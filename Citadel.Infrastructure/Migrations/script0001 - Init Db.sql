@@ -1,0 +1,426 @@
+﻿CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+    "MigrationId" TEXT NOT NULL CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY,
+    "ProductVersion" TEXT NOT NULL
+);
+
+BEGIN TRANSACTION;
+CREATE TABLE "Platforms" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_Platforms" PRIMARY KEY,
+    "Name" TEXT NULL,
+    "Address" TEXT NULL
+);
+
+CREATE TABLE "Registries" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_Registries" PRIMARY KEY,
+    "Name" TEXT NOT NULL,
+    "Url" TEXT NOT NULL,
+    "Created" TEXT NOT NULL,
+    "Discriminator" TEXT NOT NULL,
+    "Configuration" TEXT NOT NULL
+);
+
+CREATE TABLE "Roles" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_Roles" PRIMARY KEY,
+    "Name" TEXT NOT NULL,
+    "CreatedAt" TEXT NOT NULL DEFAULT '2024-11-20 23:02:57.0644541',
+    "UpdatedAt" TEXT NOT NULL DEFAULT '2024-11-20 23:02:57.0658826'
+);
+
+CREATE TABLE "Users" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_Users" PRIMARY KEY,
+    "Name" TEXT NULL,
+    "Email" TEXT NOT NULL,
+    "Password" TEXT NOT NULL,
+    "CreatedAt" TEXT NOT NULL DEFAULT '2024-11-20 23:02:57.0840906',
+    "UpdatedAt" TEXT NOT NULL DEFAULT '2024-11-20 23:02:57.0841648'
+);
+
+CREATE TABLE "ContainersInfo" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_ContainersInfo" PRIMARY KEY,
+    "PlatformId" TEXT NOT NULL,
+    "ContainerId" TEXT NULL,
+    "Name" TEXT NULL,
+    "Image" TEXT NULL,
+    "Created" TEXT NOT NULL,
+    "State" TEXT NULL,
+    "Status" TEXT NULL,
+    "Labels" TEXT NULL,
+    "Ports" TEXT NULL,
+    CONSTRAINT "FK_ContainersInfo_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "PlatformStats" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_PlatformStats" PRIMARY KEY,
+    "PlatformId" TEXT NOT NULL,
+    "MemoryUsage" REAL NOT NULL,
+    "CpuUsage" REAL NOT NULL,
+    "CreatedAtUtc" TEXT NOT NULL,
+    CONSTRAINT "FK_PlatformStats_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "SystemsInfo" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_SystemsInfo" PRIMARY KEY,
+    "PlatformId" TEXT NOT NULL,
+    "DaemonId" TEXT NULL,
+    "NetworksCount" INTEGER NOT NULL,
+    "VolumesCount" INTEGER NOT NULL,
+    "Containers" INTEGER NOT NULL,
+    "ContainersRunning" INTEGER NOT NULL,
+    "ContainersPaused" INTEGER NOT NULL,
+    "ContainersStopped" INTEGER NOT NULL,
+    "Images" INTEGER NOT NULL,
+    "Driver" TEXT NULL,
+    "OperatingSystem" TEXT NULL,
+    "OSVersion" TEXT NULL,
+    "OSType" TEXT NULL,
+    "Architecture" TEXT NULL,
+    "NCPU" INTEGER NOT NULL,
+    "MemTotal" INTEGER NOT NULL,
+    "ServerVersion" TEXT NULL,
+    "AgentVersion" TEXT NULL,
+    CONSTRAINT "FK_SystemsInfo_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "Permissions" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_Permissions" PRIMARY KEY,
+    "RoleId" TEXT NOT NULL,
+    "PermissionCode" INTEGER NOT NULL,
+    CONSTRAINT "FK_Permissions_Roles_RoleId" FOREIGN KEY ("RoleId") REFERENCES "Roles" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "Teams" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_Teams" PRIMARY KEY,
+    "RoleId" TEXT NOT NULL,
+    "Name" TEXT NOT NULL,
+    CONSTRAINT "FK_Teams_Roles_RoleId" FOREIGN KEY ("RoleId") REFERENCES "Roles" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "ContainerStats" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_ContainerStats" PRIMARY KEY,
+    "ContainerInfoId" TEXT NOT NULL,
+    "CreatedAtUtc" TEXT NOT NULL,
+    "MemoryUsage" REAL NULL,
+    "CpuUsage" REAL NULL,
+    "MemoryLimit" REAL NULL,
+    "RxBytes" INTEGER NULL,
+    "TxBytes" INTEGER NULL,
+    CONSTRAINT "FK_ContainerStats_ContainersInfo_ContainerInfoId" FOREIGN KEY ("ContainerInfoId") REFERENCES "ContainersInfo" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "SwarmsInfo" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_SwarmsInfo" PRIMARY KEY,
+    "SystemInfoId" TEXT NOT NULL,
+    "NodeID" TEXT NULL,
+    "NodeAddr" TEXT NULL,
+    "LocalNodeState" TEXT NULL,
+    "ControlAvailable" INTEGER NOT NULL,
+    "Error" TEXT NULL,
+    "Nodes" INTEGER NOT NULL,
+    "Managers" INTEGER NOT NULL,
+    CONSTRAINT "FK_SwarmsInfo_SystemsInfo_SystemInfoId" FOREIGN KEY ("SystemInfoId") REFERENCES "SystemsInfo" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "UsersTeams" (
+    "UserId" TEXT NOT NULL,
+    "TeamId" TEXT NOT NULL,
+    CONSTRAINT "PK_UsersTeams" PRIMARY KEY ("TeamId", "UserId"),
+    CONSTRAINT "FK_UsersTeams_Teams_TeamId" FOREIGN KEY ("TeamId") REFERENCES "Teams" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_UsersTeams_Users_UserId" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "SwarmsPeer" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_SwarmsPeer" PRIMARY KEY,
+    "SwarmInfoId" TEXT NOT NULL,
+    "NodeID" TEXT NULL,
+    "Addr" TEXT NULL,
+    CONSTRAINT "FK_SwarmsPeer_SwarmsInfo_SwarmInfoId" FOREIGN KEY ("SwarmInfoId") REFERENCES "SwarmsInfo" ("Id") ON DELETE CASCADE
+);
+
+INSERT INTO "Roles" ("Id", "CreatedAt", "Name")
+VALUES ('01934BD0-84FE-7ABE-A03A-E2D9919BFA2D', '2024-11-20 23:02:57.022995', 'Administrator');
+SELECT changes();
+
+INSERT INTO "Roles" ("Id", "CreatedAt", "Name")
+VALUES ('01934BD0-84FF-7A0F-9030-3F9352A83511', '2024-11-20 23:02:57.0230317', 'QA');
+SELECT changes();
+
+INSERT INTO "Roles" ("Id", "CreatedAt", "Name")
+VALUES ('01934BD0-84FF-7A25-8B54-265589AEB00C', '2024-11-20 23:02:57.0230315', 'Developer');
+SELECT changes();
+
+
+INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
+VALUES ('01934BD0-84FF-7A0B-B89E-57B1EC7B8DB5', '2024-11-20 23:02:57.0237516', 'admin@admin.com', 'admin', '+HRQtRdSCAW2Z+JxWK4bcNBaD05BooUjNoXDiorhBeLGycZ1');
+SELECT changes();
+
+INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
+VALUES ('01934BD0-850C-7727-9CA7-862904D5B3B1', '2024-11-20 23:02:57.036779', 'dev@dev.com', 'dev', 'Juv8e61mds1If1G7yC7jGoKkhTdO3daGy/6zhF12gW9lrkVz');
+SELECT changes();
+
+INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
+VALUES ('01934BD0-8512-7776-8973-8797D0D8979F', '2024-11-20 23:02:57.0421704', 'qa@qa.com', 'qa', 'Wo2c8VG1ZFmAkHDwIQq3OoPRzJwLhjkJ0xcWwQO4IrXGN6sb');
+SELECT changes();
+
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7038-83E2-DFFB0A4A9EC3', 24, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-705C-A010-F6976E6C46C9', 20, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-706D-9354-5C13C1796742', 15, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-70CF-B826-2720D66EC960', 22, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7119-A41F-3ED0E5719BAC', 2, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-716E-AC32-BA8B700A140B', 9, '01934BD0-84FF-7A0F-9030-3F9352A83511');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7235-A492-1A47A0C4161B', 25, '01934BD0-84FF-7A0F-9030-3F9352A83511');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-736D-8195-19DA8444E24A', 13, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7386-B878-EC08A9E97DA0', 13, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-73E6-B3C6-F095B7D442F1', 5, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-742A-A532-4F0E795A685F', 18, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7433-A8C4-D18740B14ABF', 7, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7443-9BC4-D9D9ADD22B2E', 17, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7450-A7D8-CEB0C1E4F7CE', 23, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7461-B148-97C8DA6DC960', 9, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-746F-9D14-60ECE28DB8C7', 6, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-74AC-B533-5381345CCAF2', 13, '01934BD0-84FF-7A0F-9030-3F9352A83511');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7565-85AF-727E4FF31641', 12, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-75CC-8FD2-271909639E41', 19, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-75E8-BE36-D906E8141CD9', 10, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-75F2-8341-D26EAEF6E5A9', 27, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7697-B581-0BEB2A01A41E', 11, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-76B3-AC33-27C3EC8EC7A6', 5, '01934BD0-84FF-7A0F-9030-3F9352A83511');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-76C2-8CB0-9BFE6625F1BA', 4, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-76D1-963E-EAF6A087B10B', 9, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-774B-B176-9C2BCE6D3AF4', 1, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7755-8A82-3C293EA14E99', 14, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7810-95A5-A786DB9926BB', 15, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7818-8B53-B8FAD16C2573', 18, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-78CB-816E-AFA8BB9627A6', 25, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7949-AC0E-A9FDBBA5F8F6', 19, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-799E-9A45-0655CBB0580C', 8, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7A26-BD12-A22388209E5D', 27, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7A73-A283-6C606EDD2E0F', 1, '01934BD0-84FF-7A0F-9030-3F9352A83511');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7B0D-A6DF-583DE2DB2068', 5, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7B51-99DE-118314688E8E', 26, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7B6E-B89A-77D3D3CC08BB', 21, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7BB7-8815-96C5DF844155', 17, '01934BD0-84FF-7A0F-9030-3F9352A83511');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7C4D-A8FC-F9E8A893DCB3', 21, '01934BD0-84FF-7A0F-9030-3F9352A83511');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7CE1-9F27-70FAB0EFE872', 16, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7D3D-AE46-C179701A14BB', 1, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7D4D-9CC9-E47D96169A5E', 17, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7D65-B32A-405FE79E936C', 22, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7DC8-9AA3-B6171441C3DB', 14, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7DFD-803B-A6F0A02C15F9', 21, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7E8C-B1E0-3A77A98CE822', 16, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7ED8-9081-77E3B2A87392', 28, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7F13-A311-EF4CFD942777', 3, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7F76-89B2-BD38396A2C67', 20, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7F7A-95BB-E11717B20B65', 28, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7F8E-ACFA-250BE43757CC', 24, '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "PermissionCode", "RoleId")
+VALUES ('01934BD0-84FF-7FE1-9486-63C267475087', 26, '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+
+INSERT INTO "Teams" ("Id", "Name", "RoleId")
+VALUES ('01934BD0-84FF-790E-98B6-D720D47CA01E', 'QA', '01934BD0-84FF-7A0F-9030-3F9352A83511');
+SELECT changes();
+
+INSERT INTO "Teams" ("Id", "Name", "RoleId")
+VALUES ('01934BD0-84FF-7A01-A9B7-19A84C97C4F5', 'Devs', '01934BD0-84FF-7A25-8B54-265589AEB00C');
+SELECT changes();
+
+INSERT INTO "Teams" ("Id", "Name", "RoleId")
+VALUES ('01934BD0-84FF-7A20-AE88-888F274C88A7', 'Admins', '01934BD0-84FE-7ABE-A03A-E2D9919BFA2D');
+SELECT changes();
+
+
+INSERT INTO "UsersTeams" ("TeamId", "UserId")
+VALUES ('01934BD0-84FF-790E-98B6-D720D47CA01E', '01934BD0-8512-7776-8973-8797D0D8979F');
+SELECT changes();
+
+INSERT INTO "UsersTeams" ("TeamId", "UserId")
+VALUES ('01934BD0-84FF-7A01-A9B7-19A84C97C4F5', '01934BD0-850C-7727-9CA7-862904D5B3B1');
+SELECT changes();
+
+INSERT INTO "UsersTeams" ("TeamId", "UserId")
+VALUES ('01934BD0-84FF-7A20-AE88-888F274C88A7', '01934BD0-84FF-7A0B-B89E-57B1EC7B8DB5');
+SELECT changes();
+
+
+CREATE INDEX "IX_ContainersInfo_PlatformId" ON "ContainersInfo" ("PlatformId");
+
+CREATE INDEX "IX_ContainerStats_ContainerInfoId" ON "ContainerStats" ("ContainerInfoId");
+
+CREATE INDEX "IX_Permissions_RoleId" ON "Permissions" ("RoleId");
+
+CREATE UNIQUE INDEX "AddressIndex" ON "Platforms" ("Address");
+
+CREATE INDEX "IX_PlatformStats_PlatformId" ON "PlatformStats" ("PlatformId");
+
+CREATE UNIQUE INDEX "IX_SwarmsInfo_SystemInfoId" ON "SwarmsInfo" ("SystemInfoId");
+
+CREATE INDEX "IX_SwarmsPeer_SwarmInfoId" ON "SwarmsPeer" ("SwarmInfoId");
+
+CREATE UNIQUE INDEX "IX_SystemsInfo_PlatformId" ON "SystemsInfo" ("PlatformId");
+
+CREATE INDEX "IX_Teams_RoleId" ON "Teams" ("RoleId");
+
+CREATE UNIQUE INDEX "EmailIndex" ON "Users" ("Email");
+
+CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
+
+INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+VALUES ('20241120230257_migration0001', '9.0.0');
+
+COMMIT;
+

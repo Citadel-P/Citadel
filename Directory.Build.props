@@ -1,0 +1,16 @@
+<Project>
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0</AssemblyVersion>
+	<Copyright>Citadel © 2024. All rights reserved.</Copyright>
+  </PropertyGroup>
+	
+	<PropertyGroup>
+		<IsPackable>false</IsPackable>
+		<TargetFramework>net9.0</TargetFramework>
+		<RepositoryType>git</RepositoryType>
+		<RepositoryUrl>https://github.com/Citadel/Citadel</RepositoryUrl>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+	</PropertyGroup>
+
+</Project>

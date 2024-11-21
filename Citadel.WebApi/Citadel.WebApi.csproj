@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>    
+    <ImplicitUsings>enable</ImplicitUsings>
+	<RootNamespace>WebApi</RootNamespace>
+	<GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    <DockerComposeProjectPath>..\docker-compose.dcproj</DockerComposeProjectPath>
+	<OpenApiDocumentsDirectory>..\schema</OpenApiDocumentsDirectory>
+	<OpenApiGenerateDocuments>true</OpenApiGenerateDocuments>
+	<OpenApiGenerateDocumentsOnBuild>true</OpenApiGenerateDocumentsOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Controllers\V1\Resources\Auth\Responses\**" />
+    <Content Remove="Controllers\V1\Resources\Auth\Responses\**" />
+    <EmbeddedResource Remove="Controllers\V1\Resources\Auth\Responses\**" />
+    <None Remove="Controllers\V1\Resources\Auth\Responses\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+	  <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" Version="9.0.0" />
+	  <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" Version="9.0.0">
+	    <PrivateAssets>all</PrivateAssets>
+	    <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+	  </PackageReference>
+	  <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Citadel.Contracts\Citadel.Hosting\Citadel.Hosting.csproj" />
+	<ProjectReference Include="..\Citadel.Application\Citadel.Application.csproj" />
+  </ItemGroup>
+
+</Project>

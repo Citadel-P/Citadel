@@ -1,0 +1,46 @@
+version: '3.4'
+
+services:
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:4.0.3-management-alpine
+    ports:
+      - 15672:15672
+      - 15671:15671
+      - 5672:5672
+    environment:
+     - RABBITMQ_DEFAULT_USER=rabbituser
+     - RABBITMQ_DEFAULT_PASS=r@bb1tPasS
+    networks:
+      - citadel
+    volumes:
+     - ./enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+
+  citadel:
+    container_name: citadel
+    image: ${DOCKER_REGISTRY-}citadelwebapi
+    environment:
+     - BusConfiguration__Hosts__0__Host=host.docker.internal
+     - BusConfiguration__Hosts__0__Port=5672
+     - BusConfiguration__Transport__Username=rabbituser
+     - BusConfiguration__Transport__Password=r@bb1tPasS
+     - ASPNETCORE_ENVIRONMENT=Development
+    mem_limit: 400m
+    build:
+      context: .
+      dockerfile: Citadel.WebApi/Dockerfile
+    volumes:
+      - citadel_data:/app/data
+    networks:
+      - citadel
+    ports:
+      - 8000:8080
+    depends_on:
+     - rabbitmq
+
+volumes:
+  citadel_data:
+
+networks:
+  citadel:
+   name: citadel_network  

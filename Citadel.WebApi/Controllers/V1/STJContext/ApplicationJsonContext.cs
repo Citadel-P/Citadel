@@ -1,0 +1,45 @@
+﻿using System.Text.Json.Serialization;
+using Application.Features.Auth.Models;
+using Infrastructure.Entities;
+using Microsoft.AspNetCore.Mvc;
+using WebApi.Controllers.V1.Resources.Auth;
+using WebApi.Controllers.V1.Resources.Containers;
+using WebApi.Controllers.V1.Resources.Platforms;
+
+namespace Application.Models;
+
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
+[JsonSerializable(typeof(string[]))]
+[JsonSerializable(typeof(List<Platform>))]
+[JsonSerializable(typeof(List<PlatformStat>))]
+[JsonSerializable(typeof(SwarmPeer))]
+[JsonSerializable(typeof(SystemInfoView))]
+[JsonSerializable(typeof(SwarmInfoView))]
+[JsonSerializable(typeof(IEnumerable<PlatformView>))]
+[JsonSerializable(typeof(List<SwarmPeerView>))]
+[JsonSerializable(typeof(List<PlatformStatView>))]
+[JsonSerializable(typeof(Infrastructure.AppPermission[]))]
+[JsonSerializable(typeof(DockerHubRegistry))]
+[JsonSerializable(typeof(AzureRegistry))]
+[JsonSerializable(typeof(AWSRegistry))]
+[JsonSerializable(typeof(GitlabRegistry))]
+[JsonSerializable(typeof(CustomRegistry))]
+[JsonSerializable(typeof(List<ContainerInfoView>))]
+[JsonSerializable(typeof(List<PortView>))]
+[JsonSerializable(typeof(NetworkSettingsView))]
+[JsonSerializable(typeof(EndpointSettingsView))]
+[JsonSerializable(typeof(StreamLogsRequest))]
+[JsonSerializable(typeof(LoginRequest))]
+[JsonSerializable(typeof(LoginResponse))]
+[JsonSerializable(typeof(PlatformsView))]
+[JsonSerializable(typeof(ContainersInfoView))]
+[JsonSerializable(typeof(ContainerInfoView))]
+public partial class ApplicationJsonContext : JsonSerializerContext
+{
+}
+
+[JsonSerializable(typeof(ProblemDetails))]
+public partial class ProblemJsonContext : JsonSerializerContext
+{
+
+}

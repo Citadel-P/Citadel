@@ -1,0 +1,1665 @@
+{
+    "openapi": "3.0.1",
+    "info": {
+        "title": "DT RESTful API",
+        "description": "Doktainer Platform - DT Backend Module RESTful.",
+        "contact": {
+            "name": "Doktainer Support",
+            "url": "https://www.test.com/"
+        },
+        "license": {
+            "name": "MIT License",
+            "url": "https://www.test.com/"
+        },
+        "version": "1.0"
+    },
+    "paths": {
+        "/api/v1/containers/list": {
+            "get": {
+                "tags": [
+                    "Containers"
+                ],
+                "summary": "Returns a list of containers",
+                "operationId": "Containers_List",
+                "parameters": [
+                    {
+                        "name": "All",
+                        "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "Limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    },
+                    {
+                        "name": "Size",
+                        "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "Filters",
+                        "in": "query",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "object",
+                                "additionalProperties": {
+                                    "type": "boolean"
+                                },
+                                "nullable": true
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ContainerSummary"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/containers/logs/stream": {
+            "post": {
+                "tags": [
+                    "Containers"
+                ],
+                "summary": "Request to (start/stop) stream container logs",
+                "operationId": "Containers_StreamContainerLogs",
+                "requestBody": {
+                    "description": "Request params",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/StreamLogsRequest"
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/StreamLogsRequest"
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/StreamLogsRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LogView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/containers/start": {
+            "patch": {
+                "tags": [
+                    "Containers"
+                ],
+                "summary": "Start a container(s)",
+                "operationId": "Containers_StartContainers",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/containers/stop": {
+            "patch": {
+                "tags": [
+                    "Containers"
+                ],
+                "summary": "Stop a container(s)",
+                "operationId": "Containers_StopContainers",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/containers/pause": {
+            "patch": {
+                "tags": [
+                    "Containers"
+                ],
+                "summary": "Pause a container(s)",
+                "operationId": "Containers_PauseContainers",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/containers/unpause": {
+            "patch": {
+                "tags": [
+                    "Containers"
+                ],
+                "summary": "Unpause a container(s)",
+                "operationId": "Containers_UnpauseContainers",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/containers/restart": {
+            "patch": {
+                "tags": [
+                    "Containers"
+                ],
+                "summary": "Pause a container(s)",
+                "operationId": "Containers_RestartContainers",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/containers/delete": {
+            "patch": {
+                "tags": [
+                    "Containers"
+                ],
+                "summary": "Delete a container(s)",
+                "operationId": "Containers_DeleteContainers",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/system/info": {
+            "get": {
+                "tags": [
+                    "System"
+                ],
+                "summary": "Returns the system info",
+                "operationId": "System_GetSystemInfo",
+                "responses": {
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "headers": {
+                            "agent-version": {
+                                "description": "The current agent version",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SystemInfo"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Anonymous2": {
+                "type": "object",
+                "properties": {
+                    "NamedResourceSpec": {
+                        "$ref": "#/components/schemas/NamedResourceSpec"
+                    },
+                    "DiscreteResourceSpec": {
+                        "$ref": "#/components/schemas/DiscreteResourceSpec"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "CAConfig": {
+                "type": "object",
+                "properties": {
+                    "NodeCertExpiry": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true
+                    },
+                    "ExternalCAs": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ExternalCAs"
+                        },
+                        "nullable": true
+                    },
+                    "SigningCACert": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "SigningCAKey": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "ForceRotate": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "ClusterInfo": {
+                "type": "object",
+                "properties": {
+                    "ID": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Version": {
+                        "$ref": "#/components/schemas/ObjectVersion"
+                    },
+                    "CreatedAt": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "UpdatedAt": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Spec": {
+                        "$ref": "#/components/schemas/SwarmSpec"
+                    },
+                    "TLSInfo": {
+                        "$ref": "#/components/schemas/TLSInfo"
+                    },
+                    "RootRotationInProgress": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "DataPathPort": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "DefaultAddrPool": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "SubnetSize": {
+                        "maximum": 29,
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "Commit": {
+                "type": "object",
+                "properties": {
+                    "ID": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Expected": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "ContainerSummary": {
+                "type": "object",
+                "properties": {
+                    "Id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Names": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "Image": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "ImageID": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Command": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Created": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true
+                    },
+                    "Ports": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Port"
+                        },
+                        "nullable": true
+                    },
+                    "SizeRw": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true
+                    },
+                    "SizeRootFs": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true
+                    },
+                    "Labels": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string",
+                            "nullable": true
+                        },
+                        "nullable": true
+                    },
+                    "State": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Status": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "HostConfig": {
+                        "$ref": "#/components/schemas/HostConfig2"
+                    },
+                    "NetworkSettings": {
+                        "$ref": "#/components/schemas/NetworkSettings2"
+                    },
+                    "Mounts": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MountPoint"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "DefaultAddressPools": {
+                "type": "object",
+                "properties": {
+                    "Base": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Size": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "DiscreteResourceSpec": {
+                "type": "object",
+                "properties": {
+                    "Kind": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Value": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "Dispatcher": {
+                "type": "object",
+                "properties": {
+                    "HeartbeatPeriod": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "EncryptionConfig": {
+                "type": "object",
+                "properties": {
+                    "AutoLockManagers": {
+                        "type": "boolean",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "EndpointIPAMConfig": {
+                "type": "object",
+                "properties": {
+                    "IPv4Address": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "IPv6Address": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "LinkLocalIPs": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "EndpointSettings": {
+                "type": "object",
+                "properties": {
+                    "IPAMConfig": {
+                        "$ref": "#/components/schemas/EndpointIPAMConfig"
+                    },
+                    "Links": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "MacAddress": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Aliases": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "NetworkID": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "EndpointID": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Gateway": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "IPAddress": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "IPPrefixLen": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "IPv6Gateway": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "GlobalIPv6Address": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "GlobalIPv6PrefixLen": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true
+                    },
+                    "DriverOpts": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string",
+                            "nullable": true
+                        },
+                        "nullable": true
+                    },
+                    "DNSNames": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "ExternalCAs": {
+                "type": "object",
+                "properties": {
+                    "Protocol": {
+                        "$ref": "#/components/schemas/ExternalCAsProtocol"
+                    },
+                    "URL": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Options": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string",
+                            "nullable": true
+                        },
+                        "nullable": true
+                    },
+                    "CACert": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "ExternalCAsProtocol": {
+                "enum": [
+                    "Cfssl"
+                ],
+                "type": "string"
+            },
+            "HostConfig2": {
+                "type": "object",
+                "properties": {
+                    "NetworkMode": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "IndexInfo": {
+                "type": "object",
+                "properties": {
+                    "Name": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Mirrors": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "Secure": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "Official": {
+                        "type": "boolean",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "LocalNodeState": {
+                "enum": [
+                    "Empty",
+                    "Inactive",
+                    "Pending",
+                    "Active",
+                    "Error",
+                    "Locked"
+                ],
+                "type": "string"
+            },
+            "LogDriver2": {
+                "type": "object",
+                "properties": {
+                    "Name": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Options": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string",
+                            "nullable": true
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "LogView": {
+                "type": "object",
+                "properties": {
+                    "jobId": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "MountPoint": {
+                "type": "object",
+                "properties": {
+                    "Type": {
+                        "$ref": "#/components/schemas/MountPointType"
+                    },
+                    "Name": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Source": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Destination": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Driver": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Mode": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "RW": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "Propagation": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "MountPointType": {
+                "enum": [
+                    "Bind",
+                    "Volume",
+                    "Tmpfs",
+                    "Npipe",
+                    "Cluster"
+                ],
+                "type": "string"
+            },
+            "NamedResourceSpec": {
+                "type": "object",
+                "properties": {
+                    "Kind": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Value": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "NetworkSettings2": {
+                "type": "object",
+                "properties": {
+                    "Networks": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/EndpointSettings"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "ObjectVersion": {
+                "type": "object",
+                "properties": {
+                    "Index": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "Orchestration": {
+                "type": "object",
+                "properties": {
+                    "TaskHistoryRetentionLimit": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "PeerNode": {
+                "type": "object",
+                "properties": {
+                    "NodeID": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Addr": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "PluginsInfo": {
+                "type": "object",
+                "properties": {
+                    "Volume": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "Network": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "Authorization": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "Log": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "Port": {
+                "required": [
+                    "Type"
+                ],
+                "type": "object",
+                "properties": {
+                    "IP": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "PrivatePort": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "PublicPort": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "Type": {
+                        "$ref": "#/components/schemas/PortType"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "PortType": {
+                "enum": [
+                    "Tcp",
+                    "Udp",
+                    "Sctp"
+                ],
+                "type": "string"
+            },
+            "ProblemDetails": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "title": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "status": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "detail": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "instance": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "Raft": {
+                "type": "object",
+                "properties": {
+                    "SnapshotInterval": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true
+                    },
+                    "KeepOldSnapshots": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true
+                    },
+                    "LogEntriesForSlowFollowers": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true
+                    },
+                    "ElectionTick": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "HeartbeatTick": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "RegistryServiceConfig": {
+                "type": "object",
+                "properties": {
+                    "AllowNondistributableArtifactsCIDRs": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "AllowNondistributableArtifactsHostnames": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "InsecureRegistryCIDRs": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "IndexConfigs": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/IndexInfo"
+                        },
+                        "nullable": true
+                    },
+                    "Mirrors": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "RequestedLogAction": {
+                "enum": [
+                    "START",
+                    "STOP"
+                ],
+                "type": "string"
+            },
+            "Runtime": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "runtimeArgs": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "status": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string",
+                            "nullable": true
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "StreamLogsRequest": {
+                "type": "object",
+                "properties": {
+                    "containerId": {
+                        "type": "string",
+                        "description": "Container id",
+                        "nullable": true
+                    },
+                    "requestId": {
+                        "type": "string",
+                        "description": "Unique id of the request",
+                        "format": "uuid"
+                    },
+                    "requestedLogAction": {
+                        "$ref": "#/components/schemas/RequestedLogAction"
+                    }
+                },
+                "additionalProperties": false,
+                "description": ""
+            },
+            "SwarmInfo": {
+                "type": "object",
+                "properties": {
+                    "NodeID": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "NodeAddr": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "LocalNodeState": {
+                        "$ref": "#/components/schemas/LocalNodeState"
+                    },
+                    "ControlAvailable": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "Error": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "RemoteManagers": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PeerNode"
+                        },
+                        "nullable": true
+                    },
+                    "Nodes": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "Managers": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "Cluster": {
+                        "$ref": "#/components/schemas/ClusterInfo"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "SwarmSpec": {
+                "type": "object",
+                "properties": {
+                    "Name": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Labels": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string",
+                            "nullable": true
+                        },
+                        "nullable": true
+                    },
+                    "Orchestration": {
+                        "$ref": "#/components/schemas/Orchestration"
+                    },
+                    "Raft": {
+                        "$ref": "#/components/schemas/Raft"
+                    },
+                    "Dispatcher": {
+                        "$ref": "#/components/schemas/Dispatcher"
+                    },
+                    "CAConfig": {
+                        "$ref": "#/components/schemas/CAConfig"
+                    },
+                    "EncryptionConfig": {
+                        "$ref": "#/components/schemas/EncryptionConfig"
+                    },
+                    "TaskDefaults": {
+                        "$ref": "#/components/schemas/TaskDefaults"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "SystemInfo": {
+                "type": "object",
+                "properties": {
+                    "ID": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Containers": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "ContainersRunning": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "ContainersPaused": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "ContainersStopped": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "Images": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "Driver": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "DriverStatus": {
+                        "type": "array",
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "nullable": true
+                    },
+                    "DockerRootDir": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Plugins": {
+                        "$ref": "#/components/schemas/PluginsInfo"
+                    },
+                    "MemoryLimit": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "SwapLimit": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "KernelMemoryTCP": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "CpuCfsPeriod": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "CpuCfsQuota": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "CPUShares": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "CPUSet": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "PidsLimit": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "OomKillDisable": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "IPv4Forwarding": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "BridgeNfIptables": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "BridgeNfIp6tables": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "Debug": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "NFd": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "NGoroutines": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "SystemTime": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "LoggingDriver": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "CgroupDriver": {
+                        "$ref": "#/components/schemas/SystemInfoCgroupDriver"
+                    },
+                    "CgroupVersion": {
+                        "$ref": "#/components/schemas/SystemInfoCgroupVersion"
+                    },
+                    "NEventsListener": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "KernelVersion": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "OperatingSystem": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "OSVersion": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "OSType": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Architecture": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "NCPU": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "MemTotal": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true
+                    },
+                    "IndexServerAddress": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "RegistryConfig": {
+                        "$ref": "#/components/schemas/RegistryServiceConfig"
+                    },
+                    "GenericResources": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Anonymous2"
+                        },
+                        "nullable": true
+                    },
+                    "HttpProxy": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "HttpsProxy": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "NoProxy": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Name": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Labels": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "ExperimentalBuild": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "ServerVersion": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Runtimes": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/Runtime"
+                        },
+                        "nullable": true
+                    },
+                    "DefaultRuntime": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "Swarm": {
+                        "$ref": "#/components/schemas/SwarmInfo"
+                    },
+                    "LiveRestoreEnabled": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "Isolation": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "InitBinary": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "ContainerdCommit": {
+                        "$ref": "#/components/schemas/Commit"
+                    },
+                    "RuncCommit": {
+                        "$ref": "#/components/schemas/Commit"
+                    },
+                    "InitCommit": {
+                        "$ref": "#/components/schemas/Commit"
+                    },
+                    "SecurityOptions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "ProductLicense": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "DefaultAddressPools": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DefaultAddressPools"
+                        },
+                        "nullable": true
+                    },
+                    "Warnings": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "CDISpecDirs": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "SystemInfoCgroupDriver": {
+                "enum": [
+                    "Cgroupfs",
+                    "Systemd",
+                    "None"
+                ],
+                "type": "string"
+            },
+            "SystemInfoCgroupVersion": {
+                "enum": [
+                    "_1",
+                    "_2"
+                ],
+                "type": "string"
+            },
+            "TLSInfo": {
+                "type": "object",
+                "properties": {
+                    "TrustRoot": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "CertIssuerSubject": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "CertIssuerPublicKey": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "TaskDefaults": {
+                "type": "object",
+                "properties": {
+                    "LogDriver": {
+                        "$ref": "#/components/schemas/LogDriver2"
+                    }
+                },
+                "additionalProperties": false
+            }
+        }
+    }
+}

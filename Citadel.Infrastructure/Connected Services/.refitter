@@ -1,0 +1,10 @@
+{
+    "openApiPath": "./agent-proxy-api.json",
+    "namespace": "Infrastructure",
+    "outputFilename": "./AgentProxy.cs",
+    "naming": {
+        "useOpenApiTitle": false,
+        "interfaceName": "AgentProxy"
+    },
+    "useCancellationTokens": true
+}

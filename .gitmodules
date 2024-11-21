@@ -1,0 +1,6 @@
+[submodule "Citadel.contracts"]
+	path = Citadel.contracts
+	url = https://github.com/Citadel/Citadel.contracts.git
+[submodule "Citadel.Contracts"]
+	path = Citadel.Contracts
+	url = https://github.com/Citadel-P/Citadel.Contracts
