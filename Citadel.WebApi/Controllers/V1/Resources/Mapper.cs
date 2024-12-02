@@ -13,10 +13,10 @@ internal static partial class Mapper
     public static partial ContainerInfoView Map(ContainerInfo containerInfo);
     public static partial PortView Map(ContainerPort port);
 
-    [MapProperty(nameof(ContainerStat.Created), nameof(ContainerStatView.Created), Use = nameof(MapCreatedToDateTime))]
+    [MapProperty(nameof(ContainerStat.Created), nameof(ContainerStatView.Created), Use = nameof(MapCreatedToShortDate))]
     public static partial ContainerStatView Map(ContainerStat stat);
     public static partial ContainerLogView Map(ContainerLogMessage logs);
 
-    private static DateTimeOffset MapCreatedToDateTime(long timeStamp)
-        => DateTimeOffset.FromUnixTimeSeconds(timeStamp).UtcDateTime;
+    private static string MapCreatedToShortDate(long timeStamp)
+        => DateTimeOffset.FromUnixTimeSeconds(timeStamp).UtcDateTime.ToString("HH:mm:ss");
 }

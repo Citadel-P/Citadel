@@ -68,7 +68,6 @@ export interface ContainerStatView {
   rxBytes?: number | null;
   /** @format int64 */
   txBytes?: number | null;
-  /** @format date-time */
   created?: string | null;
 }
 

@@ -43,7 +43,6 @@ const MemoryUsage = () => {
               axisLine={false}
               tickMargin={8}
               minTickGap={32}
-              tickFormatter={(value) => new Date(value).toLocaleTimeString('en-US', { timeStyle: 'short' })}
             />
 
             <ChartTooltip
@@ -53,7 +52,6 @@ const MemoryUsage = () => {
                 <ChartTooltipContent
                   nameKey="stats"
                   indicator="dot"
-                  labelFormatter={(value) => new Date(value).toLocaleTimeString('en-US', { timeStyle: 'medium' })}
                   formatter={(value, name) => (
                     <>
                       <div

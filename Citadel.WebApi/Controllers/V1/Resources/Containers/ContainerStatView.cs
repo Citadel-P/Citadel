@@ -13,7 +13,7 @@ public sealed record ContainerStatView(
         double? MemoryLimit,
         ulong? RxBytes,
         ulong? TxBytes,
-        DateTimeOffset? Created)
+        string? Created)
 {
     internal static IEnumerable<ContainerStatView> Map(IEnumerable<ContainerStat> stats) 
         => stats.Select(Mapper.Map);

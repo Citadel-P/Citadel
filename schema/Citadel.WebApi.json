@@ -1445,7 +1445,6 @@
           },
           "created": {
             "type": "string",
-            "format": "date-time",
             "nullable": true
           }
         },

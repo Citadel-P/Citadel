@@ -47,7 +47,6 @@ const NetworkUsage = () => {
               axisLine={false}
               tickMargin={8}
               minTickGap={32}
-              tickFormatter={(value) => new Date(value).toLocaleTimeString('en-US', { timeStyle: 'short' })}
             />
 
             <ChartTooltip
@@ -55,7 +54,6 @@ const NetworkUsage = () => {
               defaultIndex={1}
               content={
                 <ChartTooltipContent
-                  labelFormatter={(value) => new Date(value).toLocaleTimeString('en-US', { timeStyle: 'medium' })}
                   formatter={(value, name) => (
                     <>
                       <div
