@@ -14,14 +14,9 @@ internal static partial class Mapper
     public static partial PortView Map(ContainerPort port);
 
     [MapProperty(nameof(ContainerStat.Created), nameof(ContainerStatView.Created), Use = nameof(MapCreatedToDateTime))]
-    [MapProperty(nameof(ContainerStat.MemoryUsage), nameof(ContainerStatView.MemoryUsage), Use = nameof(MapToMB))]
-    [MapProperty(nameof(ContainerStat.MemoryLimit), nameof(ContainerStatView.MemoryLimit), Use = nameof(MapToMB))]
     public static partial ContainerStatView Map(ContainerStat stat);
     public static partial ContainerLogView Map(ContainerLogMessage logs);
 
     private static DateTimeOffset MapCreatedToDateTime(long timeStamp)
         => DateTimeOffset.FromUnixTimeSeconds(timeStamp).UtcDateTime;
-
-    private static double MapToMB(double? bytes) 
-        => bytes != null ? double.Round(bytes.Value / 1024 / 1024, 2) : 0;
 }

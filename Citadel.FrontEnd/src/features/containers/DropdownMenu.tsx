@@ -6,7 +6,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Ban, MoreHorizontal, Pause, Play, RotateCcw, Trash, ScrollText } from 'lucide-react';
+import { Ban, MoreHorizontal, Pause, Play, RotateCcw, Trash, Eye } from 'lucide-react';
 import { ContainerInfoView } from '@/api/_generated';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { useDialog } from '@/hooks/useDialog';
@@ -66,8 +66,8 @@ const DropdownTableMenu = ({ container }: IProps) => {
           <DropdownMenuItem
             onClick={() => navigate(`../containers/${container.containerId?.slice(0, 12)}/logs`)}
             className="grow cursor-pointer rounded-sm px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-card">
-            <ScrollText className="mr-2 h-3 w-3" />
-            <span>Logs</span>
+            <Eye className="mr-2 h-3 w-3" />
+            <span>View details</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem

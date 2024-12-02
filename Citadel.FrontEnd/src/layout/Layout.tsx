@@ -13,7 +13,7 @@ const Layout = () => {
           <Sidebar />
           <div className="flex grow flex-col content-start overflow-hidden bg-card">
             <Navbar />
-            <div className="min-h-full scrollbar-thumb-rounded scrollbar-track-rounded scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted">
+            <div className="scrollbar-thumb-rounded scrollbar-track-rounded grow overflow-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted">
               <Breadcrumb />
               <Outlet />
             </div>

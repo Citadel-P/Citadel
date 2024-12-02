@@ -9,6 +9,7 @@ import { byteTransform } from '@/lib/bytes.helper';
 import SortableCell from '@/components/ui/SortableCell';
 import DropdownTableMenu from './DropdownMenu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Link } from 'react-router';
 
 export const columns: ColumnDef<ContainerInfoView>[] = [
   {
@@ -40,7 +41,9 @@ export const columns: ColumnDef<ContainerInfoView>[] = [
         </div>
         <div>
           <div className="mb-1 text-sm font-semibold text-foreground">
-            {row.original.name ? row.original.name?.slice(1) : ''}
+            <Link to={`../containers/${row.original.containerId?.slice(0, 12)}/logs`} className="hover:underline">
+              {row.original.name ? row.original.name?.slice(1) : ''}
+            </Link>
           </div>
           <div className="text-muted-foreground/50">{row.original.containerId?.slice(0, 12)}</div>
         </div>

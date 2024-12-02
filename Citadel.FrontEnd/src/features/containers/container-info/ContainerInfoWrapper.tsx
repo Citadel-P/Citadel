@@ -4,8 +4,10 @@ import ContainerLogs from './logs/ContainerLogs';
 import { Container } from 'lucide-react';
 import { useAppContext } from '@/AppProvider';
 import { useNavigate } from 'react-router';
-import ContainerStats from './stats/ContainerStats';
 import ContainerStatsProvider from './stats/ContainerStatsProvider';
+import NetworkUsage from './stats/NetworkUsage';
+import MemoryUsage from './stats/MemoryUsage';
+import CpuUsage from './stats/CpuUsage';
 
 const ContainerInfoWrapper = () => {
   const { route, currentContainer } = useAppContext();
@@ -46,7 +48,11 @@ const ContainerInfoWrapper = () => {
             </TabsContent>
             <TabsContent value="stats">
               <ContainerStatsProvider>
-                <ContainerStats />
+                <div className="flex flex-col gap gap-y-3">
+                  <MemoryUsage />
+                  <CpuUsage />
+                  <NetworkUsage />
+                </div>
               </ContainerStatsProvider>
             </TabsContent>
           </Tabs>

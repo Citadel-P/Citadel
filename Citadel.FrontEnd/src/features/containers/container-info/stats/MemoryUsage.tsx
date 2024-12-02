@@ -1,5 +1,4 @@
 import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   ChartConfig,
   ChartContainer,
@@ -8,8 +7,9 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
+import { Card, CardContent } from '@/components/ui/card';
 import { useContainerStatsContext } from './ContainerStatsProvider';
-
+import { Skeleton } from '@/components/ui/skeleton';
 const chartConfig = {
   stats: {
     label: 'Memory',
@@ -20,17 +20,13 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-const ContainerStats = () => {
-  const { stats } = useContainerStatsContext();
+const MemoryUsage = () => {
+  const { stats, isLoading } = useContainerStatsContext();
 
-  return (
-    <Card className="bg-background rounded-sm shadow-none">
-      <CardHeader className="flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row">
-        <div className="grid flex-1 gap-1 text-center sm:text-left">
-          <CardTitle className="text-base">Memory usage</CardTitle>
-          <CardDescription className="text-sm">Showing snapshots for the last 24 hours</CardDescription>
-        </div>
-      </CardHeader>
+  return isLoading ? (
+    <Skeleton className="h-[225px] w-full rounded-xl" />
+  ) : (
+    <Card className="bg-background rounded-sm shadow-sm">
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
         <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
           <AreaChart data={stats} accessibilityLayer>
@@ -39,12 +35,8 @@ const ContainerStats = () => {
                 <stop offset="5%" stopColor="var(--color-memoryUsage)" stopOpacity={0.8} />
                 <stop offset="95%" stopColor="var(--color-memoryUsage)" stopOpacity={0.1} />
               </linearGradient>
-              <linearGradient id="fillMobile" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--color-mobile)" stopOpacity={0.8} />
-                <stop offset="95%" stopColor="var(--color-mobile)" stopOpacity={0.1} />
-              </linearGradient>
             </defs>
-            <CartesianGrid vertical={false} />
+            <CartesianGrid vertical={true} />
             <XAxis
               dataKey="created"
               tickLine={false}
@@ -74,7 +66,7 @@ const ContainerStats = () => {
                       />
                       {chartConfig['stats']?.label || name}
                       <div className="ml-auto flex items-baseline gap-0.5 font-mono font-medium tabular-nums text-foreground">
-                        {value}
+                        {((value as number) / 1024 / 1004).toFixed(2)}
                         <span className="font-normal text-muted-foreground">MB</span>
                       </div>
                     </>
@@ -97,4 +89,4 @@ const ContainerStats = () => {
   );
 };
 
-export default ContainerStats;
+export default MemoryUsage;
