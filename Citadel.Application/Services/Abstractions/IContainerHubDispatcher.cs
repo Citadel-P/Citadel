@@ -5,7 +5,8 @@ namespace Application.Services.Abstractions;
 
 public interface IContainerHubDispatcher
 {
-    Task SendContainersInfo(Guid platformId, IEnumerable<ContainerInfo> containers);
     Task SendContainerLogs(ContainerLogMessage message);
+    Task SendContainerEvent(ContainerInfo container, string @event);
+    Task SendContainersInfo(IEnumerable<ContainerInfo> containers);
 }
 

@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Design;
 namespace Infrastructure.EntityFramework;
 
 /// <summary>
-/// Used only to generate Migrations, for more info <see cref="https://learn.microsoft.com/en-us/ef/core/cli/dbcontext-creation?tabs=dotnet-core-cli"/>
+/// Used to init db and generate migrations, for more info <see cref="https://learn.microsoft.com/en-us/ef/core/cli/dbcontext-creation?tabs=dotnet-core-cli"/>
 /// </summary>
 internal sealed class ApplicationContextFactory : IDesignTimeDbContextFactory<ApplicationDbContext>
 {
@@ -18,9 +18,13 @@ internal sealed class ApplicationContextFactory : IDesignTimeDbContextFactory<Ap
         {
             throw new IOException($"Can't find the provided directory {appDirectory}");
         }
-
+        
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-        optionsBuilder.UseSqlite(ConnectionString);
+        optionsBuilder.UseSqlite(ConnectionString, config =>
+        {
+            config.CommandTimeout(60);
+            config.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+        });
 
         return new(optionsBuilder.Options);
     }

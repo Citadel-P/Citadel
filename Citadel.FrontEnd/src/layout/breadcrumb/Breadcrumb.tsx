@@ -27,9 +27,8 @@ interface ICrumbBadge {
 const BreadCrumb = () => {
   const { currentPlatform, currentContainer, route, isBreadcrumbHidden } = useAppContext();
   const navigate = useNavigate();
-  if (isBreadcrumbHidden) return (<></>);
+  if (isBreadcrumbHidden) return <></>;
 
-  
   const crumbs: ICrumbs[] = [];
   if (route.path === paths[0]) {
     // Platforms

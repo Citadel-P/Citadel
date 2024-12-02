@@ -21,7 +21,7 @@ const ContainersContext = createContext<IContext | undefined>(undefined);
 const ContainersProvider: React.FC<IProps> = ({ children }) => {
   const { platformId } = useParams();
   const { data, isLoading, isSuccess } = useGETContainers(platformId!);
-  const { containersMessage } = useContainersHub(platformId!);
+  const { containersInfo } = useContainersHub(platformId!);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   let containers: ContainerInfoView[] = [];
 
@@ -29,8 +29,8 @@ const ContainersProvider: React.FC<IProps> = ({ children }) => {
     containers = data.data.containers!;
   }
 
-  if (containersMessage) {
-    containers = containersMessage.containers ?? [];
+  if (containersInfo) {
+    containers = containersInfo.containers ?? [];
   }
 
   const onSelectionChange = (rows: string[]) => setSelectedRowIds(rows);

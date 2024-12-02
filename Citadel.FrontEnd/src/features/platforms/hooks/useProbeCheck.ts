@@ -6,7 +6,7 @@ const useProbeCheck = (platform: PlatformView) => {
   const [isProbActive, setIsProbActive] = useState(false);
 
   const lastSnapshot =
-    platform.stats && platform.stats[0] ? new Date(platform.stats![0].createdAtUtc!).getTime() : new Date().getTime();
+    platform.stats && platform.stats[0] ? new Date(platform.stats![0].created! * 1000).getTime() : new Date().getTime();
 
   const updateProbe = () => {
     /** If we do not receive any platform stats within 60s then we consider the agent as disconnected */

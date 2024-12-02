@@ -804,6 +804,88 @@
         }
       }
     },
+    "/api/v1/containers/{id}/stats": {
+      "get": {
+        "tags": [
+          "Containers"
+        ],
+        "summary": "Get container stats",
+        "operationId": "Containers_GetStats",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The container id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContainerStatsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/platforms": {
       "get": {
         "tags": [
@@ -1361,9 +1443,22 @@
             "format": "int64",
             "nullable": true
           },
-          "createdAtUtc": {
+          "created": {
             "type": "string",
             "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContainerStatsView": {
+        "type": "object",
+        "properties": {
+          "stats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerStatView"
+            },
             "nullable": true
           }
         },
@@ -1424,9 +1519,17 @@
             "type": "number",
             "format": "double"
           },
-          "createdAtUtc": {
-            "type": "string",
-            "format": "date-time"
+          "created": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rxBytes": {
+            "type": "number",
+            "format": "double"
+          },
+          "txBytes": {
+            "type": "number",
+            "format": "double"
           }
         },
         "additionalProperties": false
@@ -1609,6 +1712,16 @@
       },
       "SwarmPeerView": {
         "type": "object",
+        "properties": {
+          "nodeID": {
+            "type": "string",
+            "nullable": true
+          },
+          "addr": {
+            "type": "string",
+            "nullable": true
+          }
+        },
         "additionalProperties": false
       },
       "SystemInfoView": {
@@ -1684,13 +1797,6 @@
           },
           "agentVersion": {
             "type": "string",
-            "nullable": true
-          },
-          "warnings": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
             "nullable": true
           },
           "swarmInfo": {

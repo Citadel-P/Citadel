@@ -1,73 +1,42 @@
-﻿using Contracts.Broker.Models;
-
-namespace Infrastructure.Entities;
+﻿namespace Infrastructure.Entities;
 
 public class SwarmInfo
 {
-    public Guid Id { get; }
-
+    public Guid Id { get; private set; }
     public Guid SystemInfoId { get; }
+    public string NodeID { get; private set; }
+    public string NodeAddr { get; private set; }
+    public string LocalNodeState { get; private set; }
+    public bool ControlAvailable { get; private set; }
+    public string Error { get; private set; }
+    public long Nodes { get; private set; }
+    public long Managers { get; private set; }
+    public ICollection<SwarmPeer> RemoteManagers { get; private set; } = [];
 
-    public string NodeID { get; set; }
+    /// <summary>
+    /// EF navigation
+    /// </summary>
+    public SystemInfo SystemInfo { get; private set; }
 
-    public string NodeAddr { get; set; }
-
-    public string LocalNodeState { get; set; }
-
-    public bool ControlAvailable { get; set; }
-
-    public string Error { get; set; }
-
-    public long Nodes { get; set; }
-
-    public long Managers { get; set; }
-
-    public ICollection<SwarmPeer> RemoteManagers { get; set; } = [];
-
-    public bool EqualsTo(SwarmInfoMessage message)
-    {
-        if (RemoteManagers.Count != message.RemoteManagers.Count)
+    public static SwarmInfo Create(
+        string nodeID,
+        string nodeAddr,
+        string localNodeState,
+        bool controlAvailable,
+        string error,
+        long nodes,
+        long managers,
+        IEnumerable<SwarmPeer> remoteManagers)
+        => new()
         {
-            return false;
-        }
-
-        foreach (var peer in message.RemoteManagers.OrderBy(s => s.NodeID))
-        {
-            if (RemoteManagers.FirstOrDefault(s => s.NodeID == peer.NodeID)?.EqualsTo(peer) == false)
-            {
-                return false;
-            }
-        }
-
-        return NodeID == message.NodeID &&
-                 NodeAddr == message.NodeAddr &&
-                 LocalNodeState == message.LocalNodeState &&
-                 ControlAvailable == message.ControlAvailable &&
-                 Error == message.Error &&
-                 Nodes == message.Nodes &&
-                 Managers == message.Managers;
-    }
-
-    public void UpdateWith(SwarmInfoMessage message)
-    {
-        NodeID = message.NodeID;
-        NodeAddr = message.NodeAddr;
-        LocalNodeState = message.LocalNodeState;
-        ControlAvailable = message.ControlAvailable;
-        Error = message.Error;
-        Nodes = message.Nodes;
-        Managers = message.Managers;
-
-        // Update the swarm peers
-        List<SwarmPeer> peers = [];
-        foreach (var peer in message.RemoteManagers)
-        {
-            peers.Add(new SwarmPeer()
-            {
-                NodeID = peer.NodeID,
-                Addr = peer.Addr
-            });
-        }
-        RemoteManagers = peers;
-    }
+            Id = Guid.CreateVersion7(),
+            NodeID = nodeID,
+            NodeAddr = nodeAddr,
+            LocalNodeState = localNodeState,
+            ControlAvailable = controlAvailable,
+            Error = error,
+            Nodes = nodes,
+            Managers = managers,
+            RemoteManagers = remoteManagers?.ToList(),
+        };
 }

@@ -36,6 +36,17 @@ const QueryClientWrapper: React.FC<IProps> = ({ children }) => {
   const queryClient = new QueryClient({
     queryCache: new QueryCache({ onError: onQueryError }),
     mutationCache: new MutationCache({ onError: onMutationError }),
+    defaultOptions: {
+      queries: {
+        retry: false,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        refetchOnMount: true,
+      },
+      mutations: {
+        retry: false,
+      },
+    },
   });
 
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;

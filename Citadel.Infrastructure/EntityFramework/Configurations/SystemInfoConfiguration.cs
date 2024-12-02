@@ -1,8 +1,8 @@
-﻿namespace Infrastructure.EntityFramework.Configurations;
-
-using Infrastructure.Entities;
+﻿using Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace Infrastructure.EntityFramework.Configurations;
 
 internal sealed class SystemInfoConfiguration : IEntityTypeConfiguration<SystemInfo>
 {
@@ -17,11 +17,11 @@ internal sealed class SystemInfoConfiguration : IEntityTypeConfiguration<SystemI
         builder.Property(p => p.OperatingSystem).HasMaxLength(128);
         builder.Property(p => p.OperatingSystem).HasMaxLength(128);
         builder.Property(p => p.Architecture).HasMaxLength(128);
-        builder.Property(p => p.OSType).HasMaxLength(128);
-        builder.Property(p => p.OSVersion).HasMaxLength(128);
+        builder.Property(p => p.OsType).HasMaxLength(128);
+        builder.Property(p => p.OsVersion).HasMaxLength(128);
         builder.Property(p => p.ServerVersion).HasMaxLength(32);
         builder.Property(p => p.ServerVersion).HasMaxLength(32);
 
-        builder.HasOne(p => p.SwarmInfo).WithOne().HasForeignKey<SwarmInfo>(p => p.SystemInfoId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(p => p.SwarmInfo).WithOne(p => p.SystemInfo).HasForeignKey<SwarmInfo>(p => p.SystemInfoId).OnDelete(DeleteBehavior.Cascade);
     }
 }

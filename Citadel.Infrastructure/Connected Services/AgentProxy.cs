@@ -184,7 +184,7 @@ namespace Infrastructure
         /// </exception>
         [Headers("Accept: application/problem+json, application/json")]
         [Get("/api/v1/system/info")]
-        Task<SystemInfo> GetSystemInfo(CancellationToken cancellationToken = default);
+        Task<SystemInfoView> GetSystemInfo(CancellationToken cancellationToken = default);
 
 
     }
@@ -215,88 +215,6 @@ namespace Infrastructure
     using System = global::System;
 
     
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Anonymous2
-    {
-
-        [JsonPropertyName("NamedResourceSpec")]
-        public NamedResourceSpec NamedResourceSpec { get; set; }
-
-        [JsonPropertyName("DiscreteResourceSpec")]
-        public DiscreteResourceSpec DiscreteResourceSpec { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class CAConfig
-    {
-
-        [JsonPropertyName("NodeCertExpiry")]
-        public long? NodeCertExpiry { get; set; }
-
-        [JsonPropertyName("ExternalCAs")]
-        public ICollection<ExternalCAs> ExternalCAs { get; set; }
-
-        [JsonPropertyName("SigningCACert")]
-        public string SigningCACert { get; set; }
-
-        [JsonPropertyName("SigningCAKey")]
-        public string SigningCAKey { get; set; }
-
-        [JsonPropertyName("ForceRotate")]
-        public long? ForceRotate { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class ClusterInfo
-    {
-
-        [JsonPropertyName("ID")]
-        public string ID { get; set; }
-
-        [JsonPropertyName("Version")]
-        public ObjectVersion Version { get; set; }
-
-        [JsonPropertyName("CreatedAt")]
-        public string CreatedAt { get; set; }
-
-        [JsonPropertyName("UpdatedAt")]
-        public string UpdatedAt { get; set; }
-
-        [JsonPropertyName("Spec")]
-        public SwarmSpec Spec { get; set; }
-
-        [JsonPropertyName("TLSInfo")]
-        public TLSInfo TLSInfo { get; set; }
-
-        [JsonPropertyName("RootRotationInProgress")]
-        public bool? RootRotationInProgress { get; set; }
-
-        [JsonPropertyName("DataPathPort")]
-        public int? DataPathPort { get; set; }
-
-        [JsonPropertyName("DefaultAddrPool")]
-        public ICollection<string> DefaultAddrPool { get; set; }
-
-        [JsonPropertyName("SubnetSize")]
-        [System.ComponentModel.DataAnnotations.Range(int.MinValue, 29)]
-        public int? SubnetSize { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Commit
-    {
-
-        [JsonPropertyName("ID")]
-        public string ID { get; set; }
-
-        [JsonPropertyName("Expected")]
-        public string Expected { get; set; }
-
-    }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class ContainerSummary
@@ -346,48 +264,6 @@ namespace Infrastructure
 
         [JsonPropertyName("Mounts")]
         public ICollection<MountPoint> Mounts { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class DefaultAddressPools
-    {
-
-        [JsonPropertyName("Base")]
-        public string Base { get; set; }
-
-        [JsonPropertyName("Size")]
-        public int? Size { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class DiscreteResourceSpec
-    {
-
-        [JsonPropertyName("Kind")]
-        public string Kind { get; set; }
-
-        [JsonPropertyName("Value")]
-        public long? Value { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Dispatcher
-    {
-
-        [JsonPropertyName("HeartbeatPeriod")]
-        public long? HeartbeatPeriod { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class EncryptionConfig
-    {
-
-        [JsonPropertyName("AutoLockManagers")]
-        public bool? AutoLockManagers { get; set; }
 
     }
 
@@ -455,93 +331,11 @@ namespace Infrastructure
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class ExternalCAs
-    {
-
-        [JsonPropertyName("Protocol")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
-        public ExternalCAsProtocol Protocol { get; set; }
-
-        [JsonPropertyName("URL")]
-        public string URL { get; set; }
-
-        [JsonPropertyName("Options")]
-        public IDictionary<string, string> Options { get; set; }
-
-        [JsonPropertyName("CACert")]
-        public string CACert { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public enum ExternalCAsProtocol
-    {
-
-        [System.Runtime.Serialization.EnumMember(Value = @"Cfssl")]
-        Cfssl = 0,
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class HostConfig2
     {
 
         [JsonPropertyName("NetworkMode")]
         public string NetworkMode { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class IndexInfo
-    {
-
-        [JsonPropertyName("Name")]
-        public string Name { get; set; }
-
-        [JsonPropertyName("Mirrors")]
-        public ICollection<string> Mirrors { get; set; }
-
-        [JsonPropertyName("Secure")]
-        public bool? Secure { get; set; }
-
-        [JsonPropertyName("Official")]
-        public bool? Official { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public enum LocalNodeState
-    {
-
-        [System.Runtime.Serialization.EnumMember(Value = @"Empty")]
-        Empty = 0,
-
-        [System.Runtime.Serialization.EnumMember(Value = @"Inactive")]
-        Inactive = 1,
-
-        [System.Runtime.Serialization.EnumMember(Value = @"Pending")]
-        Pending = 2,
-
-        [System.Runtime.Serialization.EnumMember(Value = @"Active")]
-        Active = 3,
-
-        [System.Runtime.Serialization.EnumMember(Value = @"Error")]
-        Error = 4,
-
-        [System.Runtime.Serialization.EnumMember(Value = @"Locked")]
-        Locked = 5,
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class LogDriver2
-    {
-
-        [JsonPropertyName("Name")]
-        public string Name { get; set; }
-
-        [JsonPropertyName("Options")]
-        public IDictionary<string, string> Options { get; set; }
 
     }
 
@@ -607,71 +401,11 @@ namespace Infrastructure
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class NamedResourceSpec
-    {
-
-        [JsonPropertyName("Kind")]
-        public string Kind { get; set; }
-
-        [JsonPropertyName("Value")]
-        public string Value { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class NetworkSettings2
     {
 
         [JsonPropertyName("Networks")]
         public IDictionary<string, EndpointSettings> Networks { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class ObjectVersion
-    {
-
-        [JsonPropertyName("Index")]
-        public long? Index { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Orchestration
-    {
-
-        [JsonPropertyName("TaskHistoryRetentionLimit")]
-        public long? TaskHistoryRetentionLimit { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class PeerNode
-    {
-
-        [JsonPropertyName("NodeID")]
-        public string NodeID { get; set; }
-
-        [JsonPropertyName("Addr")]
-        public string Addr { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class PluginsInfo
-    {
-
-        [JsonPropertyName("Volume")]
-        public ICollection<string> Volume { get; set; }
-
-        [JsonPropertyName("Network")]
-        public ICollection<string> Network { get; set; }
-
-        [JsonPropertyName("Authorization")]
-        public ICollection<string> Authorization { get; set; }
-
-        [JsonPropertyName("Log")]
-        public ICollection<string> Log { get; set; }
 
     }
 
@@ -741,48 +475,6 @@ namespace Infrastructure
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Raft
-    {
-
-        [JsonPropertyName("SnapshotInterval")]
-        public long? SnapshotInterval { get; set; }
-
-        [JsonPropertyName("KeepOldSnapshots")]
-        public long? KeepOldSnapshots { get; set; }
-
-        [JsonPropertyName("LogEntriesForSlowFollowers")]
-        public long? LogEntriesForSlowFollowers { get; set; }
-
-        [JsonPropertyName("ElectionTick")]
-        public int? ElectionTick { get; set; }
-
-        [JsonPropertyName("HeartbeatTick")]
-        public int? HeartbeatTick { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class RegistryServiceConfig
-    {
-
-        [JsonPropertyName("AllowNondistributableArtifactsCIDRs")]
-        public ICollection<string> AllowNondistributableArtifactsCIDRs { get; set; }
-
-        [JsonPropertyName("AllowNondistributableArtifactsHostnames")]
-        public ICollection<string> AllowNondistributableArtifactsHostnames { get; set; }
-
-        [JsonPropertyName("InsecureRegistryCIDRs")]
-        public ICollection<string> InsecureRegistryCIDRs { get; set; }
-
-        [JsonPropertyName("IndexConfigs")]
-        public IDictionary<string, IndexInfo> IndexConfigs { get; set; }
-
-        [JsonPropertyName("Mirrors")]
-        public ICollection<string> Mirrors { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
     public enum RequestedLogAction
     {
 
@@ -791,21 +483,6 @@ namespace Infrastructure
 
         [System.Runtime.Serialization.EnumMember(Value = @"STOP")]
         STOP = 1,
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Runtime
-    {
-
-        [JsonPropertyName("path")]
-        public string Path { get; set; }
-
-        [JsonPropertyName("runtimeArgs")]
-        public ICollection<string> RuntimeArgs { get; set; }
-
-        [JsonPropertyName("status")]
-        public IDictionary<string, string> Status { get; set; }
 
     }
 
@@ -833,308 +510,122 @@ namespace Infrastructure
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class SwarmInfo
+    public partial class SwarmInfoView
     {
 
-        [JsonPropertyName("NodeID")]
+        [JsonPropertyName("nodeID")]
         public string NodeID { get; set; }
 
-        [JsonPropertyName("NodeAddr")]
+        [JsonPropertyName("nodeAddr")]
         public string NodeAddr { get; set; }
 
-        [JsonPropertyName("LocalNodeState")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
-        public LocalNodeState LocalNodeState { get; set; }
+        [JsonPropertyName("localNodeState")]
+        public string LocalNodeState { get; set; }
 
-        [JsonPropertyName("ControlAvailable")]
-        public bool? ControlAvailable { get; set; }
+        [JsonPropertyName("controlAvailable")]
+        public bool ControlAvailable { get; set; }
 
-        [JsonPropertyName("Error")]
+        [JsonPropertyName("error")]
         public string Error { get; set; }
 
-        [JsonPropertyName("RemoteManagers")]
-        public ICollection<PeerNode> RemoteManagers { get; set; }
+        [JsonPropertyName("nodes")]
+        public long Nodes { get; set; }
 
-        [JsonPropertyName("Nodes")]
-        public int? Nodes { get; set; }
+        [JsonPropertyName("managers")]
+        public long Managers { get; set; }
 
-        [JsonPropertyName("Managers")]
-        public int? Managers { get; set; }
-
-        [JsonPropertyName("Cluster")]
-        public ClusterInfo Cluster { get; set; }
+        [JsonPropertyName("remoteManagers")]
+        public ICollection<SwarmPeerView> RemoteManagers { get; set; }
 
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class SwarmSpec
+    public partial class SwarmPeerView
     {
 
-        [JsonPropertyName("Name")]
-        public string Name { get; set; }
+        [JsonPropertyName("nodeID")]
+        public string NodeID { get; set; }
 
-        [JsonPropertyName("Labels")]
-        public IDictionary<string, string> Labels { get; set; }
-
-        [JsonPropertyName("Orchestration")]
-        public Orchestration Orchestration { get; set; }
-
-        [JsonPropertyName("Raft")]
-        public Raft Raft { get; set; }
-
-        [JsonPropertyName("Dispatcher")]
-        public Dispatcher Dispatcher { get; set; }
-
-        [JsonPropertyName("CAConfig")]
-        public CAConfig CAConfig { get; set; }
-
-        [JsonPropertyName("EncryptionConfig")]
-        public EncryptionConfig EncryptionConfig { get; set; }
-
-        [JsonPropertyName("TaskDefaults")]
-        public TaskDefaults TaskDefaults { get; set; }
+        [JsonPropertyName("addr")]
+        public string Addr { get; set; }
 
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class SystemInfo
+    public partial class SystemInfoView
     {
 
-        [JsonPropertyName("ID")]
-        public string ID { get; set; }
+        [JsonPropertyName("daemonId")]
+        public string DaemonId { get; set; }
 
-        [JsonPropertyName("Containers")]
-        public int? Containers { get; set; }
+        [JsonPropertyName("created")]
+        public long Created { get; set; }
 
-        [JsonPropertyName("ContainersRunning")]
-        public int? ContainersRunning { get; set; }
+        [JsonPropertyName("memTotal")]
+        public long MemTotal { get; set; }
 
-        [JsonPropertyName("ContainersPaused")]
-        public int? ContainersPaused { get; set; }
+        [JsonPropertyName("memoryUsage")]
+        public double MemoryUsage { get; set; }
 
-        [JsonPropertyName("ContainersStopped")]
-        public int? ContainersStopped { get; set; }
+        [JsonPropertyName("cpuUsage")]
+        public double CpuUsage { get; set; }
 
-        [JsonPropertyName("Images")]
-        public int? Images { get; set; }
+        [JsonPropertyName("rxBytes")]
+        public double? RxBytes { get; set; }
 
-        [JsonPropertyName("Driver")]
+        [JsonPropertyName("txBytes")]
+        public double? TxBytes { get; set; }
+
+        [JsonPropertyName("networksCount")]
+        public int NetworksCount { get; set; }
+
+        [JsonPropertyName("volumesCount")]
+        public int VolumesCount { get; set; }
+
+        [JsonPropertyName("agentVersion")]
+        public string AgentVersion { get; set; }
+
+        [JsonPropertyName("containers")]
+        public long Containers { get; set; }
+
+        [JsonPropertyName("containersRunning")]
+        public long ContainersRunning { get; set; }
+
+        [JsonPropertyName("containersPaused")]
+        public long ContainersPaused { get; set; }
+
+        [JsonPropertyName("containersStopped")]
+        public long ContainersStopped { get; set; }
+
+        [JsonPropertyName("images")]
+        public long Images { get; set; }
+
+        [JsonPropertyName("driver")]
         public string Driver { get; set; }
 
-        [JsonPropertyName("DriverStatus")]
+        [JsonPropertyName("driverStatus")]
         public ICollection<ICollection<string>> DriverStatus { get; set; }
 
-        [JsonPropertyName("DockerRootDir")]
-        public string DockerRootDir { get; set; }
-
-        [JsonPropertyName("Plugins")]
-        public PluginsInfo Plugins { get; set; }
-
-        [JsonPropertyName("MemoryLimit")]
-        public bool? MemoryLimit { get; set; }
-
-        [JsonPropertyName("SwapLimit")]
-        public bool? SwapLimit { get; set; }
-
-        [JsonPropertyName("KernelMemoryTCP")]
-        public bool? KernelMemoryTCP { get; set; }
-
-        [JsonPropertyName("CpuCfsPeriod")]
-        public bool? CpuCfsPeriod { get; set; }
-
-        [JsonPropertyName("CpuCfsQuota")]
-        public bool? CpuCfsQuota { get; set; }
-
-        [JsonPropertyName("CPUShares")]
-        public bool? CPUShares { get; set; }
-
-        [JsonPropertyName("CPUSet")]
-        public bool? CPUSet { get; set; }
-
-        [JsonPropertyName("PidsLimit")]
-        public bool? PidsLimit { get; set; }
-
-        [JsonPropertyName("OomKillDisable")]
-        public bool? OomKillDisable { get; set; }
-
-        [JsonPropertyName("IPv4Forwarding")]
-        public bool? IPv4Forwarding { get; set; }
-
-        [JsonPropertyName("BridgeNfIptables")]
-        public bool? BridgeNfIptables { get; set; }
-
-        [JsonPropertyName("BridgeNfIp6tables")]
-        public bool? BridgeNfIp6tables { get; set; }
-
-        [JsonPropertyName("Debug")]
-        public bool? Debug { get; set; }
-
-        [JsonPropertyName("NFd")]
-        public int? NFd { get; set; }
-
-        [JsonPropertyName("NGoroutines")]
-        public int? NGoroutines { get; set; }
-
-        [JsonPropertyName("SystemTime")]
-        public string SystemTime { get; set; }
-
-        [JsonPropertyName("LoggingDriver")]
-        public string LoggingDriver { get; set; }
-
-        [JsonPropertyName("CgroupDriver")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
-        public SystemInfoCgroupDriver CgroupDriver { get; set; }
-
-        [JsonPropertyName("CgroupVersion")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
-        public SystemInfoCgroupVersion CgroupVersion { get; set; }
-
-        [JsonPropertyName("NEventsListener")]
-        public int? NEventsListener { get; set; }
-
-        [JsonPropertyName("KernelVersion")]
-        public string KernelVersion { get; set; }
-
-        [JsonPropertyName("OperatingSystem")]
+        [JsonPropertyName("operatingSystem")]
         public string OperatingSystem { get; set; }
 
-        [JsonPropertyName("OSVersion")]
-        public string OSVersion { get; set; }
+        [JsonPropertyName("osVersion")]
+        public string OsVersion { get; set; }
 
-        [JsonPropertyName("OSType")]
-        public string OSType { get; set; }
+        [JsonPropertyName("osType")]
+        public string OsType { get; set; }
 
-        [JsonPropertyName("Architecture")]
+        [JsonPropertyName("architecture")]
         public string Architecture { get; set; }
 
-        [JsonPropertyName("NCPU")]
-        public int? NCPU { get; set; }
+        [JsonPropertyName("ncpu")]
+        public long Ncpu { get; set; }
 
-        [JsonPropertyName("MemTotal")]
-        public long? MemTotal { get; set; }
-
-        [JsonPropertyName("IndexServerAddress")]
-        public string IndexServerAddress { get; set; }
-
-        [JsonPropertyName("RegistryConfig")]
-        public RegistryServiceConfig RegistryConfig { get; set; }
-
-        [JsonPropertyName("GenericResources")]
-        public ICollection<Anonymous2> GenericResources { get; set; }
-
-        [JsonPropertyName("HttpProxy")]
-        public string HttpProxy { get; set; }
-
-        [JsonPropertyName("HttpsProxy")]
-        public string HttpsProxy { get; set; }
-
-        [JsonPropertyName("NoProxy")]
-        public string NoProxy { get; set; }
-
-        [JsonPropertyName("Name")]
-        public string Name { get; set; }
-
-        [JsonPropertyName("Labels")]
-        public ICollection<string> Labels { get; set; }
-
-        [JsonPropertyName("ExperimentalBuild")]
-        public bool? ExperimentalBuild { get; set; }
-
-        [JsonPropertyName("ServerVersion")]
+        [JsonPropertyName("serverVersion")]
         public string ServerVersion { get; set; }
 
-        [JsonPropertyName("Runtimes")]
-        public IDictionary<string, Runtime> Runtimes { get; set; }
-
-        [JsonPropertyName("DefaultRuntime")]
-        public string DefaultRuntime { get; set; }
-
-        [JsonPropertyName("Swarm")]
-        public SwarmInfo Swarm { get; set; }
-
-        [JsonPropertyName("LiveRestoreEnabled")]
-        public bool? LiveRestoreEnabled { get; set; }
-
-        [JsonPropertyName("Isolation")]
-        public string Isolation { get; set; }
-
-        [JsonPropertyName("InitBinary")]
-        public string InitBinary { get; set; }
-
-        [JsonPropertyName("ContainerdCommit")]
-        public Commit ContainerdCommit { get; set; }
-
-        [JsonPropertyName("RuncCommit")]
-        public Commit RuncCommit { get; set; }
-
-        [JsonPropertyName("InitCommit")]
-        public Commit InitCommit { get; set; }
-
-        [JsonPropertyName("SecurityOptions")]
-        public ICollection<string> SecurityOptions { get; set; }
-
-        [JsonPropertyName("ProductLicense")]
-        public string ProductLicense { get; set; }
-
-        [JsonPropertyName("DefaultAddressPools")]
-        public ICollection<DefaultAddressPools> DefaultAddressPools { get; set; }
-
-        [JsonPropertyName("Warnings")]
-        public ICollection<string> Warnings { get; set; }
-
-        [JsonPropertyName("CDISpecDirs")]
-        public ICollection<string> CDISpecDirs { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public enum SystemInfoCgroupDriver
-    {
-
-        [System.Runtime.Serialization.EnumMember(Value = @"Cgroupfs")]
-        Cgroupfs = 0,
-
-        [System.Runtime.Serialization.EnumMember(Value = @"Systemd")]
-        Systemd = 1,
-
-        [System.Runtime.Serialization.EnumMember(Value = @"None")]
-        None = 2,
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public enum SystemInfoCgroupVersion
-    {
-
-        [System.Runtime.Serialization.EnumMember(Value = @"_1")]
-        _1 = 0,
-
-        [System.Runtime.Serialization.EnumMember(Value = @"_2")]
-        _2 = 1,
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class TLSInfo
-    {
-
-        [JsonPropertyName("TrustRoot")]
-        public string TrustRoot { get; set; }
-
-        [JsonPropertyName("CertIssuerSubject")]
-        public string CertIssuerSubject { get; set; }
-
-        [JsonPropertyName("CertIssuerPublicKey")]
-        public string CertIssuerPublicKey { get; set; }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.0.8.0 (NJsonSchema v11.0.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class TaskDefaults
-    {
-
-        [JsonPropertyName("LogDriver")]
-        public LogDriver2 LogDriver { get; set; }
+        [JsonPropertyName("swarm")]
+        public SwarmInfoView Swarm { get; set; }
 
     }
 

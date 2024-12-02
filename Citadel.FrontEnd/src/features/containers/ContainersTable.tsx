@@ -60,7 +60,8 @@ export const columns: ColumnDef<ContainerInfoView>[] = [
     header: ({ column }) => <SortableCell cellName="Cpu" column={column} />,
     cell: ({ row }) => (
       <div>
-        {(row.original as ContainerInfoView).stats && toFixedNumber((row.original as ContainerInfoView).stats?.at(0)?.cpuUsage, 'percent')}
+        {(row.original as ContainerInfoView).stats &&
+          toFixedNumber((row.original as ContainerInfoView).stats?.at(0)?.cpuUsage, 'percent')}
       </div>
     ),
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
@@ -73,9 +74,9 @@ export const columns: ColumnDef<ContainerInfoView>[] = [
     header: ({ column }) => <SortableCell cellName="Memory" column={column} />,
     cell: ({ row }) => (
       <div>
-        {(row.original as ContainerInfoView)?.stats?.at(0)?.memoryUsage &&  (
+        {(row.original as ContainerInfoView)?.stats?.at(0)?.memoryUsage && (
           <span>
-            {toFixedNumber((row.original as ContainerInfoView).stats?.at(0)?.memoryUsage ?? 0, 'percent') +
+            {byteTransform((row.original as ContainerInfoView).stats?.at(0)?.memoryUsage ?? 0, 2) +
               ' / ' +
               byteTransform((row.original as ContainerInfoView).stats?.at(0)?.memoryLimit ?? 0, 2)}
           </span>

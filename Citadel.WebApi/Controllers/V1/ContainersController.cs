@@ -7,6 +7,8 @@ using System.ComponentModel.DataAnnotations;
 using WebApi.Controllers.V1.Resources.Containers;
 using Application.Features.Containers.Queries;
 using Application.Features.Platforms.Commands;
+using Infrastructure.Entities;
+using LightResults;
 
 namespace WebApi.Controllers.V1;
 
@@ -160,5 +162,23 @@ public sealed class ContainersController(IMediator mediator) : ControllerBase
     {
         var response = await mediator.Send(request.ToCommand(), cancellation);
         return this.HandleResultForNoContent(response);
+    }
+
+    /// <summary>
+    /// Get container stats
+    /// </summary>
+    /// <param name="id">The container id</param>
+    /// <param name="cancellation"></param>
+    /// <returns></returns>
+    [HttpGet("{id}/stats")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway)]
+    public async Task<ActionResult<ContainerStatsView>> GetStats([Required] string id, CancellationToken cancellation)
+    {
+        var response = await mediator.Send(new GetContainerStats(id), cancellation);
+        return this.HandleResult(response, ContainerStatsView.Map);
     }
 }

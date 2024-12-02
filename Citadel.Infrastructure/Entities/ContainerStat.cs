@@ -4,7 +4,7 @@ public class ContainerStat
 {
     public Guid Id { get; private set; }
     public Guid ContainerInfoId { get; private set; }
-    public DateTime CreatedAtUtc { get; private set; }
+    public long Created { get; private set; }
     public double? MemoryUsage { get; private set; }
     public double? CpuUsage { get; private set; }
     public double? MemoryLimit { get; private set; }
@@ -18,11 +18,11 @@ public class ContainerStat
         double? memoryLimit,
         ulong? rxBytes,
         ulong? txBytes,
-        DateTime? createdAtUtc
+        long? created
         ) => new()
         {
             Id = Guid.CreateVersion7(),
-            CreatedAtUtc = createdAtUtc ?? DateTime.UtcNow,
+            Created = created.Value,
             MemoryUsage = memoryUsage,
             CpuUsage = cpuUsage,
             MemoryLimit = memoryLimit,

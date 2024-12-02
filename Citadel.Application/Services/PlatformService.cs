@@ -18,7 +18,6 @@ internal sealed class PlatformService(
     {
         // Get the platform from db
         Platform platform = await dbContext.Platforms
-                                    .AsSplitQuery()
                                     .Include(s => s.SystemInfo)
                                     .ThenInclude(s => s.SwarmInfo)
                                     .ThenInclude(s => s.RemoteManagers)
@@ -29,14 +28,34 @@ internal sealed class PlatformService(
             return;
         }
 
-        // Update db only if systemInfo record has changed
-        if (!platform.SystemInfo.EqualsTo(message))
-        {
-            platform.SystemInfo.UpdateWith(message);
-        }
+        platform.SystemInfo.PartialUpdate(
+            networksCount: message.NetworksCount,
+            volumesCount: message.VolumesCount,
+            containers: message.Containers,
+            containersRunning: message.ContainersRunning,
+            containersPaused: message.ContainersPaused,
+            containersStopped: message.ContainersStopped,
+            images: message.Images,
+            ncpu: message.NCPU,
+            memTotal: message.MemTotal,
+            serverVersion: message.ServerVersion,
+            agentVersion: message.AgentVersion,
+            osType: message.OSType,
+            osVersion: message.OSVersion,
+            operatingSystem: message.OperatingSystem,
+            driver: message.Driver
+            );
 
         // Insert the platform stats
-        await dbContext.PlatformStats.AddAsync(PlatformStat.Create(platform.Id, message.MemoryUsage, message.CpuUsage, message.CreatedAtUtc), cancellationToken);
+        var stat = PlatformStat.Create(
+            memoryUsage: message.MemoryUsage,
+            cpuUsage: message.CpuUsage,
+            created: message.Created,
+            rxBytes: message.RxBytes.Value,
+            txBytes: message.TxBytes.Value,
+            platformId: platform.Id);
+
+        dbContext.PlatformStats.Add(stat);
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // Notify client(s)

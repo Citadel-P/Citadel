@@ -1,7 +1,7 @@
 ﻿using System.Security.Claims;
 using System.Security.Cryptography;
 
-namespace Application;
+namespace Application.Utils;
 
 public static class Helpers
 {

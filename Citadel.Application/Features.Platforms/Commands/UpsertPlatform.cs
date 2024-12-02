@@ -55,12 +55,8 @@ internal class UpsertPlatformHandler(
             return Result.Fail<Platform>(result.Error);
         }
 
-        var systemInfo = result.Value.SystemInfo.Map();
-        systemInfo.SetDaemonId(result.Value.DaemonId);
-
-        var platform = Platform.Create(command.Name, command.Address, systemInfo);
-
-        await dbContext.Platforms.AddAsync(platform, cancellationToken);
+        var platform = Platform.Create(command.Name, command.Address, result.Value.Map(), [result.Value.MapStat()]);
+        dbContext.Platforms.Add(platform);
 
         // Save to db
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -77,12 +73,63 @@ internal class UpsertPlatformHandler(
             Result.Fail<Platform>(new NotFoundError("The provided platform Id does not exists"));
         }
 
-        platform.Update(command.Name, command.Address);
+        platform.PartialUpdate(command.Name, command.Address);
 
         // Save to db
         await dbContext.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("The platform with id = {PlatformId} has been updated", platform.Id);
         return Result.Ok(platform);
+    }
+}
+
+internal static class PlatformMapper 
+{
+    internal static SystemInfo Map(this Infrastructure.SystemInfoView systemInfoView)
+    {
+        
+
+        var swarmInfo = SwarmInfo.Create(
+                nodeID: systemInfoView.Swarm.NodeID,
+                nodeAddr: systemInfoView.Swarm.NodeAddr,
+                localNodeState: systemInfoView.Swarm.LocalNodeState,
+                controlAvailable: systemInfoView.Swarm.ControlAvailable,
+                error: systemInfoView.Swarm.Error,
+                nodes: systemInfoView.Swarm.Nodes,
+                managers: systemInfoView.Swarm.Managers,
+                remoteManagers: systemInfoView.Swarm?.RemoteManagers?.Select(s => SwarmPeer.Create(nodeID: s.NodeID, addr: s.Addr))
+                );
+
+        return SystemInfo.Create(
+            daemonId: systemInfoView.DaemonId,
+            networksCount: systemInfoView.NetworksCount,
+            volumesCount: systemInfoView.VolumesCount,
+            containers: systemInfoView.Containers,
+            containersRunning: systemInfoView.ContainersRunning,
+            containersStopped: systemInfoView.ContainersStopped,
+            containersPaused: systemInfoView.ContainersPaused,
+            images: systemInfoView.Images,
+            driver: systemInfoView.Driver,
+            operatingSystem: systemInfoView.OperatingSystem,
+            osVersion: systemInfoView.OsVersion,
+            osType: systemInfoView.OsType,
+            architecture: systemInfoView.Architecture,
+            ncpu: systemInfoView.Ncpu,
+            serverVersion: systemInfoView.ServerVersion,
+            memTotal: systemInfoView.MemTotal,
+            agentVersion: systemInfoView.AgentVersion,
+            swarmInfo: swarmInfo
+            );
+    }
+
+    internal static PlatformStat MapStat(this Infrastructure.SystemInfoView systemInfoView)
+    {
+        return PlatformStat.Create(
+            memoryUsage: systemInfoView.MemoryUsage,
+            cpuUsage: systemInfoView.CpuUsage,
+            created: systemInfoView.Created,
+            rxBytes: systemInfoView.RxBytes.Value,
+            txBytes: systemInfoView.TxBytes.Value
+            );
     }
 }

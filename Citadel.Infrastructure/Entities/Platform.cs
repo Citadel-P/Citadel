@@ -5,7 +5,6 @@ public class Platform
     public Guid Id { get; private set; }
     public string Name { get; private set; }
     public string Address { get; private set; }
-
     public SystemInfo SystemInfo { get; private set; }
     public ICollection<PlatformStat> Stats { get; private set; } = [];
 
@@ -22,10 +21,11 @@ public class Platform
             Stats = stats?.ToList() ?? []
         };
     
-    public Platform Update(string name, string address)
+    public void PartialUpdate(
+        string name = null,
+        string address = null)
     {
-        Name = name;
-        Address = address;
-        return this;
+        if (name != null) Name = name;
+        if (address != null) Address = address;
     }
 }

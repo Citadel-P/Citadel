@@ -68,9 +68,7 @@ const themeModes = [
 
 export const PorfileDropDown = () => {
   const { theme, toggleThemeColor, setThemeMode } = useLayoutContext();
-  const handleMenuClick = (menu: ProfileMenu) => {
-    console.log(menu);
-  };
+  const handleMenuClick = (menu: ProfileMenu) => {};
   return (
     <div className="absolute right-0 z-20 mt-2 w-60 origin-top-right transform rounded-md bg-background py-4 drop-shadow-md shadow-custom ring-1 ring-transparent ring-opacity-5 transition focus:outline-none">
       <div className="flext-row flex items-center px-4 pb-4">

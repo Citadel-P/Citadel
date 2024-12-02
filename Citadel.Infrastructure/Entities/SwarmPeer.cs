@@ -1,20 +1,22 @@
-﻿using Contracts.Broker.Models;
-
-namespace Infrastructure.Entities;
+﻿namespace Infrastructure.Entities;
 
 public class SwarmPeer
 {
-    public Guid Id { get; }
+    public Guid Id { get; private set; }
+    public Guid SwarmInfoId { get; private set; }
+    public string NodeID { get; private set; }
+    public string Addr { get; private set; }
+    
+    /// <summary>
+    /// EF navigation
+    /// </summary>
+    public SwarmInfo SwarmInfo { get; private set; }
 
-    public Guid SwarmInfoId { get; }
-
-    public string NodeID { get; set; }
-
-    public string Addr { get; set; }
-
-    public bool EqualsTo(SwarmPeerMessage message)
-    {
-        return NodeID == message.NodeID &&
-            Addr == message.Addr;
-    }
+    public static SwarmPeer Create(string nodeID, string addr)
+        => new()
+        {
+            Id = Guid.CreateVersion7(),
+            NodeID = nodeID,
+            Addr = addr,
+        };
 }

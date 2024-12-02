@@ -20,7 +20,7 @@ internal static class WebApiModule
             .AddJwtBearer(options =>
             {
                 string key = string.IsNullOrEmpty(configuration["Jwt:Key"])
-                                        ? Application.Helpers.GetJwtSecretFromFile()
+                                        ? Application.Utils.Helpers.GetJwtSecretFromFile()
                                         : configuration["Jwt:Key"];
 
                 options.TokenValidationParameters = new TokenValidationParameters()

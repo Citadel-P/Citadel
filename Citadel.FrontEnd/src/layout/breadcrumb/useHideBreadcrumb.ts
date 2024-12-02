@@ -1,5 +1,5 @@
-import { useAppContext } from "@/AppProvider";
-import { useEffect } from "react";
+import { useAppContext } from '@/AppProvider';
+import { useEffect } from 'react';
 
 export const useHideBreadcrumb = () => {
   const { setIsBreadcrumbHidden } = useAppContext();
@@ -7,6 +7,6 @@ export const useHideBreadcrumb = () => {
     setIsBreadcrumbHidden(true);
     return () => {
       setIsBreadcrumbHidden(false);
-    }
+    };
   }, []);
-}
+};

@@ -28,15 +28,4 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
         modelBuilder.ApplyConfigurationsFromAssembly(GetType().Assembly);
     }
 
-    /// <inheritdoc/>
-    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
-    {
-        int result = await base.SaveChangesAsync(cancellationToken);
-        foreach (var entry in ChangeTracker.Entries())
-        {
-            entry.State = EntityState.Detached;
-        }
-
-        return result;
-    }
 }

@@ -4,9 +4,8 @@ using Riok.Mapperly.Abstractions;
 
 namespace Application;
 
-[Mapper]
+[Mapper(RequiredMappingStrategy = RequiredMappingStrategy.Source)]
 internal static partial class Mapper
 {
-    public static partial SystemInfo Map(this Infrastructure.SystemInfo systemInfo);
     public static partial IEnumerable<ContainerPort> Map(this IList<PortMessage> ports);
 }

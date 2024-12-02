@@ -9,15 +9,16 @@ namespace Infrastructure.Services.AutoSubscribers;
 /// A RabbitMq subscriber for messages related to container's notifications
 /// </summary>
 public class ContainerAutoSubscriber(IContainerService containerService, ILogger<ContainerAutoSubscriber> logger) :
-    IConsumeAsync<ContainersInfoMessage>,
-    IConsumeAsync<ContainerLogMessage>
+    IConsumeAsync<ContainerListMessage>,
+    IConsumeAsync<ContainerLogMessage>,
+    IConsumeAsync<ContainerEventMessage>
 {
-    [ForTopic(ContainersInfoMessage.ForTopic)]
-    public async Task ConsumeAsync(ContainersInfoMessage message, CancellationToken cancellationToken = default)
+    [ForTopic(ContainerListMessage.ForTopic)]
+    public async Task ConsumeAsync(ContainerListMessage message, CancellationToken cancellationToken = default)
     {
         try
         {
-            logger.LogInformation("Received message from broker: {MessageName}", nameof(ContainersInfoMessage));
+            logger.LogInformation("Received message from broker: {MessageName}", nameof(ContainerListMessage));
             await containerService.OnContainersInfoMessage(message, cancellationToken);
         }
         catch (Exception ex)
@@ -31,8 +32,22 @@ public class ContainerAutoSubscriber(IContainerService containerService, ILogger
     {
         try
         {
-            logger.LogInformation("Received message from broker: {MessageName}", nameof(ContainersInfoMessage));
+            logger.LogInformation("Received message from broker: {MessageName}", nameof(ContainerLogMessage));
             await containerService.OnContainerLogsMessage(message, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error occurred: {Message}", ex.Message);
+        }
+    }
+
+    [ForTopic(ContainerEventMessage.ForTopic)]
+    public async Task ConsumeAsync(ContainerEventMessage message, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            logger.LogInformation("Received message from broker: {MessageName}", nameof(ContainerEventMessage));
+            await containerService.OnContainerEventMessage(message, cancellationToken);
         }
         catch (Exception ex)
         {

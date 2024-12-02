@@ -2,9 +2,9 @@
     "openapi": "3.0.1",
     "info": {
         "title": "DT RESTful API",
-        "description": "Doktainer Platform - DT Backend Module RESTful.",
+        "description": "Citadel Platform - DT Backend Module RESTful.",
         "contact": {
-            "name": "Doktainer Support",
+            "name": "Citadel Support",
             "url": "https://www.test.com/"
         },
         "license": {
@@ -480,7 +480,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/SystemInfo"
+                                    "$ref": "#/components/schemas/SystemInfoView"
                                 }
                             }
                         }
@@ -491,112 +491,6 @@
     },
     "components": {
         "schemas": {
-            "Anonymous2": {
-                "type": "object",
-                "properties": {
-                    "NamedResourceSpec": {
-                        "$ref": "#/components/schemas/NamedResourceSpec"
-                    },
-                    "DiscreteResourceSpec": {
-                        "$ref": "#/components/schemas/DiscreteResourceSpec"
-                    }
-                },
-                "additionalProperties": false
-            },
-            "CAConfig": {
-                "type": "object",
-                "properties": {
-                    "NodeCertExpiry": {
-                        "type": "integer",
-                        "format": "int64",
-                        "nullable": true
-                    },
-                    "ExternalCAs": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/ExternalCAs"
-                        },
-                        "nullable": true
-                    },
-                    "SigningCACert": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "SigningCAKey": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "ForceRotate": {
-                        "type": "integer",
-                        "format": "int64",
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "ClusterInfo": {
-                "type": "object",
-                "properties": {
-                    "ID": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "Version": {
-                        "$ref": "#/components/schemas/ObjectVersion"
-                    },
-                    "CreatedAt": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "UpdatedAt": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "Spec": {
-                        "$ref": "#/components/schemas/SwarmSpec"
-                    },
-                    "TLSInfo": {
-                        "$ref": "#/components/schemas/TLSInfo"
-                    },
-                    "RootRotationInProgress": {
-                        "type": "boolean",
-                        "nullable": true
-                    },
-                    "DataPathPort": {
-                        "type": "integer",
-                        "format": "int32",
-                        "nullable": true
-                    },
-                    "DefaultAddrPool": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "nullable": true
-                    },
-                    "SubnetSize": {
-                        "maximum": 29,
-                        "type": "integer",
-                        "format": "int32",
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "Commit": {
-                "type": "object",
-                "properties": {
-                    "ID": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "Expected": {
-                        "type": "string",
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
             "ContainerSummary": {
                 "type": "object",
                 "properties": {
@@ -672,57 +566,6 @@
                         "items": {
                             "$ref": "#/components/schemas/MountPoint"
                         },
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "DefaultAddressPools": {
-                "type": "object",
-                "properties": {
-                    "Base": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "Size": {
-                        "type": "integer",
-                        "format": "int32",
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "DiscreteResourceSpec": {
-                "type": "object",
-                "properties": {
-                    "Kind": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "Value": {
-                        "type": "integer",
-                        "format": "int64",
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "Dispatcher": {
-                "type": "object",
-                "properties": {
-                    "HeartbeatPeriod": {
-                        "type": "integer",
-                        "format": "int64",
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "EncryptionConfig": {
-                "type": "object",
-                "properties": {
-                    "AutoLockManagers": {
-                        "type": "boolean",
                         "nullable": true
                     }
                 },
@@ -825,96 +668,11 @@
                 },
                 "additionalProperties": false
             },
-            "ExternalCAs": {
-                "type": "object",
-                "properties": {
-                    "Protocol": {
-                        "$ref": "#/components/schemas/ExternalCAsProtocol"
-                    },
-                    "URL": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "Options": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "type": "string",
-                            "nullable": true
-                        },
-                        "nullable": true
-                    },
-                    "CACert": {
-                        "type": "string",
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "ExternalCAsProtocol": {
-                "enum": [
-                    "Cfssl"
-                ],
-                "type": "string"
-            },
             "HostConfig2": {
                 "type": "object",
                 "properties": {
                     "NetworkMode": {
                         "type": "string",
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "IndexInfo": {
-                "type": "object",
-                "properties": {
-                    "Name": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "Mirrors": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "nullable": true
-                    },
-                    "Secure": {
-                        "type": "boolean",
-                        "nullable": true
-                    },
-                    "Official": {
-                        "type": "boolean",
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "LocalNodeState": {
-                "enum": [
-                    "Empty",
-                    "Inactive",
-                    "Pending",
-                    "Active",
-                    "Error",
-                    "Locked"
-                ],
-                "type": "string"
-            },
-            "LogDriver2": {
-                "type": "object",
-                "properties": {
-                    "Name": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "Options": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "type": "string",
-                            "nullable": true
-                        },
                         "nullable": true
                     }
                 },
@@ -977,20 +735,6 @@
                 ],
                 "type": "string"
             },
-            "NamedResourceSpec": {
-                "type": "object",
-                "properties": {
-                    "Kind": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "Value": {
-                        "type": "string",
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
             "NetworkSettings2": {
                 "type": "object",
                 "properties": {
@@ -998,76 +742,6 @@
                         "type": "object",
                         "additionalProperties": {
                             "$ref": "#/components/schemas/EndpointSettings"
-                        },
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "ObjectVersion": {
-                "type": "object",
-                "properties": {
-                    "Index": {
-                        "type": "integer",
-                        "format": "int64",
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "Orchestration": {
-                "type": "object",
-                "properties": {
-                    "TaskHistoryRetentionLimit": {
-                        "type": "integer",
-                        "format": "int64",
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "PeerNode": {
-                "type": "object",
-                "properties": {
-                    "NodeID": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "Addr": {
-                        "type": "string",
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "PluginsInfo": {
-                "type": "object",
-                "properties": {
-                    "Volume": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "nullable": true
-                    },
-                    "Network": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "nullable": true
-                    },
-                    "Authorization": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "nullable": true
-                    },
-                    "Log": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
                         },
                         "nullable": true
                     }
@@ -1134,109 +808,12 @@
                 },
                 "additionalProperties": {}
             },
-            "Raft": {
-                "type": "object",
-                "properties": {
-                    "SnapshotInterval": {
-                        "type": "integer",
-                        "format": "int64",
-                        "nullable": true
-                    },
-                    "KeepOldSnapshots": {
-                        "type": "integer",
-                        "format": "int64",
-                        "nullable": true
-                    },
-                    "LogEntriesForSlowFollowers": {
-                        "type": "integer",
-                        "format": "int64",
-                        "nullable": true
-                    },
-                    "ElectionTick": {
-                        "type": "integer",
-                        "format": "int32",
-                        "nullable": true
-                    },
-                    "HeartbeatTick": {
-                        "type": "integer",
-                        "format": "int32",
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "RegistryServiceConfig": {
-                "type": "object",
-                "properties": {
-                    "AllowNondistributableArtifactsCIDRs": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "nullable": true
-                    },
-                    "AllowNondistributableArtifactsHostnames": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "nullable": true
-                    },
-                    "InsecureRegistryCIDRs": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "nullable": true
-                    },
-                    "IndexConfigs": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "$ref": "#/components/schemas/IndexInfo"
-                        },
-                        "nullable": true
-                    },
-                    "Mirrors": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
             "RequestedLogAction": {
                 "enum": [
                     "START",
                     "STOP"
                 ],
                 "type": "string"
-            },
-            "Runtime": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "runtimeArgs": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "nullable": true
-                    },
-                    "status": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "type": "string",
-                            "nullable": true
-                        },
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
             },
             "StreamLogsRequest": {
                 "type": "object",
@@ -1258,124 +835,130 @@
                 "additionalProperties": false,
                 "description": ""
             },
-            "SwarmInfo": {
+            "SwarmInfoView": {
                 "type": "object",
                 "properties": {
-                    "NodeID": {
+                    "nodeID": {
                         "type": "string",
                         "nullable": true
                     },
-                    "NodeAddr": {
+                    "nodeAddr": {
                         "type": "string",
                         "nullable": true
                     },
-                    "LocalNodeState": {
-                        "$ref": "#/components/schemas/LocalNodeState"
-                    },
-                    "ControlAvailable": {
-                        "type": "boolean",
-                        "nullable": true
-                    },
-                    "Error": {
+                    "localNodeState": {
                         "type": "string",
                         "nullable": true
                     },
-                    "RemoteManagers": {
+                    "controlAvailable": {
+                        "type": "boolean"
+                    },
+                    "error": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "nodes": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "managers": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "remoteManagers": {
                         "type": "array",
                         "items": {
-                            "$ref": "#/components/schemas/PeerNode"
+                            "$ref": "#/components/schemas/SwarmPeerView"
                         },
                         "nullable": true
-                    },
-                    "Nodes": {
-                        "type": "integer",
-                        "format": "int32",
-                        "nullable": true
-                    },
-                    "Managers": {
-                        "type": "integer",
-                        "format": "int32",
-                        "nullable": true
-                    },
-                    "Cluster": {
-                        "$ref": "#/components/schemas/ClusterInfo"
                     }
                 },
                 "additionalProperties": false
             },
-            "SwarmSpec": {
+            "SwarmPeerView": {
                 "type": "object",
                 "properties": {
-                    "Name": {
+                    "nodeID": {
                         "type": "string",
                         "nullable": true
                     },
-                    "Labels": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "type": "string",
-                            "nullable": true
-                        },
+                    "addr": {
+                        "type": "string",
                         "nullable": true
-                    },
-                    "Orchestration": {
-                        "$ref": "#/components/schemas/Orchestration"
-                    },
-                    "Raft": {
-                        "$ref": "#/components/schemas/Raft"
-                    },
-                    "Dispatcher": {
-                        "$ref": "#/components/schemas/Dispatcher"
-                    },
-                    "CAConfig": {
-                        "$ref": "#/components/schemas/CAConfig"
-                    },
-                    "EncryptionConfig": {
-                        "$ref": "#/components/schemas/EncryptionConfig"
-                    },
-                    "TaskDefaults": {
-                        "$ref": "#/components/schemas/TaskDefaults"
                     }
                 },
                 "additionalProperties": false
             },
-            "SystemInfo": {
+            "SystemInfoView": {
                 "type": "object",
                 "properties": {
-                    "ID": {
+                    "daemonId": {
                         "type": "string",
                         "nullable": true
                     },
-                    "Containers": {
+                    "created": {
                         "type": "integer",
-                        "format": "int32",
+                        "format": "int64"
+                    },
+                    "memTotal": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "memoryUsage": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "cpuUsage": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "rxBytes": {
+                        "type": "number",
+                        "format": "double",
                         "nullable": true
                     },
-                    "ContainersRunning": {
-                        "type": "integer",
-                        "format": "int32",
+                    "txBytes": {
+                        "type": "number",
+                        "format": "double",
                         "nullable": true
                     },
-                    "ContainersPaused": {
+                    "networksCount": {
                         "type": "integer",
-                        "format": "int32",
-                        "nullable": true
+                        "format": "int32"
                     },
-                    "ContainersStopped": {
+                    "volumesCount": {
                         "type": "integer",
-                        "format": "int32",
-                        "nullable": true
+                        "format": "int32"
                     },
-                    "Images": {
-                        "type": "integer",
-                        "format": "int32",
-                        "nullable": true
-                    },
-                    "Driver": {
+                    "agentVersion": {
                         "type": "string",
                         "nullable": true
                     },
-                    "DriverStatus": {
+                    "containers": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "containersRunning": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "containersPaused": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "containersStopped": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "images": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "driver": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "driverStatus": {
                         "type": "array",
                         "items": {
                             "type": "array",
@@ -1385,277 +968,32 @@
                         },
                         "nullable": true
                     },
-                    "DockerRootDir": {
+                    "operatingSystem": {
                         "type": "string",
                         "nullable": true
                     },
-                    "Plugins": {
-                        "$ref": "#/components/schemas/PluginsInfo"
-                    },
-                    "MemoryLimit": {
-                        "type": "boolean",
+                    "osVersion": {
+                        "type": "string",
                         "nullable": true
                     },
-                    "SwapLimit": {
-                        "type": "boolean",
+                    "osType": {
+                        "type": "string",
                         "nullable": true
                     },
-                    "KernelMemoryTCP": {
-                        "type": "boolean",
+                    "architecture": {
+                        "type": "string",
                         "nullable": true
                     },
-                    "CpuCfsPeriod": {
-                        "type": "boolean",
-                        "nullable": true
-                    },
-                    "CpuCfsQuota": {
-                        "type": "boolean",
-                        "nullable": true
-                    },
-                    "CPUShares": {
-                        "type": "boolean",
-                        "nullable": true
-                    },
-                    "CPUSet": {
-                        "type": "boolean",
-                        "nullable": true
-                    },
-                    "PidsLimit": {
-                        "type": "boolean",
-                        "nullable": true
-                    },
-                    "OomKillDisable": {
-                        "type": "boolean",
-                        "nullable": true
-                    },
-                    "IPv4Forwarding": {
-                        "type": "boolean",
-                        "nullable": true
-                    },
-                    "BridgeNfIptables": {
-                        "type": "boolean",
-                        "nullable": true
-                    },
-                    "BridgeNfIp6tables": {
-                        "type": "boolean",
-                        "nullable": true
-                    },
-                    "Debug": {
-                        "type": "boolean",
-                        "nullable": true
-                    },
-                    "NFd": {
+                    "ncpu": {
                         "type": "integer",
-                        "format": "int32",
-                        "nullable": true
+                        "format": "int64"
                     },
-                    "NGoroutines": {
-                        "type": "integer",
-                        "format": "int32",
-                        "nullable": true
-                    },
-                    "SystemTime": {
+                    "serverVersion": {
                         "type": "string",
                         "nullable": true
                     },
-                    "LoggingDriver": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "CgroupDriver": {
-                        "$ref": "#/components/schemas/SystemInfoCgroupDriver"
-                    },
-                    "CgroupVersion": {
-                        "$ref": "#/components/schemas/SystemInfoCgroupVersion"
-                    },
-                    "NEventsListener": {
-                        "type": "integer",
-                        "format": "int32",
-                        "nullable": true
-                    },
-                    "KernelVersion": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "OperatingSystem": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "OSVersion": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "OSType": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "Architecture": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "NCPU": {
-                        "type": "integer",
-                        "format": "int32",
-                        "nullable": true
-                    },
-                    "MemTotal": {
-                        "type": "integer",
-                        "format": "int64",
-                        "nullable": true
-                    },
-                    "IndexServerAddress": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "RegistryConfig": {
-                        "$ref": "#/components/schemas/RegistryServiceConfig"
-                    },
-                    "GenericResources": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/Anonymous2"
-                        },
-                        "nullable": true
-                    },
-                    "HttpProxy": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "HttpsProxy": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "NoProxy": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "Name": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "Labels": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "nullable": true
-                    },
-                    "ExperimentalBuild": {
-                        "type": "boolean",
-                        "nullable": true
-                    },
-                    "ServerVersion": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "Runtimes": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "$ref": "#/components/schemas/Runtime"
-                        },
-                        "nullable": true
-                    },
-                    "DefaultRuntime": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "Swarm": {
-                        "$ref": "#/components/schemas/SwarmInfo"
-                    },
-                    "LiveRestoreEnabled": {
-                        "type": "boolean",
-                        "nullable": true
-                    },
-                    "Isolation": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "InitBinary": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "ContainerdCommit": {
-                        "$ref": "#/components/schemas/Commit"
-                    },
-                    "RuncCommit": {
-                        "$ref": "#/components/schemas/Commit"
-                    },
-                    "InitCommit": {
-                        "$ref": "#/components/schemas/Commit"
-                    },
-                    "SecurityOptions": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "nullable": true
-                    },
-                    "ProductLicense": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "DefaultAddressPools": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/DefaultAddressPools"
-                        },
-                        "nullable": true
-                    },
-                    "Warnings": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "nullable": true
-                    },
-                    "CDISpecDirs": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "SystemInfoCgroupDriver": {
-                "enum": [
-                    "Cgroupfs",
-                    "Systemd",
-                    "None"
-                ],
-                "type": "string"
-            },
-            "SystemInfoCgroupVersion": {
-                "enum": [
-                    "_1",
-                    "_2"
-                ],
-                "type": "string"
-            },
-            "TLSInfo": {
-                "type": "object",
-                "properties": {
-                    "TrustRoot": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "CertIssuerSubject": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "CertIssuerPublicKey": {
-                        "type": "string",
-                        "nullable": true
-                    }
-                },
-                "additionalProperties": false
-            },
-            "TaskDefaults": {
-                "type": "object",
-                "properties": {
-                    "LogDriver": {
-                        "$ref": "#/components/schemas/LogDriver2"
+                    "swarm": {
+                        "$ref": "#/components/schemas/SwarmInfoView"
                     }
                 },
                 "additionalProperties": false

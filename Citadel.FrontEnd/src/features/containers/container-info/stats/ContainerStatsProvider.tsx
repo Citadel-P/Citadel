@@ -1,0 +1,41 @@
+import { useRequiredContext } from '@/hooks/useRequiredContext';
+import { createContext, useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { useGetContainerStats } from './hooks/useGetContainerStats';
+import { ContainerStatView } from '@/api/_generated';
+
+interface IContext {
+  isLoading: boolean;
+  requestId: string;
+  stats: ContainerStatView[] | undefined;
+}
+interface IProps {
+  children?: React.ReactNode;
+}
+
+const ContainerStatsContext = createContext<IContext | undefined>(undefined);
+
+const ContainerLogsProvider: React.FC<IProps> = ({ children }) => {
+  const [requestId] = useState(crypto.randomUUID());
+  const { containerId } = useParams();
+  const { data, isSuccess, isLoading } = useGetContainerStats(containerId);
+  let stats: ContainerStatView[] = [];
+  if (isSuccess) {
+    stats = data?.data.stats!;
+  }
+
+  return (
+    <ContainerStatsContext.Provider
+      value={{
+        isLoading,
+        stats,
+        requestId,
+      }}>
+      {children}
+    </ContainerStatsContext.Provider>
+  );
+};
+
+export default ContainerLogsProvider;
+
+export const useContainerStatsContext = () => useRequiredContext(ContainerStatsContext);

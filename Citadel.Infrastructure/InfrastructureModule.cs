@@ -61,9 +61,9 @@ public static class InfrastructureModule
         return
             services
                 .RegisterAutoSubscriber(busConfig)
-                .AddScoped<IConsumeAsync<EventMessage>, DaemonEventAutoSubscriber>()
                 .AddScoped<IConsumeAsync<SystemInfoMessage>, PlatformAutoSubscriber>()
-                .AddScoped<IConsumeAsync<ContainersInfoMessage>, ContainerAutoSubscriber>()
+                .AddScoped<IConsumeAsync<ContainerListMessage>, ContainerAutoSubscriber>()
+                .AddScoped<IConsumeAsync<ContainerEventMessage>, ContainerAutoSubscriber>()
                 .AddScoped<IConsumeAsync<ContainerLogMessage>, ContainerAutoSubscriber>();
     }
 

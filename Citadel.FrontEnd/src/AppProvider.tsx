@@ -9,7 +9,7 @@ import { useGETContainer } from './features/containers/hooks/useGETContainer';
 interface IContext {
   route: { path: string };
   isBreadcrumbHidden: boolean;
-  setIsBreadcrumbHidden: (s: boolean) => void,
+  setIsBreadcrumbHidden: (s: boolean) => void;
   currentPlatform: PlatformView | undefined;
   currentContainer: ContainerInfoView | undefined;
 }

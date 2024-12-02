@@ -25,7 +25,7 @@ internal class GetPlatformInfoHandler(ApplicationDbContext dbContext) : IQueryHa
     {
         Platform platform = await dbContext.Platforms
             .Include(s => s.SystemInfo)
-            .Include(s => s.Stats.Where(x => x.CreatedAtUtc > DateTime.UtcNow.AddHours(-1))) // Get platform stats for the last hour
+            .Include(s => s.Stats.Where(x => x.Created > DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeSeconds())) // Get platform stats for the last hour
             .AsSplitQuery()
             .AsNoTracking()
             .SingleOrDefaultAsync(s => s.Id == query.Id, cancellationToken);

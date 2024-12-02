@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { HubConnection, HubConnectionBuilder, HubConnectionState, IHttpConnectionOptions } from '@microsoft/signalr';
 import { useAuthContext } from '@/features/login/AuthProvider';
 import { SignalrRetryPolicy } from '@/lib/signalr.retrypolicy';
-import { ContainersInfoView } from '@/api/_generated';
+import { ContainerInfoView, ContainersInfoView, ContainerStatView } from '@/api/_generated';
 
 const useContainersHub = (platformId: string) => {
-  const [containersMessage, setContainersMessage] = useState<ContainersInfoView | undefined>();
+  const [containersInfo, setContainersInfo] = useState<ContainersInfoView | undefined>();
   const { jwtToken } = useAuthContext();
   const groupName = `ContainersInfo/${platformId}`;
 
@@ -40,7 +40,10 @@ const useContainersHub = (platformId: string) => {
       if (isCanceled) return hubConnection.stop();
       hubConnection.send('JoinGroup', groupName);
       hubConnection.on('ContainersInfoUpdated', (msg: ContainersInfoView) => {
-        setContainersMessage(msg);
+        setContainersInfo(msg);
+      });
+      hubConnection.on('ContainerEventReceived', (containerInfo: ContainerInfoView, eventType: string) => {
+        // todo
       });
     };
 
@@ -55,7 +58,12 @@ const useContainersHub = (platformId: string) => {
     };
   }, [jwtToken, platformId, groupName]);
 
-  return { containersMessage };
+  return { containersInfo };
 };
+
+export interface IContainerEvent {
+  containerInfo: ContainerInfoView;
+  eventType: string;
+}
 
 export default useContainersHub;

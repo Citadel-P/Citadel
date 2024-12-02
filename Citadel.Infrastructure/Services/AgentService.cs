@@ -9,7 +9,7 @@ public interface IAgentService
     /// <summary>
     /// Query the agent to get the system info
     /// </summary>
-    Task<Result<(SystemInfo SystemInfo, string DaemonId)>> GetSystemInfo(string platformAddress, CancellationToken cancellationToken = default);
+    Task<Result<SystemInfoView>> GetSystemInfo(string platformAddress, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Get the list of containers
@@ -55,18 +55,18 @@ public interface IAgentService
 internal sealed class AgentService(IAgentProxy agentProxy, ILogger<AgentService> logger) : IAgentService
 {
     /// <inheritdoc />
-    public async Task<Result<(SystemInfo SystemInfo, string DaemonId)>> GetSystemInfo(string platformAddress, CancellationToken cancellationToken = default)
+    public async Task<Result<SystemInfoView>> GetSystemInfo(string platformAddress, CancellationToken cancellationToken = default)
     {
         try
         {
             var result = await agentProxy.ForAddress(platformAddress).GetSystemInfo(cancellationToken);
             //result.AgentVersion = response.Headers.GetValues("agent-version").FirstOrDefault();
-            return Result.Ok<(SystemInfo SystemInfo, string DaemonId)>(new(result, result.ID));
+            return Result.Ok(result);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occurred while contacting the remote agent");
-            return Result.Fail<(SystemInfo SystemInfo, string DaemonId)>(new BadGatewayError(ex.Message));
+            return Result.Fail<SystemInfoView>(new BadGatewayError(ex.Message));
         }
     }
 

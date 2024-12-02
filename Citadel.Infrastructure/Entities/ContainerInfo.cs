@@ -7,7 +7,7 @@ public class ContainerInfo
     public string ContainerId { get; private set; }
     public string Name { get; private set; }
     public string Image { get; private set; }
-    public DateTimeOffset Created { get; private set; }
+    public int Created { get; private set; }
     public string State { get; set; }
     public string Status { get; private set; }
     public ICollection<ContainerPort> Ports { get; private set; } = [];
@@ -20,10 +20,10 @@ public class ContainerInfo
         string containerId,
         string name,
         string image,
-        int created, 
         string state,
         string status,
-        IEnumerable<ContainerPort> ports,
+        int? created = null, 
+        IEnumerable<ContainerPort> ports = null,
         IDictionary<string, string> labels = null)
         => new()
         {
@@ -32,28 +32,28 @@ public class ContainerInfo
             ContainerId = containerId,
             Name = name,
             Image = image,
-            Created = DateTimeOffset.FromUnixTimeSeconds(created),
             State = state,
             Status = status,
-            Ports = ports.ToList(),
+            Ports = ports?.ToList(),
             Labels = labels,
+            Created = created.Value,
         };
 
     public void UpdateWith(
-        string name,
-        string image,
-        int created,
-        string state,
-        string status,
-        IEnumerable<ContainerPort> ports,
+        string name = null,
+        string image = null,
+        string state = null,
+        string status = null,
+        int? created = null,
+        IEnumerable<ContainerPort> ports = null,
         IDictionary<string, string> labels = null)
     {
-        Name = name;
-        Image = image;
-        Created = DateTimeOffset.FromUnixTimeSeconds(created);
-        State = state;
-        Status = status;
-        Labels = labels;
-        Ports = ports.ToList();
+        if (name != null) Name = name;
+        if (image != null) Image = image;
+        if (state != null) State = state;
+        if (status != null) Status = status;
+        if (labels != null) Labels = labels;
+        if (labels != ports) Ports = ports.ToList();
+        if (created != null) Created = created.Value;
     }
 }

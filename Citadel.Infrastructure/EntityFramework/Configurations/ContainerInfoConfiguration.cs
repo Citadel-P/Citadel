@@ -13,6 +13,7 @@ internal class ContainerInfoConfiguration : IEntityTypeConfiguration<ContainerIn
 
         // Pk & Indexes
         builder.HasKey(p => p.Id);
+        builder.HasIndex(p => p.ContainerId).IsUnique();
 
         // Properties
         builder.Property(p => p.ContainerId).HasMaxLength(64);

@@ -28,7 +28,7 @@ internal class GetPlatformByIdHandler(ApplicationDbContext dbContext) : IQueryHa
         var platform = await dbContext.Platforms
                                         .AsNoTracking()
                                         .AsSplitQuery()
-                                        .Include(s => s.Stats.OrderByDescending(s => s.CreatedAtUtc).Take(1)) // We only care about the last record)
+                                        .Include(s => s.Stats.OrderByDescending(s => s.Created).Take(1)) // We only care about the last record)
                                         .Include(s => s.SystemInfo)
                                         .ThenInclude(s => s.SwarmInfo)
                                         .ThenInclude(s => s.RemoteManagers)

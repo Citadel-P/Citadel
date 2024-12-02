@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Application.Features.Platforms.Queries.Models;
 using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
+using Application.Utils;
 
 namespace Application.Features.Platforms.Queries;
 
@@ -29,10 +30,9 @@ internal class GetContainersHandler(ApplicationDbContext dbContext)
     public async ValueTask<Result<IEnumerable<ContainerInfo>>> Handle(GetContainers query, CancellationToken cancellationToken)
     {
         var containers = await dbContext.ContainersInfo
-                            .Where(s => s.PlatformId == query.PlatformId)
-                            .Include(s => s.Stats.OrderByDescending(s => s.CreatedAtUtc).Take(1))
-                            .ToListAsync(cancellationToken);
+                .WithLastStat(query.PlatformId)
+                .ToListAsync(cancellationToken);
         
-        return Result.Ok<IEnumerable<ContainerInfo>>(containers.OrderByDescending(s => s.Created));
+        return Result.Ok<IEnumerable<ContainerInfo>>(containers);
     }
 }

@@ -6,6 +6,7 @@ namespace WebApi.Hubs;
 
 public interface ITypedContainerHub
 {
+    Task ContainerEventReceived(ContainerInfoView message, string @event);
     Task ContainersInfoUpdated(ContainersInfoView message);
     Task ContainerLogsReceived(ContainerLogView message);
 }

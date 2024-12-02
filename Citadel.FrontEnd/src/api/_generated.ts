@@ -69,7 +69,11 @@ export interface ContainerStatView {
   /** @format int64 */
   txBytes?: number | null;
   /** @format date-time */
-  createdAtUtc?: string | null;
+  created?: string | null;
+}
+
+export interface ContainerStatsView {
+  stats?: ContainerStatView[] | null;
 }
 
 export interface ContainersInfoView {
@@ -91,8 +95,12 @@ export interface PlatformStatView {
   memoryUsage?: number;
   /** @format double */
   cpuUsage?: number;
-  /** @format date-time */
-  createdAtUtc?: string;
+  /** @format int64 */
+  created?: number;
+  /** @format double */
+  rxBytes?: number;
+  /** @format double */
+  txBytes?: number;
 }
 
 export interface PlatformView {
@@ -108,7 +116,13 @@ export interface PlatformsView {
   platforms?: PlatformView[] | null;
 }
 
-export type PortView = object;
+export interface PortView {
+  ip?: string | null;
+  /** @format int32 */
+  privatePort?: number;
+  /** @format int32 */
+  publicPort?: number;
+}
 
 export interface ProblemDetails {
   type?: string | null;
@@ -159,7 +173,10 @@ export interface SwarmInfoView {
   remoteManagers?: SwarmPeerView[] | null;
 }
 
-export type SwarmPeerView = object;
+export interface SwarmPeerView {
+  nodeID?: string | null;
+  addr?: string | null;
+}
 
 export interface SystemInfoView {
   /** @format uuid */
@@ -190,7 +207,6 @@ export interface SystemInfoView {
   memTotal?: number;
   serverVersion?: string | null;
   agentVersion?: string | null;
-  warnings?: string[] | null;
   swarmInfo?: SwarmInfoView;
 }
 
@@ -644,6 +660,30 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         body: data,
         secure: true,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Containers
+     * @name ContainersGetStats
+     * @summary Get container stats
+     * @request GET:/api/v1/containers/{id}/stats
+     * @secure
+     * @response `200` `ContainerStatsView` OK
+     * @response `400` `ValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `502` `ProblemDetails` Bad Gateway
+     */
+    containersGetStats: (id: string, params: RequestParams = {}) =>
+      this.request<ContainerStatsView, ValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/containers/${id}/stats`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
         ...params,
       }),
 

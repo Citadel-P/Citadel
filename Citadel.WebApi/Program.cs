@@ -58,13 +58,13 @@ void AdditionalSwaggerOptions(SwaggerGenOptions options)
     options
         .AddSecurityRequirement(new OpenApiSecurityRequirement
         {
+            {
+                new OpenApiSecurityScheme
                 {
-                    new OpenApiSecurityScheme
-                    {
-                        Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
-                    },
-                    new List<string>()
-                }
+                    Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+                },
+                new List<string>()
+            }
         });
 }
 

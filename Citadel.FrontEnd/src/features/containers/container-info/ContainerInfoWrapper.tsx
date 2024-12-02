@@ -4,6 +4,8 @@ import ContainerLogs from './logs/ContainerLogs';
 import { Container } from 'lucide-react';
 import { useAppContext } from '@/AppProvider';
 import { useNavigate } from 'react-router-dom';
+import ContainerStats from './stats/ContainerStats';
+import ContainerStatsProvider from './stats/ContainerStatsProvider';
 
 const ContainerInfoWrapper = () => {
   const { route, currentContainer } = useAppContext();
@@ -42,7 +44,11 @@ const ContainerInfoWrapper = () => {
                 <ContainerLogs />
               </ContainerLogsProvider>
             </TabsContent>
-            <TabsContent value="stats">Change your password here.</TabsContent>
+            <TabsContent value="stats">
+              <ContainerStatsProvider>
+                <ContainerStats />
+              </ContainerStatsProvider>
+            </TabsContent>
           </Tabs>
         </div>
       </div>
