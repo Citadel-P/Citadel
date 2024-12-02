@@ -1,7 +1,7 @@
 import { createContext, useEffect, useState } from 'react';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { ContainerInfoView, PlatformView } from './api/_generated';
-import { matchRoutes, useLocation, useParams } from 'react-router-dom';
+import { matchRoutes, useLocation, useParams } from 'react-router';
 import { useGETPlatform } from './features/platforms/hooks/useGETPlatform';
 import { paths } from '@/AppRoutes';
 import { useGETContainer } from './features/containers/hooks/useGETContainer';

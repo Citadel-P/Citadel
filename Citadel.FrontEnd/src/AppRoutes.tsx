@@ -1,4 +1,4 @@
-import { createBrowserRouter, LoaderFunctionArgs, redirect, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, LoaderFunctionArgs, redirect, RouterProvider } from 'react-router';
 import Layout from './layout/Layout';
 import NotFound from './pages/NotFound';
 import { useAuthContext } from './features/login/AuthProvider';
@@ -20,6 +20,7 @@ export const AppRoutes = () => {
       path: paths[0],
       element: <Layout />,
       loader: protectedLoader,
+      hydrateFallbackElement: <Fallback />,
       children: [
         {
           index: true,
@@ -84,5 +85,9 @@ export const AppRoutes = () => {
     import.meta.hot.dispose(() => router.dispose());
   }
 
-  return <RouterProvider router={router} fallbackElement={<p>Loading...</p>} />;
+  return <RouterProvider router={router} />;
 };
+
+function Fallback() {
+  return (<p>Loading...</p>);
+}

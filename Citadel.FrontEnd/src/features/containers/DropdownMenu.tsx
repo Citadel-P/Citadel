@@ -11,7 +11,7 @@ import { ContainerInfoView } from '@/api/_generated';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { useDialog } from '@/hooks/useDialog';
 import { DeleteContainerDialog } from './dialogs/DeleteContainerDialog';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 interface IProps {
   container: ContainerInfoView;

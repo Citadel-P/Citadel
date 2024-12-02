@@ -2,7 +2,7 @@ import Loader from '@/components/ui/loader';
 import { AddPlatformDropdown } from './AddPlatformDropdown';
 import Platform from './Platform';
 import { usePlatformsContext } from './PlatformsProvider';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Message } from '@/components/ui/message';
 
 const Platforms = () => {

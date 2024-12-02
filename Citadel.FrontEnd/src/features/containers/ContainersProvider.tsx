@@ -3,7 +3,7 @@ import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { createContext, useState } from 'react';
 import useContainersHub from './hooks/useContainersHub';
 import { useGETContainers } from './hooks/useGETContainers';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 interface IContext {
   isLoading: boolean;

@@ -1,7 +1,7 @@
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { createContext, useEffect, useState } from 'react';
 import useContainerLogsHub from './hooks/useContainerLogsHub';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { usePOSTContainerLogs } from './hooks/usePOSTContainerLogs';
 import { RequestedLogAction } from '@/api/_generated';
 

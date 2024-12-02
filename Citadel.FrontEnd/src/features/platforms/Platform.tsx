@@ -1,6 +1,6 @@
 import { PlatformView } from '@/api/_generated';
 import DockerIcon from '@/assets/docker.svg';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Power, PowerOff, CirclePause, ChevronRight } from 'lucide-react';
 import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';

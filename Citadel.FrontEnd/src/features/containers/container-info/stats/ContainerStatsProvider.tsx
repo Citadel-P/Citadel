@@ -1,6 +1,6 @@
 import { useRequiredContext } from '@/hooks/useRequiredContext';
-import { createContext, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { createContext, useState } from 'react';
+import { useParams } from 'react-router';
 import { useGetContainerStats } from './hooks/useGetContainerStats';
 import { ContainerStatView } from '@/api/_generated';
 

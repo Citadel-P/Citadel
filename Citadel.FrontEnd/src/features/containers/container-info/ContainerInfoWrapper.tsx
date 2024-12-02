@@ -3,7 +3,7 @@ import ContainerLogsProvider from './logs/ContainerLogsProvider';
 import ContainerLogs from './logs/ContainerLogs';
 import { Container } from 'lucide-react';
 import { useAppContext } from '@/AppProvider';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import ContainerStats from './stats/ContainerStats';
 import ContainerStatsProvider from './stats/ContainerStatsProvider';
 
