@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-	<PackageReference Include="dbup-sqlite" Version="5.0.40" />
+	<PackageReference Include="dbup-sqlite" Version="6.0.1" />
 	<PackageReference Include="Microsoft.Extensions.Http.Polly" Version="9.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
       <PrivateAssets>all</PrivateAssets>
