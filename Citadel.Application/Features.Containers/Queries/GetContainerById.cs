@@ -27,7 +27,7 @@ internal class GetContainerByIdHandler(ApplicationDbContext dbContext)
                                 .Include(s => s.Platform)
                                 .FirstOrDefaultAsync(s => s.ContainerId.StartsWith(query.ContainerId), cancellationToken: cancellationToken);
 
-        return container ?? Result.Fail<ContainerInfo>(new NotFoundError("Platform does not exist"));
+        return container ?? Result.Failure<ContainerInfo>(new NotFoundError("Platform does not exist"));
 
     }
 }

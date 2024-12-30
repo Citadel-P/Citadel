@@ -37,7 +37,7 @@ internal class StreamContainerLogsHandler(
 
         if (platformAddress == null)
         {
-            return Result.Fail(new NotFoundError($"Platform doesn't exist for container {command.ContainerId}"));
+            return Result.Failure(new NotFoundError($"Platform doesn't exist for container {command.ContainerId}"));
         }
 
         return await agentService.StreamContainerLogs(platformAddress, command.ContainerId, command.RequestId, Convert(command.Action), cancellationToken);

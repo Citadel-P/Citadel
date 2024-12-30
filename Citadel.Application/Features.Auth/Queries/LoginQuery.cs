@@ -39,13 +39,13 @@ internal sealed class LoginQueryHandler(IJwtService jwtService,
         User user = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(s => s.Email == query.Email, cancellationToken: cancellationToken);
         if (user is null)
         {
-            return Result.Fail<LoginResponse>(new NotFoundError("User does not exist"));
+            return Result.Failure<LoginResponse>(new NotFoundError("User does not exist"));
         }
 
         // Check password is valid
         if (!user.IsValidPassword(query.Password))
         {
-            return Result.Fail<LoginResponse>(new BadRequestError("Invalid credentials"));
+            return Result.Failure<LoginResponse>(new BadRequestError("Invalid credentials"));
         }
 
         HashSet<Claim> claims =
@@ -63,7 +63,7 @@ internal sealed class LoginQueryHandler(IJwtService jwtService,
         // Get permissions
         AppPermission[] permissions = await GetPermissionsAsync(user.Id);
 
-        return Result.Ok(new LoginResponse(jwt, permissions));
+        return Result.Success(new LoginResponse(jwt, permissions));
     }
 
     private async ValueTask<AppPermission[]> GetPermissionsAsync(Guid userId)

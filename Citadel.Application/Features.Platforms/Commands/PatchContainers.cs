@@ -46,9 +46,9 @@ internal class PatchContainersHandler(
                 containerIds[i] = container.ElementAt(i).ContainerId;
             
             var response = await ToOperation(container.Key, containerIds, request.Action);
-            if (!response.IsSuccess)
+            if (response.IsFailure(out var error))
             {
-                return Result.Fail(response.Error);
+                return Result.Failure(error);
             }
         }
 
@@ -64,6 +64,6 @@ internal class PatchContainersHandler(
         };
 
 
-        return Result.Ok();
+        return Result.Success();
     }
 }

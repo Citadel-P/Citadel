@@ -29,7 +29,7 @@ internal class DeletePlatformHandler(ApplicationDbContext dbContext, ICacheServi
 
         if (platform is null)
         {
-            return Result.Fail(new NotFoundError("Platform does not exists"));
+            return Result.Failure(new NotFoundError("Platform does not exists"));
         }
 
         dbContext.Platforms.Remove(platform);
@@ -37,6 +37,6 @@ internal class DeletePlatformHandler(ApplicationDbContext dbContext, ICacheServi
 
         cacheService.DeletePlatformId(platform.SystemInfo.DaemonId);
 
-        return Result.Ok();
+        return Result.Success();
     }
 }

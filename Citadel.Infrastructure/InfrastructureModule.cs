@@ -76,7 +76,7 @@ public static class InfrastructureModule
 
         var upgrader =
                 DeployChanges.To
-                    .SQLiteDatabase(ApplicationContextFactory.ConnectionString)
+                    .SqliteDatabase(ApplicationContextFactory.ConnectionString)
                     .WithScriptsAndCodeEmbeddedInAssembly(Assembly.GetExecutingAssembly())
                     .LogToConsole()
                     .Build();

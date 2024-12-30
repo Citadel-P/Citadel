@@ -45,24 +45,25 @@ internal class UpsertPlatformHandler(
         if (await dbContext.Platforms.AsNoTracking()
                                     .FirstOrDefaultAsync(s => s.Address == command.Address || s.Name == command.Name, cancellationToken: cancellationToken) != null)
         {
-            return Result.Fail<Platform>(new ConflictError("A platform with the same [Name] or [Address] already exists!"));
+            return Result.Failure<Platform>(new ConflictError("A platform with the same [Name] or [Address] already exists!"));
         }
 
         // Try to get platform system info
         var result = await agentService.GetSystemInfo(command.Address, cancellationToken);
-        if (!result.IsSuccess)
+        if (!result.IsSuccess(out var systemInfoView))
         {
-            return Result.Fail<Platform>(result.Error);
+            result.IsFailure(out var error);
+            return Result.Failure<Platform>(error);
         }
 
-        var platform = Platform.Create(command.Name, command.Address, result.Value.Map(), [result.Value.MapStat()]);
+        var platform = Platform.Create(command.Name, command.Address, systemInfoView.Map(), [systemInfoView.MapStat()]);
         dbContext.Platforms.Add(platform);
 
         // Save to db
         await dbContext.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("A new platform has been added, id = {PlatformId}", platform.Id);
-        return Result.Ok(platform);
+        return Result.Success(platform);
     }
 
     private async Task<Result<Platform>> UpdatePlatform(UpsertPlatform command, CancellationToken cancellationToken)
@@ -70,7 +71,7 @@ internal class UpsertPlatformHandler(
         var platform = await dbContext.Platforms.FirstOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
         if (platform == null)
         {
-            Result.Fail<Platform>(new NotFoundError("The provided platform Id does not exists"));
+            Result.Failure<Platform>(new NotFoundError("The provided platform Id does not exists"));
         }
 
         platform.PartialUpdate(command.Name, command.Address);
@@ -79,7 +80,7 @@ internal class UpsertPlatformHandler(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("The platform with id = {PlatformId} has been updated", platform.Id);
-        return Result.Ok(platform);
+        return Result.Success(platform);
     }
 }
 

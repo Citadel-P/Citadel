@@ -33,6 +33,6 @@ internal class GetContainersHandler(ApplicationDbContext dbContext)
                 .WithLastStat(query.PlatformId)
                 .ToListAsync(cancellationToken);
         
-        return Result.Ok<IEnumerable<ContainerInfo>>(containers);
+        return Result.Success<IEnumerable<ContainerInfo>>(containers);
     }
 }

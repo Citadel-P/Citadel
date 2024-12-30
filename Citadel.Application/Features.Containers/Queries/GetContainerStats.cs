@@ -28,7 +28,7 @@ internal sealed class GetContainerStatsHandler(ApplicationDbContext dbContext)
 
         var last24h = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeSeconds();
         return containerId == null
-            ? Result.Fail<IEnumerable<ContainerStat>>(new NotFoundError($"Container with id {query.ContainerId} does not exists"))
+            ? Result.Failure<IEnumerable<ContainerStat>>(new NotFoundError($"Container with id {query.ContainerId} does not exists"))
             : await dbContext.ContainerStats.AsNoTracking()
                     .Where(s => s.ContainerInfoId == containerId.Id && s.Created > last24h)
                     .ToListAsync(cancellationToken);

@@ -26,6 +26,6 @@ internal class GetPlatformsHandler(ApplicationDbContext dbContext)
                                         .OrderBy(s => s.Name)
                                         .ToListAsync(cancellationToken);
 
-        return Result.Ok<IEnumerable<Platform>>(platforms);
+        return Result.Success<IEnumerable<Platform>>(platforms);
     }
 }

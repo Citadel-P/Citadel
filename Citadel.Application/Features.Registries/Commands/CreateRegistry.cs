@@ -131,7 +131,7 @@ internal class CreateRegistryHandler(ApplicationDbContext dbContext) : ICommandH
         Registry registry = await dbContext.Registries.FirstOrDefaultAsync(s => s.Url == command.Url || s.Name == command.Name, cancellationToken);
         if (registry != null)
         {
-            return Result.Fail<Registry>(new ConflictError("The provided name or url already exist"));
+            return Result.Failure<Registry>(new ConflictError("The provided name or url already exist"));
         }
 
         registry = new Registry()
@@ -146,6 +146,6 @@ internal class CreateRegistryHandler(ApplicationDbContext dbContext) : ICommandH
         await dbContext.Registries.AddAsync(registry, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return Result.Ok(registry);
+        return Result.Success(registry);
     }
 }

@@ -31,7 +31,7 @@ internal class GetPlatformInfoHandler(ApplicationDbContext dbContext) : IQueryHa
             .SingleOrDefaultAsync(s => s.Id == query.Id, cancellationToken);
 
         return platform is null
-            ? Result.Fail<Platform>(new NotFoundError("The requested platform does not exist"))
-            : Result.Ok(platform);
+            ? Result.Failure<Platform>(new NotFoundError("The requested platform does not exist"))
+            : Result.Success(platform);
     }
 }

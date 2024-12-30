@@ -61,12 +61,12 @@ internal sealed class AgentService(IAgentProxy agentProxy, ILogger<AgentService>
         {
             var result = await agentProxy.ForAddress(platformAddress).GetSystemInfo(cancellationToken);
             //result.AgentVersion = response.Headers.GetValues("agent-version").FirstOrDefault();
-            return Result.Ok(result);
+            return Result.Success(result);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occurred while contacting the remote agent");
-            return Result.Fail<SystemInfoView>(new BadGatewayError(ex.Message));
+            return Result.Failure<SystemInfoView>(new BadGatewayError(ex.Message));
         }
     }
 
@@ -79,12 +79,12 @@ internal sealed class AgentService(IAgentProxy agentProxy, ILogger<AgentService>
                 .ForAddress(platformAddress)
                 .List(all, limit, size, filters, cancellationToken);
 
-            return Result.Ok(response.AsEnumerable());
+            return Result.Success(response.AsEnumerable());
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occurred while contacting the remote agent");
-            return Result.Fail<IEnumerable<ContainerSummary>>(new BadGatewayError(ex.Message));
+            return Result.Failure<IEnumerable<ContainerSummary>>(new BadGatewayError(ex.Message));
         }
     }
 
@@ -94,12 +94,12 @@ internal sealed class AgentService(IAgentProxy agentProxy, ILogger<AgentService>
         try
         {
             await agentProxy.ForAddress(platformAddress).StartContainers(containersIds, cancellation);
-            return Result.Ok();
+            return Result.Success();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occurred while contacting the remote agent");
-            return Result.Fail(new BadGatewayError(ex.Message));
+            return Result.Failure(new BadGatewayError(ex.Message));
         }
     }
 
@@ -109,12 +109,12 @@ internal sealed class AgentService(IAgentProxy agentProxy, ILogger<AgentService>
         try
         {
             await agentProxy.ForAddress(platformAddress).StopContainers(containersIds, cancellation);
-            return Result.Ok();
+            return Result.Success();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occurred while contacting the remote agent");
-            return Result.Fail(new BadGatewayError(ex.Message));
+            return Result.Failure(new BadGatewayError(ex.Message));
         }
     }
 
@@ -124,12 +124,12 @@ internal sealed class AgentService(IAgentProxy agentProxy, ILogger<AgentService>
         try
         {
             await agentProxy.ForAddress(platformAddress).PauseContainers(containersIds, cancellation);
-            return Result.Ok();
+            return Result.Success();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occurred while contacting the remote agent");
-            return Result.Fail(new BadGatewayError(ex.Message));
+            return Result.Failure(new BadGatewayError(ex.Message));
         }
     }
 
@@ -139,12 +139,12 @@ internal sealed class AgentService(IAgentProxy agentProxy, ILogger<AgentService>
         try
         {
             await agentProxy.ForAddress(platformAddress).UnpauseContainers(containersIds, cancellation);
-            return Result.Ok();
+            return Result.Success();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occurred while contacting the remote agent");
-            return Result.Fail(new BadGatewayError(ex.Message));
+            return Result.Failure(new BadGatewayError(ex.Message));
         }
     }
 
@@ -154,12 +154,12 @@ internal sealed class AgentService(IAgentProxy agentProxy, ILogger<AgentService>
         try
         {
             await agentProxy.ForAddress(platformAddress).RestartContainers(containersIds, cancellation);
-            return Result.Ok();
+            return Result.Success();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occurred while contacting the remote agent");
-            return Result.Fail(new BadGatewayError(ex.Message));
+            return Result.Failure(new BadGatewayError(ex.Message));
         }
     }
 
@@ -169,12 +169,12 @@ internal sealed class AgentService(IAgentProxy agentProxy, ILogger<AgentService>
         try
         {
             await agentProxy.ForAddress(platformAddress).DeleteContainers(containersIds, cancellation);
-            return Result.Ok();
+            return Result.Success();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occurred while contacting the remote agent");
-            return Result.Fail(new BadGatewayError(ex.Message));
+            return Result.Failure(new BadGatewayError(ex.Message));
         }
     }
 
@@ -190,12 +190,12 @@ internal sealed class AgentService(IAgentProxy agentProxy, ILogger<AgentService>
                 RequestedLogAction = requestedLogAction
             };
             await agentProxy.ForAddress(platformAddress).StreamContainerLogs(request, cancellation);
-            return Result.Ok();
+            return Result.Success();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occurred while contacting the remote agent");
-            return Result.Fail(new BadGatewayError(ex.Message));
+            return Result.Failure(new BadGatewayError(ex.Message));
         }
     }
 }

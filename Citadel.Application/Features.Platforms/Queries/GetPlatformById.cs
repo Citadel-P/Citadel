@@ -34,6 +34,6 @@ internal class GetPlatformByIdHandler(ApplicationDbContext dbContext) : IQueryHa
                                         .ThenInclude(s => s.RemoteManagers)
                                         .SingleOrDefaultAsync(s => s.Id == query.Id, cancellationToken);
 
-        return platform ?? Result.Fail<Platform>(new NotFoundError("Platform does not exist"));
+        return platform ?? Result.Failure<Platform>(new NotFoundError("Platform does not exist"));
     }
 }
