@@ -1,4 +1,4 @@
-﻿using Contracts.Broker.Models;
+﻿using Application.Features.Containers.Models;
 using Infrastructure.Entities;
 using Riok.Mapperly.Abstractions;
 using WebApi.Controllers.V1.Resources.Containers;
@@ -15,7 +15,7 @@ internal static partial class Mapper
 
     [MapProperty(nameof(ContainerStat.Created), nameof(ContainerStatView.Created), Use = nameof(MapCreatedToShortDate))]
     public static partial ContainerStatView Map(ContainerStat stat);
-    public static partial ContainerLogView Map(ContainerLogMessage logs);
+    public static partial ContainerLogView Map(ContainerLogRequest logs);
 
     private static string MapCreatedToShortDate(long timeStamp)
         => DateTimeOffset.FromUnixTimeSeconds(timeStamp).UtcDateTime.ToString("HH:mm:ss");

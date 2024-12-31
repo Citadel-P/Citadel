@@ -1,17 +1,9 @@
-﻿using Contracts.Broker.EventMessaging.Options;
-using Contracts.Broker.EventMessaging.Subscriber;
-using Contracts.Broker.Models;
-using EasyNetQ.AutoSubscribe;
-using Infrastructure.EntityFramework;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.Configuration;
+﻿using Infrastructure.EntityFramework;
 using Microsoft.Extensions.DependencyInjection;
 using Refit;
 using Polly;
 using Polly.Extensions.Http;
-using Infrastructure.Services.AutoSubscribers;
 using Infrastructure.Services;
-using Infrastructure.Services.Abstractions;
 using DbUp;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
@@ -20,16 +12,11 @@ namespace Infrastructure;
 
 public static class InfrastructureModule
 {
-    public static IServiceCollection RegisterInfrastructureModule(this IServiceCollection services, IConfiguration config)
+    public static IServiceCollection RegisterInfrastructureModule(this IServiceCollection services)
         => services
                 .RegisterServices()
                 .RegisterHttpClients()
-                .RegisterAutoSubscribers(config)
                 .InitializeDb();
-
-    public static WebApplication UseInfrastructureModule(this WebApplication builder)
-        => builder
-             .UseAutoSubscriber();
 
     private static IServiceCollection RegisterServices(this IServiceCollection services)
         => services
@@ -52,19 +39,6 @@ public static class InfrastructureModule
                         ]);
             });
         return services;
-    }
-
-    private static IServiceCollection RegisterAutoSubscribers(this IServiceCollection services, IConfiguration config)
-    {
-        var busConfig = config.GetSection("BusConfiguration").Get<BusConfigurationOptions>() ??
-                                throw new ArgumentNullException("Broker configuration is missing.");
-        return
-            services
-                .RegisterAutoSubscriber(busConfig)
-                .AddScoped<IConsumeAsync<SystemInfoMessage>, PlatformAutoSubscriber>()
-                .AddScoped<IConsumeAsync<ContainerListMessage>, ContainerAutoSubscriber>()
-                .AddScoped<IConsumeAsync<ContainerEventMessage>, ContainerAutoSubscriber>()
-                .AddScoped<IConsumeAsync<ContainerLogMessage>, ContainerAutoSubscriber>();
     }
 
     private static IServiceCollection InitializeDb(this IServiceCollection services)

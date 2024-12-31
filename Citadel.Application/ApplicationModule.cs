@@ -4,7 +4,6 @@ using Application.Services;
 using FluentValidation;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
-using Infrastructure.Services.Abstractions;
 
 namespace Application;
 
@@ -23,9 +22,7 @@ public static class ApplicationModule
             {
                 options.ServiceLifetime = ServiceLifetime.Scoped;
             })
-            .AddSingleton(typeof(IPipelineBehavior<,>), typeof(ValidatorBehaviour<,>))
-            .AddScoped<IContainerService, ContainerService>()
-            .AddScoped<IPlatformService, PlatformService>();
+            .AddSingleton(typeof(IPipelineBehavior<,>), typeof(ValidatorBehaviour<,>));
 
         return services;
     }

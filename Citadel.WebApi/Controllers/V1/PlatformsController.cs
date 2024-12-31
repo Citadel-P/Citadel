@@ -9,6 +9,7 @@ using Application.Features.Platforms.Queries.Models;
 using System.ComponentModel.DataAnnotations;
 using WebApi.Controllers.V1.Resources.Platforms;
 using WebApi.Controllers.V1.Resources.Containers;
+using Application.Features.Platforms.Models;
 
 namespace WebApi.Controllers.V1;
 
@@ -102,7 +103,7 @@ public sealed class PlatformsController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>
-    /// List the containers of a given platform
+    /// returns the list of containers of the given platform
     /// </summary>
     /// <param name="id">The platform id</param>
     /// <param name="cancellation"></param>
@@ -118,4 +119,23 @@ public sealed class PlatformsController(IMediator mediator) : ControllerBase
         var response = await mediator.Send(new GetContainers(new GetContainersQuery(All: true), id), cancellation);
         return this.HandleResult(response, ContainersInfoView.Map);
     }
+
+    /// <summary>
+    /// Updates a new system info entry
+    /// /// </summary>
+    /// <param name="systemInfo">The system info payload</param>
+    /// <param name="cancellation"></param>
+    /// <returns></returns>
+    [HttpPut("_info")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway)]
+    public async Task<ActionResult> SystemInfo(SystemInfoRequest systemInfo, CancellationToken cancellation)
+    {
+        var response = await mediator.Send(new UpdateSystemInfo(systemInfo), cancellation);
+        return this.HandleResultForNoContent(response);
+    }
+
 }

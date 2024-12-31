@@ -2,14 +2,12 @@ using Hosting;
 using WebApi;
 using Application;
 using Infrastructure;
-using Infrastructure.HealthChecks;
 using WebApi.Helpers;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Microsoft.AspNetCore.Mvc;
 using Application.Models;
 using Common.Configs;
-using Contracts.Broker.EventMessaging.Options;
 
 DTWebApplicationBuilder.Create(args, new DTWebApplicationOptions()
 {
@@ -25,8 +23,8 @@ void WithServices(WebApplicationBuilder builder)
     builder.Services
         .RegisterWebApiModule(builder.Configuration)
         .RegisterApplicationModule()
-        .RegisterInfrastructureModule(builder.Configuration)
-        .AddHealthChecks().AddInfrastructureHealthCheck();
+        .RegisterInfrastructureModule()
+        .AddHealthChecks();
 
     AddIOptionsFromConfiguration(builder.Services, builder.Configuration);
 }
@@ -35,8 +33,7 @@ void WithServices(WebApplicationBuilder builder)
 void Configure(WebApplication app)
 {
     app
-        .UseWebApiModule()
-        .UseInfrastructureModule();
+        .UseWebApiModule();
 
     app.MapFallbackToFile("index.html");
     app.MapHealthChecks("/health", HealthCheckOptionsHelper.GetHealthCheckOptions());
@@ -76,7 +73,6 @@ void AdditionalJsonOptions(JsonOptions options)
 
 static IServiceCollection AddIOptionsFromConfiguration(IServiceCollection services, IConfiguration configuration)
 {
-    services.Configure<BusConfigurationOptions>(configuration.GetSection("BusConfiguration"));
     services.Configure<JwtConfig>(configuration.GetSection("Jwt"));
     return services;
 }

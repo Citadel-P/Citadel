@@ -1,21 +1,6 @@
 version: '3.4'
 
 services:
-  rabbitmq:
-    container_name: rabbitmq
-    image: rabbitmq:4.0.3-management-alpine
-    ports:
-      - 15672:15672
-      - 15671:15671
-      - 5672:5672
-    environment:
-     - RABBITMQ_DEFAULT_USER=rabbituser
-     - RABBITMQ_DEFAULT_PASS=r@bb1tPasS
-    networks:
-      - citadel
-    volumes:
-     - ./enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
-
   citadel:
     container_name: citadel
     image: ${DOCKER_REGISTRY-}citadelwebapi
@@ -35,8 +20,6 @@ services:
       - citadel
     ports:
       - 8000:8080
-    depends_on:
-     - rabbitmq
 
 volumes:
   citadel_data:

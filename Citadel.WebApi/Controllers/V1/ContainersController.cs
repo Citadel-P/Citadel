@@ -7,8 +7,8 @@ using System.ComponentModel.DataAnnotations;
 using WebApi.Controllers.V1.Resources.Containers;
 using Application.Features.Containers.Queries;
 using Application.Features.Platforms.Commands;
-using Infrastructure.Entities;
-using LightResults;
+using Application.Features.Containers.Models;
+using Application.Features.Containers.Commands;
 
 namespace WebApi.Controllers.V1;
 
@@ -180,5 +180,59 @@ public sealed class ContainersController(IMediator mediator) : ControllerBase
     {
         var response = await mediator.Send(new GetContainerStats(id), cancellation);
         return this.HandleResult(response, ContainerStatsView.Map);
+    }
+
+    /// <summary>
+    /// Update or create the containers info entry
+    /// </summary>
+    /// <param name="request">The container list payload</param>
+    /// <param name="cancellation"></param>
+    /// <returns></returns>
+    [HttpPut("_info")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway)]
+    public async Task<ActionResult> ContainerInfo(ContainersInfoRequest request, CancellationToken cancellation)
+    {
+        var response = await mediator.Send(new UpdateContainersInfo(request), cancellation);
+        return this.HandleResultForNoContent(response);
+    }
+
+    /// <summary>
+    /// Handles the event issued from a container
+    /// </summary>
+    /// <param name="request">The container event payload</param>
+    /// <param name="cancellation"></param>
+    /// <returns></returns>
+    [HttpPut("_event")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway)]
+    public async Task<ActionResult> ContainerEvent(ContainerEventRequest request, CancellationToken cancellation)
+    {
+        var response = await mediator.Send(new OnContainerEvent(request), cancellation);
+        return this.HandleResultForNoContent(response);
+    }
+
+    /// <summary>
+    /// Request to start (or stop) streaming container logs
+    /// </summary>
+    /// <param name="request">The request params</param>
+    /// <param name="cancellation"></param>
+    /// <returns></returns>
+    [HttpPost("_logs")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway)]
+    public async Task<ActionResult> ContainerLogs(ContainerLogRequest request, CancellationToken cancellation)
+    {
+        var response = await mediator.Send(new OnContainerLogs(request), cancellation);
+        return this.HandleResultForNoContent(response);
     }
 }

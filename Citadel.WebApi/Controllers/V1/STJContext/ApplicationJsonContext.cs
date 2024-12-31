@@ -1,5 +1,7 @@
 ﻿using System.Text.Json.Serialization;
 using Application.Features.Auth.Models;
+using Application.Features.Containers.Models;
+using Application.Features.Platforms.Models;
 using Infrastructure.Entities;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.Controllers.V1.Resources.Auth;
@@ -34,6 +36,14 @@ namespace Application.Models;
 [JsonSerializable(typeof(PlatformsView))]
 [JsonSerializable(typeof(ContainersInfoView))]
 [JsonSerializable(typeof(ContainerInfoView))]
+[JsonSerializable(typeof(SystemInfoRequest))]
+[JsonSerializable(typeof(List<SwarmPeerRequest>))]
+[JsonSerializable(typeof(SwarmInfoRequest))]
+[JsonSerializable(typeof(ContainersInfoRequest))]
+[JsonSerializable(typeof(List<PortRequest>))]
+[JsonSerializable(typeof(ContainerStatRequest))]
+[JsonSerializable(typeof(ContainerEventRequest))]
+[JsonSerializable(typeof(ContainerLogRequest))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

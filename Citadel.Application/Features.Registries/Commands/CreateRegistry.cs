@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using LightResults;
 using Hosting.Common.ErrorTypes;
 using Infrastructure;
-using Infrastructure.Services.Abstractions;
 using Infrastructure.EntityFramework;
 using Application.Utils;
 

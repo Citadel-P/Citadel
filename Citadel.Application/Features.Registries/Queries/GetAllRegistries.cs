@@ -1,7 +1,6 @@
 ﻿using Infrastructure.Entities;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
-using Infrastructure.Services.Abstractions;
 using Infrastructure.EntityFramework;
 
 namespace Application.Features.Registries.Queries;

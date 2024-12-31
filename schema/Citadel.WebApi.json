@@ -886,6 +886,258 @@
         }
       }
     },
+    "/api/v1/containers/_info": {
+      "put": {
+        "tags": [
+          "Containers"
+        ],
+        "summary": "Update or create the containers info entry",
+        "operationId": "Containers_ContainerInfo",
+        "requestBody": {
+          "description": "The container list payload",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContainersInfoRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContainersInfoRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContainersInfoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/containers/_event": {
+      "put": {
+        "tags": [
+          "Containers"
+        ],
+        "summary": "Handles the event issued from a container",
+        "operationId": "Containers_ContainerEvent",
+        "requestBody": {
+          "description": "The container event payload",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContainerEventRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContainerEventRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContainerEventRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/containers/_logs": {
+      "post": {
+        "tags": [
+          "Containers"
+        ],
+        "summary": "Request to start (or stop) streaming container logs",
+        "operationId": "Containers_ContainerLogs",
+        "requestBody": {
+          "description": "The request params",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContainerLogRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContainerLogRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContainerLogRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/platforms": {
       "get": {
         "tags": [
@@ -1241,7 +1493,7 @@
         "tags": [
           "Platforms"
         ],
-        "summary": "List the containers of a given platform",
+        "summary": "returns the list of containers of the given platform",
         "operationId": "Platforms_ListContainers",
         "parameters": [
           {
@@ -1275,6 +1527,90 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/platforms/_info": {
+      "put": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Updates a new system info entry\r\n///",
+        "operationId": "Platforms_SystemInfo",
+        "requestBody": {
+          "description": "The system info payload",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemInfoRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemInfoRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemInfoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
           },
           "400": {
             "description": "Bad Request",
@@ -1356,6 +1692,94 @@
         ],
         "type": "string"
       },
+      "ContainerEventRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "action": {
+            "type": "string",
+            "nullable": true
+          },
+          "containerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "containerInfo": {
+            "$ref": "#/components/schemas/ContainerInfoRequest"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContainerInfoRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "image": {
+            "type": "string",
+            "nullable": true
+          },
+          "imageID": {
+            "type": "string",
+            "nullable": true
+          },
+          "command": {
+            "type": "string",
+            "nullable": true
+          },
+          "created": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sizeRw": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "sizeRootFs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortRequest"
+            },
+            "nullable": true
+          },
+          "containerStat": {
+            "$ref": "#/components/schemas/ContainerStatRequest"
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "nullable": true
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "ContainerInfoView": {
         "type": "object",
         "properties": {
@@ -1415,6 +1839,57 @@
         },
         "additionalProperties": false
       },
+      "ContainerLogRequest": {
+        "type": "object",
+        "properties": {
+          "containerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "requestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "id": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContainerStatRequest": {
+        "type": "object",
+        "properties": {
+          "memoryUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "cpuUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "memoryLimit": {
+            "type": "number",
+            "format": "double"
+          },
+          "rxBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "txBytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
       "ContainerStatView": {
         "type": "object",
         "properties": {
@@ -1457,6 +1932,27 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ContainerStatView"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContainersInfoRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "created": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersInfo": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerInfoRequest"
             },
             "nullable": true
           }
@@ -1574,6 +2070,28 @@
         },
         "additionalProperties": false
       },
+      "PortRequest": {
+        "type": "object",
+        "properties": {
+          "ip": {
+            "type": "string",
+            "nullable": true
+          },
+          "privatePort": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "publicPort": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "PortView": {
         "type": "object",
         "properties": {
@@ -1665,6 +2183,46 @@
         "additionalProperties": false,
         "description": "Request params for starting or stopping streaming logs"
       },
+      "SwarmInfoRequest": {
+        "type": "object",
+        "properties": {
+          "nodeID": {
+            "type": "string",
+            "nullable": true
+          },
+          "nodeAddr": {
+            "type": "string",
+            "nullable": true
+          },
+          "localNodeState": {
+            "type": "string",
+            "nullable": true
+          },
+          "controlAvailable": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "remoteManagers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SwarmPeerRequest"
+            },
+            "nullable": true
+          },
+          "nodes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "managers": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
       "SwarmInfoView": {
         "type": "object",
         "properties": {
@@ -1709,6 +2267,20 @@
         },
         "additionalProperties": false
       },
+      "SwarmPeerRequest": {
+        "type": "object",
+        "properties": {
+          "nodeID": {
+            "type": "string",
+            "nullable": true
+          },
+          "addr": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "SwarmPeerView": {
         "type": "object",
         "properties": {
@@ -1719,6 +2291,115 @@
           "addr": {
             "type": "string",
             "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "SystemInfoRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "created": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "memoryUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "cpuUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "rxBytes": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "txBytes": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "networksCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "volumesCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "agentVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "containers": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersRunning": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersPaused": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersStopped": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "images": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "driverStatus": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "nullable": true
+          },
+          "operatingSystem": {
+            "type": "string",
+            "nullable": true
+          },
+          "osVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "osType": {
+            "type": "string",
+            "nullable": true
+          },
+          "architecture": {
+            "type": "string",
+            "nullable": true
+          },
+          "ncpu": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "memTotal": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "serverVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "swarmInfo": {
+            "$ref": "#/components/schemas/SwarmInfoRequest"
           }
         },
         "additionalProperties": false
