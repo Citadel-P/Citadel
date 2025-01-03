@@ -11,10 +11,12 @@
         },
         "Docker": {
             "commandName": "Docker",
-            "launchBrowser": true,
+            "launchBrowser": false,
             "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}",
             "publishAllPorts": true,
+            "httpPort": 8000,
             "environmentVariables": {
+                "ASPNETCORE_URLS": "http://+:8000",
                 "ASPNETCORE_ENVIRONMENT": "Development"
             }
         }

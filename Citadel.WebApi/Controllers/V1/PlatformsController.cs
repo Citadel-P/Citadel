@@ -1,6 +1,5 @@
 ﻿using Application.Features.Platforms.Commands;
 using Application.Features.Platforms.Queries;
-using Asp.Versioning;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,7 +17,6 @@ namespace WebApi.Controllers.V1;
 /// </summary>
 [Authorize]
 [ApiController]
-[ApiVersion("1.0")]
 [Produces("application/json")]
 [Route("api/v{version:apiVersion}/[controller]")]
 public sealed class PlatformsController(IMediator mediator) : ControllerBase

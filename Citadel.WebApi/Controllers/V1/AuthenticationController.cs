@@ -1,5 +1,4 @@
 ﻿using Application.Features.Auth.Models;
-using Asp.Versioning;
 using Mediator;
 using Microsoft.AspNetCore.Mvc;
 using Hosting.Extensions;
@@ -11,7 +10,6 @@ namespace WebApi.Controllers.V1;
 /// The Authentication controller
 /// </summary>
 [ApiController]
-[ApiVersion("1.0")]
 [Produces("application/json")]
 [Route("api/v{version:apiVersion}/[controller]")]
 public sealed class AuthenticationController(IMediator mediator) : ControllerBase

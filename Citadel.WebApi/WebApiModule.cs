@@ -1,11 +1,14 @@
 ﻿using System.Text;
 using Application.Services.Abstractions;
+using Hosting.OpenApi;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
 using WebApi.Hubs;
 using WebApi.Middlewares;
+using WebApi.Routes;
+using WebApi.Swagger;
 
 namespace WebApi;
 
@@ -13,7 +16,21 @@ internal static class WebApiModule
 {
     public static IServiceCollection RegisterWebApiModule(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddCors();
+        services
+            .AddOpenApi(SwaggerConfiguration.PublicApiV1, cfg =>
+            {
+                cfg.AddSchemaTransformer<EnumSchemaFilter>();
+                cfg.AddDocumentTransformer<ServerTransformer>();
+                cfg.AddOperationTransformer<ProblemDetailDocumentFilter>();
+                cfg.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
+            })
+            .AddOpenApi(SwaggerConfiguration.InternalApiV1, cfg =>
+            {
+                cfg.AddSchemaTransformer<EnumSchemaFilter>();
+                cfg.AddDocumentTransformer<ServerTransformer>();
+                cfg.AddOperationTransformer<ProblemDetailDocumentFilter>();
+            })
+            .AddCors();
 
         services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -66,10 +83,8 @@ internal static class WebApiModule
             policy
                 .AllowCredentials()
                 .WithOrigins(
-                    "https://localhost:8000",
                     "http://localhost:8000",
-                    "https://localhost:5173", // Client dev proxies,
-                    "http://localhost:5173")  // it's better to remove them in prod
+                    "http://localhost:5173")
                 .SetIsOriginAllowedToAllowWildcardSubdomains()
                 .AllowAnyMethod()
                 .AllowAnyHeader();
@@ -78,7 +93,8 @@ internal static class WebApiModule
         app.UseAuthentication();
         app.UseAuthorization();
 
-        app.MapControllers();
+        app.MapPublicEndpoints();
+        app.MapInternalEndpoints();
 
         app.MapHub<ContainerHub>("/hubs/container");
         app.MapHub<PlatformHub>("/hubs/platform");

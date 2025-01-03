@@ -1,6 +1,4 @@
 ﻿using System.Text.Json;
-using Application.Features.Registries.Queries;
-using Asp.Versioning;
 using Infrastructure;
 using Infrastructure.Entities;
 using Mediator;
@@ -16,7 +14,6 @@ namespace WebApi.Controllers.V1;
 /// </summary>
 [Authorize]
 [ApiController]
-[ApiVersion("1.0")]
 [Produces("application/json")]
 [Route("api/v{version:apiVersion}/[controller]")]
 public sealed class RegistriesController(IMediator mediator) : ControllerBase

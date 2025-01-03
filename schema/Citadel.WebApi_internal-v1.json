@@ -1,0 +1,1249 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Citadel.WebApi | internal-v1",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/internal/containers/_info": {
+      "put": {
+        "tags": [
+          "Containers"
+        ],
+        "summary": "Update or create the containers info entry",
+        "operationId": "Containers_ContainerInfo",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContainersInfoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/internal/containers/_event": {
+      "put": {
+        "tags": [
+          "Containers"
+        ],
+        "summary": "Handles the event issued from a container",
+        "operationId": "Containers_ContainerEvent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContainerEventRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/internal/containers/_logs": {
+      "post": {
+        "tags": [
+          "Containers"
+        ],
+        "summary": "Request to start (or stop) streaming container logs",
+        "operationId": "Containers_ContainerLogs",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContainerLogRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/internal/platforms/_info": {
+      "put": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Updates a new system info entry",
+        "operationId": "Platforms_SystemInfo",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemInfoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContainersInfoView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ContainerEventRequest": {
+        "required": [
+          "id",
+          "action",
+          "containerId",
+          "containerInfo"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "action": {
+            "type": "string",
+            "nullable": true
+          },
+          "containerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "containerInfo": {
+            "$ref": "#/components/schemas/ContainerInfoRequest2"
+          }
+        }
+      },
+      "ContainerInfoRequest": {
+        "required": [
+          "id",
+          "image",
+          "imageID",
+          "command",
+          "created",
+          "sizeRw",
+          "status",
+          "state",
+          "sizeRootFs",
+          "names",
+          "ports",
+          "containerStat",
+          "labels"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "image": {
+            "type": "string",
+            "nullable": true
+          },
+          "imageID": {
+            "type": "string",
+            "nullable": true
+          },
+          "command": {
+            "type": "string",
+            "nullable": true
+          },
+          "created": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sizeRw": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "sizeRootFs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortRequest"
+            },
+            "nullable": true
+          },
+          "containerStat": {
+            "$ref": "#/components/schemas/ContainerStatRequest"
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "ContainerInfoRequest2": {
+        "required": [
+          "id",
+          "image",
+          "imageID",
+          "command",
+          "created",
+          "sizeRw",
+          "status",
+          "state",
+          "sizeRootFs",
+          "names",
+          "ports",
+          "containerStat",
+          "labels"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "image": {
+            "type": "string",
+            "nullable": true
+          },
+          "imageID": {
+            "type": "string",
+            "nullable": true
+          },
+          "command": {
+            "type": "string",
+            "nullable": true
+          },
+          "created": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sizeRw": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "sizeRootFs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortRequest"
+            },
+            "nullable": true
+          },
+          "containerStat": {
+            "$ref": "#/components/schemas/ContainerStatRequest"
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "ContainerInfoView": {
+        "required": [
+          "id",
+          "containerId",
+          "name",
+          "image",
+          "created",
+          "state",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "containerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "image": {
+            "type": "string",
+            "nullable": true
+          },
+          "created": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "stats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerStatView"
+            },
+            "default": null,
+            "nullable": true
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortView"
+            },
+            "default": null,
+            "nullable": true
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": null,
+            "nullable": true
+          },
+          "platform": {
+            "$ref": "#/components/schemas/PlatformView"
+          }
+        }
+      },
+      "ContainerLogRequest": {
+        "required": [
+          "containerId",
+          "requestId",
+          "messages",
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "containerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "requestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "id": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ContainersInfoRequest": {
+        "required": [
+          "id",
+          "created",
+          "containersInfo"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "created": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersInfo": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerInfoRequest"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "ContainersInfoView": {
+        "required": [
+          "containers"
+        ],
+        "type": "object",
+        "properties": {
+          "containers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerInfoView"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "ContainerStatRequest": {
+        "required": [
+          "memoryUsage",
+          "cpuUsage",
+          "memoryLimit",
+          "rxBytes",
+          "txBytes"
+        ],
+        "type": "object",
+        "properties": {
+          "memoryUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "cpuUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "memoryLimit": {
+            "type": "number",
+            "format": "double"
+          },
+          "rxBytes": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "txBytes": {
+            "type": "integer",
+            "format": "uint64"
+          }
+        },
+        "nullable": true
+      },
+      "ContainerStatView": {
+        "required": [
+          "memoryUsage",
+          "cpuUsage",
+          "memoryLimit",
+          "rxBytes",
+          "txBytes",
+          "created"
+        ],
+        "type": "object",
+        "properties": {
+          "memoryUsage": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "cpuUsage": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "memoryLimit": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "rxBytes": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "txBytes": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "created": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "HttpValidationProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "PlatformStatView": {
+        "required": [
+          "memoryUsage",
+          "cpuUsage",
+          "created",
+          "rxBytes",
+          "txBytes"
+        ],
+        "type": "object",
+        "properties": {
+          "memoryUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "cpuUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "created": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rxBytes": {
+            "type": "number",
+            "format": "double"
+          },
+          "txBytes": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "PlatformView": {
+        "required": [
+          "id",
+          "name",
+          "address",
+          "systemInfo",
+          "stats"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "systemInfo": {
+            "$ref": "#/components/schemas/SystemInfoView"
+          },
+          "stats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformStatView"
+            },
+            "nullable": true
+          }
+        },
+        "default": null,
+        "nullable": true
+      },
+      "PortRequest": {
+        "required": [
+          "ip",
+          "privatePort",
+          "publicPort",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "ip": {
+            "type": "string",
+            "nullable": true
+          },
+          "privatePort": {
+            "type": "integer",
+            "format": "uint16"
+          },
+          "publicPort": {
+            "type": "integer",
+            "format": "uint16"
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "PortView": {
+        "required": [
+          "ip",
+          "privatePort",
+          "publicPort"
+        ],
+        "type": "object",
+        "properties": {
+          "ip": {
+            "type": "string",
+            "nullable": true
+          },
+          "privatePort": {
+            "type": "integer",
+            "format": "uint16"
+          },
+          "publicPort": {
+            "type": "integer",
+            "format": "uint16"
+          }
+        }
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "SwarmInfoRequest": {
+        "required": [
+          "nodeID",
+          "nodeAddr",
+          "localNodeState",
+          "controlAvailable",
+          "error",
+          "remoteManagers",
+          "nodes",
+          "managers"
+        ],
+        "type": "object",
+        "properties": {
+          "nodeID": {
+            "type": "string",
+            "nullable": true
+          },
+          "nodeAddr": {
+            "type": "string",
+            "nullable": true
+          },
+          "localNodeState": {
+            "type": "string",
+            "nullable": true
+          },
+          "controlAvailable": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "remoteManagers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SwarmPeerRequest"
+            },
+            "nullable": true
+          },
+          "nodes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "managers": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "nullable": true
+      },
+      "SwarmInfoView": {
+        "required": [
+          "id",
+          "nodeID",
+          "nodeAddr",
+          "localNodeState",
+          "controlAvailable",
+          "error",
+          "nodes",
+          "managers",
+          "remoteManagers"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nodeID": {
+            "type": "string",
+            "nullable": true
+          },
+          "nodeAddr": {
+            "type": "string",
+            "nullable": true
+          },
+          "localNodeState": {
+            "type": "string",
+            "nullable": true
+          },
+          "controlAvailable": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "nodes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "managers": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "remoteManagers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SwarmPeerView"
+            },
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "SwarmPeerRequest": {
+        "required": [
+          "nodeID",
+          "addr"
+        ],
+        "type": "object",
+        "properties": {
+          "nodeID": {
+            "type": "string",
+            "nullable": true
+          },
+          "addr": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "SwarmPeerView": {
+        "required": [
+          "nodeID",
+          "addr"
+        ],
+        "type": "object",
+        "properties": {
+          "nodeID": {
+            "type": "string",
+            "nullable": true
+          },
+          "addr": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "SystemInfoRequest": {
+        "required": [
+          "id",
+          "created",
+          "memoryUsage",
+          "cpuUsage",
+          "rxBytes",
+          "txBytes",
+          "networksCount",
+          "volumesCount",
+          "agentVersion",
+          "containers",
+          "containersRunning",
+          "containersPaused",
+          "containersStopped",
+          "images",
+          "driver",
+          "driverStatus",
+          "operatingSystem",
+          "osVersion",
+          "osType",
+          "architecture",
+          "ncpu",
+          "memTotal",
+          "serverVersion",
+          "swarmInfo"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "created": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "memoryUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "cpuUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "rxBytes": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "txBytes": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "networksCount": {
+            "type": "integer",
+            "format": "int16"
+          },
+          "volumesCount": {
+            "type": "integer",
+            "format": "int16"
+          },
+          "agentVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "containers": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersRunning": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersPaused": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersStopped": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "images": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "driverStatus": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "nullable": true
+          },
+          "operatingSystem": {
+            "type": "string",
+            "nullable": true
+          },
+          "osVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "osType": {
+            "type": "string",
+            "nullable": true
+          },
+          "architecture": {
+            "type": "string",
+            "nullable": true
+          },
+          "ncpu": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "memTotal": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "serverVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "swarmInfo": {
+            "$ref": "#/components/schemas/SwarmInfoRequest"
+          }
+        }
+      },
+      "SystemInfoView": {
+        "required": [
+          "id",
+          "daemonId",
+          "networksCount",
+          "volumesCount",
+          "containers",
+          "containersRunning",
+          "containersPaused",
+          "containersStopped",
+          "images",
+          "driver",
+          "operatingSystem",
+          "osVersion",
+          "osType",
+          "architecture",
+          "ncpu",
+          "memTotal",
+          "serverVersion",
+          "agentVersion",
+          "swarmInfo"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "daemonId": {
+            "type": "string",
+            "nullable": true
+          },
+          "networksCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "volumesCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "containers": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersRunning": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersPaused": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersStopped": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "images": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "operatingSystem": {
+            "type": "string",
+            "nullable": true
+          },
+          "osVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "osType": {
+            "type": "string",
+            "nullable": true
+          },
+          "architecture": {
+            "type": "string",
+            "nullable": true
+          },
+          "ncpu": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "memTotal": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "serverVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "agentVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "swarmInfo": {
+            "$ref": "#/components/schemas/SwarmInfoView"
+          }
+        },
+        "nullable": true
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Containers"
+    },
+    {
+      "name": "Platforms"
+    }
+  ]
+}

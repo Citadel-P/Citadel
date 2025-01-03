@@ -3,17 +3,15 @@ using WebApi;
 using Application;
 using Infrastructure;
 using WebApi.Helpers;
-using Microsoft.OpenApi.Models;
-using Swashbuckle.AspNetCore.SwaggerGen;
-using Microsoft.AspNetCore.Mvc;
 using Application.Models;
 using Common.Configs;
+using Microsoft.AspNetCore.Http.Json;
+using WebApi.Swagger;
 
 DTWebApplicationBuilder.Create(args, new DTWebApplicationOptions()
 {
     Configure = Configure,
     WithServices = WithServices,
-    WithAdditionalSwaggerOptions = AdditionalSwaggerOptions,
     WithAdditionalJsonOptions = AdditionalJsonOptions
 });
 
@@ -32,43 +30,22 @@ void WithServices(WebApplicationBuilder builder)
 // Configures the HTTP request pipeline.
 void Configure(WebApplication app)
 {
-    app
-        .UseWebApiModule();
+    if (app.Environment.IsDevelopment())
+    {
+        app.MapOpenApi();
+        app.UseSwaggerUI(options => options.AddCustomSwaggerUIOptions(app.Environment.IsDevelopment()));
+    }
+
+    app.UseWebApiModule();
 
     app.MapFallbackToFile("index.html");
     app.MapHealthChecks("/health", HealthCheckOptionsHelper.GetHealthCheckOptions());
 }
 
-void AdditionalSwaggerOptions(SwaggerGenOptions options)
-{
-    options
-        .AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-        {
-            Description = "JWT Authorization header using the Bearer scheme. Example: \"{token}\"",
-            Name = "Authorization",
-            In = ParameterLocation.Header,
-            Scheme = "bearer",
-            Type = SecuritySchemeType.Http,
-            BearerFormat = "JWT"
-        });
-
-    options
-        .AddSecurityRequirement(new OpenApiSecurityRequirement
-        {
-            {
-                new OpenApiSecurityScheme
-                {
-                    Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
-                },
-                new List<string>()
-            }
-        });
-}
-
 void AdditionalJsonOptions(JsonOptions options)
 {
-    options.JsonSerializerOptions.TypeInfoResolverChain.Add(ApplicationJsonContext.Default);
-    options.JsonSerializerOptions.TypeInfoResolverChain.Add(ProblemJsonContext.Default);
+    options.SerializerOptions.TypeInfoResolverChain.Add(ApplicationJsonContext.Default);
+    options.SerializerOptions.TypeInfoResolverChain.Add(ProblemJsonContext.Default);
 }
 
 static IServiceCollection AddIOptionsFromConfiguration(IServiceCollection services, IConfiguration configuration)
