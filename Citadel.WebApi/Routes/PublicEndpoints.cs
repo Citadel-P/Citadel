@@ -1,7 +1,6 @@
 ﻿using WebApi.Controllers.V1.Resources.Containers;
 using WebApi.Controllers.V1.Resources.Platforms;
 using WebApi.Routes.Endpoints;
-using WebApi.Swagger;
 
 namespace WebApi.Routes;
 
@@ -13,7 +12,7 @@ public static class PublicEndpoints
 
     public static void MapPublicEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/v1").WithGroupName(SwaggerConfiguration.PublicApiV1);
+        var group = app.MapGroup("/api/v1").WithGroupName(Constants.PublicApiV1);
         {
             var auth = group.MapGroup("/authentication").WithTags(AuthenticationName);
             {

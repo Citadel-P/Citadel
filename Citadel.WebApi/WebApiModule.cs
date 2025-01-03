@@ -8,7 +8,6 @@ using Microsoft.IdentityModel.Tokens;
 using WebApi.Hubs;
 using WebApi.Middlewares;
 using WebApi.Routes;
-using WebApi.Swagger;
 
 namespace WebApi;
 
@@ -17,14 +16,14 @@ internal static class WebApiModule
     public static IServiceCollection RegisterWebApiModule(this IServiceCollection services, IConfiguration configuration)
     {
         services
-            .AddOpenApi(SwaggerConfiguration.PublicApiV1, cfg =>
+            .AddOpenApi(Constants.PublicApiV1, cfg =>
             {
                 cfg.AddSchemaTransformer<EnumSchemaFilter>();
                 cfg.AddDocumentTransformer<ServerTransformer>();
                 cfg.AddOperationTransformer<ProblemDetailDocumentFilter>();
                 cfg.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
             })
-            .AddOpenApi(SwaggerConfiguration.InternalApiV1, cfg =>
+            .AddOpenApi(Constants.InternalApiV1, cfg =>
             {
                 cfg.AddSchemaTransformer<EnumSchemaFilter>();
                 cfg.AddDocumentTransformer<ServerTransformer>();

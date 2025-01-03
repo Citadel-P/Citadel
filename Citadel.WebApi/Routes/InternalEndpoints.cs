@@ -1,6 +1,5 @@
 ﻿using WebApi.Controllers.V1.Resources.Containers;
 using WebApi.Routes.Endpoints;
-using WebApi.Swagger;
 
 namespace WebApi.Routes;
 
@@ -11,7 +10,7 @@ public static class InternalEndpoints
 
     public static void MapInternalEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/v1/internal").WithGroupName(SwaggerConfiguration.InternalApiV1);
+        var group = app.MapGroup("/api/v1/internal").WithGroupName(Constants.InternalApiV1);
         {
             var containers = group.MapGroup("/containers").WithTags(ContainersName);
             {

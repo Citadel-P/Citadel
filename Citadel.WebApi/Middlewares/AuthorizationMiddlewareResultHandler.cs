@@ -1,5 +1,4 @@
-﻿using Hosting;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 
@@ -25,7 +24,7 @@ internal class AuthorizationResultHandler : IAuthorizationMiddlewareResultHandle
 
             await context.Response.WriteAsJsonAsync(problem,
                                                         options: null,
-                                                        contentType: Constants.Api.ProblemContentType,
+                                                        contentType: Hosting.Constants.Api.ProblemContentType,
                                                         cancellationToken: context.RequestAborted);
         }
     }

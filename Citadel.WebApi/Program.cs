@@ -6,7 +6,7 @@ using WebApi.Helpers;
 using Application.Models;
 using Common.Configs;
 using Microsoft.AspNetCore.Http.Json;
-using WebApi.Swagger;
+using Hosting.OpenApi;
 
 DTWebApplicationBuilder.Create(args, new DTWebApplicationOptions()
 {
@@ -33,7 +33,12 @@ void Configure(WebApplication app)
     if (app.Environment.IsDevelopment())
     {
         app.MapOpenApi();
-        app.UseSwaggerUI(options => options.AddCustomSwaggerUIOptions(app.Environment.IsDevelopment()));
+        app.UseSwaggerUI(options => 
+        {
+            options.AddCustomSwaggerUIOptions(app.Environment.IsDevelopment());
+            options.SwaggerEndpoint($"/openapi/{Constants.PublicApiV1}.json", Constants.PublicApiV1);
+            options.SwaggerEndpoint($"/openapi/{Constants.InternalApiV1}.json", Constants.InternalApiV1);
+        });
     }
 
     app.UseWebApiModule();
