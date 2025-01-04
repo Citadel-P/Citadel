@@ -11,6 +11,6 @@ public static class Authentication
     public static async Task<Results<Ok<LoginResponse>, ProblemHttpResult>> Login(IMediator mediator, LoginRequest request, CancellationToken cancellationToken)
     {
         var response = await mediator.Send(request.ToQuery(), cancellationToken);
-        return ControllerExtensions.HandleResult(response);
+        return EndpointHandlers.HandleResult(response);
     }
 }
