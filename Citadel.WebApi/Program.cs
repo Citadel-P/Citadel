@@ -8,7 +8,7 @@ using Common.Configs;
 using Microsoft.AspNetCore.Http.Json;
 using Hosting.OpenApi;
 
-DTWebApplicationBuilder.Create(args, new DTWebApplicationOptions()
+CitadelWebApplicationBuilder.Create(args, new CitadelWebApplicationOptions()
 {
     Configure = Configure,
     WithServices = WithServices,
