@@ -1,10 +1,10 @@
 ﻿using Application.Features.Containers.Models;
 using Infrastructure.Entities;
 using Riok.Mapperly.Abstractions;
-using WebApi.Controllers.V1.Resources.Containers;
-using WebApi.Controllers.V1.Resources.Platforms;
+using WebApi.Routes.Endpoints.Resources.Containers;
+using WebApi.Routes.Endpoints.Resources.Platforms;
 
-namespace WebApi.Controllers.V1.Resources;
+namespace WebApi.Routes.Endpoints.Resources;
 
 [Mapper(RequiredMappingStrategy = RequiredMappingStrategy.Target)]
 internal static partial class Mapper

@@ -1,6 +1,6 @@
 ﻿using Application.Features.Platforms.Commands;
 
-namespace WebApi.Controllers.V1.Resources.Containers;
+namespace WebApi.Routes.Endpoints.Resources.Containers;
 
 /// <summary>
 /// Request params for starting or stopping streaming logs
@@ -10,5 +10,5 @@ namespace WebApi.Controllers.V1.Resources.Containers;
 /// <param name="RequestedLogAction">Action to execute</param>
 public sealed record StreamLogsRequest(string ContainerId, Guid RequestId, RequestedLogAction RequestedLogAction = RequestedLogAction.START)
 {
-    internal StreamContainerLogs ToCommand() => new (ContainerId, RequestId, RequestedLogAction);
+    internal StreamContainerLogs ToCommand() => new(ContainerId, RequestId, RequestedLogAction);
 }

@@ -1,6 +1,6 @@
 ﻿using Application.Features.Platforms.Commands;
 
-namespace WebApi.Controllers.V1.Resources.Platforms;
+namespace WebApi.Routes.Endpoints.Resources.Platforms;
 
 public sealed record PutPlatformRequest(
     Guid? Id,

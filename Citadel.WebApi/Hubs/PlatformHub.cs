@@ -1,7 +1,7 @@
 ﻿using Infrastructure.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using WebApi.Controllers.V1.Resources.Platforms;
+using WebApi.Routes.Endpoints.Resources.Platforms;
 
 namespace WebApi.Hubs;
 

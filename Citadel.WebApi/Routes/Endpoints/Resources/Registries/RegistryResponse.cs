@@ -1,7 +1,7 @@
 ﻿using Infrastructure.Entities;
 using System.Text.Json.Serialization;
 
-namespace WebApi.Controllers.V1.Resources.Registries;
+namespace WebApi.Routes.Endpoints.Resources.Registries;
 
 public sealed record RegistryResponse(Guid Id, string Name, string Url, DateTime Created, IRegistryConfiguration Configuration)
 {

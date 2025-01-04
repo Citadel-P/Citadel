@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using WebApi.Controllers.V1.Resources.Containers;
+using WebApi.Routes.Endpoints.Resources.Containers;
 
 namespace WebApi.Hubs;
 

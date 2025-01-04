@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace WebApi.Controllers.V1.Resources.Platforms;
+namespace WebApi.Routes.Endpoints.Resources.Platforms;
 
 public sealed record EndpointSettingsView
 {

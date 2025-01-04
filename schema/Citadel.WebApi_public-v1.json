@@ -75,7 +75,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/{id}": {
@@ -149,7 +154,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/start": {
@@ -218,7 +228,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/stop": {
@@ -287,7 +302,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/pause": {
@@ -356,7 +376,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/restart": {
@@ -425,7 +450,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/unpause": {
@@ -494,7 +524,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/delete": {
@@ -563,7 +598,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/stream-logs": {
@@ -629,7 +669,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/{id}/stats": {
@@ -704,7 +749,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/platforms": {
@@ -768,7 +818,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -839,7 +894,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -906,7 +966,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/platforms/{id}": {
@@ -982,7 +1047,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/platforms/{id}/info": {
@@ -1058,7 +1128,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/platforms/{id}/containers": {
@@ -1134,7 +1209,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     }
   },

@@ -1,6 +1,6 @@
 ﻿using Infrastructure.Entities;
 
-namespace WebApi.Controllers.V1.Resources.Containers;
+namespace WebApi.Routes.Endpoints.Resources.Containers;
 
 public sealed record ContainersInfoView(IEnumerable<ContainerInfoView> Containers)
 {

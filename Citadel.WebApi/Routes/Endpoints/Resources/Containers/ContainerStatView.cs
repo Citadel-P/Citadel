@@ -1,6 +1,6 @@
 ﻿using Infrastructure.Entities;
 
-namespace WebApi.Controllers.V1.Resources.Containers;
+namespace WebApi.Routes.Endpoints.Resources.Containers;
 
 public sealed record ContainerStatsView(IEnumerable<ContainerStatView> stats)
 {
@@ -13,8 +13,8 @@ public sealed record ContainerStatView(
         double? MemoryLimit,
         ulong? RxBytes,
         ulong? TxBytes,
-        string? Created)
+        string Created)
 {
-    internal static IEnumerable<ContainerStatView> Map(IEnumerable<ContainerStat> stats) 
+    internal static IEnumerable<ContainerStatView> Map(IEnumerable<ContainerStat> stats)
         => stats.Select(Mapper.Map);
 }

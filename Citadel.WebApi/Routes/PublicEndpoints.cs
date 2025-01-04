@@ -1,6 +1,6 @@
-﻿using WebApi.Controllers.V1.Resources.Containers;
-using WebApi.Controllers.V1.Resources.Platforms;
-using WebApi.Routes.Endpoints;
+﻿using WebApi.Routes.Endpoints;
+using WebApi.Routes.Endpoints.Resources.Containers;
+using WebApi.Routes.Endpoints.Resources.Platforms;
 
 namespace WebApi.Routes;
 
@@ -25,7 +25,7 @@ public static class PublicEndpoints
                      .ProducesProblem(StatusCodes.Status401Unauthorized)
                      .WithName(AuthenticationName + "_" + nameof(Authentication.Login));
             }
-            var containers = group.MapGroup("/containers").WithTags(ContainersName);
+            var containers = group.MapGroup("/containers").WithTags(ContainersName).RequireAuthorization();
             {
                 containers.MapGet("/{id}", Containers.GetById)
                      .WithSummary("Get container by Id")
@@ -109,7 +109,7 @@ public static class PublicEndpoints
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
                     .WithName(ContainersName + "_" + nameof(Containers.GetStats));
             }
-            var platforms = group.MapGroup("/platforms").WithTags(PlatformsName);
+            var platforms = group.MapGroup("/platforms").WithTags(PlatformsName).RequireAuthorization();
             {
                 platforms.MapGet("/", Platforms.List)
                     .WithSummary("List all platforms")

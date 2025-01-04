@@ -4,9 +4,9 @@ using Application.Features.Containers.Models;
 using Application.Features.Platforms.Models;
 using Infrastructure.Entities;
 using Microsoft.AspNetCore.Mvc;
-using WebApi.Controllers.V1.Resources.Auth;
-using WebApi.Controllers.V1.Resources.Containers;
-using WebApi.Controllers.V1.Resources.Platforms;
+using WebApi.Routes.Endpoints.Resources.Auth;
+using WebApi.Routes.Endpoints.Resources.Containers;
+using WebApi.Routes.Endpoints.Resources.Platforms;
 
 namespace Application.Models;
 

@@ -1,14 +1,14 @@
 ﻿using Infrastructure.Entities;
-using WebApi.Controllers.V1.Resources.Platforms;
+using WebApi.Routes.Endpoints.Resources.Platforms;
 
-namespace WebApi.Controllers.V1.Resources.Containers;
+namespace WebApi.Routes.Endpoints.Resources.Containers;
 
-public sealed record ContainerInfoView (
+public sealed record ContainerInfoView(
     Guid Id,
     string ContainerId,
     string Name,
     string Image,
-    DateTimeOffset Created, 
+    DateTimeOffset Created,
     string State,
     string Status,
     IEnumerable<ContainerStatView> Stats = null,

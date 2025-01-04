@@ -1,6 +1,6 @@
 ﻿using Application.Features.Auth.Queries;
 
-namespace WebApi.Controllers.V1.Resources.Auth;
+namespace WebApi.Routes.Endpoints.Resources.Auth;
 
 public sealed record LoginRequest(string Email, string Password)
 {

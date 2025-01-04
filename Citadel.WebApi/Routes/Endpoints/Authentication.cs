@@ -2,7 +2,7 @@
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
-using WebApi.Controllers.V1.Resources.Auth;
+using WebApi.Routes.Endpoints.Resources.Auth;
 
 namespace WebApi.Routes.Endpoints;
 

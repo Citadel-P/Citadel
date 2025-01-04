@@ -1,7 +1,7 @@
 ﻿using Application.Services.Abstractions;
 using Infrastructure.Entities;
 using Microsoft.AspNetCore.SignalR;
-using WebApi.Controllers.V1.Resources;
+using WebApi.Routes.Endpoints.Resources;
 
 namespace WebApi.Hubs;
 

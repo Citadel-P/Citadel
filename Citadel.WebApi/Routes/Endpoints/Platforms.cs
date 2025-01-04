@@ -4,11 +4,12 @@ using Application.Features.Platforms.Models;
 using Application.Features.Platforms.Queries;
 using Application.Features.Platforms.Queries.Models;
 using Hosting.Extensions;
+using LightResults;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
-using WebApi.Controllers.V1.Resources.Containers;
-using WebApi.Controllers.V1.Resources.Platforms;
+using WebApi.Routes.Endpoints.Resources.Containers;
+using WebApi.Routes.Endpoints.Resources.Platforms;
 
 namespace WebApi.Routes.Endpoints;
 
@@ -16,43 +17,43 @@ public static class Platforms
 {
     public static async Task<Results<Ok<PlatformsView>, ProblemHttpResult>> List(IMediator mediator, CancellationToken cancellationToken)
     {
-        var response = await mediator.Send(new GetPlatforms(), cancellationToken);
-        return ControllerExtensions.HandleResult(response, PlatformsView.Map);
+        var result = await mediator.Send(new GetPlatforms(), cancellationToken);
+        return ControllerExtensions.HandleResult(result, PlatformsView.Map);
     }
 
     public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> GetById(IMediator mediator, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
     {
-        var response = await mediator.Send(new GetPlatformById(id), cancellationToken);
-        return ControllerExtensions.HandleResult(response, PlatformView.Map);
+        var result = await mediator.Send(new GetPlatformById(id), cancellationToken);
+        return ControllerExtensions.HandleResult(result, PlatformView.Map);
     }
 
     public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> GetInfo(IMediator mediator, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
     {
-        var response = await mediator.Send(new GetPlatformInfo(id), cancellationToken);
-        return ControllerExtensions.HandleResult(response, PlatformView.Map);
+        var result = await mediator.Send(new GetPlatformInfo(id), cancellationToken);
+        return ControllerExtensions.HandleResult(result, PlatformView.Map);
     }
 
     public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> Put(IMediator mediator, [FromBody] PutPlatformRequest platformParams, CancellationToken cancellationToken)
     {
-        var response = await mediator.Send(platformParams.ToCommand(), cancellationToken);
-        return ControllerExtensions.HandleResult(response, PlatformView.Map);
+        var result = await mediator.Send(platformParams.ToCommand(), cancellationToken);
+        return ControllerExtensions.HandleResult(result, PlatformView.Map);
     }
 
     public static async Task<Results<NoContent, ProblemHttpResult>> Delete(IMediator mediator, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
     {
-        var response = await mediator.Send(new DeletePlatform(id), cancellationToken);
-        return ControllerExtensions.HandleResultForNoContent(response);
+        var result = await mediator.Send(new DeletePlatform(id), cancellationToken);
+        return ControllerExtensions.HandleResultForNoContent(result);
     }
 
     public static async Task<Results<Ok<ContainersInfoView>, ProblemHttpResult>> ListContainers(IMediator mediator, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
     {
-        var response = await mediator.Send(new GetContainers(new GetContainersQuery(All: true), id), cancellationToken);
-        return ControllerExtensions.HandleResult(response, ContainersInfoView.Map);
+        var result = await mediator.Send(new GetContainers(new GetContainersQuery(All: true), id), cancellationToken);
+        return ControllerExtensions.HandleResult(result, ContainersInfoView.Map);
     }
 
     public static async Task<Results<NoContent, ProblemHttpResult>> SystemInfo(IMediator mediator, SystemInfoRequest systemInfo, CancellationToken cancellationToken)
     {
-        var response = await mediator.Send(new UpdateSystemInfo(systemInfo), cancellationToken);
-        return ControllerExtensions.HandleResultForNoContent(response);
+        var result = await mediator.Send(new UpdateSystemInfo(systemInfo), cancellationToken);
+        return ControllerExtensions.HandleResultForNoContent(result);
     }
 }

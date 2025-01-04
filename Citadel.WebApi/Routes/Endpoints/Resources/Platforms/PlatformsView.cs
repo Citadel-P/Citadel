@@ -1,6 +1,6 @@
 ﻿using Infrastructure.Entities;
 
-namespace WebApi.Controllers.V1.Resources.Platforms;
+namespace WebApi.Routes.Endpoints.Resources.Platforms;
 
 public sealed record PlatformView(
     Guid Id,
