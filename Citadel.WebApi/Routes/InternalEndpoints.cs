@@ -46,7 +46,7 @@ public static class InternalEndpoints
             {
                 platforms.MapPut("_info", Platforms.SystemInfo)
                     .WithSummary("Updates a new system info entry")
-                    .Produces<ContainersInfoView>()
+                    .Produces(StatusCodes.Status204NoContent)
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status404NotFound)
                     .ProducesProblem(StatusCodes.Status403Forbidden)

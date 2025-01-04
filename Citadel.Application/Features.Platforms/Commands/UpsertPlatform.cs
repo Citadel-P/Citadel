@@ -88,7 +88,10 @@ internal static class PlatformMapper
 {
     internal static SystemInfo Map(this Infrastructure.SystemInfoView systemInfoView)
     {
-        
+        if (systemInfoView.DaemonId == null) 
+        {
+            throw new ArgumentNullException("DaemonId is required");
+        }
 
         var swarmInfo = SwarmInfo.Create(
                 nodeID: systemInfoView.Swarm.NodeID,

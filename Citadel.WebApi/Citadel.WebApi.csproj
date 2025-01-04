@@ -1,7 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <IsPackable>false</IsPackable>    
     <ImplicitUsings>enable</ImplicitUsings>
 	<RootNamespace>WebApi</RootNamespace>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
