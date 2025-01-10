@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using Hosting.Middlewares;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 
 namespace WebApi.Middlewares;
@@ -22,10 +24,12 @@ internal class AuthorizationResultHandler : IAuthorizationMiddlewareResultHandle
             var problemFactory = context.RequestServices.GetService<ProblemDetailsFactory>();
             var problem = problemFactory.CreateProblemDetails(context, context.Response.StatusCode);
 
-            await context.Response.WriteAsJsonAsync(problem,
-                                                        options: null,
-                                                        contentType: Hosting.Constants.Api.ProblemContentType,
-                                                        cancellationToken: context.RequestAborted);
+            await context.Response.WriteAsJsonAsync(
+                            problem,
+                            type: typeof(ProblemDetails),
+                            context: ProblemDetailsSerializerContext.Default,
+                            contentType: Hosting.Constants.Api.ProblemContentType,
+                            cancellationToken: context.RequestAborted);
         }
     }
 }

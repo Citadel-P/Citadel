@@ -19,7 +19,8 @@
                 "$ref": "#/components/schemas/ContainersInfoRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "204": {
@@ -85,7 +86,8 @@
                 "$ref": "#/components/schemas/ContainerEventRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "204": {
@@ -151,7 +153,8 @@
                 "$ref": "#/components/schemas/ContainerLogRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "204": {
@@ -217,7 +220,8 @@
                 "$ref": "#/components/schemas/SystemInfoRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "204": {

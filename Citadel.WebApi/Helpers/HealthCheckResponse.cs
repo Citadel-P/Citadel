@@ -1,7 +1,7 @@
-﻿namespace WebApi.Helpers;
-
-using System.Text.Json;
+﻿using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+
+namespace WebApi.Helpers;
 
 internal sealed record HealthCheckResponse(string Status, TimeSpan Duration, HealthCheckEntry[] Entries);
 
@@ -22,13 +22,20 @@ internal static class HealthCheckOptionsHelper
                 HealthCheckResponse response = new(
                     report.Status.ToString(),
                     report.TotalDuration,
-                    report.Entries.Select(x => new HealthCheckEntry(
+                    [.. report.Entries.Select(x => new HealthCheckEntry(
                         x.Value.Status.ToString(),
                         x.Key,
-                        x.Value.Description)).ToArray());
+                        x.Value.Description))]);
 
-                await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+                await context.Response.WriteAsJsonAsync(response, typeof(HealthCheckResponse), HealthCheckSerializerContext.Default, cancellationToken: context.RequestAborted);
             }
         };
     }
+}
+
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
+[JsonSerializable(typeof(HealthCheckEntry))]
+[JsonSerializable(typeof(HealthCheckResponse))]
+internal partial class HealthCheckSerializerContext : JsonSerializerContext 
+{
 }

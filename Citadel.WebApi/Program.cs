@@ -42,8 +42,6 @@ void Configure(WebApplication app)
     }
 
     app.UseWebApiModule();
-
-    app.MapFallbackToFile("index.html");
     app.MapHealthChecks("/health", HealthCheckOptionsHelper.GetHealthCheckOptions());
 }
 

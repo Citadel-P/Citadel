@@ -11,3 +11,5 @@
   * Run `dotnet ef migrations add migration0001` - update ef if needed (`dotnet tool update --global dotnet-ef`)
   * Check the generated files for any errors
   * Generate script `dotnet ef migrations script -o "Migrations/script0001 - Init Db.sql"`
+
+*  To build the image: docker build --platform=linux/amd64 -t citadel .
