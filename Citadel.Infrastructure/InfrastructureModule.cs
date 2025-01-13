@@ -7,6 +7,7 @@ using Infrastructure.Services;
 using DbUp;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
+using Infrastructure.Connected_Services.Serializer;
 
 namespace Infrastructure;
 
@@ -26,7 +27,10 @@ public static class InfrastructureModule
     private static IServiceCollection RegisterHttpClients(this IServiceCollection services)
     {
         services
-            .AddRefitClient<IAgentProxy>()
+            .AddRefitClient<IAgentProxy>(new RefitSettings()
+            {
+                ContentSerializer = new STJSourceGeneratorSerializer()
+            })
             .SetHandlerLifetime(TimeSpan.FromMinutes(10))
             .AddPolicyHandler(option =>
             {

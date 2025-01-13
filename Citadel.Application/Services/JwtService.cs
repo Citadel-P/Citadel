@@ -35,8 +35,9 @@ internal sealed class JwtService(IOptions<JwtConfig> jwtConfig) : IJwtService
             throw new ArgumentException("Secret key for algorithm: 'HS512' must be at least '256' bit long");
         }
 
-        string issuer = jwtConfig.Issuer;
-        string audience = jwtConfig.Audience;
+        string issuer = jwtConfig.Issuer ?? throw new ArgumentNullException(nameof(jwtConfig.Issuer));
+        string audience = jwtConfig.Audience ?? throw new ArgumentNullException(nameof(jwtConfig.Audience));
+
         SecurityTokenDescriptor tokenDescriptor = new()
         {
             Subject = new ClaimsIdentity(claims),

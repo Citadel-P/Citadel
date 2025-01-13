@@ -31,8 +31,7 @@ internal static class WebApiModule
             })
             .AddCors();
 
-        services
-            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
                 string key = string.IsNullOrEmpty(configuration["Jwt:Key"])
@@ -41,13 +40,14 @@ internal static class WebApiModule
 
                 options.TokenValidationParameters = new TokenValidationParameters()
                 {
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
                     ValidIssuer = configuration["Jwt:Issuer"],
                     ValidAudience = configuration["Jwt:Audience"],
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+                    ValidateIssuerSigningKey = true,
                     ValidateIssuer = true,
                     ValidateAudience = true,
                     ValidateLifetime = true,
-                    ValidateIssuerSigningKey = true
+                    ClockSkew = TimeSpan.Zero
                 };
 
                 options.Events = new JwtBearerEvents()
@@ -69,6 +69,7 @@ internal static class WebApiModule
                     }
                 };
             });
+        services.AddAuthorization();
         services.AddSingleton<IAuthorizationMiddlewareResultHandler, AuthorizationResultHandler>();
         services.AddSignalRDependencies();
         return services;
