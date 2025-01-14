@@ -42,6 +42,7 @@ void Configure(WebApplication app)
     }
 
     app.UseWebApiModule();
+    app.UseInfrastructureModule();
     app.MapHealthChecks("/health", HealthCheckOptionsHelper.GetHealthCheckOptions());
 }
 

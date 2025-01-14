@@ -23,8 +23,9 @@
 	  <ProjectReference Include="..\Citadel.Contracts\Citadel.Hosting.Common\Citadel.Hosting.Common.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Migrations\" />
-  </ItemGroup>
+   <ItemGroup>
+	   <PackageReference Include="Grpc.AspNetCore" Version="2.67.0" />
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\containers.proto" GrpcServices="Server" Link="Protos\containers.proto" />
+   </ItemGroup>
 
 </Project>

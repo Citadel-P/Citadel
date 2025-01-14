@@ -8,6 +8,8 @@ using DbUp;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
 using Infrastructure.Connected_Services.Serializer;
+using Microsoft.AspNetCore.Builder;
+using Infrastructure.Services.Grpc;
 
 namespace Infrastructure;
 
@@ -17,7 +19,8 @@ public static class InfrastructureModule
         => services
                 .RegisterServices()
                 .RegisterHttpClients()
-                .InitializeDb();
+                .InitializeDb()
+                .AddGrpc().Services;
 
     private static IServiceCollection RegisterServices(this IServiceCollection services)
         => services
@@ -66,5 +69,10 @@ public static class InfrastructureModule
         {
             c.UseSqlite(ApplicationContextFactory.ConnectionString);
         });
+    }
+
+    public static void UseInfrastructureModule(this WebApplication app)
+    {
+        app.MapGrpcService<ContainersService>();
     }
 }
