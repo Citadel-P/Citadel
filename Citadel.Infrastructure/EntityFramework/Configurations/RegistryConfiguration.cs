@@ -21,6 +21,6 @@ internal sealed class RegistryConfiguration : IEntityTypeConfiguration<Registry>
         // Converters
         builder.Property(p => p.Discriminator).HasConversion(
                                                 v => v.ToString(),
-                                                v => (RegistryDiscriminator)Enum.Parse(typeof(RegistryDiscriminator), v));
+                                                v => Enum.Parse<RegistryDiscriminator>(v));
     }
 }

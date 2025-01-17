@@ -1,5 +1,5 @@
-﻿using Application.Features.Containers.Models;
-using Application.Services.Abstractions;
+﻿using Application.Services.Abstractions;
+using Gcontainers;
 using Infrastructure.Entities;
 using Microsoft.AspNetCore.SignalR;
 using WebApi.Routes.Endpoints.Resources;
@@ -12,7 +12,7 @@ internal sealed class ContainerHubDispatcher(IHubContext<ContainerHub, ITypedCon
     public async Task SendContainersInfo(IEnumerable<ContainerInfo> containers) 
         => await hubContext.Clients.Group($"ContainersInfo/{containers.First().PlatformId}").ContainersInfoUpdated(ContainersInfoView.Map(containers));
 
-    public async Task SendContainerLogs(ContainerLogRequest message)
+    public async Task SendContainerLogs(ContainerLogMessage message)
         => await hubContext.Clients.Group($"ContainerLogs/{message.ContainerId}/{message.RequestId}").ContainerLogsReceived(Mapper.Map(message));
 
     public async Task SendContainerEvent(ContainerInfo container, string @event)

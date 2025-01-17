@@ -73,6 +73,6 @@ public static class InfrastructureModule
 
     public static void UseInfrastructureModule(this WebApplication app)
     {
-        app.MapGrpcService<ContainersService>();
+        app.MapGrpcService<ContainerGrpcService>();
     }
 }

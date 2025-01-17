@@ -115,6 +115,7 @@ internal static class WebApiModule
             var context = provider.GetRequiredService<IHubContext<PlatformHub, ITypedPlatformHub>>();
             return new PlatformHubDispatcher(context);
         });
-        services.AddSignalR();
+
+        services.AddSignalR().AddJsonProtocol(c => c.PayloadSerializerOptions.TypeInfoResolverChain.Add(SignalRSerializeContext.Default));
     }
 }

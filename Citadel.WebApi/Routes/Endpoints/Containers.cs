@@ -1,6 +1,4 @@
 ﻿using System.ComponentModel;
-using Application.Features.Containers.Commands;
-using Application.Features.Containers.Models;
 using Application.Features.Containers.Queries;
 using Application.Features.Platforms.Commands;
 using Hosting.Extensions;
@@ -65,23 +63,5 @@ public static class Containers
     {
         var result = await mediator.Send(new GetContainerStats(id), cancellationToken);
         return EndpointHandlers.HandleResult(result, ContainerStatsView.Map);
-    }
-
-    public static async Task<Results<NoContent, ProblemHttpResult>> ContainerInfo(IMediator mediator, ContainersInfoRequest request, CancellationToken cancellationToken)
-    {
-        var result = await mediator.Send(new UpdateContainersInfo(request), cancellationToken);
-        return EndpointHandlers.HandleResultForNoContent(result);
-    }
-
-    public static async Task<Results<NoContent, ProblemHttpResult>> ContainerEvent(IMediator mediator, ContainerEventRequest request, CancellationToken cancellationToken)
-    {
-        var result = await mediator.Send(new OnContainerEvent(request), cancellationToken);
-        return EndpointHandlers.HandleResultForNoContent(result);
-    }
-
-    public static async Task<Results<NoContent, ProblemHttpResult>> ContainerLogs(IMediator mediator, ContainerLogRequest request, CancellationToken cancellationToken)
-    {
-        var result = await mediator.Send(new OnContainerLogs(request), cancellationToken);
-        return EndpointHandlers.HandleResultForNoContent(result);
     }
 }

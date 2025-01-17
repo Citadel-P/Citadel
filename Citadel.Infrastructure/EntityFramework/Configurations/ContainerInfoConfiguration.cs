@@ -1,4 +1,6 @@
 ﻿using System.Text.Json;
+using System.Text.Json.Serialization;
+using Google.Protobuf.Collections;
 using Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -20,9 +22,16 @@ internal class ContainerInfoConfiguration : IEntityTypeConfiguration<ContainerIn
         builder.OwnsMany(p => p.Ports, cfg => cfg.ToJson());
 
         builder.Property(p => p.Labels).HasConversion(
-              v => JsonSerializer.Serialize(v, (JsonSerializerOptions)null),
-              v => JsonSerializer.Deserialize<Dictionary<string, string>>(v, (JsonSerializerOptions)null));
+              v => JsonSerializer.Serialize(v, typeof(Dictionary<string, string>), ContainerInfoConfigurationContext.Default),
+              v => (Dictionary<string, string>)JsonSerializer.Deserialize(v, typeof(Dictionary<string, string>),  ContainerInfoConfigurationContext.Default ));
 
         builder.HasMany(p => p.Stats).WithOne().HasForeignKey(p => p.ContainerInfoId).OnDelete(DeleteBehavior.Cascade);
     }
+}
+
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
+[JsonSerializable(typeof(Dictionary<string, string>))]
+[JsonSerializable(typeof(MapField<string, string>))]
+internal partial class ContainerInfoConfigurationContext : JsonSerializerContext
+{
 }
