@@ -16,18 +16,12 @@ internal static class WebApiModule
     public static IServiceCollection RegisterWebApiModule(this IServiceCollection services, IConfiguration configuration)
     {
         services
-            .AddOpenApi(Constants.PublicApiV1, cfg =>
+            .AddOpenApi(cfg =>
             {
                 cfg.AddSchemaTransformer<EnumSchemaFilter>();
                 cfg.AddDocumentTransformer<ServerTransformer>();
                 cfg.AddOperationTransformer<ProblemDetailDocumentFilter>();
                 cfg.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
-            })
-            .AddOpenApi(Constants.InternalApiV1, cfg =>
-            {
-                cfg.AddSchemaTransformer<EnumSchemaFilter>();
-                cfg.AddDocumentTransformer<ServerTransformer>();
-                cfg.AddOperationTransformer<ProblemDetailDocumentFilter>();
             })
             .AddCors();
 
@@ -94,7 +88,6 @@ internal static class WebApiModule
         app.UseAuthorization();
 
         app.MapPublicEndpoints();
-        app.MapInternalEndpoints();
 
         app.MapHub<ContainerHub>("/hubs/container");
         app.MapHub<PlatformHub>("/hubs/platform");

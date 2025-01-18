@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.1",
   "info": {
-    "title": "Citadel.WebApi | public-v1",
+    "title": "Citadel.WebApi | v1",
     "version": "1.0.0"
   },
   "paths": {

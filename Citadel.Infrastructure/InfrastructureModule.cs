@@ -74,5 +74,6 @@ public static class InfrastructureModule
     public static void UseInfrastructureModule(this WebApplication app)
     {
         app.MapGrpcService<ContainerGrpcService>();
+        app.MapGrpcService<PlatformGrpcService>();
     }
 }

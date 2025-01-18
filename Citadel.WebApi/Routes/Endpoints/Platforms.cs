@@ -51,9 +51,4 @@ public static class Platforms
         return EndpointHandlers.HandleResult(result, ContainersInfoView.Map);
     }
 
-    public static async Task<Results<NoContent, ProblemHttpResult>> SystemInfo(IMediator mediator, SystemInfoRequest systemInfo, CancellationToken cancellationToken)
-    {
-        var result = await mediator.Send(new UpdateSystemInfo(systemInfo), cancellationToken);
-        return EndpointHandlers.HandleResultForNoContent(result);
-    }
 }

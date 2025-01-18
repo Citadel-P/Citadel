@@ -25,7 +25,9 @@ public static class ApplicationModule
             })
             .AddSingleton(typeof(IPipelineBehavior<,>), typeof(ValidatorBehaviour<,>));
 
-        services.AddScoped<IContainerService, ContainerService>();
+        services
+            .AddScoped<IPlatformService, PlatformService>()
+            .AddScoped<IContainerService, ContainerService>();
 
         return services;
     }

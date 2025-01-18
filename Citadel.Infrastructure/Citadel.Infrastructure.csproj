@@ -26,6 +26,7 @@
    <ItemGroup>
 	   <PackageReference Include="Grpc.AspNetCore" Version="2.67.0" />
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\containers.proto" GrpcServices="Server" Link="Protos\containers.proto" />
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\platform.proto" GrpcServices="Server" Link="Protos\platform.proto" />
    </ItemGroup>
 
    <ItemGroup>

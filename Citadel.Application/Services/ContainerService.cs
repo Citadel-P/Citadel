@@ -50,7 +50,7 @@ internal sealed class ContainerService(
                 logger.LogDebug("Update record for {ContainerId} ", containerMessage.Id);
 
                 existing.UpdateWith(
-                    name: containerMessage.Names.First(),
+                    name: containerMessage.Name,
                     image: containerMessage.Image,
                     created: containerMessage.Created,
                     state: containerMessage.State,
@@ -106,6 +106,7 @@ internal sealed class ContainerService(
                     "stop" => "exited",
                     "start" => "running",
                     "pause" => "paused",
+                    "restart" => "restarting",
                     _ => throw new NotImplementedException()
                 };
                 existing.UpdateWith(state: state, status: containerInfo.Status);
@@ -133,13 +134,13 @@ internal static class ContainerInfoMapper
         var containerInfo = ContainerInfo.Create(
                     platformId: platformId,
                     containerId: container.Id,
-                    name: container.Names?.First(),
+                    name: container.Name,
                     image: container.Image,
                     created: container.Created,
                     state: container.State,
                     status: container.Status,
                     ports: container.Ports?.Map(),
-                    labels: container.Labels);
+                    labels: container.Labels.ToDictionary());
 
         var stat = ContainerStat.Create(
                     containerInfoId: containerInfo.Id,

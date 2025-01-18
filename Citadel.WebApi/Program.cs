@@ -36,8 +36,7 @@ void Configure(WebApplication app)
         app.UseSwaggerUI(options => 
         {
             options.AddCustomSwaggerUIOptions(app.Environment.IsDevelopment());
-            options.SwaggerEndpoint($"/openapi/{Constants.PublicApiV1}.json", Constants.PublicApiV1);
-            options.SwaggerEndpoint($"/openapi/{Constants.InternalApiV1}.json", Constants.InternalApiV1);
+            options.SwaggerEndpoint("/openapi/v1.json", "v1");
         });
     }
 

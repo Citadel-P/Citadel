@@ -7,7 +7,7 @@ public class ContainerInfo
     public string ContainerId { get; private set; }
     public string Name { get; private set; }
     public string Image { get; private set; }
-    public int Created { get; private set; }
+    public long Created { get; private set; }
     public string State { get; set; }
     public string Status { get; private set; }
     public ICollection<ContainerPort> Ports { get; private set; } = [];
@@ -22,7 +22,7 @@ public class ContainerInfo
         string image,
         string state,
         string status,
-        int? created = null, 
+        long? created = null, 
         IEnumerable<ContainerPort> ports = null,
         IDictionary<string, string> labels = null)
         => new()
@@ -44,7 +44,7 @@ public class ContainerInfo
         string image = null,
         string state = null,
         string status = null,
-        int? created = null,
+        long? created = null,
         IEnumerable<ContainerPort> ports = null,
         IDictionary<string, string> labels = null)
     {
@@ -53,7 +53,7 @@ public class ContainerInfo
         if (state != null) State = state;
         if (status != null) Status = status;
         if (labels != null) Labels = labels;
-        if (labels != ports) Ports = ports.ToList();
+        if (labels != ports) Ports = [.. ports];
         if (created != null) Created = created.Value;
     }
 }

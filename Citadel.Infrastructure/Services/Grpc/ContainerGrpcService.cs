@@ -23,10 +23,4 @@ internal class ContainerGrpcService(IContainerService containerService) : gConta
         await containerService.OnContainerLogsMessage(request, context.CancellationToken);
         return new ContainerLogReply();
     }
-
-    public override async Task<SystemInfoReply> SystemInfo(SystemInfoMessage request, ServerCallContext context)
-    {
-        return new SystemInfoReply();
-    }
-
 }
