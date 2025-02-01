@@ -13,5 +13,5 @@ export interface ContainerLogsMessage {
   /** Daemon Id  */
   id: string;
   containerId: string;
-  messages: string[];
+  log: string;
 }

@@ -1,4 +1,4 @@
-﻿namespace Common.Configs;
+﻿namespace Application.Configs;
 
 public class JwtConfig
 {

@@ -23,9 +23,11 @@ public class Platform
     
     public void PartialUpdate(
         string name = null,
-        string address = null)
+        string address = null,
+        SystemInfo systemInfo = null)
     {
         if (name != null) Name = name;
         if (address != null) Address = address;
+        if (systemInfo != null) SystemInfo = systemInfo;
     }
 }

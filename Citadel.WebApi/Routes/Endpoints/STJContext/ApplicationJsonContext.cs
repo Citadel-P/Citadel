@@ -47,6 +47,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(PutPlatformRequest))]
 [JsonSerializable(typeof(ContainerStatsView))]
 [JsonSerializable(typeof(ContainerStatView))]
+[JsonSerializable(typeof(HttpValidationProblemDetails))]
+[JsonSerializable(typeof(Dictionary<string, string[]>))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

@@ -4,7 +4,12 @@ using Mediator;
 using Microsoft.EntityFrameworkCore;
 using Hosting.Common;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services;
+using static Agent.Server.Containers.Containers;
+using Agent.Server.Containers;
+using Infrastructure.Services.Abstractions;
+using Google.Protobuf.WellKnownTypes;
+using Hosting.Common.ErrorTypes;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Platforms.Commands;
 
@@ -28,8 +33,9 @@ public enum ContainerAction : uint
 }
 
 internal class PatchContainersHandler(
-    IAgentService agentService,
-    ApplicationDbContext dbContext)
+    IGrpcClientFactory clientFactory,
+    ApplicationDbContext dbContext,
+    ILogger<PatchContainersHandler> logger)
     : ICommandHandler<PatchContainers, Result>
 {
     public async ValueTask<Result> Handle(PatchContainers request, CancellationToken cancellationToken)
@@ -38,31 +44,31 @@ internal class PatchContainersHandler(
                         .AsNoTracking()
                         .Where(s => request.ContainersIds.Contains(s.ContainerId))
                         .ToListAsync(cancellationToken);
-
-        foreach (var container in containers.GroupBy(s => s.Platform.Address)) 
+        
+        Parallel.ForEach(containers.GroupBy(s => s.Platform.Address), async container =>
         {
-            var containerIds = new string[container.Count()];
-            for (var i = 0; i < containerIds.Length; i++)
-                containerIds[i] = container.ElementAt(i).ContainerId;
-            
-            var response = await ToOperation(container.Key, containerIds, request.Action);
-            if (response.IsFailure(out var error))
+            var containerIds = container.Select(s => s.ContainerId);
+            var client = clientFactory.GetContainerClient(container.Key);
+            try
             {
-                return Result.Failure(error);
+                await ToOperation(client, containerIds, request.Action);
             }
-        }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error while processing container {ContainerIds} on platform {PlatformAddress}", containerIds, container.Key);
+            }
+        });
 
-        async Task<Result> ToOperation(string platformAddress, string[] containersIds, ContainerAction action) => action switch
+        async Task<Empty> ToOperation(ContainersClient client, IEnumerable<string> containersIds, ContainerAction action) => action switch
         {
-            ContainerAction.START => await agentService.StartContainers(platformAddress, containersIds, cancellationToken),
-            ContainerAction.STOP => await agentService.StopContainers(platformAddress, containersIds, cancellationToken),
-            ContainerAction.PAUSE => await agentService.PauseContainers(platformAddress, containersIds, cancellationToken),
-            ContainerAction.UNPAUSE => await agentService.UnpauseContainers(platformAddress, containersIds, cancellationToken),
-            ContainerAction.DELETE => await agentService.DeleteContainers(platformAddress, containersIds, cancellationToken),
-            ContainerAction.RESTART => await agentService.RestartContainers(platformAddress, containersIds, cancellationToken),
+            ContainerAction.START => await client.StartContainersAsync(new ContainersId() { Ids = { containersIds } }, cancellationToken: cancellationToken),
+            ContainerAction.STOP => await client.StopContainersAsync(new ContainersId() { Ids = { containersIds } }, cancellationToken: cancellationToken),
+            ContainerAction.PAUSE => await client.PauseContainersAsync(new ContainersId() { Ids = { containersIds } }, cancellationToken: cancellationToken),
+            ContainerAction.UNPAUSE => await client.UnpauseContainersAsync(new ContainersId() { Ids = { containersIds } }, cancellationToken: cancellationToken),
+            ContainerAction.DELETE => await client.DeleteContainersAsync(new ContainersId() { Ids = { containersIds } }, cancellationToken: cancellationToken),
+            ContainerAction.RESTART => await client.RestartContainersAsync(new ContainersId() { Ids = { containersIds } }, cancellationToken: cancellationToken),
             _ => throw new NotImplementedException()
         };
-
 
         return Result.Success();
     }

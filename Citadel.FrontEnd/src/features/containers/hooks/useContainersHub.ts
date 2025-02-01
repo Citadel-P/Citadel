@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { HubConnection, HubConnectionBuilder, HubConnectionState, IHttpConnectionOptions } from '@microsoft/signalr';
 import { useAuthContext } from '@/features/login/AuthProvider';
 import { SignalrRetryPolicy } from '@/lib/signalr.retrypolicy';
-import { ContainerInfoView, ContainersInfoView, ContainerStatView } from '@/api/_generated';
+import { ContainerInfoView, ContainersInfoView } from '@/api/_generated';
 
 const useContainersHub = (platformId: string) => {
   const [containersInfo, setContainersInfo] = useState<ContainersInfoView | undefined>();

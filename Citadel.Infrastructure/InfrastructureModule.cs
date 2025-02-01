@@ -1,52 +1,33 @@
 ﻿using Infrastructure.EntityFramework;
 using Microsoft.Extensions.DependencyInjection;
-using Refit;
-using Polly;
-using Polly.Extensions.Http;
 using Infrastructure.Services;
 using DbUp;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
-using Infrastructure.Connected_Services.Serializer;
 using Microsoft.AspNetCore.Builder;
-using Infrastructure.Services.Grpc;
+using Infrastructure.Services.Abstractions;
+using Infrastructure.TaskJobs;
+using Microsoft.Extensions.Configuration;
 
 namespace Infrastructure;
 
 public static class InfrastructureModule
 {
-    public static IServiceCollection RegisterInfrastructureModule(this IServiceCollection services)
+    public static IServiceCollection RegisterInfrastructureModule(this IServiceCollection services, IConfiguration configuration)
         => services
                 .RegisterServices()
-                .RegisterHttpClients()
                 .InitializeDb()
-                .AddGrpc().Services;
+                .AddGrpcClients()
+                .AddTaskJobs(configuration);
 
     private static IServiceCollection RegisterServices(this IServiceCollection services)
         => services
-            .AddScoped<ICacheService, CacheService>()
-            .AddScoped<IAgentService, AgentService>();
+            .AddScoped<ICacheService, CacheService>();
 
-    private static IServiceCollection RegisterHttpClients(this IServiceCollection services)
-    {
-        services
-            .AddRefitClient<IAgentProxy>(new RefitSettings()
-            {
-                ContentSerializer = new STJSourceGeneratorSerializer()
-            })
-            .SetHandlerLifetime(TimeSpan.FromMinutes(10))
-            .AddPolicyHandler(option =>
-            {
-                return HttpPolicyExtensions
-                        .HandleTransientHttpError()
-                        .WaitAndRetryAsync(
-                        [
-                            TimeSpan.FromSeconds(1),
-                            TimeSpan.FromSeconds(5)
-                        ]);
-            });
-        return services;
-    }
+    private static IServiceCollection AddGrpcClients(this IServiceCollection services)
+        => services
+        .AddSingleton<IGrpcClientFactory, GrpcClientFactory>()
+        .AddGrpc().Services;
 
     private static IServiceCollection InitializeDb(this IServiceCollection services)
     {
@@ -71,9 +52,4 @@ public static class InfrastructureModule
         });
     }
 
-    public static void UseInfrastructureModule(this WebApplication app)
-    {
-        app.MapGrpcService<ContainerGrpcService>();
-        app.MapGrpcService<PlatformGrpcService>();
-    }
 }

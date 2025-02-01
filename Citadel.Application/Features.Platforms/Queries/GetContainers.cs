@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Application.Features.Platforms.Queries.Models;
 using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
-using Application.Utils;
+using Infrastructure;
 
 namespace Application.Features.Platforms.Queries;
 

@@ -1,11 +1,11 @@
-﻿using Gcontainers;
+﻿using Agent.Server.Containers;
 using Infrastructure.Entities;
 
-namespace Application.Services.Abstractions;
+namespace Infrastructure.Services.Abstractions;
 
 public interface IContainerHubDispatcher
 {
-    Task SendContainerLogs(ContainerLogMessage message);
+    Task SendContainerLogs(ContainerLogReply message, string requestId);
     Task SendContainerEvent(ContainerInfo container, string @event);
     Task SendContainersInfo(IEnumerable<ContainerInfo> containers);
 }

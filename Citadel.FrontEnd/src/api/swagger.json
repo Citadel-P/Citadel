@@ -1,17 +1,8 @@
 {
   "openapi": "3.0.1",
   "info": {
-    "title": "DT RESTful API",
-    "description": "Citadel Platform - DT Backend Module RESTful.",
-    "contact": {
-      "name": "Citadel Support",
-      "url": "https://www.test.com/"
-    },
-    "license": {
-      "name": "MIT License",
-      "url": "https://www.test.com/"
-    },
-    "version": "1.0"
+    "title": "Citadel.WebApi | v1",
+    "version": "1.0.0"
   },
   "paths": {
     "/api/v1/authentication/login": {
@@ -27,36 +18,27 @@
               "schema": {
                 "$ref": "#/components/schemas/LoginRequest"
               }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
             }
           },
+          "required": true
+        },
+        "responses": {
           "200": {
             "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LoginResponse"
+                  "$ref": "#/components/schemas/ContainerInfoView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
                 }
               }
             }
@@ -71,17 +53,35 @@
               }
             }
           },
-          "400": {
-            "description": "Bad Request",
+          "403": {
+            "description": "Forbidden",
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/{id}": {
@@ -95,7 +95,6 @@
           {
             "name": "id",
             "in": "path",
-            "description": "The container id",
             "required": true,
             "schema": {
               "type": "string"
@@ -103,22 +102,22 @@
           }
         ],
         "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "200": {
             "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ContainerInfoView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
                 }
               }
             }
@@ -152,8 +151,16 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/start": {
@@ -161,28 +168,11 @@
         "tags": [
           "Containers"
         ],
-        "summary": "Start the given container(s)",
+        "summary": "Starts the given container(s)",
         "operationId": "Containers_StartContainers",
         "requestBody": {
-          "description": "List of containers ids",
           "content": {
             "application/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "text/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "application/*+json": {
               "schema": {
                 "type": "array",
                 "items": {
@@ -194,16 +184,6 @@
           "required": true
         },
         "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "204": {
             "description": "No Content"
           },
@@ -212,7 +192,17 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -237,17 +227,15 @@
               }
             }
           },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/stop": {
@@ -255,28 +243,11 @@
         "tags": [
           "Containers"
         ],
-        "summary": "Stop the given container(s)",
+        "summary": "Stops the given container(s)",
         "operationId": "Containers_StopContainers",
         "requestBody": {
-          "description": "List of containers ids",
           "content": {
             "application/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "text/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "application/*+json": {
               "schema": {
                 "type": "array",
                 "items": {
@@ -288,16 +259,6 @@
           "required": true
         },
         "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "204": {
             "description": "No Content"
           },
@@ -306,7 +267,17 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -331,17 +302,15 @@
               }
             }
           },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/pause": {
@@ -352,25 +321,8 @@
         "summary": "Pause the given container(s)",
         "operationId": "Containers_PauseContainers",
         "requestBody": {
-          "description": "List of containers ids",
           "content": {
             "application/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "text/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "application/*+json": {
               "schema": {
                 "type": "array",
                 "items": {
@@ -382,16 +334,6 @@
           "required": true
         },
         "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "204": {
             "description": "No Content"
           },
@@ -400,7 +342,17 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -425,17 +377,15 @@
               }
             }
           },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/restart": {
@@ -443,28 +393,11 @@
         "tags": [
           "Containers"
         ],
-        "summary": "Restart the given container(s)",
+        "summary": "Restarts the given container(s)",
         "operationId": "Containers_RestartContainers",
         "requestBody": {
-          "description": "List of containers ids",
           "content": {
             "application/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "text/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "application/*+json": {
               "schema": {
                 "type": "array",
                 "items": {
@@ -476,16 +409,6 @@
           "required": true
         },
         "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "204": {
             "description": "No Content"
           },
@@ -494,7 +417,17 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -519,17 +452,15 @@
               }
             }
           },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/unpause": {
@@ -540,25 +471,8 @@
         "summary": "Unpause the given container(s)",
         "operationId": "Containers_UnpauseContainers",
         "requestBody": {
-          "description": "List of containers ids",
           "content": {
             "application/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "text/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "application/*+json": {
               "schema": {
                 "type": "array",
                 "items": {
@@ -570,16 +484,6 @@
           "required": true
         },
         "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "204": {
             "description": "No Content"
           },
@@ -588,7 +492,17 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -613,17 +527,15 @@
               }
             }
           },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/delete": {
@@ -634,25 +546,8 @@
         "summary": "Delete the given container(s)",
         "operationId": "Containers_DeleteContainers",
         "requestBody": {
-          "description": "List of containers ids",
           "content": {
             "application/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "text/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "application/*+json": {
               "schema": {
                 "type": "array",
                 "items": {
@@ -664,16 +559,6 @@
           "required": true
         },
         "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "204": {
             "description": "No Content"
           },
@@ -682,7 +567,17 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -707,17 +602,15 @@
               }
             }
           },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/stream-logs": {
@@ -728,36 +621,16 @@
         "summary": "Request to start (or stop) streaming container logs",
         "operationId": "Containers_StreamLogs",
         "requestBody": {
-          "description": "The request params",
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/StreamLogsRequest"
               }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StreamLogsRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/StreamLogsRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
             }
           },
+          "required": true
+        },
+        "responses": {
           "204": {
             "description": "No Content"
           },
@@ -766,7 +639,17 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -791,17 +674,15 @@
               }
             }
           },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/containers/{id}/stats": {
@@ -823,16 +704,6 @@
           }
         ],
         "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "200": {
             "description": "OK",
             "content": {
@@ -848,7 +719,17 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -873,17 +754,15 @@
               }
             }
           },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/platforms": {
@@ -894,16 +773,6 @@
         "summary": "List all platforms",
         "operationId": "Platforms_List",
         "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "200": {
             "description": "OK",
             "content": {
@@ -914,6 +783,26 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -933,8 +822,16 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -943,52 +840,22 @@
         "summary": "Create or update a platform",
         "operationId": "Platforms_Put",
         "requestBody": {
-          "description": "",
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PutPlatformRequest"
               }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PutPlatformRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/PutPlatformRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
             }
           },
+          "required": true
+        },
+        "responses": {
           "200": {
             "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlatformView"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/PlatformView2"
                 }
               }
             }
@@ -998,7 +865,17 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -1022,8 +899,88 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Delete a platform",
+        "operationId": "Platforms_Delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "description": "The platform id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/platforms/{id}": {
@@ -1046,22 +1003,22 @@
           }
         ],
         "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "200": {
             "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlatformView"
+                  "$ref": "#/components/schemas/PlatformView2"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
                 }
               }
             }
@@ -1095,72 +1052,16 @@
                 }
               }
             }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Platforms"
-        ],
-        "summary": "Delete a platform",
-        "operationId": "Platforms_Delete",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "The platform Id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
+          },
           "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/platforms/{id}/info": {
@@ -1168,7 +1069,7 @@
         "tags": [
           "Platforms"
         ],
-        "summary": "Get platform info from agent",
+        "summary": "Get platform by Id",
         "operationId": "Platforms_GetInfo",
         "parameters": [
           {
@@ -1183,22 +1084,22 @@
           }
         ],
         "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "200": {
             "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlatformView"
+                  "$ref": "#/components/schemas/PlatformView2"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
                 }
               }
             }
@@ -1232,8 +1133,16 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/platforms/{id}/containers": {
@@ -1241,7 +1150,7 @@
         "tags": [
           "Platforms"
         ],
-        "summary": "List the containers of a given platform",
+        "summary": "Returns the list of containers of the given platform",
         "operationId": "Platforms_ListContainers",
         "parameters": [
           {
@@ -1256,16 +1165,6 @@
           }
         ],
         "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "200": {
             "description": "OK",
             "content": {
@@ -1281,7 +1180,17 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -1306,57 +1215,30 @@
               }
             }
           },
-          "502": {
-            "description": "Bad Gateway",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     }
   },
   "components": {
     "schemas": {
-      "AppPermission": {
-        "enum": [
-          "None",
-          "ListUsers",
-          "AddUsers",
-          "EditUsers",
-          "DeleteUsers",
-          "ListRoles",
-          "AddRoles",
-          "EditRoles",
-          "DeleteRoles",
-          "ListTeams",
-          "AddTeams",
-          "EditTeams",
-          "DeleteTeams",
-          "ListPlatforms",
-          "AddPlatforms",
-          "EditPlatforms",
-          "DeletePlatforms",
-          "ListContainers",
-          "AddContainers",
-          "EditContainers",
-          "DeleteContainers",
-          "ListNetworks",
-          "AddNetworks",
-          "EditNetworks",
-          "DeleteNetworks",
-          "ListVolumes",
-          "AddVolumes",
-          "EditVolumes",
-          "DeleteVolumes"
-        ],
-        "type": "string"
-      },
       "ContainerInfoView": {
+        "required": [
+          "id",
+          "containerId",
+          "name",
+          "image",
+          "created",
+          "state",
+          "status"
+        ],
         "type": "object",
         "properties": {
           "id": {
@@ -1392,6 +1274,7 @@
             "items": {
               "$ref": "#/components/schemas/ContainerStatView"
             },
+            "default": null,
             "nullable": true
           },
           "ports": {
@@ -1399,23 +1282,61 @@
             "items": {
               "$ref": "#/components/schemas/PortView"
             },
+            "default": null,
             "nullable": true
           },
           "labels": {
             "type": "object",
             "additionalProperties": {
-              "type": "string",
-              "nullable": true
+              "type": "string"
             },
+            "default": null,
             "nullable": true
           },
           "platform": {
             "$ref": "#/components/schemas/PlatformView"
           }
-        },
-        "additionalProperties": false
+        }
+      },
+      "ContainersInfoView": {
+        "required": [
+          "containers"
+        ],
+        "type": "object",
+        "properties": {
+          "containers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerInfoView"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "ContainerStatsView": {
+        "required": [
+          "stats"
+        ],
+        "type": "object",
+        "properties": {
+          "stats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerStatView"
+            },
+            "nullable": true
+          }
+        }
       },
       "ContainerStatView": {
+        "required": [
+          "memoryUsage",
+          "cpuUsage",
+          "memoryLimit",
+          "rxBytes",
+          "txBytes",
+          "created"
+        ],
         "type": "object",
         "properties": {
           "memoryUsage": {
@@ -1435,48 +1356,60 @@
           },
           "rxBytes": {
             "type": "integer",
-            "format": "int64",
+            "format": "uint64",
             "nullable": true
           },
           "txBytes": {
             "type": "integer",
-            "format": "int64",
+            "format": "uint64",
             "nullable": true
           },
           "created": {
             "type": "string",
             "nullable": true
           }
-        },
-        "additionalProperties": false
+        }
       },
-      "ContainerStatsView": {
+      "HttpValidationProblemDetails": {
         "type": "object",
         "properties": {
-          "stats": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ContainerStatView"
-            },
+          "type": {
+            "type": "string",
             "nullable": true
-          }
-        },
-        "additionalProperties": false
-      },
-      "ContainersInfoView": {
-        "type": "object",
-        "properties": {
-          "containers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ContainerInfoView"
-            },
+          },
+          "title": {
+            "type": "string",
             "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           }
-        },
-        "additionalProperties": false
+        }
       },
       "LoginRequest": {
+        "required": [
+          "email",
+          "password"
+        ],
         "type": "object",
         "properties": {
           "email": {
@@ -1487,27 +1420,23 @@
             "type": "string",
             "nullable": true
           }
-        },
-        "additionalProperties": false
+        }
       },
-      "LoginResponse": {
-        "type": "object",
-        "properties": {
-          "jwt": {
-            "type": "string",
-            "nullable": true
-          },
-          "permissions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AppPermission"
-            },
-            "nullable": true
-          }
-        },
-        "additionalProperties": false
+      "PlatformStatus": {
+        "enum": [
+          "Disconnected",
+          "Connected"
+        ],
+        "type": "string"
       },
       "PlatformStatView": {
+        "required": [
+          "memoryUsage",
+          "cpuUsage",
+          "created",
+          "rxBytes",
+          "txBytes"
+        ],
         "type": "object",
         "properties": {
           "memoryUsage": {
@@ -1530,10 +1459,32 @@
             "type": "number",
             "format": "double"
           }
-        },
-        "additionalProperties": false
+        }
+      },
+      "PlatformsView": {
+        "required": [
+          "platforms"
+        ],
+        "type": "object",
+        "properties": {
+          "platforms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformView2"
+            },
+            "nullable": true
+          }
+        }
       },
       "PlatformView": {
+        "required": [
+          "id",
+          "name",
+          "address",
+          "status",
+          "systemInfo",
+          "stats"
+        ],
         "type": "object",
         "properties": {
           "id": {
@@ -1548,6 +1499,9 @@
             "type": "string",
             "nullable": true
           },
+          "status": {
+            "$ref": "#/components/schemas/PlatformStatus"
+          },
           "systemInfo": {
             "$ref": "#/components/schemas/SystemInfoView"
           },
@@ -1559,22 +1513,53 @@
             "nullable": true
           }
         },
-        "additionalProperties": false
+        "default": null,
+        "nullable": true
       },
-      "PlatformsView": {
+      "PlatformView2": {
+        "required": [
+          "id",
+          "name",
+          "address",
+          "status",
+          "systemInfo",
+          "stats"
+        ],
         "type": "object",
         "properties": {
-          "platforms": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlatformStatus"
+          },
+          "systemInfo": {
+            "$ref": "#/components/schemas/SystemInfoView"
+          },
+          "stats": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/PlatformView"
+              "$ref": "#/components/schemas/PlatformStatView"
             },
             "nullable": true
           }
-        },
-        "additionalProperties": false
+        }
       },
       "PortView": {
+        "required": [
+          "ip",
+          "privatePort",
+          "publicPort"
+        ],
         "type": "object",
         "properties": {
           "ip": {
@@ -1583,14 +1568,13 @@
           },
           "privatePort": {
             "type": "integer",
-            "format": "int32"
+            "format": "uint16"
           },
           "publicPort": {
             "type": "integer",
-            "format": "int32"
+            "format": "uint16"
           }
-        },
-        "additionalProperties": false
+        }
       },
       "ProblemDetails": {
         "type": "object",
@@ -1616,10 +1600,14 @@
             "type": "string",
             "nullable": true
           }
-        },
-        "additionalProperties": { }
+        }
       },
       "PutPlatformRequest": {
+        "required": [
+          "id",
+          "name",
+          "address"
+        ],
         "type": "object",
         "properties": {
           "id": {
@@ -1635,37 +1623,48 @@
             "type": "string",
             "nullable": true
           }
-        },
-        "additionalProperties": false
+        }
       },
       "RequestedLogAction": {
         "enum": [
           "START",
           "STOP"
         ],
-        "type": "string"
+        "type": "string",
+        "default": "START"
       },
       "StreamLogsRequest": {
+        "required": [
+          "containerId",
+          "requestId"
+        ],
         "type": "object",
         "properties": {
           "containerId": {
             "type": "string",
-            "description": "containers id",
             "nullable": true
           },
           "requestId": {
             "type": "string",
-            "description": "Unique identifier of the request",
             "format": "uuid"
           },
           "requestedLogAction": {
             "$ref": "#/components/schemas/RequestedLogAction"
           }
-        },
-        "additionalProperties": false,
-        "description": "Request params for starting or stopping streaming logs"
+        }
       },
       "SwarmInfoView": {
+        "required": [
+          "id",
+          "nodeID",
+          "nodeAddr",
+          "localNodeState",
+          "controlAvailable",
+          "error",
+          "nodes",
+          "managers",
+          "remoteManagers"
+        ],
         "type": "object",
         "properties": {
           "id": {
@@ -1707,9 +1706,13 @@
             "nullable": true
           }
         },
-        "additionalProperties": false
+        "nullable": true
       },
       "SwarmPeerView": {
+        "required": [
+          "nodeID",
+          "addr"
+        ],
         "type": "object",
         "properties": {
           "nodeID": {
@@ -1720,10 +1723,30 @@
             "type": "string",
             "nullable": true
           }
-        },
-        "additionalProperties": false
+        }
       },
       "SystemInfoView": {
+        "required": [
+          "id",
+          "daemonId",
+          "networksCount",
+          "volumesCount",
+          "containers",
+          "containersRunning",
+          "containersPaused",
+          "containersStopped",
+          "images",
+          "driver",
+          "operatingSystem",
+          "osVersion",
+          "osType",
+          "architecture",
+          "ncpu",
+          "memTotal",
+          "serverVersion",
+          "agentVersion",
+          "swarmInfo"
+        ],
         "type": "object",
         "properties": {
           "id": {
@@ -1802,58 +1825,26 @@
             "$ref": "#/components/schemas/SwarmInfoView"
           }
         },
-        "additionalProperties": false
-      },
-      "ValidationProblemDetails": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "nullable": true
-          },
-          "title": {
-            "type": "string",
-            "nullable": true
-          },
-          "status": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "detail": {
-            "type": "string",
-            "nullable": true
-          },
-          "instance": {
-            "type": "string",
-            "nullable": true
-          },
-          "errors": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "nullable": true
-          }
-        },
-        "additionalProperties": { }
+        "nullable": true
       }
     },
     "securitySchemes": {
       "Bearer": {
         "type": "http",
-        "description": "JWT Authorization header using the Bearer scheme. Example: \"{token}\"",
         "scheme": "bearer",
-        "bearerFormat": "JWT"
+        "bearerFormat": "Json Web Token"
       }
     }
   },
-  "security": [
+  "tags": [
     {
-      "Bearer": [ ]
+      "name": "Authentication"
+    },
+    {
+      "name": "Containers"
+    },
+    {
+      "name": "Platforms"
     }
   ]
 }

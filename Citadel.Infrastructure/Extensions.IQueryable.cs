@@ -1,11 +1,11 @@
 ﻿using Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace Application.Utils;
+namespace Infrastructure;
 
-internal static partial class Extensions
+public static partial class Extensions
 {
-    internal static IQueryable<ContainerInfo> WithLastStat(this DbSet<ContainerInfo> containersInfo, Guid platformId)
+    public static IQueryable<ContainerInfo> WithLastStat(this DbSet<ContainerInfo> containersInfo, Guid platformId)
         => containersInfo
             .AsNoTracking()
             .OrderByDescending(s => s.Created)

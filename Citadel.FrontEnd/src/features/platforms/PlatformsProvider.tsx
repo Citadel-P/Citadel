@@ -16,15 +16,15 @@ const PlatformsContext = createContext<IContext | undefined>(undefined);
 
 const PlatformsProvider: React.FC<IProps> = ({ children }) => {
   const { data, isLoading, isSuccess } = useGETPlatforms();
-  const { platformMessage } = usePlatformHub();
+  const { platformsMessage } = usePlatformHub();
   let platforms: PlatformView[] | undefined;
 
   if (isSuccess && data?.data) {
     platforms = data.data.platforms!;
   }
 
-  if (platformMessage) {
-    platforms = platforms?.map((s) => (s.id === platformMessage.id ? platformMessage : s));
+  if (platformsMessage) {
+    platforms = platformsMessage;
   }
 
   return (

@@ -6,6 +6,9 @@ using Mediator;
 using Microsoft.EntityFrameworkCore;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services;
+using Quartz;
+using Infrastructure.TaskJobs;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Platforms.Commands;
 
@@ -18,7 +21,11 @@ public sealed record DeletePlatform(Guid Id) : ICommand<Result>
     }
 }
 
-internal class DeletePlatformHandler(ApplicationDbContext dbContext, ICacheService cacheService) : ICommandHandler<DeletePlatform, Result>
+internal class DeletePlatformHandler(
+    ApplicationDbContext dbContext, 
+    ISchedulerFactory schedulerFactory,
+    ICacheService cacheService,
+    ILogger<DeletePlatformHandler> logger) : ICommandHandler<DeletePlatform, Result>
 {
     public async ValueTask<Result> Handle(DeletePlatform command, CancellationToken cancellationToken)
     {
@@ -36,7 +43,14 @@ internal class DeletePlatformHandler(ApplicationDbContext dbContext, ICacheServi
         await dbContext.SaveChangesAsync(cancellationToken);
 
         cacheService.DeletePlatformId(platform.SystemInfo.DaemonId);
+        await AbortTaskJobs(platform.Address, cancellationToken);
 
         return Result.Success();
+    }
+
+    private async Task AbortTaskJobs(string address, CancellationToken cancellationToken)
+    {
+        var scheduler = await schedulerFactory.GetScheduler(cancellationToken);
+        await scheduler.AbortStreamDaemonEventJob(address, logger, cancellationToken);
     }
 }

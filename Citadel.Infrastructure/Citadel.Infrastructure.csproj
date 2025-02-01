@@ -7,12 +7,12 @@
 
   <ItemGroup>
 	<PackageReference Include="dbup-sqlite" Version="6.0.1" />
-	<PackageReference Include="Microsoft.Extensions.Http.Polly" Version="9.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.1">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.1" />
+	<PackageReference Include="Quartz.AspNetCore" Version="4.0.0-preview-20250116-1816" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,8 +25,11 @@
 
    <ItemGroup>
 	   <PackageReference Include="Grpc.AspNetCore" Version="2.67.0" />
-	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\containers.proto" GrpcServices="Server" Link="Protos\containers.proto" />
-	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\platform.proto" GrpcServices="Server" Link="Protos\platform.proto" />
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\agent.containers.proto" GrpcServices="Client" Link="Protos\agent.containers.proto" />
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\agent.platform.proto" GrpcServices="Client" Link="Protos\agent.platform.proto" />
+
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\Common\platforms.proto" GrpcServices="None" Link="Protos\Common\platforms.proto" />
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\Common\containers.proto" GrpcServices="None" Link="Protos\Common\containers.proto" />
    </ItemGroup>
 
    <ItemGroup>

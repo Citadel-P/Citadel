@@ -1,5 +1,5 @@
-﻿using Application.Services.Abstractions;
-using Infrastructure.Entities;
+﻿using Infrastructure.Entities;
+using Infrastructure.Services.Abstractions;
 using Microsoft.AspNetCore.SignalR;
 using WebApi.Routes.Endpoints.Resources;
 
@@ -7,6 +7,6 @@ namespace WebApi.Hubs;
 
 internal sealed class PlatformHubDispatcher(IHubContext<PlatformHub, ITypedPlatformHub> hubContext) : IPlatformHubDispatcher
 {
-    public async Task SendPlatformUpdated(Platform platform) 
-        => await hubContext.Clients.All.PlatformUpdated(Mapper.Map(platform));
+    public async Task PushPlatformsUpdates(IEnumerable<Platform> platforms) 
+        => await hubContext.Clients.All.PlatformsUpdated(Mapper.Map(platforms));
 }

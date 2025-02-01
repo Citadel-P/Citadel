@@ -1,6 +1,9 @@
-﻿using System.Text;
-using Application.Services.Abstractions;
+﻿using System.ComponentModel;
+using System.Text;
+using System.Text.Json.Serialization;
+using Hosting.Converters;
 using Hosting.OpenApi;
+using Infrastructure.Services.Abstractions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -109,6 +112,13 @@ internal static class WebApiModule
             return new PlatformHubDispatcher(context);
         });
 
-        services.AddSignalR().AddJsonProtocol(c => c.PayloadSerializerOptions.TypeInfoResolverChain.Add(SignalRSerializeContext.Default));
+        services.AddSignalR().AddJsonProtocol(c => 
+        {
+            c.PayloadSerializerOptions.TypeInfoResolverChain.Add(SignalRSerializeContext.Default);
+            c.PayloadSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+            c.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+            c.PayloadSerializerOptions.Converters.Add(new DatetimeOffsetConverter());
+            c.PayloadSerializerOptions.Converters.Add(new DatetimeConverter());
+        });
     }
 }

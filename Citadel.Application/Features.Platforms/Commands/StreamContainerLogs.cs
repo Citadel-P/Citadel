@@ -1,15 +1,14 @@
 ﻿using FluentValidation;
 using Hosting.Common;
-using Hosting.Common.ErrorTypes;
-using Infrastructure.EntityFramework;
-using Infrastructure.Services;
+using Infrastructure.TaskJobs;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Quartz;
 
 namespace Application.Features.Platforms.Commands;
 
-public sealed record StreamContainerLogs(string ContainerId, Guid RequestId, RequestedLogAction Action = RequestedLogAction.START) : ICommand<Result>
+public sealed record StreamContainerLogs(string ContainerId, Guid RequestId, RequestedLogAction RequestedLogAction) : ICommand<Result>
 {
     internal class Validator : AbstractValidator<StreamContainerLogs>
     {
@@ -21,35 +20,22 @@ public sealed record StreamContainerLogs(string ContainerId, Guid RequestId, Req
     }
 }
 
-internal class StreamContainerLogsHandler(
-    IAgentService agentService,
-    ApplicationDbContext dbContext)
+internal class StreamContainerLogsHandler(ISchedulerFactory schedulerFactory, ILogger<StreamContainerLogsHandler> logger)
     : ICommandHandler<StreamContainerLogs, Result>
 {
-    public async ValueTask<Result> Handle(StreamContainerLogs command, CancellationToken cancellationToken)
+    public async ValueTask<Result> Handle(StreamContainerLogs query, CancellationToken cancellationToken)
     {
-        var platformAddress = await dbContext.ContainersInfo
-            .AsNoTracking()
-            .Include(s => s.Platform)
-            .Where(s => s.ContainerId.StartsWith(command.ContainerId))
-            .Select(s => s.Platform.Address)
-            .FirstOrDefaultAsync(cancellationToken: cancellationToken);
-
-        if (platformAddress == null)
+        var scheduler = await schedulerFactory.GetScheduler(cancellationToken);
+        if (query.RequestedLogAction == RequestedLogAction.START)
         {
-            return Result.Failure(new NotFoundError($"Platform doesn't exist for container {command.ContainerId}"));
+            await scheduler.EnqueueContainerLogsJob(query.ContainerId, query.RequestId, logger, cancellationToken);
         }
-
-        return await agentService.StreamContainerLogs(platformAddress, command.ContainerId, command.RequestId, Convert(command.Action), cancellationToken);
-    }
-
-    private static Infrastructure.RequestedLogAction Convert(RequestedLogAction requestedLogAction) 
-        => requestedLogAction switch
+        else
         {
-            RequestedLogAction.START => Infrastructure.RequestedLogAction.START,
-            RequestedLogAction.STOP => Infrastructure.RequestedLogAction.STOP,
-            _ => throw new NotImplementedException(),
-        };
+            await scheduler.AbortContainerLogsJob(query.RequestId, logger, cancellationToken);
+        }
+        return Result.Success();
+    }
 }
 
 public enum RequestedLogAction

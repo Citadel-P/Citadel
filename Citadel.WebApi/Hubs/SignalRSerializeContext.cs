@@ -13,6 +13,7 @@ namespace WebApi.Hubs;
 [JsonSerializable(typeof(PortView))]
 [JsonSerializable(typeof(List<PortView>))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
+[JsonSerializable(typeof(IEnumerable<PlatformView>))]
 [JsonSerializable(typeof(PlatformView))]
 [JsonSerializable(typeof(List<PlatformStatView>))]
 [JsonSerializable(typeof(SystemInfoView))]

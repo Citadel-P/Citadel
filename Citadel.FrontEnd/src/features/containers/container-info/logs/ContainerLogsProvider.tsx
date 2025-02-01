@@ -24,7 +24,7 @@ const ContainerLogsProvider: React.FC<IProps> = ({ children }) => {
   let logs: string[] = [];
 
   if (containerLogsMessage) {
-    logs = containerLogsMessage.messages;
+    logs.push(containerLogsMessage.log);
   }
 
   useEffect(() => {

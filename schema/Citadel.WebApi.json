@@ -1422,6 +1422,13 @@
           }
         }
       },
+      "PlatformStatus": {
+        "enum": [
+          "Disconnected",
+          "Connected"
+        ],
+        "type": "string"
+      },
       "PlatformStatView": {
         "required": [
           "memoryUsage",
@@ -1474,6 +1481,7 @@
           "id",
           "name",
           "address",
+          "status",
           "systemInfo",
           "stats"
         ],
@@ -1490,6 +1498,9 @@
           "address": {
             "type": "string",
             "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlatformStatus"
           },
           "systemInfo": {
             "$ref": "#/components/schemas/SystemInfoView"
@@ -1510,6 +1521,7 @@
           "id",
           "name",
           "address",
+          "status",
           "systemInfo",
           "stats"
         ],
@@ -1526,6 +1538,9 @@
           "address": {
             "type": "string",
             "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlatformStatus"
           },
           "systemInfo": {
             "$ref": "#/components/schemas/SystemInfoView"

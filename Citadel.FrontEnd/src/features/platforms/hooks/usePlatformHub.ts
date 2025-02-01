@@ -12,7 +12,7 @@ export enum ConnectionState {
 
 const usePlatformHub = () => {
   const [connectionState, setConnectionState] = useState(ConnectionState.unknown);
-  const [platformMessage, setPlatformMessage] = useState<PlatformView | undefined>();
+  const [platformsMessage, setPlatformsMessage] = useState<PlatformView[] | undefined>();
   const { jwtToken } = useAuthContext();
 
   useEffect(() => {
@@ -47,8 +47,8 @@ const usePlatformHub = () => {
       if (isCanceled) return hubConnection.stop();
 
       setConnectionState(ConnectionState.connected);
-      hubConnection.on('PlatformUpdated', (platform: PlatformView) => {
-        setPlatformMessage(platform);
+      hubConnection.on('PlatformsUpdated', (platforms: PlatformView[]) => {
+        setPlatformsMessage(platforms);
       });
     };
 
@@ -60,7 +60,7 @@ const usePlatformHub = () => {
     };
   }, [jwtToken]);
 
-  return { connectionState, platformMessage };
+  return { connectionState, platformsMessage };
 };
 
 export default usePlatformHub;

@@ -6,6 +6,7 @@ public sealed record PlatformView(
     Guid Id,
     string Name,
     string Address,
+    PlatformStatus Status,
     SystemInfoView SystemInfo,
     IEnumerable<PlatformStatView> Stats
     )
@@ -21,4 +22,10 @@ public sealed record PlatformsView(IEnumerable<PlatformView> Platforms)
 {
     internal static PlatformsView Map(IEnumerable<Platform> platforms)
        => new(PlatformView.Map(platforms));
+}
+
+public enum PlatformStatus
+{
+    Disconnected,
+    Connected
 }

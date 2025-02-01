@@ -4,9 +4,10 @@ using Application;
 using Infrastructure;
 using WebApi.Helpers;
 using Application.Models;
-using Common.Configs;
 using Microsoft.AspNetCore.Http.Json;
 using Hosting.OpenApi;
+using Application.Configs;
+using Infrastructure.TaskJobs;
 
 CitadelWebApplicationBuilder.Create(args, new CitadelWebApplicationOptions()
 {
@@ -21,7 +22,7 @@ void WithServices(WebApplicationBuilder builder)
     builder.Services
         .RegisterWebApiModule(builder.Configuration)
         .RegisterApplicationModule()
-        .RegisterInfrastructureModule()
+        .RegisterInfrastructureModule(builder.Configuration)
         .AddHealthChecks();
 
     AddIOptionsFromConfiguration(builder.Services, builder.Configuration);
@@ -41,7 +42,6 @@ void Configure(WebApplication app)
     }
 
     app.UseWebApiModule();
-    app.UseInfrastructureModule();
     app.MapHealthChecks("/health", HealthCheckOptionsHelper.GetHealthCheckOptions());
 }
 
@@ -54,5 +54,6 @@ void AdditionalJsonOptions(JsonOptions options)
 static IServiceCollection AddIOptionsFromConfiguration(IServiceCollection services, IConfiguration configuration)
 {
     services.Configure<JwtConfig>(configuration.GetSection("Jwt"));
+    services.Configure<JobConfiguration>(configuration.GetSection("JobConfiguration"));
     return services;
 }
