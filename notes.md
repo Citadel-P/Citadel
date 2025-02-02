@@ -12,4 +12,5 @@
   * Check the generated files for any errors
   * Generate script `dotnet ef migrations script -o "Migrations/script0001 - Init Db.sql"`
 
-*  To build the image: docker build --platform=linux/amd64 -t citadel .
+*  Build the image: `docker build --platform=linux/amd64 -t citadel.v1 .`
+	* Run the image:  `docker run -d -p 8000:8000 -p 8001:8001 -v "citadel_data:/app/data" --name citadel.v1 citadel.v1`
