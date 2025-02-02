@@ -9,7 +9,7 @@
 		<IsPackable>false</IsPackable>
 		<TargetFramework>net9.0</TargetFramework>
 		<RepositoryType>git</RepositoryType>
-		<RepositoryUrl>https://github.com/Citadel/Citadel</RepositoryUrl>
+		<RepositoryUrl>https://github.com/Citadel-P/Citadel.Agent</RepositoryUrl>
 		<PublishRepositoryUrl>true</PublishRepositoryUrl>
 	</PropertyGroup>
 

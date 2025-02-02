@@ -19,8 +19,7 @@
                 "$ref": "#/components/schemas/LoginRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -180,8 +179,7 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "204": {
@@ -255,8 +253,7 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "204": {
@@ -330,8 +327,7 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "204": {
@@ -405,8 +401,7 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "204": {
@@ -480,8 +475,7 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "204": {
@@ -555,8 +549,7 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "204": {
@@ -627,8 +620,7 @@
                 "$ref": "#/components/schemas/StreamLogsRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "204": {
@@ -846,8 +838,7 @@
                 "$ref": "#/components/schemas/PutPlatformRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
