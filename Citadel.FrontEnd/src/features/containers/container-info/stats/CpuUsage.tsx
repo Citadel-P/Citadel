@@ -37,13 +37,7 @@ const CpuUsage = () => {
               </linearGradient>
             </defs>
             <CartesianGrid vertical={true} />
-            <XAxis
-              dataKey="created"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={32}
-            />
+            <XAxis dataKey="created" tickLine={false} axisLine={false} tickMargin={8} minTickGap={32} />
 
             <ChartTooltip
               cursor={false}

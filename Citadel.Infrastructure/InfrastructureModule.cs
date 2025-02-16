@@ -4,7 +4,6 @@ using Infrastructure.Services;
 using DbUp;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
-using Microsoft.AspNetCore.Builder;
 using Infrastructure.Services.Abstractions;
 using Infrastructure.TaskJobs;
 using Microsoft.Extensions.Configuration;
@@ -46,10 +45,9 @@ public static class InfrastructureModule
         var result = upgrader.PerformUpgrade();
         if (!result.Successful) throw new Exception(result.Error.Message, result.Error);
 
-        return services.AddDbContext<ApplicationDbContext>(c =>
+        return services.AddDbContextPool<ApplicationDbContext>(c =>
         {
             c.UseSqlite(ApplicationContextFactory.ConnectionString);
         });
     }
-
 }

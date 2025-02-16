@@ -33,6 +33,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(StreamLogsRequest))]
 [JsonSerializable(typeof(LoginRequest))]
 [JsonSerializable(typeof(LoginResponse))]
+[JsonSerializable(typeof(RefreshTokenResponse))]
 [JsonSerializable(typeof(PlatformsView))]
 [JsonSerializable(typeof(ContainersInfoView))]
 [JsonSerializable(typeof(ContainerInfoView))]

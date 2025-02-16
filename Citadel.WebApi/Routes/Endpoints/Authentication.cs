@@ -1,4 +1,5 @@
-﻿using Application.Features.Auth.Models;
+﻿using Application.Features.Auth.Commands;
+using Application.Features.Auth.Models;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -12,5 +13,17 @@ public static class Authentication
     {
         var response = await mediator.Send(request.ToQuery(), cancellationToken);
         return EndpointHandlers.HandleResult(response);
+    }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> Logout(IMediator mediator, CancellationToken cancellationToken)
+    {
+        var response = await mediator.Send(new LogoutCommand(), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(response);
+    }
+
+    public static async Task<Results<Ok<RefreshTokenResponse>, ProblemHttpResult>> RefreshToken(IMediator mediator, CancellationToken cancellationToken)
+    {
+        var response = await mediator.Send(new RefreshTokenCommand(), cancellationToken);
+        return EndpointHandlers.HandleResult(response, (token) => new RefreshTokenResponse(token));
     }
 }

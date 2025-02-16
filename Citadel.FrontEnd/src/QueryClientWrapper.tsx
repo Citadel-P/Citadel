@@ -7,31 +7,24 @@ import {
   QueryClientProvider,
 } from '@tanstack/react-query';
 import { ProblemDetails } from './api/_generated';
-import { useAuthContext } from './features/login/AuthProvider';
-import { toast } from 'sonner';
+import { createContext, useState } from 'react';
+import { useRequiredContext } from './hooks/useRequiredContext';
+
+interface IContext {
+  error: ProblemDetails | undefined;
+}
 
 interface IProps {
   children?: React.ReactNode;
 }
 
+const QueryClientContext = createContext<IContext | undefined>(undefined);
+
 const QueryClientWrapper: React.FC<IProps> = ({ children }) => {
-  const { logout } = useAuthContext();
-  const onQueryError = (error: any, _query: Query<_, _, _>) => handleError(error as ProblemDetails);
-
+  const [error, setError] = useState<ProblemDetails>();
+  const onQueryError = (error: any, _query: Query<_, _, _>) => setError(error);
   const onMutationError = (error: DefaultError, _variables: any, _context: any, _mutations: any) =>
-    handleError(error as ProblemDetails);
-
-  const handleError = (error: ProblemDetails): void => {
-    if (error?.status === 401) {
-      logout();
-    }
-    if (error?.status && error?.status >= 500) {
-      const problem = error.error as ProblemDetails;
-      toast.error(problem.status + ' ' + problem.title, {
-        description: problem.detail,
-      });
-    }
-  };
+    setError(error as ProblemDetails);
 
   const queryClient = new QueryClient({
     queryCache: new QueryCache({ onError: onQueryError }),
@@ -49,7 +42,13 @@ const QueryClientWrapper: React.FC<IProps> = ({ children }) => {
     },
   });
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientContext.Provider value={{ error }}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </QueryClientContext.Provider>
+  );
 };
 
 export default QueryClientWrapper;
+
+export const useQueryClientContext = () => useRequiredContext(QueryClientContext);

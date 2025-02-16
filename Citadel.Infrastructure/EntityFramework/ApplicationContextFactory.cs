@@ -8,7 +8,7 @@ namespace Infrastructure.EntityFramework;
 /// </summary>
 internal sealed class ApplicationContextFactory : IDesignTimeDbContextFactory<ApplicationDbContext>
 {
-    internal const string DbFilePath = "./data/Citadel.db"; // path on the container
+    internal const string DbFilePath = "./data/Citadel.db"; // Path on the container
     internal const string ConnectionString = $"Data Source={DbFilePath}";
 
     public ApplicationDbContext CreateDbContext(string[] args)

@@ -1,15 +1,17 @@
 import { useApiClientContext } from '@/api/ApiClientProvider';
-import { useMutation } from '@tanstack/react-query';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
+import { useMutation } from '@tanstack/react-query';
 
-export const usePOSTLogin = () => {
+export const useGETAccessToken = () => {
+  //const { setAccessToken } = useAuthContext();
   const { apiClient } = useApiClientContext();
-  const { mutate, isPending, isSuccess, error, data } = useMutation({ mutationFn: apiClient.api.authenticationLogin });
+  const { mutate, isPending, error, isSuccess, data } = useMutation({
+    mutationFn: apiClient.api.authenticationRefreshToken,
+  });
   const validationErrors = useGetValidationErrors(error);
 
   if (isSuccess && data?.data.accessToken) {
-    // Reload the entire app
-    window.location.href = '/';
+    //setAccessToken(data?.data.accessToken);
   }
 
   return { mutate, isPending, validationErrors };

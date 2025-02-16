@@ -9,6 +9,38 @@
  * ---------------------------------------------------------------
  */
 
+export enum AppPermission {
+  None = 'None',
+  ListUsers = 'ListUsers',
+  AddUsers = 'AddUsers',
+  EditUsers = 'EditUsers',
+  DeleteUsers = 'DeleteUsers',
+  ListRoles = 'ListRoles',
+  AddRoles = 'AddRoles',
+  EditRoles = 'EditRoles',
+  DeleteRoles = 'DeleteRoles',
+  ListTeams = 'ListTeams',
+  AddTeams = 'AddTeams',
+  EditTeams = 'EditTeams',
+  DeleteTeams = 'DeleteTeams',
+  ListPlatforms = 'ListPlatforms',
+  AddPlatforms = 'AddPlatforms',
+  EditPlatforms = 'EditPlatforms',
+  DeletePlatforms = 'DeletePlatforms',
+  ListContainers = 'ListContainers',
+  AddContainers = 'AddContainers',
+  EditContainers = 'EditContainers',
+  DeleteContainers = 'DeleteContainers',
+  ListNetworks = 'ListNetworks',
+  AddNetworks = 'AddNetworks',
+  EditNetworks = 'EditNetworks',
+  DeleteNetworks = 'DeleteNetworks',
+  ListVolumes = 'ListVolumes',
+  AddVolumes = 'AddVolumes',
+  EditVolumes = 'EditVolumes',
+  DeleteVolumes = 'DeleteVolumes',
+}
+
 export interface ContainerInfoView {
   /** @format uuid */
   id: string;
@@ -63,6 +95,11 @@ export interface HttpValidationProblemDetails {
 export interface LoginRequest {
   email: string | null;
   password: string | null;
+}
+
+export interface LoginResponse {
+  accessToken: string | null;
+  permissions: AppPermission[] | null;
 }
 
 export enum PlatformStatus {
@@ -130,6 +167,10 @@ export interface PutPlatformRequest {
   id: string | null;
   name: string | null;
   address: string | null;
+}
+
+export interface RefreshTokenResponse {
+  accessToken: string | null;
 }
 
 /** @default "START" */
@@ -418,23 +459,62 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      *
      * @tags Authentication
      * @name AuthenticationLogin
-     * @summary Check user credentials and issue a jwt token on successful login
+     * @summary Check user credentials and issue an access token on successful login
      * @request POST:/api/v1/authentication/login
+     * @response `200` `LoginResponse` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    authenticationLogin: (data: LoginRequest, params: RequestParams = {}) =>
+      this.request<LoginResponse, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/authentication/login`,
+        method: 'POST',
+        body: data,
+        type: ContentType.Json,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Authentication
+     * @name AuthenticationLogout
+     * @summary Log out
+     * @request POST:/api/v1/authentication/logout
      * @secure
-     * @response `200` `ContainerInfoView` OK
+     * @response `204` `void` No Content
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
-    authenticationLogin: (data: LoginRequest, params: RequestParams = {}) =>
-      this.request<ContainerInfoView, HttpValidationProblemDetails | ProblemDetails | void>({
-        path: `/api/v1/authentication/login`,
+    authenticationLogout: (params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/authentication/logout`,
         method: 'POST',
-        body: data,
         secure: true,
-        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Authentication
+     * @name AuthenticationRefreshToken
+     * @summary Request a new access token
+     * @request GET:/api/v1/authentication/refresh
+     * @response `200` `RefreshTokenResponse` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    authenticationRefreshToken: (params: RequestParams = {}) =>
+      this.request<RefreshTokenResponse, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/authentication/refresh`,
+        method: 'GET',
         format: 'json',
         ...params,
       }),
@@ -452,10 +532,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
     containersGetById: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerInfoView, HttpValidationProblemDetails | ProblemDetails | void>({
+      this.request<ContainerInfoView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/${id}`,
         method: 'GET',
         secure: true,
@@ -476,10 +556,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
     containersStartContainers: (data: string[], params: RequestParams = {}) =>
-      this.request<void, HttpValidationProblemDetails | ProblemDetails | void>({
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/start`,
         method: 'PATCH',
         body: data,
@@ -501,10 +581,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
     containersStopContainers: (data: string[], params: RequestParams = {}) =>
-      this.request<void, HttpValidationProblemDetails | ProblemDetails | void>({
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/stop`,
         method: 'PATCH',
         body: data,
@@ -526,10 +606,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
     containersPauseContainers: (data: string[], params: RequestParams = {}) =>
-      this.request<void, HttpValidationProblemDetails | ProblemDetails | void>({
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/pause`,
         method: 'PATCH',
         body: data,
@@ -551,10 +631,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
     containersRestartContainers: (data: string[], params: RequestParams = {}) =>
-      this.request<void, HttpValidationProblemDetails | ProblemDetails | void>({
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/restart`,
         method: 'PATCH',
         body: data,
@@ -576,10 +656,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
     containersUnpauseContainers: (data: string[], params: RequestParams = {}) =>
-      this.request<void, HttpValidationProblemDetails | ProblemDetails | void>({
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/unpause`,
         method: 'PATCH',
         body: data,
@@ -601,10 +681,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
     containersDeleteContainers: (data: string[], params: RequestParams = {}) =>
-      this.request<void, HttpValidationProblemDetails | ProblemDetails | void>({
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/delete`,
         method: 'PATCH',
         body: data,
@@ -626,10 +706,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
     containersStreamLogs: (data: StreamLogsRequest, params: RequestParams = {}) =>
-      this.request<void, HttpValidationProblemDetails | ProblemDetails | void>({
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/stream-logs`,
         method: 'POST',
         body: data,
@@ -651,10 +731,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
     containersGetStats: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerStatsView, HttpValidationProblemDetails | ProblemDetails | void>({
+      this.request<ContainerStatsView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/${id}/stats`,
         method: 'GET',
         secure: true,
@@ -675,10 +755,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
     platformsList: (params: RequestParams = {}) =>
-      this.request<PlatformsView, HttpValidationProblemDetails | ProblemDetails | void>({
+      this.request<PlatformsView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/platforms`,
         method: 'GET',
         secure: true,
@@ -699,10 +779,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
     platformsPut: (data: PutPlatformRequest, params: RequestParams = {}) =>
-      this.request<PlatformView2, HttpValidationProblemDetails | ProblemDetails | void>({
+      this.request<PlatformView2, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/platforms`,
         method: 'PUT',
         body: data,
@@ -725,7 +805,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
     platformsDelete: (
       query: {
@@ -737,7 +817,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<void, HttpValidationProblemDetails | ProblemDetails | void>({
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/platforms`,
         method: 'DELETE',
         query: query,
@@ -758,10 +838,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
     platformsGetById: (id: string, params: RequestParams = {}) =>
-      this.request<PlatformView2, HttpValidationProblemDetails | ProblemDetails | void>({
+      this.request<PlatformView2, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/platforms/${id}`,
         method: 'GET',
         secure: true,
@@ -782,10 +862,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
     platformsGetInfo: (id: string, params: RequestParams = {}) =>
-      this.request<PlatformView2, HttpValidationProblemDetails | ProblemDetails | void>({
+      this.request<PlatformView2, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/platforms/${id}/info`,
         method: 'GET',
         secure: true,
@@ -806,10 +886,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
-     * @response `500` `void` Internal server error
+     * @response `500` `ProblemDetails` Internal Server Error
      */
     platformsListContainers: (id: string, params: RequestParams = {}) =>
-      this.request<ContainersInfoView, HttpValidationProblemDetails | ProblemDetails | void>({
+      this.request<ContainersInfoView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/platforms/${id}/containers`,
         method: 'GET',
         secure: true,

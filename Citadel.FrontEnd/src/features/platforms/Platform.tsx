@@ -14,7 +14,10 @@ interface IProps {
 const Platform = ({ platform }: IProps) => {
   let isConnected = platform.status === PlatformStatus.Connected;
   const LastSnapshotTooltip = () => {
-    const lastSnapshot = platform.stats && platform.stats[0] ? new Date(platform.stats![0].created! * 1000).getTime() : new Date().getTime();
+    const lastSnapshot =
+      platform.stats && platform.stats[0]
+        ? new Date(platform.stats![0].created! * 1000).getTime()
+        : new Date().getTime();
     return (
       <TooltipProvider delayDuration={200}>
         <Tooltip>

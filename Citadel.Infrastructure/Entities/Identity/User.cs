@@ -1,4 +1,6 @@
-﻿using System.Security.Cryptography;
+﻿using System.Security.Claims;
+using System.Security.Cryptography;
+using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace Infrastructure.Entities.Identity;
 
@@ -11,6 +13,7 @@ public class User
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
     public ICollection<Team> Teams { get; } = [];
+    public ICollection<RefreshToken> RefreshTokens { get; } = [];
 
     /// <summary>
     /// Factory method to create a user
@@ -53,11 +56,33 @@ public class User
     }
 
     /// <summary>
+    /// Get user permissions
+    /// </summary>
+    public IEnumerable<AppPermission> GetPermissions()
+    {
+        foreach (var team in Teams)
+        {
+            foreach (var permission in team.Role.Permissions)
+            {
+                yield return permission.PermissionCode;
+            }
+        }
+    }
+
+    public IEnumerable<Claim> GetJwtClaims() 
+    {
+        yield return new Claim(JwtRegisteredClaimNames.Name, Name);
+        yield return new Claim(JwtRegisteredClaimNames.Email, Email);
+        yield return new Claim(JwtRegisteredClaimNames.Sub, Id.ToString());
+        yield return new Claim(JwtRegisteredClaimNames.Jti, Guid.CreateVersion7().ToString());
+    }
+
+    /// <summary>
     /// Hash a password
     /// </summary>
     /// <param name="plainTextPassword">The plain text password</param>
     /// <returns> A secure base64 hashed password</returns>
-    public static string HashPassword(string plainTextPassword)
+    private static string HashPassword(string plainTextPassword)
     {
         byte[] salt = RandomNumberGenerator.GetBytes(16);
         byte[] hash = ComputeHash(plainTextPassword, salt);

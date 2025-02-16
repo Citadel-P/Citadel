@@ -1,5 +1,4 @@
-﻿using System.ComponentModel;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json.Serialization;
 using Hosting.Converters;
 using Hosting.OpenApi;
@@ -23,8 +22,9 @@ internal static class WebApiModule
             {
                 cfg.AddSchemaTransformer<EnumSchemaFilter>();
                 cfg.AddDocumentTransformer<ServerTransformer>();
-                cfg.AddOperationTransformer<ProblemDetailDocumentFilter>();
                 cfg.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
+                cfg.AddOperationTransformer<AddCookieOperationTransformer>();
+                cfg.AddOperationTransformer<ProduceCookieOperationTransformer>();
             })
             .AddCors();
 
@@ -66,6 +66,7 @@ internal static class WebApiModule
                     }
                 };
             });
+
         services.AddAuthorization();
         services.AddSingleton<IAuthorizationMiddlewareResultHandler, AuthorizationResultHandler>();
         services.AddSignalRDependencies();
@@ -74,18 +75,18 @@ internal static class WebApiModule
 
     public static WebApplication UseWebApiModule(this WebApplication app)
     {
-        app.UseCors(
-        policy =>
+        var cors = app.Configuration.GetSection("Cors").Get<string[]>();
+        if (cors != null && cors.Length != 0)
         {
-            policy
-                .AllowCredentials()
-                .WithOrigins(
-                    "http://localhost:8000",
-                    "http://localhost:5173")
-                .SetIsOriginAllowedToAllowWildcardSubdomains()
-                .AllowAnyMethod()
-                .AllowAnyHeader();
-        });
+            app.UseCors(policy =>
+            {
+                policy
+                    .AllowCredentials()
+                    .WithOrigins(cors)
+                    .AllowAnyMethod()
+                    .AllowAnyHeader();
+            });
+        }
 
         app.UseAuthentication();
         app.UseAuthorization();

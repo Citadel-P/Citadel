@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { PlatformView } from '@/api/_generated';
 import { HubConnection, HubConnectionBuilder, IHttpConnectionOptions } from '@microsoft/signalr';
-import { useAuthContext } from '../../login/AuthProvider';
 import { SignalrRetryPolicy } from '@/lib/signalr.retrypolicy';
+import { useApiClientContext } from '@/api/ApiClientProvider';
 
 export enum ConnectionState {
   unknown,
@@ -13,7 +13,7 @@ export enum ConnectionState {
 const usePlatformHub = () => {
   const [connectionState, setConnectionState] = useState(ConnectionState.unknown);
   const [platformsMessage, setPlatformsMessage] = useState<PlatformView[] | undefined>();
-  const { jwtToken } = useAuthContext();
+  const { accessToken } = useApiClientContext();
 
   useEffect(() => {
     let hubConnection: HubConnection;
@@ -23,7 +23,7 @@ const usePlatformHub = () => {
       const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
       const httpOptions: IHttpConnectionOptions = {
-        accessTokenFactory: () => jwtToken,
+        accessTokenFactory: () => accessToken!,
       };
       hubConnection = new HubConnectionBuilder()
         .withUrl(`${baseUrl}/hubs/platform`, httpOptions)
@@ -40,12 +40,13 @@ const usePlatformHub = () => {
       await hubConnection
         .start()
         .then((_) => onConnected())
-        .catch((_) => setTimeout(() => startConnection(), 10000));
+        .catch((_) => {
+          if (!isCanceled) setTimeout(() => startConnection(), 10000);
+          else hubConnection.stop();
+        });
     };
 
     const onConnected = () => {
-      if (isCanceled) return hubConnection.stop();
-
       setConnectionState(ConnectionState.connected);
       hubConnection.on('PlatformsUpdated', (platforms: PlatformView[]) => {
         setPlatformsMessage(platforms);
@@ -58,7 +59,7 @@ const usePlatformHub = () => {
       isCanceled = true;
       hubConnection.stop();
     };
-  }, [jwtToken]);
+  }, [accessToken]);
 
   return { connectionState, platformsMessage };
 };

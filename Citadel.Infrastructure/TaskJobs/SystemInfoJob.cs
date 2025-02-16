@@ -74,11 +74,11 @@ internal class SystemInfoJob(
                 );
             // Insert the platform stats
             var stat = PlatformStat.Create(
-                memoryUsage: systemInfo.MemoryUsage,
-                cpuUsage: systemInfo.CpuUsage,
-                created: systemInfo.Created,
-                rxBytes: systemInfo.RxBytes,
-                txBytes: systemInfo.TxBytes,
+                memoryUsage: double.IsNaN(systemInfo.MemoryUsage) ? 0 : systemInfo.MemoryUsage,
+                cpuUsage: double.IsNaN(systemInfo.CpuUsage) ? 0 : systemInfo.CpuUsage,
+                created: double.IsNaN(systemInfo.Created) ? 0 : systemInfo.Created,
+                rxBytes: double.IsNaN(systemInfo.RxBytes) ? 0 : systemInfo.RxBytes,
+                txBytes: double.IsNaN(systemInfo.TxBytes) ? 0 : systemInfo.TxBytes,
                 platformId: platform.Id);
 
             dbContext.PlatformStats.Add(stat);    

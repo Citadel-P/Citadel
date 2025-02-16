@@ -10,7 +10,7 @@
         "tags": [
           "Authentication"
         ],
-        "summary": "Check user credentials and issue a jwt token on successful login",
+        "summary": "Check user credentials and issue an access token on successful login",
         "operationId": "Authentication_Login",
         "requestBody": {
           "content": {
@@ -19,16 +19,33 @@
                 "$ref": "#/components/schemas/LoginRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
+            "headers": {
+              "refresh_token": {
+                "description": "refresh_token",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ContainerInfoView"
+                  "$ref": "#/components/schemas/LoginResponse"
                 }
               }
             }
@@ -49,6 +66,51 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/authentication/logout": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Log out",
+        "operationId": "Authentication_Logout",
+        "parameters": [
+          {
+            "name": "refresh_token",
+            "in": "cookie",
+            "description": "Refresh Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
                 }
               }
             }
@@ -73,8 +135,15 @@
               }
             }
           },
-          "500": {
-            "description": "Internal server error"
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -82,6 +151,68 @@
             "Bearer": [ ]
           }
         ]
+      }
+    },
+    "/api/v1/authentication/refresh": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Request a new access token",
+        "operationId": "Authentication_RefreshToken",
+        "parameters": [
+          {
+            "name": "refresh_token",
+            "in": "cookie",
+            "description": "Refresh Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/containers/{id}": {
@@ -102,6 +233,16 @@
           }
         ],
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -151,9 +292,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -180,10 +318,19 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "204": {
             "description": "No Content"
           },
@@ -226,9 +373,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -255,10 +399,19 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "204": {
             "description": "No Content"
           },
@@ -301,9 +454,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -330,10 +480,19 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "204": {
             "description": "No Content"
           },
@@ -376,9 +535,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -405,10 +561,19 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "204": {
             "description": "No Content"
           },
@@ -451,9 +616,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -480,10 +642,19 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "204": {
             "description": "No Content"
           },
@@ -526,9 +697,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -555,10 +723,19 @@
                 }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "204": {
             "description": "No Content"
           },
@@ -601,9 +778,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -627,10 +801,19 @@
                 "$ref": "#/components/schemas/StreamLogsRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "204": {
             "description": "No Content"
           },
@@ -673,9 +856,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -704,6 +884,16 @@
           }
         ],
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -753,9 +943,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -773,6 +960,16 @@
         "summary": "List all platforms",
         "operationId": "Platforms_List",
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -822,9 +1019,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -846,10 +1040,19 @@
                 "$ref": "#/components/schemas/PutPlatformRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -899,9 +1102,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -929,6 +1129,16 @@
           }
         ],
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "204": {
             "description": "No Content"
           },
@@ -971,9 +1181,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -1003,6 +1210,16 @@
           }
         ],
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -1052,9 +1269,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -1084,6 +1298,16 @@
           }
         ],
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -1133,9 +1357,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -1165,6 +1386,16 @@
           }
         ],
         "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -1214,9 +1445,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error"
           }
         },
         "security": [
@@ -1229,6 +1457,40 @@
   },
   "components": {
     "schemas": {
+      "AppPermission": {
+        "enum": [
+          "None",
+          "ListUsers",
+          "AddUsers",
+          "EditUsers",
+          "DeleteUsers",
+          "ListRoles",
+          "AddRoles",
+          "EditRoles",
+          "DeleteRoles",
+          "ListTeams",
+          "AddTeams",
+          "EditTeams",
+          "DeleteTeams",
+          "ListPlatforms",
+          "AddPlatforms",
+          "EditPlatforms",
+          "DeletePlatforms",
+          "ListContainers",
+          "AddContainers",
+          "EditContainers",
+          "DeleteContainers",
+          "ListNetworks",
+          "AddNetworks",
+          "EditNetworks",
+          "DeleteNetworks",
+          "ListVolumes",
+          "AddVolumes",
+          "EditVolumes",
+          "DeleteVolumes"
+        ],
+        "type": "string"
+      },
       "ContainerInfoView": {
         "required": [
           "id",
@@ -1418,6 +1680,26 @@
           },
           "password": {
             "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "LoginResponse": {
+        "required": [
+          "accessToken",
+          "permissions"
+        ],
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "nullable": true
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppPermission"
+            },
             "nullable": true
           }
         }
@@ -1620,6 +1902,18 @@
             "nullable": true
           },
           "address": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "RefreshTokenResponse": {
+        "required": [
+          "accessToken"
+        ],
+        "type": "object",
+        "properties": {
+          "accessToken": {
             "type": "string",
             "nullable": true
           }

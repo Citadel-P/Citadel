@@ -21,6 +21,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<Permission> Permissions { get; private set; }
     public DbSet<UserTeam> UsersTeams { get; private set; }
     public DbSet<Registry> Registries { get; private set; }
+    public DbSet<RefreshToken> RefreshTokens { get; private set; }
 
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)

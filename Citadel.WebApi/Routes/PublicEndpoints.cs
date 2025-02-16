@@ -1,6 +1,6 @@
-﻿using WebApi.Routes.Endpoints;
-using WebApi.Routes.Endpoints.Resources.Containers;
-using WebApi.Routes.Endpoints.Resources.Platforms;
+﻿using Application.Utils;
+using Hosting.OpenApi;
+using WebApi.Routes.Endpoints;
 
 namespace WebApi.Routes;
 
@@ -17,19 +17,32 @@ public static class PublicEndpoints
             var auth = group.MapGroup("/authentication").WithTags(AuthenticationName);
             {
                 auth.MapPost("/login", Authentication.Login)
-                     .WithSummary("Check user credentials and issue a jwt token on successful login")
-                     .Produces<ContainerInfoView>()
+                     .WithSummary("Check user credentials and issue an access token on successful login")
+                     .ProduceCookie(Constants.RefreshToken)
                      .ProducesValidationProblem()
                      .ProducesProblem(StatusCodes.Status404NotFound)
+                     .WithName(AuthenticationName + "_" + nameof(Authentication.Login));
+
+                auth.MapPost("/logout", Authentication.Logout)
+                     .WithSummary("Log out")
+                     .WithCookie(Constants.RefreshToken, "Refresh Token", true)
+                     .ProducesValidationProblem()
                      .ProducesProblem(StatusCodes.Status403Forbidden)
                      .ProducesProblem(StatusCodes.Status401Unauthorized)
-                     .WithName(AuthenticationName + "_" + nameof(Authentication.Login));
+                     .ProducesProblem(StatusCodes.Status404NotFound)
+                     .WithName(AuthenticationName + "_" + nameof(Authentication.Logout));
+
+                auth.MapGet("/refresh", Authentication.RefreshToken)
+                     .WithSummary("Request a new access token")
+                     .WithCookie(Constants.RefreshToken, "Refresh Token", true)
+                     .ProducesValidationProblem()
+                     .ProducesProblem(StatusCodes.Status404NotFound)
+                     .WithName(AuthenticationName + "_" + nameof(Authentication.RefreshToken));
             }
             var containers = group.MapGroup("/containers").WithTags(ContainersName).RequireAuthorization();
             {
                 containers.MapGet("/{id}", Containers.GetById)
                      .WithSummary("Get container by Id")
-                     .Produces<ContainerInfoView>()
                      .ProducesValidationProblem()
                      .ProducesProblem(StatusCodes.Status404NotFound)
                      .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -38,7 +51,6 @@ public static class PublicEndpoints
 
                 containers.MapPatch("start", Containers.StartContainers)
                      .WithSummary("Starts the given container(s)")
-                     .Produces(StatusCodes.Status204NoContent)
                      .ProducesValidationProblem()
                      .ProducesProblem(StatusCodes.Status404NotFound)
                      .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -47,7 +59,6 @@ public static class PublicEndpoints
 
                 containers.MapPatch("stop", Containers.StopContainers)
                      .WithSummary("Stops the given container(s)")
-                     .Produces(StatusCodes.Status204NoContent)
                      .ProducesValidationProblem()
                      .ProducesProblem(StatusCodes.Status404NotFound)
                      .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -56,7 +67,6 @@ public static class PublicEndpoints
 
                 containers.MapPatch("pause", Containers.PauseContainers)
                      .WithSummary("Pause the given container(s)")
-                     .Produces(StatusCodes.Status204NoContent)
                      .ProducesValidationProblem()
                      .ProducesProblem(StatusCodes.Status404NotFound)
                      .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -65,7 +75,6 @@ public static class PublicEndpoints
 
                 containers.MapPatch("restart", Containers.RestartContainers)
                      .WithSummary("Restarts the given container(s)")
-                     .Produces(StatusCodes.Status204NoContent)
                      .ProducesValidationProblem()
                      .ProducesProblem(StatusCodes.Status404NotFound)
                      .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -74,7 +83,6 @@ public static class PublicEndpoints
 
                 containers.MapPatch("unpause", Containers.UnpauseContainers)
                      .WithSummary("Unpause the given container(s)")
-                     .Produces(StatusCodes.Status204NoContent)
                      .ProducesValidationProblem()
                      .ProducesProblem(StatusCodes.Status404NotFound)
                      .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -83,7 +91,6 @@ public static class PublicEndpoints
 
                 containers.MapPatch("delete", Containers.DeleteContainers)
                      .WithSummary("Delete the given container(s)")
-                     .Produces(StatusCodes.Status204NoContent)
                      .ProducesValidationProblem()
                      .ProducesProblem(StatusCodes.Status404NotFound)
                      .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -92,7 +99,6 @@ public static class PublicEndpoints
 
                 containers.MapPost("stream-logs", Containers.StreamLogs)
                      .WithSummary("Request to start (or stop) streaming container logs")
-                     .Produces(StatusCodes.Status204NoContent)
                      .ProducesValidationProblem()
                      .ProducesProblem(StatusCodes.Status404NotFound)
                      .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -102,7 +108,6 @@ public static class PublicEndpoints
                 
                 containers.MapGet("{id}/stats", Containers.GetStats)
                     .WithSummary("Get container stats")
-                    .Produces<ContainerStatsView>()
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status404NotFound)
                     .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -113,7 +118,6 @@ public static class PublicEndpoints
             {
                 platforms.MapGet("/", Platforms.List)
                     .WithSummary("List all platforms")
-                    .Produces<PlatformsView>()
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status404NotFound)
                     .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -122,7 +126,6 @@ public static class PublicEndpoints
 
                 platforms.MapGet("/{id}", Platforms.GetById)
                     .WithSummary("Get platform by Id")
-                    .Produces<PlatformView>()
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status404NotFound)
                     .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -131,7 +134,6 @@ public static class PublicEndpoints
 
                 platforms.MapGet("/{id}/info", Platforms.GetInfo)
                     .WithSummary("Get platform by Id")
-                    .Produces<PlatformView>()
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status404NotFound)
                     .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -140,7 +142,6 @@ public static class PublicEndpoints
 
                 platforms.MapPut("/", Platforms.Put)
                     .WithSummary("Create or update a platform")
-                    .Produces<PlatformView>()
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status404NotFound)
                     .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -149,7 +150,6 @@ public static class PublicEndpoints
 
                 platforms.MapDelete("/", Platforms.Delete)
                     .WithSummary("Delete a platform")
-                    .Produces(StatusCodes.Status204NoContent)
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status404NotFound)
                     .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -158,7 +158,6 @@ public static class PublicEndpoints
 
                 platforms.MapGet("{id}/containers", Platforms.ListContainers)
                     .WithSummary("Returns the list of containers of the given platform")
-                    .Produces<ContainersInfoView>()
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status404NotFound)
                     .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -167,5 +166,6 @@ public static class PublicEndpoints
             }
         }
 
+        group.ProducesProblem(StatusCodes.Status500InternalServerError);
     }
 }

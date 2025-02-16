@@ -13,12 +13,20 @@ public class JwtConfig
     public string Audience { get; set; }
 
     /// <summary>
-    /// Set the timespan the token will be valid for (in hours)
+    /// Access token configuration
     /// </summary>
-    public double ValidFor { get; set; } = 8;
+    public AccessToken AccessToken { get; set; }
+
+    /// <summary>
+    /// Refresh token configuration
+    /// </summary>
+    public RefreshToken RefreshToken { get; set; }
 
     /// <summary>
     /// Secret key to generate the jwt signing key
     /// </summary>
     public string Key { get; set; }
 }
+
+public record AccessToken(int ValidForMinutes = 15);
+public record RefreshToken(int ValidForDays = 30);

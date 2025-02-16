@@ -30,7 +30,9 @@ const Platforms = () => {
             .
           </Message>
         )}
-        {(platforms ?? []).map((platform) => <Platform key={`${platform.id}`} platform={platform} />)} 
+        {(platforms ?? []).map((platform) => (
+          <Platform key={`${platform.id}`} platform={platform} />
+        ))}
       </div>
     </div>
   );

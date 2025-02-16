@@ -1,7 +1,7 @@
 import { createBrowserRouter, LoaderFunctionArgs, redirect, RouterProvider } from 'react-router';
 import Layout from './layout/Layout';
 import NotFound from './pages/NotFound';
-import { useAuthContext } from './features/login/AuthProvider';
+import { useApiClientContext } from './api/ApiClientProvider';
 
 export const paths = [
   '/',
@@ -14,7 +14,7 @@ export const paths = [
 ];
 
 export const AppRoutes = () => {
-  const { isAuthenticated } = useAuthContext();
+  const { isAuthenticated } = useApiClientContext();
   const router = createBrowserRouter([
     {
       path: paths[0],

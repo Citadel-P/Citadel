@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { HubConnection, HubConnectionBuilder, HubConnectionState, IHttpConnectionOptions } from '@microsoft/signalr';
-import { useAuthContext } from '@/features/login/AuthProvider';
 import { SignalrRetryPolicy } from '@/lib/signalr.retrypolicy';
 import { ContainerInfoView, ContainersInfoView } from '@/api/_generated';
+import { useApiClientContext } from '@/api/ApiClientProvider';
 
 const useContainersHub = (platformId: string) => {
   const [containersInfo, setContainersInfo] = useState<ContainersInfoView | undefined>();
-  const { jwtToken } = useAuthContext();
+  const { accessToken } = useApiClientContext();
   const groupName = `ContainersInfo/${platformId}`;
 
   useEffect(() => {
@@ -17,7 +17,7 @@ const useContainersHub = (platformId: string) => {
       const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
       const httpOptions: IHttpConnectionOptions = {
-        accessTokenFactory: () => jwtToken,
+        accessTokenFactory: () => accessToken!,
       };
       hubConnection = new HubConnectionBuilder()
         .withUrl(`${baseUrl}/hubs/container`, httpOptions)
@@ -29,15 +29,16 @@ const useContainersHub = (platformId: string) => {
 
     const startConnection = async () => {
       hubConnection.onreconnected(() => onConnected());
-
       await hubConnection
         .start()
         .then((_) => onConnected())
-        .catch((_) => setTimeout(() => startConnection(), 10000));
+        .catch((_) => {
+          if (!isCanceled) setTimeout(() => startConnection(), 10000);
+          else hubConnection.stop();
+        });
     };
 
     const onConnected = () => {
-      if (isCanceled) return hubConnection.stop();
       hubConnection.send('JoinGroup', groupName);
       hubConnection.on('ContainersInfoUpdated', (msg: ContainersInfoView) => {
         setContainersInfo(msg);
@@ -50,13 +51,12 @@ const useContainersHub = (platformId: string) => {
     initHub();
 
     return () => {
+      if (hubConnection.state === HubConnectionState.Connected) hubConnection.send('LeaveGroup', groupName);
+
       isCanceled = true;
-      if (hubConnection.state === HubConnectionState.Connected) {
-        hubConnection.send('LeaveGroup', groupName);
-        hubConnection.stop();
-      }
+      hubConnection.stop();
     };
-  }, [jwtToken, platformId, groupName]);
+  }, [accessToken, platformId, groupName]);
 
   return { containersInfo };
 };

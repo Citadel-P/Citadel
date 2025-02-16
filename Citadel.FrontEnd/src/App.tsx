@@ -1,7 +1,6 @@
 import { ErrorBoundary } from 'react-error-boundary';
 import { AppRoutes } from './AppRoutes';
 import ApiClientProvider from './api/ApiClientProvider';
-import AuthProvider from './features/login/AuthProvider';
 import QueryClientWrapper from './QueryClientWrapper';
 import LoadingBarWrapper from './LoadingBarWrapper';
 
@@ -11,14 +10,12 @@ function App() {
 
   return (
     <ErrorBoundary FallbackComponent={Fallback}>
-      <AuthProvider>
-        <QueryClientWrapper>
-          <ApiClientProvider>
-            <LoadingBarWrapper />
-            <AppRoutes />
-          </ApiClientProvider>
-        </QueryClientWrapper>
-      </AuthProvider>
+      <QueryClientWrapper>
+        <ApiClientProvider>
+          <LoadingBarWrapper />
+          <AppRoutes />
+        </ApiClientProvider>
+      </QueryClientWrapper>
     </ErrorBoundary>
   );
 }
