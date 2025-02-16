@@ -27,17 +27,15 @@ const ApiClientProvider: React.FC<IProps> = ({ children }) => {
     securityWorker: (accessToken) => (accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : {}),
   });
 
-  const { mutate, isSuccess, data, error: refreshError } = useMutation({ mutationFn: apiClient.api.authenticationRefreshToken });
+  const { mutate: requestRefreshToken, isSuccess, data } = useMutation({ mutationFn: apiClient.api.authenticationRefreshToken });
+  const { mutate: logout } = useMutation({ mutationFn: apiClient.api.authenticationLogout });
   if (isSuccess && data?.data.accessToken) {
     apiClient.setSecurityData(data?.data.accessToken);
   }
-  if (refreshError) {
-    console.error(refreshError);
-  }
 
   useEffect(() => {
-   // Request a new access token when the component mounts
-    mutate(undefined);
+    // Request a new access token when the component mounts
+    requestRefreshToken(undefined);
   }, []);
 
   useEffect(() => {
@@ -47,11 +45,10 @@ const ApiClientProvider: React.FC<IProps> = ({ children }) => {
   }, [data]);
 
   useEffect(() => {
-    
     if (error?.status === 401) {
-      mutate(undefined);
-    }
-    else if (error?.status != null && error?.status >= 500) {
+      logout(undefined);
+      window.location.href = '/login';
+    } else if (error?.status != null && error?.status >= 500) {
       const problem = error.error as ProblemDetails;
       toast.error(problem.status + ' ' + problem.title, {
         description: problem.detail,

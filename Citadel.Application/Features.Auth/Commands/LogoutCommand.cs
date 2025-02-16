@@ -20,7 +20,7 @@ internal sealed class LogoutCommandHandler(
         var refreshToken = context.HttpContext.Request.Cookies[Constants.RefreshToken];
 
         if (string.IsNullOrWhiteSpace(refreshToken))
-            return Result.Failure(new BadRequestError("Please include a refresh token in the request."));
+            return Result.Success();
 
         if (!jwtService.TryValidate(refreshToken, out var tokenId))
             return Result.Failure(new BadRequestError("Invalid refresh token."));

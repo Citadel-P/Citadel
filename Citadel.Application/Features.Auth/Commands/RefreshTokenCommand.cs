@@ -26,11 +26,11 @@ internal sealed class RefreshTokenCommandHandler(
         if (!jwtService.TryValidate(refreshToken, out var tokenId))
             return Result.Failure<string>(new BadRequestError("Invalid refresh token."));
 
-        var existing = await dbContext.RefreshTokens.Include(s => s.User).FirstOrDefaultAsync(s => s.Id == tokenId, cancellationToken);
+        var existing = await dbContext.RefreshTokens.AsNoTracking().Include(s => s.User)
+            .FirstOrDefaultAsync(s => s.Id == tokenId, cancellationToken);
+        
         if (existing == null)
-        {
             return Result.Failure<string>(new BadRequestError("Refresh token does not exist."));
-        }
 
         var accessToken = jwtService.CreateAccessToken(existing.User.GetJwtClaims());
         
