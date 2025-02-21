@@ -3,6 +3,7 @@ import { AppRoutes } from './AppRoutes';
 import ApiClientProvider from './api/ApiClientProvider';
 import QueryClientWrapper from './QueryClientWrapper';
 import LoadingBarWrapper from './LoadingBarWrapper';
+import AuthProvider from './features/auth/AuthProvider';
 
 function App() {
   const classNames = ['bg-background', 'font-poppins', 'selection:bg-primary', 'selection:text-primary-foreground'];
@@ -12,8 +13,10 @@ function App() {
     <ErrorBoundary FallbackComponent={Fallback}>
       <QueryClientWrapper>
         <ApiClientProvider>
-          <LoadingBarWrapper />
-          <AppRoutes />
+          <AuthProvider>
+            <LoadingBarWrapper />
+            <AppRoutes />
+          </AuthProvider>
         </ApiClientProvider>
       </QueryClientWrapper>
     </ErrorBoundary>

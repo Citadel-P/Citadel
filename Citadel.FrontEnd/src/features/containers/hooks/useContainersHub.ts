@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { HubConnection, HubConnectionBuilder, HubConnectionState, IHttpConnectionOptions } from '@microsoft/signalr';
 import { SignalrRetryPolicy } from '@/lib/signalr.retrypolicy';
 import { ContainerInfoView, ContainersInfoView } from '@/api/_generated';
-import { useApiClientContext } from '@/api/ApiClientProvider';
+import { useContextSelector } from 'use-context-selector';
+import { AuthContext } from '@/features/auth/AuthProvider';
 
 const useContainersHub = (platformId: string) => {
   const [containersInfo, setContainersInfo] = useState<ContainersInfoView | undefined>();
-  const { accessToken } = useApiClientContext();
+  const accessToken = useContextSelector(AuthContext, (v) => v?.accessToken);
   const groupName = `ContainersInfo/${platformId}`;
 
   useEffect(() => {

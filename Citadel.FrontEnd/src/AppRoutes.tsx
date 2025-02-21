@@ -1,7 +1,8 @@
 import { createBrowserRouter, LoaderFunctionArgs, redirect, RouterProvider } from 'react-router';
 import Layout from './layout/Layout';
 import NotFound from './pages/NotFound';
-import { useApiClientContext } from './api/ApiClientProvider';
+import { useContextSelector } from 'use-context-selector';
+import { AuthContext } from '@/features/auth/AuthProvider';
 
 export const paths = [
   '/',
@@ -14,7 +15,7 @@ export const paths = [
 ];
 
 export const AppRoutes = () => {
-  const { isAuthenticated } = useApiClientContext();
+  const isAuthenticated = useContextSelector(AuthContext, (v) => v?.isAuthenticated);
   const router = createBrowserRouter([
     {
       path: paths[0],
@@ -62,7 +63,7 @@ export const AppRoutes = () => {
       path: paths[5],
       loader: loginLoader,
       lazy: async () => {
-        return { Component: (await import('./features/login/Login')).default };
+        return { Component: (await import('./features/auth/Login')).default };
       },
     },
   ]);

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { PlatformView } from '@/api/_generated';
 import { HubConnection, HubConnectionBuilder, IHttpConnectionOptions } from '@microsoft/signalr';
 import { SignalrRetryPolicy } from '@/lib/signalr.retrypolicy';
-import { useApiClientContext } from '@/api/ApiClientProvider';
+import { useContextSelector } from 'use-context-selector';
+import { AuthContext } from '@/features/auth/AuthProvider';
 
 export enum ConnectionState {
   unknown,
@@ -13,7 +14,7 @@ export enum ConnectionState {
 const usePlatformHub = () => {
   const [connectionState, setConnectionState] = useState(ConnectionState.unknown);
   const [platformsMessage, setPlatformsMessage] = useState<PlatformView[] | undefined>();
-  const { accessToken } = useApiClientContext();
+  const accessToken = useContextSelector(AuthContext, (v) => v?.accessToken);
 
   useEffect(() => {
     let hubConnection: HubConnection;
