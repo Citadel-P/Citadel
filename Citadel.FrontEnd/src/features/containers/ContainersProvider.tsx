@@ -1,5 +1,5 @@
 import { ContainerInfoView } from '@/api/_generated';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createContext } from 'use-context-selector';
 import useContainersHub from './hooks/useContainersHub';
 import { useGETContainers } from './hooks/useGETContainers';
@@ -10,7 +10,7 @@ interface IContext {
   platformId: string | undefined;
   containers: ContainerInfoView[];
   selectedContainerIds: string[];
-  onSelectionChange: (selectedRows: string[]) => void;
+  setSelectedRowIds: (selectedRows: string[]) => void;
 }
 interface IProps {
   children?: React.ReactNode;
@@ -23,17 +23,16 @@ const ContainersProvider: React.FC<IProps> = ({ children }) => {
   const { data, isLoading, isSuccess } = useGETContainers(platformId!);
   const { containersInfo } = useContainersHub(platformId!);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
-  let containers: ContainerInfoView[] = [];
+  const [containers, setContainers] = useState<ContainerInfoView[]>([]);
 
-  if (isSuccess && data?.data) {
-    containers = data.data.containers!;
-  }
-
-  if (containersInfo) {
-    containers = containersInfo.containers ?? [];
-  }
-
-  const onSelectionChange = (rows: string[]) => setSelectedRowIds(rows);
+  useEffect(() => {
+    if (isSuccess && data?.data) {
+      setContainers(data.data.containers!);
+    }
+    if (containersInfo) {
+      setContainers(containersInfo.containers ?? []);
+    }
+  }, [data, isSuccess, containersInfo]);
 
   return (
     <ContainersContext.Provider
@@ -42,7 +41,7 @@ const ContainersProvider: React.FC<IProps> = ({ children }) => {
         platformId,
         containers,
         selectedContainerIds: selectedRowIds,
-        onSelectionChange,
+        setSelectedRowIds,
       }}>
       {children}
     </ContainersContext.Provider>

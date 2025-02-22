@@ -168,6 +168,6 @@ const ContainerStatTootltip = ({ stat }: { stat: string }) => {
 export const ContainersTable = () => {
   const containers = useContextSelector(ContainersContext, (v) => v?.containers!);
   const isLoading = useContextSelector(ContainersContext, (v) => v?.isLoading!);
-  const onSelectionChange = useContextSelector(ContainersContext, (v) => v?.onSelectionChange!);
-  return <DataTable columns={columns} data={containers} isLoading={isLoading} onSelectionChange={onSelectionChange} />;
+  const setSelectedRowIds = useContextSelector(ContainersContext, (v) => v?.setSelectedRowIds!);
+  return <DataTable columns={columns} data={containers} isLoading={isLoading} onSelectionChange={setSelectedRowIds} />;
 };
