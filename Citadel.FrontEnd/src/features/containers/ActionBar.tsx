@@ -1,12 +1,14 @@
 import { Play, Pause, RotateCcw, Ban, Trash } from 'lucide-react';
-import { useContainersContext } from './ContainersProvider';
+import { useContextSelector } from 'use-context-selector';
+import { ContainersContext } from './ContainersProvider';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { useDialog } from '@/hooks/useDialog';
 import { DeleteContainerDialog } from './dialogs/DeleteContainerDialog';
 
 export const ActionBar = () => {
   const deleteDialog = useDialog();
-  const { containers, selectedContainerIds } = useContainersContext();
+  const containers = useContextSelector(ContainersContext, (v) => v?.containers!);
+  const selectedContainerIds = useContextSelector(ContainersContext, (v) => v?.selectedContainerIds!);
   const { availableActions, isPending, requestPatch } = useAvailableActions(
     containers.filter((s) => selectedContainerIds.some((i) => i === s.id)),
   );

@@ -1,5 +1,6 @@
 import { User, Settings, LogOut, Sun, Moon } from 'lucide-react';
-import { useLayoutContext } from '../../LayoutProvider';
+import { useContextSelector } from 'use-context-selector';
+import { LayoutContext } from '@/layout/LayoutProvider';
 
 interface ProfileMenu {
   title: string;
@@ -67,7 +68,10 @@ const themeModes = [
 ];
 
 export const PorfileDropDown = () => {
-  const { theme, toggleThemeColor, setThemeMode } = useLayoutContext();
+  const theme = useContextSelector(LayoutContext, (v) => v?.theme!);
+  const setThemeMode = useContextSelector(LayoutContext, (v) => v?.setThemeMode!);
+  const toggleThemeColor = useContextSelector(LayoutContext, (v) => v?.toggleThemeColor!);
+
   const handleMenuClick = (menu: ProfileMenu) => {};
   return (
     <div className="absolute right-0 z-20 mt-2 w-60 origin-top-right transform rounded-md bg-background py-4 drop-shadow-md shadow-custom ring-1 ring-transparent ring-opacity-5 transition focus:outline-none">

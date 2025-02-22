@@ -1,7 +1,5 @@
-import { createContext } from 'react';
-import { useRequiredContext } from '@/hooks/useRequiredContext';
+import { createContext } from 'use-context-selector';
 import { Api } from './_generated';
-import AuthProvider from '@/features/auth/AuthProvider';
 
 interface IContext {
   apiClient: Api<unknown>;
@@ -11,7 +9,7 @@ interface IProps {
   children?: React.ReactNode;
 }
 
-const ApiClientContext = createContext<IContext | undefined>(undefined);
+export const ApiClientContext = createContext<IContext | undefined>(undefined);
 
 const ApiClientProvider: React.FC<IProps> = ({ children }) => {
   const apiClient = new Api({
@@ -19,10 +17,6 @@ const ApiClientProvider: React.FC<IProps> = ({ children }) => {
     baseApiParams: { secure: true, format: 'json', credentials: 'include' },
     securityWorker: (accessToken) => (accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : {}),
   });
-
-  function onAccessTokenChange(accessToken: string | undefined) {
-    apiClient.setSecurityData(accessToken);
-  }
 
   return (
     <ApiClientContext.Provider
@@ -35,5 +29,3 @@ const ApiClientProvider: React.FC<IProps> = ({ children }) => {
 };
 
 export default ApiClientProvider;
-
-export const useApiClientContext = () => useRequiredContext(ApiClientContext);

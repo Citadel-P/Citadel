@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useGETAccessToken } from './useGETAccessToken';
-import { useApiClientContext } from '@/api/ApiClientProvider';
+import { ApiClientContext } from '@/api/ApiClientProvider';
+import { useContextSelector } from 'use-context-selector';
 import { createContext } from 'use-context-selector';
 import { useHTTPErrorHandler } from './useHTTPErrorHandler';
 
@@ -22,8 +23,8 @@ export const AuthContext = createContext<IContext | undefined>(undefined);
 const AuthProvider: React.FC<IProps> = ({ children }) => {
   useHTTPErrorHandler();
   const client = useQueryClient();
-  const { apiClient } = useApiClientContext();
-  const { data: accessTokenData, isSuccess } = useGETAccessToken(undefined);
+  const { data: accessTokenData, isSuccess } = useGETAccessToken();
+  const apiClient = useContextSelector(ApiClientContext, (s) => s?.apiClient!);
   const [accessToken, setAccessToken] = useState<string | undefined>(storedJwt ?? undefined);
   let isAuthenticated = accessToken != null;
 
@@ -43,7 +44,7 @@ const AuthProvider: React.FC<IProps> = ({ children }) => {
 
       if (result?.exp) {
         const currentTime = Math.floor(Date.now() / 1000);
-        const timeToExpire = (result.exp - currentTime) * 1000;
+        const timeToExpire = (result.exp - currentTime) * 1000 - 10 * 1000;
         timer = setTimeout(
           () => {
             client.invalidateQueries({ queryKey: ['getAccessToken'] });

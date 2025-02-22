@@ -1,10 +1,12 @@
-import { useLayoutContext } from '../LayoutProvider';
+import { useContextSelector } from 'use-context-selector';
+import { LayoutContext } from '@/layout/LayoutProvider';
 import { ChevronsRight, Info } from 'lucide-react';
 import LogoIcon from '@/assets/logo.svg';
 import { SidebarMenu } from './SidebarMenu';
 
 export const Sidebar = () => {
-  const { sidebarMinimized, toggleSidebar } = useLayoutContext();
+  const toggleSidebar = useContextSelector(LayoutContext, (v) => v?.toggleSidebar);
+  const sidebarMinimized = useContextSelector(LayoutContext, (v) => v?.sidebarMinimized);
 
   return (
     <nav

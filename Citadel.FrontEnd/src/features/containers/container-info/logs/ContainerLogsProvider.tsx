@@ -1,9 +1,9 @@
-import { useRequiredContext } from '@/hooks/useRequiredContext';
-import { createContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import useContainerLogsHub from './hooks/useContainerLogsHub';
 import { useParams } from 'react-router';
 import { usePOSTContainerLogs } from './hooks/usePOSTContainerLogs';
 import { RequestedLogAction } from '@/api/_generated';
+import { createContext } from 'use-context-selector';
 
 interface IContext {
   isPending: boolean;
@@ -14,7 +14,7 @@ interface IProps {
   children?: React.ReactNode;
 }
 
-const ContainerLogsContext = createContext<IContext | undefined>(undefined);
+export const ContainerLogsContext = createContext<IContext | undefined>(undefined);
 
 const ContainerLogsProvider: React.FC<IProps> = ({ children }) => {
   const [requestId] = useState(crypto.randomUUID());
@@ -54,5 +54,3 @@ const ContainerLogsProvider: React.FC<IProps> = ({ children }) => {
 };
 
 export default ContainerLogsProvider;
-
-export const useContainerLogsContext = () => useRequiredContext(ContainerLogsContext);

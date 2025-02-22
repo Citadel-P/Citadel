@@ -1,4 +1,5 @@
-import { useAppContext } from '@/AppProvider';
+import { AppContext } from '@/AppProvider';
+import { useContextSelector } from 'use-context-selector';
 import { paths } from '@/AppRoutes';
 import { Badge } from '@/components/ui/badge';
 
@@ -25,30 +26,33 @@ interface ICrumbBadge {
 }
 
 const BreadCrumb = () => {
-  const { currentPlatform, currentContainer, route, isBreadcrumbHidden } = useAppContext();
+  const route = useContextSelector(AppContext, (v) => v?.route);
+  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
+  const currentContainer = useContextSelector(AppContext, (v) => v?.currentContainer);
+  const isBreadcrumbHidden = useContextSelector(AppContext, (v) => v?.isBreadcrumbHidden);
   const navigate = useNavigate();
   if (isBreadcrumbHidden) return <></>;
 
   const crumbs: ICrumbs[] = [];
-  if (route.path === paths[0]) {
+  if (route?.path === paths[0]) {
     // Platforms
     crumbs.push({ title: 'Patforms', isActive: true });
-  } else if (route.path === paths[1]) {
+  } else if (route?.path === paths[1]) {
     // add docker platform
     crumbs.push({ title: 'Patforms', link: '/' });
     crumbs.push({ title: 'Add Platform', isActive: true });
-  } else if (route.path === paths[2]) {
+  } else if (route?.path === paths[2]) {
     // containers
     crumbs.push({ title: 'Patforms', link: '/' });
     crumbs.push({ title: currentPlatform?.name ?? '', link: '/platforms/' + currentPlatform?.id });
     crumbs.push({ title: 'Containers', isActive: true });
-  } else if (route.path === paths[3]) {
+  } else if (route?.path === paths[3]) {
     // container logs
     crumbs.push({ title: 'Patforms', link: '/' });
     crumbs.push({ title: currentContainer?.platform?.name ?? '', link: '/platforms/' + currentPlatform?.id });
     crumbs.push({ title: 'Containers', link: '/platforms/' + currentPlatform?.id + '/containers' });
     crumbs.push({ title: currentContainer?.name?.slice(1) ?? '', isActive: true, badge: { title: 'Logs' } });
-  } else if (route.path === paths[4]) {
+  } else if (route?.path === paths[4]) {
     // container logs
     crumbs.push({ title: 'Patforms', link: '/' });
     crumbs.push({ title: currentContainer?.platform?.name ?? '', link: '/platforms/' + currentPlatform?.id });

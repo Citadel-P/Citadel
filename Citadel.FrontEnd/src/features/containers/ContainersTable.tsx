@@ -1,7 +1,8 @@
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useContainersContext } from './ContainersProvider';
+import { useContextSelector } from 'use-context-selector';
+import { ContainersContext } from './ContainersProvider';
 import { ContainerInfoView, PortView } from '@/api/_generated';
 import { truncate } from '@/lib/truncate';
 import { toFixedNumber } from '@/lib/utils';
@@ -165,6 +166,8 @@ const ContainerStatTootltip = ({ stat }: { stat: string }) => {
 };
 
 export const ContainersTable = () => {
-  const { containers, isLoading, onSelectionChange } = useContainersContext();
+  const containers = useContextSelector(ContainersContext, (v) => v?.containers!);
+  const isLoading = useContextSelector(ContainersContext, (v) => v?.isLoading!);
+  const onSelectionChange = useContextSelector(ContainersContext, (v) => v?.onSelectionChange!);
   return <DataTable columns={columns} data={containers} isLoading={isLoading} onSelectionChange={onSelectionChange} />;
 };

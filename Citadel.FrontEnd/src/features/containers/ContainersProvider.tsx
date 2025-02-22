@@ -1,6 +1,6 @@
 import { ContainerInfoView } from '@/api/_generated';
-import { useRequiredContext } from '@/hooks/useRequiredContext';
-import { createContext, useState } from 'react';
+import { useState } from 'react';
+import { createContext } from 'use-context-selector';
 import useContainersHub from './hooks/useContainersHub';
 import { useGETContainers } from './hooks/useGETContainers';
 import { useParams } from 'react-router';
@@ -16,7 +16,7 @@ interface IProps {
   children?: React.ReactNode;
 }
 
-const ContainersContext = createContext<IContext | undefined>(undefined);
+export const ContainersContext = createContext<IContext | undefined>(undefined);
 
 const ContainersProvider: React.FC<IProps> = ({ children }) => {
   const { platformId } = useParams();
@@ -50,5 +50,3 @@ const ContainersProvider: React.FC<IProps> = ({ children }) => {
 };
 
 export default ContainersProvider;
-
-export const useContainersContext = () => useRequiredContext(ContainersContext);

@@ -1,5 +1,5 @@
-import { createContext, useState } from 'react';
-import { useRequiredContext } from '@/hooks/useRequiredContext';
+import { useState } from 'react';
+import { createContext } from 'use-context-selector';
 
 interface IContext {
   theme: ITheme;
@@ -20,7 +20,7 @@ interface IProps {
   children?: React.ReactNode;
 }
 
-const LayoutContext = createContext<IContext | undefined>(undefined);
+export const LayoutContext = createContext<IContext | undefined>(undefined);
 
 const theme = localStorage.getItem('theme');
 const initTheme: ITheme = theme ? JSON.parse(theme) : { color: 'blue', mode: 'light' };
@@ -51,5 +51,3 @@ const LayoutProvider: React.FC<IProps> = ({ children }) => {
 };
 
 export default LayoutProvider;
-
-export const useLayoutContext = () => useRequiredContext(LayoutContext);

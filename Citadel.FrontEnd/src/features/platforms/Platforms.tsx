@@ -1,12 +1,14 @@
 import Loader from '@/components/ui/loader';
 import { AddPlatformDropdown } from './AddPlatformDropdown';
 import Platform from './Platform';
-import { usePlatformsContext } from './PlatformsProvider';
+import { PlatformsContext } from './PlatformsProvider';
+import { useContextSelector } from 'use-context-selector';
 import { useNavigate } from 'react-router';
 import { Message } from '@/components/ui/message';
 
 const Platforms = () => {
-  const { platforms, isLoading } = usePlatformsContext();
+  const platforms = useContextSelector(PlatformsContext, (v) => v?.platforms);
+  const isLoading = useContextSelector(PlatformsContext, (v) => v?.isLoading);
   const navigate = useNavigate();
 
   return (

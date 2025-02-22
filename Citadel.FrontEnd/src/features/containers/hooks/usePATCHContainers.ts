@@ -1,5 +1,6 @@
 import { RequestParams } from '@/api/_generated';
-import { useApiClientContext } from '@/api/ApiClientProvider';
+import { ApiClientContext } from '@/api/ApiClientProvider';
+import { useContextSelector } from 'use-context-selector';
 import { useMutation } from '@tanstack/react-query';
 
 export type actionType = 'start' | 'stop' | 'pause' | 'restart' | 'delete';
@@ -9,7 +10,7 @@ interface IArgs {
   params?: RequestParams;
 }
 export const usePATCHContainers = () => {
-  const { apiClient } = useApiClientContext();
+  const apiClient = useContextSelector(ApiClientContext, (v) => v?.apiClient!);
   const { mutate, isPending, isSuccess, data } = useMutation({
     mutationFn: ({ action, containersId: data, params }: IArgs) => {
       switch (action) {

@@ -1,8 +1,8 @@
-import { useRequiredContext } from '@/hooks/useRequiredContext';
-import { createContext, useState } from 'react';
+import { useState } from 'react';
 import { useParams } from 'react-router';
 import { useGetContainerStats } from './hooks/useGetContainerStats';
 import { ContainerStatView } from '@/api/_generated';
+import { createContext } from 'use-context-selector';
 
 interface IContext {
   isLoading: boolean;
@@ -13,7 +13,7 @@ interface IProps {
   children?: React.ReactNode;
 }
 
-const ContainerStatsContext = createContext<IContext | undefined>(undefined);
+export const ContainerStatsContext = createContext<IContext | undefined>(undefined);
 
 const ContainerLogsProvider: React.FC<IProps> = ({ children }) => {
   const [requestId] = useState(crypto.randomUUID());
@@ -37,5 +37,3 @@ const ContainerLogsProvider: React.FC<IProps> = ({ children }) => {
 };
 
 export default ContainerLogsProvider;
-
-export const useContainerStatsContext = () => useRequiredContext(ContainerStatsContext);

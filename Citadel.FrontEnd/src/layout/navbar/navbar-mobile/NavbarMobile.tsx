@@ -1,9 +1,11 @@
 import { X } from 'lucide-react';
 import { Logo } from '../../Logo';
-import { useLayoutContext } from '../../LayoutProvider';
+import { useContextSelector } from 'use-context-selector';
+import { LayoutContext } from '@/layout/LayoutProvider';
 
 export const NavbarMobile = () => {
-  const { mobileMenuVisible, toggleMobileMenu } = useLayoutContext()!;
+  const mobileMenuVisible = useContextSelector(LayoutContext, (v) => v?.mobileMenuVisible);
+  const toggleMobileMenu = useContextSelector(LayoutContext, (v) => v?.toggleMobileMenu);
 
   return (
     <div

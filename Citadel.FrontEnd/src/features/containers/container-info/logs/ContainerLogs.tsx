@@ -1,9 +1,11 @@
-import { useContainerLogsContext } from './ContainerLogsProvider';
+import { ContainerLogsContext } from './ContainerLogsProvider';
+import { useContextSelector } from 'use-context-selector';
 import { CodeBlock } from 'react-code-block';
 import { useEffect, useState } from 'react';
 
 const ContainerLogs = () => {
-  const { logs, isPending } = useContainerLogsContext();
+  const logs = useContextSelector(ContainerLogsContext, (v) => v?.logs!);
+  const isPending = useContextSelector(ContainerLogsContext, (v) => v?.isPending);
   const [logsBuffer, setLogsBuffer] = useState(logs);
 
   useEffect(() => {

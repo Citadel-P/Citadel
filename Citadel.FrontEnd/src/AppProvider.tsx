@@ -1,5 +1,5 @@
-import { createContext, useEffect, useState } from 'react';
-import { useRequiredContext } from '@/hooks/useRequiredContext';
+import { useEffect, useState } from 'react';
+import { createContext } from 'use-context-selector';
 import { ContainerInfoView, PlatformView } from './api/_generated';
 import { matchRoutes, useLocation, useParams } from 'react-router';
 import { useGETPlatform } from './features/platforms/hooks/useGETPlatform';
@@ -18,7 +18,7 @@ interface IProps {
   children?: React.ReactNode;
 }
 
-const AppContext = createContext<IContext | undefined>(undefined);
+export const AppContext = createContext<IContext | undefined>(undefined);
 
 const AppProvider: React.FC<IProps> = ({ children }) => {
   const { platformId, containerId } = useParams();
@@ -61,5 +61,3 @@ const AppProvider: React.FC<IProps> = ({ children }) => {
 };
 
 export default AppProvider;
-
-export const useAppContext = () => useRequiredContext(AppContext);

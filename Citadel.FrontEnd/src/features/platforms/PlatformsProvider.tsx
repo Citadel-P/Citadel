@@ -1,8 +1,7 @@
 import { PlatformView } from '@/api/_generated';
-import { useRequiredContext } from '@/hooks/useRequiredContext';
-import { createContext } from 'react';
 import { useGETPlatforms } from './hooks/useGETPlatforms';
 import usePlatformHub from './hooks/usePlatformHub';
+import { createContext } from 'use-context-selector';
 
 interface IContext {
   isLoading: boolean;
@@ -12,7 +11,7 @@ interface IProps {
   children?: React.ReactNode;
 }
 
-const PlatformsContext = createContext<IContext | undefined>(undefined);
+export const PlatformsContext = createContext<IContext | undefined>(undefined);
 
 const PlatformsProvider: React.FC<IProps> = ({ children }) => {
   const { data, isLoading, isSuccess } = useGETPlatforms();
@@ -39,5 +38,3 @@ const PlatformsProvider: React.FC<IProps> = ({ children }) => {
 };
 
 export default PlatformsProvider;
-
-export const usePlatformsContext = () => useRequiredContext(PlatformsContext);

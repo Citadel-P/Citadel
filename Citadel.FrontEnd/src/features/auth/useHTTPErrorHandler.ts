@@ -12,7 +12,6 @@ export function useHTTPErrorHandler() {
     const handleError = (error: ProblemDetails) => {
       if (error?.status === 401) {
         logout({});
-        window.location.href = '/login';
       } else if (error?.status != null && error?.status >= 400) {
         const problem = error.error as ProblemDetails;
         toast.error(problem.status + ' ' + problem.title, {

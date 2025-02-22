@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
-import { useLayoutContext } from '../LayoutProvider';
+import { useContextSelector } from 'use-context-selector';
+import { LayoutContext } from '@/layout/LayoutProvider';
 import { ISubMenuItem } from './menu-items';
 import { ChevronRight } from 'lucide-react';
 
@@ -9,7 +10,7 @@ interface IProps {
 }
 
 export const SidebarSubMenu = ({ submenu, toggleMenu }: IProps) => {
-  const { sidebarMinimized } = useLayoutContext();
+  const sidebarMinimized = useContextSelector(LayoutContext, (v) => v?.sidebarMinimized);
 
   return (
     <div

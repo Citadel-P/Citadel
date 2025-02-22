@@ -2,19 +2,29 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ContainerLogsProvider from './logs/ContainerLogsProvider';
 import ContainerLogs from './logs/ContainerLogs';
 import { Container } from 'lucide-react';
-import { useAppContext } from '@/AppProvider';
+import { AppContext } from '@/AppProvider';
+import { useContextSelector } from 'use-context-selector';
 import { useNavigate } from 'react-router';
 import ContainerStatsProvider from './stats/ContainerStatsProvider';
 import NetworkUsage from './stats/NetworkUsage';
 import MemoryUsage from './stats/MemoryUsage';
 import CpuUsage from './stats/CpuUsage';
+import { useEffect, useState } from 'react';
 
 const ContainerInfoWrapper = () => {
-  const { route, currentContainer } = useAppContext();
+  const route = useContextSelector(AppContext, (v) => v?.route);
+  const currentContainer = useContextSelector(AppContext, (v) => v?.currentContainer);
   const navigate = useNavigate();
+  const [currentTab, setCurrentTab] = useState<string>();
 
-  const handleClick = (fragment: string) =>
-    navigate(`../containers/${currentContainer?.containerId?.slice(0, 12)}/${fragment}`);
+  useEffect(() => {
+    const tab = route?.path.match('[^/]+$')![0];
+    tab && ['logs', 'stats'].includes(tab) ? setCurrentTab(tab) : setCurrentTab('logs');
+  }, [setCurrentTab, route]);
+
+  const onValueChange = (tabName: string) => {
+    navigate(`../containers/${currentContainer?.containerId?.slice(0, 12)}/${tabName}`);
+  };
 
   return (
     <div className="min-h-[calc(100%-2rem)] relative">
@@ -32,14 +42,10 @@ const ContainerInfoWrapper = () => {
               <span className="text-sm text-muted ml-2">({currentContainer?.containerId?.slice(0, 12)})</span>
             </div>
           </div>
-          <Tabs defaultValue={route.path.endsWith('logs') ? 'logs' : 'stats'}>
+          <Tabs value={currentTab} onValueChange={onValueChange}>
             <TabsList className="w-full justify-start bg-muted/20 rounded-sm">
-              <TabsTrigger value="logs" onClick={() => handleClick('logs')}>
-                Logs
-              </TabsTrigger>
-              <TabsTrigger value="stats" onClick={() => handleClick('stats')}>
-                Stats
-              </TabsTrigger>
+              <TabsTrigger value="logs">Logs</TabsTrigger>
+              <TabsTrigger value="stats">Stats</TabsTrigger>
             </TabsList>
             <TabsContent value="logs">
               <ContainerLogsProvider>

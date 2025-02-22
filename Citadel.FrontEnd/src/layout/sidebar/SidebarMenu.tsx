@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useLayoutContext } from '../LayoutProvider';
+import { useContextSelector } from 'use-context-selector';
+import { LayoutContext } from '@/layout/LayoutProvider';
 import { ISubMenuItem, MenuItems } from './menu-items';
 import { ChevronRight } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
@@ -8,7 +9,8 @@ import { SidebarSubMenu } from './SidebarSidemenu';
 export const SidebarMenu = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { sidebarMinimized, toggleSidebar } = useLayoutContext();
+  const sidebarMinimized = useContextSelector(LayoutContext, (v) => v?.sidebarMinimized);
+  const toggleSidebar = useContextSelector(LayoutContext, (v) => v?.toggleSidebar!);
   const [menuItems, setMenuItems] = useState(MenuItems);
 
   useEffect(() => {

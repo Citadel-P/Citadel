@@ -1,11 +1,12 @@
 import { Menu } from 'lucide-react';
-import { useLayoutContext } from '../LayoutProvider';
+import { LayoutContext } from '../LayoutProvider';
+import { useContextSelector } from 'use-context-selector';
 import { NavbarMobile } from './navbar-mobile/NavbarMobile';
 import { Logo } from '../Logo';
 import { PorfileMenu } from './profile-menu/ProfileMenu';
 
 export const Navbar = () => {
-  const { toggleMobileMenu } = useLayoutContext();
+  const toggleMobileMenu = useContextSelector(LayoutContext, (v) => v?.toggleMobileMenu);
 
   return (
     <div className="relative bg-background">

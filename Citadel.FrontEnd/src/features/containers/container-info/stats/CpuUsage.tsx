@@ -8,7 +8,8 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { Card, CardContent } from '@/components/ui/card';
-import { useContainerStatsContext } from './ContainerStatsProvider';
+import { ContainerStatsContext } from './ContainerStatsProvider';
+import { useContextSelector } from 'use-context-selector';
 import { Skeleton } from '@/components/ui/skeleton';
 const chartConfig = {
   stats: {
@@ -21,7 +22,8 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 const CpuUsage = () => {
-  const { stats, isLoading } = useContainerStatsContext();
+  const stats = useContextSelector(ContainerStatsContext, (v) => v?.stats);
+  const isLoading = useContextSelector(ContainerStatsContext, (v) => v?.isLoading);
 
   return isLoading ? (
     <Skeleton className="h-[225px] w-full rounded-xl" />

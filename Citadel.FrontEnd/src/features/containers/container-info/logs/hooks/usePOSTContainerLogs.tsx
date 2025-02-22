@@ -1,5 +1,6 @@
 import { StreamLogsRequest } from '@/api/_generated';
-import { useApiClientContext } from '@/api/ApiClientProvider';
+import { ApiClientContext } from '@/api/ApiClientProvider';
+import { useContextSelector } from 'use-context-selector';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 import { useMutation } from '@tanstack/react-query';
 
@@ -8,7 +9,8 @@ interface IParams {
 }
 
 export const usePOSTContainerLogs = () => {
-  const { apiClient } = useApiClientContext();
+  const apiClient = useContextSelector(ApiClientContext, (v) => v?.apiClient!);
+
   const { mutate, isPending, isSuccess, error, data } = useMutation({
     mutationFn: ({ requestParams }: IParams) => apiClient.api.containersStreamLogs(requestParams),
   });
