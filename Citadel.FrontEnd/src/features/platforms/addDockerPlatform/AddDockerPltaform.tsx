@@ -8,7 +8,7 @@ const AddDockerPlatform = () => {
   return (
     <div className="mx-auto px-4 py-3 xl:w-2/3 sm:px-6">
       <div className="mb-3 flex items-baseline gap-1">
-        <div className="inline-flex h-8 w-8 bg-primary/10 text-primary flex-shrink-0 items-center justify-center rounded-lg ">
+        <div className="inline-flex h-8 w-8 bg-primary/10 text-primary shrink-0 items-center justify-center rounded-lg ">
           <span className="h-4 w-4 ">
             <DockerIcon />
           </span>

@@ -74,7 +74,7 @@ export const PorfileDropDown = () => {
 
   const handleMenuClick = (menu: ProfileMenu) => {};
   return (
-    <div className="absolute right-0 z-20 mt-2 w-60 origin-top-right transform rounded-md bg-background py-4 drop-shadow-md shadow-custom ring-1 ring-transparent ring-opacity-5 transition focus:outline-none">
+    <div className="absolute right-0 z-20 mt-2 w-60 origin-top-right transform rounded-md bg-background py-4 drop-shadow-md shadow-custom ring-1 ring-transparent ring-opacity-5 transition focus:outline-hidden">
       <div className="flext-row flex items-center px-4 pb-4">
         <div className="w-10 shrink-0">
           <img className="rounded-md" src="https://avatars.githubusercontent.com/u/993610?v=4" alt="" />
@@ -108,7 +108,7 @@ export const PorfileDropDown = () => {
             <button
               key={index}
               onClick={() => toggleThemeColor(item.name)}
-              className={`${item.name === theme.color ? 'border-muted-foreground bg-card' : ''} focus-visible:ring-ring inline-flex h-8 items-center justify-start whitespace-nowrap rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 disabled:pointer-events-none disabled:opacity-50 hover:bg-card hover:text-foreground`}>
+              className={`${item.name === theme.color ? 'border-muted-foreground bg-card' : ''} focus-visible:ring-ring inline-flex h-8 items-center justify-start whitespace-nowrap rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:pointer-events-none disabled:opacity-50 hover:bg-card hover:text-foreground`}>
               <span
                 style={{ backgroundColor: item.code }}
                 className="mr-1 flex h-5 w-5 shrink-0 -translate-x-1 items-center justify-center rounded-full bg-rose-500"></span>
@@ -125,7 +125,7 @@ export const PorfileDropDown = () => {
             <button
               key={index}
               onClick={() => setThemeMode(item.name as any)}
-              className={`${item.name === theme.mode ? 'border-muted-foreground bg-card' : ''} focus-visible:ring-ring inline-flex h-8 items-center justify-start whitespace-nowrap rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 disabled:pointer-events-none disabled:opacity-50 hover:bg-card hover:text-foreground`}>
+              className={`${item.name === theme.mode ? 'border-muted-foreground bg-card' : ''} focus-visible:ring-ring inline-flex h-8 items-center justify-start whitespace-nowrap rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:pointer-events-none disabled:opacity-50 hover:bg-card hover:text-foreground`}>
               <span className="h-6 w-7 text-muted-foreground/50">{item.icon}</span>
               <p className="capitalize">{item.name}</p>
             </button>

@@ -7,7 +7,7 @@ export const SearchField = () => {
       <Input
         type="search"
         placeholder="Search"
-        className="bg-background placeholder:text-foreground/50 h-9 px-5 pr-10 rounded-full text-xs focus:outline-none focus-visible:ring-transparent"
+        className="bg-background placeholder:text-foreground/50 h-9 px-5 pr-10 rounded-full text-xs focus:outline-hidden focus-visible:ring-transparent"
       />
       <Search className="absolute text-slate-300 right-0 top-0 mt-1.5 mr-4 h4 w-4" />
     </div>

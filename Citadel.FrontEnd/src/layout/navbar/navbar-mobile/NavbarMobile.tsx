@@ -25,7 +25,7 @@ export const NavbarMobile = () => {
                 <button
                   onClick={toggleMobileMenu}
                   type="button"
-                  className="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground transition-transform focus:outline-none focus:ring-0 focus:ring-inset hover:rotate-90 hover:bg-card hover:text-foreground">
+                  className="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground transition-transform focus:outline-hidden focus:ring-0 focus:ring-inset hover:rotate-90 hover:bg-card hover:text-foreground">
                   <span className="sr-only">Close menu</span>
                   <X />
                 </button>

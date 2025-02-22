@@ -28,7 +28,7 @@ const CpuUsage = () => {
   return isLoading ? (
     <Skeleton className="h-[225px] w-full rounded-xl" />
   ) : (
-    <Card className="bg-background rounded-sm shadow-sm">
+    <Card className="bg-background rounded-sm shadow-xs">
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
         <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
           <AreaChart data={stats} accessibilityLayer>
@@ -51,7 +51,7 @@ const CpuUsage = () => {
                   formatter={(value, name) => (
                     <>
                       <div
-                        className="h-2.5 w-2.5 shrink-0 rounded-[2px] bg-[--color-bg]"
+                        className="h-2.5 w-2.5 shrink-0 rounded-[2px] bg-(--color-bg)"
                         style={
                           {
                             '--color-bg': `var(--color-${name})`,

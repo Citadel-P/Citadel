@@ -68,7 +68,7 @@ export const SidebarMenu = () => {
 
                   {item.children ? (
                     <div className="flex h-9 cursor-pointer items-center justify-start rounded hover:bg-card">
-                      <a className="ml-10 truncate text-xs font-semibold tracking-wide text-muted-foreground focus:outline-none group-hover:text-foreground">
+                      <a className="ml-10 truncate text-xs font-semibold tracking-wide text-muted-foreground focus:outline-hidden group-hover:text-foreground">
                         {item.label}
                       </a>
                     </div>
@@ -76,7 +76,7 @@ export const SidebarMenu = () => {
                     <div className="flex h-9 cursor-pointer items-center justify-start rounded text-muted-foreground hover:bg-card hover:text-foreground">
                       <Link
                         to={item.route!}
-                        className={`${item.active ? 'text-primary' : ''} ml-10 truncate text-xs font-semibold tracking-wide focus:outline-none`}>
+                        className={`${item.active ? 'text-primary' : ''} ml-10 truncate text-xs font-semibold tracking-wide focus:outline-hidden`}>
                         {item.label}
                       </Link>
                     </div>

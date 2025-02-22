@@ -1,7 +1,7 @@
 import { ContainerLogsContext } from './ContainerLogsProvider';
 import { useContextSelector } from 'use-context-selector';
-import { CodeBlock } from 'react-code-block';
 import { useEffect, useState } from 'react';
+import { Highlight, themes } from 'prism-react-renderer';
 
 const ContainerLogs = () => {
   const logs = useContextSelector(ContainerLogsContext, (v) => v?.logs!);
@@ -13,17 +13,22 @@ const ContainerLogs = () => {
   }, [logs]);
 
   return (
-    <CodeBlock code={logsBuffer.join('\n')} language="js">
-      <CodeBlock.Code className="bg-card-foreground dark:bg-card !p-6 rounded-sm shadow-sm w-full overflow-auto max-w-[1400px] max-h-[600px] scrollbar-thumb-rounded scrollbar-track-rounded scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted">
-        <div className="table-row">
-          <CodeBlock.LineNumber className="table-cell pr-4 text-xs text-gray-500 text-right select-none" />
-          <CodeBlock.LineContent className="table-cell text-sm">
-            {(isPending || !logsBuffer.length) && <p>loading...</p>}
-            <CodeBlock.Token />
-          </CodeBlock.LineContent>
-        </div>
-      </CodeBlock.Code>
-    </CodeBlock>
+    <Highlight theme={themes.nightOwl} code={logsBuffer.join('\n')} language="tsx">
+      {({ className, style, tokens, getLineProps, getTokenProps }) => (
+        <pre
+          style={style}
+          className="bg-card-foreground dark:bg-card p-6! rounded-sm shadow-xs w-full overflow-auto max-w-[1400px] max-h-[600px] scrollbar-thumb-rounded scrollbar-track-rounded scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted">
+          {tokens.map((line, i) => (
+            <div key={i} {...getLineProps({ line })} className="table-row">
+              <span className="table-cell pr-4 text-xs text-gray-500 text-right select-none">{i + 1}</span>
+              {line.map((token, key) => (
+                <span key={key} {...getTokenProps({ token })} className="text-sm" />
+              ))}
+            </div>
+          ))}
+        </pre>
+      )}
+    </Highlight>
   );
 };
 

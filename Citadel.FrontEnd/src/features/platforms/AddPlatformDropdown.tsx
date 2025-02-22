@@ -28,7 +28,7 @@ export const AddPlatformDropdown = () => {
         <ChevronDown className="ml-1 h-4 w-4 text-primary-foreground" />
       </button>
       {open && (
-        <div className="absolute right-0 z-20 mt-2 w-52 drop-shadow-md origin-top-right transform rounded-md bg-background py-0 shadow-custom ring-1 ring-transparent ring-opacity-5 transition focus:outline-none">
+        <div className="absolute right-0 z-20 mt-2 w-52 drop-shadow-md origin-top-right transform rounded-md bg-background py-0 shadow-custom ring-1 ring-transparent ring-opacity-5 transition focus:outline-hidden">
           <ul className="my-2 mx-2 flex flex-col">
             {platforms.map((item, index) => (
               <li key={index} className="flex">

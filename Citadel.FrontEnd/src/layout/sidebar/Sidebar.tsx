@@ -16,7 +16,7 @@ export const Sidebar = () => {
         <div className="relative h-10">
           {!sidebarMinimized && (
             <div className="flex items-center">
-              <a className="flex text-background cursor-pointer items-center justify-center rounded bg-primary p-2 focus:outline-none focus:ring-1">
+              <a className="flex text-background cursor-pointer items-center justify-center rounded bg-primary p-2 focus:outline-hidden focus:ring-1">
                 <LogoIcon />
               </a>
               <b className="ml-1 pl-2 text-sm font-bold text-foreground"> Citadel </b>
@@ -24,7 +24,7 @@ export const Sidebar = () => {
           )}
           <button
             onClick={toggleSidebar}
-            className={`${sidebarMinimized ? '' : '-rotate-180'} absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded text-muted-foreground/50 transition-all duration-200 focus:outline-none hover:text-muted-foreground`}>
+            className={`${sidebarMinimized ? '' : '-rotate-180'} absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded text-muted-foreground/50 transition-all duration-200 focus:outline-hidden hover:text-muted-foreground`}>
             <ChevronsRight />
           </button>
         </div>
@@ -48,7 +48,7 @@ export const Sidebar = () => {
             <Info width={18} />
           </span>
 
-          <div className="ml-3 truncate text-[10px] font-semibold tracking-wide focus:outline-none">
+          <div className="ml-3 truncate text-[10px] font-semibold tracking-wide focus:outline-hidden">
             <span className="rounded-lg bg-primary/10 px-2 font-semibold text-primary">v 1.0.0 </span>
           </div>
           {sidebarMinimized && (

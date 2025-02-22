@@ -90,7 +90,7 @@ const Platform = ({ platform }: IProps) => {
       <ul className="divide-y divide-foreground">
         <li className="group/platform py-3 bg-card/40 hover:bg-card/90 sm:py-4">
           <div className="flex flex-row flex-wrap items-center space-x-4">
-            <div className="relative flex-shrink-0">
+            <div className="relative shrink-0">
               <div className="ml-1 w-20 h-20">
                 <DockerIcon />
               </div>

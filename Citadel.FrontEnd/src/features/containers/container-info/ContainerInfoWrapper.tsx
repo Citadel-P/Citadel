@@ -31,7 +31,7 @@ const ContainerInfoWrapper = () => {
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
         <div className="max-w-full rounded-lg border-border bg-background p-4">
           <div className="flex items-baseline gap-1 mb-3">
-            <div className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <Container className="h-4 w-4" />
               <span className="sr-only">
                 {currentContainer?.name?.slice(1)} {currentContainer?.containerId?.slice(0, 12)}
