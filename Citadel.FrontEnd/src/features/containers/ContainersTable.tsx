@@ -41,12 +41,12 @@ export const columns: ColumnDef<ContainerInfoView>[] = [
           <ContainerStatTootltip stat={row.original.state ?? 'exited'} />
         </div>
         <div>
-          <div className="mb-1 text-sm font-semibold text-foreground">
+          <div className="mb-1 text-[13px] font-semibold text-foreground">
             <Link to={`../containers/${row.original.containerId?.slice(0, 12)}/logs`} className="hover:underline">
               {row.original.name ? row.original.name?.slice(1) : ''}
             </Link>
           </div>
-          <div className="text-muted-foreground/50">{row.original.containerId?.slice(0, 12)}</div>
+          <div className="text-muted-foreground/50 text-xs">{row.original.containerId?.slice(0, 12)}</div>
         </div>
       </div>
     ),
@@ -63,7 +63,7 @@ export const columns: ColumnDef<ContainerInfoView>[] = [
     accessorKey: 'CPU',
     header: ({ column }) => <SortableCell cellName="Cpu" column={column} />,
     cell: ({ row }) => (
-      <div>
+      <div className="text-xs">
         {(row.original as ContainerInfoView).stats &&
           toFixedNumber((row.original as ContainerInfoView).stats?.at(0)?.cpuUsage, 'percent')}
       </div>
@@ -77,7 +77,7 @@ export const columns: ColumnDef<ContainerInfoView>[] = [
     accessorKey: 'memory',
     header: ({ column }) => <SortableCell cellName="Memory" column={column} />,
     cell: ({ row }) => (
-      <div>
+      <div className="text-xs">
         {(row.original as ContainerInfoView)?.stats?.at(0)?.memoryUsage && (
           <span>
             {byteTransform((row.original as ContainerInfoView).stats?.at(0)?.memoryUsage ?? 0, 2) +
@@ -99,7 +99,7 @@ export const columns: ColumnDef<ContainerInfoView>[] = [
     header: () => <span>Ports</span>,
     cell: ({ row }) =>
       (row.original.ports as PortView[])?.map((port: PortView, i) => (
-        <div key={i}>
+        <div key={i} className="text-xs">
           <span>
             {port.publicPort !== undefined && port.publicPort !== null && port.publicPort > 0 && (
               <span>{port.publicPort + ':' + port.privatePort}</span>
@@ -117,7 +117,7 @@ export const columns: ColumnDef<ContainerInfoView>[] = [
     accessorKey: 'stack',
     header: ({ column }) => <SortableCell cellName="Stack" column={column} />,
     cell: ({ row }) => (
-      <div>
+      <div className="text-xs">
         {row.original.labels &&
           row.original.labels['com.docker.compose.project'] &&
           truncate(row.original.labels['com.docker.compose.project'], 10, 'left')}
@@ -146,11 +146,11 @@ const ContainerStatTootltip = ({ stat }: { stat: string }) => {
           <div
             className={`${
               stat === 'exited'
-                ? 'bg-gray-500 mr-2 h-2.5 w-2.5 rounded-full'
+                ? 'bg-gray-500 mr-2 h-2 w-2 rounded-full'
                 : stat === 'paused'
-                  ? 'bg-orange-500 mr-2 h-2.5 w-2.5 rounded-full'
+                  ? 'bg-orange-500 mr-2 h-2 w-2 rounded-full'
                   : stat === 'running'
-                    ? 'bg-green-500 mr-2 h-2.5 w-2.5 rounded-full'
+                    ? 'bg-green-500 mr-2 h-2 w-2 rounded-full'
                     : ''
             }`}
           />

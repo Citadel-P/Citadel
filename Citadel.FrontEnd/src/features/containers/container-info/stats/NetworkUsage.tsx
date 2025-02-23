@@ -14,11 +14,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 const chartConfig = {
   rxBytes: {
     label: 'Data received',
-    color: 'hsl(var(--chart-1))',
+    color: 'var(--chart-1)',
   },
   txBytes: {
     label: 'Data sent',
-    color: 'hsl(var(--chart-2))',
+    color: 'var(--chart-2)',
   },
 } satisfies ChartConfig;
 

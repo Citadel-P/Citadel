@@ -6,7 +6,7 @@ import LoadingBarWrapper from './LoadingBarWrapper';
 import AuthProvider from './features/auth/AuthProvider';
 
 function App() {
-  const classNames = ['bg-background', 'font-poppins', 'selection:bg-primary', 'selection:text-primary-foreground'];
+  const classNames = ['bg-background', 'selection:bg-primary', 'selection:text-primary-foreground'];
   document.body.classList.add(...classNames);
 
   return (

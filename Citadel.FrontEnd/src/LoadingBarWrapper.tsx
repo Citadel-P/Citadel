@@ -29,7 +29,7 @@ const LoadingBarWrapper = () => {
     }
   });
 
-  return <LoadingBar color="#f11946" ref={ref} shadow={true} />;
+  return <LoadingBar color="var(--primary)" ref={ref} shadow={true} />;
 };
 
 export default LoadingBarWrapper;

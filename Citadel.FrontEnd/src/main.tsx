@@ -8,6 +8,6 @@ import './main.css';
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />
-    <Toaster richColors theme="light" toastOptions={{}} />
+    <Toaster richColors toastOptions={{}} />
   </React.StrictMode>,
 );

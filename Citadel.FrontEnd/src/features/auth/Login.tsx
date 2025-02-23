@@ -40,6 +40,7 @@ const Login = () => {
                       <FormLabel>Email address</FormLabel>
                       <FormControl>
                         <Input
+                          type="text"
                           placeholder="Enter your email"
                           className="rounded-sm focus-visible:ring-transparent"
                           {...field}

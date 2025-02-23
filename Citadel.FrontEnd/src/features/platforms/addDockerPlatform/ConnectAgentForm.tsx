@@ -33,6 +33,7 @@ const ConnectAgentForm = () => {
               <div className="flex-1">
                 <FormControl>
                   <Input
+                    type="text"
                     className="rounded-sm focus-visible:ring-transparent"
                     placeholder="e.g. Platform-01"
                     {...field}
@@ -52,6 +53,7 @@ const ConnectAgentForm = () => {
               <div className="flex-1">
                 <FormControl>
                   <Input
+                    type="text"
                     className="rounded-sm focus-visible:ring-transparent"
                     placeholder="e.g. 172.25.192.1:8001 or myhostname:8001"
                     {...field}
