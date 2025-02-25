@@ -1929,7 +1929,7 @@
             "$ref": "#/components/schemas/ContainerConfig"
           },
           "networkSettings": {
-            "$ref": "#/components/schemas/NetworkSettingsInspectView"
+            "$ref": "#/components/schemas/NetworkSettingsView"
           }
         }
       },
@@ -2098,7 +2098,23 @@
         },
         "nullable": true
       },
-      "EndpointSettings": {
+      "EndpointSettingsView": {
+        "required": [
+          "ipamConfig",
+          "links",
+          "macAddress",
+          "aliases",
+          "networkID",
+          "endpointID",
+          "gateway",
+          "ipAddress",
+          "ipPrefixLen",
+          "iPv6Gateway",
+          "globalIPv6Address",
+          "globalIPv6PrefixLen",
+          "driverOpts",
+          "dnsNames"
+        ],
         "type": "object",
         "properties": {
           "ipamConfig": {
@@ -2140,10 +2156,10 @@
           },
           "ipPrefixLen": {
             "type": "integer",
-            "format": "int64",
+            "format": "int32",
             "nullable": true
           },
-          "ipv6Gateway": {
+          "iPv6Gateway": {
             "type": "string",
             "nullable": true
           },
@@ -2681,7 +2697,7 @@
           }
         }
       },
-      "NetworkSettingsInspectView": {
+      "NetworkSettingsView": {
         "required": [
           "bridge",
           "sandboxID",
@@ -2779,7 +2795,7 @@
           "networks": {
             "type": "object",
             "additionalProperties": {
-              "$ref": "#/components/schemas/EndpointSettings"
+              "$ref": "#/components/schemas/EndpointSettingsView"
             },
             "nullable": true
           }

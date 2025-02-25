@@ -9,6 +9,12 @@
  * ---------------------------------------------------------------
  */
 
+export interface Address {
+  addr?: string | null;
+  /** @format int64 */
+  prefixLen?: number | null;
+}
+
 export enum AppPermission {
   None = 'None',
   ListUsers = 'ListUsers',
@@ -41,6 +47,37 @@ export enum AppPermission {
   DeleteVolumes = 'DeleteVolumes',
 }
 
+export type BindOptions = {
+  propagation?: string | null;
+  nonRecursive?: boolean | null;
+  createMountpoint?: boolean | null;
+  readOnlyNonRecursive?: boolean | null;
+  readOnlyForceRecursive?: boolean | null;
+};
+
+export type ContainerConfig = {
+  hostname?: string | null;
+  domainname?: string | null;
+  user?: string | null;
+  attachStdin?: boolean | null;
+  attachStdout?: boolean | null;
+  attachStderr?: boolean | null;
+  exposedPorts?: string[] | null;
+  tty?: boolean | null;
+  openStdin?: boolean | null;
+  stdinOnce?: boolean | null;
+  env?: string[] | null;
+  cmd?: string[] | null;
+  image?: string | null;
+  volumes?: string[] | null;
+  workingDir?: string | null;
+  entrypoint?: string[] | null;
+  networkDisabled?: boolean | null;
+  macAddress?: string | null;
+  onBuild?: string[] | null;
+  labels?: Record<string, string>;
+};
+
 export interface ContainerInfoView {
   /** @format uuid */
   id: string;
@@ -60,9 +97,57 @@ export interface ContainerInfoView {
   platform?: PlatformView;
 }
 
+export interface ContainerInspectView {
+  id: string | null;
+  created: string | null;
+  path: string | null;
+  args: string[] | null;
+  state: ContainerState;
+  image: string | null;
+  resolvConfPath: string | null;
+  hostnamePath: string | null;
+  hostsPath: string | null;
+  logPath: string | null;
+  name: string | null;
+  /** @format int32 */
+  restartCount: number | null;
+  driver: string | null;
+  platform: string | null;
+  mountLabel: string | null;
+  processLabel: string | null;
+  appArmorProfile: string | null;
+  execIDs: string[] | null;
+  hostConfig: HostConfig;
+  graphDriver: GraphDriverData;
+  /** @format int64 */
+  sizeRw: number | null;
+  /** @format int64 */
+  sizeRootFs: number | null;
+  mounts: MountPoint[] | null;
+  config: ContainerConfig;
+  networkSettings: NetworkSettingsInspectView;
+}
+
 export interface ContainersInfoView {
   containers: ContainerInfoView[] | null;
 }
+
+export type ContainerState = {
+  status?: string | null;
+  running?: boolean | null;
+  paused?: boolean | null;
+  restarting?: boolean | null;
+  oomKilled?: boolean | null;
+  dead?: boolean | null;
+  /** @format int32 */
+  pid?: number | null;
+  /** @format int32 */
+  exitCode?: number | null;
+  error?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  health?: Health;
+};
 
 export interface ContainerStatsView {
   stats: ContainerStatView[] | null;
@@ -82,6 +167,114 @@ export interface ContainerStatView {
   created: string | null;
 }
 
+export type DriverConfig = {
+  name?: string | null;
+  options?: Record<string, string>;
+};
+
+export type EndpointIPAMConfig = {
+  ipv4Address?: string | null;
+  ipv6Address?: string | null;
+  linkLocalIPs?: string[] | null;
+};
+
+export interface EndpointSettings {
+  ipamConfig?: EndpointIPAMConfig;
+  links?: string[] | null;
+  macAddress?: string | null;
+  aliases?: string[] | null;
+  networkID?: string | null;
+  endpointID?: string | null;
+  gateway?: string | null;
+  ipAddress?: string | null;
+  /** @format int64 */
+  ipPrefixLen?: number | null;
+  ipv6Gateway?: string | null;
+  globalIPv6Address?: string | null;
+  /** @format int64 */
+  globalIPv6PrefixLen?: number | null;
+  driverOpts?: Record<string, string>;
+  dnsNames?: string[] | null;
+}
+
+export type GraphDriverData = {
+  name?: string | null;
+  data?: Record<string, string>;
+};
+
+export type Health = {
+  status?: string | null;
+  /** @format int32 */
+  failingStreak?: number | null;
+};
+
+export type HostConfig = {
+  binds?: string[] | null;
+  containerIDFile?: string | null;
+  logConfig?: LogConfig;
+  networkMode?: string | null;
+  portBindings?: MapFieldPortBinding[] | null;
+  restartPolicy?: RestartPolicy;
+  autoRemove?: boolean | null;
+  volumeDriver?: string | null;
+  volumesFrom?: string[] | null;
+  mounts?: Mount[] | null;
+  consoleSize?: number[] | null;
+  annotations?: Record<string, string>;
+  capAdd?: string[] | null;
+  capDrop?: string[] | null;
+  cgroupnsMode?: string | null;
+  dns?: string[] | null;
+  dnsOptions?: string[] | null;
+  dnsSearch?: string[] | null;
+  extraHosts?: string[] | null;
+  groupAdd?: string[] | null;
+  ipcMode?: string | null;
+  cgroup?: string | null;
+  links?: string[] | null;
+  /** @format int32 */
+  oomScoreAdj?: number | null;
+  pidMode?: string | null;
+  privileged?: boolean | null;
+  publishAllPorts?: boolean | null;
+  readonlyRootfs?: boolean | null;
+  securityOpt?: string[] | null;
+  storageOpt?: Record<string, string>;
+  tmpfs?: Record<string, string>;
+  utsMode?: string | null;
+  usernsMode?: string | null;
+  /** @format int64 */
+  shmSize?: number;
+  sysctls?: Record<string, string>;
+  runtime?: string | null;
+  isolation?: string | null;
+  maskedPaths?: string[] | null;
+  readonlyPaths?: string[] | null;
+  /** @format int64 */
+  memorySwap?: number | null;
+  /** @format int64 */
+  memorySwappiness?: number | null;
+  /** @format int64 */
+  nanoCpus?: number | null;
+  /** @format int64 */
+  pidsLimit?: number | null;
+  /** @format int64 */
+  memory?: number | null;
+  /** @format int64 */
+  memoryReservation?: number | null;
+  /** @format int64 */
+  ioMaximumBandwidth?: number | null;
+  /** @format int64 */
+  cpuPeriod?: number | null;
+  /** @format int64 */
+  cpuPercent?: number | null;
+  /** @format int64 */
+  cpuCount?: number | null;
+  ulimits?: Ulimits[] | null;
+  /** @format int64 */
+  kernelMemoryTCP?: number | null;
+};
+
 export interface HttpValidationProblemDetails {
   type?: string | null;
   title?: string | null;
@@ -92,6 +285,11 @@ export interface HttpValidationProblemDetails {
   errors?: Record<string, string[]>;
 }
 
+export type LogConfig = {
+  type?: string | null;
+  config?: Record<string, string>;
+};
+
 export interface LoginRequest {
   email: string | null;
   password: string | null;
@@ -101,6 +299,60 @@ export interface LoginResponse {
   accessToken: string | null;
   permissions: AppPermission[] | null;
 }
+
+export interface MapFieldPortBinding {
+  key?: string | null;
+  value?: PortBinding[] | null;
+}
+
+export interface MapFieldPortBindingView {
+  key: string | null;
+  value: PortBindingView[] | null;
+}
+
+export interface Mount {
+  target?: string | null;
+  source?: string | null;
+  type?: string | null;
+  readOnly?: boolean | null;
+  consistency?: string | null;
+  bindOptions?: BindOptions;
+  volumeOptions?: VolumeOptions;
+}
+
+export interface MountPoint {
+  type?: string | null;
+  name?: string | null;
+  source?: string | null;
+  destination?: string | null;
+  driver?: string | null;
+  mode?: string | null;
+  rw?: boolean | null;
+  propagation?: string | null;
+}
+
+export type NetworkSettingsInspectView = {
+  bridge: string | null;
+  sandboxID: string | null;
+  hairpinMode: boolean | null;
+  linkLocalIPv6Address: string | null;
+  /** @format int32 */
+  linkLocalIPv6PrefixLen: number | null;
+  ports: MapFieldPortBindingView[] | null;
+  sandboxKey: string | null;
+  secondaryIPAddresses: Address[] | null;
+  endpointID: string | null;
+  gateway: string | null;
+  globalIPv6Address: string | null;
+  /** @format int32 */
+  globalIPv6PrefixLen: number | null;
+  ipAddress: string | null;
+  /** @format int32 */
+  ipPrefixLen: number | null;
+  iPv6Gateway: string | null;
+  macAddress: string | null;
+  networks: Record<string, EndpointSettings>;
+};
 
 export enum PlatformStatus {
   Disconnected = 'Disconnected',
@@ -145,6 +397,16 @@ export interface PlatformView2 {
   stats: PlatformStatView[] | null;
 }
 
+export interface PortBinding {
+  hostIP?: string | null;
+  hostPort?: string | null;
+}
+
+export interface PortBindingView {
+  hostIP: string | null;
+  hostPort: string | null;
+}
+
 export interface PortView {
   ip: string | null;
   /** @format uint16 */
@@ -178,6 +440,12 @@ export enum RequestedLogAction {
   START = 'START',
   STOP = 'STOP',
 }
+
+export type RestartPolicy = {
+  name?: string | null;
+  /** @format int32 */
+  maximumRetryCount?: number | null;
+};
 
 export interface StreamLogsRequest {
   containerId: string | null;
@@ -238,6 +506,21 @@ export type SystemInfoView = {
   swarmInfo: SwarmInfoView;
 };
 
+export interface Ulimits {
+  name?: string | null;
+  /** @format int64 */
+  soft?: number | null;
+  /** @format int64 */
+  hard?: number | null;
+}
+
+export type VolumeOptions = {
+  noCopy?: boolean | null;
+  labels?: Record<string, string>;
+  driverConfig?: DriverConfig;
+  subpath?: string | null;
+};
+
 export type QueryParamsType = Record<string | number, any>;
 export type ResponseFormat = keyof Omit<Body, 'body' | 'bodyUsed'>;
 
@@ -284,7 +567,7 @@ export enum ContentType {
 }
 
 export class HttpClient<SecurityDataType = unknown> {
-  public baseUrl: string = '';
+  public baseUrl: string = 'http://localhost:8000';
   private securityData: SecurityDataType | null = null;
   private securityWorker?: ApiConfig<SecurityDataType>['securityWorker'];
   private abortControllers = new Map<CancelToken, AbortController>();
@@ -451,6 +734,7 @@ export class HttpClient<SecurityDataType = unknown> {
 /**
  * @title Citadel.WebApi | v1
  * @version 1.0.0
+ * @baseUrl http://localhost:8000
  */
 export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDataType> {
   api = {
@@ -736,6 +1020,30 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     containersGetStats: (id: string, params: RequestParams = {}) =>
       this.request<ContainerStatsView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/${id}/stats`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Containers
+     * @name ContainersInspect
+     * @summary Inspect a container
+     * @request GET:/api/v1/containers/{id}/inspect
+     * @secure
+     * @response `200` `ContainerInspectView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    containersInspect: (id: string, params: RequestParams = {}) =>
+      this.request<ContainerInspectView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/containers/${id}/inspect`,
         method: 'GET',
         secure: true,
         format: 'json',

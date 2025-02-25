@@ -2,6 +2,7 @@
 using Application.Features.Auth.Models;
 using Application.Features.Containers.Models;
 using Application.Features.Platforms.Models;
+using Citadel.Common;
 using Infrastructure.Entities;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources.Auth;
@@ -20,7 +21,6 @@ namespace Application.Models;
 [JsonSerializable(typeof(IEnumerable<PlatformView>))]
 [JsonSerializable(typeof(List<SwarmPeerView>))]
 [JsonSerializable(typeof(List<PlatformStatView>))]
-[JsonSerializable(typeof(Infrastructure.AppPermission[]))]
 [JsonSerializable(typeof(DockerHubRegistry))]
 [JsonSerializable(typeof(AzureRegistry))]
 [JsonSerializable(typeof(AWSRegistry))]
@@ -28,7 +28,6 @@ namespace Application.Models;
 [JsonSerializable(typeof(CustomRegistry))]
 [JsonSerializable(typeof(List<ContainerInfoView>))]
 [JsonSerializable(typeof(List<PortView>))]
-[JsonSerializable(typeof(NetworkSettingsView))]
 [JsonSerializable(typeof(EndpointSettingsView))]
 [JsonSerializable(typeof(StreamLogsRequest))]
 [JsonSerializable(typeof(LoginRequest))]
@@ -50,6 +49,15 @@ namespace Application.Models;
 [JsonSerializable(typeof(ContainerStatView))]
 [JsonSerializable(typeof(HttpValidationProblemDetails))]
 [JsonSerializable(typeof(Dictionary<string, string[]>))]
+[JsonSerializable(typeof(ContainerInspectView))]
+[JsonSerializable(typeof(ContainerState))]
+[JsonSerializable(typeof(HostConfig))]
+[JsonSerializable(typeof(GraphDriverData))]
+[JsonSerializable(typeof(MountPoint))]
+[JsonSerializable(typeof(ContainerConfig))]
+[JsonSerializable(typeof(NetworkSettingsView))]
+[JsonSerializable(typeof(MapFieldPortBindingView))]
+[JsonSerializable(typeof(Address))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

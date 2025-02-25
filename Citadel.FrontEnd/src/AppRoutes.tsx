@@ -10,6 +10,7 @@ export const paths = [
   'platforms/:platformId/containers',
   'containers/:containerId/logs',
   'containers/:containerId/stats',
+  'containers/:containerId/inspect',
   'login',
   '*',
 ];
@@ -54,13 +55,19 @@ export const AppRoutes = () => {
           },
         },
         {
+          path: paths[5],
+          lazy: async () => {
+            return { Component: (await import('./pages/container-info-page')).default };
+          },
+        },
+        {
           path: '*',
           element: <NotFound />,
         },
       ],
     },
     {
-      path: paths[5],
+      path: paths[6],
       loader: loginLoader,
       lazy: async () => {
         return { Component: (await import('./features/auth/Login')).default };

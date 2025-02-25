@@ -53,11 +53,18 @@ const BreadCrumb = () => {
     crumbs.push({ title: 'Containers', link: '/platforms/' + currentPlatform?.id + '/containers' });
     crumbs.push({ title: currentContainer?.name?.slice(1) ?? '', isActive: true, badge: { title: 'Logs' } });
   } else if (route?.path === paths[4]) {
-    // container logs
+    // container stats
     crumbs.push({ title: 'Patforms', link: '/' });
     crumbs.push({ title: currentContainer?.platform?.name ?? '', link: '/platforms/' + currentPlatform?.id });
     crumbs.push({ title: 'Containers', link: '/platforms/' + currentPlatform?.id + '/containers' });
     crumbs.push({ title: currentContainer?.name?.slice(1) ?? '', isActive: true, badge: { title: 'Stats' } });
+  }
+  else if (route?.path === paths[5]) {
+    // container stats
+    crumbs.push({ title: 'Patforms', link: '/' });
+    crumbs.push({ title: currentContainer?.platform?.name ?? '', link: '/platforms/' + currentPlatform?.id });
+    crumbs.push({ title: 'Containers', link: '/platforms/' + currentPlatform?.id + '/containers' });
+    crumbs.push({ title: currentContainer?.name?.slice(1) ?? '', isActive: true, badge: { title: 'Inspect' } });
   }
 
   return (

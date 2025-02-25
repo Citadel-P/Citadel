@@ -10,6 +10,7 @@ import NetworkUsage from './stats/NetworkUsage';
 import MemoryUsage from './stats/MemoryUsage';
 import CpuUsage from './stats/CpuUsage';
 import { useEffect, useState } from 'react';
+import ContainerInspect from './inspect/ContainerInspect';
 
 const ContainerInfoWrapper = () => {
   const route = useContextSelector(AppContext, (v) => v?.route);
@@ -19,7 +20,7 @@ const ContainerInfoWrapper = () => {
 
   useEffect(() => {
     const tab = route?.path.match('[^/]+$')![0];
-    tab && ['logs', 'stats'].includes(tab) ? setCurrentTab(tab) : setCurrentTab('logs');
+    tab && ['logs', 'stats', 'inspect'].includes(tab) ? setCurrentTab(tab) : setCurrentTab('logs');
   }, [setCurrentTab, route]);
 
   const onValueChange = (tabName: string) => {
@@ -45,12 +46,16 @@ const ContainerInfoWrapper = () => {
           <Tabs value={currentTab} onValueChange={onValueChange}>
             <TabsList className="w-full justify-start bg-muted/20 rounded-sm">
               <TabsTrigger value="logs">Logs</TabsTrigger>
+              <TabsTrigger value="inspect">Inspect</TabsTrigger>
               <TabsTrigger value="stats">Stats</TabsTrigger>
             </TabsList>
             <TabsContent value="logs">
               <ContainerLogsProvider>
                 <ContainerLogs />
               </ContainerLogsProvider>
+            </TabsContent>
+            <TabsContent value="inspect">
+              <ContainerInspect />
             </TabsContent>
             <TabsContent value="stats">
               <ContainerStatsProvider>

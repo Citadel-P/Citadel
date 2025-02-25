@@ -1,5 +1,6 @@
 ﻿using Agent.Server.Containers;
 using Citadel.Common;
+using Google.Protobuf.Collections;
 using Infrastructure.Entities;
 using Riok.Mapperly.Abstractions;
 using WebApi.Routes.Endpoints.Resources.Containers;
@@ -34,7 +35,21 @@ internal static partial class Mapper
     }
 
     public static partial ContainerInspectView Map(this ContainerInspectReply containerInfo);
-    public static partial NetworkSettingsInspectView Map(this NetworkSettings networkSettings);
+
+    [MapProperty(nameof(NetworkSettings.Networks), nameof(NetworkSettingsView.Networks), Use = nameof(ToDictionary))]
+    public static partial NetworkSettingsView Map(this NetworkSettings networkSettings);
+    public static partial EndpointSettingsView Map(this EndpointSettings endpointSettings);
+
+    private static Dictionary<string, EndpointSettingsView> ToDictionary(RepeatedField<MapFieldNetwork> networks)
+    {
+        var result = new Dictionary<string, EndpointSettingsView>();
+        foreach (var network in networks)
+        {
+            var endpointSettings = network.Value;
+            result[network.Key] = endpointSettings.Map();
+        }
+        return result;
+    }
 
     internal static IEnumerable<PortBindingView> Map(this IEnumerable<PortBinding> portsBinding) => portsBinding.Select(Map);
     internal static PortBindingView Map(this PortBinding portBinding)

@@ -7,6 +7,7 @@ import { createContext } from 'use-context-selector';
 
 interface IContext {
   isPending: boolean;
+  isSuccess: boolean;
   logs: string[];
   requestId: string;
 }
@@ -19,7 +20,7 @@ export const ContainerLogsContext = createContext<IContext | undefined>(undefine
 const ContainerLogsProvider: React.FC<IProps> = ({ children }) => {
   const [requestId] = useState(crypto.randomUUID());
   const { containerId } = useParams();
-  const { mutate, isPending } = usePOSTContainerLogs();
+  const { mutate, isPending, isSuccess } = usePOSTContainerLogs();
   const { containerLogsMessage } = useContainerLogsHub(containerId!, requestId);
   let logs: string[] = [];
 
@@ -45,6 +46,7 @@ const ContainerLogsProvider: React.FC<IProps> = ({ children }) => {
     <ContainerLogsContext.Provider
       value={{
         isPending,
+        isSuccess,
         logs,
         requestId,
       }}>

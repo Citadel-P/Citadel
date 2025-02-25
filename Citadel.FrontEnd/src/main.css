@@ -341,7 +341,7 @@
 [multiple],
 textarea,
 select {
-  @apply w-full rounded-md border border-border bg-background text-xs text-foreground placeholder-muted-foreground focus:z-10 focus:ring-1 focus:outline-hidden;
+  @apply w-full rounded-md border border-border bg-background text-sm text-foreground placeholder-muted-foreground focus:z-10 focus:ring-1 focus:outline-hidden;
 }
 
 [type='checkbox'],

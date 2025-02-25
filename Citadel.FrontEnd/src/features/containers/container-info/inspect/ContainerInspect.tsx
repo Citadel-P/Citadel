@@ -1,19 +1,21 @@
-import { ContainerLogsContext } from './ContainerLogsProvider';
-import { useContextSelector } from 'use-context-selector';
-import { useEffect, useState } from 'react';
+import { useParams } from "react-router";
+import { usGETContainerInspect } from "./hooks/useGETContainerInspect";
 import { Highlight, themes } from 'prism-react-renderer';
 
-const ContainerLogs = () => {
-  const logs = useContextSelector(ContainerLogsContext, (v) => v?.logs!);
-  const isPending = useContextSelector(ContainerLogsContext, (v) => v?.isPending);
-  const [logsBuffer, setLogsBuffer] = useState(logs);
+const ContainerInspect = () => {
+    const { containerId } = useParams();
+    const { data, isSuccess, isLoading } = usGETContainerInspect(containerId);
+    let code = "";
 
-  useEffect(() => {
-    setLogsBuffer([...logsBuffer, ...logs]);
-  }, [logs]);
+    if (isSuccess && data?.data) {
+        code = JSON.stringify(data.data, null, 2);
+    }
 
-  return (
-    <Highlight theme={themes.nightOwl} code={isPending ? "Loading..." : logsBuffer.join('\n')} language="tsx">
+    if (isLoading) {
+        code = "Loading...";
+    }
+    return (
+    <Highlight theme={themes.nightOwl} code={code} language="tsx">
       {({ className, style, tokens, getLineProps, getTokenProps }) => (
         <pre
           style={style}
@@ -29,7 +31,7 @@ const ContainerLogs = () => {
         </pre>
       )}
     </Highlight>
-  );
-};
+    );
+}
 
-export default ContainerLogs;
+export default ContainerInspect;
