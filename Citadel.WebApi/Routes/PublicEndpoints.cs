@@ -105,7 +105,6 @@ public static class PublicEndpoints
                      .ProducesProblem(StatusCodes.Status401Unauthorized)
                      .WithName(ContainersName + "_" + nameof(Containers.StreamLogs));
 
-                
                 containers.MapGet("{id}/stats", Containers.GetStats)
                     .WithSummary("Get container stats")
                     .ProducesValidationProblem()
@@ -113,6 +112,14 @@ public static class PublicEndpoints
                     .ProducesProblem(StatusCodes.Status403Forbidden)
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
                     .WithName(ContainersName + "_" + nameof(Containers.GetStats));
+
+                containers.MapGet("{id}/inspect", Containers.Inspect)
+                   .WithSummary("Inspect a container")
+                   .ProducesValidationProblem()
+                   .ProducesProblem(StatusCodes.Status404NotFound)
+                   .ProducesProblem(StatusCodes.Status403Forbidden)
+                   .ProducesProblem(StatusCodes.Status401Unauthorized)
+                   .WithName(ContainersName + "_" + nameof(Containers.Inspect));
             }
             var platforms = group.MapGroup("/platforms").WithTags(PlatformsName).RequireAuthorization();
             {

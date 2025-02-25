@@ -952,6 +952,93 @@
         ]
       }
     },
+    "/api/v1/containers/{id}/inspect": {
+      "get": {
+        "tags": [
+          "Containers"
+        ],
+        "summary": "Inspect a container",
+        "operationId": "Containers_Inspect",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The container id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContainerInspectView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/platforms": {
       "get": {
         "tags": [
@@ -1457,6 +1544,20 @@
   },
   "components": {
     "schemas": {
+      "Address": {
+        "type": "object",
+        "properties": {
+          "addr": {
+            "type": "string",
+            "nullable": true
+          },
+          "prefixLen": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
       "AppPermission": {
         "enum": [
           "None",
@@ -1490,6 +1591,139 @@
           "DeleteVolumes"
         ],
         "type": "string"
+      },
+      "BindOptions": {
+        "type": "object",
+        "properties": {
+          "propagation": {
+            "type": "string",
+            "nullable": true
+          },
+          "nonRecursive": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "createMountpoint": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "readOnlyNonRecursive": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "readOnlyForceRecursive": {
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "ContainerConfig": {
+        "type": "object",
+        "properties": {
+          "hostname": {
+            "type": "string",
+            "nullable": true
+          },
+          "domainname": {
+            "type": "string",
+            "nullable": true
+          },
+          "user": {
+            "type": "string",
+            "nullable": true
+          },
+          "attachStdin": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "attachStdout": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "attachStderr": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "exposedPorts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "tty": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "openStdin": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "stdinOnce": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "env": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "cmd": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "image": {
+            "type": "string",
+            "nullable": true
+          },
+          "volumes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "workingDir": {
+            "type": "string",
+            "nullable": true
+          },
+          "entrypoint": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "networkDisabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "macAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "onBuild": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "nullable": true
       },
       "ContainerInfoView": {
         "required": [
@@ -1560,6 +1794,145 @@
           }
         }
       },
+      "ContainerInspectView": {
+        "required": [
+          "id",
+          "created",
+          "path",
+          "args",
+          "state",
+          "image",
+          "resolvConfPath",
+          "hostnamePath",
+          "hostsPath",
+          "logPath",
+          "name",
+          "restartCount",
+          "driver",
+          "platform",
+          "mountLabel",
+          "processLabel",
+          "appArmorProfile",
+          "execIDs",
+          "hostConfig",
+          "graphDriver",
+          "sizeRw",
+          "sizeRootFs",
+          "mounts",
+          "config",
+          "networkSettings"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "created": {
+            "type": "string",
+            "nullable": true
+          },
+          "path": {
+            "type": "string",
+            "nullable": true
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "state": {
+            "$ref": "#/components/schemas/ContainerState"
+          },
+          "image": {
+            "type": "string",
+            "nullable": true
+          },
+          "resolvConfPath": {
+            "type": "string",
+            "nullable": true
+          },
+          "hostnamePath": {
+            "type": "string",
+            "nullable": true
+          },
+          "hostsPath": {
+            "type": "string",
+            "nullable": true
+          },
+          "logPath": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "restartCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "platform": {
+            "type": "string",
+            "nullable": true
+          },
+          "mountLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "processLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "appArmorProfile": {
+            "type": "string",
+            "nullable": true
+          },
+          "execIDs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "hostConfig": {
+            "$ref": "#/components/schemas/HostConfig"
+          },
+          "graphDriver": {
+            "$ref": "#/components/schemas/GraphDriverData"
+          },
+          "sizeRw": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "sizeRootFs": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "mounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MountPoint"
+            },
+            "nullable": true
+          },
+          "config": {
+            "$ref": "#/components/schemas/ContainerConfig"
+          },
+          "networkSettings": {
+            "$ref": "#/components/schemas/NetworkSettingsInspectView"
+          }
+        }
+      },
       "ContainersInfoView": {
         "required": [
           "containers"
@@ -1574,6 +1947,61 @@
             "nullable": true
           }
         }
+      },
+      "ContainerState": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "running": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "paused": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "restarting": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "oomKilled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "dead": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "pid": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "exitCode": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "startedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "finishedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "health": {
+            "$ref": "#/components/schemas/Health"
+          }
+        },
+        "nullable": true
       },
       "ContainerStatsView": {
         "required": [
@@ -1632,6 +2060,434 @@
           }
         }
       },
+      "DriverConfig": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "EndpointIPAMConfig": {
+        "type": "object",
+        "properties": {
+          "ipv4Address": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipv6Address": {
+            "type": "string",
+            "nullable": true
+          },
+          "linkLocalIPs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "EndpointSettings": {
+        "type": "object",
+        "properties": {
+          "ipamConfig": {
+            "$ref": "#/components/schemas/EndpointIPAMConfig"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "macAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "networkID": {
+            "type": "string",
+            "nullable": true
+          },
+          "endpointID": {
+            "type": "string",
+            "nullable": true
+          },
+          "gateway": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipPrefixLen": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "ipv6Gateway": {
+            "type": "string",
+            "nullable": true
+          },
+          "globalIPv6Address": {
+            "type": "string",
+            "nullable": true
+          },
+          "globalIPv6PrefixLen": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "driverOpts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "dnsNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "GraphDriverData": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "failingStreak": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "HostConfig": {
+        "type": "object",
+        "properties": {
+          "binds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "containerIDFile": {
+            "type": "string",
+            "nullable": true
+          },
+          "logConfig": {
+            "$ref": "#/components/schemas/LogConfig"
+          },
+          "networkMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "portBindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapFieldPortBinding"
+            },
+            "nullable": true
+          },
+          "restartPolicy": {
+            "$ref": "#/components/schemas/RestartPolicy"
+          },
+          "autoRemove": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "volumeDriver": {
+            "type": "string",
+            "nullable": true
+          },
+          "volumesFrom": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "mounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Mount"
+            },
+            "nullable": true
+          },
+          "consoleSize": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          },
+          "annotations": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "capAdd": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "capDrop": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "cgroupnsMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "dns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "dnsOptions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "dnsSearch": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "extraHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "groupAdd": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "ipcMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "cgroup": {
+            "type": "string",
+            "nullable": true
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "oomScoreAdj": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "pidMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "privileged": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "publishAllPorts": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "readonlyRootfs": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "securityOpt": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "storageOpt": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "tmpfs": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "utsMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "usernsMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "shmSize": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sysctls": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "runtime": {
+            "type": "string",
+            "nullable": true
+          },
+          "isolation": {
+            "type": "string",
+            "nullable": true
+          },
+          "maskedPaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "readonlyPaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "memorySwap": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "memorySwappiness": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "nanoCpus": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "pidsLimit": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "memory": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "memoryReservation": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "ioMaximumBandwidth": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "cpuPeriod": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "cpuPercent": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "cpuCount": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "ulimits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Ulimits"
+            },
+            "nullable": true
+          },
+          "kernelMemoryTCP": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
       "HttpValidationProblemDetails": {
         "type": "object",
         "properties": {
@@ -1666,6 +2522,23 @@
             }
           }
         }
+      },
+      "LogConfig": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "nullable": true
       },
       "LoginRequest": {
         "required": [
@@ -1703,6 +2576,215 @@
             "nullable": true
           }
         }
+      },
+      "MapFieldPortBinding": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "nullable": true
+          },
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortBinding"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "MapFieldPortBindingView": {
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "nullable": true
+          },
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortBindingView"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "Mount": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "readOnly": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "consistency": {
+            "type": "string",
+            "nullable": true
+          },
+          "bindOptions": {
+            "$ref": "#/components/schemas/BindOptions"
+          },
+          "volumeOptions": {
+            "$ref": "#/components/schemas/VolumeOptions"
+          }
+        }
+      },
+      "MountPoint": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          },
+          "destination": {
+            "type": "string",
+            "nullable": true
+          },
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "mode": {
+            "type": "string",
+            "nullable": true
+          },
+          "rw": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "propagation": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "NetworkSettingsInspectView": {
+        "required": [
+          "bridge",
+          "sandboxID",
+          "hairpinMode",
+          "linkLocalIPv6Address",
+          "linkLocalIPv6PrefixLen",
+          "ports",
+          "sandboxKey",
+          "secondaryIPAddresses",
+          "endpointID",
+          "gateway",
+          "globalIPv6Address",
+          "globalIPv6PrefixLen",
+          "ipAddress",
+          "ipPrefixLen",
+          "iPv6Gateway",
+          "macAddress",
+          "networks"
+        ],
+        "type": "object",
+        "properties": {
+          "bridge": {
+            "type": "string",
+            "nullable": true
+          },
+          "sandboxID": {
+            "type": "string",
+            "nullable": true
+          },
+          "hairpinMode": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "linkLocalIPv6Address": {
+            "type": "string",
+            "nullable": true
+          },
+          "linkLocalIPv6PrefixLen": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapFieldPortBindingView"
+            },
+            "nullable": true
+          },
+          "sandboxKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "secondaryIPAddresses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Address"
+            },
+            "nullable": true
+          },
+          "endpointID": {
+            "type": "string",
+            "nullable": true
+          },
+          "gateway": {
+            "type": "string",
+            "nullable": true
+          },
+          "globalIPv6Address": {
+            "type": "string",
+            "nullable": true
+          },
+          "globalIPv6PrefixLen": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "ipAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipPrefixLen": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "iPv6Gateway": {
+            "type": "string",
+            "nullable": true
+          },
+          "macAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "networks": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/EndpointSettings"
+            },
+            "nullable": true
+          }
+        },
+        "nullable": true
       },
       "PlatformStatus": {
         "enum": [
@@ -1836,6 +2918,36 @@
           }
         }
       },
+      "PortBinding": {
+        "type": "object",
+        "properties": {
+          "hostIP": {
+            "type": "string",
+            "nullable": true
+          },
+          "hostPort": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "PortBindingView": {
+        "required": [
+          "hostIP",
+          "hostPort"
+        ],
+        "type": "object",
+        "properties": {
+          "hostIP": {
+            "type": "string",
+            "nullable": true
+          },
+          "hostPort": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "PortView": {
         "required": [
           "ip",
@@ -1926,6 +3038,21 @@
         ],
         "type": "string",
         "default": "START"
+      },
+      "RestartPolicy": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "maximumRetryCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "nullable": true
       },
       "StreamLogsRequest": {
         "required": [
@@ -2117,6 +3244,49 @@
           },
           "swarmInfo": {
             "$ref": "#/components/schemas/SwarmInfoView"
+          }
+        },
+        "nullable": true
+      },
+      "Ulimits": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "soft": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "hard": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "VolumeOptions": {
+        "type": "object",
+        "properties": {
+          "noCopy": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "driverConfig": {
+            "$ref": "#/components/schemas/DriverConfig"
+          },
+          "subpath": {
+            "type": "string",
+            "nullable": true
           }
         },
         "nullable": true

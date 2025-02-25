@@ -24,13 +24,7 @@ internal class ContainerLogJob(
             throw new ArgumentNullException("ContainerId or RequestId is null or empty");
         }
 
-        var platformAddress = await dbContext.ContainersInfo
-            .AsNoTracking()
-            .Include(s => s.Platform)
-            .Where(s => s.ContainerId.StartsWith(containerId))
-            .Select(s => s.Platform.Address)
-            .FirstOrDefaultAsync(cancellationToken: context.CancellationToken);
-
+        var platformAddress = await dbContext.ContainersInfo.GetPlatformAddress(containerId, context.CancellationToken);
         if (platformAddress == null)
         {
             logger.LogError("Platform doesn't exist for container {ContainerId}", containerId);
@@ -54,7 +48,7 @@ internal class ContainerLogJob(
         {
             if (e.StatusCode == StatusCode.Cancelled)
             {
-                logger.LogInformation("StreamContainerLogs has been cancelled");
+                logger.LogInformation("StreamContainerLogs has been canceled");
             }
             else
             {

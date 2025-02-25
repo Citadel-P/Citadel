@@ -1,5 +1,5 @@
 ﻿using Agent.Server.Containers;
-using Application.Features.Platforms.Commands;
+using Citadel.Common;
 using Infrastructure.Entities;
 using Riok.Mapperly.Abstractions;
 using WebApi.Routes.Endpoints.Resources.Containers;
@@ -32,4 +32,14 @@ internal static partial class Mapper
             return PlatformStatus.Connected;
         else return PlatformStatus.Disconnected;
     }
+
+    public static partial ContainerInspectView Map(this ContainerInspectReply containerInfo);
+    public static partial NetworkSettingsInspectView Map(this NetworkSettings networkSettings);
+
+    internal static IEnumerable<PortBindingView> Map(this IEnumerable<PortBinding> portsBinding) => portsBinding.Select(Map);
+    internal static PortBindingView Map(this PortBinding portBinding)
+        => new(portBinding.HostIP, portBinding.HostPort);
+
+    internal static MapFieldPortBindingView Map(MapFieldPortBinding mapFieldPortBinding)
+        => new(mapFieldPortBinding.Key, mapFieldPortBinding.Value.Map());
 }

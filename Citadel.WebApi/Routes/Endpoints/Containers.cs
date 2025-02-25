@@ -64,4 +64,10 @@ public static class Containers
         var result = await mediator.Send(new GetContainerStats(id), cancellationToken);
         return EndpointHandlers.HandleResult(result, ContainerStatsView.Map);
     }
+
+    public static async Task<Results<Ok<ContainerInspectView>, ProblemHttpResult>> Inspect(IMediator mediator, [Description("The container id")] string id, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new InspectContainer(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, ContainerInspectView.Map);
+    }
 }
