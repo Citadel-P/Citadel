@@ -33,6 +33,12 @@ public enum AppPermission
     DeleteVolumes,
 }
 
+public enum PlatformStatus
+{
+    Offline,
+    Online
+}
+
 public enum RegistryDiscriminator
 {
     DockerHub,

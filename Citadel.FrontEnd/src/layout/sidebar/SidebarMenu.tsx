@@ -10,7 +10,7 @@ export const SidebarMenu = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const sidebarMinimized = useContextSelector(LayoutContext, (v) => v?.sidebarMinimized);
-  const toggleSidebar = useContextSelector(LayoutContext, (v) => v?.toggleSidebar!);
+  const toggleSidebar = useContextSelector(LayoutContext, (v) => v?.toggleSidebar);
   const [menuItems, setMenuItems] = useState(MenuItems);
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export const SidebarMenu = () => {
 
   const toggleMenu = (menu: ISubMenuItem): void => {
     menu.expanded = !menu.expanded;
-    if (sidebarMinimized && menu.children) toggleSidebar();
+    if (sidebarMinimized && menu.children) toggleSidebar!();
     else if (!menu.children) navigate(menu.route!);
     setMenuItems([...menuItems]);
   };

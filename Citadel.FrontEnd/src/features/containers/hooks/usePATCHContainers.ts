@@ -10,20 +10,20 @@ interface IArgs {
   params?: RequestParams;
 }
 export const usePATCHContainers = () => {
-  const apiClient = useContextSelector(ApiClientContext, (v) => v?.apiClient!);
+  const apiClient = useContextSelector(ApiClientContext, (v) => v?.apiClient);
   const { mutate, isPending, isSuccess, data } = useMutation({
     mutationFn: ({ action, containersId: data, params }: IArgs) => {
       switch (action) {
         case 'start':
-          return apiClient.api.containersStartContainers(data, params);
+          return apiClient!.api.containersStartContainers(data, params);
         case 'stop':
-          return apiClient.api.containersStopContainers(data, params);
+          return apiClient!.api.containersStopContainers(data, params);
         case 'pause':
-          return apiClient.api.containersPauseContainers(data, params);
+          return apiClient!.api.containersPauseContainers(data, params);
         case 'restart':
-          return apiClient.api.containersRestartContainers(data, params);
+          return apiClient!.api.containersRestartContainers(data, params);
         case 'delete':
-          return apiClient.api.containersDeleteContainers(data, params);
+          return apiClient!.api.containersDeleteContainers(data, params);
       }
     },
   });

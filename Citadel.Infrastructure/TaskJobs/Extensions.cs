@@ -13,9 +13,9 @@ internal static class Extensions
         services.AddQuartz(q =>
         {
             // Add SystemInfo job
-            q.AddJob<SystemInfoJob>(opts => opts.WithIdentity(SystemInfoJob.JobKey));
+            q.AddJob<PlatformInfoJob>(opts => opts.WithIdentity(PlatformInfoJob.JobKey));
             q.AddTrigger(opts => opts
-                .ForJob(SystemInfoJob.JobKey)
+                .ForJob(PlatformInfoJob.JobKey)
                 .StartNow()
                  .WithSimpleSchedule(x => x
                     .WithInterval(TimeSpan.FromSeconds(jobConfig.SystemInfoInterval))

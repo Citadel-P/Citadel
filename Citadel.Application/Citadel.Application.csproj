@@ -17,4 +17,8 @@
     <ProjectReference Include="..\Citadel.Infrastructure\Citadel.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Features.Platforms\Models\" />
+  </ItemGroup>
+
 </Project>

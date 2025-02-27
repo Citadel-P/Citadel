@@ -31,7 +31,6 @@ internal class DeletePlatformHandler(
     {
         Platform platform = await dbContext.Platforms
             .AsNoTracking()
-            .Include(s => s.SystemInfo)
             .SingleOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
 
         if (platform is null)
@@ -42,7 +41,7 @@ internal class DeletePlatformHandler(
         dbContext.Platforms.Remove(platform);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        cacheService.DeletePlatformId(platform.SystemInfo.DaemonId);
+        cacheService.DeletePlatformId(platform.DaemonId);
         await AbortTaskJobs(platform.Address, cancellationToken);
 
         return Result.Success();

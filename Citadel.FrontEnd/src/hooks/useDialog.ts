@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 
 export function useDialog(): ICustomDialog {
   const [isOpen, setIsOpen] = useState(false);
-  const triggerRef = useRef();
+  const triggerRef = useRef(null);
 
   function trigger() {
     setIsOpen(true);

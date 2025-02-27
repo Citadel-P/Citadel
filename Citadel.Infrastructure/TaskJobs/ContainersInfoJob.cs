@@ -1,4 +1,5 @@
-﻿using Agent.Server.Containers;
+﻿using System.Collections.Concurrent;
+using Agent.Server.Containers;
 using Citadel.Common;
 using Grpc.Core;
 using Infrastructure.Entities;
@@ -25,14 +26,14 @@ internal class ContainersInfoJob(
         var addresses = await cacheService.GetClientsAddresses(context.CancellationToken);
         if (!addresses.Any()) return;
 
-        var replies = new List<ContainersListReply>();
-        await Parallel.ForEachAsync(addresses, async (address, token) =>
+        var replies = new ConcurrentBag<ContainersListReply>();
+        await Parallel.ForEachAsync(addresses, context.CancellationToken, async (address, cancellationToken) =>
         {
             var client = clientFactory.GetContainerClient(address);
             try
             {
-                var reply = await client.ListContainersAsync(new ContainersListMessage() { All = true }, cancellationToken: context.CancellationToken);
-                replies.AddRange(reply);
+                var reply = await client.ListContainersAsync(new ContainersListMessage() { All = true }, cancellationToken: cancellationToken);
+                replies.Add(reply);
             }
             catch (RpcException ex)
             {

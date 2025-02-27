@@ -12,7 +12,6 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<PlatformStat> PlatformStats { get; private set; }
     public DbSet<ContainerInfo> ContainersInfo { get; private set; }
     public DbSet<ContainerStat> ContainerStats { get; private set; }
-    public DbSet<SystemInfo> SystemsInfo { get; private set; }
     public DbSet<SwarmInfo> SwarmsInfo { get; private set; }
     public DbSet<SwarmPeer> SwarmsPeer { get; private set; }
     public DbSet<User> Users { get; private set; }

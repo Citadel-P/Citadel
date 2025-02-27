@@ -9,10 +9,10 @@ interface IParams {
 }
 
 export const usePOSTContainerLogs = () => {
-  const apiClient = useContextSelector(ApiClientContext, (v) => v?.apiClient!);
+  const apiClient = useContextSelector(ApiClientContext, (v) => v?.apiClient);
 
   const { mutate, isPending, isSuccess, error, data } = useMutation({
-    mutationFn: ({ requestParams }: IParams) => apiClient.api.containersStreamLogs(requestParams),
+    mutationFn: ({ requestParams }: IParams) => apiClient!.api.containersStreamLogs(requestParams),
   });
 
   const validationErrors = useGetValidationErrors(error);

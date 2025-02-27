@@ -3,8 +3,10 @@ import { LayoutContext } from '@/layout/LayoutProvider';
 import { ChevronsRight, Info } from 'lucide-react';
 import LogoIcon from '@/assets/logo.svg';
 import { SidebarMenu } from './SidebarMenu';
+import { useNavigate } from 'react-router';
 
 export const Sidebar = () => {
+  const navigate = useNavigate();
   const toggleSidebar = useContextSelector(LayoutContext, (v) => v?.toggleSidebar);
   const sidebarMinimized = useContextSelector(LayoutContext, (v) => v?.sidebarMinimized);
 
@@ -16,9 +18,9 @@ export const Sidebar = () => {
         <div className="relative h-10">
           {!sidebarMinimized && (
             <div className="flex items-center">
-              <a className="flex text-background cursor-pointer items-center justify-center rounded bg-primary p-2 focus:outline-hidden focus:ring-1">
+              <span onClick={() => navigate('/')} className="flex text-background cursor-pointer items-center justify-center rounded bg-primary p-2 focus:outline-hidden focus:ring-1">
                 <LogoIcon />
-              </a>
+              </span>
               <b className="ml-1 pl-2 text-sm font-bold text-foreground"> Citadel </b>
             </div>
           )}
@@ -41,7 +43,7 @@ export const Sidebar = () => {
       <div className="mx-4 my-4 space-y-1">
         {/* Version */}
         <a
-          target="_blank"
+          target="_blank" rel="noreferrer"
           href="https://github.com/Citadel/Citadel"
           className="group flex h-9 cursor-pointer items-center justify-start rounded p-2 hover:bg-card">
           <span className="h-6 w-5 text-muted-foreground/50">

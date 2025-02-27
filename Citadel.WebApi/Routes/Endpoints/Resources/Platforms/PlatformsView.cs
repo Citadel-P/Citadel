@@ -1,4 +1,5 @@
-﻿using Infrastructure.Entities;
+﻿using Infrastructure;
+using Infrastructure.Entities;
 
 namespace WebApi.Routes.Endpoints.Resources.Platforms;
 
@@ -7,7 +8,24 @@ public sealed record PlatformView(
     string Name,
     string Address,
     PlatformStatus Status,
-    SystemInfoView SystemInfo,
+    string DaemonId,
+    int NetworksCount,
+    int VolumesCount,
+    long Containers,
+    long ContainersRunning,
+    long ContainersPaused,
+    long ContainersStopped,
+    long Images,
+    string Driver,
+    string OperatingSystem,
+    string OsVersion,
+    string OsType,
+    string Architecture,
+    long Ncpu,
+    long MemTotal,
+    string ServerVersion,
+    string AgentVersion,
+    SwarmInfoView SwarmInfo,
     IEnumerable<PlatformStatView> Stats
     )
 {
@@ -22,10 +40,4 @@ public sealed record PlatformsView(IEnumerable<PlatformView> Platforms)
 {
     internal static PlatformsView Map(IEnumerable<Platform> platforms)
        => new(PlatformView.Map(platforms));
-}
-
-public enum PlatformStatus
-{
-    Disconnected,
-    Connected
 }

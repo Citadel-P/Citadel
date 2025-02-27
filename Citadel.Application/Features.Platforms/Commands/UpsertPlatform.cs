@@ -46,11 +46,11 @@ internal class UpsertPlatformHandler(
         {
             // Get platform system info
             var client = clientFactory.GetPlatformClient(command.Address);
-            var systemInfo = await client.GetSystemInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
+            var platformInfo = await client.GetPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
 
             var platform = (command.Id is null)
-                    ? await CreatePlatform(command, systemInfo, cancellationToken)
-                    : await UpdatePlatform(command, systemInfo, cancellationToken);
+                    ? await CreatePlatform(command, platformInfo, cancellationToken)
+                    : await UpdatePlatform(command, platformInfo, cancellationToken);
 
             // rebuild cache
             cacheService.DeleteClientsAddresses();
@@ -68,7 +68,7 @@ internal class UpsertPlatformHandler(
         }
     }
 
-    private async Task<Result<Platform>> CreatePlatform(UpsertPlatform command, SystemInfoMessage systemInfo, CancellationToken cancellationToken)
+    private async Task<Result<Platform>> CreatePlatform(UpsertPlatform command, PlatformInfoMessage platformInfo, CancellationToken cancellationToken)
     {
         // Check if the platform already exists
         if (await dbContext.Platforms.AsNoTracking()
@@ -77,20 +77,42 @@ internal class UpsertPlatformHandler(
             return Result.Failure<Platform>(new ConflictError("A platform with the same [Name] or [Address] already exists!"));
         }
 
-        var platform = Platform.Create(command.Name, command.Address, systemInfo.Map(), [systemInfo.MapStat()]);
+        var platform = Platform.Create(
+            name: command.Name, 
+            address: command.Address,
+            daemonId: platformInfo.Id,
+            networksCount: platformInfo.NetworksCount ,
+            volumesCount: platformInfo.VolumesCount,
+            containers: platformInfo.Containers,
+            containersRunning: platformInfo.ContainersRunning,
+            containersPaused: platformInfo.ContainersPaused,
+            containersStopped: platformInfo.ContainersStopped,
+            images: platformInfo.Images,
+            driver: platformInfo.Driver,
+            operatingSystem: platformInfo.OperatingSystem,
+            osVersion: platformInfo.OsVersion,
+            osType: platformInfo.OsType,
+            architecture: platformInfo.Architecture,
+            ncpu: platformInfo.Ncpu,
+            memTotal: platformInfo.MemTotal,
+            serverVersion: platformInfo.ServerVersion,
+            agentVersion: platformInfo.AgentVersion,
+            swarmInfo: platformInfo.SwarmInfo.Map(),
+            stats: [platformInfo.MapStat()]
+            );
         dbContext.Platforms.Add(platform);
 
         // Save to db
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // Re-queue job
-        await RequeuTaskJob(cancellationToken, platform.Address);
+        await EnqueueTaskJob(platform.Address, cancellationToken: cancellationToken);
 
         logger.LogInformation("A new platform has been added, id = {PlatformId}", platform.Id);
         return Result.Success(platform);
     }
 
-    private async Task<Result<Platform>> UpdatePlatform(UpsertPlatform command, SystemInfoMessage systemInfo, CancellationToken cancellationToken)
+    private async Task<Result<Platform>> UpdatePlatform(UpsertPlatform command, PlatformInfoMessage platformInfo, CancellationToken cancellationToken)
     {
         var platform = await dbContext.Platforms.FirstOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
         if (platform == null)
@@ -99,19 +121,38 @@ internal class UpsertPlatformHandler(
         }
 
         var oldPlatformAddress = platform.Address;
-        platform.PartialUpdate(command.Name, command.Address, systemInfo.Map());
+        platform.PartialUpdate(
+            name: command.Name,
+            address: command.Address,
+            daemonId: platformInfo.Id,
+            networksCount: platformInfo.NetworksCount,
+            volumesCount: platformInfo.VolumesCount,
+            containers: platformInfo.Containers,
+            containersRunning: platformInfo.ContainersRunning,
+            containersPaused: platformInfo.ContainersPaused,
+            containersStopped: platformInfo.ContainersStopped,
+            images: platformInfo.Images,
+            driver: platformInfo.Driver,
+            operatingSystem: platformInfo.OperatingSystem,
+            osVersion: platformInfo.OsVersion,
+            osType: platformInfo.OsType,
+            architecture: platformInfo.Architecture,
+            ncpu: platformInfo.Ncpu,
+            memTotal: platformInfo.MemTotal,
+            serverVersion: platformInfo.ServerVersion,
+            agentVersion: platformInfo.AgentVersion);
 
         // Save to db
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // Re-queue job
-        await RequeuTaskJob(cancellationToken, platform.Address, oldPlatformAddress);
+        await EnqueueTaskJob(platform.Address, oldPlatformAddress, cancellationToken);
 
         logger.LogInformation("The platform with id = {PlatformId} has been updated", platform.Id);
         return Result.Success(platform);
     }
 
-    private async Task RequeuTaskJob(CancellationToken cancellationToken, string newAddress, string? oldAddress = null)
+    private async Task EnqueueTaskJob(string newAddress, string oldAddress = null, CancellationToken cancellationToken = default)
     {
         var scheduler = await schedulerFactory.GetScheduler(cancellationToken);
         if (!string.IsNullOrEmpty(oldAddress))
@@ -123,56 +164,26 @@ internal class UpsertPlatformHandler(
 
 }
 
-internal static class PlatformMapper 
+internal static class Mapper 
 {
-    internal static SystemInfo Map(this SystemInfoMessage systemInfo)
-    {
-        if (systemInfo.Id == null) 
-        {
-            throw new ArgumentNullException("Daemon Id is required");
-        }
-
-        var swarmInfo = SwarmInfo.Create(
-                nodeID: systemInfo.SwarmInfo?.NodeID,
-                nodeAddr: systemInfo.SwarmInfo?.NodeAddr,
-                localNodeState: systemInfo.SwarmInfo?.LocalNodeState,
-                controlAvailable: systemInfo.SwarmInfo?.ControlAvailable ?? false,
-                error: systemInfo.SwarmInfo?.Error,
-                nodes: systemInfo.SwarmInfo?.Nodes ?? 0,
-                managers: systemInfo.SwarmInfo?.Managers ?? 0,
-                remoteManagers: systemInfo.SwarmInfo?.RemoteManagers?.Select(s => SwarmPeer.Create(nodeID: s.NodeID, addr: s.Addr))
+    internal static SwarmInfo Map(this SwarmInfoMessage swarmInfo)
+        => SwarmInfo.Create(
+                nodeID: swarmInfo?.NodeID,
+                nodeAddr: swarmInfo?.NodeAddr,
+                localNodeState: swarmInfo?.LocalNodeState,
+                controlAvailable: swarmInfo?.ControlAvailable ?? false,
+                error: swarmInfo?.Error,
+                nodes: swarmInfo?.Nodes ?? 0,
+                managers: swarmInfo?.Managers ?? 0,
+                remoteManagers: swarmInfo?.RemoteManagers?.Select(s => SwarmPeer.Create(nodeID: s.NodeID, addr: s.Addr))
                 );
 
-        return SystemInfo.Create(
-            daemonId: systemInfo.Id,
-            networksCount: systemInfo.NetworksCount,
-            volumesCount: systemInfo.VolumesCount,
-            containers: systemInfo.Containers,
-            containersRunning: systemInfo.ContainersRunning,
-            containersStopped: systemInfo.ContainersStopped,
-            containersPaused: systemInfo.ContainersPaused,
-            images: systemInfo.Images,
-            driver: systemInfo.Driver,
-            operatingSystem: systemInfo.OperatingSystem,
-            osVersion: systemInfo.OsVersion,
-            osType: systemInfo.OsType,
-            architecture: systemInfo.Architecture,
-            ncpu: systemInfo.Ncpu,
-            serverVersion: systemInfo.ServerVersion,
-            memTotal: systemInfo.MemTotal,
-            agentVersion: systemInfo.AgentVersion,
-            swarmInfo: swarmInfo
-            );
-    }
-
-    internal static PlatformStat MapStat(this SystemInfoMessage systemInfo)
-    {
-        return PlatformStat.Create(
+    internal static PlatformStat MapStat(this PlatformInfoMessage systemInfo)
+        => PlatformStat.Create(
             memoryUsage: systemInfo.MemoryUsage,
             cpuUsage: systemInfo.CpuUsage,
             created: systemInfo.Created,
             rxBytes: systemInfo.RxBytes,
             txBytes: systemInfo.TxBytes
             );
-    }
 }

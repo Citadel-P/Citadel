@@ -1,6 +1,7 @@
 import { User, Settings, LogOut, Sun, Moon } from 'lucide-react';
 import { useContextSelector } from 'use-context-selector';
 import { LayoutContext } from '@/layout/LayoutProvider';
+import { JSX } from 'react/jsx-runtime';
 
 interface ProfileMenu {
   title: string;
@@ -68,9 +69,9 @@ const themeModes = [
 ];
 
 export const PorfileDropDown = () => {
-  const theme = useContextSelector(LayoutContext, (v) => v?.theme!);
-  const setThemeMode = useContextSelector(LayoutContext, (v) => v?.setThemeMode!);
-  const toggleThemeColor = useContextSelector(LayoutContext, (v) => v?.toggleThemeColor!);
+  const theme = useContextSelector(LayoutContext, (v) => v?.theme);
+  const setThemeMode = useContextSelector(LayoutContext, (v) => v?.setThemeMode);
+  const toggleThemeColor = useContextSelector(LayoutContext, (v) => v?.toggleThemeColor);
 
   const handleMenuClick = (menu: ProfileMenu) => {};
   return (
@@ -107,8 +108,8 @@ export const PorfileDropDown = () => {
           {themeColors.map((item, index) => (
             <button
               key={index}
-              onClick={() => toggleThemeColor(item.name)}
-              className={`${item.name === theme.color ? 'border-muted-foreground bg-card' : ''} focus-visible:ring-ring inline-flex h-8 items-center justify-start whitespace-nowrap rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:pointer-events-none disabled:opacity-50 hover:bg-card hover:text-foreground`}>
+              onClick={() => toggleThemeColor!(item.name)}
+              className={`${item.name === theme!.color ? 'border-muted-foreground bg-card' : ''} focus-visible:ring-ring inline-flex h-8 items-center justify-start whitespace-nowrap rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:pointer-events-none disabled:opacity-50 hover:bg-card hover:text-foreground`}>
               <span
                 style={{ backgroundColor: item.code }}
                 className="mr-1 flex h-5 w-5 shrink-0 -translate-x-1 items-center justify-center rounded-full bg-rose-500"></span>
@@ -124,8 +125,8 @@ export const PorfileDropDown = () => {
           {themeModes.map((item, index) => (
             <button
               key={index}
-              onClick={() => setThemeMode(item.name as any)}
-              className={`${item.name === theme.mode ? 'border-muted-foreground bg-card' : ''} focus-visible:ring-ring inline-flex h-8 items-center justify-start whitespace-nowrap rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:pointer-events-none disabled:opacity-50 hover:bg-card hover:text-foreground`}>
+              onClick={() => setThemeMode!(item.name as any)}
+              className={`${item.name === theme!.mode ? 'border-muted-foreground bg-card' : ''} focus-visible:ring-ring inline-flex h-8 items-center justify-start whitespace-nowrap rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:pointer-events-none disabled:opacity-50 hover:bg-card hover:text-foreground`}>
               <span className="h-6 w-7 text-muted-foreground/50">{item.icon}</span>
               <p className="capitalize">{item.name}</p>
             </button>

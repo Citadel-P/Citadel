@@ -4,17 +4,17 @@ import { useEffect, useState } from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
 
 const ContainerLogs = () => {
-  const logs = useContextSelector(ContainerLogsContext, (v) => v?.logs!);
+  const logs = useContextSelector(ContainerLogsContext, (v) => v?.logs);
   const isPending = useContextSelector(ContainerLogsContext, (v) => v?.isPending);
   const [logsBuffer, setLogsBuffer] = useState(logs);
 
   useEffect(() => {
-    setLogsBuffer([...logsBuffer, ...logs]);
+    setLogsBuffer((currentLogs) => [...currentLogs ?? [], ...logs ?? []]);
   }, [logs]);
 
   return (
-    <Highlight theme={themes.nightOwl} code={isPending ? "Loading..." : logsBuffer.join('\n')} language="tsx">
-      {({ className, style, tokens, getLineProps, getTokenProps }) => (
+    <Highlight theme={themes.nightOwl} code={isPending ? "Loading..." : logsBuffer!.join('\n')} language="tsx">
+      {({ style, tokens, getLineProps, getTokenProps }) => (
         <pre
           style={style}
           className="bg-card-foreground dark:bg-card p-6! rounded-sm shadow-xs w-full overflow-auto max-w-[1400px] max-h-[600px] scrollbar-thumb-rounded scrollbar-track-rounded scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted">

@@ -10,6 +10,8 @@ using Infrastructure.Services.Abstractions;
 using Google.Protobuf.WellKnownTypes;
 using Hosting.Common.ErrorTypes;
 using Microsoft.Extensions.Logging;
+using Grpc.Core;
+using System.Collections.Concurrent;
 
 namespace Application.Features.Platforms.Commands;
 
@@ -40,26 +42,33 @@ internal class PatchContainersHandler(
 {
     public async ValueTask<Result> Handle(PatchContainers request, CancellationToken cancellationToken)
     {
-        var containers = await dbContext.ContainersInfo.Include(s => s.Platform)
-                        .AsNoTracking()
+        var platforms = await dbContext.ContainersInfo.Include(s => s.Platform)
                         .Where(s => request.ContainersIds.Contains(s.ContainerId))
+                        .GroupBy(s => s.Platform.Address)
+                        .Select(s => new 
+                        { 
+                            Address = s.Key, 
+                            ContainersId = s.Select(x => x.ContainerId) 
+                        })
+                        .AsNoTracking()
                         .ToListAsync(cancellationToken);
-        
-        Parallel.ForEach(containers.GroupBy(s => s.Platform.Address), async container =>
+
+        var exceptions = new ConcurrentBag<Exception>();
+        await Parallel.ForEachAsync(platforms, cancellationToken, async (platform, token) =>
         {
-            var containerIds = container.Select(s => s.ContainerId);
-            var client = clientFactory.GetContainerClient(container.Key);
+            var client = clientFactory.GetContainerClient(platform.Address);
             try
             {
-                await ToOperation(client, containerIds, request.Action);
+                await ToOperation(client, platform.ContainersId, request.Action, token);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error while processing container {ContainerIds} on platform {PlatformAddress}", containerIds, container.Key);
+                exceptions.Add(ex);
+                logger.LogError(ex, "Error while processing container {ContainerIds} on platform {PlatformAddress}", platform.ContainersId, platform.Address);
             }
         });
 
-        async Task<Empty> ToOperation(ContainersClient client, IEnumerable<string> containersIds, ContainerAction action) => action switch
+        static async Task<Empty> ToOperation(ContainersClient client, IEnumerable<string> containersIds, ContainerAction action, CancellationToken cancellationToken) => action switch
         {
             ContainerAction.START => await client.StartContainersAsync(new ContainersId() { Ids = { containersIds } }, cancellationToken: cancellationToken),
             ContainerAction.STOP => await client.StopContainersAsync(new ContainersId() { Ids = { containersIds } }, cancellationToken: cancellationToken),
@@ -70,6 +79,20 @@ internal class PatchContainersHandler(
             _ => throw new NotImplementedException()
         };
 
-        return Result.Success();
+        if (exceptions.IsEmpty)
+        {
+            return Result.Success();
+        }
+        else
+        {
+            if (exceptions.Any(s => s is RpcException))
+            {
+                return Result.Failure(new ClientRpcException($"An rpc exception occurred while processing the request {exceptions.First(s => s is RpcException).Message}"));
+            }
+            else
+            {
+                return Result.Failure(new Exception("An error occurred while processing the request"));
+            }
+        }
     }
 }

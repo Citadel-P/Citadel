@@ -1,4 +1,4 @@
-import { Layers, ChartPie, Users, Settings, Bell } from 'lucide-react';
+import { Layers, Users, Settings, Bell } from 'lucide-react';
 
 interface IMenuItem {
   group: string;

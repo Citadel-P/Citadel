@@ -91,17 +91,15 @@ internal class StreamDaemonEventJob(
                 }
             }
         }
-        catch (RpcException ex)
-        {
-            if (ex.Status.StatusCode == StatusCode.Unavailable)
-            {
-                logger.LogError(ex, "Service unavailable");
-                await RescheduleJob(context);
-            }
-        }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error while streaming daemon events");
+            if (ex is RpcException rpc && rpc.Status.StatusCode == StatusCode.Cancelled) {
+                // In case the job was canceled
+                logger.LogInformation("Job was canceled");
+                return;
+            }
+            logger.LogError(ex, "An exception occurred while streaming daemon events");
+            await RescheduleJob(context);
         }
     }
 

@@ -47,7 +47,11 @@ public static class InfrastructureModule
 
         return services.AddDbContextPool<ApplicationDbContext>(c =>
         {
-            c.UseSqlite(ApplicationContextFactory.ConnectionString);
+            c.UseSqlite(ApplicationContextFactory.ConnectionString, config =>
+            {
+                config.CommandTimeout(60);
+                config.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+            });
         });
     }
 }

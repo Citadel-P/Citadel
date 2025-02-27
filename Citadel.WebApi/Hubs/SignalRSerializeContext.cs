@@ -16,7 +16,6 @@ namespace WebApi.Hubs;
 [JsonSerializable(typeof(IEnumerable<PlatformView>))]
 [JsonSerializable(typeof(PlatformView))]
 [JsonSerializable(typeof(List<PlatformStatView>))]
-[JsonSerializable(typeof(SystemInfoView))]
 [JsonSerializable(typeof(SwarmInfoView))]
 [JsonSerializable(typeof(List<SwarmPeerView>))]
 [JsonSerializable(typeof(ContainerLogView))]

@@ -20,7 +20,7 @@ const ContainerInfoWrapper = () => {
 
   useEffect(() => {
     const tab = route?.path.match('[^/]+$')![0];
-    tab && ['logs', 'stats', 'inspect'].includes(tab) ? setCurrentTab(tab) : setCurrentTab('logs');
+    const _ = tab && ['logs', 'stats', 'inspect'].includes(tab) ? setCurrentTab(tab) : setCurrentTab('logs');
   }, [setCurrentTab, route]);
 
   const onValueChange = (tabName: string) => {

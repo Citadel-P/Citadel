@@ -18,10 +18,8 @@ internal class GetPlatformsHandler(ApplicationDbContext dbContext)
     {
         var platforms = await dbContext.Platforms
                                         .AsNoTracking()
-                                        .AsSplitQuery()
                                         .Include(s => s.Stats.OrderByDescending(s => s.Created).Take(1)) // We only care about the last record
-                                        .Include(s => s.SystemInfo)
-                                        .ThenInclude(s => s.SwarmInfo)
+                                        .Include(s => s.SwarmInfo)
                                         .ThenInclude(s => s.RemoteManagers)
                                         .OrderBy(s => s.Name)
                                         .ToListAsync(cancellationToken);

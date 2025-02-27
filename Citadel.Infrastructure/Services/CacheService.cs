@@ -35,8 +35,7 @@ internal sealed class CacheService (
         {
             platformId = await dbContext.Platforms
                                     .AsNoTracking()
-                                    .Include(s => s.SystemInfo)
-                                    .Where(s => s.SystemInfo.DaemonId == daemonId)
+                                    .Where(s => s.DaemonId == daemonId)
                                     .Select(s => s.Id)
                                     .FirstOrDefaultAsync(cancellationToken);
             

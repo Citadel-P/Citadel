@@ -24,17 +24,17 @@ const AuthProvider: React.FC<IProps> = ({ children }) => {
   useHTTPErrorHandler();
   const client = useQueryClient();
   const { data: accessTokenData, isSuccess } = useGETAccessToken();
-  const apiClient = useContextSelector(ApiClientContext, (s) => s?.apiClient!);
+  const apiClient = useContextSelector(ApiClientContext, (s) => s?.apiClient);
   const [accessToken, setAccessToken] = useState<string | undefined>(storedJwt ?? undefined);
-  let isAuthenticated = accessToken != null;
+  const isAuthenticated = accessToken != null;
 
   useEffect(() => {
     if (isSuccess && accessTokenData?.data.accessToken) {
       setAccessToken(accessTokenData?.data.accessToken);
-      apiClient.setSecurityData(accessTokenData?.data.accessToken);
-      sessionStorage.setItem(accessTokenKey, accessTokenData?.data.accessToken!);
+      apiClient?.setSecurityData(accessTokenData?.data.accessToken);
+      sessionStorage.setItem(accessTokenKey, accessTokenData?.data.accessToken);
     }
-  }, [accessTokenData]);
+  }, [accessTokenData, apiClient, isSuccess]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -57,7 +57,7 @@ const AuthProvider: React.FC<IProps> = ({ children }) => {
     return () => {
       clearTimeout(timer);
     };
-  }, [accessToken, isAuthenticated]);
+  }, [accessToken, isAuthenticated, client]);
 
   const parseJwt = (token: string) => {
     if (!token) return true;

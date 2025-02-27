@@ -3,7 +3,7 @@
 public class SwarmInfo
 {
     public Guid Id { get; private set; }
-    public Guid SystemInfoId { get; }
+    public Guid PlatformId { get; }
     public string NodeID { get; private set; }
     public string NodeAddr { get; private set; }
     public string LocalNodeState { get; private set; }
@@ -16,7 +16,7 @@ public class SwarmInfo
     /// <summary>
     /// EF navigation
     /// </summary>
-    public SystemInfo SystemInfo { get; private set; }
+    public Platform Platform { get; private set; }
 
     public static SwarmInfo Create(
         string nodeID,

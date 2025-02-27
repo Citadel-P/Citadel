@@ -22,22 +22,23 @@ const ContainerLogsProvider: React.FC<IProps> = ({ children }) => {
   const { containerId } = useParams();
   const { mutate, isPending, isSuccess } = usePOSTContainerLogs();
   const { containerLogsMessage } = useContainerLogsHub(containerId!, requestId);
-  let logs: string[] = [];
+  const logs: string[] = [];
 
   if (containerLogsMessage) {
     logs.push(containerLogsMessage.log);
   }
 
   useEffect(() => {
-    if (!containerId) return;
     // https://react.dev/learn/synchronizing-with-effects#putting-it-all-together
     function onTimeout() {
-      mutate({ requestParams: { containerId, requestId, requestedLogAction: RequestedLogAction.START } });
+      if (containerId)
+        mutate({ requestParams: { containerId, requestId, requestedLogAction: RequestedLogAction.START } });
     }
     const timeoutId = setTimeout(onTimeout, 1000);
 
     return () => {
-      mutate({ requestParams: { containerId, requestId, requestedLogAction: RequestedLogAction.STOP } });
+      if (containerId)
+              mutate({ requestParams: { containerId, requestId, requestedLogAction: RequestedLogAction.STOP } });
       clearTimeout(timeoutId);
     };
   }, [containerId, requestId, mutate]);

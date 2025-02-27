@@ -3,10 +3,10 @@ import { useContextSelector } from 'use-context-selector';
 import { useQuery } from '@tanstack/react-query';
 
 export const useGETPlatforms = () => {
-  const apiClient = useContextSelector(ApiClientContext, (v) => v?.apiClient!);
+  const apiClient = useContextSelector(ApiClientContext, (v) => v?.apiClient);
   const { data, error, isLoading, isSuccess } = useQuery({
     queryKey: ['platforms'],
-    queryFn: ({ signal }) => apiClient.api.platformsList({ signal }),
+    queryFn: ({ signal }) => apiClient!.api.platformsList({ signal }),
   });
 
   return { data, error, isLoading, isSuccess };

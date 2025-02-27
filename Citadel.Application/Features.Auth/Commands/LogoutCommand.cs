@@ -22,17 +22,17 @@ internal sealed class LogoutCommandHandler(
         if (string.IsNullOrWhiteSpace(refreshToken))
             return Result.Success();
 
+        context.HttpContext.Response.Cookies.Delete(Constants.RefreshToken);
+
         if (!jwtService.TryValidate(refreshToken, out var tokenId))
-            return Result.Failure(new BadRequestError("Invalid refresh token."));
+            return Result.Success();
 
         var existing = await dbContext.RefreshTokens.FindAsync(tokenId, cancellationToken);
         if (existing == null)
-            return Result.Failure(new BadRequestError("Refresh token does not exist."));
+            return Result.Success();
 
         dbContext.RefreshTokens.Remove(existing);
         await dbContext.SaveChangesAsync(cancellationToken);
-
-        context.HttpContext.Response.Cookies.Delete(Constants.RefreshToken);
 
         return Result.Success();
     }

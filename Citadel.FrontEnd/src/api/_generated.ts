@@ -125,7 +125,7 @@ export interface ContainerInspectView {
   sizeRootFs: number | null;
   mounts: MountPoint[] | null;
   config: ContainerConfig;
-  networkSettings: NetworkSettingsInspectView;
+  networkSettings: NetworkSettingsView;
 }
 
 export interface ContainersInfoView {
@@ -178,23 +178,23 @@ export type EndpointIPAMConfig = {
   linkLocalIPs?: string[] | null;
 };
 
-export interface EndpointSettings {
-  ipamConfig?: EndpointIPAMConfig;
-  links?: string[] | null;
-  macAddress?: string | null;
-  aliases?: string[] | null;
-  networkID?: string | null;
-  endpointID?: string | null;
-  gateway?: string | null;
-  ipAddress?: string | null;
+export interface EndpointSettingsView {
+  ipamConfig: EndpointIPAMConfig;
+  links: string[] | null;
+  macAddress: string | null;
+  aliases: string[] | null;
+  networkID: string | null;
+  endpointID: string | null;
+  gateway: string | null;
+  ipAddress: string | null;
+  /** @format int32 */
+  ipPrefixLen: number | null;
+  iPv6Gateway: string | null;
+  globalIPv6Address: string | null;
   /** @format int64 */
-  ipPrefixLen?: number | null;
-  ipv6Gateway?: string | null;
-  globalIPv6Address?: string | null;
-  /** @format int64 */
-  globalIPv6PrefixLen?: number | null;
-  driverOpts?: Record<string, string>;
-  dnsNames?: string[] | null;
+  globalIPv6PrefixLen: number | null;
+  driverOpts: Record<string, string>;
+  dnsNames: string[] | null;
 }
 
 export type GraphDriverData = {
@@ -331,7 +331,7 @@ export interface MountPoint {
   propagation?: string | null;
 }
 
-export type NetworkSettingsInspectView = {
+export type NetworkSettingsView = {
   bridge: string | null;
   sandboxID: string | null;
   hairpinMode: boolean | null;
@@ -351,12 +351,12 @@ export type NetworkSettingsInspectView = {
   ipPrefixLen: number | null;
   iPv6Gateway: string | null;
   macAddress: string | null;
-  networks: Record<string, EndpointSettings>;
+  networks: Record<string, EndpointSettingsView>;
 };
 
 export enum PlatformStatus {
-  Disconnected = 'Disconnected',
-  Connected = 'Connected',
+  Offline = 'Offline',
+  Online = 'Online',
 }
 
 export interface PlatformStatView {
@@ -383,7 +383,33 @@ export type PlatformView = {
   name: string | null;
   address: string | null;
   status: PlatformStatus;
-  systemInfo: SystemInfoView;
+  daemonId: string | null;
+  /** @format int32 */
+  networksCount: number;
+  /** @format int32 */
+  volumesCount: number;
+  /** @format int64 */
+  containers: number;
+  /** @format int64 */
+  containersRunning: number;
+  /** @format int64 */
+  containersPaused: number;
+  /** @format int64 */
+  containersStopped: number;
+  /** @format int64 */
+  images: number;
+  driver: string | null;
+  operatingSystem: string | null;
+  osVersion: string | null;
+  osType: string | null;
+  architecture: string | null;
+  /** @format int64 */
+  ncpu: number;
+  /** @format int64 */
+  memTotal: number;
+  serverVersion: string | null;
+  agentVersion: string | null;
+  swarmInfo: SwarmInfoView;
   stats: PlatformStatView[] | null;
 };
 
@@ -393,7 +419,33 @@ export interface PlatformView2 {
   name: string | null;
   address: string | null;
   status: PlatformStatus;
-  systemInfo: SystemInfoView;
+  daemonId: string | null;
+  /** @format int32 */
+  networksCount: number;
+  /** @format int32 */
+  volumesCount: number;
+  /** @format int64 */
+  containers: number;
+  /** @format int64 */
+  containersRunning: number;
+  /** @format int64 */
+  containersPaused: number;
+  /** @format int64 */
+  containersStopped: number;
+  /** @format int64 */
+  images: number;
+  driver: string | null;
+  operatingSystem: string | null;
+  osVersion: string | null;
+  osType: string | null;
+  architecture: string | null;
+  /** @format int64 */
+  ncpu: number;
+  /** @format int64 */
+  memTotal: number;
+  serverVersion: string | null;
+  agentVersion: string | null;
+  swarmInfo: SwarmInfoView;
   stats: PlatformStatView[] | null;
 }
 
@@ -474,38 +526,6 @@ export interface SwarmPeerView {
   addr: string | null;
 }
 
-export type SystemInfoView = {
-  /** @format uuid */
-  id: string;
-  daemonId: string | null;
-  /** @format int32 */
-  networksCount: number;
-  /** @format int32 */
-  volumesCount: number;
-  /** @format int64 */
-  containers: number;
-  /** @format int64 */
-  containersRunning: number;
-  /** @format int64 */
-  containersPaused: number;
-  /** @format int64 */
-  containersStopped: number;
-  /** @format int64 */
-  images: number;
-  driver: string | null;
-  operatingSystem: string | null;
-  osVersion: string | null;
-  osType: string | null;
-  architecture: string | null;
-  /** @format int64 */
-  ncpu: number;
-  /** @format int64 */
-  memTotal: number;
-  serverVersion: string | null;
-  agentVersion: string | null;
-  swarmInfo: SwarmInfoView;
-};
-
 export interface Ulimits {
   name?: string | null;
   /** @format int64 */
@@ -567,7 +587,7 @@ export enum ContentType {
 }
 
 export class HttpClient<SecurityDataType = unknown> {
-  public baseUrl: string = 'http://localhost:8000';
+  public baseUrl: string = '';
   private securityData: SecurityDataType | null = null;
   private securityWorker?: ApiConfig<SecurityDataType>['securityWorker'];
   private abortControllers = new Map<CancelToken, AbortController>();
@@ -734,7 +754,6 @@ export class HttpClient<SecurityDataType = unknown> {
 /**
  * @title Citadel.WebApi | v1
  * @version 1.0.0
- * @baseUrl http://localhost:8000
  */
 export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDataType> {
   api = {

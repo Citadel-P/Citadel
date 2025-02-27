@@ -2804,8 +2804,8 @@
       },
       "PlatformStatus": {
         "enum": [
-          "Disconnected",
-          "Connected"
+          "Offline",
+          "Online"
         ],
         "type": "string"
       },
@@ -2862,7 +2862,24 @@
           "name",
           "address",
           "status",
-          "systemInfo",
+          "daemonId",
+          "networksCount",
+          "volumesCount",
+          "containers",
+          "containersRunning",
+          "containersPaused",
+          "containersStopped",
+          "images",
+          "driver",
+          "operatingSystem",
+          "osVersion",
+          "osType",
+          "architecture",
+          "ncpu",
+          "memTotal",
+          "serverVersion",
+          "agentVersion",
+          "swarmInfo",
           "stats"
         ],
         "type": "object",
@@ -2882,8 +2899,76 @@
           "status": {
             "$ref": "#/components/schemas/PlatformStatus"
           },
-          "systemInfo": {
-            "$ref": "#/components/schemas/SystemInfoView"
+          "daemonId": {
+            "type": "string",
+            "nullable": true
+          },
+          "networksCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "volumesCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "containers": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersRunning": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersPaused": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersStopped": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "images": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "operatingSystem": {
+            "type": "string",
+            "nullable": true
+          },
+          "osVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "osType": {
+            "type": "string",
+            "nullable": true
+          },
+          "architecture": {
+            "type": "string",
+            "nullable": true
+          },
+          "ncpu": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "memTotal": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "serverVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "agentVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "swarmInfo": {
+            "$ref": "#/components/schemas/SwarmInfoView"
           },
           "stats": {
             "type": "array",
@@ -2902,7 +2987,24 @@
           "name",
           "address",
           "status",
-          "systemInfo",
+          "daemonId",
+          "networksCount",
+          "volumesCount",
+          "containers",
+          "containersRunning",
+          "containersPaused",
+          "containersStopped",
+          "images",
+          "driver",
+          "operatingSystem",
+          "osVersion",
+          "osType",
+          "architecture",
+          "ncpu",
+          "memTotal",
+          "serverVersion",
+          "agentVersion",
+          "swarmInfo",
           "stats"
         ],
         "type": "object",
@@ -2922,8 +3024,76 @@
           "status": {
             "$ref": "#/components/schemas/PlatformStatus"
           },
-          "systemInfo": {
-            "$ref": "#/components/schemas/SystemInfoView"
+          "daemonId": {
+            "type": "string",
+            "nullable": true
+          },
+          "networksCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "volumesCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "containers": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersRunning": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersPaused": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersStopped": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "images": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "operatingSystem": {
+            "type": "string",
+            "nullable": true
+          },
+          "osVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "osType": {
+            "type": "string",
+            "nullable": true
+          },
+          "architecture": {
+            "type": "string",
+            "nullable": true
+          },
+          "ncpu": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "memTotal": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "serverVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "agentVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "swarmInfo": {
+            "$ref": "#/components/schemas/SwarmInfoView"
           },
           "stats": {
             "type": "array",
@@ -3161,108 +3331,6 @@
             "nullable": true
           }
         }
-      },
-      "SystemInfoView": {
-        "required": [
-          "id",
-          "daemonId",
-          "networksCount",
-          "volumesCount",
-          "containers",
-          "containersRunning",
-          "containersPaused",
-          "containersStopped",
-          "images",
-          "driver",
-          "operatingSystem",
-          "osVersion",
-          "osType",
-          "architecture",
-          "ncpu",
-          "memTotal",
-          "serverVersion",
-          "agentVersion",
-          "swarmInfo"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "daemonId": {
-            "type": "string",
-            "nullable": true
-          },
-          "networksCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "volumesCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "containers": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "containersRunning": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "containersPaused": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "containersStopped": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "images": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "driver": {
-            "type": "string",
-            "nullable": true
-          },
-          "operatingSystem": {
-            "type": "string",
-            "nullable": true
-          },
-          "osVersion": {
-            "type": "string",
-            "nullable": true
-          },
-          "osType": {
-            "type": "string",
-            "nullable": true
-          },
-          "architecture": {
-            "type": "string",
-            "nullable": true
-          },
-          "ncpu": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "memTotal": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "serverVersion": {
-            "type": "string",
-            "nullable": true
-          },
-          "agentVersion": {
-            "type": "string",
-            "nullable": true
-          },
-          "swarmInfo": {
-            "$ref": "#/components/schemas/SwarmInfoView"
-          }
-        },
-        "nullable": true
       },
       "Ulimits": {
         "type": "object",

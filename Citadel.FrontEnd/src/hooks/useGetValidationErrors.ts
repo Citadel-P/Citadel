@@ -1,8 +1,8 @@
-import { ProblemDetails, ValidationProblemDetails } from '@/api/_generated';
+import { ProblemDetails, HttpValidationProblemDetails } from '@/api/_generated';
 
 export const useGetValidationErrors = (error: Error | null) => {
   if (error) {
-    const validationProblem = (error as any).error as ValidationProblemDetails;
+    const validationProblem = (error as any).error as HttpValidationProblemDetails;
     if (validationProblem && validationProblem.status === 400) {
       if (validationProblem.errors) {
         return Object.values(validationProblem.errors).join(', ');

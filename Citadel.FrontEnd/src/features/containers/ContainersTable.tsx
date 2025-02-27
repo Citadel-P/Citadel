@@ -91,7 +91,8 @@ export const columns: ColumnDef<ContainerInfoView>[] = [
       const cA = rowA.original as ContainerInfoView;
       const cB = rowB.original as ContainerInfoView;
       if (!cA.stats?.length || !cB.stats?.length) return 0;
-      return cA.stats[0]?.memoryUsage! < cB.stats[0]?.memoryUsage! ? 1 : -1;
+      if (!cA.stats[0]?.memoryUsage || !cB.stats[0]?.memoryUsage) return 0;
+      return cA.stats[0]?.memoryUsage < cB.stats[0]?.memoryUsage ? 1 : -1;
     },
   },
   {
@@ -166,8 +167,8 @@ const ContainerStatTootltip = ({ stat }: { stat: string }) => {
 };
 
 export const ContainersTable = () => {
-  const containers = useContextSelector(ContainersContext, (v) => v?.containers!);
-  const isLoading = useContextSelector(ContainersContext, (v) => v?.isLoading!);
-  const setSelectedRowIds = useContextSelector(ContainersContext, (v) => v?.setSelectedRowIds!);
-  return <DataTable columns={columns} data={containers} isLoading={isLoading} onSelectionChange={setSelectedRowIds} />;
+  const containers = useContextSelector(ContainersContext, (v) => v?.containers);
+  const isLoading = useContextSelector(ContainersContext, (v) => v?.isLoading);
+  const setSelectedRowIds = useContextSelector(ContainersContext, (v) => v?.setSelectedRowIds);
+  return <DataTable columns={columns} data={containers!} isLoading={isLoading!} onSelectionChange={setSelectedRowIds!} />;
 };

@@ -1,7 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 using Application.Features.Auth.Models;
 using Application.Features.Containers.Models;
-using Application.Features.Platforms.Models;
 using Citadel.Common;
 using Infrastructure.Entities;
 using Microsoft.AspNetCore.Mvc;
@@ -16,7 +15,6 @@ namespace Application.Models;
 [JsonSerializable(typeof(List<Platform>))]
 [JsonSerializable(typeof(List<PlatformStat>))]
 [JsonSerializable(typeof(SwarmPeer))]
-[JsonSerializable(typeof(SystemInfoView))]
 [JsonSerializable(typeof(SwarmInfoView))]
 [JsonSerializable(typeof(IEnumerable<PlatformView>))]
 [JsonSerializable(typeof(List<SwarmPeerView>))]
@@ -36,9 +34,6 @@ namespace Application.Models;
 [JsonSerializable(typeof(PlatformsView))]
 [JsonSerializable(typeof(ContainersInfoView))]
 [JsonSerializable(typeof(ContainerInfoView))]
-[JsonSerializable(typeof(SystemInfoRequest))]
-[JsonSerializable(typeof(List<SwarmPeerRequest>))]
-[JsonSerializable(typeof(SwarmInfoRequest))]
 [JsonSerializable(typeof(ContainersInfoRequest))]
 [JsonSerializable(typeof(List<PortRequest>))]
 [JsonSerializable(typeof(ContainerStatRequest))]

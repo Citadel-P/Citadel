@@ -4,9 +4,9 @@ import { useMutation } from '@tanstack/react-query';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 
 export const usePOSTLogout = () => {
-  const apiClient = useContextSelector(ApiClientContext, (v) => v?.apiClient!);
+  const apiClient = useContextSelector(ApiClientContext, (v) => v?.apiClient);
   const { mutate, isPending, isSuccess, error, data } = useMutation({
-    mutationFn: apiClient.api.authenticationLogout,
+    mutationFn: apiClient?.api.authenticationLogout,
   });
   const validationErrors = useGetValidationErrors(error);
 

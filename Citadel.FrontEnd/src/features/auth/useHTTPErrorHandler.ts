@@ -13,21 +13,20 @@ export function useHTTPErrorHandler() {
       if (error?.status === 401) {
         logout({});
       } else if (error?.status != null && error?.status > 400 && error?.status != 404) {
-        const problem = error.error as ProblemDetails;
-        toast.error(problem.status + ' ' + problem.title, {
-          description: problem.detail,
+        toast.error(error.status + ' ' + error.title, {
+          description: error.detail,
         });
       }
     };
     const mutationUnsubscribe = client.getMutationCache().subscribe((event) => {
       if (event.type === 'updated' && event.action.type === 'error') {
-        handleError(event.action.error);
+        handleError(event.action.error.error);
       }
     });
 
     const queryUnsubscribe = client.getQueryCache().subscribe((event) => {
       if (event.type === 'updated' && event.action.type === 'error') {
-        handleError(event.action.error);
+        handleError(event.action.error.error);
       }
     });
 
@@ -35,5 +34,5 @@ export function useHTTPErrorHandler() {
       mutationUnsubscribe();
       queryUnsubscribe();
     };
-  }, [client]);
+  }, [client, logout]);
 }

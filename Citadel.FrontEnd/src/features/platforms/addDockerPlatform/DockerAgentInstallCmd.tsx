@@ -16,7 +16,7 @@ const DockerAgentInstallCmd = () => {
       isCopied: copiedLinuxCmd,
       copyHandler: copyLinuxCmdToClipboard,
       code: `docker run -d
-    -p 8001:8001 
+    -p 9000:9000 
     --name Citadel_agent 
     --restart=always
     -v /var/run/docker.sock:/var/run/docker.sock
@@ -28,7 +28,7 @@ const DockerAgentInstallCmd = () => {
       isCopied: copiedWinCmd,
       copyHandler: copyWinCmdToClipboard,
       code: `docker run -d 
-    -p 8001:8001 
+    -p 9000:9000 
     --name Citadel_agent
     --restart=always
     -v C:\\ProgramData\\docker\\volumes:C:\\ProgramData\\docker\\volumes 
@@ -46,7 +46,7 @@ const DockerAgentInstallCmd = () => {
       {commands.map((cmd, index) => (
         <TabsContent key={index} value={cmd.name}>
           <Highlight theme={themes.nightOwl} code={cmd.code} language="tsx">
-            {({ className, style, tokens, getLineProps, getTokenProps }) => (
+            {({ style, tokens, getLineProps, getTokenProps }) => (
               <pre style={style} className="bg-card-foreground dark:bg-card p-6! rounded-sm shadow-xs relative">
                 {tokens.map((line, i) => (
                   <div key={i} {...getLineProps({ line })} className="table-row">

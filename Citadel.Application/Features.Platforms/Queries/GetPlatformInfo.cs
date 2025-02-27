@@ -24,10 +24,8 @@ internal class GetPlatformInfoHandler(ApplicationDbContext dbContext) : IQueryHa
     public async ValueTask<Result<Platform>> Handle(GetPlatformInfo query, CancellationToken cancellationToken)
     {
         Platform platform = await dbContext.Platforms
-            .Include(s => s.SystemInfo)
-            .Include(s => s.Stats.Where(x => x.Created > DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeSeconds())) // Get platform stats for the last hour
-            .AsSplitQuery()
             .AsNoTracking()
+            .Include(s => s.Stats.Where(x => x.Created > DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeSeconds())) // Get platform stats for the last hour
             .SingleOrDefaultAsync(s => s.Id == query.Id, cancellationToken);
 
         return platform is null

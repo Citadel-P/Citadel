@@ -4,8 +4,8 @@ import { useMutation } from '@tanstack/react-query';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 
 export const usePOSTLogin = () => {
-  const apiClient = useContextSelector(ApiClientContext, (s) => s?.apiClient!);
-  const { mutate, isPending, isSuccess, error, data } = useMutation({ mutationFn: apiClient.api.authenticationLogin });
+  const apiClient = useContextSelector(ApiClientContext, (s) => s?.apiClient);
+  const { mutate, isPending, isSuccess, error, data } = useMutation({ mutationFn: apiClient?.api.authenticationLogin });
   const validationErrors = useGetValidationErrors(error);
 
   if (isSuccess && data?.data.accessToken) {

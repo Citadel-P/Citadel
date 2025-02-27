@@ -21,7 +21,7 @@ const ContainerLogsProvider: React.FC<IProps> = ({ children }) => {
   const { data, isSuccess, isLoading } = useGetContainerStats(containerId);
   let stats: ContainerStatView[] = [];
   if (isSuccess) {
-    stats = data?.data.stats!;
+    stats = data?.data.stats || [];
   }
 
   return (

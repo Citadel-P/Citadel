@@ -13,7 +13,7 @@ public class ContainerInfo
     public ICollection<ContainerPort> Ports { get; private set; } = [];
     public ICollection<ContainerStat> Stats { get; private set; } = [];
     public IDictionary<string, string> Labels { get; private set; } = new Dictionary<string, string>();
-    public Platform Platform { get; private set; }
+    public Platform Platform { get; private set; } = null!;
 
     public static ContainerInfo Create(
         Guid platformId, 

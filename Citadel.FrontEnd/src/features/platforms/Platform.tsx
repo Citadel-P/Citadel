@@ -12,7 +12,7 @@ interface IProps {
 }
 
 const Platform = ({ platform }: IProps) => {
-  let isConnected = platform.status === PlatformStatus.Connected;
+  const isConnected = platform.status === PlatformStatus.Online;
   const LastSnapshotTooltip = () => {
     const lastSnapshot =
       platform.stats && platform.stats[0]
@@ -44,7 +44,7 @@ const Platform = ({ platform }: IProps) => {
             <TooltipContent>Paused</TooltipContent>
           </Tooltip>
         </TooltipProvider>
-        <div className="ml-1">{platform.systemInfo?.containersPaused}</div>
+        <div className="ml-1">{platform?.containersPaused}</div>
       </div>
     );
   };
@@ -62,7 +62,7 @@ const Platform = ({ platform }: IProps) => {
             </Tooltip>
           </TooltipProvider>
         </div>
-        <div className="ml-1">{platform.systemInfo?.containersRunning}</div>
+        <div className="ml-1">{platform?.containersRunning}</div>
       </div>
     );
   };
@@ -80,7 +80,7 @@ const Platform = ({ platform }: IProps) => {
             </Tooltip>
           </TooltipProvider>
         </div>
-        <div className="ml-1">{platform.systemInfo?.containersStopped}</div>
+        <div className="ml-1">{platform?.containersStopped}</div>
       </div>
     );
   };
@@ -103,29 +103,25 @@ const Platform = ({ platform }: IProps) => {
                   <Link to={'/platforms/' + platform.id}>{platform.name}</Link>
                 </div>
                 <div className="truncate text-xs text-foreground">
-                  ({platform.systemInfo?.operatingSystem} v{platform.systemInfo?.serverVersion})
+                  ({platform?.operatingSystem} v{platform?.serverVersion})
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-x-3">
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  <Link to={'/platforms/' + platform.id + '/containers'}>
-                    {platform.systemInfo?.containers} containers
-                  </Link>
+                  <Link to={'/platforms/' + platform.id + '/containers'}>{platform?.containers} containers</Link>
                 </div>
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  {platform.systemInfo?.images} images
+                  {platform?.images} images
                 </div>
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  {platform.systemInfo?.volumesCount} volumes
+                  {platform?.volumesCount} volumes
                 </div>
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  {platform.systemInfo?.networksCount} networks
+                  {platform?.networksCount} networks
                 </div>
-                <div className="truncate text-xs text-muted-foreground">{platform.systemInfo?.ncpu} CPU</div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {byteTransform(platform.systemInfo?.memTotal)} RAM
-                </div>
+                <div className="truncate text-xs text-muted-foreground">{platform?.ncpu} CPU</div>
+                <div className="truncate text-xs text-muted-foreground">{byteTransform(platform?.memTotal)} RAM</div>
               </div>
             </div>
             <div className="flex flex-auto">

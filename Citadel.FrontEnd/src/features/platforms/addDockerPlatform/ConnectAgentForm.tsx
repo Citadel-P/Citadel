@@ -55,7 +55,7 @@ const ConnectAgentForm = () => {
                   <Input
                     type="text"
                     className="rounded-sm focus-visible:ring-transparent"
-                    placeholder="e.g. 172.25.192.1:8001 or myhostname:8001"
+                    placeholder="e.g. 172.25.192.1:9000 or myhostname:9000"
                     {...field}
                   />
                 </FormControl>
