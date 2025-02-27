@@ -33,7 +33,7 @@ const DropdownTableMenu = ({ container }: IProps) => {
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-32 drop-shadow-md shadow-custom bg-background pt-2 pb-2">
+        <DropdownMenuContent align="end" className="w-38 drop-shadow-md shadow-custom bg-background pt-2 pb-2">
           <DropdownMenuItem
             disabled={!availableActions.canStart || isPending}
             className="grow cursor-pointer rounded-sm px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-card"

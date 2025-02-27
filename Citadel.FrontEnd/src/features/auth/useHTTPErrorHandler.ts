@@ -1,17 +1,16 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { usePOSTLogout } from './usePOSTLogout';
 import { useEffect } from 'react';
 import { ProblemDetails } from '@/api/_generated';
 import { toast } from 'sonner';
 
 export function useHTTPErrorHandler() {
-  const { mutate: logout } = usePOSTLogout();
+  
   const client = useQueryClient();
 
   useEffect(() => {
     const handleError = (error: ProblemDetails) => {
       if (error?.status === 401) {
-        logout({});
+        client.invalidateQueries({ queryKey: ['getAccessToken'] });
       } else if (error?.status != null && error?.status > 400 && error?.status != 404) {
         toast.error(error.status + ' ' + error.title, {
           description: error.detail,
@@ -19,7 +18,7 @@ export function useHTTPErrorHandler() {
       }
     };
     const mutationUnsubscribe = client.getMutationCache().subscribe((event) => {
-      if (event.type === 'updated' && event.action.type === 'error') {
+      if (event.type === 'updated' && event.action.type === 'error') {      
         handleError(event.action.error.error);
       }
     });
@@ -34,5 +33,5 @@ export function useHTTPErrorHandler() {
       mutationUnsubscribe();
       queryUnsubscribe();
     };
-  }, [client, logout]);
+  }, [client]);
 }
