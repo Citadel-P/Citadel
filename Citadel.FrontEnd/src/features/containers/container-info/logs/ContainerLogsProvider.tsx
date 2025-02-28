@@ -38,7 +38,7 @@ const ContainerLogsProvider: React.FC<IProps> = ({ children }) => {
 
     return () => {
       if (containerId)
-              mutate({ requestParams: { containerId, requestId, requestedLogAction: RequestedLogAction.STOP } });
+        mutate({ requestParams: { containerId, requestId, requestedLogAction: RequestedLogAction.STOP } });
       clearTimeout(timeoutId);
     };
   }, [containerId, requestId, mutate]);

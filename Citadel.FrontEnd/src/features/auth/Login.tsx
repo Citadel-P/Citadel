@@ -6,7 +6,7 @@ import { useLoginForm } from './useLoginForm';
 import { usePOSTLogin } from './usePOSTLogin';
 import { LoginRequest } from '@/api/_generated';
 import { LoaderCircle } from 'lucide-react';
-import { Message } from '@/components/ui/message';
+import { AlertMessage } from '@/components/ui/alert-message';
 
 const Login = () => {
   const { form } = useLoginForm();
@@ -29,7 +29,7 @@ const Login = () => {
         <div className="w-full rounded-lg bg-background shadow-sm sm:max-w-md md:mt-0 xl:p-0">
           <div className="space-y-4 p-6 sm:p-8 md:space-y-6">
             <h1 className="text-xl font-bold leading-tight tracking-tight md:text-2xl">Sign in to your account</h1>
-            {validationErrors && <Message type="warning">{validationErrors} </Message>}
+            {validationErrors && <AlertMessage type="warning">{validationErrors} </AlertMessage>}
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                 <FormField

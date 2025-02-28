@@ -10,6 +10,7 @@ interface IContext {
   platformId: string | undefined;
   containers: ContainerInfoView[];
   selectedContainerIds: string[];
+  isPlatformOnline: boolean;
   setSelectedRowIds: (selectedRows: string[]) => void;
 }
 interface IProps {
@@ -24,6 +25,7 @@ const ContainersProvider: React.FC<IProps> = ({ children }) => {
   const { containersInfo } = useContainersHub(platformId!);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [containers, setContainers] = useState<ContainerInfoView[]>([]);
+  const isPlatformOnline = containers.find((s) => s.state === 'offline') === undefined;
 
   useEffect(() => {
     if (isSuccess && data?.data) {
@@ -42,6 +44,7 @@ const ContainersProvider: React.FC<IProps> = ({ children }) => {
         containers,
         selectedContainerIds: selectedRowIds,
         setSelectedRowIds,
+        isPlatformOnline,
       }}>
       {children}
     </ContainersContext.Provider>

@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { useAddDockerForm } from './useAddDockerForm';
 import { PutPlatformRequest } from '@/api/_generated';
 import { usePUTDockerPlatform } from './usePUTDockerPlatform';
-import { Message } from '@/components/ui/message';
+import { AlertMessage } from '@/components/ui/alert-message';
 import { LoaderCircle } from 'lucide-react';
 
 const ConnectAgentForm = () => {
@@ -18,11 +18,11 @@ const ConnectAgentForm = () => {
   return (
     <Form {...form}>
       {isSuccess && (
-        <Message type="success">
+        <AlertMessage type="success">
           <span>The platform {data?.data.name} has been added successfully</span>
-        </Message>
+        </AlertMessage>
       )}
-      {validationErrors && <Message type="warning">{validationErrors}</Message>}
+      {validationErrors && <AlertMessage type="error">{validationErrors}</AlertMessage>}
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <FormField
           control={form.control}

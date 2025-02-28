@@ -152,7 +152,9 @@ const ContainerStatTootltip = ({ stat }: { stat: string }) => {
                   ? 'bg-orange-500 mr-2 h-2 w-2 rounded-full'
                   : stat === 'running'
                     ? 'bg-green-500 mr-2 h-2 w-2 rounded-full'
-                    : ''
+                    : stat === 'offline'
+                      ? 'bg-red-500 mr-2 h-2 w-2 rounded-full'
+                      : ''
             }`}
           />
         </TooltipTrigger>
@@ -160,6 +162,7 @@ const ContainerStatTootltip = ({ stat }: { stat: string }) => {
           {stat === 'running' && <span>Running</span>}
           {stat === 'exited' && <span>Exited</span>}
           {stat === 'paused' && <span>Paused</span>}
+          {stat === 'offline' && <span>Offline</span>}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -170,5 +173,7 @@ export const ContainersTable = () => {
   const containers = useContextSelector(ContainersContext, (v) => v?.containers);
   const isLoading = useContextSelector(ContainersContext, (v) => v?.isLoading);
   const setSelectedRowIds = useContextSelector(ContainersContext, (v) => v?.setSelectedRowIds);
-  return <DataTable columns={columns} data={containers!} isLoading={isLoading!} onSelectionChange={setSelectedRowIds!} />;
+  return (
+    <DataTable columns={columns} data={containers!} isLoading={isLoading!} onSelectionChange={setSelectedRowIds!} />
+  );
 };

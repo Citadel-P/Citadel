@@ -2,8 +2,13 @@ import { Container } from 'lucide-react';
 import { SearchField } from './SearchField';
 import { ContainersTable } from './ContainersTable';
 import { ActionBar } from './ActionBar';
+import { useContextSelector } from 'use-context-selector';
+import { ContainersContext } from './ContainersProvider';
+import { AlertMessage } from '@/components/ui/alert-message';
 
 const Containers = () => {
+  const platformOnline = useContextSelector(ContainersContext, (v) => v?.isPlatformOnline);
+
   return (
     <div className="min-h-[calc(100%-4rem)] relative">
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
@@ -18,6 +23,11 @@ const Containers = () => {
             </div>
             <SearchField />
           </div>
+          {!platformOnline && (
+            <AlertMessage type="warning" hasTitle={true}>
+              This platform is not connected, please try to update or reconnect the platform.{' '}
+            </AlertMessage>
+          )}
           <ContainersTable />
         </div>
       </div>

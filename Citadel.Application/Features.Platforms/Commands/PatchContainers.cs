@@ -87,7 +87,7 @@ internal class PatchContainersHandler(
         {
             if (exceptions.Any(s => s is RpcException))
             {
-                return Result.Failure(new ClientRpcException($"An rpc exception occurred while processing the request {exceptions.First(s => s is RpcException).Message}"));
+                return Result.Failure(new ClientRpcException($"An RPC exception occurred: {exceptions.First(s => s is RpcException).Message}"));
             }
             else
             {

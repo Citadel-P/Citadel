@@ -4,7 +4,6 @@ import { ProblemDetails } from '@/api/_generated';
 import { toast } from 'sonner';
 
 export function useHTTPErrorHandler() {
-  
   const client = useQueryClient();
 
   useEffect(() => {
@@ -18,7 +17,7 @@ export function useHTTPErrorHandler() {
       }
     };
     const mutationUnsubscribe = client.getMutationCache().subscribe((event) => {
-      if (event.type === 'updated' && event.action.type === 'error') {      
+      if (event.type === 'updated' && event.action.type === 'error') {
         handleError(event.action.error.error);
       }
     });

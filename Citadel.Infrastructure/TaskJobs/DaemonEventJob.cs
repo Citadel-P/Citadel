@@ -80,7 +80,7 @@ internal class StreamDaemonEventJob(
                                 "restart" => "restarting",
                                 _ => throw new NotImplementedException()
                             };
-                            existing.UpdateWith(state: state, status: containerInfo.Status);
+                            existing.PartialUpdate(state: state, status: containerInfo.Status);
 
                             await dbContext.SaveChangesAsync(context.CancellationToken);
                         }
