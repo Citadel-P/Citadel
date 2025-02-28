@@ -9,11 +9,11 @@ const ContainerLogs = () => {
   const [logsBuffer, setLogsBuffer] = useState(logs);
 
   useEffect(() => {
-    setLogsBuffer((currentLogs) => [...currentLogs ?? [], ...logs ?? []]);
+    setLogsBuffer((currentLogs) => [...(currentLogs ?? []), ...(logs ?? [])]);
   }, [logs]);
 
   return (
-    <Highlight theme={themes.nightOwl} code={isPending ? "Loading..." : logsBuffer!.join('\n')} language="tsx">
+    <Highlight theme={themes.nightOwl} code={isPending ? 'Loading...' : logsBuffer!.join('\n')} language="tsx">
       {({ style, tokens, getLineProps, getTokenProps }) => (
         <pre
           style={style}

@@ -82,7 +82,7 @@ internal class PlatformInfoJob(
             }
             catch (RpcException ex)
             {
-                logger.LogError(ex, "Error while getting system info from platform {PlatformAddress}", address);
+                logger.LogWarning(ex, "Error while getting system info from platform {PlatformAddress}", address);
                 platforms.Add(new PlatformData(address, PlatformStatus.Offline));
             }
         });

@@ -18,7 +18,9 @@ export const Sidebar = () => {
         <div className="relative h-10">
           {!sidebarMinimized && (
             <div className="flex items-center">
-              <span onClick={() => navigate('/')} className="flex text-background cursor-pointer items-center justify-center rounded bg-primary p-2 focus:outline-hidden focus:ring-1">
+              <span
+                onClick={() => navigate('/')}
+                className="flex text-background cursor-pointer items-center justify-center rounded bg-primary p-2 focus:outline-hidden focus:ring-1">
                 <LogoIcon />
               </span>
               <b className="ml-1 pl-2 text-sm font-bold text-foreground"> Citadel </b>
@@ -43,7 +45,8 @@ export const Sidebar = () => {
       <div className="mx-4 my-4 space-y-1">
         {/* Version */}
         <a
-          target="_blank" rel="noreferrer"
+          target="_blank"
+          rel="noreferrer"
           href="https://github.com/Citadel/Citadel"
           className="group flex h-9 cursor-pointer items-center justify-start rounded p-2 hover:bg-card">
           <span className="h-6 w-5 text-muted-foreground/50">

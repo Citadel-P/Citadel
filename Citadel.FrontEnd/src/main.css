@@ -1,8 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap') layer(base);
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap')
+layer(base);
 
 @import 'tailwindcss';
 
-/** Plugins **/  
+/** Plugins **/
 
 @plugin "@tailwindcss/forms";
 @plugin "@tailwindcss/typography";
@@ -57,7 +58,6 @@
   --color-danger: var(--danger);
 
   @keyframes wiggle {
-
     0%,
     100% {
       transform: rotate(-3deg);
@@ -146,7 +146,6 @@
   color utility to any element that depends on these defaults.
 */
 @layer base {
-
   *,
   ::after,
   ::before,
@@ -159,34 +158,34 @@
 @utility dropdown-content {
   @apply pointer-events-none scale-95 opacity-0 duration-100 ease-in;
 
-  .dropdown:hover>& {
+  .dropdown:hover > & {
     @apply pointer-events-auto block scale-100 animate-fade-in-up opacity-100 duration-200;
   }
 }
 
 @utility dropdown {
-  &:hover>.dropdown-content {
+  &:hover > .dropdown-content {
     @apply pointer-events-auto block scale-100 animate-fade-in-up opacity-100 duration-200;
   }
 }
 
 @layer base {
   :root {
-    --background: #FFFFFF;
-    --foreground: #0C1420;
-    --card: #F1F5F9;
+    --background: #ffffff;
+    --foreground: #0c1420;
+    --card: #f1f5f9;
     --card-foreground: #000000;
-    --primary: #E11D48;
-    --primary-foreground: #FFFFFF;
+    --primary: #e11d48;
+    --primary-foreground: #ffffff;
     --secondary: #e6e6e6;
     --secondary-foreground: #171717;
-    --muted: #CFD9E5;
-    --muted-foreground: #64748B;
+    --muted: #cfd9e5;
+    --muted-foreground: #64748b;
     --accent: #f5f5f5;
     --accent-foreground: #171717;
-    --destructive: #CC0033;
-    --destructive-foreground: #FAFAFA;
-    --border: #E2E8F0;
+    --destructive: #ef4444;
+    --destructive-foreground: #ef4444;
+    --border: #e2e8f0;
     --input: #e5e5e5;
     --ring: #0a0a0a;
     --radius: 0.5rem;
@@ -198,124 +197,123 @@
     --warning: #f97316;
     --warning-foreground: #fafaf9;
     --danger: #ff0f0f;
-    --chart-1: #2490FF;
-    --chart-2: #E76A4B;
+    --chart-1: #2490ff;
+    --chart-2: #e76a4b;
   }
 
   .dark {
-    --background: #0A0A0A;
-    --foreground: #F2F2F2;
+    --background: #0a0a0a;
+    --foreground: #f2f2f2;
     --card: #525252;
     --card-foreground: #262626;
-    --primary: #E63946; 
-    --primary-foreground: #FFFFFF;
+    --primary: #e63946;
+    --primary-foreground: #ffffff;
     --secondary: #262626;
-    --secondary-foreground: #FAFAFA;
+    --secondary-foreground: #fafafa;
     --muted: #262626;
-    --muted-foreground: #A3A3A3;
+    --muted-foreground: #a3a3a3;
     --accent: #262626;
-    --accent-foreground: #FAFAFA;
-    --destructive: #FF0033;
-    --destructive-foreground: #FAFAFA;
+    --accent-foreground: #fafafa;
+    --destructive: #ff0033;
+    --destructive-foreground: #c21943;
     --border: #262626;
     --input: #262626;
-    --ring: #D4D4D4;
+    --ring: #d4d4d4;
     --secondary: #333333;
-    --success: #22C55E;
-    --success-foreground: #D9E6F8;
-    --info: #3B82F6;
-    --info-foreground: #D9E6F8; 
-    --warning: #F97316;
-    --warning-foreground: #F9F9F9;
-    --chart-1: #CC0022;
-    --chart-2: #E23670;
+    --success: #22c55e;
+    --success-foreground: #d9e6f8;
+    --info: #3b82f6;
+    --info-foreground: #d9e6f8;
+    --warning: #f97316;
+    --warning-foreground: #f9f9f9;
+    --chart-1: #cc0022;
+    --chart-2: #e23670;
   }
 
   :root[data-theme='violet'] {
-    --primary: #6E56CF;
-    --chart-1: #6E56CF;
+    --primary: #6e56cf;
+    --chart-1: #6e56cf;
   }
 
   .dark[data-theme='violet'] {
     --background: #060815;
-    --foreground: #F6F8FB;
+    --foreground: #f6f8fb;
     --primary: #6d28d9;
-    --primary-foreground: #F6F8FB;
-    --muted: #232B3D;
-    --muted-foreground: #A1A8BF;
-    --border: #232B3D;
-    --chart-1: #6E56CF;
+    --primary-foreground: #f6f8fb;
+    --muted: #232b3d;
+    --muted-foreground: #a1a8bf;
+    --border: #232b3d;
+    --chart-1: #6e56cf;
   }
 
   :root[data-theme='red'] {
-    --primary: #CC0033;
-    --chart-1: #CC0033;
+    --primary: #cc0033;
+    --chart-1: #cc0033;
   }
 
   .dark[data-theme='red'] {
-    --primary-foreground: #FFE5E5;
+    --primary-foreground: #ffe5e5;
     --primary-foreground: #fef2f2;
-    --chart-1: #CC0033;
+    --chart-1: #cc0033;
   }
 
   :root[data-theme='blue'] {
-    --primary: #2490FF;
-    --chart-1: #2490FF;
+    --primary: #2490ff;
+    --chart-1: #2490ff;
   }
 
   .dark[data-theme='blue'] {
-    --background: #02080F;
-    --foreground: #F8FAFC;
+    --background: #02080f;
+    --foreground: #f8fafc;
     --primary: #3b82f6;
-    --primary-foreground: #0F1729;
-    --muted: #1E293B;
-    --muted-foreground: #94A3B8;
-    --border: #1E293B;
-    --chart-1: #2490FF;
+    --primary-foreground: #0f1729;
+    --muted: #1e293b;
+    --muted-foreground: #94a3b8;
+    --border: #1e293b;
+    --chart-1: #2490ff;
   }
 
   :root[data-theme='orange'] {
-    --primary: #EA580C;
-    --chart-1: #EA580C;
+    --primary: #ea580c;
+    --chart-1: #ea580c;
   }
 
   .dark[data-theme='orange'] {
-    --background: #0C0A09;
-    --foreground: #FAFAF9;
-    --primary-foreground: #FAFAF9;
+    --background: #0c0a09;
+    --foreground: #fafaf9;
+    --primary-foreground: #fafaf9;
     --muted: #292524;
-    --muted-foreground: #A8A29E;
+    --muted-foreground: #a8a29e;
     --border: #292524;
-    --chart-1: #EA580C;
+    --chart-1: #ea580c;
   }
 
   :root[data-theme='yellow'] {
-    --primary: #FACC15;
-    --chart-1: #FACC15;
+    --primary: #facc15;
+    --chart-1: #facc15;
   }
 
   .dark[data-theme='yellow'] {
-    --background: #0C0A09;
-    --foreground: #FAFAF9;
-    --primary: #FACC15;
+    --background: #0c0a09;
+    --foreground: #fafaf9;
+    --primary: #facc15;
     --primary-foreground: #422006;
     --muted: #292524;
-    --muted-foreground: #A8A29E;
+    --muted-foreground: #a8a29e;
     --border: #292524;
-    --chart-1: #FACC15;
+    --chart-1: #facc15;
   }
 
   :root[data-theme='green'] {
-    --primary: #22C55E;
-    --chart-1: #22C55E;
+    --primary: #22c55e;
+    --chart-1: #22c55e;
   }
 
   .dark[data-theme='green'] {
-    --primary: #22C55E;
-    --primary-foreground: #052E16;
-    --chart-1: #22C55E;
+    --primary: #22c55e;
+    --primary-foreground: #052e16;
+    --chart-1: #22c55e;
   }
-
 }
 
 /** Scroll bar **/
@@ -361,7 +359,7 @@ select {
 }
 @layer base {
   button:not(:disabled),
-  [role="button"]:not(:disabled) {
+  [role='button']:not(:disabled) {
     cursor: pointer;
   }
 }
