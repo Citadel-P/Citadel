@@ -39,7 +39,7 @@ public class ContainerInfo
             Created = created.Value,
         };
 
-    public void UpdateWith(
+    public void PartialUpdate(
         string name = null,
         string image = null,
         string state = null,

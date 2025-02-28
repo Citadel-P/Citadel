@@ -1,7 +1,10 @@
 import { ContainerInfoView } from '@/api/_generated';
 import { actionType, usePATCHContainers } from './usePATCHContainers';
+import { useContextSelector } from 'use-context-selector';
+import { ContainersContext } from '../ContainersProvider';
 
 export const useAvailableActions = (containers: ContainerInfoView[]) => {
+  const isPlatformOnline = useContextSelector(ContainersContext, (v) => v?.isPlatformOnline);
   const { mutate, isPending } = usePATCHContainers();
 
   const actions: ContainerActionsState = {
@@ -9,7 +12,7 @@ export const useAvailableActions = (containers: ContainerInfoView[]) => {
     canStop: false,
     canRestart: false,
     canPause: false,
-    canDelete: containers.length > 0,
+    canDelete: containers.length > 0 && isPlatformOnline!,
   };
 
   containers.forEach((container) => {

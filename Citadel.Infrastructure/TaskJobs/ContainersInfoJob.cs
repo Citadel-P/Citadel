@@ -1,10 +1,10 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using Agent.Server.Containers;
 using Citadel.Common;
 using Grpc.Core;
 using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -13,7 +13,6 @@ using Quartz;
 namespace Infrastructure.TaskJobs;
 
 internal class ContainersInfoJob(
-    ICacheService cacheService,
     IGrpcClientFactory clientFactory,
     ApplicationDbContext dbContext,
     ILogger<ContainersInfoJob> logger,
@@ -23,79 +22,96 @@ internal class ContainersInfoJob(
 
     public async ValueTask Execute(IJobExecutionContext context)
     {
-        var addresses = await cacheService.GetClientsAddresses(context.CancellationToken);
-        if (!addresses.Any()) return;
+        var platforms = await dbContext.Platforms.AsNoTracking()
+            .Select(s => new { s.Id, s.DaemonId, s.Address, s.Status})
+            .ToListAsync(context.CancellationToken);
 
-        var replies = new ConcurrentBag<ContainersListReply>();
-        await Parallel.ForEachAsync(addresses, context.CancellationToken, async (address, cancellationToken) =>
+        if (platforms.Count == 0) return;
+
+        var platformsData = await GetPlatformsData(platforms.Where(s => s.Status == PlatformStatus.Online).Select(s => s.Address), context.CancellationToken);
+        foreach (var platform in platforms)
+        {
+            var platformData = platformsData.SingleOrDefault(s => s.PlatformAddress == platform.Address);
+            var containers = await dbContext.ContainersInfo.Where(s => s.PlatformId == platform.Id).ToListAsync(context.CancellationToken);
+
+            if (platformData != null && platformData.Status == PlatformStatus.Online)
+            {
+                var containersToDelete = containers.Where(s => platformData.Containers.Select(s => s.Id).Contains(s.ContainerId) == false);
+                if (containersToDelete.Any())
+                {
+                    dbContext.ContainersInfo.RemoveRange(containersToDelete);
+                }
+
+                foreach (var containerMessage in platformData.Containers)
+                {
+                    var existing = containers.SingleOrDefault(s => s.ContainerId == containerMessage.Id);
+                    if (existing is null)
+                    {
+                        logger.LogDebug("Create new record for {ContainerId} ", containerMessage.Id);
+
+                        var containerInfo = containerMessage.Map(platform.Id);
+                        dbContext.ContainersInfo.Add(containerInfo);
+                        containers.Add(containerInfo);
+                    }
+                    else
+                    {
+                        logger.LogDebug("Update record for {ContainerId} ", containerMessage.Id);
+
+                        existing.PartialUpdate(
+                            name: containerMessage.Name,
+                            image: containerMessage.Image,
+                            created: containerMessage.Created,
+                            state: containerMessage.State,
+                            status: containerMessage.Status,
+                            labels: containerMessage.Labels.ToDictionary(),
+                            ports: containerMessage.Ports.Map());
+
+                        var stat = ContainerStat.Create(
+                            containerInfoId: existing.Id,
+                            memoryUsage: containerMessage.ContainerStatMessage?.MemoryUsage,
+                            memoryLimit: containerMessage.ContainerStatMessage?.MemoryLimit,
+                            cpuUsage: containerMessage.ContainerStatMessage?.CpuUsage,
+                            rxBytes: containerMessage.ContainerStatMessage?.RxBytes,
+                            txBytes: containerMessage.ContainerStatMessage?.TxBytes,
+                            created: DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                        dbContext.ContainerStats.Add(stat);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var container in containers) 
+                {
+                    container.PartialUpdate(state: "offline");
+                }
+            }
+    
+            await containerHub.SendContainersInfo(containers.OrderByDescending(s => s.Created));
+        }
+        await dbContext.SaveChangesAsync(context.CancellationToken);
+    }
+
+    private async Task<IEnumerable<PlatformData>> GetPlatformsData(IEnumerable<string> addresses, CancellationToken cancellationToken)
+    {
+        var containersData = new ConcurrentBag<PlatformData>();
+        await Parallel.ForEachAsync(addresses, cancellationToken, async (address, cancellationToken) =>
         {
             var client = clientFactory.GetContainerClient(address);
             try
             {
-                var reply = await client.ListContainersAsync(new ContainersListMessage() { All = true }, cancellationToken: cancellationToken);
-                replies.Add(reply);
+                var containers = await client.ListContainersAsync(new ContainersListMessage() { All = true }, cancellationToken: cancellationToken);
+                containersData.Add(new PlatformData(address, PlatformStatus.Online, containers.Containers));
             }
             catch (RpcException ex)
             {
-                logger.LogError(ex, "Error while getting system info from platform {PlatformAddress}", address);
+                logger.LogWarning(ex, "Error while getting containers info from platform {PlatformAddress}", address);
+                containersData.Add(new PlatformData(address, PlatformStatus.Offline));
             }
         });
-
-        foreach (var reply in replies)
-        {
-            Guid? platformId = await cacheService.GetPlatformId(reply.Id, context.CancellationToken);
-            if (platformId == null)
-            {
-                logger.LogError("Platform does not exists, daemon id: {PlatformId}", reply.Id);
-                continue;
-            }
-
-            var containersList = await dbContext.ContainersInfo.Where(s => s.PlatformId == platformId.Value).ToListAsync(context.CancellationToken);
-            var containersToDelete = containersList.Where(s => reply.Containers.Select(s => s.Id).Contains(s.ContainerId) == false);
-            if (containersToDelete.Any())
-            {
-                dbContext.ContainersInfo.RemoveRange(containersToDelete);
-            }
-
-            foreach (var containerMessage in reply.Containers)
-            {
-                var existing = containersList.SingleOrDefault(s => s.ContainerId == containerMessage.Id);
-                if (existing is null)
-                {
-                    logger.LogDebug("Create new record for {ContainerId} ", containerMessage.Id);
-
-                    var containerInfo = containerMessage.Map(platformId.Value);
-                    dbContext.ContainersInfo.Add(containerInfo);
-                    containersList.Add(containerInfo);
-                }
-                else
-                {
-                    logger.LogDebug("Update record for {ContainerId} ", containerMessage.Id);
-
-                    existing.UpdateWith(
-                        name: containerMessage.Name,
-                        image: containerMessage.Image,
-                        created: containerMessage.Created,
-                        state: containerMessage.State,
-                        status: containerMessage.Status,
-                        labels: containerMessage.Labels.ToDictionary(),
-                        ports: containerMessage.Ports.Map());
-
-                    var stat = ContainerStat.Create(
-                        containerInfoId: existing.Id,
-                        memoryUsage: containerMessage.ContainerStatMessage?.MemoryUsage,
-                        memoryLimit: containerMessage.ContainerStatMessage?.MemoryLimit,
-                        cpuUsage: containerMessage.ContainerStatMessage?.CpuUsage,
-                        rxBytes: containerMessage.ContainerStatMessage?.RxBytes,
-                        txBytes: containerMessage.ContainerStatMessage?.TxBytes,
-                        created: DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-                    dbContext.ContainerStats.Add(stat);
-                }
-            }
-            await containerHub.SendContainersInfo(containersList.OrderByDescending(s => s.Created));
-        }
-        await dbContext.SaveChangesAsync(context.CancellationToken);
+        return containersData;
     }
+
+    private record PlatformData(string PlatformAddress, PlatformStatus Status, IEnumerable<ContainerMessage> Containers = null);
 }
 
 internal static class ContainerInfoMapper

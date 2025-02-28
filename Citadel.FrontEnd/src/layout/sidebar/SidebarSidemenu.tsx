@@ -23,7 +23,9 @@ export const SidebarSubMenu = ({ submenu, toggleMenu }: IProps) => {
               onClick={() => toggleMenu(sub)}>
               {sub.children ? (
                 <>
-                  <span className="inline-block w-full cursor-pointer px-4 py-2 text-xs font-semibold">{sub.label}</span>
+                  <span className="inline-block w-full cursor-pointer px-4 py-2 text-xs font-semibold">
+                    {sub.label}
+                  </span>
                   <button
                     className={`${sidebarMinimized ? 'hidden' : ''} ${sub.expanded ? 'rotate-90' : ''} flex items-center p-1 text-muted-foreground transition-all duration-500`}>
                     <ChevronRight width={18} height={18} />

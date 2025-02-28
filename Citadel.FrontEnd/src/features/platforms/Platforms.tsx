@@ -4,7 +4,7 @@ import Platform from './Platform';
 import { PlatformsContext } from './PlatformsProvider';
 import { useContextSelector } from 'use-context-selector';
 import { useNavigate } from 'react-router';
-import { Message } from '@/components/ui/message';
+import { AlertMessage } from '@/components/ui/alert-message';
 
 const Platforms = () => {
   const platforms = useContextSelector(PlatformsContext, (v) => v?.platforms);
@@ -22,7 +22,7 @@ const Platforms = () => {
         </div>
         {isLoading && <Loader />}
         {platforms?.length === 0 && !isLoading && (
-          <Message type="info">
+          <AlertMessage type="info">
             <span>No platform has been configured yet, please add a new Docker platform</span>
             <button
               className="font-semibold underline hover:no-underline ml-1"
@@ -30,7 +30,7 @@ const Platforms = () => {
               here
             </button>
             .
-          </Message>
+          </AlertMessage>
         )}
         {(platforms ?? []).map((platform) => (
           <Platform key={`${platform.id}`} platform={platform} />
