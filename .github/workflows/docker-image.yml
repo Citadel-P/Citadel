@@ -16,7 +16,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
           submodules: true # Ensure submodules are updated
-          token: ${{ secrets.GITHUB_TOKEN }} # Use GitHub token for authentication
+          token: ${{ secrets.ACCESS_TOKEN }} # Use GitHub token for authentication
     - name: Update submodules
       run: git submodule update --init --recursive
     - name: Build the Docker image
