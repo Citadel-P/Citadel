@@ -36,6 +36,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: true # Ensure submodules are updated
+          token: ${{ secrets.ACCESS_TOKEN }} # Use GitHub token for authentication
 
       # Install the cosign tool except on PR
       # https://github.com/sigstore/cosign-installer
@@ -59,7 +62,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.ACCESS_TOKEN }}
 
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
