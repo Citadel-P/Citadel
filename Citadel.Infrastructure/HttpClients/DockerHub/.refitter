@@ -1,0 +1,10 @@
+{
+    "openApiPath": "./dockerhub-api.yaml",
+    "namespace": "Infrastructure.DockerHub",
+    "outputFilename": "./DockerHubApi.cs",
+    "naming": {
+        "useOpenApiTitle": false,
+        "interfaceName": "DockerHubApi"
+    },
+    "useCancellationTokens": true
+}

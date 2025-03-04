@@ -7,6 +7,8 @@ using Hosting.Common.ErrorTypes;
 using Infrastructure;
 using Infrastructure.EntityFramework;
 using Application.Utils;
+using Infrastructure.DockerHub;
+using Refit;
 
 namespace Application.Features.Registries.Commands;
 
@@ -17,59 +19,33 @@ public sealed record CreateRegistry(string Name, string Url, RegistryDiscriminat
         public CreateRegistryRequestValidator()
         {
             RuleFor(x => x.Name).NotEmpty().MinimumLength(3);
-
-            RuleFor(x => x.Url)
-                .Matches(Constants.Url)
-                .WithMessage("Please provide a valid url");
-
             RuleFor(x => x.Discriminator)
                 .Must(d => Enum.IsDefined(d))
                 .WithMessage("'{PropertyName}' must be a valid discriminator");
 
-            RuleFor(x => x).Custom((request, ctx) =>
+            When(x => x.Configuration is not DockerHubRegistry, () =>
             {
-                switch (request.Discriminator)
-                {
-                    case RegistryDiscriminator.Azure:
-                        AzureRegistry azureCfg = request.Configuration as AzureRegistry;
-                        if (azureCfg is not null)
-                        {
-                            new AzureRegistryValidator().ValidateAndThrow(azureCfg);
-                        }
-                        break;
-
-                    case RegistryDiscriminator.DockerHub:
-                        DockerHubRegistry dockerHubCfg = request.Configuration as DockerHubRegistry;
-                        if (dockerHubCfg is not null)
-                        {
-                            new DockerHubRegistryValidator().ValidateAndThrow(dockerHubCfg);
-                        }
-                        break;
-
-                    case RegistryDiscriminator.AWS:
-                        AWSRegistry awsCfg = request.Configuration as AWSRegistry;
-                        if (awsCfg.AuthenticationRequired && awsCfg is not null)
-                        {
-                            new AWSRegistryValidator().ValidateAndThrow(awsCfg);
-                        }
-                        break;
-
-                    case RegistryDiscriminator.Gitlab:
-                        GitlabRegistry gitlabCfg = request.Configuration as GitlabRegistry;
-                        if (gitlabCfg is not null)
-                        {
-                            new GitlabRegistryValidator().ValidateAndThrow(gitlabCfg);
-                        }
-                        break;
-
-                    case RegistryDiscriminator.Custom:
-                        CustomRegistry customCfg = request.Configuration as CustomRegistry;
-                        if (customCfg.AuthenticationRequired && customCfg is not null)
-                        {
-                            new CustomRegistryValidator().ValidateAndThrow(customCfg);
-                        }
-                        break;
-                }
+                RuleFor(x => x.Url).Matches(Constants.Url).WithMessage("Please provide a valid url");
+            });
+            When(x => x.Configuration is DockerHubRegistry, () =>
+            {
+                RuleFor(x => x.Configuration as DockerHubRegistry).SetValidator(new DockerHubRegistryValidator());
+            });
+            When(x => x.Configuration is AzureRegistry, () =>
+            {
+                RuleFor(x => x.Configuration as AzureRegistry).SetValidator(new AzureRegistryValidator());
+            });
+            When(x => x.Configuration is AWSRegistry, () =>
+            {
+                RuleFor(x => x.Configuration as AWSRegistry).SetValidator(new AWSRegistryValidator());
+            });
+            When(x => x.Configuration is GitlabRegistry, () =>
+            {
+                RuleFor(x => x.Configuration as GitlabRegistry).SetValidator(new GitlabRegistryValidator());
+            });
+            When(x => x.Configuration is CustomRegistry, () =>
+            {
+                RuleFor(x => x.Configuration as CustomRegistry).SetValidator(new CustomRegistryValidator());
             });
         }
     }
@@ -108,7 +84,7 @@ public sealed record CreateRegistry(string Name, string Url, RegistryDiscriminat
         {
             RuleFor(x => x.InstanceUrl).NotEmpty().MinimumLength(10);
             RuleFor(x => x.UserName).NotEmpty().MinimumLength(10);
-            RuleFor(x => x.PAT).NotEmpty().MinimumLength(4);
+            RuleFor(x => x.PAT).NotEmpty().MinimumLength(10);
         }
     }
 
@@ -122,28 +98,42 @@ public sealed record CreateRegistry(string Name, string Url, RegistryDiscriminat
     }
 }
 
-internal class CreateRegistryHandler(ApplicationDbContext dbContext) : ICommandHandler<CreateRegistry, Result<Registry>>
+internal class CreateRegistryHandler(ApplicationDbContext dbContext, IDockerHubApi dockerHub) : ICommandHandler<CreateRegistry, Result<Registry>>
 {
     public async ValueTask<Result<Registry>> Handle(CreateRegistry command, CancellationToken cancellationToken)
     {
-        // Check for conflict entries
+        // Check for conflicted entries
         Registry registry = await dbContext.Registries.FirstOrDefaultAsync(s => s.Url == command.Url || s.Name == command.Name, cancellationToken);
         if (registry != null)
         {
             return Result.Failure<Registry>(new ConflictError("The provided name or url already exist"));
         }
 
-        registry = new Registry()
+        if (command.Configuration is DockerHubRegistry cfg)
         {
-            Name = command.Name,
-            Url = command.Url,
-            Created = DateTime.UtcNow,
-            Discriminator = command.Discriminator,
-            Configuration = command.Configuration.SerializeConfiguration(command.Discriminator)
-        };
+            try
+            {
+                var authResponse = await dockerHub.AuthCreateAccessToken(new Body() { Identifier = cfg.UserName, Secret = cfg.PAT }, cancellationToken);
 
-        await dbContext.Registries.AddAsync(registry, cancellationToken);
-        await dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (ApiException ex)
+            {
+                if (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    return Result.Failure<Registry>(new BadRequestError("Invalid DockerHub credentials, please check your PAT and/or User-name."));
+                }
+                return Result.Failure<Registry>(new BadRequestError(ex.Message));
+            }
+            catch (Exception ex) 
+            {
+                return Result.Failure<Registry>(new InternalServerError(ex.Message));
+            }
+        }
+
+        registry = Registry.Create(name: command.Name, url: command.Url, discriminator: command.Discriminator, configuration: command.Configuration);
+        
+        dbContext.Registries.Add(registry);
+        //await dbContext.SaveChangesAsync(cancellationToken);
 
         return Result.Success(registry);
     }

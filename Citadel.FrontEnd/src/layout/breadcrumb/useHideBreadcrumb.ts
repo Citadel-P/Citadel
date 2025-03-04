@@ -9,5 +9,5 @@ export const useHideBreadcrumb = () => {
     return () => {
       setIsBreadcrumbHidden!(false);
     };
-  }, []);
+  }, [setIsBreadcrumbHidden]);
 };

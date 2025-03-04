@@ -7,6 +7,8 @@ using System.Reflection;
 using Infrastructure.Services.Abstractions;
 using Infrastructure.TaskJobs;
 using Microsoft.Extensions.Configuration;
+using Refit;
+using Infrastructure.DockerHub;
 
 namespace Infrastructure;
 
@@ -17,6 +19,7 @@ public static class InfrastructureModule
                 .RegisterServices()
                 .InitializeDb()
                 .AddGrpcClients()
+                .AddHttpClients()
                 .AddTaskJobs(configuration);
 
     private static IServiceCollection RegisterServices(this IServiceCollection services)
@@ -27,6 +30,11 @@ public static class InfrastructureModule
         => services
         .AddSingleton<IGrpcClientFactory, GrpcClientFactory>()
         .AddGrpc().Services;
+
+    private static IServiceCollection AddHttpClients(this IServiceCollection services)
+        => services.AddRefitClient<IDockerHubApi>()
+                    .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://hub.docker.com"))
+                    .Services;
 
     private static IServiceCollection InitializeDb(this IServiceCollection services)
     {

@@ -1,6 +1,8 @@
 ﻿using Application.Utils;
 using Hosting.OpenApi;
+using Infrastructure;
 using WebApi.Routes.Endpoints;
+using WebApi.Routes.Endpoints.Resources;
 
 namespace WebApi.Routes;
 
@@ -8,6 +10,7 @@ public static class PublicEndpoints
 {
     const string ContainersName = nameof(Containers);
     const string PlatformsName = nameof(Platforms);
+    const string RegistriesName = nameof(Registries);
     const string AuthenticationName = nameof(Authentication);
 
     public static void MapPublicEndpoints(this WebApplication app)
@@ -170,6 +173,22 @@ public static class PublicEndpoints
                     .ProducesProblem(StatusCodes.Status403Forbidden)
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
                     .WithName(PlatformsName + "_" + nameof(Platforms.ListContainers));
+            }
+            var registries = group.MapGroup("/registries").WithTags(RegistriesName).RequireAuthorization();
+            {
+                registries.MapPost("/", Registries.Create)
+                    .WithSummary("Create a registry")
+                    .WithDescription($"A discriminator should be provided in the request, this discriminator is based on {nameof(RegistryDiscriminator)} enum ")
+                    .WithExample(RegistryDiscriminator.Azure.ToString(), Examples.Registries.CreateAzureRegistryExample())
+                    .WithExample(RegistryDiscriminator.AWS.ToString(), Examples.Registries.CreateAwsRegistryExample())
+                    .WithExample(RegistryDiscriminator.Gitlab.ToString(), Examples.Registries.CreateGitlabRegistryExample())
+                    .WithExample(RegistryDiscriminator.Custom.ToString(), Examples.Registries.CreateCustomRegistryExample())
+                    .WithExample(RegistryDiscriminator.DockerHub.ToString(), Examples.Registries.CreateDockerHubRegistryExample())
+                    .ProducesValidationProblem()
+                    .ProducesProblem(StatusCodes.Status404NotFound)
+                    .ProducesProblem(StatusCodes.Status403Forbidden)
+                    .ProducesProblem(StatusCodes.Status401Unauthorized)
+                    .WithName(RegistriesName + "_" + nameof(Registries.Create));
             }
         }
 

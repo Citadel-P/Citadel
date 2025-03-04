@@ -25,6 +25,7 @@ internal static class WebApiModule
                 cfg.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
                 cfg.AddOperationTransformer<AddCookieOperationTransformer>();
                 cfg.AddOperationTransformer<ProduceCookieOperationTransformer>();
+                cfg.AddOperationTransformer<ExampleOperationTransformer>();
             })
             .AddCors();
 

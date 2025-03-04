@@ -34,36 +34,43 @@ const BreadCrumb = () => {
   if (isBreadcrumbHidden) return <></>;
 
   const crumbs: ICrumbs[] = [];
-  if (route?.path === paths[0]) {
-    // Platforms
+  if (route?.path === paths[2]) {
+    // platforms
     crumbs.push({ title: 'Patforms', isActive: true });
-  } else if (route?.path === paths[1]) {
+  } else if (route?.path === paths[3]) {
     // add docker platform
     crumbs.push({ title: 'Patforms', link: '/' });
     crumbs.push({ title: 'Add Platform', isActive: true });
-  } else if (route?.path === paths[2]) {
+  } else if (route?.path === paths[4]) {
     // containers
     crumbs.push({ title: 'Patforms', link: '/' });
     crumbs.push({ title: currentPlatform?.name ?? '', link: '/platforms/' + currentPlatform?.id });
     crumbs.push({ title: 'Containers', isActive: true });
-  } else if (route?.path === paths[3]) {
+  } else if (route?.path === paths[5]) {
     // container logs
     crumbs.push({ title: 'Patforms', link: '/' });
     crumbs.push({ title: currentContainer?.platform?.name ?? '', link: '/platforms/' + currentPlatform?.id });
     crumbs.push({ title: 'Containers', link: '/platforms/' + currentPlatform?.id + '/containers' });
     crumbs.push({ title: currentContainer?.name?.slice(1) ?? '', isActive: true, badge: { title: 'Logs' } });
-  } else if (route?.path === paths[4]) {
+  } else if (route?.path === paths[6]) {
     // container stats
     crumbs.push({ title: 'Patforms', link: '/' });
     crumbs.push({ title: currentContainer?.platform?.name ?? '', link: '/platforms/' + currentPlatform?.id });
     crumbs.push({ title: 'Containers', link: '/platforms/' + currentPlatform?.id + '/containers' });
     crumbs.push({ title: currentContainer?.name?.slice(1) ?? '', isActive: true, badge: { title: 'Stats' } });
-  } else if (route?.path === paths[5]) {
+  } else if (route?.path === paths[7]) {
     // container stats
     crumbs.push({ title: 'Patforms', link: '/' });
     crumbs.push({ title: currentContainer?.platform?.name ?? '', link: '/platforms/' + currentPlatform?.id });
     crumbs.push({ title: 'Containers', link: '/platforms/' + currentPlatform?.id + '/containers' });
     crumbs.push({ title: currentContainer?.name?.slice(1) ?? '', isActive: true, badge: { title: 'Inspect' } });
+  } else if (route?.path === paths[8]) {
+    // registries
+    crumbs.push({ title: 'Registries', isActive: true });
+  } else if (route?.path === paths[9]) {
+    // add docker platform
+    crumbs.push({ title: 'Registries', link: '/registries' });
+    crumbs.push({ title: 'Add registry', isActive: true });
   }
 
   return (

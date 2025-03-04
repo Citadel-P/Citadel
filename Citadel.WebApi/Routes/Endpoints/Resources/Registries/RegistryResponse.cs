@@ -1,12 +1,9 @@
-﻿using Infrastructure.Entities;
-using System.Text.Json.Serialization;
+﻿using Infrastructure;
+using Infrastructure.Entities;
 
 namespace WebApi.Routes.Endpoints.Resources.Registries;
 
-public sealed record RegistryResponse(Guid Id, string Name, string Url, DateTime Created, IRegistryConfiguration Configuration)
+public sealed record RegistryResponse(Guid Id, string Name, string Url, RegistryDiscriminator Discriminator, DateTime Created, IRegistryConfiguration Configuration)
 {
-    [JsonPropertyName("Id")]
-    public Guid Id { get; init; } = Id;
-
-    internal static RegistryResponse Map(Registry registry) => new(registry.Id, registry.Name, registry.Url, registry.Created, null);
+    internal static RegistryResponse Map(Registry registry) => new(registry.Id, registry.Name, registry.Url, registry.Discriminator, registry.Created, null);
 }
