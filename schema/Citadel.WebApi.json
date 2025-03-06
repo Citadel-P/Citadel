@@ -1553,23 +1553,23 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateRegistryRequest"
+                "$ref": "#/components/schemas/CreateRegistryInput"
               },
               "examples": {
                 "Azure": {
-                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Discriminator\":1,\"Configuration\":{\"$type\":1,\"UserName\":\"johnDoe\",\"Password\":\"myPassword\"}}"
+                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Discriminator\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\"}}"
                 },
                 "AWS": {
-                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Discriminator\":2,\"Configuration\":{\"$type\":2,\"AuthenticationRequired\":true,\"AccessKey\":\"\",\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\"}}"
+                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Discriminator\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"AuthenticationRequired\":true,\"AccessKey\":\"\",\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\"}}"
                 },
                 "Gitlab": {
-                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Discriminator\":3,\"Configuration\":{\"$type\":3,\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\"}}"
-                },
-                "Custom": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"10.0.0.1 or myregistry.domain.tld\",\"Discriminator\":4,\"Configuration\":{\"$type\":4,\"AuthenticationRequired\":true,\"UserName\":\"\",\"Password\":\"\"}}"
+                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Discriminator\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\"}}"
                 },
                 "DockerHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":0,\"Configuration\":{\"$type\":0,\"UserName\":\"\",\"PAT\":\"\"}}"
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"UserName\":\"\",\"PAT\":\"\"}}"
+                },
+                "GitHub": {
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"Name\":\"organization or user name\",\"Type\":\"Organization\",\"PAT\":\"\"}}"
                 }
               }
             }
@@ -1591,7 +1591,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RegistryResponse"
+                  "$ref": "#/components/schemas/RegistryView"
                 }
               }
             }
@@ -1612,6 +1612,145 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Registries"
+        ],
+        "summary": "Get all registries",
+        "operationId": "Registries_Delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteRegistriesInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistriesView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/registries/all": {
+      "get": {
+        "tags": [
+          "Registries"
+        ],
+        "summary": "Get all registries",
+        "operationId": "Registries_GetAll",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistriesView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
                 }
               }
             }
@@ -2163,7 +2302,7 @@
           }
         }
       },
-      "CreateRegistryRequest": {
+      "CreateRegistryInput": {
         "required": [
           "name",
           "url",
@@ -2185,6 +2324,22 @@
           },
           "configuration": {
             "$ref": "#/components/schemas/IRegistryConfiguration"
+          }
+        }
+      },
+      "DeleteRegistriesInput": {
+        "required": [
+          "ids"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "nullable": true
           }
         }
       },
@@ -2683,21 +2838,21 @@
             "$ref": "#/components/schemas/IRegistryConfigurationGitlabRegistry"
           },
           {
-            "$ref": "#/components/schemas/IRegistryConfigurationCustomRegistry"
+            "$ref": "#/components/schemas/IRegistryConfigurationDockerHubRegistry"
           },
           {
-            "$ref": "#/components/schemas/IRegistryConfigurationDockerHubRegistry"
+            "$ref": "#/components/schemas/IRegistryConfigurationGitHubRegistry"
           }
         ],
         "nullable": true,
         "discriminator": {
           "propertyName": "$type",
           "mapping": {
-            "2": "#/components/schemas/IRegistryConfigurationAWSRegistry",
-            "1": "#/components/schemas/IRegistryConfigurationAzureRegistry",
-            "3": "#/components/schemas/IRegistryConfigurationGitlabRegistry",
-            "4": "#/components/schemas/IRegistryConfigurationCustomRegistry",
-            "0": "#/components/schemas/IRegistryConfigurationDockerHubRegistry"
+            "AWS": "#/components/schemas/IRegistryConfigurationAWSRegistry",
+            "Azure": "#/components/schemas/IRegistryConfigurationAzureRegistry",
+            "Gitlab": "#/components/schemas/IRegistryConfigurationGitlabRegistry",
+            "DockerHub": "#/components/schemas/IRegistryConfigurationDockerHubRegistry",
+            "GitHub": "#/components/schemas/IRegistryConfigurationGitHubRegistry"
           }
         }
       },
@@ -2705,9 +2860,9 @@
         "properties": {
           "$type": {
             "enum": [
-              2
+              "AWS"
             ],
-            "type": "integer"
+            "type": "string"
           },
           "authenticationRequired": {
             "type": "boolean"
@@ -2730,30 +2885,9 @@
         "properties": {
           "$type": {
             "enum": [
-              1
+              "Azure"
             ],
-            "type": "integer"
-          },
-          "userName": {
-            "type": "string",
-            "nullable": true
-          },
-          "password": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "IRegistryConfigurationCustomRegistry": {
-        "properties": {
-          "$type": {
-            "enum": [
-              4
-            ],
-            "type": "integer"
-          },
-          "authenticationRequired": {
-            "type": "boolean"
+            "type": "string"
           },
           "userName": {
             "type": "string",
@@ -2769,9 +2903,9 @@
         "properties": {
           "$type": {
             "enum": [
-              0
+              "DockerHub"
             ],
-            "type": "integer"
+            "type": "string"
           },
           "userName": {
             "type": "string",
@@ -2783,13 +2917,38 @@
           }
         }
       },
+      "IRegistryConfigurationGitHubRegistry": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "GitHub"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "enum": [
+              "Organization",
+              "User"
+            ],
+            "type": "string"
+          },
+          "pat": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "IRegistryConfigurationGitlabRegistry": {
         "properties": {
           "$type": {
             "enum": [
-              3
+              "Gitlab"
             ],
-            "type": "integer"
+            "type": "string"
           },
           "userName": {
             "type": "string",
@@ -3483,24 +3642,38 @@
           }
         }
       },
+      "RegistriesView": {
+        "required": [
+          "registries"
+        ],
+        "type": "object",
+        "properties": {
+          "registries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegistryView"
+            },
+            "nullable": true
+          }
+        }
+      },
       "RegistryDiscriminator": {
         "enum": [
           "DockerHub",
           "Azure",
           "AWS",
           "Gitlab",
-          "Custom"
+          "GitHub"
         ],
         "type": "string"
       },
-      "RegistryResponse": {
+      "RegistryView": {
         "required": [
           "id",
           "name",
           "url",
           "discriminator",
-          "created",
-          "configuration"
+          "created"
         ],
         "type": "object",
         "properties": {
@@ -3522,9 +3695,6 @@
           "created": {
             "type": "string",
             "format": "date-time"
-          },
-          "configuration": {
-            "$ref": "#/components/schemas/IRegistryConfiguration"
           }
         }
       },

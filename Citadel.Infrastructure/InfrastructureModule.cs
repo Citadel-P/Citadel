@@ -9,6 +9,7 @@ using Infrastructure.TaskJobs;
 using Microsoft.Extensions.Configuration;
 using Refit;
 using Infrastructure.DockerHub;
+using Infrastructure.GithubCr;
 
 namespace Infrastructure;
 
@@ -34,7 +35,8 @@ public static class InfrastructureModule
     private static IServiceCollection AddHttpClients(this IServiceCollection services)
         => services.AddRefitClient<IDockerHubApi>()
                     .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://hub.docker.com"))
-                    .Services;
+                    .Services.AddRefitClient<IGithubCrApi>()
+                    .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://api.github.com")).Services;
 
     private static IServiceCollection InitializeDb(this IServiceCollection services)
     {

@@ -1,0 +1,74 @@
+import { DataTable } from '@/components/ui/data-table';
+import { RegistryView } from '@/api/_generated';
+import SortableCell from '@/components/ui/SortableCell';
+import DropdownTableMenu from './DropdownTableMenu';
+import { ColumnDef } from '@tanstack/react-table';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useContextSelector } from 'use-context-selector';
+import { RegistriesContext } from './RegistriesProvider';
+
+const columns: ColumnDef<RegistryView>[] = [
+  {
+    id: 'select',
+    header: ({ table }) => (
+      <Checkbox
+        checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="Select all"
+      />
+    ),
+    cell: ({ row }) => (
+      <Checkbox
+        checked={row.getIsSelected()}
+        onCheckedChange={(value) => row.toggleSelected(!!value)}
+        aria-label="Select registry"
+      />
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
+    accessorKey: 'name',
+    header: ({ column }) => <SortableCell cellName="Name" column={column} />,
+    cell: ({ row }) => <div>{row.original.name}</div>,
+    sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
+      return rowA.original.name < rowB.original.name ? 1 : -1;
+    },
+  },
+  {
+    accessorKey: 'provider',
+    header: ({ column }) => <SortableCell cellName="Provider" column={column} />,
+    cell: ({ row }) => <div>{row.original.discriminator}</div>,
+    sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
+      return rowA.original.discriminator < rowB.original.discriminator ? 1 : -1;
+    },
+  },
+  {
+    accessorKey: 'url',
+    header: ({ column }) => <SortableCell cellName="Url" column={column} />,
+    cell: ({ row }) => <div>{row.original.url}</div>,
+    sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
+      return rowA.original.url < rowB.original.url ? 1 : -1;
+    },
+  },
+  {
+    id: 'actions',
+    cell: ({ row }) => {
+      return <DropdownTableMenu registry={row.original} />;
+    },
+  },
+];
+
+export const RegistriesTable = () => {
+  const registries = useContextSelector(RegistriesContext, (v) => v?.registries) ?? [];
+  const isLoading = useContextSelector(RegistriesContext, (v) => v?.isLoading) ?? false;
+  const setSelectedRowIds = useContextSelector(RegistriesContext, (v) => v?.setSelectedRowIds);
+
+  return (
+    <>
+      {registries?.length > 0 && (
+        <DataTable columns={columns} data={registries} isLoading={isLoading} onSelectionChange={setSelectedRowIds!} />
+      )}
+    </>
+  );
+};

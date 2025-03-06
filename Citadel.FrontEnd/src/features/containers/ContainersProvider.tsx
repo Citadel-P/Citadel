@@ -9,9 +9,9 @@ interface IContext {
   isLoading: boolean;
   platformId: string | undefined;
   containers: ContainerInfoView[];
-  selectedContainerIds: string[];
   isPlatformOnline: boolean;
-  setSelectedRowIds: (selectedRows: string[]) => void;
+  selectedRowsId: string[];
+  setSelectedRowsId: (selectedRows: string[]) => void;
 }
 interface IProps {
   children?: React.ReactNode;
@@ -23,7 +23,7 @@ const ContainersProvider: React.FC<IProps> = ({ children }) => {
   const { platformId } = useParams();
   const { data, isLoading, isSuccess } = useGETContainers(platformId!);
   const { containersInfo } = useContainersHub(platformId!);
-  const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
+  const [selectedRowsId, setSelectedRowsId] = useState<string[]>([]);
   const [containers, setContainers] = useState<ContainerInfoView[]>([]);
   const isPlatformOnline = containers.find((s) => s.state === 'offline') === undefined;
 
@@ -42,8 +42,8 @@ const ContainersProvider: React.FC<IProps> = ({ children }) => {
         isLoading,
         platformId,
         containers,
-        selectedContainerIds: selectedRowIds,
-        setSelectedRowIds,
+        selectedRowsId,
+        setSelectedRowsId,
         isPlatformOnline,
       }}>
       {children}

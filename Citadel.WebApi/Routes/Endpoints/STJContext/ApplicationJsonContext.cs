@@ -23,7 +23,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(AzureRegistry))]
 [JsonSerializable(typeof(AWSRegistry))]
 [JsonSerializable(typeof(GitlabRegistry))]
-[JsonSerializable(typeof(CustomRegistry))]
+[JsonSerializable(typeof(GitHubRegistry))]
 [JsonSerializable(typeof(List<ContainerInfoView>))]
 [JsonSerializable(typeof(List<PortView>))]
 [JsonSerializable(typeof(EndpointSettingsView))]

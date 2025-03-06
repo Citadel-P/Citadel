@@ -1,4 +1,6 @@
-﻿namespace Infrastructure;
+﻿using System.Text.Json.Serialization;
+
+namespace Infrastructure;
 
 public enum AppPermission
 {
@@ -39,11 +41,17 @@ public enum PlatformStatus
     Online
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum RegistryDiscriminator
 {
+    [JsonStringEnumMemberName("DockerHub")] 
     DockerHub,
+    [JsonStringEnumMemberName("Azure")]
     Azure,
+    [JsonStringEnumMemberName("AWS")]
     AWS,
+    [JsonStringEnumMemberName("Gitlab")]
     Gitlab,
-    Custom
+    [JsonStringEnumMemberName("GitHub")]
+    GitHub
 }

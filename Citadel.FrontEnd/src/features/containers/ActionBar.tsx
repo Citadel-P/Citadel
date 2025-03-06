@@ -8,17 +8,17 @@ import { DeleteContainerDialog } from './dialogs/DeleteContainerDialog';
 export const ActionBar = () => {
   const deleteDialog = useDialog();
   const containers = useContextSelector(ContainersContext, (v) => v?.containers);
-  const selectedContainerIds = useContextSelector(ContainersContext, (v) => v?.selectedContainerIds);
+  const selectedContainersId = useContextSelector(ContainersContext, (v) => v?.selectedRowsId);
   const { availableActions, isPending, requestPatch } = useAvailableActions(
-    containers!.filter((s) => selectedContainerIds!.some((i) => i === s.id)),
+    containers?.filter((s) => selectedContainersId!.some((i) => i === s.id)) ?? [],
   );
 
-  if (!selectedContainerIds!.length) return <></>;
+  if (!selectedContainersId!.length) return <></>;
 
   return (
     <div className="min-h-20 absolute bottom-0 w-full p-2 bg-background sm:flex sm:justify-between">
       <div className="flex-1 text-xs text-muted-foreground mt-2">
-        {selectedContainerIds!.length} of {containers!.length} container(s) selected.
+        {selectedContainersId!.length} of {containers!.length} container(s) selected.
       </div>
       <div className="mt-1">
         <button
@@ -63,7 +63,7 @@ export const ActionBar = () => {
         </button>
         <DeleteContainerDialog
           dialog={deleteDialog}
-          containersIds={selectedContainerIds ?? []}
+          containersIds={selectedContainersId ?? []}
           onDelete={() => requestPatch('delete')}
         />
       </div>

@@ -8,11 +8,11 @@ import { truncate } from '@/lib/truncate';
 import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
 import SortableCell from '@/components/ui/SortableCell';
-import DropdownTableMenu from './DropdownMenu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Link } from 'react-router';
+import DropdownTableMenu from './DropdownMenu';
 
-export const columns: ColumnDef<ContainerInfoView>[] = [
+const columns: ColumnDef<ContainerInfoView>[] = [
   {
     id: 'select',
     header: ({ table }) => (
@@ -170,10 +170,8 @@ const ContainerStatTootltip = ({ stat }: { stat: string }) => {
 };
 
 export const ContainersTable = () => {
-  const containers = useContextSelector(ContainersContext, (v) => v?.containers);
-  const isLoading = useContextSelector(ContainersContext, (v) => v?.isLoading);
-  const setSelectedRowIds = useContextSelector(ContainersContext, (v) => v?.setSelectedRowIds);
-  return (
-    <DataTable columns={columns} data={containers!} isLoading={isLoading!} onSelectionChange={setSelectedRowIds!} />
-  );
+  const containers = useContextSelector(ContainersContext, (v) => v?.containers) ?? [];
+  const isLoading = useContextSelector(ContainersContext, (v) => v?.isLoading) ?? false;
+  const setSelectedRowsId = useContextSelector(ContainersContext, (v) => v?.setSelectedRowsId);
+  return <DataTable columns={columns} data={containers} isLoading={isLoading} onSelectionChange={setSelectedRowsId!} />;
 };

@@ -182,13 +182,27 @@ public static class PublicEndpoints
                     .WithExample(RegistryDiscriminator.Azure.ToString(), Examples.Registries.CreateAzureRegistryExample())
                     .WithExample(RegistryDiscriminator.AWS.ToString(), Examples.Registries.CreateAwsRegistryExample())
                     .WithExample(RegistryDiscriminator.Gitlab.ToString(), Examples.Registries.CreateGitlabRegistryExample())
-                    .WithExample(RegistryDiscriminator.Custom.ToString(), Examples.Registries.CreateCustomRegistryExample())
                     .WithExample(RegistryDiscriminator.DockerHub.ToString(), Examples.Registries.CreateDockerHubRegistryExample())
+                    .WithExample(RegistryDiscriminator.GitHub.ToString(), Examples.Registries.CreateGitHubRegistryExample())
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status404NotFound)
                     .ProducesProblem(StatusCodes.Status403Forbidden)
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
                     .WithName(RegistriesName + "_" + nameof(Registries.Create));
+
+                registries.MapGet("/all", Registries.GetAll)
+                    .WithSummary("Get all registries")
+                    .ProducesValidationProblem()
+                    .ProducesProblem(StatusCodes.Status403Forbidden)
+                    .ProducesProblem(StatusCodes.Status401Unauthorized)
+                    .WithName(RegistriesName + "_" + nameof(Registries.GetAll));
+
+                registries.MapDelete("/", Registries.Delete)
+                    .WithSummary("Get all registries")
+                    .ProducesValidationProblem()
+                    .ProducesProblem(StatusCodes.Status403Forbidden)
+                    .ProducesProblem(StatusCodes.Status401Unauthorized)
+                    .WithName(RegistriesName + "_" + nameof(Registries.Delete));
             }
         }
 

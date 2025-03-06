@@ -43,33 +43,31 @@ public class Registry
             case RegistryDiscriminator.Azure:
                 serializedCfg = JsonSerializer.Serialize((AzureRegistry)configuration);
                 break;
-
             case RegistryDiscriminator.AWS:
                 serializedCfg = JsonSerializer.Serialize((AWSRegistry)configuration);
                 break;
-
             case RegistryDiscriminator.DockerHub:
                 serializedCfg = JsonSerializer.Serialize((DockerHubRegistry)configuration);
                 break;
-
             case RegistryDiscriminator.Gitlab:
                 serializedCfg = JsonSerializer.Serialize((GitlabRegistry)configuration);
                 break;
-
-            case RegistryDiscriminator.Custom:
-                serializedCfg = JsonSerializer.Serialize((CustomRegistry)configuration);
+            case RegistryDiscriminator.GitHub:
+                serializedCfg = JsonSerializer.Serialize((GitHubRegistry)configuration);
                 break;
+
+            default: throw new ArgumentException();
         }
         return serializedCfg;
     }
 }
 
 [JsonPolymorphic]
-[JsonDerivedType(typeof(AWSRegistry), (int)RegistryDiscriminator.AWS)]
-[JsonDerivedType(typeof(AzureRegistry), (int)RegistryDiscriminator.Azure)]
-[JsonDerivedType(typeof(GitlabRegistry), (int)RegistryDiscriminator.Gitlab)]
-[JsonDerivedType(typeof(CustomRegistry), (int)RegistryDiscriminator.Custom)]
-[JsonDerivedType(typeof(DockerHubRegistry), (int)RegistryDiscriminator.DockerHub)]
+[JsonDerivedType(typeof(AWSRegistry), nameof(RegistryDiscriminator.AWS))]
+[JsonDerivedType(typeof(AzureRegistry), nameof(RegistryDiscriminator.Azure))]
+[JsonDerivedType(typeof(GitlabRegistry), nameof(RegistryDiscriminator.Gitlab))]
+[JsonDerivedType(typeof(DockerHubRegistry), nameof(RegistryDiscriminator.DockerHub))]
+[JsonDerivedType(typeof(GitHubRegistry), nameof(RegistryDiscriminator.GitHub))]
 public interface IRegistryConfiguration
 { }
 
@@ -99,6 +97,24 @@ public class AzureRegistry : IRegistryConfiguration
         {
             Password = password,
             UserName = userName 
+        };
+}
+
+public class GitHubRegistry : IRegistryConfiguration
+{
+    [JsonInclude]
+    public string Name { get; private set; }
+    [JsonInclude]
+    public GhcrAccountType Type { get; private set; }
+    [JsonInclude]
+    public string PAT { get; private set; }
+
+    public static GitHubRegistry Create(string name, string PAT, GhcrAccountType type) =>
+        new()
+        {
+            PAT = PAT,
+            Name = name,
+            Type = type
         };
 }
 
@@ -144,23 +160,8 @@ public class GitlabRegistry : IRegistryConfiguration
         };
 }
 
-public class CustomRegistry : IRegistryConfiguration
+public enum GhcrAccountType
 {
-    /// <summary>
-    /// If true, the credential bellow should be specified in order to connect to the custom registry
-    /// </summary>
-    [JsonInclude]
-    public bool AuthenticationRequired { get; set; }
-
-    [JsonInclude]
-    public string UserName { get; private set; }
-    [JsonInclude]
-    public string Password { get; private set; }
-    public static CustomRegistry Create(bool authenticationRequired, string userName, string password)
-        => new()
-        {
-            AuthenticationRequired = authenticationRequired,
-            UserName = userName,
-            Password = password
-        };
+    Organization,
+    User
 }

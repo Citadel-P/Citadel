@@ -1,21 +1,23 @@
 import { AlertMessage } from '@/components/ui/alert-message';
-import { useDockerHubRegistryForm } from './hooks/useDockerHubRegistryForm';
-import { useNavigate } from 'react-router';
-import { usePOSTRegistry } from './hooks/usePOSTRegistry';
-import { useEffect } from 'react';
-import { toast } from 'sonner';
+import { useGhcrForm } from './hooks/useGhcrForm';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle } from 'lucide-react';
-import { CreateRegistryRequest } from '@/api/_generated';
+import { usePOSTRegistry } from './hooks/usePOSTRegistry';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router';
+import { CreateRegistryInput } from '@/api/_generated';
 
-const DockerRegistryConfiguration = () => {
-  const { form } = useDockerHubRegistryForm();
+const GhcrConfiguration = () => {
+  const { form } = useGhcrForm();
   const navigate = useNavigate();
+  const [accountType, setAccountType] = useState('Organization');
   const { mutate, validationErrors, isSuccess, isPending, data } = usePOSTRegistry();
 
-  const onSubmit = (values: CreateRegistryRequest) => {
+  const onSubmit = (values: CreateRegistryInput) => {
     mutate(values);
   };
 
@@ -29,13 +31,13 @@ const DockerRegistryConfiguration = () => {
   return (
     <div>
       <AlertMessage type="info">
-        For information on how to generate a DockerHub Access Token, follow the{' '}
+        Please provide a Personal Access Token with `read-package` scope, follow the{' '}
         <a
           className="hover:underline"
           target="_blank"
           rel="noreferrer"
-          href="https://docs.docker.com/security/for-developers/access-tokens/">
-          DockerHub guide
+          href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic">
+          GitHub guide
         </a>
         .
       </AlertMessage>
@@ -53,7 +55,7 @@ const DockerRegistryConfiguration = () => {
                   <FormControl>
                     <Input
                       type="text"
-                      placeholder="my-dockerhub-registry"
+                      placeholder="my-ghcr-registry"
                       className="rounded-sm focus-visible:ring-transparent"
                       {...field}
                     />
@@ -72,7 +74,7 @@ const DockerRegistryConfiguration = () => {
                 <FormControl className="flex-1">
                   <Input
                     type="text"
-                    placeholder=""
+                    placeholder="https://ghcr.io"
                     disabled
                     className="rounded-sm focus-visible:ring-transparent"
                     {...field}
@@ -85,10 +87,39 @@ const DockerRegistryConfiguration = () => {
 
           <FormField
             control={form.control}
-            name="configuration.username"
+            name="configuration.type"
             render={({ field }) => (
               <FormItem className="flex items-baseline">
-                <FormLabel className="flex-none w-36 text-xs">DockerHub Username</FormLabel>
+                <FormLabel className="flex-none w-36 text-xs">Account type</FormLabel>
+                <Select
+                  onValueChange={(v) => {
+                    setAccountType(v);
+                    field.onChange(v);
+                  }}
+                  defaultValue={field.value}>
+                  <FormControl className="flex-1">
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select your account type" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent className="bg-background">
+                    <SelectItem value="Organization">Organization</SelectItem>
+                    <SelectItem value="User">User</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="configuration.name"
+            render={({ field }) => (
+              <FormItem className="flex items-baseline">
+                <FormLabel className="flex-none w-36 text-xs">
+                  {accountType === 'Organization' ? 'Organization name' : 'User name'}
+                </FormLabel>
                 <div className="flex-1">
                   <FormControl>
                     <Input
@@ -108,7 +139,7 @@ const DockerRegistryConfiguration = () => {
             name="configuration.pat"
             render={({ field }) => (
               <FormItem className="flex items-baseline">
-                <FormLabel className="flex-none w-36 text-xs">DockerHub PAT</FormLabel>
+                <FormLabel className="flex-none w-36 text-xs">PAT</FormLabel>
                 <div className="flex-1">
                   <FormControl>
                     <Input
@@ -133,4 +164,4 @@ const DockerRegistryConfiguration = () => {
   );
 };
 
-export default DockerRegistryConfiguration;
+export default GhcrConfiguration;

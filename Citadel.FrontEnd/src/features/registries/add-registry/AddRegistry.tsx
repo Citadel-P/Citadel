@@ -2,6 +2,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { JSX, useState } from 'react';
 import DockerRegistryConfiguration from './DockerRegistryConfiguration';
+import GhcrConfiguration from './GhcrConfiguration';
 interface RegistryProvider {
   id: string;
   name: string;
@@ -13,15 +14,15 @@ const AddRegistry = () => {
   const registryProviders: RegistryProvider[] = [
     {
       id: 'dockerhub',
-      name: 'Docker Hub',
+      name: 'DockerHub',
       description: 'Docker hub authenticated account',
       configuration: <DockerRegistryConfiguration />,
     },
     {
-      id: 'azure',
-      name: 'Azure',
-      description: 'Azure container registry',
-      configuration: <>Azure Cfg</>,
+      id: 'ghcr',
+      name: 'GitHub',
+      description: 'GitHub container registry Ghcr',
+      configuration: <GhcrConfiguration />,
     },
     {
       id: 'aws',

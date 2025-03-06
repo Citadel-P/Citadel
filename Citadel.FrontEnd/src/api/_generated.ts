@@ -167,6 +167,17 @@ export interface ContainerStatView {
   created: string | null;
 }
 
+export interface CreateRegistryInput {
+  name: string | null;
+  url: string | null;
+  discriminator: RegistryDiscriminator;
+  configuration: IRegistryConfiguration;
+}
+
+export interface DeleteRegistriesInput {
+  ids: string[] | null;
+}
+
 export type DriverConfig = {
   name?: string | null;
   options?: Record<string, string>;
@@ -283,6 +294,49 @@ export interface HttpValidationProblemDetails {
   detail?: string | null;
   instance?: string | null;
   errors?: Record<string, string[]>;
+}
+
+export type IRegistryConfiguration = BaseIRegistryConfiguration &
+  (
+    | BaseIRegistryConfigurationTypeMapping<'AWS', IRegistryConfigurationAWSRegistry>
+    | BaseIRegistryConfigurationTypeMapping<'Azure', IRegistryConfigurationAzureRegistry>
+    | BaseIRegistryConfigurationTypeMapping<'Gitlab', IRegistryConfigurationGitlabRegistry>
+    | BaseIRegistryConfigurationTypeMapping<'DockerHub', IRegistryConfigurationDockerHubRegistry>
+    | BaseIRegistryConfigurationTypeMapping<'GitHub', IRegistryConfigurationGitHubRegistry>
+  );
+
+export interface IRegistryConfigurationAWSRegistry {
+  $type?: 'AWS';
+  authenticationRequired?: boolean;
+  accessKey?: string | null;
+  secretAccessKey?: string | null;
+  region?: string | null;
+}
+
+export interface IRegistryConfigurationAzureRegistry {
+  $type?: 'Azure';
+  userName?: string | null;
+  password?: string | null;
+}
+
+export interface IRegistryConfigurationDockerHubRegistry {
+  $type?: 'DockerHub';
+  userName?: string | null;
+  pat?: string | null;
+}
+
+export interface IRegistryConfigurationGitHubRegistry {
+  $type?: 'GitHub';
+  name?: string | null;
+  type?: 'Organization' | 'User';
+  pat?: string | null;
+}
+
+export interface IRegistryConfigurationGitlabRegistry {
+  $type?: 'Gitlab';
+  userName?: string | null;
+  pat?: string | null;
+  instanceUrl?: string | null;
 }
 
 export type LogConfig = {
@@ -487,6 +541,28 @@ export interface RefreshTokenResponse {
   accessToken: string | null;
 }
 
+export interface RegistriesView {
+  registries: RegistryView[] | null;
+}
+
+export enum RegistryDiscriminator {
+  DockerHub = 'DockerHub',
+  Azure = 'Azure',
+  AWS = 'AWS',
+  Gitlab = 'Gitlab',
+  GitHub = 'GitHub',
+}
+
+export interface RegistryView {
+  /** @format uuid */
+  id: string;
+  name: string | null;
+  url: string | null;
+  discriminator: RegistryDiscriminator;
+  /** @format date-time */
+  created: string;
+}
+
 /** @default "START" */
 export enum RequestedLogAction {
   START = 'START',
@@ -540,6 +616,12 @@ export type VolumeOptions = {
   driverConfig?: DriverConfig;
   subpath?: string | null;
 };
+
+type BaseIRegistryConfiguration = object | null;
+
+type BaseIRegistryConfigurationTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
 
 export type QueryParamsType = Record<string | number, any>;
 export type ResponseFormat = keyof Omit<Body, 'body' | 'bodyUsed'>;
@@ -1218,6 +1300,80 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     platformsListContainers: (id: string, params: RequestParams = {}) =>
       this.request<ContainersInfoView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/platforms/${id}/containers`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * @description A discriminator should be provided in the request, this discriminator is based on RegistryDiscriminator enum
+     *
+     * @tags Registries
+     * @name RegistriesCreate
+     * @summary Create a registry
+     * @request POST:/api/v1/registries
+     * @secure
+     * @response `200` `RegistryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    registriesCreate: (data: CreateRegistryInput, params: RequestParams = {}) =>
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/registries`,
+        method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Registries
+     * @name RegistriesDelete
+     * @summary Get all registries
+     * @request DELETE:/api/v1/registries
+     * @secure
+     * @response `200` `RegistriesView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    registriesDelete: (data: DeleteRegistriesInput, params: RequestParams = {}) =>
+      this.request<RegistriesView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/registries`,
+        method: 'DELETE',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Registries
+     * @name RegistriesGetAll
+     * @summary Get all registries
+     * @request GET:/api/v1/registries/all
+     * @secure
+     * @response `200` `RegistriesView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    registriesGetAll: (params: RequestParams = {}) =>
+      this.request<RegistriesView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/registries/all`,
         method: 'GET',
         secure: true,
         format: 'json',

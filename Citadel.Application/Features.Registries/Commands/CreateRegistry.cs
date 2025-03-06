@@ -9,6 +9,7 @@ using Infrastructure.EntityFramework;
 using Application.Utils;
 using Infrastructure.DockerHub;
 using Refit;
+using Infrastructure.GithubCr;
 
 namespace Application.Features.Registries.Commands;
 
@@ -23,7 +24,7 @@ public sealed record CreateRegistry(string Name, string Url, RegistryDiscriminat
                 .Must(d => Enum.IsDefined(d))
                 .WithMessage("'{PropertyName}' must be a valid discriminator");
 
-            When(x => x.Configuration is not DockerHubRegistry, () =>
+            When(x => x.Configuration is not DockerHubRegistry && x.Configuration is not GitHubRegistry, () =>
             {
                 RuleFor(x => x.Url).Matches(Constants.Url).WithMessage("Please provide a valid url");
             });
@@ -43,9 +44,9 @@ public sealed record CreateRegistry(string Name, string Url, RegistryDiscriminat
             {
                 RuleFor(x => x.Configuration as GitlabRegistry).SetValidator(new GitlabRegistryValidator());
             });
-            When(x => x.Configuration is CustomRegistry, () =>
+            When(x => x.Configuration is GitHubRegistry, () =>
             {
-                RuleFor(x => x.Configuration as CustomRegistry).SetValidator(new CustomRegistryValidator());
+                RuleFor(x => x.Configuration as GitHubRegistry).SetValidator(new GitHubRegistryValidator());
             });
         }
     }
@@ -88,25 +89,25 @@ public sealed record CreateRegistry(string Name, string Url, RegistryDiscriminat
         }
     }
 
-    internal sealed class CustomRegistryValidator : AbstractValidator<CustomRegistry>
+    internal sealed class GitHubRegistryValidator : AbstractValidator<GitHubRegistry>
     {
-        public CustomRegistryValidator()
+        public GitHubRegistryValidator()
         {
-            RuleFor(x => x.UserName).NotEmpty().MinimumLength(5);
-            RuleFor(x => x.Password).NotEmpty().MinimumLength(6);
+            RuleFor(x => x.PAT).NotEmpty().MinimumLength(10);
+            RuleFor(x => x.Name).NotEmpty().MinimumLength(5);
         }
     }
 }
 
-internal class CreateRegistryHandler(ApplicationDbContext dbContext, IDockerHubApi dockerHub) : ICommandHandler<CreateRegistry, Result<Registry>>
+internal class CreateRegistryHandler(ApplicationDbContext dbContext, IDockerHubApi dockerHub, IGithubCrApi githubCrApi) : ICommandHandler<CreateRegistry, Result<Registry>>
 {
     public async ValueTask<Result<Registry>> Handle(CreateRegistry command, CancellationToken cancellationToken)
     {
         // Check for conflicted entries
-        Registry registry = await dbContext.Registries.FirstOrDefaultAsync(s => s.Url == command.Url || s.Name == command.Name, cancellationToken);
+        Registry registry = await dbContext.Registries.FirstOrDefaultAsync(s => s.Name == command.Name, cancellationToken);
         if (registry != null)
         {
-            return Result.Failure<Registry>(new ConflictError("The provided name or url already exist"));
+            return Result.Failure<Registry>(new ConflictError("The provided name already exist"));
         }
 
         if (command.Configuration is DockerHubRegistry cfg)
@@ -120,20 +121,41 @@ internal class CreateRegistryHandler(ApplicationDbContext dbContext, IDockerHubA
             {
                 if (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
                 {
-                    return Result.Failure<Registry>(new BadRequestError("Invalid DockerHub credentials, please check your PAT and/or User-name."));
+                    return Result.Failure<Registry>(new BadRequestError("401 invalid DockerHub credentials, please check your PAT and/or your user-name."));
                 }
                 return Result.Failure<Registry>(new BadRequestError(ex.Message));
             }
-            catch (Exception ex) 
+            catch (Exception ex)
+            {
+                return Result.Failure<Registry>(new InternalServerError(ex.Message));
+            }
+        }
+        else if (command.Configuration is GitHubRegistry githubRegistry) 
+        {
+            try
+            {
+                var packages = githubRegistry.Type == GhcrAccountType.Organization
+                    ? await githubCrApi.ListOrgPackages(githubRegistry.Name, githubRegistry.PAT, githubRegistry.Name, cancellationToken)
+                    : await githubCrApi.ListUserPackages(githubRegistry.Name, githubRegistry.PAT, githubRegistry.Name, cancellationToken);
+            }
+            catch (ApiException ex) 
+            {
+                if (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    return Result.Failure<Registry>(new BadRequestError("401 invalid GitHub credentials, please verify your input"));
+                }
+                return Result.Failure<Registry>(new BadRequestError(ex.Message));
+            }
+            catch (Exception ex)
             {
                 return Result.Failure<Registry>(new InternalServerError(ex.Message));
             }
         }
 
-        registry = Registry.Create(name: command.Name, url: command.Url, discriminator: command.Discriminator, configuration: command.Configuration);
         
+        registry = Registry.Create(name: command.Name, url: command.Url, discriminator: command.Discriminator, configuration: command.Configuration);
         dbContext.Registries.Add(registry);
-        //await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         return Result.Success(registry);
     }

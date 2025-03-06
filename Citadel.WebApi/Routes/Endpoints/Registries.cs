@@ -1,4 +1,5 @@
-﻿using Hosting.Extensions;
+﻿using Application.Features.Registries.Queries;
+using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -8,11 +9,21 @@ namespace WebApi.Routes.Endpoints;
 
 public static class Registries
 {
-    public static async Task<Results<Ok<RegistryResponse>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreateRegistryRequest request, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreateRegistryInput request, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, RegistryResponse.Map);
+        return EndpointHandlers.HandleResult(result, RegistryView.Map);
     }
 
+    public static async Task<Results<Ok<RegistriesView>, ProblemHttpResult>> GetAll(IMediator mediator, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetAllRegistries(), cancellationToken);
+        return EndpointHandlers.HandleResult(result, RegistriesView.Map);
+    }
 
+    public static async Task<Results<Ok<RegistriesView>, ProblemHttpResult>> Delete(IMediator mediator, [FromBody] DeleteRegistriesInput request, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(request.ToCommand(), cancellationToken);
+        return EndpointHandlers.HandleResult(result, RegistriesView.Map);
+    }
 }

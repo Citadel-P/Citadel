@@ -64,7 +64,7 @@ const ConnectAgentForm = () => {
             </FormItem>
           )}
         />
-        <Button type="submit" className='dark:text-foreground ' disabled={isPending}>
+        <Button type="submit" className="dark:text-foreground " disabled={isPending}>
           <span>Connect</span>
           {isPending && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
         </Button>
