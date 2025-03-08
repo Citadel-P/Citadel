@@ -1,4 +1,5 @@
-﻿using Application.Features.Registries.Queries;
+﻿using System.ComponentModel;
+using Application.Features.Registries.Queries;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -19,6 +20,12 @@ public static class Registries
     {
         var result = await mediator.Send(new GetAllRegistries(), cancellationToken);
         return EndpointHandlers.HandleResult(result, RegistriesView.Map);
+    }
+
+    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> GetById(IMediator mediator, [Description("Registry id")] Guid id, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetRegistry(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, RegistryView.Map);
     }
 
     public static async Task<Results<Ok<RegistriesView>, ProblemHttpResult>> Delete(IMediator mediator, [FromBody] DeleteRegistriesInput request, CancellationToken cancellationToken)

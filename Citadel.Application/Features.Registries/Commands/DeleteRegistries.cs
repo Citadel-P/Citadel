@@ -14,7 +14,7 @@ internal class DeleteRegistriesHandler(ApplicationDbContext dbContext) : IComman
     {
         var registries = await dbContext.Registries.Where(s => command.Ids.Contains(s.Id)).ToListAsync(cancellationToken);
         dbContext.RemoveRange(registries);
-        //await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
         return Result.Success<IEnumerable<Registry>>(registries);
     }
 }

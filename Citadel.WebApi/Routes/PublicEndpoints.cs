@@ -1,4 +1,4 @@
-﻿using Application.Utils;
+﻿using Hosting.Common;
 using Hosting.OpenApi;
 using Infrastructure;
 using WebApi.Routes.Endpoints;
@@ -196,6 +196,13 @@ public static class PublicEndpoints
                     .ProducesProblem(StatusCodes.Status403Forbidden)
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
                     .WithName(RegistriesName + "_" + nameof(Registries.GetAll));
+
+                registries.MapGet("/{id}", Registries.GetById)
+                   .WithSummary("Get all registries")
+                   .ProducesValidationProblem()
+                   .ProducesProblem(StatusCodes.Status403Forbidden)
+                   .ProducesProblem(StatusCodes.Status401Unauthorized)
+                   .WithName(RegistriesName + "_" + nameof(Registries.GetById));
 
                 registries.MapDelete("/", Registries.Delete)
                     .WithSummary("Get all registries")

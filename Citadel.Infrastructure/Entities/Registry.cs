@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Serialization;
+using Hosting.Common;
 
 namespace Infrastructure.Entities;
 
@@ -32,7 +33,7 @@ public class Registry
             Name = name,
             Url = url,
             Discriminator = discriminator,
-            Configuration = SerializeConfiguration(configuration, discriminator)
+            Configuration = JsonSerializer.Serialize(configuration, Helpers.CommonJsonOptions)
         };
 
     private static string SerializeConfiguration(IRegistryConfiguration configuration, RegistryDiscriminator discriminator)
@@ -41,19 +42,19 @@ public class Registry
         switch (discriminator)
         {
             case RegistryDiscriminator.Azure:
-                serializedCfg = JsonSerializer.Serialize((AzureRegistry)configuration);
+                serializedCfg = JsonSerializer.Serialize(configuration, Helpers.CommonJsonOptions);
                 break;
             case RegistryDiscriminator.AWS:
-                serializedCfg = JsonSerializer.Serialize((AWSRegistry)configuration);
+                serializedCfg = JsonSerializer.Serialize(configuration, Helpers.CommonJsonOptions);
                 break;
             case RegistryDiscriminator.DockerHub:
-                serializedCfg = JsonSerializer.Serialize((DockerHubRegistry)configuration);
+                serializedCfg = JsonSerializer.Serialize(configuration, Helpers.CommonJsonOptions);
                 break;
             case RegistryDiscriminator.Gitlab:
-                serializedCfg = JsonSerializer.Serialize((GitlabRegistry)configuration);
+                serializedCfg = JsonSerializer.Serialize(configuration, Helpers.CommonJsonOptions);
                 break;
             case RegistryDiscriminator.GitHub:
-                serializedCfg = JsonSerializer.Serialize((GitHubRegistry)configuration);
+                serializedCfg = JsonSerializer.Serialize(configuration, Helpers.CommonJsonOptions);
                 break;
 
             default: throw new ArgumentException();

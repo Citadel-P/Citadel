@@ -1,5 +1,5 @@
 ﻿using Application.Services;
-using Application.Utils;
+using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
 using LightResults;

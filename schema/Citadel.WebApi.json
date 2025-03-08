@@ -1782,6 +1782,84 @@
           }
         ]
       }
+    },
+    "/api/v1/registries/{id}": {
+      "get": {
+        "tags": [
+          "Registries"
+        ],
+        "summary": "Get all registries",
+        "operationId": "Registries_GetById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Registry id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -3673,7 +3751,8 @@
           "name",
           "url",
           "discriminator",
-          "created"
+          "created",
+          "configuration"
         ],
         "type": "object",
         "properties": {
@@ -3695,6 +3774,9 @@
           "created": {
             "type": "string",
             "format": "date-time"
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/IRegistryConfiguration"
           }
         }
       },

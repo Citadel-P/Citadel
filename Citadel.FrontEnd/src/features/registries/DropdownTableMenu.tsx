@@ -31,7 +31,7 @@ const DropdownTableMenu = ({ registry }: IProps) => {
         <DropdownMenuContent align="end" className="w-38 drop-shadow-md shadow-custom bg-background pt-2 pb-2">
           <DropdownMenuItem
             className="grow cursor-pointer rounded-sm px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-card"
-            onClick={() => navigate(`../registries/edit`)}>
+            onClick={() => navigate(`../registries/edit/${registry.id}`)}>
             <Pencil className="mr-2" />
             <span>Edit</span>
           </DropdownMenuItem>

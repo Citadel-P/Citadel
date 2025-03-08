@@ -24,18 +24,18 @@ const Registries = () => {
             </div>
             <Button
               type="button"
-              onClick={() => navigate('/add-registry')}
+              onClick={() => navigate('/registries/add')}
               className="inline-flex items-center dark:text-foreground bg-primary hover:bg-primary/80 font-medium rounded-sm text-xs px-2.5 py-2.5">
               <Plus className="h-3 w-3" /> Add registy
             </Button>
           </div>
           {isLoading && <Loader />}
-          {registries?.length === 0 && (
+          {!isLoading && registries?.length === 0 && (
             <AlertMessage type="info">
               <span>No registry has been configured yet, please add a new registry</span>
               <button
                 className="font-semibold underline hover:no-underline ml-1"
-                onClick={() => navigate('/add-registry')}>
+                onClick={() => navigate('/registries/add')}>
                 here
               </button>
               .

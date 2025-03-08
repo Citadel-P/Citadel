@@ -4,29 +4,19 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle } from 'lucide-react';
-import { usePOSTRegistry } from './hooks/usePOSTRegistry';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
-import { useNavigate } from 'react-router';
-import { CreateRegistryInput } from '@/api/_generated';
+import { useState } from 'react';
+import { useContextSelector } from 'use-context-selector';
+import { RegistryFormContext } from './RegistryFormProvider';
 
 const GhcrConfiguration = () => {
   const { form } = useGhcrForm();
-  const navigate = useNavigate();
+
   const [accountType, setAccountType] = useState('Organization');
-  const { mutate, validationErrors, isSuccess, isPending, data } = usePOSTRegistry();
-
-  const onSubmit = (values: CreateRegistryInput) => {
-    mutate(values);
-  };
-
-  useEffect(() => {
-    if (isSuccess && data?.data) {
-      toast.success(`The ${data?.data.name} registry has been added`);
-      navigate('/registries');
-    }
-  }, [isSuccess, data, navigate]);
+  const saveButtonTitle = useContextSelector(RegistryFormContext, (v) => v?.saveButtonTitle);
+  const onPostForm = useContextSelector(RegistryFormContext, (v) => v?.onPostForm);
+  const isLoading = useContextSelector(RegistryFormContext, (v) => v?.isLoadingForm);
+  const validationErrors = useContextSelector(RegistryFormContext, (v) => v?.validationErrors);
 
   return (
     <div>
@@ -44,7 +34,7 @@ const GhcrConfiguration = () => {
 
       <Form {...form}>
         {validationErrors && <AlertMessage type="error">{validationErrors}</AlertMessage>}
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <form onSubmit={form.handleSubmit(onPostForm)} className="space-y-8">
           <FormField
             control={form.control}
             name="name"
@@ -143,7 +133,7 @@ const GhcrConfiguration = () => {
                 <div className="flex-1">
                   <FormControl>
                     <Input
-                      type="text"
+                      type="password"
                       placeholder=""
                       className="rounded-sm focus-visible:ring-transparent"
                       {...field}
@@ -154,9 +144,9 @@ const GhcrConfiguration = () => {
               </FormItem>
             )}
           />
-          <Button type="submit" className="dark:text-foreground " disabled={isPending}>
-            <span>Add registry</span>
-            {isPending && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
+          <Button type="submit" className="dark:text-foreground " disabled={isLoading}>
+            <span>{saveButtonTitle}</span>
+            {isLoading && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
           </Button>
         </form>
       </Form>

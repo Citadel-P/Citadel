@@ -14,7 +14,8 @@ export const paths = [
   'containers/:containerId/stats',
   'containers/:containerId/inspect',
   'registries',
-  'add-registry',
+  'registries/add',
+  'registries/edit/:registryId',
 ];
 
 export const AppRoutes = () => {
@@ -78,7 +79,13 @@ export const AppRoutes = () => {
         {
           path: paths[9],
           lazy: async () => {
-            return { Component: (await import('./features/registries/add-registry/AddRegistry')).default };
+            return { Component: (await import('./pages/registries-page')).RegistryFormPage };
+          },
+        },
+        {
+          path: paths[10],
+          lazy: async () => {
+            return { Component: (await import('./pages/registries-page')).RegistryFormPage };
           },
         },
         {

@@ -1,6 +1,6 @@
 ﻿using System.Text;
 using System.Text.Json.Serialization;
-using Hosting.Converters;
+using Hosting.Common.Converters;
 using Hosting.OpenApi;
 using Infrastructure.Services.Abstractions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -33,7 +33,7 @@ internal static class WebApiModule
             .AddJwtBearer(options =>
             {
                 string key = string.IsNullOrEmpty(configuration["Jwt:Key"])
-                                        ? Application.Utils.Helpers.GetJwtSecretFromFile()
+                                        ? Hosting.Common.Helpers.GetJwtSecretFromFile()
                                         : configuration["Jwt:Key"];
 
                 options.TokenValidationParameters = new TokenValidationParameters()

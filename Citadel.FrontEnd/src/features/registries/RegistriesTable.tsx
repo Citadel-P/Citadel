@@ -6,6 +6,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useContextSelector } from 'use-context-selector';
 import { RegistriesContext } from './RegistriesProvider';
+import { Link } from 'react-router';
 
 const columns: ColumnDef<RegistryView>[] = [
   {
@@ -30,7 +31,9 @@ const columns: ColumnDef<RegistryView>[] = [
   {
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
-    cell: ({ row }) => <div>{row.original.name}</div>,
+    cell: ({ row }) => (<Link to={`../registries/edit/${row.original.id}`} className="hover:underline">
+    {row.original.name}
+  </Link>),
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
       return rowA.original.name < rowB.original.name ? 1 : -1;
     },

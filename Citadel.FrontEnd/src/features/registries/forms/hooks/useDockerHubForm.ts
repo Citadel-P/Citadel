@@ -1,9 +1,13 @@
-import { RegistryDiscriminator } from '@/api/_generated';
+import { IRegistryConfigurationDockerHubRegistry, RegistryDiscriminator } from '@/api/_generated';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
+import { useContextSelector } from 'use-context-selector';
 import { z } from 'zod';
+import { RegistryFormContext } from '../RegistryFormProvider';
 
-export const useDockerHubRegistryForm = () => {
+export const useDockerHubForm = () => {
+  const registry = useContextSelector(RegistryFormContext, (v) => v?.registry);
+  const configuration = registry?.configuration as IRegistryConfigurationDockerHubRegistry;
   const formSchema = z.object({
     name: z.string().min(5, {
       message: 'Name must be at least 5 characters.',
@@ -20,13 +24,13 @@ export const useDockerHubRegistryForm = () => {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: '',
+      name: registry?.name ?? '',
       url: 'https://hub.docker.com',
       discriminator: RegistryDiscriminator.DockerHub,
       configuration: {
         $type: RegistryDiscriminator.DockerHub,
-        username: '',
-        pat: '',
+        username: configuration?.userName ?? '',
+        pat: configuration?.pat ?? '',
       },
     },
   });

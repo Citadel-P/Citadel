@@ -561,6 +561,7 @@ export interface RegistryView {
   discriminator: RegistryDiscriminator;
   /** @format date-time */
   created: string;
+  configuration: IRegistryConfiguration;
 }
 
 /** @default "START" */
@@ -1374,6 +1375,29 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     registriesGetAll: (params: RequestParams = {}) =>
       this.request<RegistriesView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/registries/all`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Registries
+     * @name RegistriesGetById
+     * @summary Get all registries
+     * @request GET:/api/v1/registries/{id}
+     * @secure
+     * @response `200` `RegistryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    registriesGetById: (id: string, params: RequestParams = {}) =>
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/registries/${id}`,
         method: 'GET',
         secure: true,
         format: 'json',

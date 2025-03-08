@@ -1,4 +1,5 @@
-﻿using Hosting.Middlewares;
+﻿using Hosting.Common;
+using Hosting.Middlewares;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Mvc;
@@ -28,7 +29,7 @@ internal class AuthorizationResultHandler : IAuthorizationMiddlewareResultHandle
                             problem,
                             type: typeof(ProblemDetails),
                             context: ProblemDetailsSerializerContext.Default,
-                            contentType: Hosting.Constants.Api.ProblemContentType,
+                            contentType: Constants.Api.ProblemContentType,
                             cancellationToken: context.RequestAborted);
         }
     }

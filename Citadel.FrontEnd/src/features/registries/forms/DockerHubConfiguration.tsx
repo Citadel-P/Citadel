@@ -1,30 +1,18 @@
 import { AlertMessage } from '@/components/ui/alert-message';
-import { useDockerHubRegistryForm } from './hooks/useDockerHubRegistryForm';
-import { useNavigate } from 'react-router';
-import { usePOSTRegistry } from './hooks/usePOSTRegistry';
-import { useEffect } from 'react';
-import { toast } from 'sonner';
+import { useDockerHubForm } from './hooks/useDockerHubForm';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle } from 'lucide-react';
-import { CreateRegistryRequest } from '@/api/_generated';
+import { useContextSelector } from 'use-context-selector';
+import { RegistryFormContext } from './RegistryFormProvider';
 
-const DockerRegistryConfiguration = () => {
-  const { form } = useDockerHubRegistryForm();
-  const navigate = useNavigate();
-  const { mutate, validationErrors, isSuccess, isPending, data } = usePOSTRegistry();
-
-  const onSubmit = (values: CreateRegistryRequest) => {
-    mutate(values);
-  };
-
-  useEffect(() => {
-    if (isSuccess && data?.data) {
-      toast.success(`The ${data?.data.name} registry has been added`);
-      navigate('/registries');
-    }
-  }, [isSuccess, data, navigate]);
+const DockerHubConfiguration = () => {
+  const { form } = useDockerHubForm();
+  const saveButtonTitle = useContextSelector(RegistryFormContext, (v) => v?.saveButtonTitle);
+  const onPostForm = useContextSelector(RegistryFormContext, (v) => v?.onPostForm);
+  const isLoading = useContextSelector(RegistryFormContext, (v) => v?.isLoadingForm);
+  const validationErrors = useContextSelector(RegistryFormContext, (v) => v?.validationErrors);
 
   return (
     <div>
@@ -42,7 +30,7 @@ const DockerRegistryConfiguration = () => {
 
       <Form {...form}>
         {validationErrors && <AlertMessage type="error">{validationErrors}</AlertMessage>}
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <form onSubmit={form.handleSubmit(onPostForm)} className="space-y-8">
           <FormField
             control={form.control}
             name="name"
@@ -112,7 +100,7 @@ const DockerRegistryConfiguration = () => {
                 <div className="flex-1">
                   <FormControl>
                     <Input
-                      type="text"
+                      type="password"
                       placeholder=""
                       className="rounded-sm focus-visible:ring-transparent"
                       {...field}
@@ -123,9 +111,9 @@ const DockerRegistryConfiguration = () => {
               </FormItem>
             )}
           />
-          <Button type="submit" className="dark:text-foreground " disabled={isPending}>
-            <span>Add registry</span>
-            {isPending && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
+          <Button type="submit" className="dark:text-foreground " disabled={isLoading}>
+            <span>{saveButtonTitle}</span>
+            {isLoading && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
           </Button>
         </form>
       </Form>
@@ -133,4 +121,4 @@ const DockerRegistryConfiguration = () => {
   );
 };
 
-export default DockerRegistryConfiguration;
+export default DockerHubConfiguration;

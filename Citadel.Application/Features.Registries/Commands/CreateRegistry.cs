@@ -6,10 +6,10 @@ using LightResults;
 using Hosting.Common.ErrorTypes;
 using Infrastructure;
 using Infrastructure.EntityFramework;
-using Application.Utils;
 using Infrastructure.DockerHub;
 using Refit;
 using Infrastructure.GithubCr;
+using Hosting.Common;
 
 namespace Application.Features.Registries.Commands;
 

@@ -7,8 +7,6 @@ using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 using Infrastructure.EntityFramework;
-using Microsoft.AspNetCore.Http;
-using Application.Utils;
 
 namespace Application.Features.Auth.Commands;
 
