@@ -71,8 +71,7 @@ const BreadCrumb = () => {
     // add docker platform
     crumbs.push({ title: 'Registries', link: '/registries' });
     crumbs.push({ title: 'Add registry', isActive: true });
-  }
-  else if (route?.path === paths[10]) {
+  } else if (route?.path === paths[10]) {
     // edit docker platform
     crumbs.push({ title: 'Registries', link: '/registries' });
     crumbs.push({ title: 'Edit registry', isActive: true });

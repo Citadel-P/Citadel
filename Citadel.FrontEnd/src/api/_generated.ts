@@ -408,6 +408,15 @@ export type NetworkSettingsView = {
   networks: Record<string, EndpointSettingsView>;
 };
 
+export interface PatchRegistryInput {
+  /** @format uuid */
+  id: string;
+  name: string | null;
+  url: string | null;
+  discriminator: RegistryDiscriminator;
+  configuration: IRegistryConfiguration;
+}
+
 export enum PlatformStatus {
   Offline = 'Offline',
   Online = 'Online',
@@ -1338,7 +1347,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      *
      * @tags Registries
      * @name RegistriesDelete
-     * @summary Get all registries
+     * @summary Delete registries
      * @request DELETE:/api/v1/registries
      * @secure
      * @response `200` `RegistriesView` OK
@@ -1351,6 +1360,31 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       this.request<RegistriesView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/registries`,
         method: 'DELETE',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * @description A discriminator should be provided in the request, this discriminator is based on RegistryDiscriminator enum
+     *
+     * @tags Registries
+     * @name RegistriesPach
+     * @summary Patch a registry
+     * @request PATCH:/api/v1/registries
+     * @secure
+     * @response `200` `RegistryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    registriesPach: (data: PatchRegistryInput, params: RequestParams = {}) =>
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/registries`,
+        method: 'PATCH',
         body: data,
         secure: true,
         type: ContentType.Json,

@@ -112,43 +112,18 @@ internal class CreateRegistryHandler(ApplicationDbContext dbContext, IDockerHubA
 
         if (command.Configuration is DockerHubRegistry cfg)
         {
-            try
+            var (canConnect, errorMessage) = await cfg.CanConnect(dockerHub, cancellationToken);
+            if (!canConnect)
             {
-                var authResponse = await dockerHub.AuthCreateAccessToken(new Body() { Identifier = cfg.UserName, Secret = cfg.PAT }, cancellationToken);
-
-            }
-            catch (ApiException ex)
-            {
-                if (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                {
-                    return Result.Failure<Registry>(new BadRequestError("401 invalid DockerHub credentials, please check your PAT and/or your user-name."));
-                }
-                return Result.Failure<Registry>(new BadRequestError(ex.Message));
-            }
-            catch (Exception ex)
-            {
-                return Result.Failure<Registry>(new InternalServerError(ex.Message));
+                return Result.Failure<Registry>(new BadRequestError(errorMessage));
             }
         }
         else if (command.Configuration is GitHubRegistry githubRegistry) 
         {
-            try
+            var (canConnect, errorMessage) = await githubRegistry.CanConnect(githubCrApi, cancellationToken);
+            if (!canConnect)
             {
-                var packages = githubRegistry.Type == GhcrAccountType.Organization
-                    ? await githubCrApi.ListOrgPackages(githubRegistry.Name, githubRegistry.PAT, githubRegistry.Name, cancellationToken)
-                    : await githubCrApi.ListUserPackages(githubRegistry.Name, githubRegistry.PAT, githubRegistry.Name, cancellationToken);
-            }
-            catch (ApiException ex) 
-            {
-                if (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                {
-                    return Result.Failure<Registry>(new BadRequestError("401 invalid GitHub credentials, please verify your input"));
-                }
-                return Result.Failure<Registry>(new BadRequestError(ex.Message));
-            }
-            catch (Exception ex)
-            {
-                return Result.Failure<Registry>(new InternalServerError(ex.Message));
+                return Result.Failure<Registry>(new BadRequestError(errorMessage));
             }
         }
 
@@ -157,6 +132,6 @@ internal class CreateRegistryHandler(ApplicationDbContext dbContext, IDockerHubA
         dbContext.Registries.Add(registry);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return Result.Success(registry);
+        return registry;
     }
 }

@@ -5,6 +5,9 @@ using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources.Registries;
+using Infrastructure;
+using Infrastructure.Entities;
+
 
 namespace WebApi.Routes.Endpoints;
 
@@ -32,5 +35,11 @@ public static class Registries
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResult(result, RegistriesView.Map);
+    }
+
+    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Pach(IMediator mediator, [FromBody] PatchRegistryInput request, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(request.ToCommand(), cancellationToken);
+        return EndpointHandlers.HandleResult(result, RegistryView.Map);
     }
 }

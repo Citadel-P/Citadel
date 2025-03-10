@@ -179,11 +179,11 @@ public static class PublicEndpoints
                 registries.MapPost("/", Registries.Create)
                     .WithSummary("Create a registry")
                     .WithDescription($"A discriminator should be provided in the request, this discriminator is based on {nameof(RegistryDiscriminator)} enum ")
-                    .WithExample(RegistryDiscriminator.Azure.ToString(), Examples.Registries.CreateAzureRegistryExample())
-                    .WithExample(RegistryDiscriminator.AWS.ToString(), Examples.Registries.CreateAwsRegistryExample())
-                    .WithExample(RegistryDiscriminator.Gitlab.ToString(), Examples.Registries.CreateGitlabRegistryExample())
-                    .WithExample(RegistryDiscriminator.DockerHub.ToString(), Examples.Registries.CreateDockerHubRegistryExample())
-                    .WithExample(RegistryDiscriminator.GitHub.ToString(), Examples.Registries.CreateGitHubRegistryExample())
+                    .WithExample(RegistryDiscriminator.Azure.ToString(), Examples.Registries.Create.CreateAzureRegistryExample())
+                    .WithExample(RegistryDiscriminator.AWS.ToString(), Examples.Registries.Create.CreateAwsRegistryExample())
+                    .WithExample(RegistryDiscriminator.Gitlab.ToString(), Examples.Registries.Create.CreateGitlabRegistryExample())
+                    .WithExample(RegistryDiscriminator.DockerHub.ToString(), Examples.Registries.Create.CreateDockerHubRegistryExample())
+                    .WithExample(RegistryDiscriminator.GitHub.ToString(), Examples.Registries.Create.CreateGitHubRegistryExample())
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status404NotFound)
                     .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -205,11 +205,24 @@ public static class PublicEndpoints
                    .WithName(RegistriesName + "_" + nameof(Registries.GetById));
 
                 registries.MapDelete("/", Registries.Delete)
-                    .WithSummary("Get all registries")
+                    .WithSummary("Delete registries")
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status403Forbidden)
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
                     .WithName(RegistriesName + "_" + nameof(Registries.Delete));
+
+                registries.MapPatch("/", Registries.Pach)
+                    .WithSummary("Patch a registry")
+                    .WithDescription($"A discriminator should be provided in the request, this discriminator is based on {nameof(RegistryDiscriminator)} enum")
+                    .WithExample(RegistryDiscriminator.Azure.ToString(), Examples.Registries.Update.UpdateAzureRegistryExample())
+                    .WithExample(RegistryDiscriminator.AWS.ToString(), Examples.Registries.Update.UpdateAwsRegistryExample())
+                    .WithExample(RegistryDiscriminator.Gitlab.ToString(), Examples.Registries.Update.UpdateGitlabRegistryExample())
+                    .WithExample(RegistryDiscriminator.DockerHub.ToString(), Examples.Registries.Update.UpdateDockerHubRegistryExample())
+                    .WithExample(RegistryDiscriminator.GitHub.ToString(), Examples.Registries.Update.UpdateGitHubRegistryExample())
+                    .ProducesValidationProblem()
+                    .ProducesProblem(StatusCodes.Status403Forbidden)
+                    .ProducesProblem(StatusCodes.Status401Unauthorized)
+                    .WithName(RegistriesName + "_" + nameof(Registries.Pach));
             }
         }
 

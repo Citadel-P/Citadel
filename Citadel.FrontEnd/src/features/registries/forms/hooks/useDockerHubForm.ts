@@ -1,9 +1,9 @@
 import { IRegistryConfigurationDockerHubRegistry, RegistryDiscriminator } from '@/api/_generated';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { useContextSelector } from 'use-context-selector';
 import { z } from 'zod';
 import { RegistryFormContext } from '../RegistryFormProvider';
+import { useContextSelector } from 'use-context-selector';
 
 export const useDockerHubForm = () => {
   const registry = useContextSelector(RegistryFormContext, (v) => v?.registry);
@@ -23,7 +23,7 @@ export const useDockerHubForm = () => {
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
+    values: {
       name: registry?.name ?? '',
       url: 'https://hub.docker.com',
       discriminator: RegistryDiscriminator.DockerHub,

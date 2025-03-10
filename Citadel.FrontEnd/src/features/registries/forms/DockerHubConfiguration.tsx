@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button';
 import { LoaderCircle } from 'lucide-react';
 import { useContextSelector } from 'use-context-selector';
 import { RegistryFormContext } from './RegistryFormProvider';
+import { FieldChange } from '@/components/ui/field-change';
+import { CreateRegistryInput } from '@/api/_generated';
+import { getEditedFields } from '@/lib/utils';
 
 const DockerHubConfiguration = () => {
   const { form } = useDockerHubForm();
@@ -13,6 +16,15 @@ const DockerHubConfiguration = () => {
   const onPostForm = useContextSelector(RegistryFormContext, (v) => v?.onPostForm);
   const isLoading = useContextSelector(RegistryFormContext, (v) => v?.isLoadingForm);
   const validationErrors = useContextSelector(RegistryFormContext, (v) => v?.validationErrors);
+  const mode = useContextSelector(RegistryFormContext, (v) => v?.mode);
+
+  function onSubmit(values: CreateRegistryInput | Partial<CreateRegistryInput>) {
+    if (mode === 'edit') {
+      const dirtyFields = form.formState.dirtyFields;
+      values = getEditedFields(dirtyFields, values);
+    }
+    onPostForm!(values);
+  }
 
   return (
     <div>
@@ -30,7 +42,7 @@ const DockerHubConfiguration = () => {
 
       <Form {...form}>
         {validationErrors && <AlertMessage type="error">{validationErrors}</AlertMessage>}
-        <form onSubmit={form.handleSubmit(onPostForm)} className="space-y-8">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
           <FormField
             control={form.control}
             name="name"
@@ -38,6 +50,7 @@ const DockerHubConfiguration = () => {
               <FormItem className="flex items-baseline">
                 <FormLabel className="flex-none w-36 text-xs">Name</FormLabel>
                 <div className="flex-1">
+                  {mode === 'edit' && <FieldChange form={form} fieldName={field.name} />}
                   <FormControl>
                     <Input
                       type="text"
@@ -78,6 +91,7 @@ const DockerHubConfiguration = () => {
               <FormItem className="flex items-baseline">
                 <FormLabel className="flex-none w-36 text-xs">DockerHub Username</FormLabel>
                 <div className="flex-1">
+                  {mode === 'edit' && <FieldChange form={form} fieldName={field.name} />}
                   <FormControl>
                     <Input
                       type="text"
@@ -98,6 +112,7 @@ const DockerHubConfiguration = () => {
               <FormItem className="flex items-baseline">
                 <FormLabel className="flex-none w-36 text-xs">DockerHub PAT</FormLabel>
                 <div className="flex-1">
+                  {mode === 'edit' && <FieldChange form={form} fieldName={field.name} />}
                   <FormControl>
                     <Input
                       type="password"
@@ -111,7 +126,7 @@ const DockerHubConfiguration = () => {
               </FormItem>
             )}
           />
-          <Button type="submit" className="dark:text-foreground " disabled={isLoading}>
+          <Button type="submit" className="dark:text-foreground " disabled={isLoading || !form.formState.isDirty}>
             <span>{saveButtonTitle}</span>
             {isLoading && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
           </Button>

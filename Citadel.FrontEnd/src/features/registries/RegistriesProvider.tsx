@@ -36,9 +36,10 @@ const RegistriesProvider: React.FC<IProps> = ({ children }) => {
       const ids = deletedRegistries.data.registries?.map((s) => s.id) ?? [];
       setRegistries((r) => r.filter((s) => !ids.includes(s.id)));
       setSelectedRowIds([]);
-      const message = deletedRegistries.data.registries!.length > 1 
-      ? 'The selected registries has been successfully deleted' 
-      : 'The selected registry has been successfully deleted'
+      const message =
+        deletedRegistries.data.registries!.length > 1
+          ? 'The selected registries has been successfully deleted'
+          : 'The selected registry has been successfully deleted';
       toast.success(message);
     }
   }, [deleteIsSuccess, deletedRegistries]);

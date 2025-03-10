@@ -1,6 +1,7 @@
-﻿using System.Text.Json;
-using System.Text.Json.Serialization;
-using Hosting.Common;
+﻿using System.Text.Json.Serialization;
+using Infrastructure.DockerHub;
+using Infrastructure.GithubCr;
+using Refit;
 
 namespace Infrastructure.Entities;
 
@@ -20,10 +21,9 @@ public class Registry
     public RegistryDiscriminator Discriminator { get; private set; }
 
     /// <summary>
-    /// The registry configuration serialized as a json string.
-    /// Contains an implementation of the <see cref="IRegistryConfiguration"/>
+    /// The registry configuration
     /// </summary>
-    public string Configuration { get; set; }
+    public IRegistryConfiguration Configuration { get; set; }
 
     public static Registry Create(string name, string url, RegistryDiscriminator discriminator, IRegistryConfiguration configuration) 
         => new ()
@@ -33,33 +33,14 @@ public class Registry
             Name = name,
             Url = url,
             Discriminator = discriminator,
-            Configuration = JsonSerializer.Serialize(configuration, Helpers.CommonJsonOptions)
+            Configuration = configuration 
         };
 
-    private static string SerializeConfiguration(IRegistryConfiguration configuration, RegistryDiscriminator discriminator)
+    public void PartialUpdate(string name = null, string url = null, IRegistryConfiguration configuration = null)
     {
-        string serializedCfg = string.Empty;
-        switch (discriminator)
-        {
-            case RegistryDiscriminator.Azure:
-                serializedCfg = JsonSerializer.Serialize(configuration, Helpers.CommonJsonOptions);
-                break;
-            case RegistryDiscriminator.AWS:
-                serializedCfg = JsonSerializer.Serialize(configuration, Helpers.CommonJsonOptions);
-                break;
-            case RegistryDiscriminator.DockerHub:
-                serializedCfg = JsonSerializer.Serialize(configuration, Helpers.CommonJsonOptions);
-                break;
-            case RegistryDiscriminator.Gitlab:
-                serializedCfg = JsonSerializer.Serialize(configuration, Helpers.CommonJsonOptions);
-                break;
-            case RegistryDiscriminator.GitHub:
-                serializedCfg = JsonSerializer.Serialize(configuration, Helpers.CommonJsonOptions);
-                break;
-
-            default: throw new ArgumentException();
-        }
-        return serializedCfg;
+        if (name != null) Name = name;
+        if (url != null) Url = url;
+        if (configuration != null) Configuration = configuration;
     }
 }
 
@@ -84,6 +65,22 @@ public class DockerHubRegistry : IRegistryConfiguration
             UserName = userName,
             PAT = PAT
         };
+
+    public async Task<(bool success, string errorMessage)> CanConnect(IDockerHubApi dockerHub, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var authResponse = await dockerHub.AuthCreateAccessToken(new Body() { Identifier = UserName, Secret = PAT }, cancellationToken);
+            return (true, null);
+        }
+        catch (ApiException ex)
+        {
+            return (false, 
+                ex.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                    ? "401 invalid DockerHub credentials, please check your PAT and/or your user-name."
+                    : ex.Message);
+        }
+    }
 }
 
 public class AzureRegistry : IRegistryConfiguration
@@ -106,7 +103,7 @@ public class GitHubRegistry : IRegistryConfiguration
     [JsonInclude]
     public string Name { get; private set; }
     [JsonInclude]
-    public GhcrAccountType Type { get; private set; }
+    public GhcrAccountType? Type { get; private set; }
     [JsonInclude]
     public string PAT { get; private set; }
 
@@ -117,6 +114,24 @@ public class GitHubRegistry : IRegistryConfiguration
             Name = name,
             Type = type
         };
+
+    public async Task<(bool success, string errorMessage)> CanConnect(IGithubCrApi githubCrApi, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var packages = Type == GhcrAccountType.Organization
+                    ? await githubCrApi.ListOrgPackages(Name, PAT, Name, cancellationToken)
+                    : await githubCrApi.ListUserPackages(Name, PAT, Name, cancellationToken);
+            return (true, null);
+        }
+        catch (ApiException ex)
+        {
+            return (false,
+                ex.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                    ? "401 invalid GitHub credentials, please verify your input."
+                    : ex.Message);
+        }
+    }
 }
 
 public class AWSRegistry : IRegistryConfiguration

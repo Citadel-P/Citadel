@@ -1,4 +1,6 @@
-﻿using Infrastructure.Entities;
+﻿using System.Text.Json;
+using Hosting.Common;
+using Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -12,6 +14,7 @@ internal sealed class RegistryConfiguration : IEntityTypeConfiguration<Registry>
 
         // Pk & Indexes
         builder.HasKey(p => p.Id);
+        builder.HasIndex(p => p.Name).IsUnique();
 
         // Properties
         builder.Property(p => p.Configuration).IsRequired();
@@ -22,5 +25,9 @@ internal sealed class RegistryConfiguration : IEntityTypeConfiguration<Registry>
         builder.Property(p => p.Discriminator).HasConversion(
                                                 v => v.ToString(),
                                                 v => Enum.Parse<RegistryDiscriminator>(v));
+
+        builder.Property(p => p.Configuration).HasConversion(
+                                                v => JsonSerializer.Serialize(v, Helpers.CommonJsonOptions),
+                                                v => JsonSerializer.Deserialize<IRegistryConfiguration>(v, Helpers.CommonJsonOptions));
     }
 }

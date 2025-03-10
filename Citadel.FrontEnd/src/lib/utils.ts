@@ -4,6 +4,7 @@ import { twMerge } from 'tailwind-merge';
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
 export function toFixedNumber(input: any, style?: keyof Intl.NumberFormatOptionsStyleRegistry, digits: number = 2) {
   if (!input) {
     return;
@@ -16,4 +17,11 @@ export function toFixedNumber(input: any, style?: keyof Intl.NumberFormatOptions
     }).format(input / 100);
   }
   return Number.parseFloat(input).toFixed(digits);
+}
+
+export function getEditedFields(dirtyFields: object | boolean, allValues: object): object {
+  if (dirtyFields === true || Array.isArray(dirtyFields)) return allValues;
+  return Object.fromEntries(
+    Object.keys(dirtyFields).map((key) => [key, getEditedFields(dirtyFields[key], allValues[key])]),
+  );
 }

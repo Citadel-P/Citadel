@@ -5,9 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useState } from 'react';
 import { useContextSelector } from 'use-context-selector';
 import { RegistryFormContext } from './RegistryFormProvider';
+import { FieldChange } from '@/components/ui/field-change';
+import { CreateRegistryInput } from '@/api/_generated';
+import { getEditedFields } from '@/lib/utils';
+import { useState } from 'react';
 
 const GhcrConfiguration = () => {
   const { form } = useGhcrForm();
@@ -17,7 +20,15 @@ const GhcrConfiguration = () => {
   const onPostForm = useContextSelector(RegistryFormContext, (v) => v?.onPostForm);
   const isLoading = useContextSelector(RegistryFormContext, (v) => v?.isLoadingForm);
   const validationErrors = useContextSelector(RegistryFormContext, (v) => v?.validationErrors);
+  const mode = useContextSelector(RegistryFormContext, (v) => v?.mode);
 
+  function onSubmit(values: CreateRegistryInput | Partial<CreateRegistryInput>) {
+    if (mode === 'edit') {
+      const dirtyFields = form.formState.dirtyFields;
+      values = getEditedFields(dirtyFields, values);
+    }
+    onPostForm!(values);
+  }
   return (
     <div>
       <AlertMessage type="info">
@@ -34,7 +45,7 @@ const GhcrConfiguration = () => {
 
       <Form {...form}>
         {validationErrors && <AlertMessage type="error">{validationErrors}</AlertMessage>}
-        <form onSubmit={form.handleSubmit(onPostForm)} className="space-y-8">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
           <FormField
             control={form.control}
             name="name"
@@ -42,6 +53,7 @@ const GhcrConfiguration = () => {
               <FormItem className="flex items-baseline">
                 <FormLabel className="flex-none w-36 text-xs">Name</FormLabel>
                 <div className="flex-1">
+                  {mode === 'edit' && <FieldChange form={form} fieldName={field.name} />}
                   <FormControl>
                     <Input
                       type="text"
@@ -81,23 +93,26 @@ const GhcrConfiguration = () => {
             render={({ field }) => (
               <FormItem className="flex items-baseline">
                 <FormLabel className="flex-none w-36 text-xs">Account type</FormLabel>
-                <Select
-                  onValueChange={(v) => {
-                    setAccountType(v);
-                    field.onChange(v);
-                  }}
-                  defaultValue={field.value}>
-                  <FormControl className="flex-1">
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select your account type" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent className="bg-background">
-                    <SelectItem value="Organization">Organization</SelectItem>
-                    <SelectItem value="User">User</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
+                <div className="flex-1">
+                  <Select
+                    onValueChange={(v) => {
+                      setAccountType(v);
+                      field.onChange(v);
+                    }}
+                    {...field}>
+                    {mode === 'edit' && <FieldChange form={form} fieldName={field.name} />}
+                    <FormControl className="w-full">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select your account type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="bg-background">
+                      <SelectItem value="Organization">Organization</SelectItem>
+                      <SelectItem value="User">User</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </div>
               </FormItem>
             )}
           />
@@ -111,6 +126,7 @@ const GhcrConfiguration = () => {
                   {accountType === 'Organization' ? 'Organization name' : 'User name'}
                 </FormLabel>
                 <div className="flex-1">
+                  {mode === 'edit' && <FieldChange form={form} fieldName={field.name} />}
                   <FormControl>
                     <Input
                       type="text"
@@ -131,6 +147,7 @@ const GhcrConfiguration = () => {
               <FormItem className="flex items-baseline">
                 <FormLabel className="flex-none w-36 text-xs">PAT</FormLabel>
                 <div className="flex-1">
+                  {mode === 'edit' && <FieldChange form={form} fieldName={field.name} />}
                   <FormControl>
                     <Input
                       type="password"
@@ -144,7 +161,7 @@ const GhcrConfiguration = () => {
               </FormItem>
             )}
           />
-          <Button type="submit" className="dark:text-foreground " disabled={isLoading}>
+          <Button type="submit" className="dark:text-foreground " disabled={isLoading || !form.formState.isDirty}>
             <span>{saveButtonTitle}</span>
             {isLoading && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
           </Button>

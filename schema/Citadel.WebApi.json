@@ -1647,7 +1647,7 @@
         "tags": [
           "Registries"
         ],
-        "summary": "Get all registries",
+        "summary": "Delete registries",
         "operationId": "Registries_Delete",
         "requestBody": {
           "content": {
@@ -1675,6 +1675,97 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RegistriesView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Registries"
+        ],
+        "summary": "Patch a registry",
+        "description": "A discriminator should be provided in the request, this discriminator is based on RegistryDiscriminator enum",
+        "operationId": "Registries_Pach",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchRegistryInput"
+              },
+              "examples": {
+                "Azure": {
+                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Discriminator\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\"}}"
+                },
+                "AWS": {
+                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Discriminator\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"AuthenticationRequired\":true,\"AccessKey\":\"\",\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\"}}"
+                },
+                "Gitlab": {
+                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Discriminator\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\"}}"
+                },
+                "DockerHub": {
+                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"UserName\":\"\",\"PAT\":\"\"}}"
+                },
+                "GitHub": {
+                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"Name\":\"organization or user name\",\"Type\":\"Organization\",\"PAT\":\"\"}}"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryView"
                 }
               }
             }
@@ -3010,9 +3101,10 @@
           "type": {
             "enum": [
               "Organization",
-              "User"
+              "User",
+              null
             ],
-            "type": "string"
+            "nullable": true
           },
           "pat": {
             "type": "string",
@@ -3304,6 +3396,36 @@
           }
         },
         "nullable": true
+      },
+      "PatchRegistryInput": {
+        "required": [
+          "id",
+          "name",
+          "url",
+          "discriminator",
+          "configuration"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "discriminator": {
+            "$ref": "#/components/schemas/RegistryDiscriminator"
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/IRegistryConfiguration"
+          }
+        }
       },
       "PlatformStatus": {
         "enum": [

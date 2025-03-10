@@ -8,7 +8,7 @@ import { RegistryFormContext } from '../RegistryFormProvider';
 export const useGhcrForm = () => {
   const registry = useContextSelector(RegistryFormContext, (v) => v?.registry);
   const configuration = registry?.configuration as IRegistryConfigurationGitHubRegistry;
-  
+
   const formSchema = z.object({
     name: z.string().min(5, {
       message: 'Name must be at least 5 characters.',
@@ -25,7 +25,7 @@ export const useGhcrForm = () => {
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
+    values: {
       name: registry?.name ?? '',
       url: 'https://ghcr.io',
       discriminator: RegistryDiscriminator.GitHub,
