@@ -9,7 +9,7 @@ const Layout = () => {
   return (
     <AppProvider>
       <LayoutProvider>
-        <div className="flex h-screen w-full overflow-hidden">
+        <div className="flex h-dvh w-full overflow-hidden">
           <Sidebar />
           <div className="flex grow flex-col content-start overflow-hidden bg-card">
             <Navbar />

@@ -5,9 +5,14 @@ import { z } from 'zod';
 
 export const useAddDockerForm = () => {
   const formSchema = z.object({
-    name: z.string().min(4, {
-      message: 'Platform name must be at least 3 characters.',
-    }),
+    name: z
+      .string()
+      .regex(new RegExp(Constants.validNameIdentifier), {
+        message: 'Must be a valid name, no whitespace or special chars are allowed.',
+      })
+      .min(4, {
+        message: 'Platform name must be at least 3 characters.',
+      }),
     address: z.string().regex(new RegExp(Constants.validHostOrIp), {
       message: 'Please provide a valid hostname or ip',
     }),

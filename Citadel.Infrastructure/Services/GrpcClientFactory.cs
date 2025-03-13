@@ -3,6 +3,7 @@ using Grpc.Net.Client;
 using Infrastructure.Services.Abstractions;
 using static Agent.Server.Containers.Containers;
 using static Agent.Server.GPlatform.gPlatform;
+using static Agent.Server.Images.Images;
 
 namespace Infrastructure.Services;
 
@@ -10,6 +11,7 @@ internal class GrpcClientFactory : IGrpcClientFactory
 {
     private readonly ConcurrentDictionary<string, gPlatformClient> platformChannels = [];
     private readonly ConcurrentDictionary<string, ContainersClient> containerChannels = [];
+    private readonly ConcurrentDictionary<string, ImagesClient> imageChannels = [];
 
     public gPlatformClient GetPlatformClient(string address)
     {
@@ -32,6 +34,18 @@ internal class GrpcClientFactory : IGrpcClientFactory
         var channel = GrpcChannel.ForAddress(normalizedAddress);
         var client = new ContainersClient(channel);
         containerChannels.TryAdd(normalizedAddress, client);
+        return client;
+    }
+
+    public ImagesClient GetImageClient(string address)
+    {
+        var normalizedAddress = NormalizeAddress(address);
+        if (imageChannels.TryGetValue(normalizedAddress, out ImagesClient value))
+            return value;
+
+        var channel = GrpcChannel.ForAddress(normalizedAddress);
+        var client = new ImagesClient(channel);
+        imageChannels.TryAdd(normalizedAddress, client);
         return client;
     }
 

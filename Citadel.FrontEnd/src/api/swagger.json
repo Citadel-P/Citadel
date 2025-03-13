@@ -1951,6 +1951,164 @@
           }
         ]
       }
+    },
+    "/api/v1/images/{id}/all": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "summary": "Get all local images",
+        "operationId": "Images_GetAllLocalImages",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The platform id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImagesView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/images/all/{registryName}": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "summary": "Get external images of a the given registry",
+        "operationId": "Images_GetExternalImages",
+        "parameters": [
+          {
+            "name": "registryName",
+            "in": "path",
+            "description": "The registry name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IImageResponse"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -2991,6 +3149,151 @@
           }
         }
       },
+      "IImageResponse": {
+        "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/IImageResponseGitHubPackageResponse"
+          },
+          {
+            "$ref": "#/components/schemas/IImageResponseDockerHubImageResponse"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "GitHub": "#/components/schemas/IImageResponseGitHubPackageResponse",
+            "DockerHub": "#/components/schemas/IImageResponseDockerHubImageResponse"
+          }
+        }
+      },
+      "IImageResponseDockerHubImageResponse": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "DockerHub"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "IImageResponseGitHubPackageResponse": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "GitHub"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ImagesView": {
+        "required": [
+          "images"
+        ],
+        "type": "object",
+        "properties": {
+          "images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageView"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "ImageView": {
+        "required": [
+          "id",
+          "created",
+          "parentId",
+          "repoDigests",
+          "repoTags",
+          "sharedSize",
+          "size",
+          "virtualSize",
+          "labels"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "created": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "parentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "repoDigests": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "repoTags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "sharedSize": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "size": {
+            "type": "number",
+            "format": "double"
+          },
+          "virtualSize": {
+            "type": "number",
+            "format": "double"
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        }
+      },
       "IRegistryConfiguration": {
         "required": [
           "$type"
@@ -3101,9 +3404,10 @@
           "type": {
             "enum": [
               "Organization",
-              "User"
+              "User",
+              null
             ],
-            "type": "string"
+            "nullable": true
           },
           "pat": {
             "type": "string",
@@ -4080,6 +4384,9 @@
     },
     {
       "name": "Registries"
+    },
+    {
+      "name": "Images"
     }
   ]
 }

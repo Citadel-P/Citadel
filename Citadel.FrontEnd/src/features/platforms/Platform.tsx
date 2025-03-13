@@ -112,13 +112,13 @@ const Platform = ({ platform }: IProps) => {
                   <Link to={'/platforms/' + platform.id + '/containers'}>{platform?.containers} containers</Link>
                 </div>
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  {platform?.images} images
+                  <Link to={'/platforms/' + platform.id + '/images'}>{platform?.images} images</Link>
                 </div>
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  {platform?.volumesCount} volumes
+                  <Link to={'/platforms/' + platform.id + '/volumes'}>{platform?.volumesCount} volumes</Link>
                 </div>
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  {platform?.networksCount} networks
+                  <Link to={'/platforms/' + platform.id + '/networks'}>{platform?.networksCount} networks</Link>
                 </div>
                 <div className="truncate text-xs text-muted-foreground">{platform?.ncpu} CPU</div>
                 <div className="truncate text-xs text-muted-foreground">{byteTransform(platform?.memTotal)} RAM</div>

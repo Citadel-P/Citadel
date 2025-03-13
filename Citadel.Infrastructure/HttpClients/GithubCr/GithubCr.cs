@@ -37,28 +37,75 @@ namespace Infrastructure.GithubCr
         [Headers("Accept: application/vnd.github+json", "X-GitHub-Api-Version: 2022-11-28")]
         [Get("/orgs/{org}/packages?package_type=container&page=1&per_page=100")]
         Task<IEnumerable<GhcrPackage>> ListOrgPackages(string org, [Authorize("Bearer")] string pat, [Header("User-Agent")] string agent, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Lists package versions for a package owned by the authenticated user.
+        /// </summary>
+        /// <param name="package_type"></param>
+        /// <param name="package_name"></param>
+        /// <param name="pat">Personal access token</param>
+        /// <param name="agent">user agent</param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        [Headers("Accept: application/vnd.github+json", "X-GitHub-Api-Version: 2022-11-28")]
+        [Get("/user/packages/container/{package_name}/versions&page=1&per_page=100")]
+        Task<IEnumerable<GhcrPackageVersion>> ListPackageVersionsForUser(string package_name, [Authorize("Bearer")] string pat, [Header("User-Agent")] string agent, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Lists package versions for a package owned by an organization.
+        /// </summary>
+        /// <param name="org"></param>
+        /// <param name="pat"></param>
+        /// <param name="agent"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        [Headers("Accept: application/vnd.github+json", "X-GitHub-Api-Version: 2022-11-28")]
+        [Get("/orgs/{org}/packages/container/{package_name}/versions")]
+        Task<IEnumerable<GhcrPackageVersion>> ListPackageVersionsForOrg(string org, string package_name, [Authorize("Bearer")] string pat, [Header("User-Agent")] string agent, CancellationToken cancellationToken = default);
+
     }
     public class GhcrPackage
     {
-        public int Id { get; set; }
-        public string Name { get; set; }
-        public string Url { get; set; }
+        public int Id { get; init; }
+        public string Name { get; init; }
+        public string Url { get; init; }
         [JsonPropertyName("package_type")]
-        public string PackageType { get; set; }
+        public string PackageType { get; init; }
         [JsonPropertyName("version_count")]
-        public string VersionCount { get; set; }
+        public string VersionCount { get; init; }
         [JsonPropertyName("created_at")]
-        public string CreatedAt { get; set; }
+        public string CreatedAt { get; init; }
         [JsonPropertyName("updated_at")]
-        public string UpdatedAt { get; set; }
-        public Owner Owner { get; set; }
+        public string UpdatedAt { get; init; }
+        [JsonPropertyName("html_url")]
+        public string HtmlUrl { get; init; }
+        public Owner Owner { get; init; }
     }
 
     public class Owner
     {
-        public int Id { get; set; }
-        public string Url { get; set; }
+        public int Id { get; init; }
+        public string Url { get; init; }
         [JsonPropertyName("html_url")]
-        public string HmlUrl { get; set; }
+        public string HmlUrl { get; init; }
+        [JsonPropertyName("node_id")]
+        public string NodeId { get; init; }
+        [JsonPropertyName("gists_url")]
+        public string GistsUrl { get; init; }
+    }
+
+    public record GhcrPackageVersion
+    {
+        public int Id { get; init; }
+        public string Name { get; init; }
+        public string Url { get; init; }
+        [JsonPropertyName("package_html_url")]
+        public string PackageHtmlUrl { get; init; }
+        [JsonPropertyName("created_at")]
+        public string CreatedAt { get; init; }
+        [JsonPropertyName("updated_at")]
+        public string UpdatedAt { get; init; }
+        [JsonPropertyName("html_url")]
+        public string HtmlUrl { get; init; }
     }
 }

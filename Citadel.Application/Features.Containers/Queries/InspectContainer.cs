@@ -38,8 +38,7 @@ internal sealed class InspectContainerHandler(
         var request = new InspectContainerRequest() { ContainerId = query.ContainerId };
         try
         {
-            var container = await client.InspectContainerAsync(request, cancellationToken: cancellationToken);
-            return Result.Success(container);
+            return await client.InspectContainerAsync(request, cancellationToken: cancellationToken);
         }
         catch (RpcException ex) 
         {

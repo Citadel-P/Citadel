@@ -26,6 +26,7 @@
    <ItemGroup>
 	   <PackageReference Include="Grpc.AspNetCore" Version="2.67.0" />
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\agent.containers.proto" GrpcServices="Client" Link="Protos\agent.containers.proto" />
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\agent.images.proto" GrpcServices="Client" Link="Protos\agent.images.proto" />
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\agent.platform.proto" GrpcServices="Client" Link="Protos\agent.platform.proto" />
 
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\Common\platforms.proto" GrpcServices="None" Link="Protos\Common\platforms.proto" />

@@ -26,7 +26,7 @@ public sealed record UpsertPlatform(Guid? Id, string Name, string Address) : ICo
     {
         public Validator()
         {
-            RuleFor(x => x.Name).NotEmpty().Length(4, 128);
+            RuleFor(x => x.Name).NotEmpty().ValidNameIdentifier();
             RuleFor(x => x.Address).ValidHostOrIp();
         }
     }

@@ -296,6 +296,47 @@ export interface HttpValidationProblemDetails {
   errors?: Record<string, string[]>;
 }
 
+export type IImageResponse = BaseIImageResponse &
+  (
+    | BaseIImageResponseTypeMapping<'GitHub', IImageResponseGitHubPackageResponse>
+    | BaseIImageResponseTypeMapping<'DockerHub', IImageResponseDockerHubImageResponse>
+  );
+
+export interface IImageResponseDockerHubImageResponse {
+  $type?: 'DockerHub';
+  id?: string | null;
+  name?: string | null;
+}
+
+export interface IImageResponseGitHubPackageResponse {
+  $type?: 'GitHub';
+  id?: string | null;
+  name?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  url?: string | null;
+}
+
+export interface ImagesView {
+  images: ImageView[] | null;
+}
+
+export interface ImageView {
+  id: string | null;
+  /** @format int64 */
+  created: number;
+  parentId: string | null;
+  repoDigests: string[] | null;
+  repoTags: string[] | null;
+  /** @format int64 */
+  sharedSize: number;
+  /** @format double */
+  size: number;
+  /** @format double */
+  virtualSize: number;
+  labels: Record<string, string>;
+}
+
 export type IRegistryConfiguration = BaseIRegistryConfiguration &
   (
     | BaseIRegistryConfigurationTypeMapping<'AWS', IRegistryConfigurationAWSRegistry>
@@ -328,7 +369,7 @@ export interface IRegistryConfigurationDockerHubRegistry {
 export interface IRegistryConfigurationGitHubRegistry {
   $type?: 'GitHub';
   name?: string | null;
-  type?: 'Organization' | 'User';
+  type?: 'Organization' | 'User' | null;
   pat?: string | null;
 }
 
@@ -626,6 +667,12 @@ export type VolumeOptions = {
   driverConfig?: DriverConfig;
   subpath?: string | null;
 };
+
+type BaseIImageResponse = object;
+
+type BaseIImageResponseTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
 
 type BaseIRegistryConfiguration = object | null;
 
@@ -1432,6 +1479,52 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     registriesGetById: (id: string, params: RequestParams = {}) =>
       this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/registries/${id}`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Images
+     * @name ImagesGetAllLocalImages
+     * @summary Get all local images
+     * @request GET:/api/v1/images/{id}/all
+     * @secure
+     * @response `200` `ImagesView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    imagesGetAllLocalImages: (id: string, params: RequestParams = {}) =>
+      this.request<ImagesView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/images/${id}/all`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Images
+     * @name ImagesGetExternalImages
+     * @summary Get external images of a the given registry
+     * @request GET:/api/v1/images/all/{registryName}
+     * @secure
+     * @response `200` `(IImageResponse)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    imagesGetExternalImages: (registryName: string, params: RequestParams = {}) =>
+      this.request<IImageResponse[], HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/images/all/${registryName}`,
         method: 'GET',
         secure: true,
         format: 'json',

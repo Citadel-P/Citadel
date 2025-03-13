@@ -81,6 +81,8 @@ public class DockerHubRegistry : IRegistryConfiguration
                     : ex.Message);
         }
     }
+
+    
 }
 
 public class AzureRegistry : IRegistryConfiguration
@@ -129,6 +131,42 @@ public class GitHubRegistry : IRegistryConfiguration
             return (false,
                 ex.StatusCode == System.Net.HttpStatusCode.Unauthorized
                     ? "401 invalid GitHub credentials, please verify your input."
+                    : ex.Message);
+        }
+    }
+
+    public async Task<(IEnumerable<GhcrPackage> packages, string errorMessage)> GetPackages(IGithubCrApi githubCrApi, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var packages = Type == GhcrAccountType.User
+                ? await githubCrApi.ListUserPackages(Name, PAT, Name, cancellationToken)
+                : await githubCrApi.ListOrgPackages(Name, PAT, Name, cancellationToken);
+            return (packages, null);
+        }
+        catch (ApiException ex)
+        {
+            return (null,
+                ex.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                    ? "401 invalid DockerHub credentials, please check your PAT and/or your user-name."
+                    : ex.Message);
+        }
+    }
+
+    public async Task<(IEnumerable<GhcrPackageVersion> packages, string errorMessage)> GetPackageVersions(IGithubCrApi githubCrApi, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var versions = Type == GhcrAccountType.User
+                        ? await githubCrApi.ListPackageVersionsForUser(Name, PAT, Name, cancellationToken)
+                        : await githubCrApi.ListPackageVersionsForOrg(Name, Name, PAT, Name, cancellationToken);
+            return (versions, null);
+        }
+        catch (ApiException ex)
+        {
+            return (null,
+                ex.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                    ? "401 invalid DockerHub credentials, please check your PAT and/or your user-name."
                     : ex.Message);
         }
     }

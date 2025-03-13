@@ -76,6 +76,24 @@ const BreadCrumb = () => {
     crumbs.push({ title: 'Registries', link: '/registries' });
     crumbs.push({ title: 'Edit registry', isActive: true });
   }
+  else if (route?.path === paths[11]) {
+    // images
+    crumbs.push({ title: 'Patforms', link: '/' });
+    crumbs.push({ title: currentPlatform?.name ?? '', link: '/platforms/' + currentPlatform?.id });
+    crumbs.push({ title: 'Images',  badge: { title: 'local' }, isActive: true });
+  }
+  else if (route?.path === paths[12]) {
+    // images local
+    crumbs.push({ title: 'Patforms', link: '/' });
+    crumbs.push({ title: currentPlatform?.name ?? '', link: '/platforms/' + currentPlatform?.id });
+    crumbs.push({ title: 'Images', badge: { title: 'local' }, isActive: true });
+  }
+  else if (route?.path === paths[13]) {
+    // images local
+    crumbs.push({ title: 'Patforms', link: '/' });
+    crumbs.push({ title: currentPlatform?.name ?? '', link: '/platforms/' + currentPlatform?.id });
+    crumbs.push({ title: 'Images', badge: { title: 'external' }, isActive: true });
+  }
 
   return (
     <div className="mx-auto px-4 pt-3 lg:container sm:px-6">

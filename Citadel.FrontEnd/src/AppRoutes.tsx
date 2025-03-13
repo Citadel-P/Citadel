@@ -16,6 +16,9 @@ export const paths = [
   'registries',
   'registries/add',
   'registries/edit/:registryId',
+  'platforms/:platformId/images',
+  'platforms/:platformId/images/local',
+  'platforms/:platformId/images/external',
 ];
 
 export const AppRoutes = () => {
@@ -86,6 +89,24 @@ export const AppRoutes = () => {
           path: paths[10],
           lazy: async () => {
             return { Component: (await import('./pages/registries-page')).RegistryFormPage };
+          },
+        },
+        {
+          path: paths[11],
+          lazy: async () => {
+            return { Component: (await import('./pages/images-page')).default };
+          },
+        },
+        {
+          path: paths[12],
+          lazy: async () => {
+            return { Component: (await import('./pages/images-page')).default };
+          },
+        },
+        {
+          path: paths[13],
+          lazy: async () => {
+            return { Component: (await import('./pages/images-page')).default };
           },
         },
         {

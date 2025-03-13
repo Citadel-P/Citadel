@@ -8,8 +8,9 @@ namespace WebApi.Routes;
 
 public static class PublicEndpoints
 {
-    const string ContainersName = nameof(Containers);
+    const string ImagesName = nameof(Images);
     const string PlatformsName = nameof(Platforms);
+    const string ContainersName = nameof(Containers);
     const string RegistriesName = nameof(Registries);
     const string AuthenticationName = nameof(Authentication);
 
@@ -223,6 +224,23 @@ public static class PublicEndpoints
                     .ProducesProblem(StatusCodes.Status403Forbidden)
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
                     .WithName(RegistriesName + "_" + nameof(Registries.Pach));
+            }
+
+            var images = group.MapGroup("/images").WithTags(ImagesName).RequireAuthorization();
+            {
+                images.MapGet("/{id}/all", Images.GetAllLocalImages)
+                    .WithSummary("Get all local images")
+                    .ProducesValidationProblem()
+                    .ProducesProblem(StatusCodes.Status403Forbidden)
+                    .ProducesProblem(StatusCodes.Status401Unauthorized)
+                    .WithName(ImagesName + "_" + nameof(Images.GetAllLocalImages));
+
+                images.MapGet("/all/{registryName}", Images.GetExternalImages)
+                    .WithSummary("Get external images of a the given registry")
+                    .ProducesValidationProblem()
+                    .ProducesProblem(StatusCodes.Status403Forbidden)
+                    .ProducesProblem(StatusCodes.Status401Unauthorized)
+                    .WithName(ImagesName + "_" + nameof(Images.GetExternalImages));
             }
         }
 

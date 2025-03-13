@@ -4,15 +4,21 @@ import { useForm } from 'react-hook-form';
 import { useContextSelector } from 'use-context-selector';
 import { z } from 'zod';
 import { RegistryFormContext } from '../RegistryFormProvider';
+import { Constants } from '@/lib/constants';
 
 export const useGhcrForm = () => {
   const registry = useContextSelector(RegistryFormContext, (v) => v?.registry);
   const configuration = registry?.configuration as IRegistryConfigurationGitHubRegistry;
 
   const formSchema = z.object({
-    name: z.string().min(5, {
-      message: 'Name must be at least 5 characters.',
-    }),
+    name: z
+      .string()
+      .regex(new RegExp(Constants.validNameIdentifier), {
+        message: 'Must be a valid name, no whitespace or special chars are allowed.',
+      })
+      .min(5, {
+        message: 'Name must be at least 5 characters.',
+      }),
     discriminator: z.string(),
     url: z.string(),
     configuration: z.object({
