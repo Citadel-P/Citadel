@@ -47,7 +47,7 @@ export const Sidebar = () => {
         <a
           target="_blank"
           rel="noreferrer"
-          href="https://github.com/Citadel/Citadel"
+          href="https://github.com/Citadel-P/Citadel"
           className="group flex h-9 cursor-pointer items-center justify-start rounded p-2 hover:bg-card">
           <span className="h-6 w-5 text-muted-foreground/50">
             <Info width={18} />

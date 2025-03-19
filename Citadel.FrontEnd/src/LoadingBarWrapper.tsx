@@ -6,8 +6,8 @@ const LoadingBarWrapper = () => {
   const ref = useRef(null);
   const client = useQueryClient();
 
-  const showProgressBar = () => ref?.current?.continuousStart();
-  const hideProgressBar = () => ref?.current?.complete();
+  const showProgressBar = () => (ref?.current as any)?.continuousStart();
+  const hideProgressBar = () => (ref?.current as any)?.complete();
 
   client.getQueryCache().subscribe((event) => {
     if (event.type === 'updated' && event.action.type === 'fetch') showProgressBar();

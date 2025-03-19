@@ -23,7 +23,7 @@ const ImagesProvider: React.FC<IProps> = ({ children }) => {
   const { data, isLoading, isSuccess } = useGETRegistries();
   const [registries, setRegistries] = useState<RegistryView[]>([]);
   const [selectedRegistry, setSelectedRegistry] = useState<RegistryView | undefined>();
-  
+
   const isPlatformOnline = true;
 
   useEffect(() => {

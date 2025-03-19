@@ -59,7 +59,11 @@ const columns: ColumnDef<RegistryView>[] = [
   {
     id: 'actions',
     cell: ({ row }) => {
-      return <DropdownTableMenu registry={row.original} />;
+      return (
+        <div className="text-center">
+          <DropdownTableMenu registry={row.original} />
+        </div>
+      );
     },
   },
 ];

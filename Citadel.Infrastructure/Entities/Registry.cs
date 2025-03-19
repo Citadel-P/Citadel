@@ -1,4 +1,6 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.Text.Json;
+using System.Text;
+using System.Text.Json.Serialization;
 using Infrastructure.DockerHub;
 using Infrastructure.GithubCr;
 using Refit;
@@ -51,7 +53,9 @@ public class Registry
 [JsonDerivedType(typeof(DockerHubRegistry), nameof(RegistryDiscriminator.DockerHub))]
 [JsonDerivedType(typeof(GitHubRegistry), nameof(RegistryDiscriminator.GitHub))]
 public interface IRegistryConfiguration
-{ }
+{
+    string GetRegistryAuth() => throw new NotImplementedException();
+}
 
 public class DockerHubRegistry : IRegistryConfiguration
 {
@@ -82,7 +86,6 @@ public class DockerHubRegistry : IRegistryConfiguration
         }
     }
 
-    
 }
 
 public class AzureRegistry : IRegistryConfiguration
@@ -102,6 +105,7 @@ public class AzureRegistry : IRegistryConfiguration
 
 public class GitHubRegistry : IRegistryConfiguration
 {
+    public readonly string RegistryUrl = "https://ghcr.io";
     [JsonInclude]
     public string Name { get; private set; }
     [JsonInclude]
@@ -153,13 +157,13 @@ public class GitHubRegistry : IRegistryConfiguration
         }
     }
 
-    public async Task<(IEnumerable<GhcrPackageVersion> packages, string errorMessage)> GetPackageVersions(IGithubCrApi githubCrApi, CancellationToken cancellationToken)
+    public async Task<(IEnumerable<GhcrPackageVersion> versions, string errorMessage)> GetPackageVersions(IGithubCrApi githubCrApi, string packageName, CancellationToken cancellationToken)
     {
         try
         {
             var versions = Type == GhcrAccountType.User
-                        ? await githubCrApi.ListPackageVersionsForUser(Name, PAT, Name, cancellationToken)
-                        : await githubCrApi.ListPackageVersionsForOrg(Name, Name, PAT, Name, cancellationToken);
+                        ? await githubCrApi.ListPackageVersionsForUser(packageName, PAT, Name, cancellationToken: cancellationToken)
+                        : await githubCrApi.ListPackageVersionsForOrg(Name, packageName, PAT, Name, cancellationToken: cancellationToken);
             return (versions, null);
         }
         catch (ApiException ex)
@@ -170,6 +174,8 @@ public class GitHubRegistry : IRegistryConfiguration
                     : ex.Message);
         }
     }
+
+    public string GetRegistryAuth() => new RegistryAuth(Name, PAT, RegistryUrl).GetAuth();
 }
 
 public class AWSRegistry : IRegistryConfiguration
@@ -214,8 +220,10 @@ public class GitlabRegistry : IRegistryConfiguration
         };
 }
 
-public enum GhcrAccountType
+
+
+internal sealed record RegistryAuth(string Username, string Password, string Serveraddress)
 {
-    Organization,
-    User
+    internal string GetAuth()
+        => Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new RegistryAuth(Username, Password, Serveraddress))));
 }

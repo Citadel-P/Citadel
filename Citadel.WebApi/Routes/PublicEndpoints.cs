@@ -241,6 +241,20 @@ public static class PublicEndpoints
                     .ProducesProblem(StatusCodes.Status403Forbidden)
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
                     .WithName(ImagesName + "_" + nameof(Images.GetExternalImages));
+
+                images.MapGet("/all/{registryName}/{packageName}", Images.GetGhcrPackageVersions)
+                    .WithSummary("Get versions of the given package")
+                    .ProducesValidationProblem()
+                    .ProducesProblem(StatusCodes.Status403Forbidden)
+                    .ProducesProblem(StatusCodes.Status401Unauthorized)
+                    .WithName(ImagesName + "_" + nameof(Images.GetGhcrPackageVersions));
+
+                images.MapPost("/pull", Images.PullImage)
+                    .WithSummary("Pull an image from a registry and returns logs as a stream")
+                    .ProducesValidationProblem()
+                    .ProducesProblem(StatusCodes.Status403Forbidden)
+                    .ProducesProblem(StatusCodes.Status401Unauthorized)
+                    .WithName(ImagesName + "_" + nameof(Images.PullImage));
             }
         }
 

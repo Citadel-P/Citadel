@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState } from 'react';
 import {
   createColumnHelper,
@@ -8,6 +6,7 @@ import {
   useReactTable,
   type ExpandedState,
   getExpandedRowModel,
+  Row,
 } from '@tanstack/react-table';
 import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,155 +14,80 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn } from '@/lib/utils';
 import { useGETExternalImages } from './hooks/useGETExternalImages';
 import Loader from '@/components/ui/loader';
-
-// Types for our data structure
-type PackageVersion = {
-  id: string;
-  name: string;
-  status: 'not-started' | 'in-progress' | 'completed' | 'on-hold';
-  startDate: string;
-  endDate: string;
-  priority: 'low' | 'medium' | 'high';
-};
-
-type Package = {
-  id: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-  versions: PackageVersion[];
-  url: string;
-};
-
-// Sample data
-const data: Package[] = [
-  {
-    id: '1',
-    name: 'Alex Johnson',
-    createdAt: 'alex@example.com',
-    updatedAt: 'Developer',
-    url: 'Engineering',
-    versions: [
-      {
-        id: 'p1',
-        name: 'Website Redesign',
-        status: 'in-progress',
-        startDate: '2023-01-10',
-        endDate: '2023-04-30',
-        priority: 'high',
-      },
-      {
-        id: 'p2',
-        name: 'API Integration',
-        status: 'not-started',
-        startDate: '2023-05-01',
-        endDate: '2023-06-15',
-        priority: 'medium',
-      },
-    ],
-  },
-  {
-    id: '2',
-    name: 'Sam Taylor',
-    createdAt: 'sam@example.com',
-    updatedAt: 'Designer',
-    url: 'Design',
-    versions: [
-      {
-        id: 'p3',
-        name: 'Mobile App UI',
-        status: 'completed',
-        startDate: '2022-10-01',
-        endDate: '2023-01-20',
-        priority: 'high',
-      },
-      {
-        id: 'p4',
-        name: 'Brand Guidelines',
-        status: 'in-progress',
-        startDate: '2023-02-01',
-        endDate: '2023-03-31',
-        priority: 'medium',
-      },
-      {
-        id: 'p5',
-        name: 'Marketing Materials',
-        status: 'on-hold',
-        startDate: '2023-03-15',
-        endDate: '2023-05-30',
-        priority: 'low',
-      },
-    ],
-  },
-  {
-    id: '3',
-    name: 'Jordan Lee',
-    createdAt: 'jordan@example.com',
-    updatedAt: 'Manager',
-    url: 'Product',
-    versions: [
-      {
-        id: 'p6',
-        name: 'Q4 Roadmap',
-        status: 'completed',
-        startDate: '2022-09-01',
-        endDate: '2022-10-15',
-        priority: 'high',
-      },
-      {
-        id: 'p7',
-        name: 'Feature Prioritization',
-        status: 'in-progress',
-        startDate: '2023-01-05',
-        endDate: '2023-02-28',
-        priority: 'high',
-      },
-    ],
-  },
-];
+import { GhcrPackageVersion, IImageResponseGitHubPackageResponse } from '@/api/_generated';
+import { useGETPackageVersions } from './hooks/useGETPackageVersions';
+import { useContextSelector } from 'use-context-selector';
+import { ImagesContext } from './ImagesProvider';
+import { fromNow } from '@/lib/dayjs.helper';
+import { Badge } from '@/components/ui/badge';
+import { truncate } from '@/lib/truncate';
+import PullProgressSheet from './PullProgressSheet';
 
 // Column helpers
-const personColumnHelper = createColumnHelper<Package>();
-const projectColumnHelper = createColumnHelper<PackageVersion>();
+const packageColumnHelper = createColumnHelper<IImageResponseGitHubPackageResponse>();
+const versionColumnHelper = createColumnHelper<GhcrPackageVersion>();
 
 // Nested table component
-function NestedProjectsTable({ person }: { person: Package }) {
-  const projectColumns = React.useMemo(
+function NestedVersionsTable({ ghPackage }: { ghPackage: IImageResponseGitHubPackageResponse }) {
+  const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
+  const { isLoading, data } = useGETPackageVersions(selectedRegistry?.name ?? undefined, ghPackage?.name ?? '');
+  const versionColumns = React.useMemo(
     () => [
-      projectColumnHelper.accessor('name', {
-        header: 'Project Name',
-        cell: (info) => info.getValue(),
+      versionColumnHelper.accessor('html_url', {
+        header: 'Url',
+        cell: (info) => (
+          <a
+            className="hover:underline text-blue-600 text-[13px]"
+            target="_blank"
+            rel="noreferrer"
+            href={info.row.original.html_url ?? ''}>
+            {info.row.original.id}{' '}
+          </a>
+        ),
       }),
-      projectColumnHelper.accessor('status', {
-        header: 'Status',
-        cell: (info) => <span>Not started</span>,
+      versionColumnHelper.accessor('name', {
+        header: 'Version',
+        cell: (info) => <span className="text-[13px]">{truncate(info.getValue() ?? '', 50, 'left')}</span>,
       }),
-      projectColumnHelper.accessor('startDate', {
-        header: 'Start Date',
-        cell: (info) => info.getValue(),
+      {
+        header: 'Tags',
+        cell: ({ row }: { row: Row<GhcrPackageVersion> }) =>
+          row.original.metadata?.container?.tags?.map((s) => (
+            <Badge className="mr-1 text-[13px] font-normal" variant="outline" key={s}>
+              {truncate(s, 15, 'left')}
+            </Badge>
+          )),
+      },
+      versionColumnHelper.accessor('created_at', {
+        header: 'Created At',
+        cell: (info) => <span className="text-[13px]">{fromNow(new Date(info.getValue() ?? 0 * 1000).getTime())}</span>,
       }),
-      projectColumnHelper.accessor('endDate', {
-        header: 'End Date',
-        cell: (info) => info.getValue(),
+      versionColumnHelper.accessor('updated_at', {
+        header: 'Updated At',
+        cell: (info) => <span className="text-[13px]">{fromNow(new Date(info.getValue() ?? 0 * 1000).getTime())}</span>,
       }),
-      projectColumnHelper.accessor('priority', {
-        header: 'Priority',
-        cell: (info) => <span>PP</span>,
-      }),
+      {
+        id: 'select',
+        cell: ({ row }: { row: Row<GhcrPackageVersion> }) => (
+          <PullProgressSheet ghPackage={ghPackage} version={row.original} />
+        ),
+      },
     ],
     [],
   );
 
-  const projectsTable = useReactTable({
-    data: person.versions,
-    columns: projectColumns,
+  const versionsTable = useReactTable({
+    data: data?.data ?? [],
+    columns: versionColumns,
     getCoreRowModel: getCoreRowModel(),
   });
+
+  if (isLoading) return <Loader />;
 
   return (
     <Table className="bg-background">
       <TableHeader>
-        {projectsTable.getHeaderGroups().map((headerGroup) => (
+        {versionsTable.getHeaderGroups().map((headerGroup) => (
           <TableRow key={headerGroup.id}>
             {headerGroup.headers.map((header) => (
               <TableHead key={header.id}>
@@ -174,18 +98,20 @@ function NestedProjectsTable({ person }: { person: Package }) {
         ))}
       </TableHeader>
       <TableBody>
-        {projectsTable.getRowModel().rows.length ? (
-          projectsTable.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
+        {versionsTable.getRowModel().rows.length ? (
+          versionsTable.getRowModel().rows.map((row) => (
+            <TableRow key={row.id} className="group/versionrow">
               {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                <TableCell className="justify-items-center" key={cell.id}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
               ))}
             </TableRow>
           ))
         ) : (
           <TableRow>
-            <TableCell colSpan={projectColumns.length} className="h-24 text-center">
-              No projects found.
+            <TableCell colSpan={versionColumns.length} className="h-24 text-center">
+              No results found.
             </TableCell>
           </TableRow>
         )}
@@ -194,13 +120,13 @@ function NestedProjectsTable({ person }: { person: Package }) {
   );
 }
 
-export default function GhcrImageTable({registryName}: {registryName: string}) {
-  const {isLoading, isSuccess, data: externalImagesData } = useGETExternalImages(registryName);
+export default function GhcrImageTable({ registryName }: { registryName: string }) {
+  const { isLoading, data } = useGETExternalImages(registryName);
   const [expanded, setExpanded] = useState<ExpandedState>({});
 
   const columns = React.useMemo(
     () => [
-      personColumnHelper.display({
+      packageColumnHelper.display({
         id: 'expander',
         cell: ({ row }) => {
           return (
@@ -216,23 +142,30 @@ export default function GhcrImageTable({registryName}: {registryName: string}) {
             </Button>
           );
         },
-        header: () => null,
         size: 50,
       }),
-      personColumnHelper.accessor('name', {
+      packageColumnHelper.accessor('name', {
         cell: (info) => info.getValue(),
         header: 'Package Name',
       }),
-      personColumnHelper.accessor('url', {
-        cell: (info) => info.getValue(),
+      packageColumnHelper.accessor('url', {
+        cell: (info) => (
+          <a
+            className="hover:underline text-blue-600 "
+            target="_blank"
+            rel="noreferrer"
+            href={info.row.original.htmlUrl ?? ''}>
+            {info.row.original.htmlUrl}{' '}
+          </a>
+        ),
         header: 'Url',
       }),
-      personColumnHelper.accessor('createdAt', {
-        cell: (info) => info.getValue(),
+      packageColumnHelper.accessor('createdAt', {
+        cell: (info) => fromNow(new Date(info.getValue() ?? 0 * 1000).getTime()),
         header: 'Create dAt',
       }),
-      personColumnHelper.accessor('updatedAt', {
-        cell: (info) => info.getValue(),
+      packageColumnHelper.accessor('updatedAt', {
+        cell: (info) => fromNow(new Date(info.getValue() ?? 0 * 1000).getTime()),
         header: 'updated at',
       }),
     ],
@@ -240,7 +173,7 @@ export default function GhcrImageTable({registryName}: {registryName: string}) {
   );
 
   const table = useReactTable({
-    data,
+    data: (data?.data ?? []) as IImageResponseGitHubPackageResponse[],
     columns,
     state: {
       expanded,
@@ -282,7 +215,7 @@ export default function GhcrImageTable({registryName}: {registryName: string}) {
                       row.getIsExpanded() ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
                     )}>
                     <div className="overflow-hidden min-h-0 pl-10 bg-background">
-                      <NestedProjectsTable person={row.original} />
+                      <NestedVersionsTable ghPackage={row.original} />
                     </div>
                   </div>
                 </TableCell>

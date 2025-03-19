@@ -19,6 +19,7 @@ public class GitHubPackageResponse : IImageResponse
     public string CreatedAt { get; init; }
     public string UpdatedAt { get; init; }
     public string Url { get; init; }
+    public string HtmlUrl { get; init; }
 }
 
 public class DockerHubImageResponse : IImageResponse

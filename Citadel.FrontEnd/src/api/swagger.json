@@ -2109,6 +2109,173 @@
           }
         ]
       }
+    },
+    "/api/v1/images/all/{registryName}/{packageName}": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "summary": "Get versions of the given package",
+        "operationId": "Images_GetGhcrPackageVersions",
+        "parameters": [
+          {
+            "name": "registryName",
+            "in": "path",
+            "description": "The registry name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "packageName",
+            "in": "path",
+            "description": "The package name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GhcrPackageVersion"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/images/pull": {
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "summary": "Pull an image from a registry and returns a stream",
+        "operationId": "Images_PullImage",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PullImageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PullImageReply"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -2798,6 +2965,42 @@
           }
         }
       },
+      "GhcrPackageVersion": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "package_html_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "nullable": true
+          },
+          "html_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PackageVersionMetadata"
+          }
+        }
+      },
       "GraphDriverData": {
         "type": "object",
         "properties": {
@@ -3215,6 +3418,10 @@
           "url": {
             "type": "string",
             "nullable": true
+          },
+          "htmlUrl": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -3436,6 +3643,46 @@
             "nullable": true
           }
         }
+      },
+      "JSONErrorReply": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "JSONProgressReply": {
+        "type": "object",
+        "properties": {
+          "current": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "start": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "units": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "nullable": true
       },
       "LogConfig": {
         "type": "object",
@@ -3696,6 +3943,28 @@
               "$ref": "#/components/schemas/EndpointSettingsView"
             },
             "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "PackageVersionContainerMetadata": {
+        "type": "object",
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "PackageVersionMetadata": {
+        "type": "object",
+        "properties": {
+          "container": {
+            "$ref": "#/components/schemas/PackageVersionContainerMetadata"
           }
         },
         "nullable": true
@@ -4105,6 +4374,68 @@
             "nullable": true
           },
           "instance": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "PullImageReply": {
+        "type": "object",
+        "properties": {
+          "stream": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "progressMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "from": {
+            "type": "string",
+            "nullable": true
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "progress": {
+            "$ref": "#/components/schemas/JSONProgressReply"
+          },
+          "error": {
+            "$ref": "#/components/schemas/JSONErrorReply"
+          }
+        }
+      },
+      "PullImageRequest": {
+        "required": [
+          "platformId",
+          "registryName",
+          "packageName",
+          "imageTag"
+        ],
+        "type": "object",
+        "properties": {
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "registryName": {
+            "type": "string",
+            "nullable": true
+          },
+          "packageName": {
+            "type": "string",
+            "nullable": true
+          },
+          "imageTag": {
             "type": "string",
             "nullable": true
           }

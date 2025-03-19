@@ -135,7 +135,11 @@ const columns: ColumnDef<ContainerInfoView>[] = [
   },
   {
     id: 'actions',
-    cell: ({ row }) => <DropdownTableMenu container={row.original} />,
+    cell: ({ row }) => (
+      <div className="text-center">
+        <DropdownTableMenu container={row.original} />
+      </div>
+    ),
   },
 ];
 

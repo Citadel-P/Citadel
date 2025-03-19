@@ -75,20 +75,17 @@ const BreadCrumb = () => {
     // edit docker platform
     crumbs.push({ title: 'Registries', link: '/registries' });
     crumbs.push({ title: 'Edit registry', isActive: true });
-  }
-  else if (route?.path === paths[11]) {
+  } else if (route?.path === paths[11]) {
     // images
     crumbs.push({ title: 'Patforms', link: '/' });
     crumbs.push({ title: currentPlatform?.name ?? '', link: '/platforms/' + currentPlatform?.id });
-    crumbs.push({ title: 'Images',  badge: { title: 'local' }, isActive: true });
-  }
-  else if (route?.path === paths[12]) {
+    crumbs.push({ title: 'Images', badge: { title: 'local' }, isActive: true });
+  } else if (route?.path === paths[12]) {
     // images local
     crumbs.push({ title: 'Patforms', link: '/' });
     crumbs.push({ title: currentPlatform?.name ?? '', link: '/platforms/' + currentPlatform?.id });
     crumbs.push({ title: 'Images', badge: { title: 'local' }, isActive: true });
-  }
-  else if (route?.path === paths[13]) {
+  } else if (route?.path === paths[13]) {
     // images local
     crumbs.push({ title: 'Patforms', link: '/' });
     crumbs.push({ title: currentPlatform?.name ?? '', link: '/platforms/' + currentPlatform?.id });

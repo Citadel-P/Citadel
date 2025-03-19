@@ -35,9 +35,12 @@ public enum AppPermission
     DeleteVolumes,
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum PlatformStatus
 {
+    [JsonStringEnumMemberName("Offline")]
     Offline,
+    [JsonStringEnumMemberName("Online")]
     Online
 }
 
@@ -54,4 +57,13 @@ public enum RegistryDiscriminator
     Gitlab,
     [JsonStringEnumMemberName("GitHub")]
     GitHub
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum GhcrAccountType
+{
+    [JsonStringEnumMemberName("Organization")]
+    Organization,
+    [JsonStringEnumMemberName("User")]
+    User
 }

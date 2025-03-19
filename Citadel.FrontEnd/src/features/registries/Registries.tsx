@@ -15,16 +15,6 @@ const Registries = () => {
   const isLoading = useContextSelector(RegistriesContext, (v) => v?.isLoading);
 
   if (isLoading) return <Loader />;
-  if (!isLoading && registries?.length === 0)
-    return (
-      <AlertMessage type="info">
-        <span>No registry has been configured yet, please add a new registry</span>
-        <button className="font-semibold underline hover:no-underline ml-1" onClick={() => navigate('/registries/add')}>
-          here
-        </button>
-        .
-      </AlertMessage>
-    );
   return (
     <div className="flex-col justify-between min-h-[calc(100%-4rem)] relative">
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
@@ -40,6 +30,17 @@ const Registries = () => {
               <Plus className="h-3 w-3" /> Add Registy
             </Button>
           </div>
+          {!isLoading && registries?.length === 0 && (
+            <AlertMessage type="info">
+              <span>No registry has been configured yet, please add a new registry</span>
+              <button
+                className="font-semibold underline hover:no-underline ml-1"
+                onClick={() => navigate('/registries/add')}>
+                here
+              </button>
+              .
+            </AlertMessage>
+          )}
           <RegistriesTable />
         </div>
       </div>

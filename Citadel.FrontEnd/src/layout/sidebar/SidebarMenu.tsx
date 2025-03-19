@@ -68,9 +68,9 @@ export const SidebarMenu = () => {
 
                   {item.children ? (
                     <div className="flex h-9 cursor-pointer items-center justify-start rounded hover:bg-card">
-                      <a className="ml-10 truncate text-xs font-semibold tracking-wide text-muted-foreground focus:outline-hidden group-hover:text-foreground">
+                      <span className="ml-10 truncate text-xs font-semibold tracking-wide text-muted-foreground focus:outline-hidden group-hover:text-foreground">
                         {item.label}
-                      </a>
+                      </span>
                     </div>
                   ) : (
                     <div className="flex h-9 cursor-pointer items-center justify-start rounded text-muted-foreground hover:bg-card hover:text-foreground">

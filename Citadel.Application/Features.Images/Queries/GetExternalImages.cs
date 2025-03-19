@@ -57,5 +57,6 @@ internal static partial class Mapper
         CreatedAt = image.CreatedAt,
         UpdatedAt = image.UpdatedAt,
         Url = image.Url,
+        HtmlUrl = image.HtmlUrl,
     };
 }

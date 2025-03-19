@@ -208,6 +208,18 @@ export interface EndpointSettingsView {
   dnsNames: string[] | null;
 }
 
+export interface GhcrPackageVersion {
+  /** @format int32 */
+  id?: number;
+  name?: string | null;
+  url?: string | null;
+  package_html_url?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  html_url?: string | null;
+  metadata?: PackageVersionMetadata;
+}
+
 export type GraphDriverData = {
   name?: string | null;
   data?: Record<string, string>;
@@ -315,6 +327,7 @@ export interface IImageResponseGitHubPackageResponse {
   createdAt?: string | null;
   updatedAt?: string | null;
   url?: string | null;
+  htmlUrl?: string | null;
 }
 
 export interface ImagesView {
@@ -379,6 +392,22 @@ export interface IRegistryConfigurationGitlabRegistry {
   pat?: string | null;
   instanceUrl?: string | null;
 }
+
+export type JSONErrorReply = {
+  /** @format int64 */
+  code?: number | null;
+  message?: string | null;
+};
+
+export type JSONProgressReply = {
+  /** @format int64 */
+  current?: number | null;
+  /** @format int64 */
+  total?: number | null;
+  /** @format int64 */
+  start?: number | null;
+  units?: string | null;
+};
 
 export type LogConfig = {
   type?: string | null;
@@ -448,6 +477,14 @@ export type NetworkSettingsView = {
   macAddress: string | null;
   networks: Record<string, EndpointSettingsView>;
 };
+
+export type PackageVersionContainerMetadata = {
+  tags?: string[] | null;
+};
+
+export type PackageVersionMetadata = {
+  container?: PackageVersionContainerMetadata;
+} | null;
 
 export interface PatchRegistryInput {
   /** @format uuid */
@@ -578,6 +615,25 @@ export interface ProblemDetails {
   status?: number | null;
   detail?: string | null;
   instance?: string | null;
+}
+
+export interface PullImageReply {
+  stream?: string | null;
+  status?: string | null;
+  progressMessage?: string | null;
+  id?: string | null;
+  from?: string | null;
+  errorMessage?: string | null;
+  progress?: JSONProgressReply;
+  error?: JSONErrorReply;
+}
+
+export interface PullImageRequest {
+  /** @format uuid */
+  platformId: string;
+  registryName: string | null;
+  packageName: string | null;
+  imageTag: string | null;
 }
 
 export interface PutPlatformRequest {
@@ -1527,6 +1583,54 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         path: `/api/v1/images/all/${registryName}`,
         method: 'GET',
         secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Images
+     * @name ImagesGetGhcrPackageVersions
+     * @summary Get versions of the given package
+     * @request GET:/api/v1/images/all/{registryName}/{packageName}
+     * @secure
+     * @response `200` `(GhcrPackageVersion)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    imagesGetGhcrPackageVersions: (registryName: string, packageName: string, params: RequestParams = {}) =>
+      this.request<GhcrPackageVersion[], HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/images/all/${registryName}/${packageName}`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Images
+     * @name ImagesPullImage
+     * @summary Pull an image from a registry and returns a stream
+     * @request POST:/api/v1/images/pull
+     * @secure
+     * @response `200` `(PullImageReply)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    imagesPullImage: (data: PullImageRequest, params: RequestParams = {}) =>
+      this.request<PullImageReply[], HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/images/pull`,
+        method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: 'json',
         ...params,
       }),

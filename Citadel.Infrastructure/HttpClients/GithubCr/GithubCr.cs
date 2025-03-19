@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.Json.Serialization;
-using System.Threading.Tasks;
-using Infrastructure.DockerHub;
+﻿using System.Text.Json.Serialization;
 using Refit;
 
 namespace Infrastructure.GithubCr
@@ -48,8 +42,8 @@ namespace Infrastructure.GithubCr
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         [Headers("Accept: application/vnd.github+json", "X-GitHub-Api-Version: 2022-11-28")]
-        [Get("/user/packages/container/{package_name}/versions&page=1&per_page=100")]
-        Task<IEnumerable<GhcrPackageVersion>> ListPackageVersionsForUser(string package_name, [Authorize("Bearer")] string pat, [Header("User-Agent")] string agent, CancellationToken cancellationToken = default);
+        [Get("/user/packages/container/{package_name}/versions")]
+        Task<IEnumerable<GhcrPackageVersion>> ListPackageVersionsForUser(string package_name, [Authorize("Bearer")] string pat, [Header("User-Agent")] string agent, int page = 1, int per_page = 100, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Lists package versions for a package owned by an organization.
@@ -61,7 +55,7 @@ namespace Infrastructure.GithubCr
         /// <returns></returns>
         [Headers("Accept: application/vnd.github+json", "X-GitHub-Api-Version: 2022-11-28")]
         [Get("/orgs/{org}/packages/container/{package_name}/versions")]
-        Task<IEnumerable<GhcrPackageVersion>> ListPackageVersionsForOrg(string org, string package_name, [Authorize("Bearer")] string pat, [Header("User-Agent")] string agent, CancellationToken cancellationToken = default);
+        Task<IEnumerable<GhcrPackageVersion>> ListPackageVersionsForOrg(string org, string package_name, [Authorize("Bearer")] string pat, [Header("User-Agent")] string agent, int page = 1, int per_page = 100, CancellationToken cancellationToken = default);
 
     }
     public class GhcrPackage
@@ -107,5 +101,19 @@ namespace Infrastructure.GithubCr
         public string UpdatedAt { get; init; }
         [JsonPropertyName("html_url")]
         public string HtmlUrl { get; init; }
+        [JsonPropertyName("metadata")]
+        public PackageVersionMetadata Metadata { get; init; }
+    }
+
+    public record PackageVersionMetadata
+    {
+        [JsonPropertyName("container")]
+        public PackageVersionContainerMetadata Container {  get; init; }
+    }
+    public record PackageVersionContainerMetadata
+    {
+        [JsonPropertyName("tags")]
+        public IEnumerable<string> Tags { get; init; }
+
     }
 }

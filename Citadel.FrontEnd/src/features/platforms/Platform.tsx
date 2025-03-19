@@ -16,7 +16,7 @@ const Platform = ({ platform }: IProps) => {
   const LastSnapshotTooltip = () => {
     const lastSnapshot =
       platform.stats && platform.stats[0]
-        ? new Date(platform.stats![0].created! * 1000).getTime()
+        ? new Date(platform.stats[0].created ?? 0 * 1000).getTime()
         : new Date().getTime();
     return (
       <TooltipProvider delayDuration={200}>
@@ -158,7 +158,7 @@ const Platform = ({ platform }: IProps) => {
             </div>
 
             <div className="flex flex-auto">
-              <button className="group/edit invisible flex items-center truncate rounded-full p-2 text-xs font-medium group-hover/platform:visible hover:bg-foreground/10">
+              <button className="group/edit invisible flex items-center truncate rounded-full p-2 text-xs font-medium  group-hover/platform:visible hover:bg-foreground/10">
                 <span>Edit</span>
                 <ChevronRight className="ml-1 h-3.5 w-3.5 group-hover/edit:translate-x-0.5" />
               </button>
