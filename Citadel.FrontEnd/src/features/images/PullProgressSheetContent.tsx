@@ -12,6 +12,7 @@ import { useContextSelector } from 'use-context-selector';
 import { AppContext } from '@/AppProvider';
 import { ImagesContext } from './ImagesProvider';
 import { Highlight, themes } from 'prism-react-renderer';
+import { toast } from 'sonner';
 
 export default function PullProgressSheetContent({
   ghPackage,
@@ -57,8 +58,15 @@ export default function PullProgressSheetContent({
       if (data) {
         const response = JSON.parse(data) as PullImageReply[];
         const errors = response.filter((s) => s.errorMessage).map((s) => s.errorMessage);
-        if (errors) {
-          setPullError(errors?.at(0) ?? undefined);
+        if (errors && errors.length > 0) {
+          const error = errors?.at(0) ?? undefined;
+          setPullError(error);
+          toast.error('Error', {
+            description: error,
+          });
+        }
+        else {
+          toast.success('Image pulled successfully');
         }
       }
     }
