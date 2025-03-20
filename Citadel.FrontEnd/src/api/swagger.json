@@ -792,7 +792,7 @@
         "tags": [
           "Containers"
         ],
-        "summary": "Request to start (or stop) streaming container logs",
+        "summary": "Stream container logs",
         "operationId": "Containers_StreamLogs",
         "requestBody": {
           "content": {
@@ -814,8 +814,18 @@
               }
             }
           },
-          "204": {
-            "description": "No Content"
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContainerLogReply"
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Bad Request",
@@ -2204,7 +2214,7 @@
         "tags": [
           "Images"
         ],
-        "summary": "Pull an image from a registry and returns a stream",
+        "summary": "Pull an image from a registry and returns logs as a stream",
         "operationId": "Images_PullImage",
         "requestBody": {
           "content": {
@@ -2666,6 +2676,19 @@
           },
           "networkSettings": {
             "$ref": "#/components/schemas/NetworkSettingsView"
+          }
+        }
+      },
+      "ContainerLogReply": {
+        "type": "object",
+        "properties": {
+          "containerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "log": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -4536,14 +4559,6 @@
           }
         }
       },
-      "RequestedLogAction": {
-        "enum": [
-          "START",
-          "STOP"
-        ],
-        "type": "string",
-        "default": "START"
-      },
       "RestartPolicy": {
         "type": "object",
         "properties": {
@@ -4561,21 +4576,13 @@
       },
       "StreamLogsRequest": {
         "required": [
-          "containerId",
-          "requestId"
+          "containerId"
         ],
         "type": "object",
         "properties": {
           "containerId": {
             "type": "string",
             "nullable": true
-          },
-          "requestId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "requestedLogAction": {
-            "$ref": "#/components/schemas/RequestedLogAction"
           }
         }
       },

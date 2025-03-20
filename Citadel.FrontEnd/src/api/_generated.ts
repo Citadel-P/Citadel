@@ -128,6 +128,11 @@ export interface ContainerInspectView {
   networkSettings: NetworkSettingsView;
 }
 
+export interface ContainerLogReply {
+  containerId?: string | null;
+  log?: string | null;
+}
+
 export interface ContainersInfoView {
   containers: ContainerInfoView[] | null;
 }
@@ -670,12 +675,6 @@ export interface RegistryView {
   configuration: IRegistryConfiguration;
 }
 
-/** @default "START" */
-export enum RequestedLogAction {
-  START = 'START',
-  STOP = 'STOP',
-}
-
 export type RestartPolicy = {
   name?: string | null;
   /** @format int32 */
@@ -684,9 +683,6 @@ export type RestartPolicy = {
 
 export interface StreamLogsRequest {
   containerId: string | null;
-  /** @format uuid */
-  requestId: string;
-  requestedLogAction?: RequestedLogAction;
 }
 
 export type SwarmInfoView = {
@@ -1196,10 +1192,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      *
      * @tags Containers
      * @name ContainersStreamLogs
-     * @summary Request to start (or stop) streaming container logs
+     * @summary Stream container logs
      * @request POST:/api/v1/containers/stream-logs
      * @secure
-     * @response `204` `void` No Content
+     * @response `200` `(ContainerLogReply)[]` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -1207,12 +1203,13 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     containersStreamLogs: (data: StreamLogsRequest, params: RequestParams = {}) =>
-      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<ContainerLogReply[], HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/stream-logs`,
         method: 'POST',
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: 'json',
         ...params,
       }),
 
@@ -1615,7 +1612,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      *
      * @tags Images
      * @name ImagesPullImage
-     * @summary Pull an image from a registry and returns a stream
+     * @summary Pull an image from a registry and returns logs as a stream
      * @request POST:/api/v1/images/pull
      * @secure
      * @response `200` `(PullImageReply)[]` OK

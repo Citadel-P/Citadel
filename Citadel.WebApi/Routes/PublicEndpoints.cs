@@ -102,7 +102,7 @@ public static class PublicEndpoints
                      .WithName(ContainersName + "_" + nameof(Containers.DeleteContainers));
 
                 containers.MapPost("stream-logs", Containers.StreamLogs)
-                     .WithSummary("Request to start (or stop) streaming container logs")
+                     .WithSummary("Stream container logs")
                      .ProducesValidationProblem()
                      .ProducesProblem(StatusCodes.Status404NotFound)
                      .ProducesProblem(StatusCodes.Status403Forbidden)

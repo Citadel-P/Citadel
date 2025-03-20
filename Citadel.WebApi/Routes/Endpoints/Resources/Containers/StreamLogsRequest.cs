@@ -6,9 +6,7 @@ namespace WebApi.Routes.Endpoints.Resources.Containers;
 /// Request params for starting or stopping streaming logs
 /// </summary>
 /// <param name="ContainerId">containers id</param>
-/// <param name="RequestId">unique id of the request</param>
-/// <param name="RequestedLogAction">action to perform</param>
-public sealed record StreamLogsRequest(string ContainerId, Guid RequestId, RequestedLogAction RequestedLogAction = RequestedLogAction.START)
+public sealed record StreamLogsRequest(string ContainerId)
 {
-    internal StreamContainerLogs ToCommand() => new(ContainerId, RequestId, RequestedLogAction);
+    internal StreamContainerLogs ToCommand() => new(ContainerId);
 }

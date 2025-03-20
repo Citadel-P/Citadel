@@ -1,45 +1,44 @@
-﻿using FluentValidation;
+﻿using System.Runtime.CompilerServices;
+using Agent.Server.Containers;
+using FluentValidation;
+using Grpc.Core;
 using Hosting.Common;
-using Infrastructure.TaskJobs;
-using LightResults;
+using Infrastructure;
+using Infrastructure.EntityFramework;
+using Infrastructure.Services.Abstractions;
 using Mediator;
-using Microsoft.Extensions.Logging;
-using Quartz;
 
 namespace Application.Features.Platforms.Commands;
 
-public sealed record StreamContainerLogs(string ContainerId, Guid RequestId, RequestedLogAction RequestedLogAction) : ICommand<Result>
+public sealed record StreamContainerLogs(string ContainerId) : IStreamCommand<ContainerLogReply>
 {
     internal class Validator : AbstractValidator<StreamContainerLogs>
     {
         public Validator()
         {
-            RuleFor(s => s.RequestId).NotNull().NotEmpty();
             RuleFor(s => s.ContainerId).ValidContainerId();
         }
     }
 }
 
-internal class StreamContainerLogsHandler(ISchedulerFactory schedulerFactory, ILogger<StreamContainerLogsHandler> logger)
-    : ICommandHandler<StreamContainerLogs, Result>
+internal class StreamContainerLogsHandler(
+    IGrpcClientFactory clientFactory,
+    ApplicationDbContext dbContext): IStreamCommandHandler<StreamContainerLogs, ContainerLogReply>
 {
-    public async ValueTask<Result> Handle(StreamContainerLogs query, CancellationToken cancellationToken)
+    public async IAsyncEnumerable<ContainerLogReply> Handle(StreamContainerLogs query, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var scheduler = await schedulerFactory.GetScheduler(cancellationToken);
-        if (query.RequestedLogAction == RequestedLogAction.START)
+        var platformAddress = await dbContext.ContainersInfo.GetPlatformAddress(query.ContainerId, cancellationToken)
+             ?? throw new Exception($"Platform doesn't exist for container {query.ContainerId}");
+        
+        var client = clientFactory.GetContainerClient(platformAddress);
+        var request = new ContainerLogRequest
         {
-            await scheduler.EnqueueContainerLogsJob(query.ContainerId, query.RequestId, logger, cancellationToken);
-        }
-        else
+            ContainerId = query.ContainerId,
+        };
+        using var call = client.StreamContainerLogs(request, cancellationToken: cancellationToken);
+        await foreach (var reply in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
         {
-            await scheduler.AbortContainerLogsJob(query.RequestId, logger, cancellationToken);
+            yield return reply;
         }
-        return Result.Success();
     }
-}
-
-public enum RequestedLogAction
-{
-    START,
-    STOP
 }

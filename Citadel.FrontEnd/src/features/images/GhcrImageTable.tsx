@@ -8,7 +8,7 @@ import {
   getExpandedRowModel,
   Row,
 } from '@tanstack/react-table';
-import { ChevronRight } from 'lucide-react';
+import { ArrowDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
@@ -21,7 +21,8 @@ import { ImagesContext } from './ImagesProvider';
 import { fromNow } from '@/lib/dayjs.helper';
 import { Badge } from '@/components/ui/badge';
 import { truncate } from '@/lib/truncate';
-import PullProgressSheet from './PullProgressSheet';
+import PullProgressSheetContent from './PullProgressSheetContent';
+import { Sheet } from '@/components/ui/sheet';
 
 // Column helpers
 const packageColumnHelper = createColumnHelper<IImageResponseGitHubPackageResponse>();
@@ -31,6 +32,19 @@ const versionColumnHelper = createColumnHelper<GhcrPackageVersion>();
 function NestedVersionsTable({ ghPackage }: { ghPackage: IImageResponseGitHubPackageResponse }) {
   const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
   const { isLoading, data } = useGETPackageVersions(selectedRegistry?.name ?? undefined, ghPackage?.name ?? '');
+  const [selectedVersion, setSelectedVersion] = useState<GhcrPackageVersion | null>(null);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+
+  const openSheet = (version: GhcrPackageVersion) => {
+    setSelectedVersion(version);
+    setIsSheetOpen(true);
+  };
+
+  const closeSheet = () => {
+    setIsSheetOpen(false);
+    setSelectedVersion(null);
+  };
+
   const versionColumns = React.useMemo(
     () => [
       versionColumnHelper.accessor('html_url', {
@@ -69,7 +83,12 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageResponseGitHubPac
       {
         id: 'select',
         cell: ({ row }: { row: Row<GhcrPackageVersion> }) => (
-          <PullProgressSheet ghPackage={ghPackage} version={row.original} />
+          <Badge
+            onClick={() => openSheet(row.original)}
+            className="flex text-right cursor-pointer invisible group/versionrowdown group-hover/versionrow:visible truncate rounded-full hover:bg-primary/90">
+            <span>Pull</span>
+            <ArrowDown className="ml-1 h-3.5 w-3.5 text-background group-hover/versionrowdown:animate-bounce" />
+          </Badge>
         ),
       },
     ],
@@ -85,38 +104,45 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageResponseGitHubPac
   if (isLoading) return <Loader />;
 
   return (
-    <Table className="bg-background">
-      <TableHeader>
-        {versionsTable.getHeaderGroups().map((headerGroup) => (
-          <TableRow key={headerGroup.id}>
-            {headerGroup.headers.map((header) => (
-              <TableHead key={header.id}>
-                {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-              </TableHead>
-            ))}
-          </TableRow>
-        ))}
-      </TableHeader>
-      <TableBody>
-        {versionsTable.getRowModel().rows.length ? (
-          versionsTable.getRowModel().rows.map((row) => (
-            <TableRow key={row.id} className="group/versionrow">
-              {row.getVisibleCells().map((cell) => (
-                <TableCell className="justify-items-center" key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
+    <>
+      <Table className="bg-background">
+        <TableHeader>
+          {versionsTable.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <TableHead key={header.id}>
+                  {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                </TableHead>
               ))}
             </TableRow>
-          ))
-        ) : (
-          <TableRow>
-            <TableCell colSpan={versionColumns.length} className="h-24 text-center">
-              No results found.
-            </TableCell>
-          </TableRow>
-        )}
-      </TableBody>
-    </Table>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {versionsTable.getRowModel().rows.length ? (
+            versionsTable.getRowModel().rows.map((row) => (
+              <TableRow key={row.id} className="group/versionrow">
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell className="justify-items-center" key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={versionColumns.length} className="h-24 text-center">
+                No results found.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+      {selectedVersion && (
+        <Sheet open={isSheetOpen} onOpenChange={(open) => (open ? setIsSheetOpen(true) : closeSheet())}>
+          <PullProgressSheetContent ghPackage={ghPackage} version={selectedVersion} />
+        </Sheet>
+      )}
+    </>
   );
 }
 
@@ -162,11 +188,11 @@ export default function GhcrImageTable({ registryName }: { registryName: string 
       }),
       packageColumnHelper.accessor('createdAt', {
         cell: (info) => fromNow(new Date(info.getValue() ?? 0 * 1000).getTime()),
-        header: 'Create dAt',
+        header: 'Created At',
       }),
       packageColumnHelper.accessor('updatedAt', {
         cell: (info) => fromNow(new Date(info.getValue() ?? 0 * 1000).getTime()),
-        header: 'updated at',
+        header: 'Updated At',
       }),
     ],
     [],

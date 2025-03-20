@@ -4,15 +4,17 @@ import { useMutation } from '@tanstack/react-query';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 import { PullImageRequest } from '@/api/_generated';
 import { AuthContext } from '@/features/auth/AuthProvider';
+import { Cancellable } from '@/api/models';
 
 export const usePOSTPullImageStream = (onChunkReceived: (chunk: string) => void) => {
   const apiClient = useContextSelector(ApiClientContext, (s) => s?.apiClient);
   const accessToken = useContextSelector(AuthContext, (s) => s?.accessToken);
 
-  const mutationFn = async (param: PullImageRequest) => {
+  const mutationFn = async (param: PullImageRequest & Cancellable) => {
     const response = await fetch(`${apiClient?.baseUrl}/api/v1/images/pull`, {
       method: 'POST',
       credentials: 'include',
+      signal: param.signal,
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
@@ -46,5 +48,5 @@ export const usePOSTPullImageStream = (onChunkReceived: (chunk: string) => void)
 
   const validationErrors = useGetValidationErrors(error);
 
-  return { mutate, isPending, isSuccess, validationErrors };
+  return { mutate, isPending, isSuccess, error, validationErrors };
 };

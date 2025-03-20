@@ -1,6 +1,4 @@
 ﻿using System.Runtime.CompilerServices;
-using System.Text;
-using System.Text.Json;
 using Agent.Server.Images;
 using FluentValidation;
 using Grpc.Core;
@@ -10,7 +8,6 @@ using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Images.Commands;
 
@@ -28,7 +25,7 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Pack
     }
 }
 
-internal sealed class PullImageHandler(IGrpcClientFactory clientFactory, ApplicationDbContext dbContext, ILogger<PullImageHandler> logger) : IStreamCommandHandler<PullImage, PullImageReply>
+internal sealed class PullImageHandler(IGrpcClientFactory clientFactory, ApplicationDbContext dbContext) : IStreamCommandHandler<PullImage, PullImageReply>
 {
     public async IAsyncEnumerable<PullImageReply> Handle(PullImage command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -43,7 +40,6 @@ internal sealed class PullImageHandler(IGrpcClientFactory clientFactory, Applica
         {
             var request = new PullImageMessage()
             {
-                //FromImage = "ghcr.io/citadel-p/citadel@sha256:d3094783b65f8ec1ef525c9417b3fa20c9da9299ca71c001b27e9ee67a219e0a".ToLower(),
                 FromImage = $"ghcr.io/{cfg.Name}/{command.PackageName}@{command.ImageTag}".ToLower(),
                 Repo = $"ghcr.io/{cfg.Name}/{command.PackageName}".ToLower(),
                 FromSrc = cfg.RegistryUrl,
