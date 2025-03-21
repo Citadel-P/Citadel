@@ -3,7 +3,7 @@
 namespace WebApi.Routes.Endpoints.Resources.Images;
 
 public sealed record ImageView(
-    string Id ,
+    string Id,
     long Created,
     string ParentId,
     IEnumerable<string> RepoDigests,
@@ -11,7 +11,22 @@ public sealed record ImageView(
     long SharedSize,
     double Size,
     double VirtualSize,
-    IDictionary<string, string> Labels);
+    IDictionary<string, string> Labels)
+{
+    public string Name => GetImageName();
+    public string Tag => GetTag();
+
+    private string GetImageName()
+    {
+        if (RepoTags.Any()) return RepoTags.First().Split(":").FirstOrDefault();
+        else if (RepoDigests.Any()) return RepoDigests.FirstOrDefault()?.Split("@").FirstOrDefault();
+        else if (Labels.Any()) return Labels["org.opencontainers.image.title"];
+        else return Id;
+    }
+
+    private string GetTag()
+        => RepoTags.FirstOrDefault()?.Split(":").LastOrDefault() ?? "none";
+}
 
 public sealed record ImagesView(IEnumerable<ImageView> Images)
 {
@@ -28,5 +43,4 @@ public sealed record ImagesView(IEnumerable<ImageView> Images)
             reply.VirtualSize,
             reply.Labels
         );
-
 }

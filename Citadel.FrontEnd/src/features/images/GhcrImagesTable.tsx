@@ -8,7 +8,7 @@ import {
   getExpandedRowModel,
   Row,
 } from '@tanstack/react-table';
-import { ArrowDown, ChevronRight } from 'lucide-react';
+import { ArrowDown, CheckCheck, ChevronRight, Clipboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { truncate } from '@/lib/truncate';
 import PullProgressSheetContent from './PullProgressSheetContent';
 import { Sheet } from '@/components/ui/sheet';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 
 // Column helpers
 const packageColumnHelper = createColumnHelper<IImageResponseGitHubPackageResponse>();
@@ -61,7 +62,7 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageResponseGitHubPac
       }),
       versionColumnHelper.accessor('name', {
         header: 'Version',
-        cell: (info) => <span className="text-[13px]">{truncate(info.getValue() ?? '', 50, 'left')}</span>,
+        cell: (info) => <VersionRow version={info.getValue() ?? ''} />,
       }),
       {
         header: 'Tags',
@@ -145,8 +146,22 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageResponseGitHubPac
     </>
   );
 }
+const VersionRow = ({ version }: { version: string }) => {
+  const [copiedWinCmd, copyWinCmdToClipboard] = useCopyToClipboard(5000);
+  const v = version?.split(':').at(1) ?? '';
+  return (
+    <div className="flex gap-0.5 items-center">
+      <div>{truncate(v, 12, 'right', true)}</div>
+      <button
+        className="rounded-full invisible group-hover/versionrow:visible ml-1 px-1.5 py-1.5 bg-foreground/5 hover:bg-foreground/10 text-sm font-semibold"
+        onClick={() => copyWinCmdToClipboard(v ?? '')}>
+        {copiedWinCmd ? <CheckCheck className="w-3 h-3 text-green-500" /> : <Clipboard className="w-3 h-3 " />}
+      </button>
+    </div>
+  );
+};
 
-export default function GhcrImageTable({ registryName }: { registryName: string }) {
+export default function GhcrImagesTable({ registryName }: { registryName: string }) {
   const { isLoading, data } = useGETExternalImages(registryName);
   const [expanded, setExpanded] = useState<ExpandedState>({});
 

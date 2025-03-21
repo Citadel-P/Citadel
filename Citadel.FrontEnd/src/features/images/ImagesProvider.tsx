@@ -1,8 +1,7 @@
 import { createContext } from 'use-context-selector';
 import { useGETRegistries } from '../registries/hooks/useGETRegistries';
 import { useEffect, useState } from 'react';
-import { RegistryDiscriminator, RegistryView } from '@/api/_generated';
-import { useGETExternalImages } from './hooks/useGETExternalImages';
+import { ImageView, RegistryView } from '@/api/_generated';
 import { useQueryClient } from '@tanstack/react-query';
 
 interface IContext {
@@ -11,6 +10,11 @@ interface IContext {
   registries: RegistryView[];
   setSelectionChange: (name: string) => void;
   selectedRegistry: RegistryView | undefined;
+  selectedRowIds: string[];
+  locaImages: ImageView[];
+  requestDelete: (ids: string[]) => void;
+  setSelectedRowIds: (ids: string[]) => void;
+  setLocalImages: (images: ImageView[]) => void;
 }
 interface IProps {
   children?: React.ReactNode;
@@ -22,7 +26,9 @@ const ImagesProvider: React.FC<IProps> = ({ children }) => {
   const client = useQueryClient();
   const { data, isLoading, isSuccess } = useGETRegistries();
   const [registries, setRegistries] = useState<RegistryView[]>([]);
+  const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [selectedRegistry, setSelectedRegistry] = useState<RegistryView | undefined>();
+  const [locaImages, setLocalImages] = useState<ImageView[]>([]);
 
   const isPlatformOnline = true;
 
@@ -41,6 +47,10 @@ const ImagesProvider: React.FC<IProps> = ({ children }) => {
     }
   }
 
+  function requestDelete(ids: string[]) {
+    //mutate({ ids });
+  }
+
   return (
     <ImagesContext.Provider
       value={{
@@ -48,7 +58,12 @@ const ImagesProvider: React.FC<IProps> = ({ children }) => {
         registries,
         isPlatformOnline,
         selectedRegistry,
+        selectedRowIds,
         setSelectionChange,
+        requestDelete,
+        setSelectedRowIds,
+        locaImages,
+        setLocalImages,
       }}>
       {children}
     </ImagesContext.Provider>

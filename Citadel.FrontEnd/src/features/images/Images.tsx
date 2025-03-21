@@ -7,6 +7,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { AppContext } from '@/AppProvider';
 import ExternalImages from './ExternalImages';
+import LocalImagesTable from './LocalImagesTable';
+import { ActionBar } from './ActionBar';
 const Images = () => {
   const navigate = useNavigate();
   const route = useContextSelector(AppContext, (v) => v?.route);
@@ -25,7 +27,7 @@ const Images = () => {
   };
 
   return (
-    <div className="min-h-[calc(calc(92%)] relative">
+    <div className="flex-col justify-between min-h-[calc(100%-4rem)] relative">
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
         <div className="w-full rounded-lg border-border bg-background p-4">
           <div className="sm:flex sm:justify-between">
@@ -48,7 +50,9 @@ const Images = () => {
               <TabsTrigger value="external">External</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="local">linuxCommand</TabsContent>
+            <TabsContent value="local">
+              <LocalImagesTable platfomrId={currentPlatform?.id} />
+            </TabsContent>
             <TabsContent value="external">
               <div className="flex flex-col gap-3">
                 <ExternalImages />
@@ -57,6 +61,7 @@ const Images = () => {
           </Tabs>
         </div>
       </div>
+      <ActionBar />
     </div>
   );
 };

@@ -3521,6 +3521,14 @@
               "type": "string"
             },
             "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "tag": {
+            "type": "string",
+            "nullable": true
           }
         }
       },

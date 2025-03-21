@@ -1,5 +1,5 @@
 import { useContextSelector } from 'use-context-selector';
-import GhcrImageTable from './GhcrImageTable';
+import GhcrImagesTable from './GhcrImagesTable';
 import SelectRegistryInput from './SelectRegistryInput';
 import { ImagesContext } from './ImagesProvider';
 import Loader from '@/components/ui/loader';
@@ -28,7 +28,7 @@ export default function ExternalImages() {
     <>
       <SelectRegistryInput />
       {selectedRegistry?.discriminator === RegistryDiscriminator.GitHub && (
-        <GhcrImageTable registryName={selectedRegistry.name!} />
+        <GhcrImagesTable registryName={selectedRegistry.name!} />
       )}
     </>
   );

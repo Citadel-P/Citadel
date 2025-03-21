@@ -353,6 +353,8 @@ export interface ImageView {
   /** @format double */
   virtualSize: number;
   labels: Record<string, string>;
+  name?: string | null;
+  tag?: string | null;
 }
 
 export type IRegistryConfiguration = BaseIRegistryConfiguration &
