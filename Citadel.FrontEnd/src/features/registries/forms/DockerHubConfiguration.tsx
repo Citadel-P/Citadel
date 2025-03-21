@@ -126,7 +126,7 @@ const DockerHubConfiguration = () => {
               </FormItem>
             )}
           />
-          <Button type="submit" className="dark:text-foreground " disabled={isLoading || !form.formState.isDirty}>
+          <Button type="submit" disabled={isLoading || !form.formState.isDirty}>
             <span>{saveButtonTitle}</span>
             {isLoading && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
           </Button>

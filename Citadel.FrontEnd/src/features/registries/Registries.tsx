@@ -26,7 +26,7 @@ const Registries = () => {
             <Button
               type="button"
               onClick={() => navigate('/registries/add')}
-              className="inline-flex items-center dark:text-foreground bg-primary hover:bg-primary/80 font-medium rounded-sm text-xs px-2.5 py-2.5">
+              className="inline-flex items-center bg-primary hover:bg-primary/80 font-medium rounded-sm text-xs px-2.5 py-2.5">
               <Plus className="h-3 w-3" /> Add Registy
             </Button>
           </div>
