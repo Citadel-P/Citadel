@@ -11,7 +11,6 @@ import { ImagesContext } from './ImagesProvider';
 import { truncate } from '@/lib/truncate';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { CheckCheck, Clipboard } from 'lucide-react';
-import { ActionBar } from './ActionBar';
 import { useEffect } from 'react';
 
 const columns: ColumnDef<ImageView>[] = [

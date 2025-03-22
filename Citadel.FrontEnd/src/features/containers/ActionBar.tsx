@@ -16,7 +16,7 @@ export const ActionBar = () => {
   if (!selectedContainersId!.length) return <></>;
 
   return (
-    <div className="min-h-16 absolute inset-x-0 bottom-0 w-full p-2 bg-background sm:flex sm:justify-between">
+    <div className="min-h-16 fixed inset-x-0 bottom-0 w-full p-2 bg-background sm:flex sm:justify-between">
       <div className="flex-1 text-xs text-muted-foreground mt-2">
         {selectedContainersId!.length} of {containers!.length} container(s) selected.
       </div>

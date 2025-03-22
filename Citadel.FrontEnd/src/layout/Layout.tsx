@@ -1,6 +1,5 @@
 import { Outlet } from 'react-router';
 import LayoutProvider from './LayoutProvider';
-import { Navbar } from './navbar/Navbar';
 import { Sidebar } from './sidebar/Sidebar';
 import Breadcrumb from './breadcrumb/Breadcrumb';
 import AppProvider from '@/AppProvider';
@@ -12,7 +11,6 @@ const Layout = () => {
         <div className="flex h-dvh w-full overflow-hidden">
           <Sidebar />
           <div className="flex grow flex-col content-start overflow-hidden bg-card">
-            <Navbar />
             <div className="scrollbar-thumb-rounded scrollbar-track-rounded grow overflow-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted">
               <Breadcrumb />
               <Outlet />

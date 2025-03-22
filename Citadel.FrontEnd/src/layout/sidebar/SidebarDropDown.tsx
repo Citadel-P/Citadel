@@ -68,14 +68,14 @@ const themeModes = [
   },
 ];
 
-export const PorfileDropDown = () => {
+export const SidebarDropDown = () => {
   const theme = useContextSelector(LayoutContext, (v) => v?.theme);
   const setThemeMode = useContextSelector(LayoutContext, (v) => v?.setThemeMode);
   const toggleThemeColor = useContextSelector(LayoutContext, (v) => v?.toggleThemeColor);
 
   const handleMenuClick = (menu: ProfileMenu) => {};
   return (
-    <div className="absolute right-0 z-20 mt-2 w-60 origin-top-right transform rounded-md bg-background py-4 drop-shadow-md shadow-custom ring-1 ring-transparent ring-opacity-5 transition focus:outline-hidden">
+    <div className="absolute bottom-0 z-10 mt-2 w-60 origin-bottom-left transform rounded-md bg-background py-4 drop-shadow-md shadow-custom ring-1 ring-transparent ring-opacity-5 transition focus:outline-hidden">
       <div className="flext-row flex items-center px-4 pb-4">
         <div className="w-10 shrink-0">
           <img className="rounded-md" src="https://avatars.githubusercontent.com/u/993610?v=4" alt="" />
