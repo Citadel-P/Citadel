@@ -51,7 +51,7 @@ const Images = () => {
             </TabsList>
 
             <TabsContent value="local">
-              <LocalImagesTable platfomrId={currentPlatform?.id} />
+              <LocalImagesTable />
             </TabsContent>
             <TabsContent value="external">
               <div className="flex flex-col gap-3">

@@ -19,7 +19,12 @@ export const ActionBar = () => {
   if (!selectedRowIds.length) return <></>;
 
   return (
-    <div className="h-16 fixed inset-x-0 w-[50%] translate-x-1/2 inset-shadow-xs bottom-0 shadow-lg p-2 bg-background sm:flex sm:justify-between">
+    <div
+      className="h-14 fixed -translate-x-6 inset-x-0 inset-shadow-xs bottom-0 shadow-lg p-2 bg-background sm:flex sm:justify-between"
+      style={{
+        left: 'var(--sidebar-width)',
+        width: 'calc(100% - var(--sidebar-width))',
+      }}>
       <div className="flex-1 text-xs text-muted-foreground mt-2">
         {selectedRowIds.length} of {images.length} image(s) selected.
       </div>

@@ -12,6 +12,7 @@ import { truncate } from '@/lib/truncate';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { CheckCheck, Clipboard } from 'lucide-react';
 import { useEffect } from 'react';
+import { AppContext } from '@/AppProvider';
 
 const columns: ColumnDef<ImageView>[] = [
   {
@@ -88,10 +89,12 @@ const ImageIdRow = ({ image }: { image: ImageView }) => {
   );
 };
 
-export default function LocalImagesTable({ platfomrId }: { platfomrId: string | undefined }) {
-  const { data, isLoading, isSuccess, error } = useGETInternalImages(platfomrId);
+export default function LocalImagesTable() {
+  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
+  const { data, isLoading, isSuccess, error } = useGETInternalImages(currentPlatform?.id);
   const setSelectedRowIds = useContextSelector(ImagesContext, (v) => v?.setSelectedRowIds);
   const setLocalImages = useContextSelector(ImagesContext, (v) => v?.setLocalImages);
+  
 
   useEffect(() => {
     if (isSuccess && data?.data.images) {
