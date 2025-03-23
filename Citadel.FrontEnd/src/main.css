@@ -360,9 +360,9 @@ select {
   }
 }
 .sidebar-expanded {
-  --sidebar-width: 270px;
+  --sidebar-width: 295px;
 }
 
 .sidebar-collapsed {
-  --sidebar-width: 70px;
+  --sidebar-width: 105px;
 }

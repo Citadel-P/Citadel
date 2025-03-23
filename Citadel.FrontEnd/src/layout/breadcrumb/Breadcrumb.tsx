@@ -25,12 +25,14 @@ interface ICrumbBadge {
   title?: string | undefined;
 }
 
-const BreadCrumb = () => {
+const BreadCrumb = ({isSticky}: {isSticky: boolean}) => {
   const route = useContextSelector(AppContext, (v) => v?.route);
   const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
   const currentContainer = useContextSelector(AppContext, (v) => v?.currentContainer);
   const isBreadcrumbHidden = useContextSelector(AppContext, (v) => v?.isBreadcrumbHidden);
+
   const navigate = useNavigate();
+
   if (isBreadcrumbHidden) return <></>;
 
   const crumbs: ICrumbs[] = [];
@@ -91,10 +93,9 @@ const BreadCrumb = () => {
     crumbs.push({ title: currentPlatform?.name ?? '', link: '/platforms/' + currentPlatform?.id });
     crumbs.push({ title: 'Images', badge: { title: 'external' }, isActive: true });
   }
-
   return (
-    <div className="mx-auto px-4 pt-3 lg:container sm:px-6">
-      <div className="w-full rounded-lg border-border bg-background p-4">
+    <div className={`sticky top-0 z-40 mx-auto px-4  lg:container sm:px-6 ${isSticky ? 'pt-0 ' : 'pt-3'}`}>
+      <div className={`w-full  border-border bg-background p-4 ${isSticky ? 'shadow-md rounded-b-none' : 'rounded-lg'}`}>
         <Breadcrumb>
           <BreadcrumbList>
             {crumbs.map((crumb, i) =>

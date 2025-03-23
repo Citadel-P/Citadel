@@ -177,5 +177,16 @@ export const ContainersTable = () => {
   const containers = useContextSelector(ContainersContext, (v) => v?.containers) ?? [];
   const isLoading = useContextSelector(ContainersContext, (v) => v?.isLoading) ?? false;
   const setSelectedRowsId = useContextSelector(ContainersContext, (v) => v?.setSelectedRowsId);
-  return <DataTable columns={columns} data={containers} isLoading={isLoading} onSelectionChange={setSelectedRowsId!} />;
+  return (
+    <div className="flex flex-col gap-3">
+      <DataTable columns={columns} data={containers} isLoading={isLoading} onSelectionChange={setSelectedRowsId!} />
+      <div className="text-muted-foreground text-xs font-normal ">
+        {containers?.length && (
+          <span>
+            Showing {containers.length} of {containers.length} container(s)
+          </span>
+        )}
+      </div>
+    </div>
+  );
 };

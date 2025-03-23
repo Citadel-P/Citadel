@@ -13,6 +13,8 @@ import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { CheckCheck, Clipboard } from 'lucide-react';
 import { useEffect } from 'react';
 import { AppContext } from '@/AppProvider';
+import { fromNow } from '@/lib/dayjs.helper';
+import { byteTransform } from '@/lib/bytes.helper';
 
 const columns: ColumnDef<ImageView>[] = [
   {
@@ -39,7 +41,7 @@ const columns: ColumnDef<ImageView>[] = [
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => (
       <Link to={`../registries/edit/${row.original.id}`} className="hover:underline">
-        {row.original.name}
+        {truncate(row.original.name ?? '', 35, 'right')}
       </Link>
     ),
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
@@ -58,6 +60,22 @@ const columns: ColumnDef<ImageView>[] = [
     accessorKey: 'id',
     header: ({ column }) => <SortableCell cellName="Image Id" column={column} />,
     cell: ({ row }) => <ImageIdRow image={row.original} />,
+    sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
+      return rowA.original.url < rowB.original.url ? 1 : -1;
+    },
+  },
+  {
+    accessorKey: 'created',
+    header: ({ column }) => <SortableCell cellName="Created" column={column} />,
+    cell: ({ row }) => <span className="text-[13px]">{fromNow(new Date(row.original.created * 1000).getTime())}</span>,
+    sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
+      return rowA.original.url < rowB.original.url ? 1 : -1;
+    },
+  },
+  {
+    accessorKey: 'size',
+    header: ({ column }) => <SortableCell cellName="Size" column={column} />,
+    cell: ({ row }) => <span className="text-[13px]">{byteTransform(row.original.size, 2)}</span>,
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
       return rowA.original.url < rowB.original.url ? 1 : -1;
     },
@@ -82,7 +100,7 @@ const ImageIdRow = ({ image }: { image: ImageView }) => {
       <div>{truncate(image.id?.split(':').at(1) ?? '', 12, 'right', true)}</div>
       <button
         className="rounded-full invisible group-hover/trow:visible ml-1 px-1.5 py-1.5 bg-foreground/5 hover:bg-foreground/10 text-sm font-semibold"
-        onClick={() => copyWinCmdToClipboard(image.id?.split(':').at(1) ?? '')}>
+        onClick={() => copyWinCmdToClipboard(image.id ?? '')}>
         {copiedWinCmd ? <CheckCheck className="w-3 h-3 text-green-500" /> : <Clipboard className="w-3 h-3 " />}
       </button>
     </div>
@@ -92,22 +110,34 @@ const ImageIdRow = ({ image }: { image: ImageView }) => {
 export default function LocalImagesTable() {
   const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
   const { data, isLoading, isSuccess, error } = useGETInternalImages(currentPlatform?.id);
-  const setSelectedRowIds = useContextSelector(ImagesContext, (v) => v?.setSelectedRowIds);
-  const setLocalImages = useContextSelector(ImagesContext, (v) => v?.setLocalImages);
-  
+  const setSelectedRowIds = useContextSelector(ImagesContext, (v) => v?.setSelectedRowIds)!;
+  const setLocalImages = useContextSelector(ImagesContext, (v) => v?.setLocalImages)!;
 
   useEffect(() => {
     if (isSuccess && data?.data.images) {
-      setLocalImages!(data.data.images);
+      setLocalImages(data.data.images);
     }
-  }, [data, isSuccess, setLocalImages]);
+    return () => {
+      setLocalImages([]);
+      setSelectedRowIds([]);
+    };
+  }, [data, isSuccess, setLocalImages, setSelectedRowIds]);
 
   return (
-    <DataTable
-      columns={columns}
-      data={data?.data.images ?? []}
-      isLoading={isLoading}
-      onSelectionChange={setSelectedRowIds!}
-    />
+    <div className="flex flex-col gap-3">
+      <DataTable
+        columns={columns}
+        data={data?.data.images ?? []}
+        isLoading={isLoading}
+        onSelectionChange={setSelectedRowIds}
+      />
+      <div className="text-muted-foreground text-xs font-normal ">
+        {data?.data.images?.length && (
+          <span>
+            Showing {data?.data.images?.length} of {data?.data.images?.length} image(s)
+          </span>
+        )}
+      </div>
+    </div>
   );
 }

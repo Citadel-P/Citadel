@@ -76,7 +76,16 @@ export const RegistriesTable = () => {
   return (
     <>
       {registries?.length > 0 && (
-        <DataTable columns={columns} data={registries} isLoading={isLoading} onSelectionChange={setSelectedRowIds!} />
+        <div className="flex flex-col gap-3">
+          <DataTable columns={columns} data={registries} isLoading={isLoading} onSelectionChange={setSelectedRowIds!} />
+          <div className="text-muted-foreground text-xs font-normal ">
+            {registries?.length && (
+              <span>
+                Showing {registries.length} of {registries.length} registries
+              </span>
+            )}
+          </div>
+        </div>
       )}
     </>
   );

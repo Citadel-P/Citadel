@@ -48,6 +48,10 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageResponseGitHubPac
 
   const versionColumns = React.useMemo(
     () => [
+      versionColumnHelper.accessor('name', {
+        header: 'Version',
+        cell: (info) => <VersionRow version={info.getValue() ?? ''} />,
+      }),
       versionColumnHelper.accessor('html_url', {
         header: 'Url',
         cell: (info) => (
@@ -59,10 +63,6 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageResponseGitHubPac
             {info.row.original.id}{' '}
           </a>
         ),
-      }),
-      versionColumnHelper.accessor('name', {
-        header: 'Version',
-        cell: (info) => <VersionRow version={info.getValue() ?? ''} />,
       }),
       {
         header: 'Tags',
@@ -122,8 +122,12 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageResponseGitHubPac
           {versionsTable.getRowModel().rows.length ? (
             versionsTable.getRowModel().rows.map((row) => (
               <TableRow key={row.id} className="group/versionrow">
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell className="justify-items-center" key={cell.id}>
+                {row.getVisibleCells().map((cell, index) => (
+                  <TableCell
+                    key={cell.id}
+                    className={cn({
+                      'justify-items-center': index === row.getVisibleCells().length - 1,
+                    })}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}
@@ -250,14 +254,8 @@ export default function GhcrImagesTable({ registryName }: { registryName: string
             {row.getIsExpanded() && (
               <TableRow className="bg-muted/20 hover:bg-muted/20">
                 <TableCell colSpan={row.getVisibleCells().length} className="p-0">
-                  <div
-                    className={cn(
-                      'grid overflow-hidden transition-all duration-300 ease-in-out',
-                      row.getIsExpanded() ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
-                    )}>
-                    <div className="overflow-hidden min-h-0 pl-10 bg-background">
-                      <NestedVersionsTable ghPackage={row.original} />
-                    </div>
+                  <div className="overflow-hidden min-h-0 pl-10 bg-background">
+                    <NestedVersionsTable ghPackage={row.original} />
                   </div>
                 </TableCell>
               </TableRow>

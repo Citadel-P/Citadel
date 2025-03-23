@@ -6,8 +6,8 @@ using Hosting.Extensions;
 using Infrastructure.GithubCr;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources.Images;
-using WebApi.Routes.Endpoints.Resources.Registries;
 
 namespace WebApi.Routes.Endpoints;
 
@@ -37,6 +37,12 @@ public static class Images
         {
             yield return reply;
         }
+    }
+
+    public static async Task<Results<Ok<DeleteImagesReply>, ProblemHttpResult>> Delete(IMediator mediator, [FromBody] DeleteImagesRequest deleteImagesRequest, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(deleteImagesRequest.ToCommand(), cancellationToken);
+        return EndpointHandlers.HandleResult(result, v => v);
     }
 
 }

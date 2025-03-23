@@ -16,7 +16,7 @@ public static class PublicEndpoints
 
     public static void MapPublicEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/v1").WithGroupName("v1"); ;
+        var group = app.MapGroup("/api/v1").WithGroupName("v1");
         {
             var auth = group.MapGroup("/authentication").WithTags(AuthenticationName);
             {
@@ -255,6 +255,14 @@ public static class PublicEndpoints
                     .ProducesProblem(StatusCodes.Status403Forbidden)
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
                     .WithName(ImagesName + "_" + nameof(Images.PullImage));
+
+                images.MapDelete("/", Images.Delete)
+                    .WithSummary("Remove an image(s), along with any untagged parent images that were referenced by that image")
+                    .ProducesValidationProblem()
+                    .ProducesProblem(StatusCodes.Status404NotFound)
+                    .ProducesProblem(StatusCodes.Status403Forbidden)
+                    .ProducesProblem(StatusCodes.Status401Unauthorized)
+                    .WithName(ImagesName + "_" + nameof(Images.Delete));
             }
         }
 
