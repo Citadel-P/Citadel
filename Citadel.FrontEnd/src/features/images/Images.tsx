@@ -27,7 +27,7 @@ const Images = () => {
   };
 
   return (
-    <div className="flex-col justify-between min-h-[calc(100%-4rem)] relative">
+    <div className="flex-col justify-between relative">
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
         <div className="w-full rounded-lg border-border bg-background p-4">
           <div className="sm:flex sm:justify-between">

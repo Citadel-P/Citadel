@@ -1,8 +1,10 @@
 import { createContext } from 'use-context-selector';
 import { useGETRegistries } from '../registries/hooks/useGETRegistries';
 import { useEffect, useState } from 'react';
-import { ImageView, RegistryView } from '@/api/_generated';
+import { DeleteImagesRequest, ImageView, RegistryView } from '@/api/_generated';
 import { useQueryClient } from '@tanstack/react-query';
+import { useDELETEImages } from './hooks/useDELETEImages';
+import { toast } from 'sonner';
 
 interface IContext {
   isLoading: boolean;
@@ -12,9 +14,10 @@ interface IContext {
   selectedRegistry: RegistryView | undefined;
   selectedRowIds: string[];
   locaImages: ImageView[];
-  requestDelete: (ids: string[]) => void;
+  requestDelete: (request: DeleteImagesRequest) => void;
   setSelectedRowIds: (ids: string[]) => void;
   setLocalImages: (images: ImageView[]) => void;
+  deleteIsPending: boolean;
 }
 interface IProps {
   children?: React.ReactNode;
@@ -25,6 +28,13 @@ export const ImagesContext = createContext<IContext | undefined>(undefined);
 const ImagesProvider: React.FC<IProps> = ({ children }) => {
   const client = useQueryClient();
   const { data, isLoading, isSuccess } = useGETRegistries();
+  const {
+    mutate,
+    isSuccess: deleteIsSuccess,
+    isPending: deleteIsPending,
+    error: deleteInErrpr,
+    data: deleteData,
+  } = useDELETEImages();
   const [registries, setRegistries] = useState<RegistryView[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [selectedRegistry, setSelectedRegistry] = useState<RegistryView | undefined>();
@@ -39,6 +49,17 @@ const ImagesProvider: React.FC<IProps> = ({ children }) => {
     }
   }, [isSuccess, data]);
 
+  useEffect(() => {
+    if (deleteIsSuccess) {
+      client.invalidateQueries({ queryKey: ['getAllLocalImages'] });
+      const message =
+        deleteData?.data?.replies && deleteData?.data?.replies.length > 1
+          ? 'The selected images has been successfully deleted'
+          : 'The selected image has been successfully deleted';
+      toast.success(message);
+    }
+  }, [deleteIsSuccess, client, deleteData]);
+
   function setSelectionChange(name: string) {
     const registry = registries.find((s) => s.name === name);
     if (registry) {
@@ -47,8 +68,8 @@ const ImagesProvider: React.FC<IProps> = ({ children }) => {
     }
   }
 
-  function requestDelete(ids: string[]) {
-    //mutate({ ids });
+  function requestDelete(request: DeleteImagesRequest) {
+    mutate(request);
   }
 
   return (
@@ -64,6 +85,7 @@ const ImagesProvider: React.FC<IProps> = ({ children }) => {
         setSelectedRowIds,
         locaImages,
         setLocalImages,
+        deleteIsPending,
       }}>
       {children}
     </ImagesContext.Provider>

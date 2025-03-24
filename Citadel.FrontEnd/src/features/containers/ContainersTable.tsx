@@ -181,7 +181,7 @@ export const ContainersTable = () => {
     <div className="flex flex-col gap-3">
       <DataTable columns={columns} data={containers} isLoading={isLoading} onSelectionChange={setSelectedRowsId!} />
       <div className="text-muted-foreground text-xs font-normal ">
-        {containers?.length && (
+        {!isLoading && containers?.length && (
           <span>
             Showing {containers.length} of {containers.length} container(s)
           </span>

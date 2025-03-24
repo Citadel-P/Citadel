@@ -179,6 +179,24 @@ export interface CreateRegistryInput {
   configuration: IRegistryConfiguration;
 }
 
+export interface DeleteImagesReply {
+  replies?: DeleteImagesReplyItem[] | null;
+}
+
+export interface DeleteImagesReplyItem {
+  result?: Record<string, string>;
+}
+
+export interface DeleteImagesRequest {
+  /** @format uuid */
+  platformId: string;
+  ids: string[] | null;
+  /** @default false */
+  force?: boolean;
+  /** @default false */
+  noPrune?: boolean;
+}
+
 export interface DeleteRegistriesInput {
   ids: string[] | null;
 }
@@ -1627,6 +1645,32 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       this.request<PullImageReply[], HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/images/pull`,
         method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Images
+     * @name ImagesDelete
+     * @summary Remove an image(s), along with any untagged parent images that were referenced by that image
+     * @request DELETE:/api/v1/images
+     * @secure
+     * @response `200` `DeleteImagesReply` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    imagesDelete: (data: DeleteImagesRequest, params: RequestParams = {}) =>
+      this.request<DeleteImagesReply, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/images`,
+        method: 'DELETE',
         body: data,
         secure: true,
         type: ContentType.Json,

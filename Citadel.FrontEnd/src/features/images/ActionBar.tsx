@@ -42,8 +42,8 @@ export const ActionBar = () => {
           type="button"
           {...deleteDialog.triggerProps}
           disabled={!actions.canDelete}
-          className="inline-flex items-center rounded-r-md border border-border bg-background px-2 py-2 text-xs font-medium text-danger enabled:hover:text-danger/80 focus:z-10 disabled:cursor-not-allowed disabled:opacity-60">
-          <Trash className="mr-1 h-3 w-3" />
+          className="inline-flex items-center rounded-r-md border border-border px-2 py-2 text-background bg-danger hover:bg-danger/85 font-medium text-xs disabled:cursor-not-allowed disabled:opacity-60">
+          <Trash className="mr-1 h-3.5 w-3.5" />
           Delete
         </button>
         <DeleteImageDialog dialog={deleteDialog} registriesId={selectedRowIds} />

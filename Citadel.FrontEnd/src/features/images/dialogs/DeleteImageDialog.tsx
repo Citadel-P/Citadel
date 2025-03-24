@@ -9,6 +9,11 @@ import {
 import { ICustomDialog } from '@/hooks/useDialog';
 import { useContextSelector } from 'use-context-selector';
 import { ImagesContext } from '../ImagesProvider';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { useEffect, useState } from 'react';
+import { AppContext } from '@/AppProvider';
+import { LoaderCircle } from 'lucide-react';
 
 interface IProps {
   dialog: ICustomDialog;
@@ -17,16 +22,21 @@ interface IProps {
 }
 
 export const DeleteImageDialog = ({ dialog, registriesId, children }: IProps) => {
-  const requestDelete = useContextSelector(ImagesContext, (v) => v?.requestDelete);
+  const requestDelete = useContextSelector(ImagesContext, (v) => v?.requestDelete)!;
+  const deleteIsPending = useContextSelector(ImagesContext, (v) => v?.deleteIsPending) ?? false;
+  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
+
+  const [noPrune, setNoPrune] = useState(false);
+  const [force, setForce] = useState(false);
+
   const handleDelete = () => {
-    dialog.dismiss();
-    requestDelete!(registriesId);
+    requestDelete({ platformId: currentPlatform?.id ?? '', ids: registriesId, force, noPrune });
   };
 
   return (
     <Dialog {...dialog.dialogProps}>
       {children}
-      <DialogContent className="sm:max-w-[500px]" onOpenAutoFocus={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-[600px]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Delete Confirmation</DialogTitle>
           <DialogDescription></DialogDescription>
@@ -38,6 +48,23 @@ export const DeleteImageDialog = ({ dialog, registriesId, children }: IProps) =>
               Are you sure you want to delete the selected <b>{registriesId.length}</b> images?
             </p>
           )}
+          <div className="space-y-2 flex flex-row items-center justify-between rounded-lg border p-3 shadow-xs">
+            <div className="space-y-0.5">
+              <Label htmlFor="force">Force</Label>
+              <p className="text-[0.8rem] text-muted-foreground">
+                Remove the image(s) even if it is being used by stopped containers or has other tags
+              </p>
+            </div>
+            <Switch id="force" onCheckedChange={() => setForce((v) => !v)} />
+          </div>
+
+          <div className="space-y-2 flex flex-row items-center justify-between rounded-lg border p-3 shadow-xs">
+            <div className="space-y-0.5">
+              <Label htmlFor="noprune">No Prune</Label>
+              <p className="text-[0.8rem] text-muted-foreground">Do not delete untagged parent images</p>
+            </div>
+            <Switch id="noprune" onCheckedChange={() => setNoPrune((v) => !v)} />
+          </div>
         </div>
         <DialogFooter>
           <div className="flex items-center justify-end">
@@ -49,9 +76,11 @@ export const DeleteImageDialog = ({ dialog, registriesId, children }: IProps) =>
             </button>
             <button
               type="button"
+              disabled={deleteIsPending}
               onClick={handleDelete}
-              className="text-white ml-2 bg-danger hover:bg-danger/85 font-medium rounded-sm text-sm inline-flex items-center px-2 py-2">
+              className="ml-2 bg-danger hover:bg-danger/85 text-background font-medium rounded-sm text-sm inline-flex items-center px-2 py-2">
               Delete
+              {deleteIsPending && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
             </button>
           </div>
         </DialogFooter>
