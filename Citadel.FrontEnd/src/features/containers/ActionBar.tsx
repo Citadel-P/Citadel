@@ -2,18 +2,14 @@ import { Play, Pause, RotateCcw, Ban, Trash } from 'lucide-react';
 import { useContextSelector } from 'use-context-selector';
 import { ContainersContext } from './ContainersProvider';
 import { useAvailableActions } from './hooks/useAvailableActions';
-import { useDialog } from '@/hooks/useDialog';
-import { DeleteContainerDialog } from './dialogs/DeleteContainerDialog';
 
 export const ActionBar = () => {
-  const deleteDialog = useDialog();
-  const containers = useContextSelector(ContainersContext, (v) => v?.containers);
-  const selectedContainersId = useContextSelector(ContainersContext, (v) => v?.selectedRowsId);
-  const { availableActions, isPending, requestPatch } = useAvailableActions(
-    containers?.filter((s) => selectedContainersId!.some((i) => i === s.id)) ?? [],
-  );
+  const containers = useContextSelector(ContainersContext, (v) => v?.containers)!;
+  const selectedRows = useContextSelector(ContainersContext, (v) => v?.selectedRows)!;
+  const setDialogOpen = useContextSelector(ContainersContext, (v) => v?.setDialogData)!;
+  const { availableActions, isPending, requestPatch } = useAvailableActions(selectedRows);
 
-  if (!selectedContainersId!.length) return <></>;
+  if (!selectedRows.length) return <></>;
 
   return (
     <div
@@ -23,7 +19,7 @@ export const ActionBar = () => {
         width: 'calc(100% - var(--sidebar-width))',
       }}>
       <div className="flex-1 text-xs text-muted-foreground mt-2">
-        {selectedContainersId!.length} of {containers!.length} container(s) selected.
+        {selectedRows.length} of {containers!.length} container(s) selected.
       </div>
       <div className="mt-1">
         <button
@@ -60,17 +56,12 @@ export const ActionBar = () => {
         </button>
         <button
           type="button"
-          {...deleteDialog.triggerProps}
+          onClick={() => setDialogOpen({ open: true, currentSelection: selectedRows })}
           disabled={!availableActions.canDelete || isPending}
           className="inline-flex items-center rounded-r-md border border-border px-2 py-2 text-background bg-danger hover:bg-danger/85 font-medium text-xs disabled:cursor-not-allowed disabled:opacity-60">
           <Trash className="mr-1 h-3 w-3" />
           Delete
         </button>
-        <DeleteContainerDialog
-          dialog={deleteDialog}
-          containersIds={selectedContainersId ?? []}
-          onDelete={() => requestPatch('delete')}
-        />
       </div>
     </div>
   );

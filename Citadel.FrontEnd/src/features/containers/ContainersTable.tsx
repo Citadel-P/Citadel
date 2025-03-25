@@ -10,7 +10,7 @@ import { byteTransform } from '@/lib/bytes.helper';
 import SortableCell from '@/components/ui/SortableCell';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Link } from 'react-router';
-import DropdownTableMenu from './DropdownMenu';
+import DropdownTableMenu from './DropdownTableMenu';
 
 const columns: ColumnDef<ContainerInfoView>[] = [
   {
@@ -57,7 +57,7 @@ const columns: ColumnDef<ContainerInfoView>[] = [
   {
     accessorKey: 'image',
     header: ({ column }) => <SortableCell cellName="Image" column={column} />,
-    cell: ({ row }) => <div>{truncate(row.original.image ?? '', 24)}</div>,
+    cell: ({ row }) => <div className="text-[13px]">{truncate(row.original.image ?? '', 24)}</div>,
   },
   {
     accessorKey: 'CPU',
@@ -176,12 +176,18 @@ const ContainerStatTootltip = ({ stat }: { stat: string }) => {
 export const ContainersTable = () => {
   const containers = useContextSelector(ContainersContext, (v) => v?.containers) ?? [];
   const isLoading = useContextSelector(ContainersContext, (v) => v?.isLoading) ?? false;
-  const setSelectedRowsId = useContextSelector(ContainersContext, (v) => v?.setSelectedRowsId);
+  const setSelectedRows = useContextSelector(ContainersContext, (v) => v?.setSelectedRows)!;
+
   return (
     <div className="flex flex-col gap-3">
-      <DataTable columns={columns} data={containers} isLoading={isLoading} onSelectionChange={setSelectedRowsId!} />
+      <DataTable
+        columns={columns}
+        data={containers}
+        isLoading={isLoading}
+        onSelectionChange={(ids: string[]) => setSelectedRows(containers.filter((c) => ids.includes(c.id!)))}
+      />
       <div className="text-muted-foreground text-xs font-normal ">
-        {!isLoading && containers?.length && (
+        {containers?.length > 0 && (
           <span>
             Showing {containers.length} of {containers.length} container(s)
           </span>

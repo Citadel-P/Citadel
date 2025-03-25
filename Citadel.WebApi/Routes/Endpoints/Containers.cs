@@ -1,8 +1,8 @@
 ﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Agent.Server.Containers;
+using Application.Features.Containers.Commands;
 using Application.Features.Containers.Queries;
-using Application.Features.Platforms.Commands;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -49,9 +49,9 @@ public static class Containers
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
-    public static async Task<Results<NoContent, ProblemHttpResult>> DeleteContainers(IMediator mediator, [FromBody] string[] containersIds, CancellationToken cancellationToken)
+    public static async Task<Results<NoContent, ProblemHttpResult>> DeleteContainers(IMediator mediator, [FromBody] DeleteContainersRequest request, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new PatchContainers(containersIds, ContainerAction.DELETE), cancellationToken);
+        var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 

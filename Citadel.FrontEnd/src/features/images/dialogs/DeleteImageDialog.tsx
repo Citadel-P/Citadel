@@ -11,7 +11,7 @@ import { useContextSelector } from 'use-context-selector';
 import { ImagesContext } from '../ImagesProvider';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { AppContext } from '@/AppProvider';
 import { LoaderCircle } from 'lucide-react';
 

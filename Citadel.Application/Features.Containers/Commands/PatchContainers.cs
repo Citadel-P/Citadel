@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 using Grpc.Core;
 using System.Collections.Concurrent;
 
-namespace Application.Features.Platforms.Commands;
+namespace Application.Features.Containers.Commands;
 
 public sealed record PatchContainers(string[] ContainersIds, ContainerAction Action) : ICommand<Result>
 {
@@ -30,8 +30,7 @@ public enum ContainerAction : uint
     RESTART,
     STOP,
     PAUSE,
-    UNPAUSE,
-    DELETE
+    UNPAUSE
 }
 
 internal class PatchContainersHandler(
@@ -74,7 +73,6 @@ internal class PatchContainersHandler(
             ContainerAction.STOP => await client.StopContainersAsync(new ContainersId() { Ids = { containersIds } }, cancellationToken: cancellationToken),
             ContainerAction.PAUSE => await client.PauseContainersAsync(new ContainersId() { Ids = { containersIds } }, cancellationToken: cancellationToken),
             ContainerAction.UNPAUSE => await client.UnpauseContainersAsync(new ContainersId() { Ids = { containersIds } }, cancellationToken: cancellationToken),
-            ContainerAction.DELETE => await client.DeleteContainersAsync(new ContainersId() { Ids = { containersIds } }, cancellationToken: cancellationToken),
             ContainerAction.RESTART => await client.RestartContainersAsync(new ContainersId() { Ids = { containersIds } }, cancellationToken: cancellationToken),
             _ => throw new NotImplementedException()
         };

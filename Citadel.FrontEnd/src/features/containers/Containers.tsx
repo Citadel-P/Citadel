@@ -5,6 +5,7 @@ import { ActionBar } from './ActionBar';
 import { useContextSelector } from 'use-context-selector';
 import { ContainersContext } from './ContainersProvider';
 import { AlertMessage } from '@/components/ui/alert-message';
+import { DeleteContainerDialog } from './dialogs/DeleteContainerDialog';
 
 const Containers = () => {
   const platformOnline = useContextSelector(ContainersContext, (v) => v?.isPlatformOnline);
@@ -32,6 +33,7 @@ const Containers = () => {
         </div>
       </div>
       <ActionBar />
+      <DeleteContainerDialog />
     </div>
   );
 };

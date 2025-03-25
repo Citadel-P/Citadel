@@ -179,6 +179,16 @@ export interface CreateRegistryInput {
   configuration: IRegistryConfiguration;
 }
 
+export interface DeleteContainersRequest {
+  containersIds: string[] | null;
+  /** @default false */
+  v?: boolean | null;
+  /** @default false */
+  force?: boolean | null;
+  /** @default false */
+  link?: boolean | null;
+}
+
 export interface DeleteImagesReply {
   replies?: DeleteImagesReplyItem[] | null;
 }
@@ -1188,7 +1198,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @tags Containers
      * @name ContainersDeleteContainers
      * @summary Delete the given container(s)
-     * @request PATCH:/api/v1/containers/delete
+     * @request DELETE:/api/v1/containers/delete
      * @secure
      * @response `204` `void` No Content
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -1197,10 +1207,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    containersDeleteContainers: (data: string[], params: RequestParams = {}) =>
+    containersDeleteContainers: (data: DeleteContainersRequest, params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/delete`,
-        method: 'PATCH',
+        method: 'DELETE',
         body: data,
         secure: true,
         type: ContentType.Json,

@@ -707,7 +707,7 @@
       }
     },
     "/api/v1/containers/delete": {
-      "patch": {
+      "delete": {
         "tags": [
           "Containers"
         ],
@@ -717,10 +717,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
+                "$ref": "#/components/schemas/DeleteContainersRequest"
               }
             }
           }
@@ -2926,6 +2923,36 @@
           },
           "configuration": {
             "$ref": "#/components/schemas/IRegistryConfiguration"
+          }
+        }
+      },
+      "DeleteContainersRequest": {
+        "required": [
+          "containersIds"
+        ],
+        "type": "object",
+        "properties": {
+          "containersIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "v": {
+            "type": "boolean",
+            "default": false,
+            "nullable": true
+          },
+          "force": {
+            "type": "boolean",
+            "default": false,
+            "nullable": true
+          },
+          "link": {
+            "type": "boolean",
+            "default": false,
+            "nullable": true
           }
         }
       },

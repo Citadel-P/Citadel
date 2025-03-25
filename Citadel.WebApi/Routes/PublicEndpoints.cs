@@ -93,7 +93,7 @@ public static class PublicEndpoints
                      .ProducesProblem(StatusCodes.Status401Unauthorized)
                      .WithName(ContainersName + "_" + nameof(Containers.UnpauseContainers));
 
-                containers.MapPatch("delete", Containers.DeleteContainers)
+                containers.MapDelete("delete", Containers.DeleteContainers)
                      .WithSummary("Delete the given container(s)")
                      .ProducesValidationProblem()
                      .ProducesProblem(StatusCodes.Status404NotFound)

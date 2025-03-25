@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 
 export function useDialog(): ICustomDialog {
   const [isOpen, setIsOpen] = useState(false);
-  const triggerRef = useRef(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
 
   function trigger() {
     setIsOpen(true);
@@ -38,7 +38,7 @@ export interface ICustomDialog {
   dismiss: () => void;
 }
 interface ITriggerProps {
-  ref: React.MutableRefObject<undefined>;
+  ref: React.RefObject<HTMLDivElement | null>;
   onClick: () => void;
 }
 interface IDialogProps {

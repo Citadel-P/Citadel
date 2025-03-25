@@ -8,7 +8,7 @@ using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
 using Mediator;
 
-namespace Application.Features.Platforms.Commands;
+namespace Application.Features.Containers.Commands;
 
 public sealed record StreamContainerLogs(string ContainerId) : IStreamCommand<ContainerLogReply>
 {
