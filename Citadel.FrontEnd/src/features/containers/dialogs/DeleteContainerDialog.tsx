@@ -14,7 +14,7 @@ import { useContextSelector } from 'use-context-selector';
 import { ContainersContext } from '../ContainersProvider';
 
 export const DeleteContainerDialog = () => {
-  const dialogOpen = useContextSelector(ContainersContext, (v) => v?.dialogData)!;
+  const dialogData = useContextSelector(ContainersContext, (v) => v?.dialogData)!;
   const setDialogData = useContextSelector(ContainersContext, (v) => v?.setDialogData)!;
   const isPending = useContextSelector(ContainersContext, (v) => v?.deleteIsPending)!;
   const requestDelete = useContextSelector(ContainersContext, (v) => v?.requestDelete)!;
@@ -22,15 +22,15 @@ export const DeleteContainerDialog = () => {
   const [volume, setVolume] = useState(true);
   const [force, setForce] = useState(true);
 
-  const containersIds = dialogOpen.currentSelection?.map((c) => c.containerId!) ?? [];
+  const containersIds = dialogData.currentSelection?.map((c) => c.containerId!) ?? [];
 
   const handleDelete = () => {
     requestDelete({ containersIds, v: volume, force });
   };
 
   return (
-    <Dialog open={dialogOpen.open} onOpenChange={(open) => setDialogData({ open })}>
-      <DialogContent className="sm:max-w-[600px]" onOpenAutoFocus={(e) => e.preventDefault()}>
+    <Dialog open={dialogData.open} onOpenChange={(open) => setDialogData({ open })}>
+      <DialogContent className="sm:max-w-[600px]" >
         <DialogHeader>
           <DialogTitle>Delete Confirmation</DialogTitle>
           <DialogDescription></DialogDescription>

@@ -71,15 +71,15 @@ const columns: ColumnDef<RegistryView>[] = [
 export const RegistriesTable = () => {
   const registries = useContextSelector(RegistriesContext, (v) => v?.registries) ?? [];
   const isLoading = useContextSelector(RegistriesContext, (v) => v?.isLoading) ?? false;
-  const setSelectedRowIds = useContextSelector(RegistriesContext, (v) => v?.setSelectedRowIds);
+  const setSelectedRows = useContextSelector(RegistriesContext, (v) => v?.setSelectedRows)!;
 
   return (
     <>
       {registries?.length > 0 && (
         <div className="flex flex-col gap-3">
-          <DataTable columns={columns} data={registries} isLoading={isLoading} onSelectionChange={setSelectedRowIds!} />
+          <DataTable columns={columns} data={registries} isLoading={isLoading} onSelectionChange={(ids: string[]) => setSelectedRows(registries.filter((c) => ids.includes(c.id!)))!} />
           <div className="text-muted-foreground text-xs font-normal ">
-            {registries?.length && (
+            {registries?.length > 0 && (
               <span>
                 Showing {registries.length} of {registries.length} registries
               </span>

@@ -6,26 +6,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ICustomDialog } from '@/hooks/useDialog';
 import { useContextSelector } from 'use-context-selector';
 import { RegistriesContext } from '../RegistriesProvider';
-interface IProps {
-  dialog: ICustomDialog;
-  registriesId: string[];
-  children?: React.ReactNode;
-}
+import { LoaderCircle } from 'lucide-react';
 
-export const DeleteRegistryDialog = ({ dialog, registriesId, children }: IProps) => {
-  const requestDelete = useContextSelector(RegistriesContext, (v) => v?.requestDelete);
+export const DeleteRegistryDialog = () => {
+  const requestDelete = useContextSelector(RegistriesContext, (v) => v?.requestDelete)!;
+  const dialogData = useContextSelector(RegistriesContext, (v) => v?.dialogData)!;
+  const setDialogData = useContextSelector(RegistriesContext, (v) => v?.setDialogData)!;
+  const isPending = useContextSelector(RegistriesContext, (v) => v?.deleteIsPending)!;
+  const registriesId = dialogData.currentSelection?.map((r) => r.id!) ?? [];
+
   const handleDelete = () => {
-    dialog.dismiss();
-    requestDelete!(registriesId);
+    requestDelete(registriesId);
   };
 
   return (
-    <Dialog {...dialog.dialogProps}>
-      {children}
-      <DialogContent className="sm:max-w-[500px]" onOpenAutoFocus={(e) => e.preventDefault()}>
+    <Dialog open={dialogData.open} onOpenChange={(open) => setDialogData({ open })}>
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Delete Confirmation</DialogTitle>
           <DialogDescription></DialogDescription>
@@ -42,15 +40,17 @@ export const DeleteRegistryDialog = ({ dialog, registriesId, children }: IProps)
           <div className="flex items-center justify-end">
             <button
               type="button"
-              onClick={dialog.dismiss}
+              onClick={() => setDialogData({ open: false })}
               className="text-foreground bg-secondary hover:bg-secondary/80 font-medium rounded-sm text-sm px-2 py-2">
               Cancel
             </button>
             <button
               type="button"
+              disabled={isPending}
               onClick={handleDelete}
-              className="text-white ml-2 bg-danger hover:bg-danger/85 font-medium rounded-sm text-sm inline-flex items-center px-2 py-2">
+              className="ml-2 bg-danger hover:bg-danger/85 text-background font-medium rounded-sm text-sm inline-flex items-center px-2 py-2">
               Delete
+              {isPending && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
             </button>
           </div>
         </DialogFooter>

@@ -8,6 +8,7 @@ import { RegistriesContext } from './RegistriesProvider';
 import { useContextSelector } from 'use-context-selector';
 import { RegistriesTable } from './RegistriesTable';
 import { ActionBar } from './ActionBar';
+import { DeleteRegistryDialog } from './dialogs/DeleteRegistryDialog';
 
 const Registries = () => {
   const navigate = useNavigate();
@@ -45,6 +46,7 @@ const Registries = () => {
         </div>
       </div>
       <ActionBar />
+      <DeleteRegistryDialog />
     </div>
   );
 };

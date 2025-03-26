@@ -6,7 +6,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ICustomDialog } from '@/hooks/useDialog';
 import { useContextSelector } from 'use-context-selector';
 import { ImagesContext } from '../ImagesProvider';
 import { Label } from '@/components/ui/label';
@@ -15,16 +14,14 @@ import { useState } from 'react';
 import { AppContext } from '@/AppProvider';
 import { LoaderCircle } from 'lucide-react';
 
-interface IProps {
-  dialog: ICustomDialog;
-  registriesId: string[];
-  children?: React.ReactNode;
-}
-
-export const DeleteImageDialog = ({ dialog, registriesId, children }: IProps) => {
+export const DeleteLocalImageDialog = () => {
+  const dialogData = useContextSelector(ImagesContext, (v) => v?.dialogData)!;
+  const setDialogData = useContextSelector(ImagesContext, (v) => v?.setDialogData)!;
   const requestDelete = useContextSelector(ImagesContext, (v) => v?.requestDelete)!;
   const deleteIsPending = useContextSelector(ImagesContext, (v) => v?.deleteIsPending) ?? false;
   const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
+
+  const registriesId = dialogData.currentSelection?.map((c) => c.id!) ?? [];
 
   const [noPrune, setNoPrune] = useState(false);
   const [force, setForce] = useState(false);
@@ -34,8 +31,7 @@ export const DeleteImageDialog = ({ dialog, registriesId, children }: IProps) =>
   };
 
   return (
-    <Dialog {...dialog.dialogProps}>
-      {children}
+    <Dialog open={dialogData.open} onOpenChange={(open) => setDialogData({ open })}>
       <DialogContent className="sm:max-w-[600px]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Delete Confirmation</DialogTitle>
@@ -70,7 +66,7 @@ export const DeleteImageDialog = ({ dialog, registriesId, children }: IProps) =>
           <div className="flex items-center justify-end">
             <button
               type="button"
-              onClick={dialog.dismiss}
+              onClick={() => setDialogData({ open: false })}
               className="text-foreground bg-secondary hover:bg-secondary/80 font-medium rounded-sm text-sm px-2 py-2">
               Cancel
             </button>

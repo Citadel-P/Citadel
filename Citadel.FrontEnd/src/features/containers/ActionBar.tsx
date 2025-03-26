@@ -6,7 +6,7 @@ import { useAvailableActions } from './hooks/useAvailableActions';
 export const ActionBar = () => {
   const containers = useContextSelector(ContainersContext, (v) => v?.containers)!;
   const selectedRows = useContextSelector(ContainersContext, (v) => v?.selectedRows)!;
-  const setDialogOpen = useContextSelector(ContainersContext, (v) => v?.setDialogData)!;
+  const setDialogData = useContextSelector(ContainersContext, (v) => v?.setDialogData)!;
   const { availableActions, isPending, requestPatch } = useAvailableActions(selectedRows);
 
   if (!selectedRows.length) return <></>;
@@ -56,7 +56,7 @@ export const ActionBar = () => {
         </button>
         <button
           type="button"
-          onClick={() => setDialogOpen({ open: true, currentSelection: selectedRows })}
+          onClick={() => setDialogData({ open: true, currentSelection: selectedRows })}
           disabled={!availableActions.canDelete || isPending}
           className="inline-flex items-center rounded-r-md border border-border px-2 py-2 text-background bg-danger hover:bg-danger/85 font-medium text-xs disabled:cursor-not-allowed disabled:opacity-60">
           <Trash className="mr-1 h-3 w-3" />

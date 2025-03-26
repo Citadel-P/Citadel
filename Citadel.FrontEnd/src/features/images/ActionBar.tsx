@@ -1,22 +1,20 @@
 import { Pencil, Trash } from 'lucide-react';
 import { useContextSelector } from 'use-context-selector';
-import { useDialog } from '@/hooks/useDialog';
 import { useNavigate } from 'react-router';
 import { ImagesContext } from './ImagesProvider';
-import { DeleteImageDialog } from './dialogs/DeleteImageDialog';
 
 export const ActionBar = () => {
   const navigate = useNavigate();
-  const deleteDialog = useDialog();
-  const selectedRowIds = useContextSelector(ImagesContext, (v) => v?.selectedRowIds) ?? [];
-  const images = useContextSelector(ImagesContext, (v) => v?.locaImages) ?? [];
+  const setDialogData = useContextSelector(ImagesContext, (v) => v?.setDialogData)!;
+  const selectedRows = useContextSelector(ImagesContext, (v) => v?.selectedRows) ?? [];
+  const images = useContextSelector(ImagesContext, (v) => v?.localImages) ?? [];
 
   const actions: RegistryActionsState = {
-    canEdit: selectedRowIds?.length === 1,
-    canDelete: selectedRowIds?.length > 0,
+    canEdit: selectedRows?.length === 1,
+    canDelete: selectedRows?.length > 0,
   };
 
-  if (!selectedRowIds.length) return <></>;
+  if (!selectedRows.length) return <></>;
 
   return (
     <div
@@ -26,13 +24,13 @@ export const ActionBar = () => {
         width: 'calc(100% - var(--sidebar-width))',
       }}>
       <div className="flex-1 text-xs text-muted-foreground mt-2">
-        {selectedRowIds.length} of {images.length} image(s) selected.
+        {selectedRows.length} of {images.length} image(s) selected.
       </div>
       <div className="mt-1">
         <button
           type="button"
           disabled={!actions.canEdit}
-          onClick={() => navigate('/registries/edit/' + selectedRowIds?.at(0))}
+          onClick={() => navigate('/registries/edit/' + selectedRows?.at(0))}
           className="inline-flex items-center rounded-l-lg border border-border bg-background px-2 py-2 text-xs text-foreground font-medium enabled:hover:bg-foreground/5 enabled:hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
           <Pencil className="mr-1 h-3 w-3" />
           Edit
@@ -40,13 +38,12 @@ export const ActionBar = () => {
 
         <button
           type="button"
-          {...deleteDialog.triggerProps}
+          onClick={() => setDialogData({ open: true, currentSelection: selectedRows })}
           disabled={!actions.canDelete}
           className="inline-flex items-center rounded-r-md border border-border px-2 py-2 text-background bg-danger hover:bg-danger/85 font-medium text-xs disabled:cursor-not-allowed disabled:opacity-60">
           <Trash className="mr-1 h-3.5 w-3.5" />
           Delete
         </button>
-        <DeleteImageDialog dialog={deleteDialog} registriesId={selectedRowIds} />
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ import { useEffect } from 'react';
 import { AppContext } from '@/AppProvider';
 import { fromNow } from '@/lib/dayjs.helper';
 import { byteTransform } from '@/lib/bytes.helper';
+import { DeleteLocalImageDialog } from './dialogs/DeleteLocalImageDialog';
 
 const columns: ColumnDef<ImageView>[] = [
   {
@@ -109,9 +110,10 @@ const ImageIdRow = ({ image }: { image: ImageView }) => {
 
 export default function LocalImagesTable() {
   const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
-  const { data, isLoading, isSuccess, error } = useGETInternalImages(currentPlatform?.id);
-  const setSelectedRowIds = useContextSelector(ImagesContext, (v) => v?.setSelectedRowIds)!;
+  const { data, isLoading, isSuccess } = useGETInternalImages(currentPlatform?.id);
+  const setSelectedRows = useContextSelector(ImagesContext, (v) => v?.setSelectedRows)!;
   const setLocalImages = useContextSelector(ImagesContext, (v) => v?.setLocalImages)!;
+  const localImages = useContextSelector(ImagesContext, (v) => v?.localImages)!;
 
   useEffect(() => {
     if (isSuccess && data?.data.images) {
@@ -119,17 +121,17 @@ export default function LocalImagesTable() {
     }
     return () => {
       setLocalImages([]);
-      setSelectedRowIds([]);
+      setSelectedRows([]);
     };
-  }, [data, isSuccess, setLocalImages, setSelectedRowIds]);
+  }, [data, isSuccess, setLocalImages, setSelectedRows]);
 
   return (
     <div className="flex flex-col gap-3">
       <DataTable
         columns={columns}
-        data={data?.data.images ?? []}
+        data={localImages}
         isLoading={isLoading}
-        onSelectionChange={setSelectedRowIds}
+        onSelectionChange={(ids: string[]) => setSelectedRows(localImages.filter((c) => ids.includes(c.id!)))}
       />
       <div className="text-muted-foreground text-xs font-normal ">
         {data?.data.images?.length && (
@@ -138,6 +140,7 @@ export default function LocalImagesTable() {
           </span>
         )}
       </div>
+      <DeleteLocalImageDialog />
     </div>
   );
 }

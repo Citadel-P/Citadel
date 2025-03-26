@@ -12,15 +12,22 @@ interface IContext {
   registries: RegistryView[];
   setSelectionChange: (name: string) => void;
   selectedRegistry: RegistryView | undefined;
-  selectedRowIds: string[];
-  locaImages: ImageView[];
+  selectedRows: ImageView[] | undefined;
+  localImages: ImageView[];
   requestDelete: (request: DeleteImagesRequest) => void;
-  setSelectedRowIds: (ids: string[]) => void;
+  setSelectedRows: (images: ImageView[] | undefined) => void;
   setLocalImages: (images: ImageView[]) => void;
   deleteIsPending: boolean;
+  dialogData: IDeleteDialogData;
+  setDialogData: (data: IDeleteDialogData) => void;
 }
 interface IProps {
   children?: React.ReactNode;
+}
+
+interface IDeleteDialogData {
+  open: boolean;
+  currentSelection?: ImageView[];
 }
 
 export const ImagesContext = createContext<IContext | undefined>(undefined);
@@ -28,17 +35,12 @@ export const ImagesContext = createContext<IContext | undefined>(undefined);
 const ImagesProvider: React.FC<IProps> = ({ children }) => {
   const client = useQueryClient();
   const { data, isLoading, isSuccess } = useGETRegistries();
-  const {
-    mutate,
-    isSuccess: deleteIsSuccess,
-    isPending: deleteIsPending,
-    error: deleteInErrpr,
-    data: deleteData,
-  } = useDELETEImages();
+  const { mutate, isSuccess: deleteIsSuccess, isPending: deleteIsPending, data: deleteData } = useDELETEImages();
   const [registries, setRegistries] = useState<RegistryView[]>([]);
-  const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
+  const [selectedRows, setSelectedRows] = useState<ImageView[] | undefined>();
+  const [dialogData, setDialogData] = useState<IDeleteDialogData>({ open: false });
   const [selectedRegistry, setSelectedRegistry] = useState<RegistryView | undefined>();
-  const [locaImages, setLocalImages] = useState<ImageView[]>([]);
+  const [localImages, setLocalImages] = useState<ImageView[]>([]);
 
   const isPlatformOnline = true;
 
@@ -52,9 +54,10 @@ const ImagesProvider: React.FC<IProps> = ({ children }) => {
   useEffect(() => {
     if (deleteIsSuccess) {
       client.invalidateQueries({ queryKey: ['getAllLocalImages'] });
+      setDialogData({ open: false });
       const message =
         deleteData?.data?.replies && deleteData?.data?.replies.length > 1
-          ? 'The selected images has been successfully deleted'
+          ? 'The selected images have been successfully deleted'
           : 'The selected image has been successfully deleted';
       toast.success(message);
     }
@@ -79,13 +82,15 @@ const ImagesProvider: React.FC<IProps> = ({ children }) => {
         registries,
         isPlatformOnline,
         selectedRegistry,
-        selectedRowIds,
+        selectedRows,
+        setSelectedRows,
         setSelectionChange,
         requestDelete,
-        setSelectedRowIds,
-        locaImages,
+        localImages,
         setLocalImages,
         deleteIsPending,
+        dialogData,
+        setDialogData,
       }}>
       {children}
     </ImagesContext.Provider>

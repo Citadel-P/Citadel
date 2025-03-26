@@ -7,23 +7,36 @@ import { toast } from 'sonner';
 
 interface IContext {
   isLoading: boolean;
-  isPending: boolean;
   registries: RegistryView[] | undefined;
-  selectedRowIds: string[];
-  setSelectedRowIds: (ids: string[]) => void;
+  selectedRows: RegistryView[];
+  setSelectedRows: (ids: RegistryView[]) => void;
   requestDelete: (ids: string[]) => void;
+  deleteIsPending: boolean;
+  dialogData: IDeleteDialogData;
+  setDialogData: (data: IDeleteDialogData) => void;
 }
 interface IProps {
   children?: React.ReactNode;
 }
 
+interface IDeleteDialogData {
+  open: boolean;
+  currentSelection?: RegistryView[];
+}
+
 export const RegistriesContext = createContext<IContext | undefined>(undefined);
 
 const RegistriesProvider: React.FC<IProps> = ({ children }) => {
-  const { mutate, isPending, data: deletedRegistries, isSuccess: deleteIsSuccess } = useDELETERegistries();
+  const {
+    mutate,
+    isPending: deleteIsPending,
+    data: deletedRegistries,
+    isSuccess: deleteIsSuccess,
+  } = useDELETERegistries();
   const { data, isLoading, isSuccess } = useGETRegistries();
-  const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
+  const [selectedRows, setSelectedRows] = useState<RegistryView[]>([]);
   const [registries, setRegistries] = useState<RegistryView[]>([]);
+  const [dialogData, setDialogData] = useState<IDeleteDialogData>({ open: false });
 
   useEffect(() => {
     if (isSuccess && data?.data) {
@@ -35,10 +48,11 @@ const RegistriesProvider: React.FC<IProps> = ({ children }) => {
     if (deleteIsSuccess && deletedRegistries?.data) {
       const ids = deletedRegistries.data.registries?.map((s) => s.id) ?? [];
       setRegistries((r) => r.filter((s) => !ids.includes(s.id)));
-      setSelectedRowIds([]);
+      setDialogData({ open: false });
+      setSelectedRows([]);
       const message =
         deletedRegistries.data.registries!.length > 1
-          ? 'The selected registries has been successfully deleted'
+          ? 'The selected registries have been successfully deleted'
           : 'The selected registry has been successfully deleted';
       toast.success(message);
     }
@@ -52,11 +66,13 @@ const RegistriesProvider: React.FC<IProps> = ({ children }) => {
     <RegistriesContext.Provider
       value={{
         isLoading,
-        isPending,
+        deleteIsPending,
         registries,
-        selectedRowIds,
+        selectedRows,
         requestDelete,
-        setSelectedRowIds,
+        setSelectedRows,
+        dialogData,
+        setDialogData,
       }}>
       {children}
     </RegistriesContext.Provider>
