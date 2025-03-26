@@ -86,6 +86,23 @@ public class DockerHubRegistry : IRegistryConfiguration
         }
     }
 
+    public async Task<(IEnumerable<DockerHubRepository>, string errorMessage)> GetRepositories(IDockerHubApi dockerHub, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var authResponse = await dockerHub.AuthCreateAccessToken(new Body() { Identifier = UserName, Secret = PAT }, cancellationToken);
+            var repositories = await dockerHub.GetRepositories(UserName, authResponse.Access_token, 1, 100, cancellationToken: cancellationToken);
+            return (repositories.Results, null);
+        }
+        catch (ApiException ex)
+        {
+            return (null,
+                ex.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                    ? "401 invalid DockerHub credentials, please check your PAT and/or your user-name."
+                    : ex.Message);
+        }
+    }
+
 }
 
 public class AzureRegistry : IRegistryConfiguration

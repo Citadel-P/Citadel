@@ -1729,7 +1729,7 @@
         ],
         "summary": "Patch a registry",
         "description": "A discriminator should be provided in the request, this discriminator is based on RegistryDiscriminator enum",
-        "operationId": "Registries_Pach",
+        "operationId": "Registries_Patch",
         "requestBody": {
           "content": {
             "application/json": {
@@ -2042,7 +2042,7 @@
         "tags": [
           "Images"
         ],
-        "summary": "Get external images of a the given registry",
+        "summary": "Get external images of the given registry",
         "operationId": "Images_GetExternalImages",
         "parameters": [
           {
@@ -2117,7 +2117,7 @@
         ]
       }
     },
-    "/api/v1/images/all/{registryName}/{packageName}": {
+    "/api/v1/images/ghcr/all/{registryName}/{packageName}": {
       "get": {
         "tags": [
           "Images"
@@ -2163,6 +2163,85 @@
                   "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/GhcrPackageVersion"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/images/dockerhub/all": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "summary": "Get docker hub repositories",
+        "operationId": "Images_GetDockerHubRepositories",
+        "parameters": [
+          {
+            "name": "registryName",
+            "in": "query",
+            "description": "The registry name",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DockerHubRepository"
                   }
                 }
               }
@@ -3021,6 +3100,36 @@
               "format": "uuid"
             },
             "nullable": true
+          }
+        }
+      },
+      "DockerHubRepository": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "namespace": {
+            "type": "string",
+            "nullable": true
+          },
+          "last_updated": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "is_private": {
+            "type": "boolean"
+          },
+          "is_trusted": {
+            "type": "boolean"
+          },
+          "is_automated": {
+            "type": "boolean"
+          },
+          "pull_count": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

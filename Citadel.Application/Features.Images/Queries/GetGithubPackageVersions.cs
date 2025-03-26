@@ -32,16 +32,18 @@ internal class GetGithubPackageVersionsHander(ApplicationDbContext dbContext, IG
             return Result.Failure<IEnumerable<GhcrPackageVersion>>(new NotFoundError("The provided registry name does exist"));
         }
 
-        if (registry.Configuration is GitHubRegistry cfg) 
+        if (registry.Configuration is not GitHubRegistry cfg)
         {
-            var result = await cfg.GetPackageVersions(githubCrApi, query.PackageName, cancellationToken);
-            if (result.errorMessage != null)
-            {
-                return Result.Failure<IEnumerable<GhcrPackageVersion>>(new BadRequestError(result.errorMessage));
-            }
-            return Result.Success(result.versions);
+            return Result.Failure<IEnumerable<GhcrPackageVersion>>(new NotFoundError("The provided registry is not a Github registry instance"));
         }
 
-        return Result.Failure<IEnumerable<GhcrPackageVersion>>();
+        var (versions, errorMessage) = await cfg.GetPackageVersions(githubCrApi, query.PackageName, cancellationToken);
+        if (errorMessage != null)
+        {
+            return Result.Failure<IEnumerable<GhcrPackageVersion>>(new BadRequestError(errorMessage));
+        }
+
+        return Result.Success(versions);
+
     }
 }

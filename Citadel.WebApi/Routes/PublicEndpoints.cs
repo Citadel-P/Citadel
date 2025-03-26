@@ -212,7 +212,7 @@ public static class PublicEndpoints
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
                     .WithName(RegistriesName + "_" + nameof(Registries.Delete));
 
-                registries.MapPatch("/", Registries.Pach)
+                registries.MapPatch("/", Registries.Patch)
                     .WithSummary("Patch a registry")
                     .WithDescription($"A discriminator should be provided in the request, this discriminator is based on {nameof(RegistryDiscriminator)} enum")
                     .WithExample(RegistryDiscriminator.Azure.ToString(), Examples.Registries.Update.UpdateAzureRegistryExample())
@@ -223,7 +223,7 @@ public static class PublicEndpoints
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status403Forbidden)
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
-                    .WithName(RegistriesName + "_" + nameof(Registries.Pach));
+                    .WithName(RegistriesName + "_" + nameof(Registries.Patch));
             }
 
             var images = group.MapGroup("/images").WithTags(ImagesName).RequireAuthorization();
@@ -236,18 +236,25 @@ public static class PublicEndpoints
                     .WithName(ImagesName + "_" + nameof(Images.GetAllLocalImages));
 
                 images.MapGet("/all/{registryName}", Images.GetExternalImages)
-                    .WithSummary("Get external images of a the given registry")
+                    .WithSummary("Get external images of the given registry")
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status403Forbidden)
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
                     .WithName(ImagesName + "_" + nameof(Images.GetExternalImages));
 
-                images.MapGet("/all/{registryName}/{packageName}", Images.GetGhcrPackageVersions)
+                images.MapGet("/ghcr/all/{registryName}/{packageName}", Images.GetGhcrPackageVersions)
                     .WithSummary("Get versions of the given package")
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status403Forbidden)
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
                     .WithName(ImagesName + "_" + nameof(Images.GetGhcrPackageVersions));
+
+                images.MapGet("/dockerhub/all", Images.GetDockerHubRepositories)
+                    .WithSummary("Get docker hub repositories")
+                    .ProducesValidationProblem()
+                    .ProducesProblem(StatusCodes.Status403Forbidden)
+                    .ProducesProblem(StatusCodes.Status401Unauthorized)
+                    .WithName(ImagesName + "_" + nameof(Images.GetDockerHubRepositories));
 
                 images.MapPost("/pull", Images.PullImage)
                     .WithSummary("Pull an image from a registry and returns logs as a stream")

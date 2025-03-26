@@ -37,7 +37,7 @@ public static class Registries
         return EndpointHandlers.HandleResult(result, RegistriesView.Map);
     }
 
-    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Pach(IMediator mediator, [FromBody] PatchRegistryInput request, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Patch(IMediator mediator, [FromBody] PatchRegistryInput request, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResult(result, RegistryView.Map);

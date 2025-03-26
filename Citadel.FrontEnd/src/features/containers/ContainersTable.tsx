@@ -112,7 +112,7 @@ const columns: ColumnDef<ContainerInfoView>[] = [
   {
     accessorKey: 'status',
     header: ({ column }) => <SortableCell cellName="Status" column={column} />,
-    cell: ({ row }) => <div>{row.original?.status && truncate(row.original.status, 20)}</div>,
+    cell: ({ row }) => <div className="text-[12px]">{row.original?.status && truncate(row.original.status, 25)}</div>,
   },
   {
     accessorKey: 'stack',

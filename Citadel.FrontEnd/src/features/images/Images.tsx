@@ -12,7 +12,7 @@ import { ActionBar } from './ActionBar';
 const Images = () => {
   const navigate = useNavigate();
   const route = useContextSelector(AppContext, (v) => v?.route);
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
+  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
   const platformOnline = useContextSelector(ImagesContext, (v) => v?.isPlatformOnline);
   const [currentTab, setCurrentTab] = useState<string>();
 

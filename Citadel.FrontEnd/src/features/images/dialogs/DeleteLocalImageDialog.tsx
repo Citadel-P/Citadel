@@ -19,7 +19,7 @@ export const DeleteLocalImageDialog = () => {
   const setDialogData = useContextSelector(ImagesContext, (v) => v?.setDialogData)!;
   const requestDelete = useContextSelector(ImagesContext, (v) => v?.requestDelete)!;
   const deleteIsPending = useContextSelector(ImagesContext, (v) => v?.deleteIsPending) ?? false;
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
+  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
 
   const registriesId = dialogData.currentSelection?.map((c) => c.id!) ?? [];
 

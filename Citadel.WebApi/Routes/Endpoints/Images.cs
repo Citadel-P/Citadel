@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using Agent.Server.Images;
 using Application.Features.Images.Queries;
 using Hosting.Extensions;
+using Infrastructure.DockerHub;
 using Infrastructure.GithubCr;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -28,6 +29,12 @@ public static class Images
     public static async Task<Results<Ok<IEnumerable<GhcrPackageVersion>>, ProblemHttpResult>> GetGhcrPackageVersions(IMediator mediator, [Description("The registry name")] string registryName, [Description("The package name")] string packageName, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetGithubPackageVersions(registryName, packageName), cancellationToken);
+        return EndpointHandlers.HandleResult(result, v => v);
+    }
+
+    public static async Task<Results<Ok<IEnumerable<DockerHubRepository>>, ProblemHttpResult>> GetDockerHubRepositories(IMediator mediator, [Description("The registry name")] string registryName, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetDockerHubRepositories(registryName), cancellationToken);
         return EndpointHandlers.HandleResult(result, v => v);
     }
 

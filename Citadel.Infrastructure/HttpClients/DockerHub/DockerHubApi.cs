@@ -367,7 +367,7 @@ namespace Infrastructure.DockerHub
         /// </list>
         /// </exception>
         [Get("/v2/namespaces/{namespace}/repositories/{repository}/tags")]
-        Task<Paginated_tags> TagsGET([AliasAs("namespace")] string @namespace, string repository, [Query] int? page, [Query] int? page_size, CancellationToken cancellationToken = default);
+        Task<Paginated_tags> TagsGET([AliasAs("namespace")] string @namespace, string repository, [Header("Authorization")] string accessToken, [Query] int? page, [Query] int? page_size, CancellationToken cancellationToken = default);
 
         /// <summary>Check repository tags</summary>
         /// <returns>A <see cref="Task"/> that completes when the request is finished.</returns>

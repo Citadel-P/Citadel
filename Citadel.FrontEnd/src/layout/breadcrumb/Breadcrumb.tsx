@@ -27,8 +27,8 @@ interface ICrumbBadge {
 
 const BreadCrumb = ({isSticky}: {isSticky: boolean}) => {
   const route = useContextSelector(AppContext, (v) => v?.route);
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
-  const currentContainer = useContextSelector(AppContext, (v) => v?.currentContainer);
+  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
+  const currentContainer = useContextSelector(AppContext, (v) => v?.currentContainer)!;
   const isBreadcrumbHidden = useContextSelector(AppContext, (v) => v?.isBreadcrumbHidden);
 
   const navigate = useNavigate();

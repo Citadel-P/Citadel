@@ -26,7 +26,7 @@ export default function PullProgressSheetContent({
     setStreamData((prevChunks) => [...(prevChunks ?? []), chunk]);
   };
   const { isPending, isSuccess, error, mutate } = usePOSTPullImageStream(handleChunkReceived);
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
+  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
   const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
   const [pullError, setPullError] = useState<string | undefined>();
   const scrollRef = useRef<HTMLPreElement>(null);

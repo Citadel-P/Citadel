@@ -14,7 +14,7 @@ import ContainerInspect from './inspect/ContainerInspect';
 
 const ContainerInfoWrapper = () => {
   const route = useContextSelector(AppContext, (v) => v?.route);
-  const currentContainer = useContextSelector(AppContext, (v) => v?.currentContainer);
+  const currentContainer = useContextSelector(AppContext, (v) => v?.currentContainer)!;
   const navigate = useNavigate();
   const [currentTab, setCurrentTab] = useState<string>();
 
