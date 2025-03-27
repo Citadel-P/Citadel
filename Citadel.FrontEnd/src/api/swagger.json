@@ -1729,7 +1729,7 @@
         ],
         "summary": "Patch a registry",
         "description": "A discriminator should be provided in the request, this discriminator is based on RegistryDiscriminator enum",
-        "operationId": "Registries_Pach",
+        "operationId": "Registries_Patch",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1959,16 +1959,16 @@
         ]
       }
     },
-    "/api/v1/images/{id}/all": {
+    "/api/v1/images/{platformId}/local-images": {
       "get": {
         "tags": [
           "Images"
         ],
-        "summary": "Get all local images",
+        "summary": "Get all local images for the given platform",
         "operationId": "Images_GetAllLocalImages",
         "parameters": [
           {
-            "name": "id",
+            "name": "platformId",
             "in": "path",
             "description": "The platform id",
             "required": true,
@@ -2037,13 +2037,13 @@
         ]
       }
     },
-    "/api/v1/images/all/{registryName}": {
+    "/api/v1/images/{registryName}/repositories": {
       "get": {
         "tags": [
           "Images"
         ],
-        "summary": "Get external images of a the given registry",
-        "operationId": "Images_GetExternalImages",
+        "summary": "List external repositories of the given registry",
+        "operationId": "Images_GetExternalRepositories",
         "parameters": [
           {
             "name": "registryName",
@@ -2073,7 +2073,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/IImageResponse"
+                    "$ref": "#/components/schemas/IImageRepository"
                   }
                 }
               }
@@ -2117,12 +2117,12 @@
         ]
       }
     },
-    "/api/v1/images/all/{registryName}/{packageName}": {
+    "/api/v1/images/ghcr/{registryName}/{packageName}/versions": {
       "get": {
         "tags": [
           "Images"
         ],
-        "summary": "Get versions of the given package",
+        "summary": "List versions of GHCR package",
         "operationId": "Images_GetGhcrPackageVersions",
         "parameters": [
           {
@@ -2163,6 +2163,86 @@
                   "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/GhcrPackageVersion"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/images/dockerhub/{registryName}/repositories": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "summary": "List DockerHub repositories",
+        "operationId": "Images_GetDockerHubRepositories",
+        "parameters": [
+          {
+            "name": "registryName",
+            "in": "path",
+            "description": "The registry name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DockerHubRepository"
                   }
                 }
               }
@@ -3024,6 +3104,36 @@
           }
         }
       },
+      "DockerHubRepository": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "namespace": {
+            "type": "string",
+            "nullable": true
+          },
+          "last_updated": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "is_private": {
+            "type": "boolean"
+          },
+          "is_trusted": {
+            "type": "boolean"
+          },
+          "is_automated": {
+            "type": "boolean"
+          },
+          "pull_count": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "DriverConfig": {
         "type": "object",
         "properties": {
@@ -3539,28 +3649,28 @@
           }
         }
       },
-      "IImageResponse": {
+      "IImageRepository": {
         "required": [
           "$type"
         ],
         "type": "object",
         "anyOf": [
           {
-            "$ref": "#/components/schemas/IImageResponseGitHubPackageResponse"
+            "$ref": "#/components/schemas/IImageRepositoryGitHubPackageResponse"
           },
           {
-            "$ref": "#/components/schemas/IImageResponseDockerHubImageResponse"
+            "$ref": "#/components/schemas/IImageRepositoryDockerHubRepositoryResponse"
           }
         ],
         "discriminator": {
           "propertyName": "$type",
           "mapping": {
-            "GitHub": "#/components/schemas/IImageResponseGitHubPackageResponse",
-            "DockerHub": "#/components/schemas/IImageResponseDockerHubImageResponse"
+            "GitHub": "#/components/schemas/IImageRepositoryGitHubPackageResponse",
+            "DockerHub": "#/components/schemas/IImageRepositoryDockerHubRepositoryResponse"
           }
         }
       },
-      "IImageResponseDockerHubImageResponse": {
+      "IImageRepositoryDockerHubRepositoryResponse": {
         "properties": {
           "$type": {
             "enum": [
@@ -3568,17 +3678,28 @@
             ],
             "type": "string"
           },
-          "id": {
-            "type": "string",
-            "nullable": true
-          },
           "name": {
             "type": "string",
             "nullable": true
+          },
+          "namespace": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastUpdated": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "isPrivate": {
+            "type": "boolean"
+          },
+          "pullCount": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
-      "IImageResponseGitHubPackageResponse": {
+      "IImageRepositoryGitHubPackageResponse": {
         "properties": {
           "$type": {
             "enum": [

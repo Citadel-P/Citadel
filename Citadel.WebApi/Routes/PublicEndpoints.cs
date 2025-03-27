@@ -228,29 +228,29 @@ public static class PublicEndpoints
 
             var images = group.MapGroup("/images").WithTags(ImagesName).RequireAuthorization();
             {
-                images.MapGet("/{id}/all", Images.GetAllLocalImages)
-                    .WithSummary("Get all local images")
+                images.MapGet("/{platformId}/local-images", Images.GetAllLocalImages)
+                    .WithSummary("Get all local images for the given platform")
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status403Forbidden)
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
                     .WithName(ImagesName + "_" + nameof(Images.GetAllLocalImages));
 
-                images.MapGet("/all/{registryName}", Images.GetExternalImages)
-                    .WithSummary("Get external images of the given registry")
+                images.MapGet("/{registryName}/repositories", Images.GetExternalRepositories)
+                    .WithSummary("List external repositories of the given registry")
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status403Forbidden)
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
-                    .WithName(ImagesName + "_" + nameof(Images.GetExternalImages));
+                    .WithName(ImagesName + "_" + nameof(Images.GetExternalRepositories));
 
-                images.MapGet("/ghcr/all/{registryName}/{packageName}", Images.GetGhcrPackageVersions)
-                    .WithSummary("Get versions of the given package")
+                images.MapGet("/ghcr/{registryName}/{packageName}/versions", Images.GetGhcrPackageVersions)
+                    .WithSummary("List versions of GHCR package")
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status403Forbidden)
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
                     .WithName(ImagesName + "_" + nameof(Images.GetGhcrPackageVersions));
 
-                images.MapGet("/dockerhub/all", Images.GetDockerHubRepositories)
-                    .WithSummary("Get docker hub repositories")
+                images.MapGet("/dockerhub/{registryName}/repositories", Images.GetDockerHubRepositories)
+                    .WithSummary("List DockerHub repositories")
                     .ProducesValidationProblem()
                     .ProducesProblem(StatusCodes.Status403Forbidden)
                     .ProducesProblem(StatusCodes.Status401Unauthorized)

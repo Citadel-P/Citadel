@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { AppContext } from '@/AppProvider';
-import ExternalImages from './ExternalImages';
+import ExternalRepositories from './ExternalRepositories';
 import LocalImagesTable from './LocalImagesTable';
 import { ActionBar } from './ActionBar';
 const Images = () => {
@@ -55,7 +55,7 @@ const Images = () => {
             </TabsContent>
             <TabsContent value="external">
               <div className="flex flex-col gap-3">
-                <ExternalImages />
+                <ExternalRepositories />
               </div>
             </TabsContent>
           </Tabs>

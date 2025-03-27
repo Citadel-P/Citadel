@@ -68,14 +68,10 @@ internal sealed class DeleteContainersHandler(
         }
         else
         {
-            if (exceptions.Any(s => s is RpcException))
-            {
-                return Result.Failure(new ClientRpcException($"An RPC exception occurred: {exceptions.First(s => s is RpcException).Message}"));
-            }
-            else
-            {
-                return Result.Failure(new Exception("An error occurred while processing the request"));
-            }
+            var rpcException = exceptions.OfType<RpcException>().FirstOrDefault();
+            return rpcException is not null
+                ? Result.Failure(new ClientRpcException($"An RPC exception occurred: {rpcException.Message}", rpcException.StatusCode))
+                : Result.Failure(new InternalServerError($"An error occurred while processing the request, {exceptions.First().Message}"));
         }
     }
 }

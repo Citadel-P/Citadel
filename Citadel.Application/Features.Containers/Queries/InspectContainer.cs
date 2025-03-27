@@ -42,7 +42,7 @@ internal sealed class InspectContainerHandler(
         }
         catch (RpcException ex) 
         {
-            return Result.Failure<ContainerInspectReply>(new NotFoundError($"An error occurred while sending the request, {ex.Message}"));
+            return Result.Failure<ContainerInspectReply>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 }

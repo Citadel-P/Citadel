@@ -29,7 +29,7 @@ internal class GetAllLocalImagesHandler(ApplicationDbContext dbContext, IGrpcCli
         }
         catch (RpcException ex)
         {
-            return Result.Failure<IEnumerable<ImageReply>>(new NotFoundError($"An error occurred while sending the request, {ex.Message}"));
+            return Result.Failure<IEnumerable<ImageReply>>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 }

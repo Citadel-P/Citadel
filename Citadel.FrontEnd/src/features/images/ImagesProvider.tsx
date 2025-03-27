@@ -67,7 +67,7 @@ const ImagesProvider: React.FC<IProps> = ({ children }) => {
     const registry = registries.find((s) => s.name === name);
     if (registry) {
       setSelectedRegistry(registry);
-      client.invalidateQueries({ queryKey: ['externalImages', registry.name] });
+      client.invalidateQueries({ queryKey: ['externalRepositories', registry.name] });
     }
   }
 

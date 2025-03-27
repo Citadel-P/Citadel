@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Runtime.CompilerServices;
 using Agent.Server.Images;
 using Application.Features.Images.Queries;
@@ -14,15 +15,15 @@ namespace WebApi.Routes.Endpoints;
 
 public static class Images
 {
-    public static async Task<Results<Ok<ImagesView>, ProblemHttpResult>> GetAllLocalImages(IMediator mediator, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<ImagesView>, ProblemHttpResult>> GetAllLocalImages(IMediator mediator, [Description("The platform id")] Guid platformId, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetAllLocalImages(id), cancellationToken);
+        var result = await mediator.Send(new GetAllLocalImages(platformId), cancellationToken);
         return EndpointHandlers.HandleResult(result, ImagesView.Map);
     }
 
-    public static async Task<Results<Ok<IEnumerable<IImageResponse>>, ProblemHttpResult>> GetExternalImages(IMediator mediator, [Description("The registry name")] string registryName, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<IEnumerable<IImageRepository>>, ProblemHttpResult>> GetExternalRepositories(IMediator mediator, [Description("The registry name")] string registryName, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetExternalImages(registryName), cancellationToken);
+        var result = await mediator.Send(new GetExternalRepositories(registryName), cancellationToken);
         return EndpointHandlers.HandleResult(result, v => v);
     }
 

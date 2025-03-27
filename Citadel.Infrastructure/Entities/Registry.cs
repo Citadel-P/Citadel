@@ -86,7 +86,7 @@ public class DockerHubRegistry : IRegistryConfiguration
         }
     }
 
-    public async Task<(IEnumerable<DockerHubRepository>, string errorMessage)> GetRepositories(IDockerHubApi dockerHub, CancellationToken cancellationToken)
+    public async Task<(IEnumerable<DockerHubRepository> repositories, string errorMessage)> GetRepositories(IDockerHubApi dockerHub, CancellationToken cancellationToken)
     {
         try
         {

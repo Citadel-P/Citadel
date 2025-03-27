@@ -211,6 +211,18 @@ export interface DeleteRegistriesInput {
   ids: string[] | null;
 }
 
+export interface DockerHubRepository {
+  name?: string | null;
+  namespace?: string | null;
+  /** @format date-time */
+  last_updated?: string;
+  is_private?: boolean;
+  is_trusted?: boolean;
+  is_automated?: boolean;
+  /** @format int32 */
+  pull_count?: number;
+}
+
 export type DriverConfig = {
   name?: string | null;
   options?: Record<string, string>;
@@ -341,19 +353,24 @@ export interface HttpValidationProblemDetails {
   errors?: Record<string, string[]>;
 }
 
-export type IImageResponse = BaseIImageResponse &
+export type IImageRepository = BaseIImageRepository &
   (
-    | BaseIImageResponseTypeMapping<'GitHub', IImageResponseGitHubPackageResponse>
-    | BaseIImageResponseTypeMapping<'DockerHub', IImageResponseDockerHubImageResponse>
+    | BaseIImageRepositoryTypeMapping<'GitHub', IImageRepositoryGitHubPackageResponse>
+    | BaseIImageRepositoryTypeMapping<'DockerHub', IImageRepositoryDockerHubRepositoryResponse>
   );
 
-export interface IImageResponseDockerHubImageResponse {
+export interface IImageRepositoryDockerHubRepositoryResponse {
   $type?: 'DockerHub';
-  id?: string | null;
   name?: string | null;
+  namespace?: string | null;
+  /** @format date-time */
+  lastUpdated?: string;
+  isPrivate?: boolean;
+  /** @format int32 */
+  pullCount?: number;
 }
 
-export interface IImageResponseGitHubPackageResponse {
+export interface IImageRepositoryGitHubPackageResponse {
   $type?: 'GitHub';
   id?: string | null;
   name?: string | null;
@@ -750,9 +767,9 @@ export type VolumeOptions = {
   subpath?: string | null;
 };
 
-type BaseIImageResponse = object;
+type BaseIImageRepository = object;
 
-type BaseIImageResponseTypeMapping<Key, Type> = {
+type BaseIImageRepositoryTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
@@ -1501,7 +1518,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @description A discriminator should be provided in the request, this discriminator is based on RegistryDiscriminator enum
      *
      * @tags Registries
-     * @name RegistriesPach
+     * @name RegistriesPatch
      * @summary Patch a registry
      * @request PATCH:/api/v1/registries
      * @secure
@@ -1511,7 +1528,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    registriesPach: (data: PatchRegistryInput, params: RequestParams = {}) =>
+    registriesPatch: (data: PatchRegistryInput, params: RequestParams = {}) =>
       this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/registries`,
         method: 'PATCH',
@@ -1573,8 +1590,8 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      *
      * @tags Images
      * @name ImagesGetAllLocalImages
-     * @summary Get all local images
-     * @request GET:/api/v1/images/{id}/all
+     * @summary Get all local images for the given platform
+     * @request GET:/api/v1/images/{platformId}/local-images
      * @secure
      * @response `200` `ImagesView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -1582,9 +1599,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesGetAllLocalImages: (id: string, params: RequestParams = {}) =>
+    imagesGetAllLocalImages: (platformId: string, params: RequestParams = {}) =>
       this.request<ImagesView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/images/${id}/all`,
+        path: `/api/v1/images/${platformId}/local-images`,
         method: 'GET',
         secure: true,
         format: 'json',
@@ -1595,19 +1612,19 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * No description
      *
      * @tags Images
-     * @name ImagesGetExternalImages
-     * @summary Get external images of a the given registry
-     * @request GET:/api/v1/images/all/{registryName}
+     * @name ImagesGetExternalRepositories
+     * @summary List external repositories of the given registry
+     * @request GET:/api/v1/images/{registryName}/repositories
      * @secure
-     * @response `200` `(IImageResponse)[]` OK
+     * @response `200` `(IImageRepository)[]` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesGetExternalImages: (registryName: string, params: RequestParams = {}) =>
-      this.request<IImageResponse[], HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/images/all/${registryName}`,
+    imagesGetExternalRepositories: (registryName: string, params: RequestParams = {}) =>
+      this.request<IImageRepository[], HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/images/${registryName}/repositories`,
         method: 'GET',
         secure: true,
         format: 'json',
@@ -1619,8 +1636,8 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      *
      * @tags Images
      * @name ImagesGetGhcrPackageVersions
-     * @summary Get versions of the given package
-     * @request GET:/api/v1/images/all/{registryName}/{packageName}
+     * @summary List versions of GHCR package
+     * @request GET:/api/v1/images/ghcr/{registryName}/{packageName}/versions
      * @secure
      * @response `200` `(GhcrPackageVersion)[]` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -1630,7 +1647,30 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      */
     imagesGetGhcrPackageVersions: (registryName: string, packageName: string, params: RequestParams = {}) =>
       this.request<GhcrPackageVersion[], HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/images/all/${registryName}/${packageName}`,
+        path: `/api/v1/images/ghcr/${registryName}/${packageName}/versions`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Images
+     * @name ImagesGetDockerHubRepositories
+     * @summary List DockerHub repositories
+     * @request GET:/api/v1/images/dockerhub/{registryName}/repositories
+     * @secure
+     * @response `200` `(DockerHubRepository)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    imagesGetDockerHubRepositories: (registryName: string, params: RequestParams = {}) =>
+      this.request<DockerHubRepository[], HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/images/dockerhub/${registryName}/repositories`,
         method: 'GET',
         secure: true,
         format: 'json',

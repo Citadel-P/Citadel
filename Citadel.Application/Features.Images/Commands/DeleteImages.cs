@@ -48,7 +48,7 @@ internal sealed class DeleteImagesHandler(IGrpcClientFactory clientFactory, Appl
         }
         catch (RpcException ex)
         {
-            return Result.Failure<DeleteImagesReply>(new NotFoundError($"An error occurred while sending the request, {ex.Message}"));
+            return Result.Failure<DeleteImagesReply>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 }

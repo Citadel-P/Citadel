@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn } from '@/lib/utils';
 import { useGETExternalRepositories } from './hooks/useGETExternalRepositories';
 import Loader from '@/components/ui/loader';
-import { GhcrPackageVersion, IImageRepositoryGitHubPackageResponse } from '@/api/_generated';
+import { GhcrPackageVersion, IImageRepositoryDockerHubRepositoryResponse } from '@/api/_generated';
 import { useGETPackageVersions } from './hooks/useGETPackageVersions';
 import { useContextSelector } from 'use-context-selector';
 import { ImagesContext } from './ImagesProvider';
@@ -26,11 +26,11 @@ import { Sheet } from '@/components/ui/sheet';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 
 // Column helpers
-const packageColumnHelper = createColumnHelper<IImageRepositoryGitHubPackageResponse>();
+const repositoryColumnHelper = createColumnHelper<IImageRepositoryDockerHubRepositoryResponse>();
 const versionColumnHelper = createColumnHelper<GhcrPackageVersion>();
 
 // Nested table component
-function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubPackageResponse }) {
+function NestedImagesTable({ ghPackage }: { ghPackage: IImageRepositoryDockerHubRepositoryResponse }) {
   const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
   const { isLoading, data } = useGETPackageVersions(selectedRegistry?.name ?? undefined, ghPackage?.name ?? '');
   const [selectedVersion, setSelectedVersion] = useState<GhcrPackageVersion | null>(null);
@@ -165,13 +165,12 @@ const VersionRow = ({ version }: { version: string }) => {
   );
 };
 
-export default function GhcrImagesTable({ registryName }: { registryName: string }) {
+export default function DockerHubImagesTable({ registryName }: { registryName: string }) {
   const { isLoading, data } = useGETExternalRepositories(registryName);
   const [expanded, setExpanded] = useState<ExpandedState>({});
-
   const columns = React.useMemo(
     () => [
-      packageColumnHelper.display({
+      repositoryColumnHelper.display({
         id: 'expander',
         cell: ({ row }) => {
           return (
@@ -189,36 +188,28 @@ export default function GhcrImagesTable({ registryName }: { registryName: string
         },
         size: 50,
       }),
-      packageColumnHelper.accessor('name', {
+      repositoryColumnHelper.accessor('name', {
         cell: (info) => info.getValue(),
-        header: 'Package Name',
+        header: 'Repository',
       }),
-      packageColumnHelper.accessor('url', {
-        cell: (info) => (
-          <a
-            className="hover:underline text-blue-600 "
-            target="_blank"
-            rel="noreferrer"
-            href={info.row.original.htmlUrl ?? ''}>
-            {info.row.original.htmlUrl}{' '}
-          </a>
-        ),
-        header: 'Url',
+      repositoryColumnHelper.accessor('namespace', {
+        cell: (info) => info.getValue(),
+        header: 'Namespace',
       }),
-      packageColumnHelper.accessor('createdAt', {
+      repositoryColumnHelper.accessor('pullCount', {
+        cell: (info) => info.getValue(),
+        header: 'Pull Count',
+      }),
+      repositoryColumnHelper.accessor('lastUpdated', {
         cell: (info) => fromNow(new Date(info.getValue() ?? 0 * 1000).getTime()),
-        header: 'Created At',
-      }),
-      packageColumnHelper.accessor('updatedAt', {
-        cell: (info) => fromNow(new Date(info.getValue() ?? 0 * 1000).getTime()),
-        header: 'Updated At',
+        header: 'Last Pushed',
       }),
     ],
     [],
   );
 
   const table = useReactTable({
-    data: (data?.data ?? []) as IImageRepositoryGitHubPackageResponse[],
+    data: (data?.data ?? []) as IImageRepositoryDockerHubRepositoryResponse[],
     columns,
     state: {
       expanded,
@@ -255,7 +246,7 @@ export default function GhcrImagesTable({ registryName }: { registryName: string
               <TableRow className="bg-muted/20 hover:bg-muted/20">
                 <TableCell colSpan={row.getVisibleCells().length} className="p-0">
                   <div className="overflow-hidden min-h-0 pl-10 bg-background">
-                    <NestedVersionsTable ghPackage={row.original} />
+                    <NestedImagesTable ghPackage={row.original} />
                   </div>
                 </TableCell>
               </TableRow>

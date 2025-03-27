@@ -6,8 +6,9 @@ import Loader from '@/components/ui/loader';
 import { AlertMessage } from '@/components/ui/alert-message';
 import { useNavigate } from 'react-router';
 import { RegistryDiscriminator } from '@/api/_generated';
+import DockerHubImagesTable from './DockerHubImagesTable';
 
-export default function ExternalImages() {
+export default function ExternalRepositories() {
   const navigate = useNavigate();
   const registries = useContextSelector(ImagesContext, (v) => v?.registries) ?? [];
   const isLoading = useContextSelector(ImagesContext, (v) => v?.isLoading) ?? false;
@@ -29,6 +30,9 @@ export default function ExternalImages() {
       <SelectRegistryInput />
       {selectedRegistry?.discriminator === RegistryDiscriminator.GitHub && (
         <GhcrImagesTable registryName={selectedRegistry.name!} />
+      )}
+      {selectedRegistry?.discriminator === RegistryDiscriminator.DockerHub && (
+        <DockerHubImagesTable registryName={selectedRegistry.name!} />
       )}
     </>
   );

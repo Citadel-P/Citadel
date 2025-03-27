@@ -59,7 +59,7 @@ internal class UpsertPlatformHandler(
         }
         catch (RpcException ex)
         {
-            return Result.Failure<Platform>(new ClientRpcException($"An RPC exception occurred: {ex.Message}"));
+            return Result.Failure<Platform>(new ClientRpcException($"An RPC exception occurred: {ex.Message}", ex.StatusCode));
         }
         catch (Exception ex)
         {

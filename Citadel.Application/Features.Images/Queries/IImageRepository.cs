@@ -5,14 +5,13 @@ namespace Application.Features.Images.Queries;
 
 [JsonPolymorphic]
 [JsonDerivedType(typeof(GitHubPackageResponse), nameof(RegistryDiscriminator.GitHub))]
-[JsonDerivedType(typeof(DockerHubImageResponse), nameof(RegistryDiscriminator.DockerHub))]
-public interface IImageResponse
+[JsonDerivedType(typeof(DockerHubRepositoryResponse), nameof(RegistryDiscriminator.DockerHub))]
+public interface IImageRepository
 {
-    string Id { get; }
     string Name { get; }
 }
 
-public class GitHubPackageResponse : IImageResponse
+public class GitHubPackageResponse : IImageRepository
 {
     public string Id { get; init; }
     public string Name { get; init; }
@@ -22,8 +21,11 @@ public class GitHubPackageResponse : IImageResponse
     public string HtmlUrl { get; init; }
 }
 
-public class DockerHubImageResponse : IImageResponse
+public class DockerHubRepositoryResponse : IImageRepository
 {
-    public string Id { get; init; }
     public string Name { get; init; }
+    public string Namespace { get; set; }
+    public DateTime LastUpdated { get; set; }
+    public bool IsPrivate { get; set; }
+    public int PullCount { get; set; }
 }
