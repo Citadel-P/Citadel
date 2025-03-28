@@ -14,6 +14,10 @@ using System.Threading.Tasks;
 namespace Infrastructure.DockerHub
 {
     [System.CodeDom.Compiler.GeneratedCode("Refitter", "1.5.2.0")]
+    /// The docker hub api is instable, use with caution, I've modified the generated as follow
+    /// Replace 'Image Images' with 'List<Images>' <see cref="Tag"/>
+    /// Replace 'string V2' by 'Bool V2'
+    /// Add Authorization header to 'TagsGET' method
     public partial interface IDockerHubApi
     {
         /// <summary>Create an authentication token</summary>
@@ -2081,7 +2085,7 @@ namespace Infrastructure.DockerHub
         public int Id { get; set; }
 
         [JsonPropertyName("images")]
-        public Image Images { get; set; }
+        public IList<Image> Images { get; set; }
 
         /// <summary>
         /// ID of the user that pushed the tag
@@ -2137,7 +2141,7 @@ namespace Infrastructure.DockerHub
         /// </summary>
 
         [JsonPropertyName("v2")]
-        public string V2 { get; set; }
+        public bool V2 { get; set; }
 
         /// <summary>
         /// whether a tag has been pushed to or pulled in the past month

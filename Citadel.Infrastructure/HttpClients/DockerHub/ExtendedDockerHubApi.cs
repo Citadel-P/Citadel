@@ -7,7 +7,6 @@ public partial interface IDockerHubApi
 {
     [Get("/v2/repositories/{username}")]
     Task<PaginateRepositories> GetRepositories(string username, [Header("Authorization")] string accessToken, [Query] int? page, [Query] int? page_size, CancellationToken cancellationToken = default);
-
 }
 
 [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]

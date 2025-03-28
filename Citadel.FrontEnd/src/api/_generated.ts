@@ -211,6 +211,16 @@ export interface DeleteRegistriesInput {
   ids: string[] | null;
 }
 
+export type DockerHubImageView = {
+  architecture: string | null;
+  digest: string | null;
+  os: string | null;
+  /** @format int32 */
+  size: number;
+  status: ImageStatus;
+  lastPulled: string | null;
+};
+
 export interface DockerHubRepository {
   name?: string | null;
   namespace?: string | null;
@@ -221,6 +231,18 @@ export interface DockerHubRepository {
   is_automated?: boolean;
   /** @format int32 */
   pull_count?: number;
+}
+
+export interface DockerHubTagView {
+  /** @format int32 */
+  id: number;
+  name: string | null;
+  image: DockerHubImageView;
+  lastUpdated: string | null;
+  /** @format int32 */
+  fullSize: number;
+  status: TagStatus;
+  lastPulled: string | null;
 }
 
 export type DriverConfig = {
@@ -378,6 +400,11 @@ export interface IImageRepositoryGitHubPackageResponse {
   updatedAt?: string | null;
   url?: string | null;
   htmlUrl?: string | null;
+}
+
+export enum ImageStatus {
+  Active = 'Active',
+  Inactive = 'Inactive',
 }
 
 export interface ImagesView {
@@ -684,7 +711,7 @@ export interface PullImageRequest {
   /** @format uuid */
   platformId: string;
   registryName: string | null;
-  packageName: string | null;
+  repositoryName: string | null;
   imageTag: string | null;
 }
 
@@ -750,6 +777,11 @@ export type SwarmInfoView = {
 export interface SwarmPeerView {
   nodeID: string | null;
   addr: string | null;
+}
+
+export enum TagStatus {
+  Active = 'Active',
+  Inactive = 'Inactive',
 }
 
 export interface Ulimits {
@@ -1671,6 +1703,29 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     imagesGetDockerHubRepositories: (registryName: string, params: RequestParams = {}) =>
       this.request<DockerHubRepository[], HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/images/dockerhub/${registryName}/repositories`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Images
+     * @name ImagesGetDockerHubRepositoryTags
+     * @summary List DockerHub repository tags
+     * @request GET:/api/v1/images/dockerhub/{registryName}/{repositoryName}/tags
+     * @secure
+     * @response `200` `(DockerHubTagView)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    imagesGetDockerHubRepositoryTags: (registryName: string, repositoryName: string, params: RequestParams = {}) =>
+      this.request<DockerHubTagView[], HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/images/dockerhub/${registryName}/${repositoryName}/tags`,
         method: 'GET',
         secure: true,
         format: 'json',

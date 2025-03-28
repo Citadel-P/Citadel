@@ -1,9 +1,4 @@
-import {
-  GhcrPackageVersion,
-  IImageResponseGitHubPackageResponse,
-  PullImageReply,
-  PullImageRequest,
-} from '@/api/_generated';
+import { PullImageReply, PullImageRequest } from '@/api/_generated';
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Check, CircleX, LoaderCircle } from 'lucide-react';
 import { usePOSTPullImageStream } from './hooks/usePOSTPullImageStream';
@@ -13,14 +8,11 @@ import { AppContext } from '@/AppProvider';
 import { ImagesContext } from './ImagesProvider';
 import { Highlight, themes } from 'prism-react-renderer';
 import { toast } from 'sonner';
-
-export default function PullProgressSheetContent({
-  ghPackage,
-  version,
-}: {
-  ghPackage: IImageResponseGitHubPackageResponse;
-  version: GhcrPackageVersion;
-}) {
+export interface PullProgressSheetProps {
+  imageTag: string;
+  repository: string;
+}
+export default function PullProgressSheetContent({ sheetProps }: { sheetProps: PullProgressSheetProps }) {
   const [streamData, setStreamData] = useState<string[] | undefined>(undefined);
   const handleChunkReceived = (chunk: string) => {
     setStreamData((prevChunks) => [...(prevChunks ?? []), chunk]);
@@ -36,15 +28,15 @@ export default function PullProgressSheetContent({
     const request: PullImageRequest = {
       platformId: currentPlatform?.id ?? '',
       registryName: selectedRegistry?.name ?? '',
-      packageName: ghPackage.name ?? '',
-      imageTag: version.name ?? '',
+      repositoryName: sheetProps.repository ?? '',
+      imageTag: sheetProps.imageTag ?? '',
     };
     mutate({ ...request, signal: controller.signal });
 
     return () => {
       controller.abort();
     };
-  }, [currentPlatform, selectedRegistry, ghPackage, version, mutate]);
+  }, [currentPlatform, selectedRegistry, sheetProps, mutate]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -64,8 +56,7 @@ export default function PullProgressSheetContent({
           toast.error('Error', {
             description: error,
           });
-        }
-        else {
+        } else {
           toast.success('Image pulled successfully');
         }
       }
@@ -75,7 +66,7 @@ export default function PullProgressSheetContent({
     <SheetContent side="bottom">
       <SheetHeader>
         <SheetTitle className="flex items-center gap-1">
-          <div>Pulling {version.name}</div>
+          <div>Pulling {sheetProps.imageTag}</div>
           <div>
             {isPending ? (
               <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />

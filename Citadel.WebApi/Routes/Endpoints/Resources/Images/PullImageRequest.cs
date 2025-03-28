@@ -2,7 +2,7 @@
 
 namespace WebApi.Routes.Endpoints.Resources.Images;
 
-public sealed record PullImageRequest(Guid PlatformId, string RegistryName, string PackageName, string ImageTag)
+public sealed record PullImageRequest(Guid PlatformId, string RegistryName, string RepositoryName, string ImageTag)
 {
-    internal PullImage ToCommand() => new (PlatformId, RegistryName, PackageName, ImageTag);
+    internal PullImage ToCommand() => new (PlatformId, RegistryName, RepositoryName, ImageTag);
 }

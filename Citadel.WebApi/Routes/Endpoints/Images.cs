@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel;
-using System.ComponentModel.DataAnnotations;
 using System.Runtime.CompilerServices;
 using Agent.Server.Images;
 using Application.Features.Images.Queries;
@@ -31,6 +30,12 @@ public static class Images
     {
         var result = await mediator.Send(new GetGithubPackageVersions(registryName, packageName), cancellationToken);
         return EndpointHandlers.HandleResult(result, v => v);
+    }
+
+    public static async Task<Results<Ok<IEnumerable<DockerHubTagView>>, ProblemHttpResult>> GetDockerHubRepositoryTags(IMediator mediator, [Description("The registry name")] string registryName, [Description("The repository name")] string repositoryName, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetDockerHubRepositoryTags(registryName, repositoryName), cancellationToken);
+        return EndpointHandlers.HandleResult(result, Mapper.Map);
     }
 
     public static async Task<Results<Ok<IEnumerable<DockerHubRepository>>, ProblemHttpResult>> GetDockerHubRepositories(IMediator mediator, [Description("The registry name")] string registryName, CancellationToken cancellationToken)

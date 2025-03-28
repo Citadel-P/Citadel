@@ -256,6 +256,13 @@ public static class PublicEndpoints
                     .ProducesProblem(StatusCodes.Status401Unauthorized)
                     .WithName(ImagesName + "_" + nameof(Images.GetDockerHubRepositories));
 
+                images.MapGet("/dockerhub/{registryName}/{repositoryName}/tags", Images.GetDockerHubRepositoryTags)
+                    .WithSummary("List DockerHub repository tags")
+                    .ProducesValidationProblem()
+                    .ProducesProblem(StatusCodes.Status403Forbidden)
+                    .ProducesProblem(StatusCodes.Status401Unauthorized)
+                    .WithName(ImagesName + "_" + nameof(Images.GetDockerHubRepositoryTags));
+
                 images.MapPost("/pull", Images.PullImage)
                     .WithSummary("Pull an image from a registry and returns logs as a stream")
                     .ProducesValidationProblem()

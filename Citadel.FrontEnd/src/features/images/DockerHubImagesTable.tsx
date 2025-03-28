@@ -14,8 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn } from '@/lib/utils';
 import { useGETExternalRepositories } from './hooks/useGETExternalRepositories';
 import Loader from '@/components/ui/loader';
-import { GhcrPackageVersion, IImageRepositoryDockerHubRepositoryResponse } from '@/api/_generated';
-import { useGETPackageVersions } from './hooks/useGETPackageVersions';
+import { DockerHubTagView, IImageRepositoryDockerHubRepositoryResponse } from '@/api/_generated';
 import { useContextSelector } from 'use-context-selector';
 import { ImagesContext } from './ImagesProvider';
 import { fromNow } from '@/lib/dayjs.helper';
@@ -24,20 +23,25 @@ import { truncate } from '@/lib/truncate';
 import PullProgressSheetContent from './PullProgressSheetContent';
 import { Sheet } from '@/components/ui/sheet';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
+import { useGETDockerHubTags } from './hooks/useGETDockerHubTags';
+import { byteTransform } from '@/lib/bytes.helper';
 
 // Column helpers
 const repositoryColumnHelper = createColumnHelper<IImageRepositoryDockerHubRepositoryResponse>();
-const versionColumnHelper = createColumnHelper<GhcrPackageVersion>();
+const tagColumnHelper = createColumnHelper<DockerHubTagView>();
 
 // Nested table component
-function NestedImagesTable({ ghPackage }: { ghPackage: IImageRepositoryDockerHubRepositoryResponse }) {
+function NestedImagesTable({ dockerhubRepo }: { dockerhubRepo: IImageRepositoryDockerHubRepositoryResponse }) {
   const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
-  const { isLoading, data } = useGETPackageVersions(selectedRegistry?.name ?? undefined, ghPackage?.name ?? '');
-  const [selectedVersion, setSelectedVersion] = useState<GhcrPackageVersion | null>(null);
+  const { isLoading, data } = useGETDockerHubTags(
+    selectedRegistry?.name ?? undefined,
+    dockerhubRepo?.name ?? undefined,
+  );
+  const [selectedVersion, setSelectedVersion] = useState<DockerHubTagView | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
-  const openSheet = (version: GhcrPackageVersion) => {
-    setSelectedVersion(version);
+  const openSheet = (tag: DockerHubTagView) => {
+    setSelectedVersion(tag);
     setIsSheetOpen(true);
   };
 
@@ -46,44 +50,38 @@ function NestedImagesTable({ ghPackage }: { ghPackage: IImageRepositoryDockerHub
     setSelectedVersion(null);
   };
 
-  const versionColumns = React.useMemo(
+  const tagColumns = React.useMemo(
     () => [
-      versionColumnHelper.accessor('name', {
-        header: 'Version',
+      tagColumnHelper.accessor('name', {
+        header: 'Tag',
+        cell: (info) => info.getValue(),
+      }),
+      tagColumnHelper.accessor('image.digest', {
+        header: 'Digest',
         cell: (info) => <VersionRow version={info.getValue() ?? ''} />,
       }),
-      versionColumnHelper.accessor('html_url', {
-        header: 'Url',
-        cell: (info) => (
-          <a
-            className="hover:underline text-blue-600 text-[13px]"
-            target="_blank"
-            rel="noreferrer"
-            href={info.row.original.html_url ?? ''}>
-            {info.row.original.id}{' '}
-          </a>
-        ),
+      tagColumnHelper.accessor('lastPulled', {
+        header: 'Last Pulled',
+        cell: (info) => <span className="text-[13px]">{fromNow(new Date(info.getValue() ?? 0 * 1000).getTime())}</span>,
       }),
+      tagColumnHelper.accessor('lastUpdated', {
+        header: 'Last Pushed',
+        cell: (info) => <span className="text-[13px]">{fromNow(new Date(info.getValue() ?? 0 * 1000).getTime())}</span>,
+      }),
+
       {
-        header: 'Tags',
-        cell: ({ row }: { row: Row<GhcrPackageVersion> }) =>
-          row.original.metadata?.container?.tags?.map((s) => (
-            <Badge className="mr-1 text-[13px] font-normal" variant="outline" key={s}>
-              {truncate(s, 15, 'left')}
-            </Badge>
-          )),
+        header: 'Os/Arch',
+        cell: ({ row }: { row: Row<DockerHubTagView> }) => (
+          <span className="text-[13px]">{row.original.image.os + '/' + row.original.image.architecture}</span>
+        ),
       },
-      versionColumnHelper.accessor('created_at', {
-        header: 'Created At',
-        cell: (info) => <span className="text-[13px]">{fromNow(new Date(info.getValue() ?? 0 * 1000).getTime())}</span>,
-      }),
-      versionColumnHelper.accessor('updated_at', {
-        header: 'Updated At',
-        cell: (info) => <span className="text-[13px]">{fromNow(new Date(info.getValue() ?? 0 * 1000).getTime())}</span>,
+      tagColumnHelper.accessor('image.size', {
+        header: 'Size',
+        cell: (info) => <span className="text-[13px]">{byteTransform(info.getValue() ?? 0, 2)}</span>,
       }),
       {
         id: 'select',
-        cell: ({ row }: { row: Row<GhcrPackageVersion> }) => (
+        cell: ({ row }: { row: Row<DockerHubTagView> }) => (
           <Badge
             onClick={() => openSheet(row.original)}
             className="flex text-right cursor-pointer invisible group/versionrowdown group-hover/versionrow:visible truncate rounded-full hover:bg-primary/90">
@@ -98,7 +96,7 @@ function NestedImagesTable({ ghPackage }: { ghPackage: IImageRepositoryDockerHub
 
   const versionsTable = useReactTable({
     data: data?.data ?? [],
-    columns: versionColumns,
+    columns: tagColumns,
     getCoreRowModel: getCoreRowModel(),
   });
 
@@ -135,7 +133,7 @@ function NestedImagesTable({ ghPackage }: { ghPackage: IImageRepositoryDockerHub
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={versionColumns.length} className="h-24 text-center">
+              <TableCell colSpan={tagColumns.length} className="h-24 text-center">
                 No results found.
               </TableCell>
             </TableRow>
@@ -144,7 +142,12 @@ function NestedImagesTable({ ghPackage }: { ghPackage: IImageRepositoryDockerHub
       </Table>
       {selectedVersion && (
         <Sheet open={isSheetOpen} onOpenChange={(open) => (open ? setIsSheetOpen(true) : closeSheet())}>
-          <PullProgressSheetContent ghPackage={ghPackage} version={selectedVersion} />
+          <PullProgressSheetContent
+            sheetProps={{
+              repository: dockerhubRepo.name ?? '',
+              imageTag: selectedVersion.name ?? '',
+            }}
+          />
         </Sheet>
       )}
     </>
@@ -158,7 +161,7 @@ const VersionRow = ({ version }: { version: string }) => {
       <div>{truncate(v, 12, 'right', true)}</div>
       <button
         className="rounded-full invisible group-hover/versionrow:visible ml-1 px-1.5 py-1.5 bg-foreground/5 hover:bg-foreground/10 text-sm font-semibold"
-        onClick={() => copyWinCmdToClipboard(v ?? '')}>
+        onClick={() => copyWinCmdToClipboard(version ?? '')}>
         {copiedWinCmd ? <CheckCheck className="w-3 h-3 text-green-500" /> : <Clipboard className="w-3 h-3 " />}
       </button>
     </div>
@@ -246,7 +249,7 @@ export default function DockerHubImagesTable({ registryName }: { registryName: s
               <TableRow className="bg-muted/20 hover:bg-muted/20">
                 <TableCell colSpan={row.getVisibleCells().length} className="p-0">
                   <div className="overflow-hidden min-h-0 pl-10 bg-background">
-                    <NestedImagesTable ghPackage={row.original} />
+                    <NestedImagesTable dockerhubRepo={row.original} />
                   </div>
                 </TableCell>
               </TableRow>

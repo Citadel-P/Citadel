@@ -1,6 +1,7 @@
-﻿using System.Text.Json;
-using System.Text;
+﻿using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Xml.Linq;
 using Infrastructure.DockerHub;
 using Infrastructure.GithubCr;
 using Refit;
@@ -59,6 +60,7 @@ public interface IRegistryConfiguration
 
 public class DockerHubRegistry : IRegistryConfiguration
 {
+    public readonly string RegistryUrl = "https://docker.io";
     [JsonInclude]
     public string UserName { get; private set; }
     [JsonInclude]
@@ -103,6 +105,24 @@ public class DockerHubRegistry : IRegistryConfiguration
         }
     }
 
+    public async Task<(ICollection<Tag> tags, string errorMessage)> GetRepositoryTags(IDockerHubApi dockerHub, string repositoryName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var authResponse = await dockerHub.AuthCreateAccessToken(new Body() { Identifier = UserName, Secret = PAT }, cancellationToken);
+            var repositories = await dockerHub.TagsGET(UserName, repositoryName, authResponse.Access_token, 1, 100, cancellationToken: cancellationToken);
+            return (repositories.Results, null);
+        }
+        catch (ApiException ex)
+        {
+            return (null,
+                ex.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                    ? "401 invalid DockerHub credentials, please check your PAT and/or your user-name."
+                    : ex.Message);
+        }
+    }
+
+    public string GetRegistryAuth() => new RegistryAuth(UserName, PAT, RegistryUrl).GetAuth();
 }
 
 public class AzureRegistry : IRegistryConfiguration

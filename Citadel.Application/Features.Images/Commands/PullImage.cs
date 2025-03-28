@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Images.Commands;
 
-public sealed record PullImage(Guid PlatformId, string RegistryName, string PackageName, string ImageTag) : IStreamCommand<PullImageReply>
+public sealed record PullImage(Guid PlatformId, string RegistryName, string RepositoryName, string ImageTag) : IStreamCommand<PullImageReply>
 {
     internal class Validator : AbstractValidator<PullImage>
     {
@@ -19,7 +19,7 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Pack
         {
             RuleFor(s => s.ImageTag).NotEmpty().NotNull();
             RuleFor(s => s.PlatformId).NotEmpty().NotNull();
-            RuleFor(s => s.PackageName).NotEmpty().NotNull();
+            RuleFor(s => s.RepositoryName).NotEmpty().NotNull();
             RuleFor(s => s.RegistryName).NotEmpty().ValidNameIdentifier();
         }
     }
@@ -36,23 +36,29 @@ internal sealed class PullImageHandler(IGrpcClientFactory clientFactory, Applica
             ?? throw new Exception("The provided platform Id does not exist");
 
         var client = clientFactory.GetImageClient(platformAddress);
-        if (registry.Configuration is GitHubRegistry cfg)
+        var request = new PullImageMessage();
+        if (registry.Configuration is GitHubRegistry ghCfg)
         {
-            var request = new PullImageMessage()
-            {
-                FromImage = $"ghcr.io/{cfg.Name}/{command.PackageName}@{command.ImageTag}".ToLower(),
-                Repo = $"ghcr.io/{cfg.Name}/{command.PackageName}".ToLower(),
-                FromSrc = cfg.RegistryUrl,
-                Auth = cfg.GetRegistryAuth()
-            };
+            request.FromImage = $"ghcr.io/{ghCfg.Name}/{command.RepositoryName}@{command.ImageTag}".ToLower();
+            request.Repo = $"ghcr.io/{ghCfg.Name}/{command.RepositoryName}".ToLower();
+            request.FromSrc = ghCfg.RegistryUrl;
+            request.Auth = ghCfg.GetRegistryAuth();
 
-            using var call = client.PullImage(request, cancellationToken: cancellationToken);
-            await foreach (var reply in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
-            {
-                yield return reply;
-            }
+            
+        }
+        else if (registry.Configuration is DockerHubRegistry dockerCfg)
+        {
+            request.FromImage = $"docker.io/{dockerCfg.UserName}/{command.RepositoryName}:{command.ImageTag}".ToLower();
+            request.Repo = $"docker.io/{dockerCfg.UserName}/{command.RepositoryName}".ToLower();
+            request.FromSrc = dockerCfg.RegistryUrl;
+            request.Auth = dockerCfg.GetRegistryAuth();
         }
 
+        using var call = client.PullImage(request, cancellationToken: cancellationToken);
+        await foreach (var reply in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
+        {
+            yield return reply;
+        }
     }
 }
 

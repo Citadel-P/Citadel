@@ -32,7 +32,7 @@ const versionColumnHelper = createColumnHelper<GhcrPackageVersion>();
 // Nested table component
 function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubPackageResponse }) {
   const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
-  const { isLoading, data } = useGETPackageVersions(selectedRegistry?.name ?? undefined, ghPackage?.name ?? '');
+  const { isLoading, data } = useGETPackageVersions(selectedRegistry?.name ?? undefined, ghPackage?.name ?? undefined);
   const [selectedVersion, setSelectedVersion] = useState<GhcrPackageVersion | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
@@ -144,7 +144,9 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubP
       </Table>
       {selectedVersion && (
         <Sheet open={isSheetOpen} onOpenChange={(open) => (open ? setIsSheetOpen(true) : closeSheet())}>
-          <PullProgressSheetContent ghPackage={ghPackage} version={selectedVersion} />
+          <PullProgressSheetContent
+            sheetProps={{ repository: ghPackage.name ?? '', imageTag: selectedVersion.name ?? '' }}
+          />
         </Sheet>
       )}
     </>
@@ -158,7 +160,7 @@ const VersionRow = ({ version }: { version: string }) => {
       <div>{truncate(v, 12, 'right', true)}</div>
       <button
         className="rounded-full invisible group-hover/versionrow:visible ml-1 px-1.5 py-1.5 bg-foreground/5 hover:bg-foreground/10 text-sm font-semibold"
-        onClick={() => copyWinCmdToClipboard(v ?? '')}>
+        onClick={() => copyWinCmdToClipboard(version ?? '')}>
         {copiedWinCmd ? <CheckCheck className="w-3 h-3 text-green-500" /> : <Clipboard className="w-3 h-3 " />}
       </button>
     </div>

@@ -2286,6 +2286,95 @@
         ]
       }
     },
+    "/api/v1/images/dockerhub/{registryName}/{repositoryName}/tags": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "summary": "List DockerHub repository tags",
+        "operationId": "Images_GetDockerHubRepositoryTags",
+        "parameters": [
+          {
+            "name": "registryName",
+            "in": "path",
+            "description": "The registry name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repositoryName",
+            "in": "path",
+            "description": "The repository name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DockerHubTagView"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/images/pull": {
       "post": {
         "tags": [
@@ -3104,6 +3193,43 @@
           }
         }
       },
+      "DockerHubImageView": {
+        "required": [
+          "architecture",
+          "digest",
+          "os",
+          "size",
+          "status",
+          "lastPulled"
+        ],
+        "type": "object",
+        "properties": {
+          "architecture": {
+            "type": "string",
+            "nullable": true
+          },
+          "digest": {
+            "type": "string",
+            "nullable": true
+          },
+          "os": {
+            "type": "string",
+            "nullable": true
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ImageStatus"
+          },
+          "lastPulled": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
       "DockerHubRepository": {
         "type": "object",
         "properties": {
@@ -3131,6 +3257,46 @@
           "pull_count": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "DockerHubTagView": {
+        "required": [
+          "id",
+          "name",
+          "image",
+          "lastUpdated",
+          "fullSize",
+          "status",
+          "lastPulled"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "image": {
+            "$ref": "#/components/schemas/DockerHubImageView"
+          },
+          "lastUpdated": {
+            "type": "string",
+            "nullable": true
+          },
+          "fullSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TagStatus"
+          },
+          "lastPulled": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -3732,6 +3898,13 @@
             "nullable": true
           }
         }
+      },
+      "ImageStatus": {
+        "enum": [
+          "Active",
+          "Inactive"
+        ],
+        "type": "string"
       },
       "ImagesView": {
         "required": [
@@ -4734,7 +4907,7 @@
         "required": [
           "platformId",
           "registryName",
-          "packageName",
+          "repositoryName",
           "imageTag"
         ],
         "type": "object",
@@ -4747,7 +4920,7 @@
             "type": "string",
             "nullable": true
           },
-          "packageName": {
+          "repositoryName": {
             "type": "string",
             "nullable": true
           },
@@ -4950,6 +5123,13 @@
             "nullable": true
           }
         }
+      },
+      "TagStatus": {
+        "enum": [
+          "Active",
+          "Inactive"
+        ],
+        "type": "string"
       },
       "Ulimits": {
         "type": "object",
