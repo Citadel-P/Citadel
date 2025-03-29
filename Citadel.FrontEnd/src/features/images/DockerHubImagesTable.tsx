@@ -168,7 +168,7 @@ const VersionRow = ({ version }: { version: string }) => {
   );
 };
 
-export default function DockerHubImagesTable({ registryName }: { registryName: string }) {
+export default function PrivateDockerHubImagesTable({ registryName }: { registryName: string }) {
   const { isLoading, data } = useGETExternalRepositories(registryName);
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const columns = React.useMemo(

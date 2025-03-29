@@ -3,7 +3,7 @@ import { createContext } from 'use-context-selector';
 import { ContainerInfoView, PlatformView } from './api/_generated';
 import { matchRoutes, useLocation, useParams } from 'react-router';
 import { useGETPlatform } from './features/platforms/hooks/useGETPlatform';
-import { paths } from '@/AppRoutes';
+import { AppPaths } from '@/AppRoutes';
 import { useGETContainer } from './features/containers/hooks/useGETContainer';
 import { useGETPlatforms } from './features/platforms/hooks/useGETPlatforms';
 import usePlatformHub from './features/platforms/hooks/usePlatformHub';
@@ -37,7 +37,7 @@ const AppProvider: React.FC<IProps> = ({ children }) => {
   const [currentContainer, setCurrentContainer] = useState<ContainerInfoView | undefined>(undefined);
   const location = useLocation();
   const [{ route }] = matchRoutes(
-    paths.map((s) => ({ path: s })),
+    Object.values(AppPaths).map((s) => ({ path: s })),
     location,
   );
   let platforms: PlatformView[] | undefined;

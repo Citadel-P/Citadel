@@ -1,40 +1,36 @@
-import { createBrowserRouter, LoaderFunctionArgs, redirect, RouterProvider } from 'react-router';
+import { createBrowserRouter, redirect, RouterProvider } from 'react-router';
 import Layout from '@/layout/Layout';
 import NotFound from '@/pages/NotFound';
 import { useContextSelector } from 'use-context-selector';
 import { AuthContext } from '@/features/auth/AuthProvider';
 
-export const paths = [
-  '*',
-  'login',
-  '/',
-  'add-docker-platform',
-  'platforms/:platformId/containers',
-  'containers/:containerId/logs',
-  'containers/:containerId/stats',
-  'containers/:containerId/inspect',
-  'registries',
-  'registries/add',
-  'registries/edit/:registryId',
-  'platforms/:platformId/images',
-  'platforms/:platformId/images/local',
-  'platforms/:platformId/images/external',
-];
+export const AppPaths: Record<string, string> = {
+  any: '*',
+  login: 'login',
+  main: '/',
+  addDockerPlatform: 'add-docker-platform',
+  platformContainers: 'platforms/:platformId/containers',
+  containerLogs: 'containers/:containerId/logs',
+  containerStats: 'containers/:containerId/stats',
+  containerInspect: 'containers/:containerId/inspect',
+  registries: 'registries',
+  addRegistry: 'registries/add',
+  editRegistry: 'registries/edit/:registryId',
+  platformImages: 'platforms/:platformId/images',
+  localImages: 'platforms/:platformId/images/local',
+  externalImages: 'platforms/:platformId/images/external',
+};
 
 export const AppRoutes = () => {
   const isAuthenticated = useContextSelector(AuthContext, (v) => v?.isAuthenticated);
-  const router = createBrowserRouter([
+
+  const protectedRoutes = [
     {
-      path: paths[1],
-      loader: loginLoader,
-      lazy: async () => {
-        return { Component: (await import('@/features/auth/Login')).default };
-      },
-    },
-    {
-      path: paths[2],
+      path: AppPaths.home,
       element: <Layout />,
-      loader: protectedLoader,
+      loader: () => {
+        return !isAuthenticated ? redirect(AppPaths.login) : null;
+      },
       hydrateFallbackElement: <Fallback />,
       children: [
         {
@@ -44,93 +40,92 @@ export const AppRoutes = () => {
           },
         },
         {
-          path: paths[3],
+          path: AppPaths.addDockerPlatform,
           lazy: async () => {
             return { Component: (await import('@/features/platforms/addDockerPlatform/AddDockerPltaform')).default };
           },
         },
         {
-          path: paths[4],
+          path: AppPaths.platformContainers,
           lazy: async () => {
             return { Component: (await import('@/pages/containers-page')).default };
           },
         },
         {
-          path: paths[5],
+          path: AppPaths.containerLogs,
           lazy: async () => {
             return { Component: (await import('@/features/containers/container-info/ContainerInfoWrapper')).default };
           },
         },
         {
-          path: paths[6],
+          path: AppPaths.containerStats,
           lazy: async () => {
             return { Component: (await import('@/features/containers/container-info/ContainerInfoWrapper')).default };
           },
         },
         {
-          path: paths[7],
+          path: AppPaths.containerInspect,
           lazy: async () => {
             return { Component: (await import('@/features/containers/container-info/ContainerInfoWrapper')).default };
           },
         },
         {
-          path: paths[8],
+          path: AppPaths.registries,
           lazy: async () => {
             return { Component: (await import('@/pages/registries-page')).default };
           },
         },
         {
-          path: paths[9],
+          path: AppPaths.addRegistry,
           lazy: async () => {
             return { Component: (await import('@/pages/registries-page')).RegistryFormPage };
           },
         },
         {
-          path: paths[10],
+          path: AppPaths.editRegistry,
           lazy: async () => {
             return { Component: (await import('@/pages/registries-page')).RegistryFormPage };
           },
         },
         {
-          path: paths[11],
+          path: AppPaths.platformImages,
           lazy: async () => {
             return { Component: (await import('@/pages/images-page')).default };
           },
         },
         {
-          path: paths[12],
+          path: AppPaths.localImages,
           lazy: async () => {
             return { Component: (await import('@/pages/images-page')).default };
           },
         },
         {
-          path: paths[13],
+          path: AppPaths.externalImages,
           lazy: async () => {
             return { Component: (await import('@/pages/images-page')).default };
           },
         },
-        {
-          path: '*',
-          element: <NotFound />,
-        },
+        { path: AppPaths.any, element: <NotFound /> },
       ],
     },
-  ]);
+  ];
 
-  function protectedLoader({ request }: LoaderFunctionArgs) {
-    if (!isAuthenticated) {
-      return redirect('/login');
-    }
-    return null;
-  }
+  const publicRoutes = [
+    {
+      path: AppPaths.login,
+      loader: () => {
+        return isAuthenticated ? redirect(AppPaths.home) : null;
+      },
+      lazy: async () => {
+        return { Component: (await import('@/features/auth/Login')).default };
+      },
+    },
+  ];
 
-  function loginLoader({ request }: LoaderFunctionArgs) {
-    if (isAuthenticated) {
-      return redirect('/');
-    }
-    return null;
-  }
+  // Define the router
+  const router = createBrowserRouter([...publicRoutes, ...protectedRoutes]);
 
+  // Dispose router on hot reload
   if (import.meta.hot) {
     import.meta.hot.dispose(() => router.dispose());
   }
@@ -138,6 +133,7 @@ export const AppRoutes = () => {
   return <RouterProvider router={router} />;
 };
 
+// Fallback component for lazy loading
 function Fallback() {
   return <p>Loading...</p>;
 }
