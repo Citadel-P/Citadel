@@ -30,7 +30,7 @@ export const DeleteContainerDialog = () => {
 
   return (
     <Dialog open={dialogData.open} onOpenChange={(open) => setDialogData({ open })}>
-      <DialogContent className="sm:max-w-[600px]" >
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Delete Confirmation</DialogTitle>
           <DialogDescription></DialogDescription>

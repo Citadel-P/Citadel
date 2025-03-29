@@ -5022,6 +5022,9 @@
           },
           "configuration": {
             "$ref": "#/components/schemas/IRegistryConfiguration"
+          },
+          "isDefault": {
+            "type": "boolean"
           }
         }
       },

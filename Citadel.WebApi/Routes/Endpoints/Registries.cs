@@ -5,9 +5,6 @@ using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources.Registries;
-using Infrastructure;
-using Infrastructure.Entities;
-
 
 namespace WebApi.Routes.Endpoints;
 

@@ -9,6 +9,5 @@ export const useGETPlatform = (platformId: string | undefined) => {
     queryFn: ({ signal }) => apiClient!.api.platformsGetById(platformId!, { signal }),
     enabled: !!platformId,
   });
-
   return { data, error, isLoading, isSuccess };
 };

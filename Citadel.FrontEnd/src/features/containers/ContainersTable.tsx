@@ -143,36 +143,6 @@ const columns: ColumnDef<ContainerInfoView>[] = [
   },
 ];
 
-const ContainerStatTootltip = ({ stat }: { stat: string }) => {
-  return (
-    <TooltipProvider delayDuration={200}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div
-            className={`${
-              stat === 'exited'
-                ? 'bg-gray-500 mr-2 h-2 w-2 rounded-full'
-                : stat === 'paused'
-                  ? 'bg-orange-500 mr-2 h-2 w-2 rounded-full'
-                  : stat === 'running'
-                    ? 'bg-green-500 mr-2 h-2 w-2 rounded-full'
-                    : stat === 'offline'
-                      ? 'bg-red-500 mr-2 h-2 w-2 rounded-full'
-                      : ''
-            }`}
-          />
-        </TooltipTrigger>
-        <TooltipContent>
-          {stat === 'running' && <span>Running</span>}
-          {stat === 'exited' && <span>Exited</span>}
-          {stat === 'paused' && <span>Paused</span>}
-          {stat === 'offline' && <span>Offline</span>}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-};
-
 export const ContainersTable = () => {
   const containers = useContextSelector(ContainersContext, (v) => v?.containers) ?? [];
   const isLoading = useContextSelector(ContainersContext, (v) => v?.isLoading) ?? false;
@@ -194,5 +164,34 @@ export const ContainersTable = () => {
         )}
       </div>
     </div>
+  );
+};
+
+const ContainerStatTootltip = ({ stat }: { stat: string }) => {
+  const getStatusClass = (status: string) => {
+    switch (status) {
+      case 'exited':
+        return 'bg-gray-500';
+      case 'paused':
+        return 'bg-orange-500';
+      case 'running':
+        return 'bg-green-500';
+      case 'offline':
+        return 'bg-red-500';
+      default:
+        return '';
+    }
+  };
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className={`${getStatusClass(stat)} mr-2 h-2 w-2 rounded-full`} />
+        </TooltipTrigger>
+        <TooltipContent>
+          <span>{stat.charAt(0).toUpperCase() + stat.slice(1)}</span>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 };

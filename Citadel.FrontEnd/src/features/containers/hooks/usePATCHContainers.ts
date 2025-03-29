@@ -3,7 +3,7 @@ import { ApiClientContext } from '@/api/ApiClientProvider';
 import { useContextSelector } from 'use-context-selector';
 import { useMutation } from '@tanstack/react-query';
 
-export type actionType = 'start' | 'stop' | 'pause' | 'restart' | 'delete';
+export type actionType = 'start' | 'stop' | 'pause' | 'restart';
 interface IArgs {
   action: actionType;
   containersId: string[];
@@ -22,8 +22,8 @@ export const usePATCHContainers = () => {
           return apiClient!.api.containersPauseContainers(data, params);
         case 'restart':
           return apiClient!.api.containersRestartContainers(data, params);
-        case 'delete':
-          return apiClient!.api.containersDeleteContainers(data, params);
+        default:
+          throw new Error(`Unsupported action: ${action}`);
       }
     },
   });

@@ -5,6 +5,7 @@ import { DeleteImagesRequest, ImageView, RegistryView } from '@/api/_generated';
 import { useQueryClient } from '@tanstack/react-query';
 import { useDELETEImages } from './hooks/useDELETEImages';
 import { toast } from 'sonner';
+import { IDeleteDialogData, useDialogState } from './hooks/useDialogState';
 
 interface IContext {
   isLoading: boolean;
@@ -25,11 +26,6 @@ interface IProps {
   children?: React.ReactNode;
 }
 
-interface IDeleteDialogData {
-  open: boolean;
-  currentSelection?: ImageView[];
-}
-
 export const ImagesContext = createContext<IContext | undefined>(undefined);
 
 const ImagesProvider: React.FC<IProps> = ({ children }) => {
@@ -38,9 +34,9 @@ const ImagesProvider: React.FC<IProps> = ({ children }) => {
   const { mutate, isSuccess: deleteIsSuccess, isPending: deleteIsPending, data: deleteData } = useDELETEImages();
   const [registries, setRegistries] = useState<RegistryView[]>([]);
   const [selectedRows, setSelectedRows] = useState<ImageView[] | undefined>();
-  const [dialogData, setDialogData] = useState<IDeleteDialogData>({ open: false });
   const [selectedRegistry, setSelectedRegistry] = useState<RegistryView | undefined>();
   const [localImages, setLocalImages] = useState<ImageView[]>([]);
+  const { dialogData, setDialogData } = useDialogState();
 
   const isPlatformOnline = true;
 
@@ -61,7 +57,7 @@ const ImagesProvider: React.FC<IProps> = ({ children }) => {
           : 'The selected image has been successfully deleted';
       toast.success(message);
     }
-  }, [deleteIsSuccess, client, deleteData]);
+  }, [deleteIsSuccess, client, deleteData, setDialogData]);
 
   function setSelectionChange(name: string) {
     const registry = registries.find((s) => s.name === name);

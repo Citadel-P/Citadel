@@ -27,5 +27,10 @@ internal sealed class PlatformConfiguration : IEntityTypeConfiguration<Platform>
         builder.HasMany(p => p.Stats).WithOne().HasForeignKey(p => p.PlatformId).OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(p => p.ContainersInfo).WithOne(p => p.Platform).HasForeignKey(p => p.PlatformId).IsRequired().OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(p => p.SwarmInfo).WithOne(p => p.Platform).HasForeignKey<SwarmInfo>(p => p.PlatformId).OnDelete(DeleteBehavior.Cascade);
+
+        // Converters
+        builder.Property(p => p.Status).HasConversion(
+            v => v.ToString(),
+            v => Enum.Parse<PlatformStatus>(v));
     }
 }

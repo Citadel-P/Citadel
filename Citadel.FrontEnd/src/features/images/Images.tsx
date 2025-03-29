@@ -1,7 +1,6 @@
 import { Images as LucidImages } from 'lucide-react';
 import { useContextSelector } from 'use-context-selector';
 import { AlertMessage } from '@/components/ui/alert-message';
-import { ImagesContext } from './ImagesProvider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -9,11 +8,12 @@ import { AppContext } from '@/AppProvider';
 import ExternalRepositories from './ExternalRepositories';
 import LocalImagesTable from './LocalImagesTable';
 import { ActionBar } from './ActionBar';
+import { PlatformStatus } from '@/api/_generated';
 const Images = () => {
   const navigate = useNavigate();
   const route = useContextSelector(AppContext, (v) => v?.route);
   const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
-  const platformOnline = useContextSelector(ImagesContext, (v) => v?.isPlatformOnline);
+  const platformStatus = useContextSelector(AppContext, (v) => v?.currentPlatform?.status);
   const [currentTab, setCurrentTab] = useState<string>();
 
   useEffect(() => {
@@ -39,7 +39,7 @@ const Images = () => {
               <div className="text-md font-bold text-foreground">Images</div>
             </div>
           </div>
-          {!platformOnline && (
+          {platformStatus === PlatformStatus.Offline && (
             <AlertMessage type="warning" hasTitle={true}>
               This platform is not connected, please try to update or reconnect the platform.{' '}
             </AlertMessage>

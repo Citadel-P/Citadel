@@ -747,6 +747,7 @@ export interface RegistryView {
   /** @format date-time */
   created: string;
   configuration: IRegistryConfiguration;
+  isDefault?: boolean;
 }
 
 export type RestartPolicy = {

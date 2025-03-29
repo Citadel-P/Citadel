@@ -25,7 +25,7 @@ interface ICrumbBadge {
   title?: string | undefined;
 }
 
-const BreadCrumb = ({isSticky}: {isSticky: boolean}) => {
+const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
   const route = useContextSelector(AppContext, (v) => v?.route);
   const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
   const currentContainer = useContextSelector(AppContext, (v) => v?.currentContainer)!;
@@ -95,7 +95,8 @@ const BreadCrumb = ({isSticky}: {isSticky: boolean}) => {
   }
   return (
     <div className={`sticky top-0 z-40 mx-auto px-4  lg:container sm:px-6 ${isSticky ? 'pt-0 ' : 'pt-3'}`}>
-      <div className={`w-full  border-border bg-background p-4 ${isSticky ? 'shadow-md rounded-b-none' : 'rounded-lg'}`}>
+      <div
+        className={`w-full  border-border bg-background p-4 ${isSticky ? 'shadow-md rounded-b-none' : 'rounded-lg'}`}>
         <Breadcrumb>
           <BreadcrumbList>
             {crumbs.map((crumb, i) =>

@@ -12,6 +12,11 @@ internal sealed class GetAllRegistriesHandler(ApplicationDbContext dbContext) : 
 {
     public async ValueTask<Result<IEnumerable<Registry>>> Handle(GetAllRegistries query, CancellationToken cancellationToken)
     {
-        return await dbContext.Registries.AsNoTracking().ToListAsync(cancellationToken);
+        var registries = new List<Registry>() 
+        {
+            Registry.DefaultRegistry()
+        };
+        registries.AddRange(await dbContext.Registries.AsNoTracking().ToListAsync(cancellationToken));
+        return registries.OrderByDescending(s => s.Created).ToList();
     }
 }

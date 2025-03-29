@@ -45,6 +45,19 @@ public class Registry
         if (url != null) Url = url;
         if (configuration != null) Configuration = configuration;
     }
+
+    public static Registry DefaultRegistry()
+    {
+        return new Registry
+        {
+            Id = Guid.Empty,
+            Name = "Docker Hub",
+            Url = "https://hub.docker.com/",
+            Created = DateTime.MinValue,
+            Discriminator = RegistryDiscriminator.DockerHub,
+            Configuration = new DockerHubRegistry()
+        };
+    }
 }
 
 [JsonPolymorphic]

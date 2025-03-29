@@ -6,23 +6,18 @@ import { useGETContainers } from './hooks/useGETContainers';
 import { useParams } from 'react-router';
 import { useDELETEContainers } from './hooks/useDELETEContainers';
 import { toast } from 'sonner';
+import { IDeleteDialogData, useDialogState } from './hooks/useDialogState';
 
 interface IContext {
   isLoading: boolean;
   platformId: string | undefined;
   containers: ContainerInfoView[];
-  isPlatformOnline: boolean;
   dialogData: IDeleteDialogData;
   setDialogData: (data: IDeleteDialogData) => void;
   selectedRows: ContainerInfoView[];
   setSelectedRows: (containers: ContainerInfoView[]) => void;
   requestDelete: (data: DeleteContainersRequest) => void;
   deleteIsPending: boolean;
-}
-
-interface IDeleteDialogData {
-  open: boolean;
-  currentSelection?: ContainerInfoView[];
 }
 
 interface IProps {
@@ -32,30 +27,33 @@ interface IProps {
 export const ContainersContext = createContext<IContext | undefined>(undefined);
 
 const ContainersProvider: React.FC<IProps> = ({ children }) => {
-  const { platformId } = useParams();
+  const { platformId } = useParams<{ platformId: string }>();
   const { data, isLoading, isSuccess } = useGETContainers(platformId!);
   const { mutate, isSuccess: deleteIsSuccess, isPending: deleteIsPending } = useDELETEContainers();
   const { containersInfo } = useContainersHub(platformId!);
   const [selectedRows, setSelectedRows] = useState<ContainerInfoView[]>([]);
 
   const [containers, setContainers] = useState<ContainerInfoView[]>([]);
-  const [dialogData, setDialogData] = useState<IDeleteDialogData>({ open: false });
-  const isPlatformOnline = containers.find((s) => s.state === 'offline') === undefined;
+  const { dialogData, setDialogData } = useDialogState();
+
   useEffect(() => {
     if (isSuccess && data?.data) {
       setContainers(data.data.containers!);
     }
+  }, [data, isSuccess]);
+
+  useEffect(() => {
     if (containersInfo) {
       setContainers(containersInfo.containers ?? []);
     }
-  }, [data, isSuccess, containersInfo]);
+  }, [containersInfo]);
 
   useEffect(() => {
     if (deleteIsSuccess) {
       setDialogData({ open: false });
       toast.success('The selected container(s) has been successfully deleted');
     }
-  }, [deleteIsSuccess]);
+  }, [deleteIsSuccess, setDialogData]);
 
   function requestDelete(data: DeleteContainersRequest) {
     mutate(data);
@@ -67,7 +65,6 @@ const ContainersProvider: React.FC<IProps> = ({ children }) => {
         isLoading,
         platformId,
         containers,
-        isPlatformOnline,
         dialogData,
         setDialogData,
         selectedRows,

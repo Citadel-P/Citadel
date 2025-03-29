@@ -3,12 +3,13 @@ import { SearchField } from './SearchField';
 import { ContainersTable } from './ContainersTable';
 import { ActionBar } from './ActionBar';
 import { useContextSelector } from 'use-context-selector';
-import { ContainersContext } from './ContainersProvider';
 import { AlertMessage } from '@/components/ui/alert-message';
 import { DeleteContainerDialog } from './dialogs/DeleteContainerDialog';
+import { AppContext } from '@/AppProvider';
+import { PlatformStatus } from '@/api/_generated';
 
 const Containers = () => {
-  const platformOnline = useContextSelector(ContainersContext, (v) => v?.isPlatformOnline);
+  const platformStatus = useContextSelector(AppContext, (v) => v?.currentPlatform?.status);
 
   return (
     <div className="flex-col justify-between relative">
@@ -24,7 +25,7 @@ const Containers = () => {
             </div>
             <SearchField />
           </div>
-          {!platformOnline && (
+          {platformStatus === PlatformStatus.Offline && (
             <AlertMessage type="warning" hasTitle={true}>
               This platform is not connected, please try to update or reconnect the platform.{' '}
             </AlertMessage>

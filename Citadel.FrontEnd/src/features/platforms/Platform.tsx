@@ -7,12 +7,8 @@ import { byteTransform } from '@/lib/bytes.helper';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { fromNow } from '@/lib/dayjs.helper';
 
-interface IProps {
-  platform: PlatformView;
-}
-
-const Platform = ({ platform }: IProps) => {
-  const isConnected = platform.status === PlatformStatus.Online;
+const Platform = ({ platform }: { platform: PlatformView }) => {
+  const isPlatfomOnline = platform.status === PlatformStatus.Online;
   const LastSnapshotTooltip = () => {
     const lastSnapshot = platform.stats?.at(0)?.created
       ? new Date(platform.stats[0].created * 1000).getTime()
@@ -22,7 +18,7 @@ const Platform = ({ platform }: IProps) => {
         <Tooltip>
           <TooltipTrigger asChild>
             <div
-              className={`absolute right-2 top-1.5 ${isConnected ? 'bg-green-500' : 'bg-red-500'} h-3.5 w-3.5 rounded-full border-2`}></div>
+              className={`absolute right-2 top-1.5 ${isPlatfomOnline ? 'bg-green-500' : 'bg-red-500'} h-3.5 w-3.5 rounded-full border-2`}></div>
           </TooltipTrigger>
           <TooltipContent>
             <p>{fromNow(lastSnapshot)} (Last snapshot)</p>
@@ -139,7 +135,7 @@ const Platform = ({ platform }: IProps) => {
                 <div className="truncate text-xs font-medium text-foreground">Memory usage</div>
                 <div className="truncate text-center text-xs text-muted-foreground">
                   <span>
-                    {platform.stats && isConnected ? toFixedNumber(platform.stats[0]?.memoryUsage) + ' %' : 'N/A'}
+                    {platform.stats && isPlatfomOnline ? toFixedNumber(platform.stats[0]?.memoryUsage) + ' %' : 'N/A'}
                   </span>
                 </div>
               </div>
@@ -150,7 +146,7 @@ const Platform = ({ platform }: IProps) => {
                 <div className="truncate text-xs font-medium text-foreground">CPU usage</div>
                 <div className="truncate text-center text-xs text-muted-foreground">
                   <span>
-                    {platform.stats && isConnected ? toFixedNumber(platform.stats[0]?.cpuUsage) + ' %' : 'N/A'}
+                    {platform.stats && isPlatfomOnline ? toFixedNumber(platform.stats[0]?.cpuUsage) + ' %' : 'N/A'}
                   </span>
                 </div>
               </div>

@@ -5,7 +5,7 @@ import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 
 export const usePATCHRegistry = () => {
   const apiClient = useContextSelector(ApiClientContext, (s) => s?.apiClient);
-  const { mutate, isPending, isSuccess, error, data } = useMutation({ mutationFn: apiClient?.api.registriesPach });
+  const { mutate, isPending, isSuccess, error, data } = useMutation({ mutationFn: apiClient?.api.registriesPatch });
   const validationErrors = useGetValidationErrors(error);
 
   return { mutate, isPending, isSuccess, data, validationErrors };

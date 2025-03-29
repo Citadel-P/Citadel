@@ -21,7 +21,7 @@ const LayoutPage = () => {
       {
         root: contentRef.current, // Observe relative to the content area
         threshold: 0, // Trigger when the breadcrumb leaves the content area
-      }
+      },
     );
 
     if (breadcrumbRef.current) {
@@ -38,7 +38,9 @@ const LayoutPage = () => {
     <div className={`${sidebarMinimized ? 'sidebar-collapsed' : 'sidebar-expanded'} flex h-dvh w-full overflow-hidden`}>
       <Sidebar />
       <main className="flex grow relative flex-col content-start overflow-hidden bg-card">
-        <div ref={contentRef} className="scrollbar-thumb-rounded scrollbar-track-rounded grow overflow-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted">
+        <div
+          ref={contentRef}
+          className="scrollbar-thumb-rounded scrollbar-track-rounded grow overflow-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted">
           <span ref={breadcrumbRef}>
             <Breadcrumb isSticky={isSticky} />
           </span>

@@ -22,6 +22,7 @@ internal class PlatformInfoJob(
     public async ValueTask Execute(IJobExecutionContext context)
     {
         var platforms = await dbContext.Platforms
+                            .Include(s => s.Stats.OrderByDescending(s => s.Created).Take(1))
                             .Include(s => s.SwarmInfo)
                             .ThenInclude(s => s.RemoteManagers)
                             .ToListAsync(context.CancellationToken);
