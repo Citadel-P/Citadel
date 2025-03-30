@@ -2,7 +2,7 @@ import { ApiClientContext } from '@/api/ApiClientProvider';
 import { useContextSelector } from 'use-context-selector';
 import { useQuery } from '@tanstack/react-query';
 
-export const useGETInternalImages = (platformId: string | undefined) => {
+export const useGETAllLocalImages = (platformId: string | undefined) => {
   const apiClient = useContextSelector(ApiClientContext, (v) => v?.apiClient);
   const { data, error, isLoading, isSuccess } = useQuery({
     queryKey: ['getAllLocalImages'],

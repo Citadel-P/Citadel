@@ -27,12 +27,11 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
   const isBreadcrumbHidden = useContextSelector(AppContext, (v) => v?.isBreadcrumbHidden);
 
   const navigate = useNavigate();
-
   const generateCrumbs = useMemo((): ICrumbs[] => {
     const crumbs: ICrumbs[] = [];
 
     const routeMap: Record<string, () => void> = {
-      [AppPaths.home]: () => crumbs.push({ title: 'Platforms', isActive: true }),
+      [AppPaths.main]: () => crumbs.push({ title: 'Platforms', isActive: true }),
       [AppPaths.addDockerPlatform]: () => {
         crumbs.push({ title: 'Platforms', link: '/' });
         crumbs.push({ title: 'Add Platform', isActive: true });

@@ -80,9 +80,7 @@ const columns: ColumnDef<RegistryView>[] = [
         </Link>
       );
     },
-    sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
-      return rowA.original.name.localeCompare(rowB.original.name);
-    },
+    sortingFn: (rowA: any, rowB: any, _columnId: any): number => rowA.original.name.localeCompare(rowB.original.name),
   },
   {
     accessorKey: 'provider',

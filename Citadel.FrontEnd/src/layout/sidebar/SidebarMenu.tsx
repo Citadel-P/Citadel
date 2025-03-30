@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useContextSelector } from 'use-context-selector';
 import { LayoutContext } from '@/layout/LayoutProvider';
 import { ISubMenuItem, MenuItems } from './menu-items';
@@ -12,6 +12,20 @@ export const SidebarMenu = () => {
   const sidebarMinimized = useContextSelector(LayoutContext, (v) => v?.sidebarMinimized);
   const toggleSidebar = useContextSelector(LayoutContext, (v) => v?.toggleSidebar);
   const [menuItems, setMenuItems] = useState(MenuItems);
+  const isRouteActive = useCallback(
+    (path: string) => location.pathname == path || (location.pathname == '/' && path == ''),
+    [location.pathname],
+  );
+
+  const expand = useCallback(
+    (items: Array<any>) => {
+      items.forEach((item) => {
+        item.expanded = isRouteActive(item.route);
+        if (item.children) expand(item.children);
+      });
+    },
+    [isRouteActive],
+  );
 
   useEffect(() => {
     // Set dynamic menu
@@ -30,15 +44,6 @@ export const SidebarMenu = () => {
     });
     setMenuItems([...menuItems]);
   }, [location]);
-
-  const expand = (items: Array<any>) => {
-    items.forEach((item) => {
-      item.expanded = isRouteActive(item.route);
-      if (item.children) expand(item.children);
-    });
-  };
-
-  const isRouteActive = (path: string) => location.pathname == path || (location.pathname == '/' && path == '');
 
   const toggleMenu = (menu: ISubMenuItem): void => {
     menu.expanded = !menu.expanded;

@@ -4,18 +4,18 @@ import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Link } from 'react-router';
-import { useGETInternalImages } from './hooks/useGETAllLocalImages';
+import { useGETAllLocalImages } from './hooks/useGETAllLocalImages';
 import DropdownTableMenu from './DropdownTableMenu';
 import { useContextSelector } from 'use-context-selector';
 import { ImagesContext } from './ImagesProvider';
 import { truncate } from '@/lib/truncate';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { CheckCheck, Clipboard } from 'lucide-react';
-import { useEffect } from 'react';
-import { AppContext } from '@/AppProvider';
+import { useEffect, useCallback, useMemo } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
 import { byteTransform } from '@/lib/bytes.helper';
 import { DeleteLocalImageDialog } from './dialogs/DeleteLocalImageDialog';
+import { AppContext } from '@/AppProvider';
 
 const columns: ColumnDef<ImageView>[] = [
   {
@@ -45,51 +45,39 @@ const columns: ColumnDef<ImageView>[] = [
         {truncate(row.original.name ?? '', 35, 'right')}
       </Link>
     ),
-    sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
-      return rowA.original.name < rowB.original.name ? 1 : -1;
-    },
+    sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
   {
     accessorKey: 'tag',
     header: ({ column }) => <SortableCell cellName="Tag" column={column} />,
     cell: ({ row }) => <div>{row.original.tag}</div>,
-    sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
-      return rowA.original.discriminator < rowB.original.discriminator ? 1 : -1;
-    },
+    sortingFn: (rowA: any, rowB: any): number => rowA.original?.tag?.localeCompare(rowB.original?.tag),
   },
   {
     accessorKey: 'id',
     header: ({ column }) => <SortableCell cellName="Image Id" column={column} />,
     cell: ({ row }) => <ImageIdRow image={row.original} />,
-    sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
-      return rowA.original.url < rowB.original.url ? 1 : -1;
-    },
+    sortingFn: (rowA: any, rowB: any): number => rowA.original?.id?.localeCompare(rowB.original?.id),
   },
   {
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
     cell: ({ row }) => <span className="text-[13px]">{fromNow(new Date(row.original.created * 1000).getTime())}</span>,
-    sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
-      return rowA.original.url < rowB.original.url ? 1 : -1;
-    },
+    sortingFn: (rowA, rowB) => (rowA.original.created < rowB.original.created ? 1 : -1),
   },
   {
     accessorKey: 'size',
     header: ({ column }) => <SortableCell cellName="Size" column={column} />,
     cell: ({ row }) => <span className="text-[13px]">{byteTransform(row.original.size, 2)}</span>,
-    sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
-      return rowA.original.url < rowB.original.url ? 1 : -1;
-    },
+    sortingFn: (rowA, rowB) => (rowA.original.size < rowB.original.size ? 1 : -1),
   },
   {
     id: 'actions',
-    cell: ({ row }) => {
-      return (
-        <div className="text-center">
-          <DropdownTableMenu image={row.original} />
-        </div>
-      );
-    },
+    cell: ({ row }) => (
+      <div className="text-center">
+        <DropdownTableMenu image={row.original} />
+      </div>
+    ),
   },
 ];
 
@@ -109,12 +97,12 @@ const ImageIdRow = ({ image }: { image: ImageView }) => {
 };
 
 export default function LocalImagesTable() {
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
-  const { data, isLoading, isSuccess } = useGETInternalImages(currentPlatform?.id);
+  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
+  const { data, isLoading, isSuccess } = useGETAllLocalImages(currentPlatform?.id);
   const setSelectedRows = useContextSelector(ImagesContext, (v) => v?.setSelectedRows)!;
   const setLocalImages = useContextSelector(ImagesContext, (v) => v?.setLocalImages)!;
   const localImages = useContextSelector(ImagesContext, (v) => v?.localImages)!;
-
+  // Update local images when data is fetched
   useEffect(() => {
     if (isSuccess && data?.data.images) {
       setLocalImages(data.data.images);
@@ -125,18 +113,24 @@ export default function LocalImagesTable() {
     };
   }, [data, isSuccess, setLocalImages, setSelectedRows]);
 
+  // Memoized selection change handler
+  const handleSelectionChange = useCallback(
+    (ids: string[]) => {
+      setSelectedRows(localImages.filter((c) => ids.includes(c.id!)));
+    },
+    [localImages, setSelectedRows],
+  );
+
+  // Memoized row count
+  const rowCount = useMemo(() => data?.data.images?.length ?? 0, [data]);
+
   return (
     <div className="flex flex-col gap-3">
-      <DataTable
-        columns={columns}
-        data={localImages}
-        isLoading={isLoading}
-        onSelectionChange={(ids: string[]) => setSelectedRows(localImages.filter((c) => ids.includes(c.id!)))}
-      />
-      <div className="text-muted-foreground text-xs font-normal ">
-        {data?.data.images?.length && (
+      <DataTable columns={columns} data={localImages} isLoading={isLoading} onSelectionChange={handleSelectionChange} />
+      <div className="text-muted-foreground text-xs font-normal">
+        {rowCount > 0 && (
           <span>
-            Showing {data?.data.images?.length} of {data?.data.images?.length} image(s)
+            Showing {rowCount} of {rowCount} image(s)
           </span>
         )}
       </div>

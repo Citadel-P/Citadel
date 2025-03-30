@@ -1,18 +1,14 @@
-import { useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useGETAccessToken } from './useGETAccessToken';
 import { ApiClientContext } from '@/api/ApiClientProvider';
 import { useContextSelector } from 'use-context-selector';
 import { createContext } from 'use-context-selector';
 import { useHTTPErrorHandler } from './useHTTPErrorHandler';
+import { usePOSTLogout } from './usePOSTLogout';
 
 interface IContext {
   accessToken: string | undefined;
   isAuthenticated: boolean;
-}
-
-interface IProps {
-  children?: React.ReactNode;
 }
 
 const accessTokenKey = 'access_token';
@@ -20,22 +16,58 @@ const storedJwt = sessionStorage.getItem(accessTokenKey);
 
 export const AuthContext = createContext<IContext | undefined>(undefined);
 
-const AuthProvider: React.FC<IProps> = ({ children }) => {
+const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   useHTTPErrorHandler();
-  const client = useQueryClient();
-  const { data: accessTokenData, isSuccess } = useGETAccessToken();
+  const { mutate: logout, isSuccess: logoutIsSuccess } = usePOSTLogout();
+  const {
+    data: accessTokenData,
+    isSuccess,
+    error: accessTokenError,
+    refetch: refetchAccessToken,
+  } = useGETAccessToken();
   const apiClient = useContextSelector(ApiClientContext, (s) => s?.apiClient);
   const [accessToken, setAccessToken] = useState<string | undefined>(storedJwt ?? undefined);
-  const isAuthenticated = accessToken != null;
 
+  const isAuthenticated = useMemo(() => accessToken != null, [accessToken]);
+
+  const handleSetAccessToken = useCallback(
+    (token: string | undefined) => {
+      if (token) {
+        setAccessToken(token);
+        apiClient?.setSecurityData(token);
+        sessionStorage.setItem(accessTokenKey, token);
+      } else {
+        setAccessToken(undefined);
+        apiClient?.setSecurityData(undefined);
+        sessionStorage.removeItem(accessTokenKey);
+      }
+    },
+    [apiClient],
+  );
+
+  // Handle access token updates from the API
   useEffect(() => {
     if (isSuccess && accessTokenData?.data.accessToken) {
-      setAccessToken(accessTokenData?.data.accessToken);
-      apiClient?.setSecurityData(accessTokenData?.data.accessToken);
-      sessionStorage.setItem(accessTokenKey, accessTokenData?.data.accessToken);
+      handleSetAccessToken(accessTokenData.data.accessToken);
     }
-  }, [accessTokenData, apiClient, isSuccess]);
+  }, [accessTokenData, isSuccess, handleSetAccessToken]);
 
+  // Handle 401 errors by logging out
+  useEffect(() => {
+    if (accessTokenError && accessTokenError?.error?.status === 401) {
+      logout({});
+    }
+  }, [accessTokenError, logout]);
+
+  // Handle logout success
+  useEffect(() => {
+    if (logoutIsSuccess) {
+      handleSetAccessToken(undefined);
+      window.location.href = '/login';
+    }
+  }, [logoutIsSuccess, handleSetAccessToken]);
+
+  // Automatically refresh the token before it expires
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
 
@@ -44,10 +76,10 @@ const AuthProvider: React.FC<IProps> = ({ children }) => {
 
       if (result?.exp) {
         const currentTime = Math.floor(Date.now() / 1000);
-        const timeToExpire = (result.exp - currentTime) * 1000 - 10 * 1000;
+        const timeToExpire = (result.exp - currentTime) * 1000 - 10 * 1000; // Refresh 10 seconds before expiration
         timer = setTimeout(
           () => {
-            client.invalidateQueries({ queryKey: ['getAccessToken'] });
+            refetchAccessToken();
           },
           Math.max(0, timeToExpire),
         );
@@ -57,12 +89,18 @@ const AuthProvider: React.FC<IProps> = ({ children }) => {
     return () => {
       clearTimeout(timer);
     };
-  }, [accessToken, isAuthenticated, client]);
+  }, [accessToken, isAuthenticated, refetchAccessToken]);
 
+  // Parse JWT with error handling
   const parseJwt = (token: string) => {
-    if (!token) return true;
-    const arrayToken = token.split('.');
-    return JSON.parse(atob(arrayToken[1]));
+    try {
+      if (!token) return null;
+      const arrayToken = token.split('.');
+      return JSON.parse(atob(arrayToken[1]));
+    } catch (error) {
+      console.error('Failed to parse JWT:', error);
+      return null;
+    }
   };
 
   return (

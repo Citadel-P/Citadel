@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Refit;
 using Infrastructure.DockerHub;
 using Infrastructure.GithubCr;
+using Hosting.Common;
 
 namespace Infrastructure;
 
@@ -40,9 +41,9 @@ public static class InfrastructureModule
 
     private static IServiceCollection InitializeDb(this IServiceCollection services)
     {
-        if (!File.Exists(ApplicationContextFactory.DbFilePath))
+        if (!File.Exists(Constants.DbFilePath))
         {
-            File.Create(ApplicationContextFactory.DbFilePath).Close();
+            File.Create(Constants.DbFilePath).Close();
         }
 
         var upgrader =

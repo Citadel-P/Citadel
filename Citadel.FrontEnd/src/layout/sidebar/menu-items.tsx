@@ -25,7 +25,7 @@ const MenuItems: IMenuItem[] = [
     items: [
       {
         icon: <Layers width={17} height={17} />,
-        label: 'Patforms',
+        label: 'Platforms',
         route: '/',
       },
     ],

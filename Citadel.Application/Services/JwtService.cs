@@ -106,7 +106,7 @@ internal sealed class JwtService(IHttpContextAccessor context, IOptions<JwtConfi
     private SigningCredentials GetSigningCredentials()
     {
         string jwtKey = string.IsNullOrEmpty(jwtConfig.Key)
-                            ? Helpers.GetJwtSecretFromFile(Constants.JwtFilePath)
+                            ? Helpers.GetJwtSecretFromFile()
                             : jwtConfig.Key;
         byte[] key = Encoding.UTF8.GetBytes(jwtKey);
         if (key.Length < 32)

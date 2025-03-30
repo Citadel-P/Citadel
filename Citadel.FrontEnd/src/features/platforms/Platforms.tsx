@@ -4,11 +4,11 @@ import Platform from './Platform';
 import { useContextSelector } from 'use-context-selector';
 import { useNavigate } from 'react-router';
 import { AlertMessage } from '@/components/ui/alert-message';
-import { AppContext } from '@/AppProvider';
+import { PlatformsContext } from './PlatformsProvider';
 
 const Platforms = () => {
-  const platforms = useContextSelector(AppContext, (v) => v?.platforms);
-  const isLoading = useContextSelector(AppContext, (v) => v?.isLoading);
+  const platforms = useContextSelector(PlatformsContext, (v) => v?.platforms);
+  const isLoading = useContextSelector(PlatformsContext, (v) => v?.isLoading);
   const navigate = useNavigate();
 
   return (

@@ -10,10 +10,5 @@ export const usePOSTLogout = () => {
   });
   const validationErrors = useGetValidationErrors(error);
 
-  if (isSuccess) {
-    sessionStorage.removeItem('access_token');
-    window.location.href = '/login';
-  }
-
   return { mutate, isPending, data, isSuccess, validationErrors };
 };

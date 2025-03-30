@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Hosting.Common;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
 namespace Infrastructure.EntityFramework;
@@ -8,8 +9,7 @@ namespace Infrastructure.EntityFramework;
 /// </summary>
 internal sealed class ApplicationContextFactory : IDesignTimeDbContextFactory<ApplicationDbContext>
 {
-    internal const string DbFilePath = "./data/Citadel.db"; // Path on the container
-    internal const string ConnectionString = $"Data Source={DbFilePath}";
+    internal const string ConnectionString = $"Data Source={Constants.DbFilePath}";
 
     public ApplicationDbContext CreateDbContext(string[] args)
     {

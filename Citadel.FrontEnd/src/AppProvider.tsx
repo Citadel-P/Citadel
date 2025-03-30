@@ -1,88 +1,86 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { createContext } from 'use-context-selector';
-import { ContainerInfoView, PlatformView } from './api/_generated';
 import { matchRoutes, useLocation, useParams } from 'react-router';
-import { useGETPlatform } from './features/platforms/hooks/useGETPlatform';
 import { AppPaths } from '@/AppRoutes';
+import { ContainerInfoView, PlatformView } from './api/_generated';
+import { useGETPlatform } from './features/platforms/hooks/useGETPlatform';
 import { useGETContainer } from './features/containers/hooks/useGETContainer';
-import { useGETPlatforms } from './features/platforms/hooks/useGETPlatforms';
-import usePlatformHub from './features/platforms/hooks/usePlatformHub';
 
 interface IContext {
+  isLoading: boolean;
   route: { path: string };
   isBreadcrumbHidden: boolean;
-  isLoading: boolean;
   setIsBreadcrumbHidden: (s: boolean) => void;
-  platforms: PlatformView[] | undefined;
   currentPlatform: PlatformView | undefined;
   currentContainer: ContainerInfoView | undefined;
 }
 
-interface IProps {
-  children?: React.ReactNode;
-}
-
 export const AppContext = createContext<IContext | undefined>(undefined);
 
-const AppProvider: React.FC<IProps> = ({ children }) => {
+const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+  const location = useLocation();
   const { platformId, containerId } = useParams();
 
-  const { platformsMessage } = usePlatformHub();
-  const { data, isLoading, isSuccess } = useGETPlatforms();
+  // Fetch platform and container data
+  const { data: platformData, isLoading: platformIsLoading, isSuccess: platformIsSuccess } = useGETPlatform(platformId);
+  const {
+    data: containerData,
+    isLoading: containerIsLoading,
+    isSuccess: containerIsSuccess,
+  } = useGETContainer(containerId);
 
-  const [isBreadcrumbHidden, setIsBreadcrumbHidden] = useState(false);
-  const { data: platformData, isSuccess: platformIsSuccess } = useGETPlatform(platformId);
-  const { data: containerData, isSuccess: containerIsSuccess } = useGETContainer(containerId);
+  // State variables
   const [currentPlatform, setCurrentPlatform] = useState<PlatformView | undefined>(undefined);
   const [currentContainer, setCurrentContainer] = useState<ContainerInfoView | undefined>(undefined);
-  const location = useLocation();
-  const [{ route }] = matchRoutes(
-    Object.values(AppPaths).map((s) => ({ path: s })),
-    location,
-  );
-  let platforms: PlatformView[] | undefined;
+  const [isBreadcrumbHidden, setIsBreadcrumbHidden] = useState(false);
 
+  // Memoized route
+  const [{ route }] = useMemo(
+    () =>
+      matchRoutes(
+        Object.values(AppPaths).map((s) => ({ path: s })),
+        location,
+      ) || [{ route: { path: '' } }],
+    [location],
+  );
+
+  // Memoized loading state
+  const isLoading = useMemo(() => platformIsLoading || containerIsLoading, [platformIsLoading, containerIsLoading]);
+
+  // Update current platform when platform data is fetched
   useEffect(() => {
     if (platformIsSuccess && platformData?.data) {
-      setCurrentPlatform(platformData?.data);
+      setCurrentPlatform((prevPlatform) =>
+        prevPlatform?.id !== platformData.data.id ? platformData.data : prevPlatform,
+      );
     }
-  }, [platformData, platformIsSuccess]);
+  }, [platformIsSuccess, platformData]);
 
-  useEffect(() => {
-    if (platformsMessage) {
-      setCurrentPlatform((p) => platformsMessage?.find((s) => s.address === p?.address));
-    }
-  }, [platformsMessage]);
-
+  // Update current container and platform when container data is fetched
   useEffect(() => {
     if (containerIsSuccess && containerData?.data?.platform) {
-      setCurrentContainer(containerData?.data);
-      setCurrentPlatform(containerData?.data.platform);
+      setCurrentContainer((prevContainer) =>
+        prevContainer?.id !== containerData.data.id ? containerData.data : prevContainer,
+      );
+      setCurrentPlatform((prevPlatform) =>
+        prevPlatform?.id !== containerData?.data?.platform?.id ? containerData.data.platform : prevPlatform,
+      );
     }
   }, [containerData, containerIsSuccess]);
 
-  if (isSuccess && data?.data) {
-    platforms = data.data.platforms!;
-  }
-
-  if (platformsMessage) {
-    platforms = platformsMessage;
-  }
-
-  return (
-    <AppContext.Provider
-      value={{
-        route,
-        isBreadcrumbHidden,
-        setIsBreadcrumbHidden,
-        platforms,
-        isLoading,
-        currentPlatform,
-        currentContainer,
-      }}>
-      {children}
-    </AppContext.Provider>
+  const contextValue = useMemo(
+    () => ({
+      route,
+      isLoading,
+      isBreadcrumbHidden,
+      setIsBreadcrumbHidden,
+      currentPlatform,
+      currentContainer,
+    }),
+    [route, isLoading, isBreadcrumbHidden, currentPlatform, currentContainer],
   );
+
+  return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
 };
 
 export default AppProvider;

@@ -7,7 +7,6 @@ using Hosting.Common.ErrorTypes;
 using Infrastructure;
 using Infrastructure.EntityFramework;
 using Infrastructure.DockerHub;
-using Refit;
 using Infrastructure.GithubCr;
 using Hosting.Common;
 
@@ -26,7 +25,7 @@ public sealed record CreateRegistry(string Name, string Url, RegistryDiscriminat
 
             When(x => x.Configuration is not DockerHubRegistry && x.Configuration is not GitHubRegistry, () =>
             {
-                RuleFor(x => x.Url).Matches(Constants.Url).WithMessage("Please provide a valid url");
+                RuleFor(x => x.Url).Matches(Validators.UrlRegex).WithMessage("Please provide a valid url");
             });
             When(x => x.Configuration is DockerHubRegistry, () =>
             {

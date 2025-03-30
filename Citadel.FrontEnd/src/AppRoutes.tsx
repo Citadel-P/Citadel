@@ -26,7 +26,7 @@ export const AppRoutes = () => {
 
   const protectedRoutes = [
     {
-      path: AppPaths.home,
+      path: AppPaths.main,
       element: <Layout />,
       loader: () => {
         return !isAuthenticated ? redirect(AppPaths.login) : null;
@@ -36,7 +36,7 @@ export const AppRoutes = () => {
         {
           index: true,
           lazy: async () => {
-            return { Component: (await import('@/features/platforms/Platforms')).default };
+            return { Component: (await import('@/pages/platforms-page')).default };
           },
         },
         {
@@ -114,7 +114,7 @@ export const AppRoutes = () => {
     {
       path: AppPaths.login,
       loader: () => {
-        return isAuthenticated ? redirect(AppPaths.home) : null;
+        return isAuthenticated ? redirect(AppPaths.main) : null;
       },
       lazy: async () => {
         return { Component: (await import('@/features/auth/Login')).default };

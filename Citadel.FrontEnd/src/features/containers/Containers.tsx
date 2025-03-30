@@ -5,8 +5,8 @@ import { ActionBar } from './ActionBar';
 import { useContextSelector } from 'use-context-selector';
 import { AlertMessage } from '@/components/ui/alert-message';
 import { DeleteContainerDialog } from './dialogs/DeleteContainerDialog';
-import { AppContext } from '@/AppProvider';
 import { PlatformStatus } from '@/api/_generated';
+import { AppContext } from '@/AppProvider';
 
 const Containers = () => {
   const platformStatus = useContextSelector(AppContext, (v) => v?.currentPlatform?.status);

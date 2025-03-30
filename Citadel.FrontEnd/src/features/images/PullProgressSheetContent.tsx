@@ -2,86 +2,109 @@ import { PullImageReply, PullImageRequest } from '@/api/_generated';
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Check, CircleX, LoaderCircle } from 'lucide-react';
 import { usePOSTPullImageStream } from './hooks/usePOSTPullImageStream';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useContextSelector } from 'use-context-selector';
-import { AppContext } from '@/AppProvider';
 import { ImagesContext } from './ImagesProvider';
 import { Highlight, themes } from 'prism-react-renderer';
 import { toast } from 'sonner';
+import { AppContext } from '@/AppProvider';
+
 export interface PullProgressSheetProps {
   imageTag: string;
   repository: string;
 }
+
 export default function PullProgressSheetContent({ sheetProps }: { sheetProps: PullProgressSheetProps }) {
-  const [streamData, setStreamData] = useState<string[] | undefined>(undefined);
-  const handleChunkReceived = (chunk: string) => {
-    setStreamData((prevChunks) => [...(prevChunks ?? []), chunk]);
-  };
-  const { isPending, isSuccess, error, mutate } = usePOSTPullImageStream(handleChunkReceived);
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
-  const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
+  const [streamData, setStreamData] = useState<string[]>([]);
   const [pullError, setPullError] = useState<string | undefined>();
   const scrollRef = useRef<HTMLPreElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null); // Persist the AbortController
 
+  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
+  const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
+
+  const handleChunkReceived = useCallback((chunk: string) => {
+    setStreamData((prevChunks) => [...prevChunks, chunk]);
+  }, []);
+
+  const { isPending, isSuccess, error, mutate } = usePOSTPullImageStream(handleChunkReceived);
+
+  // Memoized request object
+  const pullRequest = useMemo<PullImageRequest>(
+    () => ({
+      registryName: selectedRegistry?.name ?? null,
+      repositoryName: sheetProps.repository,
+      platformId: currentPlatform?.id,
+      imageTag: sheetProps.imageTag,
+    }),
+    [currentPlatform, selectedRegistry, sheetProps.imageTag, sheetProps.repository],
+  );
+
+  // Start the pull image stream
   useEffect(() => {
-    const controller = new AbortController();
-    const request: PullImageRequest = {
-      platformId: currentPlatform?.id ?? '',
-      registryName: selectedRegistry?.name ?? '',
-      repositoryName: sheetProps.repository ?? '',
-      imageTag: sheetProps.imageTag ?? '',
-    };
-    mutate({ ...request, signal: controller.signal });
+    // Create a new AbortController only if one doesn't already exist
+    if (!abortControllerRef.current) {
+      abortControllerRef.current = new AbortController();
+    }
+
+    // Start the pull request
+    mutate({ ...pullRequest, signal: abortControllerRef.current.signal });
 
     return () => {
-      controller.abort();
+      // Abort the request when the component unmounts
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null; // Reset the controller
     };
-  }, [currentPlatform, selectedRegistry, sheetProps, mutate]);
+  }, [mutate, pullRequest]);
 
+  // Auto-scroll to the bottom of the log
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [streamData]);
 
+  // Handle success and errors
   useEffect(() => {
     if (isSuccess) {
-      const data = streamData?.join('\n');
-      if (data) {
+      try {
+        const data = streamData.join('\n');
         const response = JSON.parse(data) as PullImageReply[];
         const errors = response.filter((s) => s.errorMessage).map((s) => s.errorMessage);
-        if (errors && errors.length > 0) {
-          const error = errors?.at(0) ?? undefined;
-          setPullError(error);
-          toast.error('Error', {
-            description: error,
-          });
+
+        if (errors.length > 0) {
+          const error = errors[0];
+          setPullError(error ?? 'Failed to pull');
+          toast.error('Error', { description: error });
         } else {
           toast.success('Image pulled successfully');
         }
+      } catch (r) {
+        setPullError('Failed to parse response');
+        toast.error('Error', { description: 'Failed to parse response' + r });
       }
     }
   }, [isSuccess, streamData]);
+
+  // Determine the status icon
+  const statusIcon = useMemo(() => {
+    if (isPending) return <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />;
+    if (pullError || error) return <CircleX className="text-red-500 ml-1 h-5 w-5" />;
+    return <Check className="text-green-500 ml-1 h-5 w-5" />;
+  }, [isPending, pullError, error]);
+
   return (
     <SheetContent side="bottom">
       <SheetHeader>
         <SheetTitle className="flex items-center gap-1">
           <div>Pulling {sheetProps.imageTag}</div>
-          <div>
-            {isPending ? (
-              <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />
-            ) : pullError || error ? (
-              <CircleX className="text-red-500 ml-1 h-5 w-5 " />
-            ) : (
-              <Check className="text-green-500 ml-1 h-5 w-5 " />
-            )}
-          </div>
+          <div>{statusIcon}</div>
         </SheetTitle>
         <SheetDescription></SheetDescription>
       </SheetHeader>
       <Highlight
         theme={themes.nightOwl}
-        code={isPending && streamData?.length === 0 ? 'Loading...' : (streamData?.join('\n') ?? '')}
+        code={isPending && streamData.length === 0 ? 'Loading...' : streamData.join('\n')}
         language="tsx">
         {({ style, tokens, getLineProps, getTokenProps }) => (
           <pre

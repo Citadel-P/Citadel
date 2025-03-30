@@ -11,8 +11,8 @@ import { ImagesContext } from '../ImagesProvider';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useState } from 'react';
-import { AppContext } from '@/AppProvider';
 import { LoaderCircle } from 'lucide-react';
+import { AppContext } from '@/AppProvider';
 
 export const DeleteLocalImageDialog = () => {
   const dialogData = useContextSelector(ImagesContext, (v) => v?.dialogData)!;

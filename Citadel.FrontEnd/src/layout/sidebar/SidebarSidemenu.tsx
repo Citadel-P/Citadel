@@ -32,13 +32,11 @@ export const SidebarSubMenu = ({ submenu, toggleMenu }: IProps) => {
                   </button>
                 </>
               ) : (
-                <>
-                  <Link
-                    to={sub.route!}
-                    className={`${sub.active ? 'text-primary' : ''}inline-block w-full px-4 py-2 text-xs font-semibold`}>
-                    {sub.label}
-                  </Link>
-                </>
+                <Link
+                  to={sub.route ?? '/'}
+                  className={`${sub.active ? 'text-primary' : ''} inline-block w-full px-4 py-2 text-xs font-semibold`}>
+                  {sub.label}
+                </Link>
               )}
             </div>
             <SidebarSubMenu submenu={sub} toggleMenu={toggleMenu} />

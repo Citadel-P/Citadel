@@ -28,7 +28,7 @@ public sealed record PatchRegistry(Guid Id, RegistryDiscriminator Discriminator,
 
             When(x => x.Configuration is not DockerHubRegistry && x.Configuration is not GitHubRegistry, () =>
             {
-                When(s => s.Name != null, () => RuleFor(x => x.Url).Matches(Constants.Url).WithMessage("Please provide a valid url"));
+                When(s => s.Name != null, () => RuleFor(x => x.Url).Matches(Validators.UrlRegex).WithMessage("Please provide a valid url"));
             });
             When(x => x.Configuration is DockerHubRegistry, () =>
             {
