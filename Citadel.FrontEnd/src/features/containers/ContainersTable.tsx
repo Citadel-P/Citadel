@@ -11,6 +11,7 @@ import SortableCell from '@/components/ui/SortableCell';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Link } from 'react-router';
 import DropdownTableMenu from './DropdownTableMenu';
+import { memo } from 'react';
 
 const columns: ColumnDef<ContainerInfoView>[] = [
   {
@@ -38,7 +39,7 @@ const columns: ColumnDef<ContainerInfoView>[] = [
     cell: ({ row }) => (
       <div className="flex items-center whitespace-nowrap">
         <div className="flex items-center">
-          <ContainerStatTootltip stat={row.original.state ?? 'exited'} />
+          <ContainerStatTooltip stat={row.original.state ?? 'exited'} />
         </div>
         <div>
           <div className="mb-1 text-[13px] font-semibold text-foreground">
@@ -167,7 +168,8 @@ export const ContainersTable = () => {
   );
 };
 
-const ContainerStatTootltip = ({ stat }: { stat: string }) => {
+
+const ContainerStatTooltip = memo(({ stat }: { stat: string }) => {
   const getStatusClass = (status: string) => {
     switch (status) {
       case 'exited':
@@ -182,6 +184,9 @@ const ContainerStatTootltip = ({ stat }: { stat: string }) => {
         return '';
     }
   };
+
+  const statusText = stat.charAt(0).toUpperCase() + stat.slice(1);
+
   return (
     <TooltipProvider delayDuration={200}>
       <Tooltip>
@@ -189,9 +194,11 @@ const ContainerStatTootltip = ({ stat }: { stat: string }) => {
           <div className={`${getStatusClass(stat)} mr-2 h-2 w-2 rounded-full`} />
         </TooltipTrigger>
         <TooltipContent>
-          <span>{stat.charAt(0).toUpperCase() + stat.slice(1)}</span>
+          <span>{statusText}</span>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );
-};
+});
+
+ContainerStatTooltip.displayName = 'ContainerStatTooltip2';

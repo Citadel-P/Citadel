@@ -8,11 +8,10 @@ import {
 } from '@/components/ui/dialog';
 import { useContextSelector } from 'use-context-selector';
 import { ImagesContext } from '../ImagesProvider';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { AppContext } from '@/AppProvider';
+import { SwitchSection } from '@/components/ui/SwitchSection';
 
 export const DeleteLocalImageDialog = () => {
   const dialogData = useContextSelector(ImagesContext, (v) => v?.dialogData)!;
@@ -35,32 +34,27 @@ export const DeleteLocalImageDialog = () => {
       <DialogContent className="sm:max-w-[600px]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Delete Confirmation</DialogTitle>
-          <DialogDescription></DialogDescription>
+          <DialogDescription>
+            {registriesId.length === 1
+              ? 'Are you sure you want to delete the selected image?'
+              : `Are you sure you want to delete the selected ${registriesId.length} images?`}
+          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
-          {registriesId.length === 1 && <p>Are you sure you want to delete the selected image?</p>}
-          {registriesId.length > 1 && (
-            <p>
-              Are you sure you want to delete the selected <b>{registriesId.length}</b> images?
-            </p>
-          )}
-          <div className="space-y-2 flex flex-row items-center justify-between rounded-lg border p-3 shadow-xs">
-            <div className="space-y-0.5">
-              <Label htmlFor="force">Force</Label>
-              <p className="text-[0.8rem] text-muted-foreground">
-                Remove the image(s) even if it is being used by stopped containers or has other tags
-              </p>
-            </div>
-            <Switch id="force" onCheckedChange={() => setForce((v) => !v)} />
-          </div>
-
-          <div className="space-y-2 flex flex-row items-center justify-between rounded-lg border p-3 shadow-xs">
-            <div className="space-y-0.5">
-              <Label htmlFor="noprune">No Prune</Label>
-              <p className="text-[0.8rem] text-muted-foreground">Do not delete untagged parent images</p>
-            </div>
-            <Switch id="noprune" onCheckedChange={() => setNoPrune((v) => !v)} />
-          </div>
+          <SwitchSection
+            id="force"
+            label="Force"
+            description="Remove the image(s) even if it is being used by stopped containers or has other tags."
+            checked={force}
+            onToggle={() => setForce((v) => !v)}
+          />
+          <SwitchSection
+            id="noprune"
+            label="No Prune"
+            description="Do not delete untagged parent images."
+            checked={noPrune}
+            onToggle={() => setNoPrune((v) => !v)}
+          />
         </div>
         <DialogFooter>
           <div className="flex items-center justify-end">

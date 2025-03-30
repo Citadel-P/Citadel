@@ -11,7 +11,11 @@ export const usePOSTContainerLogs = (onChunkReceived: (chunk: string) => void) =
   const accessToken = useContextSelector(AuthContext, (s) => s?.accessToken);
 
   const mutationFn = async (param: StreamLogsRequest & Cancellable) => {
-    const response = await fetch(`${apiClient?.baseUrl}/api/v1/containers/stream-logs`, {
+    if (!apiClient?.baseUrl) {
+      throw new Error('API client base URL is not defined');
+    }
+
+    const response = await fetch(`${apiClient.baseUrl}/api/v1/containers/stream-logs`, {
       method: 'POST',
       credentials: 'include',
       signal: param.signal || null,
@@ -21,30 +25,40 @@ export const usePOSTContainerLogs = (onChunkReceived: (chunk: string) => void) =
       },
       body: JSON.stringify(param),
     });
+
     if (!response.ok) {
-      throw new Error('Network response was not ok');
+      throw new Error(`Network response was not ok: ${response.status} ${response.statusText}`);
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new Error('ReadableStream is not supported or no body in response');
+      throw new Error('ReadableStream is not supported or response body is null');
     }
 
     const decoder = new TextDecoder('utf-8');
     let done = false;
 
-    while (!done) {
-      const { value, done: readerDone } = await reader.read();
-      done = readerDone;
+    try {
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
 
-      if (value) {
-        const chunk = decoder.decode(value, { stream: true });
-        onChunkReceived(chunk);
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true });
+          onChunkReceived(chunk);
+        }
       }
+    } catch (error) {
+      console.error('Error while reading stream:', error);
+      throw error;
+    } finally {
+      reader.releaseLock();
     }
   };
 
-  const { mutate, isPending, isSuccess, error, data } = useMutation({ mutationFn });
+  const { mutate, isPending, isSuccess, error, data } = useMutation({
+    mutationFn,
+  });
 
   const validationErrors = useGetValidationErrors(error);
 

@@ -1,7 +1,7 @@
+import React, { useCallback } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
@@ -12,19 +12,19 @@ import { useAvailableActions } from './hooks/useAvailableActions';
 import { useNavigate } from 'react-router';
 import { useContextSelector } from 'use-context-selector';
 import { ContainersContext } from './ContainersProvider';
+import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
 
-interface IProps {
-  container: ContainerInfoView;
-}
-const DropdownTableMenu = ({ container }: IProps) => {
+const DropdownTableMenu: React.FC<{ container: ContainerInfoView }> = ({ container }) => {
   const navigate = useNavigate();
   const setDialogData = useContextSelector(ContainersContext, (v) => v?.setDialogData)!;
 
   const { availableActions, isPending, requestPatch } = useAvailableActions([container]);
 
-  function openDialog() {
+  // Memoized function to open the delete dialog
+  const openDialog = useCallback(() => {
     setDialogData({ open: true, currentSelection: [container] });
-  }
+  }, [setDialogData, container]);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -34,49 +34,58 @@ const DropdownTableMenu = ({ container }: IProps) => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-38 drop-shadow-md shadow-custom bg-background pt-2 pb-2">
-        <DropdownMenuItem
+        {/* Start Action */}
+        <ActionMenuItem
+          onClick={() => requestPatch('start')}
           disabled={!availableActions.canStart || isPending}
-          className="grow cursor-pointer rounded-sm px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-card"
-          onClick={() => requestPatch('start')}>
-          <Play className="mr-2 h-3 w-3" />
-          <span>Start</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
+          icon={<Play className="mr-2 h-3 w-3" />}
+          label="Start"
+        />
+
+        {/* Stop Action */}
+        <ActionMenuItem
           onClick={() => requestPatch('stop')}
           disabled={!availableActions.canStop || isPending}
-          className="grow cursor-pointer rounded-sm px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-card">
-          <Ban className="mr-2 h-3 w-3" />
-          <span>Stop</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClickCapture={() => requestPatch('pause')}
+          icon={<Ban className="mr-2 h-3 w-3" />}
+          label="Stop"
+        />
+
+        {/* Pause Action */}
+        <ActionMenuItem
+          onClick={() => requestPatch('pause')}
           disabled={!availableActions.canPause || isPending}
-          className="grow cursor-pointer rounded-sm px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-card">
-          <Pause className="mr-2 h-3 w-3" />
-          <span>Pause</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
+          icon={<Pause className="mr-2 h-3 w-3" />}
+          label="Pause"
+        />
+
+        {/* Restart Action */}
+        <ActionMenuItem
           onClick={() => requestPatch('restart')}
           disabled={!availableActions.canRestart || isPending}
-          className="grow cursor-pointer rounded-sm px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-card">
-          <RotateCcw className="mr-2 h-3 w-3" />
-          <span>Restart</span>
-        </DropdownMenuItem>
+          icon={<RotateCcw className="mr-2 h-3 w-3" />}
+          label="Restart"
+        />
+
         <DropdownMenuSeparator />
-        <DropdownMenuItem
+
+        {/* View Details */}
+        <ActionMenuItem
           onClick={() => navigate(`../containers/${container.containerId?.slice(0, 12)}/logs`)}
-          className="grow cursor-pointer rounded-sm px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-card">
-          <Eye className="mr-2 h-3 w-3" />
-          <span>View details</span>
-        </DropdownMenuItem>
+          disabled={false}
+          icon={<Eye className="mr-2 h-3 w-3" />}
+          label="View details"
+        />
+
         <DropdownMenuSeparator />
-        <DropdownMenuItem
+
+        {/* Delete Action */}
+        <ActionMenuItem
           onClick={openDialog}
           disabled={!availableActions.canDelete || isPending}
-          className="grow cursor-pointer rounded-sm px-3 py-2 text-xs font-semibold ">
-          <Trash className="mr-2 h-3 w-3 text-danger" />
-          <span className="text-danger">Delete</span>
-        </DropdownMenuItem>
+          icon={<Trash className="mr-2 h-3 w-3 text-danger" />}
+          label="Delete"
+          className="text-danger"
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   );

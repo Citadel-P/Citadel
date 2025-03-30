@@ -5,11 +5,12 @@ import { ActionBar } from './ActionBar';
 import { useContextSelector } from 'use-context-selector';
 import { AlertMessage } from '@/components/ui/alert-message';
 import { DeleteContainerDialog } from './dialogs/DeleteContainerDialog';
-import { PlatformStatus } from '@/api/_generated';
-import { AppContext } from '@/AppProvider';
+import { ContainersContext } from './ContainersProvider';
+import { useMemo } from 'react';
 
 const Containers = () => {
-  const platformStatus = useContextSelector(AppContext, (v) => v?.currentPlatform?.status);
+  const containers = useContextSelector(ContainersContext, (v) => v?.containers);
+  const isPlatformOffline = useMemo(() => containers?.some((container) => container.state === 'offline'), [containers]);
 
   return (
     <div className="flex-col justify-between relative">
@@ -25,7 +26,7 @@ const Containers = () => {
             </div>
             <SearchField />
           </div>
-          {platformStatus === PlatformStatus.Offline && (
+          {isPlatformOffline && (
             <AlertMessage type="warning" hasTitle={true}>
               This platform is not connected, please try to update or reconnect the platform.{' '}
             </AlertMessage>

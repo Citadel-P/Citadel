@@ -1,7 +1,6 @@
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
@@ -11,14 +10,17 @@ import { RegistryView } from '@/api/_generated';
 import { useNavigate } from 'react-router';
 import { useContextSelector } from 'use-context-selector';
 import { RegistriesContext } from './RegistriesProvider';
+import { useCallback } from 'react';
+import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
 
 const DropdownTableMenu = ({ registry }: { registry: RegistryView }) => {
   const navigate = useNavigate();
   const setDialogData = useContextSelector(RegistriesContext, (v) => v?.setDialogData)!;
 
-  function openDialog() {
+  // Memoized function to open the delete dialog
+  const openDialog = useCallback(() => {
     setDialogData({ open: true, currentSelection: [registry] });
-  }
+  }, [setDialogData, registry]);
 
   return (
     <DropdownMenu>
@@ -29,20 +31,22 @@ const DropdownTableMenu = ({ registry }: { registry: RegistryView }) => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-38 drop-shadow-md shadow-custom bg-background pt-2 pb-2">
-        <DropdownMenuItem
-          className="grow cursor-pointer rounded-sm px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-card"
-          onClick={() => navigate(`../registries/edit/${registry.id}`)}>
-          <Pencil className="mr-2" />
-          <span>Edit</span>
-        </DropdownMenuItem>
+        {/* Edit Action */}
+        <ActionMenuItem
+          onClick={() => navigate(`../registries/edit/${registry.id}`)}
+          icon={<Pencil className="mr-2 h-3 w-3" />}
+          label="Edit"
+        />
 
         <DropdownMenuSeparator />
-        <DropdownMenuItem
+
+        {/* Delete Action */}
+        <ActionMenuItem
           onClick={openDialog}
-          className="grow cursor-pointer rounded-sm px-3 py-2 text-xs font-semibold ">
-          <Trash className="mr-2 h-3 w-3 text-danger" />
-          <span className="text-danger">Delete</span>
-        </DropdownMenuItem>
+          icon={<Trash className="mr-2 h-3 w-3 text-danger" />}
+          label="Delete"
+          className="text-danger"
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   );

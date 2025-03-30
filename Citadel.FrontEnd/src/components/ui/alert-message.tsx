@@ -4,76 +4,58 @@ import { ReactNode } from 'react';
 
 interface IProps {
   type: 'success' | 'info' | 'warning' | 'error';
-  hasTitle?: boolean | undefined;
+  hasTitle?: boolean;
   children?: string | ReactNode;
 }
 
 export const AlertMessage = ({ type, hasTitle, children }: IProps) => {
+  const alertConfig = {
+    success: {
+      title: 'Success!',
+      icon: <Check className="h-4 w-4" />,
+      className: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-100',
+    },
+    info: {
+      title: 'Info!',
+      icon: <InfoIcon className="h-4 w-4" />,
+      className: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-100',
+    },
+    warning: {
+      title: 'Heads up!',
+      icon: <AlertCircle className="h-4 w-4" />,
+      className: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-100',
+    },
+    error: {
+      title: 'Error!',
+      icon: <TriangleAlert className="h-4 w-4" />,
+      className: 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-100',
+    },
+  };
+
+  const { title, icon, className } = alertConfig[type];
+
   return (
-    <>
-      {type === 'info' && <InfoMessage hasTitle={hasTitle}>{children}</InfoMessage>}
-      {type === 'success' && <SuccessMessage hasTitle={hasTitle}>{children}</SuccessMessage>}
-      {type === 'warning' && <WarningMessage hasTitle={hasTitle}>{children}</WarningMessage>}
-      {type === 'error' && <ErrorMessage hasTitle={hasTitle}>{children}</ErrorMessage>}
-    </>
+    <BaseMessage icon={icon} title={title} className={className} hasTitle={hasTitle}>
+      {children}
+    </BaseMessage>
   );
 };
 
-const SuccessMessage = ({ children, hasTitle = false }: Partial<IProps>) => {
-  return (
-    <Alert className="border-0 mt-2 mb-4 bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-100">
-      <Check className="h-4 w-4 " />
-      {hasTitle ? (
-        <>
-          <AlertTitle>Success!</AlertTitle>
-          <AlertDescription>{children}</AlertDescription>
-        </>
-      ) : (
-        <AlertTitle>{children}</AlertTitle>
-      )}
-    </Alert>
-  );
-};
+interface IBaseMessageProps {
+  icon: ReactNode;
+  title: string;
+  className: string;
+  hasTitle?: boolean;
+  children?: string | ReactNode;
+}
 
-const InfoMessage = ({ children, hasTitle = false }: Partial<IProps>) => {
+const BaseMessage = ({ icon, title, className, hasTitle = false, children }: IBaseMessageProps) => {
   return (
-    <Alert className="border-0 mt-2 mb-4 text-blue-800 bg-blue-100 dark:bg-blue-950 dark:text-blue-100">
-      <InfoIcon className="h-4 w-4 " />
+    <Alert className={`border-0 mt-2 mb-4 ${className}`}>
+      {icon}
       {hasTitle ? (
         <>
-          <AlertTitle>Info!</AlertTitle>
-          <AlertDescription>{children}</AlertDescription>
-        </>
-      ) : (
-        <AlertTitle>{children}</AlertTitle>
-      )}
-    </Alert>
-  );
-};
-
-const WarningMessage = ({ children, hasTitle = false }: Partial<IProps>) => {
-  return (
-    <Alert className="border-0 mt-2 mb-4 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-100">
-      <AlertCircle className="h-4 w-4 " />
-      {hasTitle ? (
-        <>
-          <AlertTitle>Heads up!</AlertTitle>
-          <AlertDescription>{children}</AlertDescription>
-        </>
-      ) : (
-        <AlertTitle>{children}</AlertTitle>
-      )}
-    </Alert>
-  );
-};
-
-const ErrorMessage = ({ children, hasTitle = false }: Partial<IProps>) => {
-  return (
-    <Alert className="border-danger mt-2 mb-4 bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-100">
-      <TriangleAlert className="h-4 w-4 " />
-      {hasTitle ? (
-        <>
-          <AlertTitle>Error!</AlertTitle>
+          <AlertTitle>{title}</AlertTitle>
           <AlertDescription>{children}</AlertDescription>
         </>
       ) : (

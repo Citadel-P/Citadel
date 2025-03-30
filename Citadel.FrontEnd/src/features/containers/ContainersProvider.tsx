@@ -1,5 +1,5 @@
 import { ContainerInfoView, DeleteContainersRequest } from '@/api/_generated';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { createContext } from 'use-context-selector';
 import useContainersHub from './hooks/useContainersHub';
 import { useGETContainers } from './hooks/useGETContainers';
@@ -20,34 +20,36 @@ interface IContext {
   deleteIsPending: boolean;
 }
 
-interface IProps {
-  children?: React.ReactNode;
-}
-
 export const ContainersContext = createContext<IContext | undefined>(undefined);
 
-const ContainersProvider: React.FC<IProps> = ({ children }) => {
+const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const { platformId } = useParams<{ platformId: string }>();
-  const { data, isLoading, isSuccess } = useGETContainers(platformId!);
-  const { mutate, isSuccess: deleteIsSuccess, isPending: deleteIsPending } = useDELETEContainers();
-  const { containersInfo } = useContainersHub(platformId!);
-  const [selectedRows, setSelectedRows] = useState<ContainerInfoView[]>([]);
 
+  // Fetch containers data
+  const { data, isLoading, isSuccess } = useGETContainers(platformId!);
+  const { containersInfo } = useContainersHub(platformId!);
+
+  // Handle container deletion
+  const { mutate, isSuccess: deleteIsSuccess, isPending: deleteIsPending } = useDELETEContainers();
+
+  // State for selected rows and containers
+  const [selectedRows, setSelectedRows] = useState<ContainerInfoView[]>([]);
   const [containers, setContainers] = useState<ContainerInfoView[]>([]);
+
+  // Dialog state
   const { dialogData, setDialogData } = useDialogState();
 
+  // Update containers when data or hub info changes
   useEffect(() => {
-    if (isSuccess && data?.data) {
-      setContainers(data.data.containers!);
+    // order matter
+    if (containersInfo?.containers) {
+      setContainers(containersInfo.containers);
+    } else if (isSuccess && data?.data?.containers) {
+      setContainers(data.data.containers);
     }
-  }, [data, isSuccess]);
+  }, [data, isSuccess, containersInfo]);
 
-  useEffect(() => {
-    if (containersInfo) {
-      setContainers(containersInfo.containers ?? []);
-    }
-  }, [containersInfo]);
-
+  // Handle successful deletion
   useEffect(() => {
     if (deleteIsSuccess) {
       setDialogData({ open: false });
@@ -55,26 +57,31 @@ const ContainersProvider: React.FC<IProps> = ({ children }) => {
     }
   }, [deleteIsSuccess, setDialogData]);
 
-  function requestDelete(data: DeleteContainersRequest) {
-    mutate(data);
-  }
-
-  return (
-    <ContainersContext.Provider
-      value={{
-        isLoading,
-        platformId,
-        containers,
-        dialogData,
-        setDialogData,
-        selectedRows,
-        setSelectedRows,
-        requestDelete,
-        deleteIsPending,
-      }}>
-      {children}
-    </ContainersContext.Provider>
+  // Request to delete containers
+  const requestDelete = useCallback(
+    (data: DeleteContainersRequest) => {
+      mutate(data);
+    },
+    [mutate],
   );
+
+  // Memoize context value to prevent unnecessary re-renders
+  const contextValue = useMemo(
+    () => ({
+      isLoading,
+      platformId,
+      containers,
+      dialogData,
+      setDialogData,
+      selectedRows,
+      setSelectedRows,
+      requestDelete,
+      deleteIsPending,
+    }),
+    [isLoading, platformId, containers, dialogData, selectedRows, deleteIsPending, requestDelete, setDialogData],
+  );
+
+  return <ContainersContext.Provider value={contextValue}>{children}</ContainersContext.Provider>;
 };
 
 export default ContainersProvider;

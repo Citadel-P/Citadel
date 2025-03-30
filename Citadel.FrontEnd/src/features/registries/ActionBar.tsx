@@ -20,7 +20,7 @@ export const ActionBar = () => {
 
   return (
     <div
-      className="h-14 fixed inset-x-0 bottom-0 shadow-lg p-2 bg-background sm:flex sm:justify-between"
+      className="h-14 fixed -translate-x-5 inset-x-0 bottom-0 shadow-lg p-2 bg-background sm:flex sm:justify-between"
       style={{
         left: 'var(--sidebar-width)',
         width: 'calc(100% - var(--sidebar-width))',

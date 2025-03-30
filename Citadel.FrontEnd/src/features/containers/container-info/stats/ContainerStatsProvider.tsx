@@ -1,39 +1,37 @@
-import { useState } from 'react';
 import { useParams } from 'react-router';
 import { useGetContainerStats } from './hooks/useGetContainerStats';
 import { ContainerStatView } from '@/api/_generated';
 import { createContext } from 'use-context-selector';
+import { useMemo } from 'react';
 
 interface IContext {
   isLoading: boolean;
-  requestId: string;
-  stats: ContainerStatView[] | undefined;
-}
-interface IProps {
-  children?: React.ReactNode;
+  stats: ContainerStatView[];
 }
 
+// Create context for container stats
 export const ContainerStatsContext = createContext<IContext | undefined>(undefined);
 
-const ContainerLogsProvider: React.FC<IProps> = ({ children }) => {
-  const [requestId] = useState(crypto.randomUUID());
-  const { containerId } = useParams();
-  const { data, isSuccess, isLoading } = useGetContainerStats(containerId);
-  let stats: ContainerStatView[] = [];
-  if (isSuccess) {
-    stats = data?.data.stats || [];
-  }
+const ContainerStatsProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+  // Get container ID from route params
+  const { containerId } = useParams<{ containerId: string }>();
 
-  return (
-    <ContainerStatsContext.Provider
-      value={{
-        isLoading,
-        stats,
-        requestId,
-      }}>
-      {children}
-    </ContainerStatsContext.Provider>
+  // Fetch container stats
+  const { data, isSuccess, isLoading } = useGetContainerStats(containerId);
+
+  // Extract stats from API response
+  const stats = useMemo(() => (isSuccess ? data?.data.stats || [] : []), [isSuccess, data]);
+
+  // Memoize context value to prevent unnecessary re-renders
+  const contextValue = useMemo(
+    () => ({
+      isLoading,
+      stats,
+    }),
+    [isLoading, stats],
   );
+
+  return <ContainerStatsContext.Provider value={contextValue}>{children}</ContainerStatsContext.Provider>;
 };
 
-export default ContainerLogsProvider;
+export default ContainerStatsProvider;
