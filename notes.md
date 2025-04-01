@@ -1,9 +1,7 @@
 
 * Clone the repo, and it's submodule: `git submodule update --init` 
-* In Visual Studio set the docker-compose project as the startup project.
-* You are set, have fun
 
-* The WebApi project has a folder called `data`, this folder is mapped to a named volume in docker-compose
+* The WebApi project has a folder called `data`, this folder is mapped to a named volume in docker
   * When deploying the Docker image, the named volume should be provided
 
 * To generate a db migration

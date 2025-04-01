@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   createColumnHelper,
   flexRender,
@@ -8,7 +8,7 @@ import {
   getExpandedRowModel,
   Row,
 } from '@tanstack/react-table';
-import { ArrowDown, CheckCheck, ChevronRight, Clipboard } from 'lucide-react';
+import { CheckCheck, ChevronRight, Clipboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
@@ -24,6 +24,8 @@ import { truncate } from '@/lib/truncate';
 import PullProgressSheetContent from './PullProgressSheetContent';
 import { Sheet } from '@/components/ui/sheet';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
+import { useSheetState } from './hooks/useSheetState';
+import { PullImageBadge } from '@/components/ui/PullImageBadge';
 
 // Column helpers
 const packageColumnHelper = createColumnHelper<IImageRepositoryGitHubPackageResponse>();
@@ -33,20 +35,9 @@ const versionColumnHelper = createColumnHelper<GhcrPackageVersion>();
 function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubPackageResponse }) {
   const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
   const { isLoading, data } = useGETPackageVersions(selectedRegistry?.name ?? undefined, ghPackage?.name ?? undefined);
-  const [selectedVersion, setSelectedVersion] = useState<GhcrPackageVersion | null>(null);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const { sheetState, openSheet, closeSheet } = useSheetState<GhcrPackageVersion>();
 
-  const openSheet = (version: GhcrPackageVersion) => {
-    setSelectedVersion(version);
-    setIsSheetOpen(true);
-  };
-
-  const closeSheet = () => {
-    setIsSheetOpen(false);
-    setSelectedVersion(null);
-  };
-
-  const versionColumns = React.useMemo(
+  const versionColumns = useMemo(
     () => [
       versionColumnHelper.accessor('name', {
         header: 'Version',
@@ -60,7 +51,7 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubP
             target="_blank"
             rel="noreferrer"
             href={info.row.original.html_url ?? ''}>
-            {info.row.original.id}{' '}
+            {info.row.original.id}
           </a>
         ),
       }),
@@ -84,16 +75,11 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubP
       {
         id: 'select',
         cell: ({ row }: { row: Row<GhcrPackageVersion> }) => (
-          <Badge
-            onClick={() => openSheet(row.original)}
-            className="flex text-right cursor-pointer invisible group/versionrowdown group-hover/versionrow:visible truncate rounded-full hover:bg-primary/90">
-            <span>Pull</span>
-            <ArrowDown className="ml-1 h-3.5 w-3.5 text-background group-hover/versionrowdown:animate-bounce" />
-          </Badge>
+          <PullImageBadge onClick={() => openSheet(row.original)} className="group-hover/versionrow:visible" />
         ),
       },
     ],
-    [],
+    [openSheet],
   );
 
   const versionsTable = useReactTable({
@@ -142,16 +128,18 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubP
           )}
         </TableBody>
       </Table>
-      {selectedVersion && (
-        <Sheet open={isSheetOpen} onOpenChange={(open) => (open ? setIsSheetOpen(true) : closeSheet())}>
+      {sheetState.image && (
+        <Sheet open={sheetState.isOpen} onOpenChange={(open) => (open ? openSheet(sheetState.image!) : closeSheet())}>
           <PullProgressSheetContent
-            sheetProps={{ repository: ghPackage.name ?? '', imageTag: selectedVersion.name ?? '' }}
+            sheetProps={{ repository: ghPackage.name ?? '', imageTag: sheetState.image.name ?? '' }}
           />
         </Sheet>
       )}
     </>
   );
 }
+
+// Reusable VersionRow Component
 const VersionRow = ({ version }: { version: string }) => {
   const [copiedWinCmd, copyWinCmdToClipboard] = useCopyToClipboard(5000);
   const v = version?.split(':').at(1) ?? '';
@@ -171,24 +159,22 @@ export default function GhcrImagesTable({ registryName }: { registryName: string
   const { isLoading, data } = useGETExternalRepositories(registryName);
   const [expanded, setExpanded] = useState<ExpandedState>({});
 
-  const columns = React.useMemo(
+  const columns = useMemo(
     () => [
       packageColumnHelper.display({
         id: 'expander',
-        cell: ({ row }) => {
-          return (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => row.toggleExpanded()}
-              aria-label={row.getIsExpanded() ? 'Collapse row' : 'Expand row'}
-              className="h-8 w-8 p-0">
-              <div className={cn('transition-transform duration-200', row.getIsExpanded() ? 'rotate-90' : '')}>
-                <ChevronRight className="h-4 w-4" />
-              </div>
-            </Button>
-          );
-        },
+        cell: ({ row }) => (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => row.toggleExpanded()}
+            aria-label={row.getIsExpanded() ? 'Collapse row' : 'Expand row'}
+            className="h-8 w-8 p-0">
+            <div className={cn('transition-transform duration-200', row.getIsExpanded() ? 'rotate-90' : '')}>
+              <ChevronRight className="h-4 w-4" />
+            </div>
+          </Button>
+        ),
         size: 50,
       }),
       packageColumnHelper.accessor('name', {
@@ -202,7 +188,7 @@ export default function GhcrImagesTable({ registryName }: { registryName: string
             target="_blank"
             rel="noreferrer"
             href={info.row.original.htmlUrl ?? ''}>
-            {info.row.original.htmlUrl}{' '}
+            {info.row.original.htmlUrl}
           </a>
         ),
         header: 'Url',

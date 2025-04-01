@@ -1,0 +1,122 @@
+[
+    {
+        "name": "nginx",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/nginx/live/logo-1720462242584.png",
+        "url": "https://hub.docker.com/_/nginx",
+        "description": "A lightweight and high-performance web server used as a reverse proxy or load balancer."
+    },
+    {
+        "name": "redis",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/redis/live/logo-1720462263103.png",
+        "url": "https://hub.docker.com/_/redis",
+        "description": "An in-memory data structure store, used as a database, cache, and message broker."
+    },
+    {
+        "name": "mysql",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/mysql/live/logo-1720462237323.png",
+        "url": "https://hub.docker.com/_/mysql",
+        "description": "A popular relational database management system."
+    },
+    {
+        "name": "postgres",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/postgres/live/logo-1720462257907.png",
+        "url": "https://hub.docker.com/_/postgres",
+        "description": "PostgreSQL, a powerful open-source relational database system."
+    },
+    {
+        "name": "alpine",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/alpine/live/logo-1720462146426.png",
+        "url": "https://hub.docker.com/_/alpine",
+        "description": "A minimal Docker image based on Alpine Linux, known for its small size and security."
+    },
+    {
+        "name": "node",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/node/live/logo-1720462243432.png",
+        "url": "https://hub.docker.com/_/node",
+        "description": "Node.js runtime environment for building server-side applications."
+    },
+    {
+        "name": "python",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/python/live/logo-1720462259584.png",
+        "url": "https://hub.docker.com/_/python",
+        "description": "Python runtime environment with pre-installed versions of Python (2.x or 3.x)."
+    },
+    {
+        "name": "httpd",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/httpd/live/logo-1720462209978.png",
+        "url": "https://hub.docker.com/_/httpd",
+        "description": "Apache HTTP Server, an open-source web server."
+    },
+    {
+        "name": "ubuntu",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/ubuntu/live/logo-1720462303144.png",
+        "url": "https://hub.docker.com/_/ubuntu",
+        "description": "Ubuntu Linux operating system, widely used as a base image for many containers."
+    },
+    {
+        "name": "busybox",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/busybox/live/logo-1720462159685.png",
+        "url": "https://hub.docker.com/_/busybox",
+        "description": "A minimal base image that provides a smaller alternative to full Linux distros."
+    },
+    {
+        "name": "elasticsearch",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/elasticsearch/live/logo-1720462186184.png",
+        "url": "https://hub.docker.com/_/elasticsearch",
+        "description": "Elasticsearch, a search and analytics engine."
+    },
+    {
+        "name": "mariadb",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/mariadb/live/logo-1720462226239.png",
+        "url": "https://hub.docker.com/_/mariadb",
+        "description": "A fork of MySQL, providing a free and open-source database management system."
+    },
+    {
+        "name": "wordpress",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/wordpress/live/logo-1720462319468.png",
+        "url": "https://hub.docker.com/_/wordpress",
+        "description": "WordPress, a widely-used content management system (CMS)."
+    },
+    {
+        "name": "gitlab/gitlab-ce",
+        "icon": "https://www.gravatar.com/avatar/6edd0acaf80f784fab3dd2c31d604e74?s=120&r=g&d=404",
+        "url": "https://hub.docker.com/r/gitlab/gitlab-ce",
+        "description": "GitLab Community Edition, a complete DevOps platform for Git repository management, CI/CD, and more."
+    },
+    {
+        "name": "traefik",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/traefik/live/logo-1720462302224.png",
+        "url": "https://hub.docker.com/_/traefik",
+        "description": "Traefik, a modern HTTP reverse proxy and load balancer."
+    },
+    {
+        "name": "sonarqube",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/sonarqube/live/logo-1738080662182.png",
+        "url": "https://hub.docker.com/_/sonarqube",
+        "description": "Official images for SonarQube, code analysis tool for code quality and security"
+    },
+    {
+        "name": "registry",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/registry/live/logo-1720462264832.png",
+        "url": "https://hub.docker.com/_/registry",
+        "description": "Distribution implementation for storing and distributing of container images and artifacts"
+    },
+    {
+        "name": "haproxy",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/haproxy/live/logo-1720462205614.png",
+        "url": "https://hub.docker.com/_/haproxy",
+        "description": "HAProxy - The Reliable, High Performance TCP/HTTP Load Balancer"
+    },
+    {
+        "name": "consul",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/consul/live/logo-1720462171784.png",
+        "url": "https://hub.docker.com/_/consul",
+        "description": "Consul is a datacenter runtime that provides service discovery, configuration, and orchestration."
+    },
+    {
+        "name": "vault",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/vault/live/logo-1720462317417.png",
+        "url": "https://hub.docker.com/_/vault",
+        "description": "Vault is a tool for securely accessing secrets via a unified interface and tight access control."
+    }
+]

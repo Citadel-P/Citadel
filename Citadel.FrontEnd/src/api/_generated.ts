@@ -221,6 +221,13 @@ export type DockerHubImageView = {
   lastPulled: string | null;
 };
 
+export interface DockerHubPublicImage {
+  name?: string | null;
+  icon?: string | null;
+  url?: string | null;
+  description?: string | null;
+}
+
 export interface DockerHubRepository {
   name?: string | null;
   namespace?: string | null;
@@ -1728,6 +1735,35 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       this.request<DockerHubTagView[], HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/images/dockerhub/${registryName}/${repositoryName}/tags`,
         method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Images
+     * @name ImagesGetDockerHubPublicImages
+     * @summary Search for DockerHub public images, if imageName is empty a default list of docker images will be returned
+     * @request GET:/api/v1/images/dockerhub
+     * @secure
+     * @response `200` `(DockerHubPublicImage)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    imagesGetDockerHubPublicImages: (
+      query?: {
+        imageName?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<DockerHubPublicImage[], HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/images/dockerhub`,
+        method: 'GET',
+        query: query,
         secure: true,
         format: 'json',
         ...params,

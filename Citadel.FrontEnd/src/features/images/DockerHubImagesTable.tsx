@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   createColumnHelper,
   flexRender,
@@ -8,7 +8,7 @@ import {
   getExpandedRowModel,
   Row,
 } from '@tanstack/react-table';
-import { ArrowDown, CheckCheck, ChevronRight, Clipboard } from 'lucide-react';
+import { CheckCheck, ChevronRight, Clipboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
@@ -18,13 +18,14 @@ import { DockerHubTagView, IImageRepositoryDockerHubRepositoryResponse } from '@
 import { useContextSelector } from 'use-context-selector';
 import { ImagesContext } from './ImagesProvider';
 import { fromNow } from '@/lib/dayjs.helper';
-import { Badge } from '@/components/ui/badge';
 import { truncate } from '@/lib/truncate';
 import PullProgressSheetContent from './PullProgressSheetContent';
 import { Sheet } from '@/components/ui/sheet';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { useGETDockerHubTags } from './hooks/useGETDockerHubTags';
 import { byteTransform } from '@/lib/bytes.helper';
+import { useSheetState } from './hooks/useSheetState';
+import { PullImageBadge } from '@/components/ui/PullImageBadge';
 
 // Column helpers
 const repositoryColumnHelper = createColumnHelper<IImageRepositoryDockerHubRepositoryResponse>();
@@ -37,20 +38,9 @@ function NestedImagesTable({ dockerhubRepo }: { dockerhubRepo: IImageRepositoryD
     selectedRegistry?.name ?? undefined,
     dockerhubRepo?.name ?? undefined,
   );
-  const [selectedVersion, setSelectedVersion] = useState<DockerHubTagView | null>(null);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const { sheetState, openSheet, closeSheet } = useSheetState<DockerHubTagView>();
 
-  const openSheet = (tag: DockerHubTagView) => {
-    setSelectedVersion(tag);
-    setIsSheetOpen(true);
-  };
-
-  const closeSheet = () => {
-    setIsSheetOpen(false);
-    setSelectedVersion(null);
-  };
-
-  const tagColumns = React.useMemo(
+  const tagColumns = useMemo(
     () => [
       tagColumnHelper.accessor('name', {
         header: 'Tag',
@@ -68,7 +58,6 @@ function NestedImagesTable({ dockerhubRepo }: { dockerhubRepo: IImageRepositoryD
         header: 'Last Pushed',
         cell: (info) => <span className="text-[13px]">{fromNow(new Date(info.getValue() ?? 0 * 1000).getTime())}</span>,
       }),
-
       {
         header: 'Os/Arch',
         cell: ({ row }: { row: Row<DockerHubTagView> }) => (
@@ -82,16 +71,11 @@ function NestedImagesTable({ dockerhubRepo }: { dockerhubRepo: IImageRepositoryD
       {
         id: 'select',
         cell: ({ row }: { row: Row<DockerHubTagView> }) => (
-          <Badge
-            onClick={() => openSheet(row.original)}
-            className="flex text-right cursor-pointer invisible group/versionrowdown group-hover/versionrow:visible truncate rounded-full hover:bg-primary/90">
-            <span>Pull</span>
-            <ArrowDown className="ml-1 h-3.5 w-3.5 text-background group-hover/versionrowdown:animate-bounce" />
-          </Badge>
+          <PullImageBadge onClick={() => openSheet(row.original)} className="group-hover/versionrow:visible" />
         ),
       },
     ],
-    [],
+    [openSheet],
   );
 
   const versionsTable = useReactTable({
@@ -140,12 +124,12 @@ function NestedImagesTable({ dockerhubRepo }: { dockerhubRepo: IImageRepositoryD
           )}
         </TableBody>
       </Table>
-      {selectedVersion && (
-        <Sheet open={isSheetOpen} onOpenChange={(open) => (open ? setIsSheetOpen(true) : closeSheet())}>
+      {sheetState.image && (
+        <Sheet open={sheetState.isOpen} onOpenChange={(open) => (open ? openSheet(sheetState.image!) : closeSheet())}>
           <PullProgressSheetContent
             sheetProps={{
               repository: dockerhubRepo.name ?? '',
-              imageTag: selectedVersion.name ?? '',
+              imageTag: sheetState.image.name ?? '',
             }}
           />
         </Sheet>
@@ -153,6 +137,8 @@ function NestedImagesTable({ dockerhubRepo }: { dockerhubRepo: IImageRepositoryD
     </>
   );
 }
+
+// Reusable VersionRow Component
 const VersionRow = ({ version }: { version: string }) => {
   const [copiedWinCmd, copyWinCmdToClipboard] = useCopyToClipboard(5000);
   const v = version?.split(':').at(1) ?? '';
@@ -171,24 +157,22 @@ const VersionRow = ({ version }: { version: string }) => {
 export default function PrivateDockerHubImagesTable({ registryName }: { registryName: string }) {
   const { isLoading, data } = useGETExternalRepositories(registryName);
   const [expanded, setExpanded] = useState<ExpandedState>({});
-  const columns = React.useMemo(
+  const columns = useMemo(
     () => [
       repositoryColumnHelper.display({
         id: 'expander',
-        cell: ({ row }) => {
-          return (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => row.toggleExpanded()}
-              aria-label={row.getIsExpanded() ? 'Collapse row' : 'Expand row'}
-              className="h-8 w-8 p-0">
-              <div className={cn('transition-transform duration-200', row.getIsExpanded() ? 'rotate-90' : '')}>
-                <ChevronRight className="h-4 w-4" />
-              </div>
-            </Button>
-          );
-        },
+        cell: ({ row }) => (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => row.toggleExpanded()}
+            aria-label={row.getIsExpanded() ? 'Collapse row' : 'Expand row'}
+            className="h-8 w-8 p-0">
+            <div className={cn('transition-transform duration-200', row.getIsExpanded() ? 'rotate-90' : '')}>
+              <ChevronRight className="h-4 w-4" />
+            </div>
+          </Button>
+        ),
         size: 50,
       }),
       repositoryColumnHelper.accessor('name', {

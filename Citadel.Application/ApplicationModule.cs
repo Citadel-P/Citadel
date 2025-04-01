@@ -1,10 +1,10 @@
 ﻿using System.Reflection;
-using Hosting.Common.Pipelines;
 using Application.Services;
 using FluentValidation;
+using Hosting.Common;
+using Hosting.Common.Pipelines;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
-using Infrastructure.Services.Abstractions;
 
 namespace Application;
 
@@ -25,6 +25,23 @@ public static class ApplicationModule
             })
             .AddSingleton(typeof(IPipelineBehavior<,>), typeof(ValidatorBehaviour<,>));
 
+        EnsureDefaultImagesDefinitionsExists();
         return services;
+    }
+
+    private static void EnsureDefaultImagesDefinitionsExists()
+    {
+        if (!File.Exists(Constants.DefaultImagesDefinitionsPath))
+        {
+            string sourcePath = Path.Combine(AppContext.BaseDirectory, "./Features.Images/default.docker.images.json");
+            try
+            {
+                File.Copy(sourcePath, Constants.DefaultImagesDefinitionsPath);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+            }
+        }
     }
 }

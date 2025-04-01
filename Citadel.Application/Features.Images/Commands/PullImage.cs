@@ -11,6 +11,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Images.Commands;
 
+/// <summary>
+/// Command to pull an image from a registry.
+/// </summary>
 public sealed record PullImage(Guid PlatformId, string RegistryName, string RepositoryName, string ImageTag) : IStreamCommand<PullImageReply>
 {
     internal class Validator : AbstractValidator<PullImage>
@@ -29,30 +32,21 @@ internal sealed class PullImageHandler(IGrpcClientFactory clientFactory, Applica
 {
     public async IAsyncEnumerable<PullImageReply> Handle(PullImage command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var registry = await dbContext.Registries.AsNoTracking().FirstOrDefaultAsync(s => s.Name == command.RegistryName, cancellationToken) 
-            ?? throw new Exception("The provided registry name does not exist");
+        var platformAddress = await dbContext.Platforms
+            .Where(s => s.Id == command.PlatformId)
+            .Select(s => s.Address)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new KeyNotFoundException("The provided platform Id does not exist");
 
-        var platformAddress = await dbContext.Platforms.Where(s => s.Id == command.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken) 
-            ?? throw new Exception("The provided platform Id does not exist");
+        var registry = command.RegistryName == Registry.DefaultRegistryName
+            ? Registry.DefaultRegistry() // Public Docker registry
+            : await dbContext.Registries
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Name == command.RegistryName, cancellationToken)
+                ?? throw new KeyNotFoundException("The provided registry name does not exist");
 
         var client = clientFactory.GetImageClient(platformAddress);
-        var request = new PullImageMessage();
-        if (registry.Configuration is GitHubRegistry ghCfg)
-        {
-            request.FromImage = $"ghcr.io/{ghCfg.Name}/{command.RepositoryName}@{command.ImageTag}".ToLower();
-            request.Repo = $"ghcr.io/{ghCfg.Name}/{command.RepositoryName}".ToLower();
-            request.FromSrc = ghCfg.RegistryUrl;
-            request.Auth = ghCfg.GetRegistryAuth();
-
-            
-        }
-        else if (registry.Configuration is DockerHubRegistry dockerCfg)
-        {
-            request.FromImage = $"docker.io/{dockerCfg.UserName}/{command.RepositoryName}:{command.ImageTag}".ToLower();
-            request.Repo = $"docker.io/{dockerCfg.UserName}/{command.RepositoryName}".ToLower();
-            request.FromSrc = dockerCfg.RegistryUrl;
-            request.Auth = dockerCfg.GetRegistryAuth();
-        }
+        var request = CreatePullImageRequest(command, registry.Configuration);
 
         using var call = client.PullImage(request, cancellationToken: cancellationToken);
         await foreach (var reply in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
@@ -60,6 +54,41 @@ internal sealed class PullImageHandler(IGrpcClientFactory clientFactory, Applica
             yield return reply;
         }
     }
+
+    private static PullImageMessage CreatePullImageRequest(PullImage command, IRegistryConfiguration registryCfg)
+    {
+        var request = new PullImageMessage();
+
+        string domainName = registryCfg.RegistryUrl.Replace("https://", "");
+        switch (registryCfg)
+        {
+            case GitHubRegistry ghCfg:
+                request.FromImage = $"{domainName}/{ghCfg.Name}/{command.RepositoryName}@{command.ImageTag}".ToLower();
+                request.Repo = $"{domainName}/{ghCfg.Name}/{command.RepositoryName}".ToLower();
+                request.FromSrc = ghCfg.RegistryUrl;
+                request.Auth = ghCfg.GetRegistryAuth();
+                break;
+
+            case DockerHubRegistry dockerCfg:
+                if (command.RegistryName == Registry.DefaultRegistryName)
+                {
+                    request.FromImage = $"{domainName}/{command.ImageTag}:latest".ToLower();
+                    request.Repo = domainName;
+                    request.FromSrc = dockerCfg.RegistryUrl;
+                }
+                else
+                {
+                    request.FromImage = $"{domainName}/{dockerCfg.UserName}/{command.RepositoryName}:{command.ImageTag}".ToLower();
+                    request.Repo = $"{domainName}/{dockerCfg.UserName}/{command.RepositoryName}".ToLower();
+                    request.FromSrc = dockerCfg.RegistryUrl;
+                    request.Auth = dockerCfg.GetRegistryAuth();
+                }
+                break;
+
+            default:
+                throw new NotSupportedException("Unsupported registry configuration");
+        }
+
+        return request;
+    }
 }
-
-

@@ -46,12 +46,13 @@ public class Registry
         if (configuration != null) Configuration = configuration;
     }
 
+    public static string DefaultRegistryName = "Docker Hub";
     public static Registry DefaultRegistry()
     {
         return new Registry
         {
             Id = Guid.Empty,
-            Name = "Docker Hub",
+            Name = DefaultRegistryName,
             Url = "https://hub.docker.com/",
             Created = DateTime.MinValue,
             Discriminator = RegistryDiscriminator.DockerHub,
@@ -68,12 +69,13 @@ public class Registry
 [JsonDerivedType(typeof(GitHubRegistry), nameof(RegistryDiscriminator.GitHub))]
 public interface IRegistryConfiguration
 {
+    string RegistryUrl { get; }
     string GetRegistryAuth() => throw new NotImplementedException();
 }
 
 public class DockerHubRegistry : IRegistryConfiguration
 {
-    public readonly string RegistryUrl = "https://docker.io";
+    public string RegistryUrl => "https://docker.io";
     [JsonInclude]
     public string UserName { get; private set; }
     [JsonInclude]
@@ -140,10 +142,12 @@ public class DockerHubRegistry : IRegistryConfiguration
 
 public class AzureRegistry : IRegistryConfiguration
 {
+    public string RegistryUrl => string.Empty;
     [JsonInclude]
     public string UserName { get; private set; }
     [JsonInclude]
     public string Password { get; private set; }
+
 
     public static AzureRegistry Create(string userName, string password) => 
         new () 
@@ -155,7 +159,7 @@ public class AzureRegistry : IRegistryConfiguration
 
 public class GitHubRegistry : IRegistryConfiguration
 {
-    public readonly string RegistryUrl = "https://ghcr.io";
+    public string RegistryUrl => "https://ghcr.io";
     [JsonInclude]
     public string Name { get; private set; }
     [JsonInclude]
@@ -230,6 +234,7 @@ public class GitHubRegistry : IRegistryConfiguration
 
 public class AWSRegistry : IRegistryConfiguration
 {
+    public string RegistryUrl => string.Empty;
     /// <summary>
     /// If true, the credential bellow should be specified in order to connect to a private AWS registry
     /// </summary>
@@ -254,6 +259,7 @@ public class AWSRegistry : IRegistryConfiguration
 
 public class GitlabRegistry : IRegistryConfiguration
 {
+    public string RegistryUrl => string.Empty;
     [JsonInclude]
     public string UserName { get; private set; }
     [JsonInclude]

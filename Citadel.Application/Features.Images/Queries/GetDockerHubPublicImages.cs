@@ -1,12 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
-using Agent.Server.Images;
-using Google.Protobuf.Collections;
 using Hosting.Common;
 using LightResults;
 using Mediator;
@@ -31,7 +24,14 @@ internal sealed class GetDockerHubPublicImagesHandler : IQueryHandler<GetDockerH
     }
 }
 
-public record DockerHubPublicImage (string Name, string Icon, string Url, string Description);
+public record DockerHubPublicImage
+{
+    [JsonPropertyName("name")] public string Name { get; init; }
+    [JsonPropertyName("icon")] public string Icon { get; init; }
+    [JsonPropertyName("url")] public string Url { get; init; }
+    [JsonPropertyName("description")] public string Description { get; init; }
+
+}
 
 [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
 [JsonSerializable(typeof(List<DockerHubPublicImage>))]
