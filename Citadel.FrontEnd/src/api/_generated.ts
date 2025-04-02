@@ -211,6 +211,18 @@ export interface DeleteRegistriesInput {
   ids: string[] | null;
 }
 
+export interface DockerHubImageModel {
+  repo_name?: string | null;
+  short_description?: string | null;
+  is_official?: boolean;
+  /** @format int32 */
+  star_count?: number;
+  /** @format int32 */
+  pull_count?: number;
+  url?: string | null;
+  icon?: string | null;
+}
+
 export type DockerHubImageView = {
   architecture: string | null;
   digest: string | null;
@@ -220,13 +232,6 @@ export type DockerHubImageView = {
   status: ImageStatus;
   lastPulled: string | null;
 };
-
-export interface DockerHubPublicImage {
-  name?: string | null;
-  icon?: string | null;
-  url?: string | null;
-  description?: string | null;
-}
 
 export interface DockerHubRepository {
   name?: string | null;
@@ -447,6 +452,7 @@ export type IRegistryConfiguration = BaseIRegistryConfiguration &
 
 export interface IRegistryConfigurationAWSRegistry {
   $type?: 'AWS';
+  registryUrl?: string | null;
   authenticationRequired?: boolean;
   accessKey?: string | null;
   secretAccessKey?: string | null;
@@ -455,18 +461,21 @@ export interface IRegistryConfigurationAWSRegistry {
 
 export interface IRegistryConfigurationAzureRegistry {
   $type?: 'Azure';
+  registryUrl?: string | null;
   userName?: string | null;
   password?: string | null;
 }
 
 export interface IRegistryConfigurationDockerHubRegistry {
   $type?: 'DockerHub';
+  registryUrl?: string | null;
   userName?: string | null;
   pat?: string | null;
 }
 
 export interface IRegistryConfigurationGitHubRegistry {
   $type?: 'GitHub';
+  registryUrl?: string | null;
   name?: string | null;
   type?: 'Organization' | 'User' | null;
   pat?: string | null;
@@ -474,6 +483,7 @@ export interface IRegistryConfigurationGitHubRegistry {
 
 export interface IRegistryConfigurationGitlabRegistry {
   $type?: 'Gitlab';
+  registryUrl?: string | null;
   userName?: string | null;
   pat?: string | null;
   instanceUrl?: string | null;
@@ -1748,7 +1758,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @summary Search for DockerHub public images, if imageName is empty a default list of docker images will be returned
      * @request GET:/api/v1/images/dockerhub
      * @secure
-     * @response `200` `(DockerHubPublicImage)[]` OK
+     * @response `200` `(DockerHubImageModel)[]` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -1760,7 +1770,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<DockerHubPublicImage[], HttpValidationProblemDetails | ProblemDetails>({
+      this.request<DockerHubImageModel[], HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/images/dockerhub`,
         method: 'GET',
         query: query,

@@ -25,3 +25,14 @@ export function getEditedFields(dirtyFields: object | boolean, allValues: object
     Object.keys(dirtyFields).map((key) => [key, getEditedFields(dirtyFields[key], allValues[key])]),
   );
 }
+
+export function formatNumber(value: number): string {
+  if (value >= 1_000_000_000) {
+    return `${(value / 1_000_000_000).toFixed(1)}B`;
+  } else if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  } else if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(1)}k`;
+  }
+  return value.toString();
+}

@@ -2409,7 +2409,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/DockerHubPublicImage"
+                    "$ref": "#/components/schemas/DockerHubImageModel"
                   }
                 }
               }
@@ -3271,6 +3271,38 @@
           }
         }
       },
+      "DockerHubImageModel": {
+        "type": "object",
+        "properties": {
+          "repo_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "short_description": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_official": {
+            "type": "boolean"
+          },
+          "star_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pull_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "icon": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "DockerHubImageView": {
         "required": [
           "architecture",
@@ -3307,27 +3339,6 @@
           }
         },
         "nullable": true
-      },
-      "DockerHubPublicImage": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "nullable": true
-          },
-          "icon": {
-            "type": "string",
-            "nullable": true
-          },
-          "url": {
-            "type": "string",
-            "nullable": true
-          },
-          "description": {
-            "type": "string",
-            "nullable": true
-          }
-        }
       },
       "DockerHubRepository": {
         "type": "object",

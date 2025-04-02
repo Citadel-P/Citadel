@@ -1,3 +1,1 @@
-function useDockerHubSearch(name: string) {
-    
-}
+function useDockerHubSearch(name: string) {}

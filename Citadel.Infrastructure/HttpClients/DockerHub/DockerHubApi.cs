@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 namespace Infrastructure.DockerHub
 {
     [System.CodeDom.Compiler.GeneratedCode("Refitter", "1.5.2.0")]
-    /// The docker hub api is instable, use with caution, I've modified the generated as follow
+    /// The docker hub api is instable, use with caution, I've modified this generated file as follow:
     /// Replace 'Image Images' with 'List<Images>' <see cref="Tag"/>
     /// Replace 'string V2' by 'Bool V2'
     /// Add Authorization header to 'TagsGET' method

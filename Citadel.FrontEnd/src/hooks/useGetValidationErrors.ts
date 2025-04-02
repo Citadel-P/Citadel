@@ -1,16 +1,26 @@
 import { ProblemDetails, HttpValidationProblemDetails } from '@/api/_generated';
 
-export const useGetValidationErrors = (error: Error | null) => {
-  if (error) {
-    const validationProblem = (error as any).error as HttpValidationProblemDetails;
-    if (validationProblem && validationProblem.status === 400) {
-      if (validationProblem.errors) {
-        return Object.values(validationProblem.errors).join(', ');
-      }
+export const useGetValidationErrors = (error: Error | null): string | undefined => {
+  if (!error) return undefined;
+
+  const validationProblem = (error as { error?: HttpValidationProblemDetails }).error;
+
+  if (validationProblem?.status === 400) {
+    if (validationProblem.errors) {
+      // Join all validation error messages into a single string
+      return Object.values(validationProblem.errors).flat().join(', ');
     }
-    const problem = (error as any).error as ProblemDetails;
-    if (problem && problem.status && problem.status > 400 && problem.status <= 499) {
-      return problem.detail;
+
+    if ((validationProblem as ProblemDetails)?.detail) {
+      return validationProblem.detail!;
     }
   }
+
+  const problem = (error as { error?: ProblemDetails }).error;
+
+  if (problem?.status && problem.status > 400 && problem.status <= 499) {
+    return problem.detail!;
+  }
+
+  return undefined;
 };

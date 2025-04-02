@@ -7,6 +7,10 @@ public partial interface IDockerHubApi
 {
     [Get("/v2/repositories/{username}")]
     Task<PaginateRepositories> GetRepositories(string username, [Header("Authorization")] string accessToken, [Query] int? page, [Query] int? page_size, CancellationToken cancellationToken = default);
+
+    [Get("/v2/search/repositories/?page=1&page_size=100&query={imagename}")]
+    Task<PaginateImageSearch> SearchImage(string imagename, CancellationToken cancellationToken = default);
+
 }
 
 [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
@@ -15,6 +19,26 @@ public partial class PaginateRepositories : Page
 
     [JsonPropertyName("results")]
     public ICollection<DockerHubRepository> Results { get; set; }
+
+}
+
+
+[System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
+public partial class PaginateImageSearch: Page
+{
+    [JsonPropertyName("results")]
+    public ICollection<DockerHubImageModel> Results { get; set; }
+}
+
+public record DockerHubImageModel
+{
+    [JsonPropertyName("repo_name")] public string Name { get; init; }
+    [JsonPropertyName("short_description")] public string Description { get; init; }
+    [JsonPropertyName("is_official")] public bool IsOfficial { get; init; }
+    [JsonPropertyName("star_count")] public long StarCount { get; init; }
+    [JsonPropertyName("pull_count")] public long PullCount { get; init; }
+    [JsonPropertyName("url")] public string Url { get; init; }
+    [JsonPropertyName("icon")] public string Icon { get; init; }
 
 }
 

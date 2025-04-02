@@ -1564,19 +1564,19 @@
               },
               "examples": {
                 "Azure": {
-                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Discriminator\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\"}}"
+                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Discriminator\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"RegistryUrl\":\"\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\"}}"
                 },
                 "AWS": {
-                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Discriminator\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"AuthenticationRequired\":true,\"AccessKey\":\"\",\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\"}}"
+                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Discriminator\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"RegistryUrl\":\"\",\"AuthenticationRequired\":true,\"AccessKey\":\"\",\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\"}}"
                 },
                 "Gitlab": {
-                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Discriminator\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\"}}"
+                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Discriminator\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"RegistryUrl\":\"\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\"}}"
                 },
                 "DockerHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"UserName\":\"\",\"PAT\":\"\"}}"
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"RegistryUrl\":\"https://docker.io\",\"UserName\":\"\",\"PAT\":\"\"}}"
                 },
                 "GitHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"Name\":\"organization or user name\",\"Type\":\"Organization\",\"PAT\":\"\"}}"
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"RegistryUrl\":\"https://ghcr.io\",\"Name\":\"organization or user name\",\"Type\":\"Organization\",\"PAT\":\"\"}}"
                 }
               }
             }
@@ -1738,19 +1738,19 @@
               },
               "examples": {
                 "Azure": {
-                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Discriminator\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\"}}"
+                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Discriminator\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"RegistryUrl\":\"\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\"}}"
                 },
                 "AWS": {
-                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Discriminator\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"AuthenticationRequired\":true,\"AccessKey\":\"\",\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\"}}"
+                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Discriminator\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"RegistryUrl\":\"\",\"AuthenticationRequired\":true,\"AccessKey\":\"\",\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\"}}"
                 },
                 "Gitlab": {
-                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Discriminator\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\"}}"
+                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Discriminator\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"RegistryUrl\":\"\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\"}}"
                 },
                 "DockerHub": {
-                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"UserName\":\"\",\"PAT\":\"\"}}"
+                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"RegistryUrl\":\"https://docker.io\",\"UserName\":\"\",\"PAT\":\"\"}}"
                 },
                 "GitHub": {
-                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"Name\":\"organization or user name\",\"Type\":\"Organization\",\"PAT\":\"\"}}"
+                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"RegistryUrl\":\"https://ghcr.io\",\"Name\":\"organization or user name\",\"Type\":\"Organization\",\"PAT\":\"\"}}"
                 }
               }
             }
@@ -2409,7 +2409,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/DockerHubPublicImage"
+                    "$ref": "#/components/schemas/DockerHubImageModel"
                   }
                 }
               }
@@ -3271,6 +3271,38 @@
           }
         }
       },
+      "DockerHubImageModel": {
+        "type": "object",
+        "properties": {
+          "repo_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "short_description": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_official": {
+            "type": "boolean"
+          },
+          "star_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pull_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "icon": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "DockerHubImageView": {
         "required": [
           "architecture",
@@ -3307,27 +3339,6 @@
           }
         },
         "nullable": true
-      },
-      "DockerHubPublicImage": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "nullable": true
-          },
-          "icon": {
-            "type": "string",
-            "nullable": true
-          },
-          "url": {
-            "type": "string",
-            "nullable": true
-          },
-          "description": {
-            "type": "string",
-            "nullable": true
-          }
-        }
       },
       "DockerHubRepository": {
         "type": "object",
@@ -4131,6 +4142,10 @@
             ],
             "type": "string"
           },
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "authenticationRequired": {
             "type": "boolean"
           },
@@ -4156,6 +4171,10 @@
             ],
             "type": "string"
           },
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "userName": {
             "type": "string",
             "nullable": true
@@ -4174,6 +4193,10 @@
             ],
             "type": "string"
           },
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "userName": {
             "type": "string",
             "nullable": true
@@ -4191,6 +4214,10 @@
               "GitHub"
             ],
             "type": "string"
+          },
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
           },
           "name": {
             "type": "string",
@@ -4217,6 +4244,10 @@
               "Gitlab"
             ],
             "type": "string"
+          },
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
           },
           "userName": {
             "type": "string",

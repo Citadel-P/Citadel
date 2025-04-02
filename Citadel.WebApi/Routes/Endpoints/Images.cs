@@ -44,7 +44,7 @@ public static class Images
         return EndpointHandlers.HandleResult(result, v => v);
     }
 
-    public static async Task<Results<Ok<IEnumerable<DockerHubPublicImage>>, ProblemHttpResult>> GetDockerHubPublicImages(IMediator mediator, [FromQuery] string imageName, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<IEnumerable<DockerHubImageModel>>, ProblemHttpResult>> GetDockerHubPublicImages(IMediator mediator, [FromQuery] string imageName, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetDockerHubPublicImages(imageName), cancellationToken);
         return EndpointHandlers.HandleResult(result, v => v);

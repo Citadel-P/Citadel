@@ -1,19 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
-import { Search } from 'lucide-react';
+import { Search, Package, Award, Star } from 'lucide-react';
 import { useGETPublicDockerImages } from './hooks/useGETPublicDockerImages';
-import { DockerHubPublicImage } from '@/api/_generated';
-import Loader from '@/components/ui/loader';
+import { DockerHubImageModel } from '@/api/_generated';
 import { PullImageBadge } from '@/components/ui/PullImageBadge';
 import { useSheetState } from './hooks/useSheetState';
 import { Sheet } from '@/components/ui/sheet';
 import PullProgressSheetContent from './PullProgressSheetContent';
+import Loader from '@/components/ui/loader';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatNumber } from '@/lib/utils';
 
 export function PublicDockerHubImages() {
   const [searchValue, setSearchValue] = useState<string | undefined>(undefined);
   const { data, error, isLoading, isSuccess, refetch } = useGETPublicDockerImages(searchValue);
-  const [images, setImages] = useState<DockerHubPublicImage[]>();
-  const { sheetState, openSheet, closeSheet } = useSheetState<DockerHubPublicImage>();
+  const [images, setImages] = useState<DockerHubImageModel[]>();
+  const { sheetState, openSheet, closeSheet } = useSheetState<DockerHubImageModel>();
 
   useEffect(() => {
     if (isSuccess && data?.data) {
@@ -21,22 +23,70 @@ export function PublicDockerHubImages() {
     }
   }, [isSuccess, data]);
 
-  function handleSearch() {
-    refetch(); // Trigger the query with the current search value
-  }
+  const handleSearch = () => refetch();
 
-  function handleInputChange(event: React.ChangeEvent<HTMLInputElement>) {
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchValue(event.target.value);
-  }
+  };
 
-  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
       handleSearch();
     }
-  }
+  };
+
+  const renderImageCard = (image: DockerHubImageModel) => (
+    <div
+      key={image.repo_name}
+      className="p-4 group/versionrow border rounded-lg shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex items-center justify-between">
+        <a className="hover:underline flex items-center space-x-3" target="_blank" rel="noreferrer" href={image.url!}>
+          {image.icon ? (
+            <img
+              src={image.icon || '/default-icon.png'}
+              alt={image.repo_name ?? ''}
+              className="h-10 w-10 rounded-full object-cover"
+            />
+          ) : (
+            <Package className="h-8 text-foreground/70" />
+          )}
+
+          <div className="flex items-center space-x-2">
+            <h5 className="text-lg font-semibold">{image.repo_name}</h5>
+            {image.is_official && (
+              <Tooltip>
+                <TooltipTrigger>
+                  <Award className="text-green-700 h-5 w-4" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Official Image</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        </a>
+        <div>
+          <PullImageBadge onClick={() => openSheet(image)} className="group-hover/versionrow:visible" />
+        </div>
+      </div>
+      <p className="text-sm text-foreground/70 mt-2">{image.short_description || 'No description available.'}</p>
+      {!(image.is_official && image.pull_count === 0) && (
+        <div className="flex justify-between items-center mt-4 text-sm text-foreground/70">
+          <div className="flex items-center space-x-1">
+            <Star className="h-4 w-4 text-yellow-500" />
+            <span>{formatNumber(image.star_count ?? 0)} Stars</span>
+          </div>
+          <div className="flex items-center space-x-1">
+            <Package className="h-4 w-4 text-blue-500" />
+            <span>{formatNumber(image.pull_count ?? 0)} Downloads</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
-    <>
+    <TooltipProvider>
       <div className="space-y-8">
         <div className="text-center space-y-2">
           <h4 className="text-3xl md:text-4xl font-medium text-slate-900 dark:text-slate-50">Docker Image Registry</h4>
@@ -64,32 +114,9 @@ export function PublicDockerHubImages() {
             <p>Failed to fetch images. Please try again later.</p>
           </div>
         )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-          {images?.map((image) => (
-            <div
-              key={image.name}
-              className="p-4 group/versionrow border rounded-lg shadow-sm bg-white dark:bg-slate-800 hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <img
-                    src={image.icon || '/default-icon.png'}
-                    alt={image.name ?? ''}
-                    className="h-10 w-10 rounded-full object-cover"
-                  />
-                  <h5 className="text-lg font-semibold text-slate-900 dark:text-slate-50">{image.name}</h5>
-                </div>
-                <div>
-                  <PullImageBadge onClick={() => openSheet(image)} className="group-hover/versionrow:visible" />
-                </div>
-              </div>
-              <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                {image.description || 'No description available.'}
-              </p>
-            </div>
-          ))}
-        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">{images?.map(renderImageCard)}</div>
         {!isLoading && images?.length === 0 && (
-          <div className="text-center text-slate-600 dark:text-slate-400">
+          <div className="text-center text-foreground/70">
             <p>
               No images found for <b>{searchValue}</b>.
             </p>
@@ -101,11 +128,11 @@ export function PublicDockerHubImages() {
           <PullProgressSheetContent
             sheetProps={{
               repository: '',
-              imageTag: sheetState.image.name ?? '',
+              imageTag: sheetState.image.repo_name ?? '',
             }}
           />
         </Sheet>
       )}
-    </>
+    </TooltipProvider>
   );
 }

@@ -168,7 +168,6 @@ export const ContainersTable = () => {
   );
 };
 
-
 const ContainerStatTooltip = memo(({ stat }: { stat: string }) => {
   const getStatusClass = (status: string) => {
     switch (status) {

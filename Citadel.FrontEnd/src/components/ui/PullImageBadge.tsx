@@ -16,7 +16,7 @@ export const PullImageBadge: React.FC<PullBadgeProps> = ({ onClick, className })
         className,
       )}>
       <span>Pull</span>
-      <ArrowDown className="ml-1 h-3.5 w-3.5 text-background group-hover/versionrowdown:animate-bounce" />
+      <ArrowDown className="ml-1 h-3.5 w-3.5 dark:text-foreground group-hover/versionrowdown:animate-bounce" />
     </Badge>
   );
 };
