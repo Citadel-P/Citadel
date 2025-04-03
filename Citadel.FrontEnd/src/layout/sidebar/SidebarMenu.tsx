@@ -25,7 +25,7 @@ export const SidebarMenu = () => {
         return {
           ...item,
           active: isActive,
-          expanded: item.children ? item.children.some((s) => s.expanded) : isActive,
+          expanded: item.children ? item.expanded || item.children.some((s) => s.expanded) : isActive,
           children: item.children ? updateMenuItems(item.children) : undefined,
         };
       });
