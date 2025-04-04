@@ -1,37 +1,73 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useContextSelector } from 'use-context-selector';
 import { LayoutContext } from '@/layout/LayoutProvider';
-import { ISubMenuItem, MenuItems } from './menu-items';
+import { ISubMenuItem, MenuItems, DockerPlatformMenu, IMenuItem } from './menu-items';
 import { ChevronRight } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { SidebarSubMenu } from './SidebarSidemenu';
+import { AppContext } from '@/AppProvider';
 
 export const SidebarMenu = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const sidebarMinimized = useContextSelector(LayoutContext, (v) => v?.sidebarMinimized) ?? false;
+  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
   const toggleSidebar = useContextSelector(LayoutContext, (v) => v?.toggleSidebar)!;
-  const [menuItems, setMenuItems] = useState(MenuItems);
+  const [menuItems, setMenuItems] = useState<IMenuItem[]>(MenuItems);
 
   const isRouteActive = useCallback(
     (path: string) => location.pathname === path || (location.pathname === '/' && path === ''),
     [location.pathname],
   );
 
+  // Add platform menu dynamically
+  const addPlatformToMenu = useCallback(
+    (platform: { id: string; name: string }) => {
+      const platformRoute = `/platforms/${platform.id}`;
+      const platformMenu = DockerPlatformMenu(platform);
+
+      // Mark children as active/expanded if applicable
+      platformMenu.children?.forEach((item) => {
+        item.active = isRouteActive(item.route ?? '');
+      });
+      platformMenu.expanded = platformMenu.children?.some((menu) => menu.active) || false;
+
+      setMenuItems((prevMenuItems) => {
+        const baseMenuIndex = prevMenuItems.findIndex((menu) => menu.group === 'Base');
+
+        if (baseMenuIndex === -1) return prevMenuItems;
+
+        const baseMenu = prevMenuItems[baseMenuIndex];
+
+        // Avoid duplicates
+        if (baseMenu.items.some((item) => item.route === platformRoute)) return prevMenuItems;
+
+        // Add the new platform
+        const updatedBaseMenu = {
+          ...baseMenu,
+          items: [...baseMenu.items, platformMenu],
+        };
+
+        return [...prevMenuItems.slice(0, baseMenuIndex), updatedBaseMenu, ...prevMenuItems.slice(baseMenuIndex + 1)];
+      });
+    },
+    [isRouteActive],
+  );
+
+  // Update menu items when location changes
   useEffect(() => {
     const updateMenuItems = (items: ISubMenuItem[]): ISubMenuItem[] =>
-      items.map((item) => {
-        const isActive = isRouteActive(item.route ?? '');
-        return {
-          ...item,
-          active: isActive,
-          expanded: item.children ? item.expanded || item.children.some((s) => s.expanded) : isActive,
-          children: item.children ? updateMenuItems(item.children) : undefined,
-        };
-      });
+      items.map((item) => ({
+        ...item,
+        active: isRouteActive(item.route ?? ''),
+        expanded: item.children
+          ? item.expanded || item.children.some((child) => child.expanded)
+          : isRouteActive(item.route ?? ''),
+        children: item.children ? updateMenuItems(item.children) : undefined,
+      }));
 
-    setMenuItems((v) =>
-      v.map((menu) => ({
+    setMenuItems((prevMenuItems) =>
+      prevMenuItems.map((menu) => ({
         ...menu,
         active: menu.items.some((subMenu) => isRouteActive(subMenu.route ?? '')),
         items: updateMenuItems(menu.items),
@@ -39,23 +75,21 @@ export const SidebarMenu = () => {
     );
   }, [location, isRouteActive]);
 
+  // Add platform menu when currentPlatform changes
+  useEffect(() => {
+    if (currentPlatform?.id) {
+      addPlatformToMenu({ id: currentPlatform.id, name: currentPlatform.name ?? '' });
+    }
+  }, [currentPlatform, addPlatformToMenu]);
+
   const toggleMenu = (menu: ISubMenuItem): void => {
     const updateSubMenu = (items: ISubMenuItem[]): ISubMenuItem[] =>
-      items.map((item) => {
-        if (item === menu) {
-          // Toggle the expanded state of the matched menu
-          return { ...item, expanded: !item.expanded };
-        }
+      items.map((item) => ({
+        ...item,
+        expanded: item === menu ? !item.expanded : item.expanded,
+        children: item.children ? updateSubMenu(item.children) : undefined,
+      }));
 
-        // Recursively update children if they exist
-        if (item.children) {
-          return { ...item, children: updateSubMenu(item.children) };
-        }
-
-        return item;
-      });
-
-    // Update MenuItems
     setMenuItems((prevMenuItems) =>
       prevMenuItems.map((menuGroup) => ({
         ...menuGroup,
@@ -63,7 +97,6 @@ export const SidebarMenu = () => {
       })),
     );
 
-    // Handle sidebar toggle or navigation
     if (sidebarMinimized && menu.children) {
       toggleSidebar();
     } else if (!menu.children) {
@@ -75,7 +108,7 @@ export const SidebarMenu = () => {
     <li key={item.label}>
       <div
         onClick={() => toggleMenu(item)}
-        className="group relative text-muted-foreground cursor-pointer"
+        className="group relative text-muted-foreground cursor-pointer hover:bg-card flex h-9 items-center justify-start rounded"
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
@@ -89,18 +122,15 @@ export const SidebarMenu = () => {
         </div>
 
         {item.children ? (
-          <ExpandableMenuItem item={item} sidebarMinimized={sidebarMinimized ?? false} />
+          <ExpandableMenuItem item={item} sidebarMinimized={sidebarMinimized} />
         ) : (
-          <div className="flex h-9 items-center justify-start rounded text-muted-foreground hover:bg-card hover:text-foreground">
-            <Link
-              to={item.route!}
-              className={`${item.active ? 'text-primary' : ''} ml-10 truncate text-xs font-semibold tracking-wide`}>
-              {item.label}
-            </Link>
-          </div>
+          <Link
+            to={item.route!}
+            className={`ml-10 truncate text-xs font-semibold tracking-wide ${item.active ? 'text-primary' : ''}`}>
+            {item.label}
+          </Link>
         )}
 
-        {/* Tooltip */}
         {sidebarMinimized && (
           <div className="absolute w-full">
             <span className="z-100 absolute left-14 -top-[34px] w-auto min-w-max origin-left scale-0 rounded-md bg-foreground p-2 text-xs font-bold text-background shadow-md transition-all duration-200 group-hover:scale-100">
@@ -110,7 +140,6 @@ export const SidebarMenu = () => {
         )}
       </div>
 
-      {/* Submenu items */}
       {item.children && <SidebarSubMenu submenu={item} toggleMenu={toggleMenu} />}
     </li>
   );

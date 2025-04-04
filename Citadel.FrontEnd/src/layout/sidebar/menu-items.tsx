@@ -1,6 +1,6 @@
 import { Layers, Users, Settings, Bell } from 'lucide-react';
 import { JSX } from 'react';
-
+import DockerIcon from '@/assets/docker.min.svg';
 interface IMenuItem {
   group: string;
   separator?: boolean;
@@ -62,12 +62,12 @@ const MenuItems: IMenuItem[] = [
  * @returns A submenu item for the platform.
  */
 const DockerPlatformMenu = (platform: { id: string; name: string }): ISubMenuItem => ({
-  icon: <img src="assets/icons/docker.min.svg" alt="Docker" className="w-4 h-4" />,
+  icon: <DockerIcon />,
   label: platform.name,
   route: `/platforms/${platform.id}`,
   isPlatform: true,
   children: [
-    { label: 'Containers', route: `/platforms/${platform.id}/containers` },
+    { label: 'Containers', route: `/platforms/${platform.id}/containers`,  },
     { label: 'Images', route: `/platforms/${platform.id}/images` },
     { label: 'Networks', route: `/platforms/${platform.id}/networks` },
     { label: 'Volumes', route: `/platforms/${platform.id}/volumes` },

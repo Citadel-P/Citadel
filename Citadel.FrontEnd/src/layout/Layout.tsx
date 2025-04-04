@@ -40,7 +40,7 @@ const LayoutPage = () => {
       <main className="flex grow relative flex-col content-start overflow-hidden bg-card">
         <div
           ref={contentRef}
-          className="scrollbar-thumb-rounded scrollbar-track-rounded grow overflow-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted">
+          className="scrollbar-thumb-rounded scrollbar-track-rounded grow overflow-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted dark:scrollbar-thumb-muted-foreground">
           <span ref={breadcrumbRef}>
             <Breadcrumb isSticky={isSticky} />
           </span>
