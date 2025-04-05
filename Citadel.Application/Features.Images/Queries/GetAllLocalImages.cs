@@ -18,7 +18,7 @@ internal class GetAllLocalImagesHandler(ApplicationDbContext dbContext, IGrpcCli
         var address = await dbContext.Platforms.Where(s => s.Id == query.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
         if (address == null) 
         {
-            return Result.Failure<IEnumerable<ImageReply>>(new NotFoundError($"The provided platform Id doesn't exist"));
+            return Result.Failure<IEnumerable<ImageReply>>(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
         try

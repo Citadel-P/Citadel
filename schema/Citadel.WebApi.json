@@ -4041,6 +4041,7 @@
           "sharedSize",
           "size",
           "virtualSize",
+          "isInUse",
           "labels"
         ],
         "type": "object",
@@ -4082,6 +4083,9 @@
           "virtualSize": {
             "type": "number",
             "format": "double"
+          },
+          "isInUse": {
+            "type": "boolean"
           },
           "labels": {
             "type": "object",

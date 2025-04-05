@@ -11,6 +11,7 @@ public sealed record ImageView(
     long SharedSize,
     double Size,
     double VirtualSize,
+    bool IsInUse,
     IDictionary<string, string> Labels)
 {
     public string Name => GetImageName();
@@ -41,6 +42,7 @@ public sealed record ImagesView(IEnumerable<ImageView> Images)
             reply.SharedSize,
             reply.Size,
             reply.VirtualSize,
+            reply.Containers > 0,
             reply.Labels
         );
 }

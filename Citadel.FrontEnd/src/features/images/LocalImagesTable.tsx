@@ -11,11 +11,12 @@ import { ImagesContext } from './ImagesProvider';
 import { truncate } from '@/lib/truncate';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { CheckCheck, Clipboard } from 'lucide-react';
-import { useEffect, useCallback, useMemo } from 'react';
+import { useEffect, useCallback, useMemo, memo } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
 import { byteTransform } from '@/lib/bytes.helper';
 import { DeleteLocalImageDialog } from './dialogs/DeleteLocalImageDialog';
 import { AppContext } from '@/AppProvider';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const columns: ColumnDef<ImageView>[] = [
   {
@@ -41,9 +42,12 @@ const columns: ColumnDef<ImageView>[] = [
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => (
-      <Link to={`../registries/edit/${row.original.id}`} className="hover:underline">
-        {truncate(row.original.name ?? '', 35, 'right')}
-      </Link>
+      <div className="flex items-center whitespace-nowrap">
+        <div className="flex items-center">
+          <ImageStatusTooltip inUse={row.original.isInUse} />
+        </div>
+        <span>{truncate(row.original.name ?? '', 35, 'right')}</span>
+      </div>
     ),
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
@@ -138,3 +142,22 @@ export default function LocalImagesTable() {
     </div>
   );
 }
+
+const ImageStatusTooltip = memo(({ inUse }: { inUse: boolean }) => {
+  const getStatusClass = () => (inUse ? 'bg-green-500' : 'bg-gray-500');
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className={`${getStatusClass()} mr-2 h-2 w-2 rounded-full`} />
+        </TooltipTrigger>
+        <TooltipContent>
+          <span>{inUse ? 'In use' : 'Unused'}</span>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+});
+
+ImageStatusTooltip.displayName = 'ImageStatusTooltip';

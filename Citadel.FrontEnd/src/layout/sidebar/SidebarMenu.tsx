@@ -121,8 +121,8 @@ export const SidebarMenu = () => {
           {item.icon}
         </div>
 
-        {item.children ? (
-          <ExpandableMenuItem item={item} sidebarMinimized={sidebarMinimized} />
+        {item.children && !sidebarMinimized ? (
+          <ExpandableMenuItem item={item} />
         ) : (
           <Link
             to={item.route!}
@@ -144,20 +144,13 @@ export const SidebarMenu = () => {
     </li>
   );
 
-  interface ExpandableMenuItemProps {
-    item: ISubMenuItem;
-    sidebarMinimized: boolean;
-  }
-
-  const ExpandableMenuItem = ({ item, sidebarMinimized }: ExpandableMenuItemProps) => (
+  const ExpandableMenuItem = ({ item }: { item: ISubMenuItem }) => (
     <div className="flex h-9 items-center justify-start rounded hover:bg-card">
       <span className="ml-10 truncate text-xs font-semibold tracking-wide text-muted-foreground group-hover:text-foreground">
         {item.label}
       </span>
       <button
-        className={`${
-          sidebarMinimized ? 'hidden' : ''
-        } ${item.expanded ? 'rotate-90' : ''} absolute top-1 right-0 flex items-center p-1 text-muted-foreground/50 transition-all transform duration-500`}
+        className={`${item.expanded ? 'rotate-90' : ''} absolute top-1 right-0 flex items-center p-1 text-muted-foreground/50 transition-all transform duration-500`}
         aria-label="Expand submenu">
         <ChevronRight className="w-4 h-4" />
       </button>

@@ -215,9 +215,9 @@ export interface DockerHubImageModel {
   repo_name?: string | null;
   short_description?: string | null;
   is_official?: boolean;
-  /** @format int32 */
+  /** @format int64 */
   star_count?: number;
-  /** @format int32 */
+  /** @format int64 */
   pull_count?: number;
   url?: string | null;
   icon?: string | null;
@@ -436,6 +436,7 @@ export interface ImageView {
   size: number;
   /** @format double */
   virtualSize: number;
+  isInUse: boolean;
   labels: Record<string, string>;
   name?: string | null;
   tag?: string | null;
