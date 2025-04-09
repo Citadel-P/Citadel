@@ -23,7 +23,7 @@ public static class ApplicationModule
             {
                 options.ServiceLifetime = ServiceLifetime.Scoped;
             })
-            .AddSingleton(typeof(IPipelineBehavior<,>), typeof(ValidatorBehaviour<,>));
+            .AddSingleton(typeof(IPipelineBehavior<,>), typeof(ValidatorBehavior<,>));
 
         EnsureDefaultImagesDefinitionsExists();
         return services;

@@ -3,7 +3,6 @@ import { ImageView } from '@/api/_generated';
 import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Link } from 'react-router';
 import { useGETAllLocalImages } from './hooks/useGETAllLocalImages';
 import DropdownTableMenu from './DropdownTableMenu';
 import { useContextSelector } from 'use-context-selector';
