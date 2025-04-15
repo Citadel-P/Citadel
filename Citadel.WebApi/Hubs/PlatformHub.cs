@@ -12,8 +12,6 @@ public interface ITypedPlatformHub
 [Authorize]
 internal sealed class PlatformHub : Hub<ITypedPlatformHub>
 {
-    public async Task SendPlatformUpdated(IEnumerable<PlatformView> platforms)
-    {
-        await Clients.All.PlatformsUpdated(platforms);
-    }
+    public Task SendPlatformUpdated(IEnumerable<PlatformView> platforms) =>
+        Clients.All.PlatformsUpdated(platforms);
 }

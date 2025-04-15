@@ -4630,13 +4630,6 @@
         "type": "string"
       },
       "PlatformStatView": {
-        "required": [
-          "memoryUsage",
-          "cpuUsage",
-          "created",
-          "rxBytes",
-          "txBytes"
-        ],
         "type": "object",
         "properties": {
           "memoryUsage": {
@@ -4955,11 +4948,6 @@
         }
       },
       "PortView": {
-        "required": [
-          "ip",
-          "privatePort",
-          "publicPort"
-        ],
         "type": "object",
         "properties": {
           "ip": {
@@ -5245,10 +5233,6 @@
         "nullable": true
       },
       "SwarmPeerView": {
-        "required": [
-          "nodeID",
-          "addr"
-        ],
         "type": "object",
         "properties": {
           "nodeID": {

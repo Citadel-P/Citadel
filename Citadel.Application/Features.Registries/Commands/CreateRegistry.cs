@@ -102,8 +102,7 @@ internal class CreateRegistryHandler(ApplicationDbContext dbContext, IDockerHubA
 {
     public async ValueTask<Result<Registry>> Handle(CreateRegistry command, CancellationToken cancellationToken)
     {
-        // Check for conflicted entries
-        Registry registry = await dbContext.Registries.FirstOrDefaultAsync(s => s.Name == command.Name, cancellationToken);
+        var registry = await dbContext.Registries.FirstOrDefaultAsync(s => s.Name == command.Name, cancellationToken);
         if (registry != null)
         {
             return Result.Failure<Registry>(new ConflictError("The provided name already exist"));

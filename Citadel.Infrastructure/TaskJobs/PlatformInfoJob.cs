@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using Agent.Server.Containers;
 using Citadel.Common;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
@@ -22,73 +23,84 @@ internal class PlatformInfoJob(
     public async ValueTask Execute(IJobExecutionContext context)
     {
         var platforms = await dbContext.Platforms
-                            .Include(s => s.Stats.OrderByDescending(s => s.Created).Take(1))
-                            .Include(s => s.SwarmInfo)
-                            .ThenInclude(s => s.RemoteManagers)
-                            .ToListAsync(context.CancellationToken);
+            .Include(s => s.Stats.OrderByDescending(s => s.Created).Take(1))
+            .Include(s => s.SwarmInfo)
+            .ThenInclude(s => s.RemoteManagers)
+            .ToListAsync(context.CancellationToken);
 
         if (platforms.Count == 0) return;
-        foreach (var platformData in await GetPlatformsData(platforms.Select(s => s.Address), context.CancellationToken)) 
+
+        var platformMap = platforms.ToDictionary(p => p.Address);
+        var platformDataList = await GetPlatformsData(platformMap.Keys, context.CancellationToken);
+
+        foreach (var platformData in platformDataList)
         {
-            var existing = platforms.First(s => s.Address == platformData.Address);
+            if (!platformMap.TryGetValue(platformData.Address, out var existing))
+                continue;
+
+            var info = platformData.PlatformInfo;
+
             existing.PartialUpdate(
                 platformStatus: platformData.Status,
-                networksCount: platformData.PlatformInfo?.NetworksCount,
-                volumesCount: platformData.PlatformInfo?.VolumesCount,
-                containers: platformData.PlatformInfo?.Containers,
-                containersRunning: platformData.PlatformInfo?.ContainersRunning,
-                containersPaused: platformData.PlatformInfo?.ContainersPaused,
-                containersStopped: platformData.PlatformInfo?.ContainersStopped,
-                images: platformData.PlatformInfo?.Images,
-                ncpu: platformData.PlatformInfo?.Ncpu,
-                memTotal: platformData.PlatformInfo?.MemTotal,
-                serverVersion: platformData.PlatformInfo?.ServerVersion,
-                agentVersion: platformData.PlatformInfo?.AgentVersion,
-                osType: platformData.PlatformInfo?.OsType,
-                osVersion: platformData.PlatformInfo?.OsVersion,
-                operatingSystem: platformData.PlatformInfo?.OperatingSystem,
-                driver: platformData.PlatformInfo?.Driver
-                );
+                networksCount: info?.NetworksCount,
+                volumesCount: info?.VolumesCount,
+                containers: info?.Containers,
+                containersRunning: info?.ContainersRunning,
+                containersPaused: info?.ContainersPaused,
+                containersStopped: info?.ContainersStopped,
+                images: info?.Images,
+                ncpu: info?.Ncpu,
+                memTotal: info?.MemTotal,
+                serverVersion: info?.ServerVersion,
+                agentVersion: info?.AgentVersion,
+                osType: info?.OsType,
+                osVersion: info?.OsVersion,
+                operatingSystem: info?.OperatingSystem,
+                driver: info?.Driver);
 
-            if (platformData.Status == PlatformStatus.Online)
+            if (platformData.Status == PlatformStatus.Online && info != null)
             {
                 // Insert the platform stats
                 var stat = PlatformStat.Create(
-                    memoryUsage: double.IsNaN(platformData.PlatformInfo.MemoryUsage) ? 0 : platformData.PlatformInfo.MemoryUsage,
-                    cpuUsage: double.IsNaN(platformData.PlatformInfo.CpuUsage) ? 0 : platformData.PlatformInfo.CpuUsage,
-                    created: double.IsNaN(platformData.PlatformInfo.Created) ? 0 : platformData.PlatformInfo.Created,
-                    rxBytes: double.IsNaN(platformData.PlatformInfo.RxBytes) ? 0 : platformData.PlatformInfo.RxBytes,
-                    txBytes: double.IsNaN(platformData.PlatformInfo.TxBytes) ? 0 : platformData.PlatformInfo.TxBytes,
+                    memoryUsage: double.IsNaN(info.MemoryUsage) ? 0 : info.MemoryUsage,
+                    cpuUsage: double.IsNaN(info.CpuUsage) ? 0 : info.CpuUsage,
+                    created: double.IsNaN(info.Created) ? 0 : info.Created,
+                    rxBytes: double.IsNaN(info.RxBytes) ? 0 : info.RxBytes,
+                    txBytes: double.IsNaN(info.TxBytes) ? 0 : info.TxBytes,
                     platformId: existing.Id);
 
                 dbContext.PlatformStats.Add(stat);
             }
         }
-        
+
         await dbContext.SaveChangesAsync(context.CancellationToken);
+
+        platforms.Sort((a, b) => string.Compare(b.Name, a.Name, StringComparison.Ordinal));
         // Notify client(s)
         await platformHub.PushPlatformsUpdates(platforms);
     }
 
-    private async Task<IEnumerable<PlatformData>> GetPlatformsData(IEnumerable<string> addresses, CancellationToken cancellationToken) 
+    private async Task<IEnumerable<PlatformData>> GetPlatformsData(IEnumerable<string> addresses, CancellationToken cancellationToken)
     {
-        var platforms = new ConcurrentBag<PlatformData>();
-        await Parallel.ForEachAsync(addresses, cancellationToken, async (address, cancellationToken) =>
+        var result = new ConcurrentBag<PlatformData>();
+
+        await Parallel.ForEachAsync(addresses, cancellationToken, async (address, ct) =>
         {
             var client = clientFactory.GetPlatformClient(address);
             try
             {
-                var platformInfo = await client.GetPlatformInfoAsync(new Empty(), cancellationToken: cancellationToken);
-                platforms.Add(new PlatformData(address, PlatformStatus.Online, platformInfo));
+                var info = await client.GetPlatformInfoAsync(new Empty(), cancellationToken: ct);
+                result.Add(new PlatformData(address, PlatformStatus.Online, info));
             }
             catch (RpcException ex)
             {
                 logger.LogWarning(ex, "Error while getting system info from platform {PlatformAddress}", address);
-                platforms.Add(new PlatformData(address, PlatformStatus.Offline));
+                result.Add(new PlatformData(address, PlatformStatus.Offline));
             }
         });
-        return platforms;
+
+        return result;
     }
 
-    private record PlatformData(string Address, PlatformStatus Status, PlatformInfoMessage PlatformInfo = null);
+    private readonly record struct PlatformData(string Address, PlatformStatus Status, PlatformInfoMessage PlatformInfo = null);
 }

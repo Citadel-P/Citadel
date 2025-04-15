@@ -38,6 +38,13 @@ internal static class Extensions
                 .ForJob(DaemonEventJob.JobKey)
                 .StartNow()
             );
+
+            // Add LogCleanup job
+            q.AddJob<LogCleanupJob>(opts => opts.WithIdentity(LogCleanupJob.JobKey));
+            q.AddTrigger(opts => opts
+                .ForJob(LogCleanupJob.JobKey)
+                .WithCronSchedule("0 0 0 * * ?") // Runs daily at midnight
+            );
         });
 
         services.AddQuartzHostedService(options =>

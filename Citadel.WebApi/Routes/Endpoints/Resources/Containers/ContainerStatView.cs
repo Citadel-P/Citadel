@@ -2,7 +2,7 @@
 
 namespace WebApi.Routes.Endpoints.Resources.Containers;
 
-public sealed record ContainerStatsView(IEnumerable<ContainerStatView> stats)
+public sealed record ContainerStatsView(IEnumerable<ContainerStatView> Stats)
 {
     internal static ContainerStatsView Map(IEnumerable<ContainerStat> stats)
         => new(ContainerStatView.Map(stats));

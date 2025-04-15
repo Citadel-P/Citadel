@@ -17,12 +17,12 @@ internal sealed class ContainerHub : Hub<ITypedContainerHub>
     /// <summary>
     /// Must be called from client side in order to join a group
     /// </summary>
-    public async Task JoinGroup(string groupName)
-        => await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
+    public Task JoinGroup(string groupName)
+        => Groups.AddToGroupAsync(Context.ConnectionId, groupName);
     
     /// <summary>
     /// Must be called from client side to leave a group
     /// </summary>
-    public async Task LeaveGroup(string groupName) 
-        => await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
+    public Task LeaveGroup(string groupName) 
+        => Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
 }

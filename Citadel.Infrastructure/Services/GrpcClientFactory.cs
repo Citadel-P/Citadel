@@ -9,50 +9,35 @@ namespace Infrastructure.Services;
 
 internal class GrpcClientFactory : IGrpcClientFactory
 {
-    private readonly ConcurrentDictionary<string, gPlatformClient> platformChannels = [];
-    private readonly ConcurrentDictionary<string, ContainersClient> containerChannels = [];
-    private readonly ConcurrentDictionary<string, ImagesClient> imageChannels = [];
+    private readonly ConcurrentDictionary<string, GrpcChannel> _channelCache = new();
+    private readonly ConcurrentDictionary<(Type, string), object> _clientCache = new();
 
-    public gPlatformClient GetPlatformClient(string address)
+    public gPlatformClient GetPlatformClient(string address) =>
+        GetOrCreateClient(NormalizeAddress(address), channel => new gPlatformClient(channel));
+
+    public ContainersClient GetContainerClient(string address) =>
+        GetOrCreateClient(NormalizeAddress(address), channel => new ContainersClient(channel));
+
+    public ImagesClient GetImageClient(string address) =>
+        GetOrCreateClient(NormalizeAddress(address), channel => new ImagesClient(channel));
+
+    private TClient GetOrCreateClient<TClient>(string address, Func<GrpcChannel, TClient> factory)
     {
-        var normalizedAddress = NormalizeAddress(address);
-        if (platformChannels.TryGetValue(normalizedAddress, out gPlatformClient value))
-            return value;
+        // Cache channel per address
+        var channel = _channelCache.GetOrAdd(address, GrpcChannel.ForAddress);
 
-        var channel = GrpcChannel.ForAddress(normalizedAddress);
-        var client = new gPlatformClient(channel);
-        platformChannels.TryAdd(normalizedAddress, client);
+        // Combine client type + address as cache key
+        var key = (typeof(TClient), address);
+        if (_clientCache.TryGetValue(key, out var cached))
+            return (TClient)cached;
+
+        var client = factory(channel);
+        _clientCache.TryAdd(key, client);
         return client;
     }
 
-    public ContainersClient GetContainerClient(string address)
-    {
-        var normalizedAddress = NormalizeAddress(address);
-        if (containerChannels.TryGetValue(normalizedAddress, out ContainersClient value))
-            return value;
-
-        var channel = GrpcChannel.ForAddress(normalizedAddress);
-        var client = new ContainersClient(channel);
-        containerChannels.TryAdd(normalizedAddress, client);
-        return client;
-    }
-
-    public ImagesClient GetImageClient(string address)
-    {
-        var normalizedAddress = NormalizeAddress(address);
-        if (imageChannels.TryGetValue(normalizedAddress, out ImagesClient value))
-            return value;
-
-        var channel = GrpcChannel.ForAddress(normalizedAddress);
-        var client = new ImagesClient(channel);
-        imageChannels.TryAdd(normalizedAddress, client);
-        return client;
-    }
-
-    private static string NormalizeAddress(string address)
-    {
-        if (address.StartsWith("http://") || address.StartsWith("https://"))
-            return address;
-        return $"http://{address}";
-    }
+    private static string NormalizeAddress(string address) =>
+        address.StartsWith("http://") || address.StartsWith("https://")
+            ? address
+            : $"http://{address}";
 }

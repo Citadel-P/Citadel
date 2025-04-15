@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { HubConnection, HubConnectionBuilder, HubConnectionState, IHttpConnectionOptions } from '@microsoft/signalr';
-import { SignalrRetryPolicy } from '@/lib/signalr.retrypolicy';
+import { useEffect, useState, useCallback } from 'react';
+import { HubConnection } from '@microsoft/signalr';
+import { configureHub, IHubConfig, startConnectionWithRetry } from '@/lib/signalr.helpers';
 import { ContainerInfoView, ContainersInfoView } from '@/api/_generated';
 import { useContextSelector } from 'use-context-selector';
 import { AuthContext } from '@/features/auth/AuthProvider';
@@ -9,62 +9,70 @@ const useContainersHub = (platformId: string) => {
   const [containersInfo, setContainersInfo] = useState<ContainersInfoView | undefined>();
   const accessToken = useContextSelector(AuthContext, (v) => v?.accessToken);
   const groupName = `ContainersInfo/${platformId}`;
+  const baseUrl = import.meta.env.VITE_API_BASE_URL;
+
+  const handleContainersUpdated = useCallback((containers: ContainersInfoView) => {
+    setContainersInfo(containers);
+  }, []);
+
+  const handleContainerEventReceived = useCallback((containerInfo: ContainerInfoView, eventType: string) => {
+    console.log('Container event received:', { containerInfo, eventType });
+    // TODO: Implement container event handling
+  }, []);
+
+  const setupEventListeners = useCallback(
+    (hubConnection: HubConnection) => {
+      hubConnection.onreconnecting(() => console.log('Reconnecting...'));
+      hubConnection.onreconnected(() => console.log('Reconnected.'));
+      hubConnection.on('ContainersInfoUpdated', handleContainersUpdated);
+      hubConnection.on('ContainerEventReceived', handleContainerEventReceived);
+    },
+    [handleContainersUpdated, handleContainerEventReceived],
+  );
+
+  const removeEventListeners = useCallback((hubConnection: HubConnection) => {
+    hubConnection.off('ContainersInfoUpdated');
+    hubConnection.off('ContainerEventReceived');
+  }, []);
 
   useEffect(() => {
+    if (!accessToken) return;
+
     let hubConnection: HubConnection;
     let isCanceled = false;
 
     const initHub = () => {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL;
-
-      const httpOptions: IHttpConnectionOptions = {
-        accessTokenFactory: () => accessToken!,
+      const config: IHubConfig = {
+        url: `${baseUrl}/hubs/container`,
+        accessToken,
       };
-      hubConnection = new HubConnectionBuilder()
-        .withUrl(`${baseUrl}/hubs/container`, httpOptions)
-        .withAutomaticReconnect(new SignalrRetryPolicy())
-        .build();
-
-      startConnection();
-    };
-
-    const startConnection = async () => {
-      hubConnection.onreconnected(() => onConnected());
-      await hubConnection
-        .start()
-        .then((_) => onConnected())
-        .catch((_) => {
-          if (!isCanceled) setTimeout(() => startConnection(), 10000);
-          else hubConnection.stop();
-        });
+      hubConnection = configureHub(config);
     };
 
     const onConnected = () => {
-      hubConnection.send('JoinGroup', groupName);
-      hubConnection.on('ContainersInfoUpdated', (msg: ContainersInfoView) => {
-        setContainersInfo(msg);
-      });
-      hubConnection.on('ContainerEventReceived', (containerInfo: ContainerInfoView, eventType: string) => {
-        // todo
-      });
+      hubConnection.send('JoinGroup', groupName).catch((error) => console.error('Failed to join group:', error));
+    };
+
+    const connect = async () => {
+      setupEventListeners(hubConnection);
+      await startConnectionWithRetry(hubConnection, onConnected, isCanceled);
+    };
+
+    const cleanup = () => {
+      isCanceled = true;
+      if (hubConnection) {
+        removeEventListeners(hubConnection);
+        hubConnection.stop();
+      }
     };
 
     initHub();
+    connect();
 
-    return () => {
-      if (hubConnection.state === HubConnectionState.Connected) hubConnection.send('LeaveGroup', groupName);
-
-      isCanceled = true;
-      hubConnection.stop();
-    };
-  }, [accessToken, platformId, groupName]);
+    return cleanup;
+  }, [accessToken, baseUrl, groupName, setupEventListeners, removeEventListeners]);
 
   return { containersInfo };
 };
-
-export interface IContainerEvent {
-  containerInfo: ContainerInfoView;
-  eventType: string;
-}
 
 export default useContainersHub;

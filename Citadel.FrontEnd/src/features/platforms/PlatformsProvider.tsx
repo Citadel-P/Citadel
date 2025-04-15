@@ -16,7 +16,14 @@ const PlatformsProvider: React.FC<{ children?: React.ReactNode }> = ({ children 
   const { platformsMessage } = usePlatformHub();
 
   const platforms = useMemo(() => {
-    return isSuccess && platformsData?.data?.platforms ? platformsData.data.platforms : platformsMessage;
+    // Prioritize platformsMessage if it exists, otherwise fallback to platformsData
+    if (platformsMessage && platformsMessage.length > 0) {
+      return platformsMessage;
+    }
+    if (isSuccess && platformsData?.data?.platforms) {
+      return platformsData.data.platforms;
+    }
+    return undefined;
   }, [platformsMessage, isSuccess, platformsData]);
 
   // Memoized context value

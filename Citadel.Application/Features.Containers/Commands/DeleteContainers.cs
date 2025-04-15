@@ -41,7 +41,7 @@ internal sealed class DeleteContainersHandler(
                         .ToListAsync(cancellationToken);
 
         var exceptions = new ConcurrentBag<Exception>();
-        await Parallel.ForEachAsync(platforms, cancellationToken, async (platform, token) =>
+        await Parallel.ForEachAsync(platforms, cancellationToken, async (platform, ct) =>
         {
             var client = clientFactory.GetContainerClient(platform.Address);
             try
@@ -53,7 +53,7 @@ internal sealed class DeleteContainersHandler(
                     Force = request.Force ?? false,
                     Link = request.Link ?? false,
                 };
-                await client.DeleteContainersAsync(message, cancellationToken: cancellationToken);
+                await client.DeleteContainersAsync(message, cancellationToken: ct);
             }
             catch (Exception ex)
             {

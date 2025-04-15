@@ -5,6 +5,7 @@ using Hosting.OpenApi;
 using Infrastructure.Services.Abstractions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
 using WebApi.Hubs;
@@ -94,10 +95,17 @@ internal static class WebApiModule
 
         app.MapPublicEndpoints();
 
-        app.MapHub<ContainerHub>("/hubs/container");
-        app.MapHub<PlatformHub>("/hubs/platform");
+        app.MapHub<ContainerHub>("/hubs/container", HttpConnectionDispatcherOptions);
+        app.MapHub<PlatformHub>("/hubs/platform", HttpConnectionDispatcherOptions);
 
         return app;
+    }
+
+
+    private static void HttpConnectionDispatcherOptions(HttpConnectionDispatcherOptions options)
+    {
+        options.LongPolling.PollTimeout = TimeSpan.FromSeconds(30);
+        options.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
     }
 
     private static void AddSignalRDependencies(this IServiceCollection services)
@@ -114,7 +122,7 @@ internal static class WebApiModule
             return new PlatformHubDispatcher(context);
         });
 
-        services.AddSignalR().AddJsonProtocol(c => 
+        services.AddSignalR().AddJsonProtocol(c =>
         {
             c.PayloadSerializerOptions.TypeInfoResolverChain.Add(SignalRSerializeContext.Default);
             c.PayloadSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
