@@ -11,7 +11,7 @@ const Platform = ({ platform }: { platform: PlatformView }) => {
   const isPlatfomOnline = platform.status === PlatformStatus.Online;
   const LastSnapshotTooltip = () => {
     const lastSnapshot = platform.stats?.at(0)?.created
-      ? new Date(platform.stats[0].created * 1000).getTime()
+      ? new Date(platform.stats[0].created! * 1000).getTime()
       : new Date().getTime();
     return (
       <TooltipProvider delayDuration={200}>

@@ -12,6 +12,7 @@ import { ContainerStatsContext } from './ContainerStatsProvider';
 import { useContextSelector } from 'use-context-selector';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo, useState, useTransition, useEffect } from 'react';
+import dayjs from 'dayjs';
 
 const CpuUsage = () => {
   const stats = useContextSelector(ContainerStatsContext, (v) => v?.stats) || [];
@@ -70,7 +71,14 @@ const CpuUsage = () => {
       <AreaChart data={transitionedStats} accessibilityLayer>
         {gradientDefs}
         <CartesianGrid vertical={true} />
-        <XAxis dataKey="created" tickLine={false} axisLine={false} tickMargin={8} minTickGap={32} />
+        <XAxis
+          dataKey="created"
+          tickLine={false}
+          axisLine={false}
+          tickMargin={8}
+          minTickGap={32}
+          tickFormatter={(timestamp) => dayjs(timestamp * 1000).format('HH:mm:ss')}
+        />
         <ChartTooltip
           cursor={false}
           defaultIndex={1}

@@ -88,12 +88,10 @@ export interface ContainerInfoView {
   created: string;
   state: string | null;
   status: string | null;
-  /** @default null */
-  stats?: ContainerStatView[] | null;
+  stack: string | null;
+  lastStats: ContainerStatView;
   /** @default null */
   ports?: PortView[] | null;
-  /** @default null */
-  labels?: Record<string, string>;
   platform?: PlatformView;
 }
 
@@ -160,16 +158,17 @@ export interface ContainerStatsView {
 
 export interface ContainerStatView {
   /** @format double */
-  memoryUsage: number | null;
+  memoryUsage?: number;
   /** @format double */
-  cpuUsage: number | null;
+  cpuUsage?: number;
   /** @format double */
-  memoryLimit: number | null;
-  /** @format uint64 */
-  rxBytes: number | null;
-  /** @format uint64 */
-  txBytes: number | null;
-  created: string | null;
+  memoryLimit?: number;
+  /** @format int64 */
+  rxBytes?: number;
+  /** @format int64 */
+  txBytes?: number;
+  /** @format int64 */
+  created?: number;
 }
 
 export interface CreateRegistryInput {
@@ -599,15 +598,15 @@ export enum PlatformStatus {
 
 export interface PlatformStatView {
   /** @format double */
-  memoryUsage: number;
+  memoryUsage?: number;
   /** @format double */
-  cpuUsage: number;
+  cpuUsage?: number;
   /** @format int64 */
-  created: number;
+  created?: number;
   /** @format double */
-  rxBytes: number;
+  rxBytes?: number;
   /** @format double */
-  txBytes: number;
+  txBytes?: number;
 }
 
 export interface PlatformsView {
@@ -698,11 +697,11 @@ export interface PortBindingView {
 }
 
 export interface PortView {
-  ip: string | null;
-  /** @format uint16 */
-  privatePort: number;
-  /** @format uint16 */
-  publicPort: number;
+  ip?: string | null;
+  /** @format int32 */
+  privatePort?: number;
+  /** @format int32 */
+  publicPort?: number;
 }
 
 export interface ProblemDetails {
@@ -794,8 +793,8 @@ export type SwarmInfoView = {
 };
 
 export interface SwarmPeerView {
-  nodeID: string | null;
-  addr: string | null;
+  nodeID?: string | null;
+  addr?: string | null;
 }
 
 export enum TagStatus {

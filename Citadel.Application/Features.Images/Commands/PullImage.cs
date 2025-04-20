@@ -49,7 +49,7 @@ internal sealed class PullImageHandler(IGrpcClientFactory clientFactory, Applica
         var request = CreatePullImageRequest(command, registry.Configuration);
 
         using var call = client.PullImage(request, cancellationToken: cancellationToken);
-        await foreach (var reply in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
+        await foreach (var reply in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
         {
             yield return reply;
         }

@@ -2808,7 +2808,9 @@
           "image",
           "created",
           "state",
-          "status"
+          "status",
+          "stack",
+          "lastStats"
         ],
         "type": "object",
         "properties": {
@@ -2840,26 +2842,17 @@
             "type": "string",
             "nullable": true
           },
-          "stats": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ContainerStatView"
-            },
-            "default": null,
+          "stack": {
+            "type": "string",
             "nullable": true
+          },
+          "lastStats": {
+            "$ref": "#/components/schemas/ContainerStatView"
           },
           "ports": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PortView"
-            },
-            "default": null,
-            "nullable": true
-          },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
             },
             "default": null,
             "nullable": true
@@ -3107,44 +3100,31 @@
         }
       },
       "ContainerStatView": {
-        "required": [
-          "memoryUsage",
-          "cpuUsage",
-          "memoryLimit",
-          "rxBytes",
-          "txBytes",
-          "created"
-        ],
         "type": "object",
         "properties": {
           "memoryUsage": {
             "type": "number",
-            "format": "double",
-            "nullable": true
+            "format": "double"
           },
           "cpuUsage": {
             "type": "number",
-            "format": "double",
-            "nullable": true
+            "format": "double"
           },
           "memoryLimit": {
             "type": "number",
-            "format": "double",
-            "nullable": true
+            "format": "double"
           },
           "rxBytes": {
             "type": "integer",
-            "format": "uint64",
-            "nullable": true
+            "format": "int64"
           },
           "txBytes": {
             "type": "integer",
-            "format": "uint64",
-            "nullable": true
+            "format": "int64"
           },
           "created": {
-            "type": "string",
-            "nullable": true
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -4630,13 +4610,6 @@
         "type": "string"
       },
       "PlatformStatView": {
-        "required": [
-          "memoryUsage",
-          "cpuUsage",
-          "created",
-          "rxBytes",
-          "txBytes"
-        ],
         "type": "object",
         "properties": {
           "memoryUsage": {
@@ -4955,11 +4928,6 @@
         }
       },
       "PortView": {
-        "required": [
-          "ip",
-          "privatePort",
-          "publicPort"
-        ],
         "type": "object",
         "properties": {
           "ip": {
@@ -4968,11 +4936,11 @@
           },
           "privatePort": {
             "type": "integer",
-            "format": "uint16"
+            "format": "int32"
           },
           "publicPort": {
             "type": "integer",
-            "format": "uint16"
+            "format": "int32"
           }
         }
       },
@@ -5245,10 +5213,6 @@
         "nullable": true
       },
       "SwarmPeerView": {
-        "required": [
-          "nodeID",
-          "addr"
-        ],
         "type": "object",
         "properties": {
           "nodeID": {

@@ -52,7 +52,7 @@ public static class Images
 
     public static async IAsyncEnumerable<PullImageReply> PullImage(IMediator mediator, PullImageRequest pullImageRequest, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await foreach (var reply in mediator.CreateStream(pullImageRequest.ToCommand(), cancellationToken))
+        await foreach (var reply in mediator.CreateStream(pullImageRequest.ToCommand(), cancellationToken).ConfigureAwait(false))
         {
             yield return reply;
         }

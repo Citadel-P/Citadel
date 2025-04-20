@@ -21,10 +21,6 @@ internal class ContainerInfoConfiguration : IEntityTypeConfiguration<ContainerIn
         builder.Property(p => p.ContainerId).HasMaxLength(64);
         builder.OwnsMany(p => p.Ports, cfg => cfg.ToJson());
 
-        builder.Property(p => p.Labels).HasConversion(
-              v => JsonSerializer.Serialize(v, typeof(Dictionary<string, string>), ContainerInfoConfigurationContext.Default),
-              v => (Dictionary<string, string>)JsonSerializer.Deserialize(v, typeof(Dictionary<string, string>),  ContainerInfoConfigurationContext.Default ));
-
         builder.HasMany(p => p.Stats).WithOne().HasForeignKey(p => p.ContainerInfoId).OnDelete(DeleteBehavior.Cascade);
     }
 }

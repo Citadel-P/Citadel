@@ -10,5 +10,12 @@ internal class ContainerStatConfiguration : IEntityTypeConfiguration<ContainerSt
     {
         builder.ToTable("ContainerStats");
         builder.HasKey(p => p.Id);
+
+        // Configure the relationship with ContainerInfo and enable cascading deletes
+        builder
+            .HasOne<ContainerInfo>()
+            .WithMany(c => c.Stats)
+            .HasForeignKey(cs => cs.ContainerInfoId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

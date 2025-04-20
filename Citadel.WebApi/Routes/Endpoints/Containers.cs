@@ -57,7 +57,7 @@ public static class Containers
 
     public static async IAsyncEnumerable<ContainerLogReply> StreamLogs(IMediator mediator, [FromBody] StreamLogsRequest request, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await foreach (var reply in mediator.CreateStream(request.ToCommand(), cancellationToken))
+        await foreach (var reply in mediator.CreateStream(request.ToCommand(), cancellationToken).ConfigureAwait(false))
         {
             yield return reply;
         }

@@ -44,7 +44,7 @@ internal class StreamDaemonEventJob(
             var client = clientFactory.GetContainerClient(address);
 
             using var call = client.StreamDaemonEvent(new Empty(), cancellationToken: context.CancellationToken);
-            await foreach (var reply in call.ResponseStream.ReadAllAsync(context.CancellationToken))
+            await foreach (var reply in call.ResponseStream.ReadAllAsync(context.CancellationToken).ConfigureAwait(false))
             {
                 Guid? platformId = await cacheService.GetPlatformId(reply.Id, context.CancellationToken);
                 if (platformId == null)
@@ -54,7 +54,7 @@ internal class StreamDaemonEventJob(
 
                 if (reply.EventMessageType == Agent.Server.Containers.EventMessageType.Container)
                 {
-                    var containerInfo = reply.Container.Map(platformId.Value);
+                    var containerInfo = reply.Container.Map(platformId.Value, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
                     if (reply.Action == "create")
                     {

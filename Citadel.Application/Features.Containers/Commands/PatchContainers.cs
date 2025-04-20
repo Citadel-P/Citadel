@@ -53,7 +53,12 @@ internal class PatchContainersHandler(
                         .ToListAsync(cancellationToken);
 
         var exceptions = new ConcurrentBag<Exception>();
-        await Parallel.ForEachAsync(platforms, cancellationToken, async (platform, token) =>
+        var parallelOptions = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = Environment.ProcessorCount,
+            CancellationToken = cancellationToken
+        };
+        await Parallel.ForEachAsync(platforms, parallelOptions, async (platform, token) =>
         {
             var client = clientFactory.GetContainerClient(platform.Address);
             try

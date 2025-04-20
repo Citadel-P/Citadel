@@ -13,16 +13,8 @@ internal static partial class Mapper
 {
     public static partial IEnumerable<PlatformView> Map(IEnumerable<Platform> platforms);
     public static partial PlatformView Map(Platform platform);
-    public static partial ContainerInfoView Map(ContainerInfo containerInfo);
-    public static partial PortView Map(ContainerPort port);
 
-    [MapProperty(nameof(ContainerStat.Created), nameof(ContainerStatView.Created), Use = nameof(MapCreatedToShortDate))]
-    public static partial ContainerStatView Map(ContainerStat stat);
     public static partial ContainerLogView Map(ContainerLogReply reply);
-
-    private static string MapCreatedToShortDate(long timeStamp)
-        => DateTimeOffset.FromUnixTimeSeconds(timeStamp).UtcDateTime.ToString("HH:mm:ss");
-
     public static partial ContainerInspectView Map(this ContainerInspectReply containerInfo);
 
     [MapProperty(nameof(NetworkSettings.Networks), nameof(NetworkSettingsView.Networks), Use = nameof(ToDictionary))]

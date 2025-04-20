@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using Agent.Server.Containers;
 using FluentValidation;
+using Google.Api;
 using Grpc.Core;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
@@ -41,7 +42,12 @@ internal sealed class DeleteContainersHandler(
                         .ToListAsync(cancellationToken);
 
         var exceptions = new ConcurrentBag<Exception>();
-        await Parallel.ForEachAsync(platforms, cancellationToken, async (platform, ct) =>
+        var parallelOptions = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = Environment.ProcessorCount,
+            CancellationToken = cancellationToken
+        };
+        await Parallel.ForEachAsync(platforms, parallelOptions, async (platform, ct) =>
         {
             var client = clientFactory.GetContainerClient(platform.Address);
             try

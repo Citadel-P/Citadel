@@ -6,6 +6,9 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function toFixedNumber(input: any, style?: keyof Intl.NumberFormatOptionsStyleRegistry, digits: number = 2) {
+  if (input === 0) {
+    return '0%';
+  }
   if (!input) {
     return;
   }

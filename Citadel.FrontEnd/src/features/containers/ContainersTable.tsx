@@ -3,7 +3,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useContextSelector } from 'use-context-selector';
 import { ContainersContext } from './ContainersProvider';
-import { ContainerInfoView, PortView } from '@/api/_generated';
+import { ContainerInfoView, ContainerStatView, PortView } from '@/api/_generated';
 import { truncate } from '@/lib/truncate';
 import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
@@ -65,8 +65,8 @@ const columns: ColumnDef<ContainerInfoView>[] = [
     header: ({ column }) => <SortableCell cellName="Cpu" column={column} />,
     cell: ({ row }) => (
       <div className="text-xs">
-        {(row.original as ContainerInfoView).stats &&
-          toFixedNumber((row.original as ContainerInfoView).stats?.at(0)?.cpuUsage, 'percent')}
+        {row.original.state === 'running' && (row.original as ContainerInfoView).lastStats &&
+          toFixedNumber((row.original as ContainerInfoView).lastStats?.cpuUsage, 'percent')}
       </div>
     ),
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
@@ -79,21 +79,22 @@ const columns: ColumnDef<ContainerInfoView>[] = [
     header: ({ column }) => <SortableCell cellName="Memory" column={column} />,
     cell: ({ row }) => (
       <div className="text-xs">
-        {(row.original as ContainerInfoView)?.stats?.at(0)?.memoryUsage && (
+        {(row.original.lastStats as ContainerStatView)?.memoryUsage == 0 ? (
+          ''
+        ) : (
           <span>
-            {byteTransform((row.original as ContainerInfoView).stats?.at(0)?.memoryUsage ?? 0, 2) +
+            {byteTransform((row.original.lastStats as ContainerStatView)?.memoryUsage ?? 0, 2) +
               ' / ' +
-              byteTransform((row.original as ContainerInfoView).stats?.at(0)?.memoryLimit ?? 0, 2)}
+              byteTransform((row.original.lastStats as ContainerStatView)?.memoryLimit ?? 0, 2)}
           </span>
         )}
       </div>
     ),
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
-      const cA = rowA.original as ContainerInfoView;
-      const cB = rowB.original as ContainerInfoView;
-      if (!cA.stats?.length || !cB.stats?.length) return 0;
-      if (!cA.stats[0]?.memoryUsage || !cB.stats[0]?.memoryUsage) return 0;
-      return cA.stats[0]?.memoryUsage < cB.stats[0]?.memoryUsage ? 1 : -1;
+      const cA = rowA.original.lastStats as ContainerStatView;
+      const cB = rowB.original.lastStats as ContainerStatView;
+
+      return (cA?.memoryUsage ?? 0) < (cB?.memoryUsage ?? 0) ? 1 : -1;
     },
   },
   {
@@ -118,20 +119,9 @@ const columns: ColumnDef<ContainerInfoView>[] = [
   {
     accessorKey: 'stack',
     header: ({ column }) => <SortableCell cellName="Stack" column={column} />,
-    cell: ({ row }) => (
-      <div className="text-xs">
-        {row.original.labels &&
-          row.original.labels['com.docker.compose.project'] &&
-          truncate(row.original.labels['com.docker.compose.project'], 10, 'left')}
-      </div>
-    ),
+    cell: ({ row }) => <div className="text-xs">{row.original.stack && truncate(row.original.stack, 10, 'left')}</div>,
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
-      if (!rowA.original.labels || !rowA.original.labels.length) return 0;
-      if (!rowA.original.labels['com.docker.compose.project'] || !rowB.original.labels['com.docker.compose.project'])
-        return 0;
-      return rowA.original.labels['com.docker.compose.project'] < rowB.original.labels['com.docker.compose.project']
-        ? 1
-        : -1;
+      return rowA.original.stack < rowB.original.stack ? 1 : -1;
     },
   },
   {

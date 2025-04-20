@@ -36,7 +36,7 @@ internal class StreamContainerLogsHandler(
             ContainerId = query.ContainerId,
         };
         using var call = client.StreamContainerLogs(request, cancellationToken: cancellationToken);
-        await foreach (var reply in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
+        await foreach (var reply in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
         {
             yield return reply;
         }
