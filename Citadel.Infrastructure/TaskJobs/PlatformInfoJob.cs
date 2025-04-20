@@ -1,4 +1,5 @@
-﻿using Citadel.Common;
+﻿using System.Runtime.CompilerServices;
+using Citadel.Common;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Infrastructure.Entities;
@@ -17,58 +18,50 @@ internal class PlatformInfoJob(
     IPlatformHubDispatcher platformHub) : IJob
 {
     public static readonly JobKey JobKey = new(nameof(PlatformInfoJob), "SystemInfo");
+    private static readonly ParallelOptions _parallelOptions = new()
+    {
+        MaxDegreeOfParallelism = Environment.ProcessorCount
+    };
 
     public async ValueTask Execute(IJobExecutionContext context)
     {
-        // Fetch platforms and create a dictionary directly
         var platforms = await dbContext.Platforms
             .OrderByDescending(s => s.Name)
-            .ToDictionaryAsync(p => p.Address, p => p, context.CancellationToken);
+            .ToArrayAsync(context.CancellationToken);
 
-        if (platforms.Count == 0) return;
+        if (platforms.Length == 0) return;
 
-        // Precompute platform index mapping for updates
-        var platformIndexMap = platforms.Keys
-            .Select((address, index) => new { address, index })
-            .ToDictionary(x => x.address, x => x.index);
+        // Preallocate arrays with known size
+        var updates = new PlatformUpdate[platforms.Length];
+        var platformStats = new List<PlatformStat>(platforms.Length);
 
-        var updates = new PlatformUpdate[platforms.Count];
-        var platformStats = new List<PlatformStat>(platforms.Count);
+        // Process platforms in parallel while minimizing allocations
+        _parallelOptions.CancellationToken = context.CancellationToken;
+        await Parallel.ForEachAsync(new ArraySegment<Platform>(platforms), _parallelOptions, ProcessPlatform);
 
-        var parallelOptions = new ParallelOptions
+        // Save changes to the database in one batch
+        if (platformStats.Count > 0)
         {
-            MaxDegreeOfParallelism = Environment.ProcessorCount,
-            CancellationToken = context.CancellationToken
-        };
+            dbContext.PlatformStats.AddRange(platformStats);
+        }
 
-        // Process platforms in parallel
-        await Parallel.ForEachAsync(platforms, parallelOptions, async (platformEntry, ct) =>
+        await dbContext.SaveChangesAsync(context.CancellationToken);
+        await platformHub.PushPlatformsUpdates(platforms);
+
+        // Local async function captures outer variables but avoids lambda allocation
+        async ValueTask ProcessPlatform(Platform platform, CancellationToken ct)
         {
-            var (address, platform) = platformEntry;
+            int platformIndex = Array.IndexOf(platforms, platform);
             var client = clientFactory.GetPlatformClient(platform.Address);
 
             try
             {
                 var info = await client.GetPlatformInfoAsync(new Empty(), cancellationToken: ct);
-                updates[platformIndexMap[address]] = new PlatformUpdate(platform.Address, PlatformStatus.Online, info);
-            }
-            catch (RpcException ex)
-            {
-                logger.LogWarning(ex, "Error while getting system info from platform {PlatformId}", platform.Id);
-                updates[platformIndexMap[address]] = new PlatformUpdate(platform.Address, PlatformStatus.Offline);
-            }
-        });
+                updates[platformIndex] = new PlatformUpdate(platform.Address, PlatformStatus.Online, info);
 
-        // Update platforms and prepare statistics
-        foreach (var update in updates)
-        {
-            var platform = platforms[update.Address];
-            var info = update.Info;
-
-            if (update.Status == PlatformStatus.Online && info is not null)
-            {
+                // Update platform
                 platform.PartialUpdate(
-                    platformStatus: update.Status,
+                    platformStatus: PlatformStatus.Online,
                     networksCount: info.NetworksCount,
                     volumesCount: info.VolumesCount,
                     containers: info.Containers,
@@ -85,31 +78,29 @@ internal class PlatformInfoJob(
                     operatingSystem: info.OperatingSystem,
                     driver: info.Driver);
 
-                platformStats.Add(PlatformStat.Create(
-                    memoryUsage: double.IsNaN(info.MemoryUsage) ? 0 : info.MemoryUsage,
-                    cpuUsage: double.IsNaN(info.CpuUsage) ? 0 : info.CpuUsage,
-                    created: double.IsNaN(info.Created) ? 0 : info.Created,
-                    rxBytes: double.IsNaN(info.RxBytes) ? 0 : info.RxBytes,
-                    txBytes: double.IsNaN(info.TxBytes) ? 0 : info.TxBytes,
-                    platformId: platform.Id));
+                platformStats.Add(CreatePlatformStat(platform.Id, info));
             }
-            else
+            catch (RpcException ex)
             {
+                logger.LogWarning(ex, "Error while getting system info from platform {PlatformId}", platform.Id);
+                updates[platformIndex] = new PlatformUpdate(platform.Address, PlatformStatus.Offline);
+
                 // Mark platform as offline
-                platform.PartialUpdate(platformStatus: update.Status);
+                platform.PartialUpdate(platformStatus: PlatformStatus.Offline);
             }
         }
+    }
 
-        // Batch save changes to the database
-        if (platformStats.Count > 0)
-        {
-            dbContext.PlatformStats.AddRange(platformStats);
-        }
-
-        await dbContext.SaveChangesAsync(context.CancellationToken);
-
-        // Push platform updates to the hub
-        await platformHub.PushPlatformsUpdates(platforms.Values);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static PlatformStat CreatePlatformStat(Guid platformId, PlatformInfoMessage info)
+    {
+        return PlatformStat.Create(
+            created: double.IsNaN(info.Created) ? 0 : info.Created,
+            memoryUsage: double.IsNaN(info.MemoryUsage) ? 0 : info.MemoryUsage,
+            cpuUsage: double.IsNaN(info.CpuUsage) ? 0 : info.CpuUsage,
+            rxBytes: double.IsNaN(info.RxBytes) ? 0 : info.RxBytes,
+            txBytes: double.IsNaN(info.TxBytes) ? 0 : info.TxBytes,
+            platformId: platformId);
     }
 
     private readonly struct PlatformUpdate(string address, PlatformStatus status, PlatformInfoMessage info = null)
