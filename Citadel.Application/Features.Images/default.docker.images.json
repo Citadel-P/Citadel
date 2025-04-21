@@ -32,7 +32,7 @@
         "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/alpine/live/logo-1720462146426.png",
         "url": "https://hub.docker.com/_/alpine",
         "short_description": "A minimal Docker image based on Alpine Linux, known for its small size and security.",
-        "is_official" :  true
+        "is_official": true
     },
     {
         "repo_name": "node",
@@ -71,7 +71,7 @@
     },
     {
         "repo_name": "elasticsearch",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/elasticsearch/live/logo-1720462186184.png",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/elasticsearch/live/logo-1744135840564.png",
         "is_official": true,
         "url": "https://hub.docker.com/_/elasticsearch",
         "short_description": "Elasticsearch, a search and analytics engine."
@@ -166,5 +166,68 @@
         "is_official": true,
         "url": "https://hub.docker.com/_/kong",
         "short_description": "The Cloud-Native API Gateway for APIs and Microservices"
+    },
+    {
+        "repo_name": "zookeeper",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/zookeeper/live/logo-1720462324554.png",
+        "is_official": true,
+        "url": "https://hub.docker.com/_/zookeeper",
+        "short_description": "Apache ZooKeeper is an open-source server which enables highly reliable distributed coordination."
+    },
+    {
+        "repo_name": "neo4j",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/neo4j/live/logo-1720462240295.png",
+        "is_official": true,
+        "url": "https://hub.docker.com/_/neo4j",
+        "short_description": "Neo4j is a highly scalable, robust native graph database."
+    },
+    {
+        "repo_name": "gradle",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/gradle/live/logo-1720462203779.png",
+        "is_official": true,
+        "url": "https://hub.docker.com/_/gradle",
+        "short_description": "Gradle is a build tool with a focus on build automation and support for multi-language development."
+    },
+    {
+        "repo_name": "mongo-express",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/mongo-express/live/logo.png",
+        "is_official": true,
+        "url": "https://hub.docker.com/_/mongo-express",
+        "short_description": "Web-based MongoDB admin interface, written with Node.js and express."
+    },
+    {
+        "repo_name": "cassandra",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/cassandra/live/logo-1720462160940.png",
+        "is_official": true,
+        "url": "https://hub.docker.com/_/cassandra",
+        "short_description": "Apache Cassandra is an open-source distributed storage system."
+    },
+    {
+        "repo_name": "kibana",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/kibana/live/logo-1740168662268.png",
+        "is_official": true,
+        "url": "https://hub.docker.com/_/kibana",
+        "short_description": "Kibana gives shape to any kind of data — structured and unstructured — indexed in Elasticsearch."
+    },
+    {
+        "repo_name": "logstash",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/logstash/live/logo-1720462224560.png",
+        "is_official": true,
+        "url": "https://hub.docker.com/_/logstash",
+        "short_description": "Logstash is a tool for managing events and logs."
+    },
+    {
+        "repo_name": "fedora",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/fedora/live/logo.png",
+        "is_official": true,
+        "url": "https://hub.docker.com/_/fedora",
+        "short_description": "Official Docker builds of Fedora."
+    },
+    {
+        "repo_name": "couchdb",
+        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/couchdb/live/logo-1736273402544.png",
+        "is_official": true,
+        "url": "https://hub.docker.com/_/couchdb",
+        "short_description": "CouchDB is a database that uses JSON for documents, an HTTP API, & JavaScript/declarative indexing."
     }
 ]

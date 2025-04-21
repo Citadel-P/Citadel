@@ -10,6 +10,8 @@ import LocalImagesTable from './LocalImagesTable';
 import { ActionBar } from './ActionBar';
 import { PlatformStatus } from '@/api/_generated';
 import Loader from '@/components/ui/loader';
+import { SearchField } from '@/components/ui/SearchField';
+import { ImagesContext } from './ImagesProvider';
 
 const Images = () => {
   const navigate = useNavigate();
@@ -17,6 +19,7 @@ const Images = () => {
   const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
   const platformStatus = useContextSelector(AppContext, (v) => v?.currentPlatform?.status);
   const isLoading = useContextSelector(AppContext, (v) => v?.isLoading);
+  const onSearch = useContextSelector(ImagesContext, (v) => v?.onSearch)!;
 
   // Memoize the current tab based on the route
   const currentTab = useMemo(() => {
@@ -59,6 +62,7 @@ const Images = () => {
               </div>
               <div className="text-md font-bold text-foreground">Images</div>
             </div>
+            {currentTab == 'local' && <SearchField onSearch={onSearch} />}
           </div>
 
           {/* Warning Message */}

@@ -18,6 +18,7 @@ interface IContext {
   setSelectedRows: (containers: ContainerInfoView[]) => void;
   requestDelete: (data: DeleteContainersRequest) => void;
   deleteIsPending: boolean;
+  onSearch: (searchTerm: string) => void;
 }
 
 export const ContainersContext = createContext<IContext | undefined>(undefined);
@@ -35,19 +36,49 @@ const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children
   // State for selected rows and containers
   const [selectedRows, setSelectedRows] = useState<ContainerInfoView[]>([]);
   const [containers, setContainers] = useState<ContainerInfoView[]>([]);
+  const [originalContainers, setOriginalContainers] = useState<ContainerInfoView[]>([]);
+  const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
   // Dialog state
   const { dialogData, setDialogData } = useDialogState();
 
   // Update containers when data or hub info changes
   useEffect(() => {
-    // order matter
+    // Order matters
     if (containersInfo?.containers) {
-      setContainers(containersInfo.containers);
+      setOriginalContainers(containersInfo.containers);
     } else if (isSuccess && data?.data?.containers) {
-      setContainers(data.data.containers);
+      setOriginalContainers(data.data.containers);
     }
   }, [data, isSuccess, containersInfo]);
+
+  // Filter containers whenever original containers or search term changes
+  useEffect(() => {
+    if (currentSearchTerm.trim() === '') {
+      setContainers(originalContainers);
+    } else {
+      const searchLower = currentSearchTerm.toLowerCase();
+
+      // Filter containers by name OR containerId containing the search term
+      const filtered = originalContainers.filter((container) => {
+        // Check container name (if it exists)
+        const nameMatches = container.name?.toLowerCase().includes(searchLower) || false;
+
+        // Use either short containerId format or full containerId format
+        const idMatches =
+          // Short containerId format (first 12 characters)
+          (container.containerId && container.containerId.substring(0, 12).toLowerCase().includes(searchLower)) ||
+          // Full containerId format
+          (container.containerId && container.containerId.toLowerCase().includes(searchLower)) ||
+          false;
+
+        // Return true if either name or containerId matches
+        return nameMatches || idMatches;
+      });
+
+      setContainers(filtered);
+    }
+  }, [originalContainers, currentSearchTerm]);
 
   // Handle successful deletion
   useEffect(() => {
@@ -65,6 +96,11 @@ const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children
     [mutate],
   );
 
+  // Search function to filter containers by name
+  const onSearch = useCallback((searchTerm: string) => {
+    setCurrentSearchTerm(searchTerm);
+  }, []);
+
   // Memoize context value to prevent unnecessary re-renders
   const contextValue = useMemo(
     () => ({
@@ -77,8 +113,19 @@ const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children
       setSelectedRows,
       requestDelete,
       deleteIsPending,
+      onSearch,
     }),
-    [isLoading, platformId, containers, dialogData, selectedRows, deleteIsPending, requestDelete, setDialogData],
+    [
+      isLoading,
+      platformId,
+      containers,
+      dialogData,
+      selectedRows,
+      deleteIsPending,
+      requestDelete,
+      setDialogData,
+      onSearch,
+    ],
   );
 
   return <ContainersContext.Provider value={contextValue}>{children}</ContainersContext.Provider>;

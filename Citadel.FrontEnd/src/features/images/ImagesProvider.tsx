@@ -20,6 +20,7 @@ interface IContext {
   deleteIsPending: boolean;
   dialogData: IDeleteDialogData;
   setDialogData: (data: IDeleteDialogData) => void;
+  onSearch: (searchTerm: string) => void;
 }
 
 export const ImagesContext = createContext<IContext | undefined>(undefined);
@@ -38,7 +39,9 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
   const [selectedRows, setSelectedRows] = useState<ImageView[] | undefined>();
   const [selectedRegistry, setSelectedRegistry] = useState<RegistryView | undefined>();
   const [localImages, setLocalImages] = useState<ImageView[]>([]);
+  const [originalLocalImages, setOriginalLocalImages] = useState<ImageView[]>([]);
   const { dialogData, setDialogData } = useDialogState();
+  const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
   // Update registries and selected registry when data is fetched
   useEffect(() => {
@@ -48,6 +51,44 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
       setSelectedRegistry(fetchedRegistries[0] ?? undefined); // Select the first registry by default, or undefined if none
     }
   }, [isSuccess, data]);
+
+  // Create a new wrapper function that handles both original and filtered images
+  const handleLocalImagesUpdate = useCallback((images: ImageView[]) => {
+    setOriginalLocalImages(images); // Store original images
+    setLocalImages(images); // Also update current images display
+  }, []);
+
+  // Filter images whenever search term changes
+  useEffect(() => {
+    if (!originalLocalImages.length) return;
+
+    if (currentSearchTerm.trim() === '') {
+      // If no search term, show all images
+      setLocalImages(originalLocalImages);
+    } else {
+      const searchLower = currentSearchTerm.toLowerCase();
+
+      // Filter images by name OR id containing the search term
+      const filtered = originalLocalImages.filter((image) => {
+        // Check image name (if it exists)
+        const nameMatches =
+          image.name?.toLowerCase().includes(searchLower) || image.tag?.toLowerCase().includes(searchLower) || false;
+
+        // Check image ID (if it exists)
+        const idMatches =
+          // Short ID format (first 12 characters)
+          (image.id && image.id.substring(0, 12).toLowerCase().includes(searchLower)) ||
+          // Full ID format
+          (image.id && image.id.toLowerCase().includes(searchLower)) ||
+          false;
+
+        // Return true if either name or ID matches
+        return nameMatches || idMatches;
+      });
+
+      setLocalImages(filtered);
+    }
+  }, [originalLocalImages, currentSearchTerm]);
 
   // Handle successful image deletion
   useEffect(() => {
@@ -84,6 +125,11 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
     [mutate],
   );
 
+  // Search function to filter images by name or ID
+  const onSearch = useCallback((searchTerm: string) => {
+    setCurrentSearchTerm(searchTerm);
+  }, []);
+
   // Memoized context value
   const contextValue = useMemo(
     () => ({
@@ -95,10 +141,11 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
       setSelectionChange,
       requestDelete,
       localImages,
-      setLocalImages,
+      setLocalImages: handleLocalImagesUpdate,
       deleteIsPending,
       dialogData,
       setDialogData,
+      onSearch,
     }),
     [
       isLoading,
@@ -108,9 +155,11 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
       setSelectionChange,
       requestDelete,
       localImages,
+      handleLocalImagesUpdate,
       deleteIsPending,
       dialogData,
       setDialogData,
+      onSearch,
     ],
   );
 

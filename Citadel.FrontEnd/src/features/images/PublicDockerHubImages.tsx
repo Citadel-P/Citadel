@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Input } from '@/components/ui/input';
-import { Search, Package, Award, Star } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Package, Award, Star } from 'lucide-react';
 import { useGETPublicDockerImages } from './hooks/useGETPublicDockerImages';
 import { DockerHubImageModel } from '@/api/_generated';
 import { PullImageBadge } from '@/components/ui/PullImageBadge';
@@ -10,10 +9,13 @@ import PullProgressSheetContent from './PullProgressSheetContent';
 import Loader from '@/components/ui/loader';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatNumber } from '@/lib/utils';
+import { SearchField } from '@/components/ui/SearchField';
+import { useDebounce } from '@/hooks/useDebounce';
 
 export function PublicDockerHubImages() {
-  const [searchValue, setSearchValue] = useState<string | undefined>(undefined);
-  const { data, error, isLoading, isSuccess, refetch } = useGETPublicDockerImages(searchValue);
+  const [searchValue, setSearchValue] = useState<string | undefined>('');
+  const debouncedSearchValue = useDebounce(searchValue, 300);
+  const { data, error, isLoading, isSuccess } = useGETPublicDockerImages(debouncedSearchValue);
   const [images, setImages] = useState<DockerHubImageModel[]>();
   const { sheetState, openSheet, closeSheet } = useSheetState<DockerHubImageModel>();
 
@@ -22,18 +24,6 @@ export function PublicDockerHubImages() {
       setImages(data.data);
     }
   }, [isSuccess, data]);
-
-  const handleSearch = () => refetch();
-
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchValue(event.target.value);
-  };
-
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') {
-      handleSearch();
-    }
-  };
 
   const renderImageCard = (image: DockerHubImageModel) => (
     <div
@@ -85,6 +75,10 @@ export function PublicDockerHubImages() {
     </div>
   );
 
+  const onSearch = useCallback((searchTerm: string) => {
+    setSearchValue(searchTerm);
+  }, []);
+
   return (
     <TooltipProvider>
       <div className="space-y-8">
@@ -95,18 +89,8 @@ export function PublicDockerHubImages() {
           </p>
         </div>
         <div className="relative mb-2 sm:mb-0">
-          <Input
-            type="search"
-            placeholder="Search for Docker images, (e.g., nginx)"
-            value={searchValue}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            className="bg-background placeholder:text-foreground/50 h-9 px-5 pr-10 shadow-xs rounded-full text-xs focus:outline-hidden focus-visible:ring-offset-0"
-          />
-          <Search
-            className="absolute text-slate-300 right-0 top-0 mt-1.5 mr-4 h4 w-4 hover:cursor-pointer hover:text-slate-500"
-            onClick={handleSearch}
-          />
+          <SearchField onSearch={onSearch} placeholder="Search for Docker images, (e.g., nginx)" />
+
           {isLoading && <Loader />}
         </div>
         {error && (

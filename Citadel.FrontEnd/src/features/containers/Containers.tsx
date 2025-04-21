@@ -1,5 +1,5 @@
 import { Container } from 'lucide-react';
-import { SearchField } from './SearchField';
+import { SearchField } from '../../components/ui/SearchField';
 import { ContainersTable } from './ContainersTable';
 import { ActionBar } from './ActionBar';
 import { useContextSelector } from 'use-context-selector';
@@ -11,6 +11,7 @@ import { useMemo } from 'react';
 const Containers = () => {
   const containers = useContextSelector(ContainersContext, (v) => v?.containers);
   const isPlatformOffline = useMemo(() => containers?.some((container) => container.state === 'offline'), [containers]);
+  const onSearch = useContextSelector(ContainersContext, (v) => v?.onSearch)!;
 
   return (
     <div className="flex-col justify-between relative">
@@ -24,7 +25,7 @@ const Containers = () => {
               </div>
               <div className="text-md font-bold text-foreground">Containers</div>
             </div>
-            <SearchField />
+            <SearchField onSearch={onSearch} />
           </div>
           {isPlatformOffline && (
             <AlertMessage type="warning" hasTitle={true}>
