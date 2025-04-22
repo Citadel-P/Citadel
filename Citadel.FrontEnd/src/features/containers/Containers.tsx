@@ -7,10 +7,11 @@ import { AlertMessage } from '@/components/ui/alert-message';
 import { DeleteContainerDialog } from './dialogs/DeleteContainerDialog';
 import { ContainersContext } from './ContainersProvider';
 import { useMemo } from 'react';
+import { ContainerStateStatus } from '@/api/_generated';
 
 const Containers = () => {
   const containers = useContextSelector(ContainersContext, (v) => v?.containers);
-  const isPlatformOffline = useMemo(() => containers?.some((container) => container.state === 'offline'), [containers]);
+  const isPlatformOffline = useMemo(() => containers?.some((container) => container.state === ContainerStateStatus.Offline ), [containers]);
   const onSearch = useContextSelector(ContainersContext, (v) => v?.onSearch)!;
 
   return (

@@ -3,11 +3,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 interface IProps {
   children?: React.ReactNode;
 }
+
 const retryOnceOn401 = (failureCount: number, error: any): boolean => {
-  if (error.response?.status !== 401) {
-    return false;
+  // Only retry once (when failureCount is 0) for 401 errors
+  if (error?.response?.status === 401) {
+    return failureCount === 0;
   }
-  return failureCount >= 1;
+
+  // For other errors, use default retry logic
+  return failureCount < 3;
 };
 
 const QueryClientWrapper: React.FC<IProps> = ({ children }) => {

@@ -3,7 +3,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useContextSelector } from 'use-context-selector';
 import { ContainersContext } from './ContainersProvider';
-import { ContainerInfoView, ContainerStatView, PortView } from '@/api/_generated';
+import { ContainerInfoView, ContainerStateStatus, ContainerStatView, PortView } from '@/api/_generated';
 import { truncate } from '@/lib/truncate';
 import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
@@ -39,7 +39,7 @@ const columns: ColumnDef<ContainerInfoView>[] = [
     cell: ({ row }) => (
       <div className="flex items-center whitespace-nowrap">
         <div className="flex items-center">
-          <ContainerStatTooltip stat={row.original.state ?? 'exited'} />
+          <ContainerStatTooltip stat={row.original.state ?? ContainerStateStatus.Exited} />
         </div>
         <div>
           <div className="mb-1 text-[13px] font-semibold text-foreground">
@@ -65,7 +65,8 @@ const columns: ColumnDef<ContainerInfoView>[] = [
     header: ({ column }) => <SortableCell cellName="Cpu" column={column} />,
     cell: ({ row }) => (
       <div className="text-xs">
-        {row.original.state === 'running' && (row.original as ContainerInfoView).lastStats &&
+        {row.original.state === ContainerStateStatus.Running &&
+          (row.original as ContainerInfoView).lastStats &&
           toFixedNumber((row.original as ContainerInfoView).lastStats?.cpuUsage, 'percent')}
       </div>
     ),
@@ -158,16 +159,16 @@ export const ContainersTable = () => {
   );
 };
 
-const ContainerStatTooltip = memo(({ stat }: { stat: string }) => {
-  const getStatusClass = (status: string) => {
+const ContainerStatTooltip = memo(({ stat }: { stat: ContainerStateStatus }) => {
+  const getStatusClass = (status: ContainerStateStatus) => {
     switch (status) {
-      case 'exited':
+      case ContainerStateStatus.Exited:
         return 'bg-gray-500';
-      case 'paused':
+      case ContainerStateStatus.Paused:
         return 'bg-orange-500';
-      case 'running':
+      case ContainerStateStatus.Running:
         return 'bg-green-500';
-      case 'offline':
+      case ContainerStateStatus.Offline:
         return 'bg-red-500';
       default:
         return '';

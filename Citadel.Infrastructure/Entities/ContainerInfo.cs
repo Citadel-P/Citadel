@@ -1,4 +1,6 @@
-﻿namespace Infrastructure.Entities;
+﻿using Citadel.Common;
+
+namespace Infrastructure.Entities;
 
 public class ContainerInfo
 {
@@ -8,7 +10,7 @@ public class ContainerInfo
     public string Name { get; private set; }
     public string Image { get; private set; }
     public long Created { get; private set; }
-    public string State { get; set; }
+    public ContainerStateStatus State { get; set; }
     public string Stack { get; set; }
     public string Status { get; private set; }
     public ICollection<ContainerPort> Ports { get; private set; } = [];
@@ -20,7 +22,7 @@ public class ContainerInfo
         string containerId,
         string name,
         string image,
-        string state,
+        ContainerStateStatus state,
         string status,
         string stack,
         long? created = null, 
@@ -42,7 +44,7 @@ public class ContainerInfo
     public void PartialUpdate(
         string name = null,
         string image = null,
-        string state = null,
+        ContainerStateStatus? state = null,
         string status = null,
         string stack = null,
         long? created = null,
@@ -50,7 +52,7 @@ public class ContainerInfo
     {
         if (name != null) Name = name;
         if (image != null) Image = image;
-        if (state != null) State = state;
+        if (state != null) State = state.Value;
         if (status != null) Status = status;
         if (stack != null) Stack = stack;
         if (ports != null) Ports = [.. ports];

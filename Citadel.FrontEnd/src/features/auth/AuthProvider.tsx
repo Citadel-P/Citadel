@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useGETAccessToken } from './useGETAccessToken';
 import { ApiClientContext } from '@/api/ApiClientProvider';
 import { useContextSelector } from 'use-context-selector';
@@ -27,8 +27,8 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
   } = useGETAccessToken();
   const apiClient = useContextSelector(ApiClientContext, (s) => s?.apiClient);
   const [accessToken, setAccessToken] = useState<string | undefined>(storedJwt ?? undefined);
-
   const isAuthenticated = useMemo(() => accessToken != null, [accessToken]);
+  const isRefreshing = useRef(false);
 
   const handleSetAccessToken = useCallback(
     (token: string | undefined) => {
@@ -44,6 +44,17 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
     },
     [apiClient],
   );
+
+  const parseJwt = (token: string) => {
+    try {
+      if (!token) return null;
+      const arrayToken = token.split('.');
+      return JSON.parse(atob(arrayToken[1]));
+    } catch (error) {
+      console.error('Failed to parse JWT:', error);
+      return null;
+    }
+  };
 
   // Handle access token updates from the API
   useEffect(() => {
@@ -71,15 +82,17 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
 
-    if (isAuthenticated && accessToken) {
+    if (isAuthenticated && accessToken && !isRefreshing.current) {
       const result = parseJwt(accessToken);
 
       if (result?.exp) {
         const currentTime = Math.floor(Date.now() / 1000);
         const timeToExpire = (result.exp - currentTime) * 1000 - 10 * 1000; // Refresh 10 seconds before expiration
-        timer = setTimeout(
-          () => {
-            refetchAccessToken();
+        timer = setTimeout(() => {
+          isRefreshing.current = true;  
+          refetchAccessToken().finally(() => {
+            isRefreshing.current = false;
+          });
           },
           Math.max(0, timeToExpire),
         );
@@ -90,18 +103,6 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
       clearTimeout(timer);
     };
   }, [accessToken, isAuthenticated, refetchAccessToken]);
-
-  // Parse JWT with error handling
-  const parseJwt = (token: string) => {
-    try {
-      if (!token) return null;
-      const arrayToken = token.split('.');
-      return JSON.parse(atob(arrayToken[1]));
-    } catch (error) {
-      console.error('Failed to parse JWT:', error);
-      return null;
-    }
-  };
 
   return (
     <AuthContext.Provider

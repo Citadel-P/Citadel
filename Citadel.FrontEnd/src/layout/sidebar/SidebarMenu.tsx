@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useContextSelector } from 'use-context-selector';
 import { LayoutContext } from '@/layout/LayoutProvider';
 import { ISubMenuItem, MenuItems, DockerPlatformMenu, IMenuItem } from './menu-items';
@@ -14,6 +14,7 @@ export const SidebarMenu = () => {
   const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
   const toggleSidebar = useContextSelector(LayoutContext, (v) => v?.toggleSidebar)!;
   const [menuItems, setMenuItems] = useState<IMenuItem[]>(MenuItems);
+  const addedPlatformIdsRef = useRef<Set<string>>(new Set());
 
   const isRouteActive = useCallback(
     (path: string) => location.pathname === path || (location.pathname === '/' && path === ''),
@@ -23,6 +24,9 @@ export const SidebarMenu = () => {
   // Add platform menu dynamically
   const addPlatformToMenu = useCallback(
     (platform: { id: string; name: string }) => {
+      if (!platform?.id) return;
+      if (addedPlatformIdsRef.current.has(platform.id)) return;
+
       const platformRoute = `/platforms/${platform.id}`;
       const platformMenu = DockerPlatformMenu(platform);
 
@@ -31,6 +35,7 @@ export const SidebarMenu = () => {
         item.active = isRouteActive(item.route ?? '');
       });
       platformMenu.expanded = platformMenu.children?.some((menu) => menu.active) || false;
+      addedPlatformIdsRef.current.add(platform.id);
 
       setMenuItems((prevMenuItems) => {
         const baseMenuIndex = prevMenuItems.findIndex((menu) => menu.group === 'Base');
@@ -39,7 +44,7 @@ export const SidebarMenu = () => {
 
         const baseMenu = prevMenuItems[baseMenuIndex];
 
-        // Avoid duplicates
+        // Double-check for duplicates in state (safety check)
         if (baseMenu.items.some((item) => item.route === platformRoute)) return prevMenuItems;
 
         // Add the new platform
@@ -53,6 +58,28 @@ export const SidebarMenu = () => {
     },
     [isRouteActive],
   );
+
+  // Clean up removed platforms
+  useEffect(() => {
+    const baseMenu = menuItems.find((menu) => menu.group === 'Base');
+    if (baseMenu) {
+      const currentPlatformIds = new Set<string>();
+
+      // Extract platform IDs from current menu items
+      baseMenu.items.forEach((item) => {
+        if (item.isPlatform && item.route) {
+          // Extract ID from route like "/platforms/123"
+          const match = item.route.match(/\/platforms\/(.+)/);
+          if (match && match[1]) {
+            currentPlatformIds.add(match[1]);
+          }
+        }
+      });
+
+      // Update our ref to match the current state
+      addedPlatformIdsRef.current = currentPlatformIds;
+    }
+  }, [menuItems]);
 
   // Update menu items when location changes
   useEffect(() => {
@@ -99,8 +126,8 @@ export const SidebarMenu = () => {
 
     if (sidebarMinimized && menu.children) {
       toggleSidebar();
-    } else if (!menu.children) {
-      navigate(menu.route!);
+    } else if (!menu.children && menu.route) {
+      navigate(menu.route);
     }
   };
 

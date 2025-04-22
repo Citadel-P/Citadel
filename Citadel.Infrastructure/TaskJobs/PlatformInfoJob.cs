@@ -31,7 +31,7 @@ internal class PlatformInfoJob(
 
         if (platforms.Length == 0) return;
 
-        // Preallocate arrays with known size
+        // Pre-allocate arrays with known size
         var updates = new PlatformUpdate[platforms.Length];
         var platformStats = new List<PlatformStat>(platforms.Length);
 
@@ -48,7 +48,6 @@ internal class PlatformInfoJob(
         await dbContext.SaveChangesAsync(context.CancellationToken);
         await platformHub.PushPlatformsUpdates(platforms);
 
-        // Local async function captures outer variables but avoids lambda allocation
         async ValueTask ProcessPlatform(Platform platform, CancellationToken ct)
         {
             int platformIndex = Array.IndexOf(platforms, platform);

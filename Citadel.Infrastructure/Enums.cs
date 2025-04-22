@@ -67,3 +67,27 @@ public enum GhcrAccountType
     [JsonStringEnumMemberName("User")]
     User
 }
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ContainerStateStatus
+{
+    [JsonStringEnumMemberName("Unknown")]
+    Unknown,
+    [JsonStringEnumMemberName("Created")]
+    Created,
+    [JsonStringEnumMemberName("Running")]
+    Running,
+    [JsonStringEnumMemberName("Paused")]
+    Paused,
+    [JsonStringEnumMemberName("Restarting")]
+    Restarting,
+    [JsonStringEnumMemberName("Exited")]
+    Exited,
+    [JsonStringEnumMemberName("Removing")]
+    Removing,
+    [JsonStringEnumMemberName("Dead")]
+    Dead,
+    [JsonStringEnumMemberName("Offline")]
+    Offline,
+    
+}

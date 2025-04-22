@@ -1,16 +1,17 @@
-﻿using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
-using Infrastructure.Services;
-using Microsoft.Extensions.Logging;
-using Quartz;
+﻿using System.Threading;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
+using Infrastructure.EntityFramework;
+using Infrastructure.Services;
+using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Quartz;
 
 namespace Infrastructure.TaskJobs;
 
 internal class DaemonEventJob(
-    ICacheService cacheService,
+    ApplicationDbContext dbContext,
     ISchedulerFactory schedulerFactory,
     ILogger<DaemonEventJob> logger) : IJob
 {
@@ -19,8 +20,8 @@ internal class DaemonEventJob(
     public async ValueTask Execute(IJobExecutionContext context)
     {
         var scheduler = await schedulerFactory.GetScheduler(context.CancellationToken);
-        var addresses = await cacheService.GetClientsAddresses(context.CancellationToken);
-        if (!addresses.Any()) return;
+        var addresses = await dbContext.Platforms.AsNoTracking().Select(s => s.Address).ToListAsync(context.CancellationToken);
+        if (addresses.Count == 0) return;
 
         foreach (var address in addresses)
         {
@@ -30,7 +31,6 @@ internal class DaemonEventJob(
 }
 
 internal class StreamDaemonEventJob(
-    ICacheService cacheService,
     IGrpcClientFactory clientFactory,
     ApplicationDbContext dbContext,
     ILogger<StreamDaemonEventJob> logger,
@@ -44,9 +44,12 @@ internal class StreamDaemonEventJob(
             var client = clientFactory.GetContainerClient(address);
 
             using var call = client.StreamDaemonEvent(new Empty(), cancellationToken: context.CancellationToken);
-            await foreach (var reply in call.ResponseStream.ReadAllAsync(context.CancellationToken).ConfigureAwait(false))
+            await foreach (var reply in call.ResponseStream.ReadAllAsync(context.CancellationToken))
             {
-                Guid? platformId = await cacheService.GetPlatformId(reply.Id, context.CancellationToken);
+                Guid? platformId = platformId = await dbContext.Platforms.AsNoTracking()
+                                    .Where(s => s.DaemonId == reply.Id).Select(s => s.Id)
+                                    .FirstOrDefaultAsync(context.CancellationToken);
+
                 if (platformId == null)
                 {
                     logger.LogError("Platform does not exists, {daemonId}:", reply.Id);
@@ -59,13 +62,11 @@ internal class StreamDaemonEventJob(
                     if (reply.Action == "create")
                     {
                         dbContext.ContainersInfo.Add(containerInfo);
-                        await dbContext.SaveChangesAsync(context.CancellationToken);
                     }
                     else if (reply.Action == "destroy")
                     {
                         var existing = await dbContext.ContainersInfo.FirstOrDefaultAsync(s => s.ContainerId == reply.ContainerId, context.CancellationToken);
                         dbContext.ContainersInfo.Remove(existing);
-                        await dbContext.SaveChangesAsync(context.CancellationToken);
                     }
                     else
                     {
@@ -80,14 +81,14 @@ internal class StreamDaemonEventJob(
                                 "restart" => "restarting",
                                 _ => throw new NotImplementedException()
                             };
-                            existing.PartialUpdate(state: state, status: containerInfo.Status);
-
-                            await dbContext.SaveChangesAsync(context.CancellationToken);
+                            existing.PartialUpdate(state: containerInfo.State, status: containerInfo.Status);
                         }
                     }
 
+                    await dbContext.SaveChangesAsync(context.CancellationToken);
+
                     var containers = await dbContext.ContainersInfo.WithLastStat(platformId.Value).ToListAsync(context.CancellationToken);
-                    await containerHub.SendContainersInfo(containers.OrderByDescending(s => s.Created));
+                    await containerHub.SendContainersInfo(containers);
                 }
             }
         }

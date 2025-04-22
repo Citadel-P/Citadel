@@ -24,7 +24,6 @@ public sealed record DeletePlatform(Guid Id) : ICommand<Result>
 internal class DeletePlatformHandler(
     ApplicationDbContext dbContext, 
     ISchedulerFactory schedulerFactory,
-    ICacheService cacheService,
     ILogger<DeletePlatformHandler> logger) : ICommandHandler<DeletePlatform, Result>
 {
     public async ValueTask<Result> Handle(DeletePlatform command, CancellationToken cancellationToken)
@@ -41,7 +40,6 @@ internal class DeletePlatformHandler(
         dbContext.Platforms.Remove(platform);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        cacheService.DeletePlatformId(platform.DaemonId);
         await AbortTaskJobs(platform.Address, cancellationToken);
 
         return Result.Success();

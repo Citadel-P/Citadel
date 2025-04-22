@@ -47,26 +47,52 @@ const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => 
   // Memoized loading state
   const isLoading = useMemo(() => platformIsLoading || containerIsLoading, [platformIsLoading, containerIsLoading]);
 
-  // Update current platform when platform data is fetched
   useEffect(() => {
-    if (platformIsSuccess && platformData?.data) {
-      setCurrentPlatform((prevPlatform) =>
-        prevPlatform?.id !== platformData.data.id ? platformData.data : prevPlatform,
-      );
-    }
-  }, [platformIsSuccess, platformData]);
+    const shouldClearContainer = !containerId && currentContainer !== undefined;
+    const shouldClearPlatform = !platformId && !containerId && currentPlatform !== undefined;
 
-  // Update current container and platform when container data is fetched
-  useEffect(() => {
-    if (containerIsSuccess && containerData?.data?.platform) {
-      setCurrentContainer((prevContainer) =>
-        prevContainer?.id !== containerData.data.id ? containerData.data : prevContainer,
-      );
-      setCurrentPlatform((prevPlatform) =>
-        prevPlatform?.id !== containerData?.data?.platform?.id ? containerData.data.platform : prevPlatform,
-      );
+    if (shouldClearContainer) {
+      setCurrentContainer(undefined);
     }
-  }, [containerData, containerIsSuccess]);
+
+    if (shouldClearPlatform) {
+      setCurrentPlatform(undefined);
+    }
+
+    // Set platform data from platform API
+    if (platformIsSuccess && platformData?.data?.id) {
+      setCurrentPlatform((prevPlatform) => {
+        if (!prevPlatform || prevPlatform.id !== platformData.data.id) {
+          return platformData.data;
+        }
+        return prevPlatform;
+      });
+    }
+
+    // Set container and its platform data if available
+    if (containerIsSuccess && containerData?.data) {
+      const container = containerData.data;
+
+      // Update container if changed
+      if (!currentContainer || currentContainer.id !== container.id) {
+        setCurrentContainer(container);
+      }
+
+      // Update platform from container data if it exists
+      if (container.platform?.id && (!currentPlatform || currentPlatform.id !== container.platform.id)) {
+        setCurrentPlatform(container.platform);
+      }
+    }
+  }, [
+    platformId,
+    containerId,
+    platformData?.data,
+    containerData?.data,
+    platformIsSuccess,
+    containerIsSuccess,
+    currentPlatform,
+    currentContainer,
+  ]);
 
   const contextValue = useMemo(
     () => ({

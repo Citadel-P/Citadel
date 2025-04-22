@@ -9,10 +9,8 @@ using Hosting.Common;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
 using Citadel.Common;
-using Infrastructure.Services;
 using Quartz;
 using Infrastructure.TaskJobs;
-using System.Net;
 using Grpc.Core;
 
 namespace Application.Features.Platforms.Commands;
@@ -36,7 +34,6 @@ internal class UpsertPlatformHandler(
     IGrpcClientFactory clientFactory,
     ISchedulerFactory schedulerFactory,
     ApplicationDbContext dbContext,
-    ICacheService cacheService,
     ILogger<UpsertPlatformHandler> logger)
     : ICommandHandler<UpsertPlatform, Result<Platform>>
 {
@@ -51,9 +48,6 @@ internal class UpsertPlatformHandler(
             var platform = (command.Id is null)
                     ? await CreatePlatform(command, platformInfo, cancellationToken)
                     : await UpdatePlatform(command, platformInfo, cancellationToken);
-
-            // rebuild cache
-            cacheService.DeleteClientsAddresses();
 
             return platform;
         }

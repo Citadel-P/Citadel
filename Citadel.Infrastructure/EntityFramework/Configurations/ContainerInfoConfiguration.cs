@@ -1,5 +1,4 @@
-﻿using System.Text.Json;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 using Google.Protobuf.Collections;
 using Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +19,11 @@ internal class ContainerInfoConfiguration : IEntityTypeConfiguration<ContainerIn
         // Properties
         builder.Property(p => p.ContainerId).HasMaxLength(64);
         builder.OwnsMany(p => p.Ports, cfg => cfg.ToJson());
+
+        // Converters
+        builder.Property(p => p.State).HasConversion(
+                                                v => v.ToString(),
+                                                v => Enum.Parse<ContainerStateStatus>(v));
 
         builder.HasMany(p => p.Stats).WithOne().HasForeignKey(p => p.ContainerInfoId).OnDelete(DeleteBehavior.Cascade);
     }

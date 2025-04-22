@@ -2835,8 +2835,7 @@
             "format": "date-time"
           },
           "state": {
-            "type": "string",
-            "nullable": true
+            "$ref": "#/components/schemas/ContainerStateStatus"
           },
           "status": {
             "type": "string",
@@ -3033,8 +3032,7 @@
         "type": "object",
         "properties": {
           "status": {
-            "type": "string",
-            "nullable": true
+            "$ref": "#/components/schemas/ContainerStateType"
           },
           "running": {
             "type": "boolean",
@@ -3083,6 +3081,33 @@
           }
         },
         "nullable": true
+      },
+      "ContainerStateStatus": {
+        "enum": [
+          "Unknown",
+          "Created",
+          "Running",
+          "Paused",
+          "Restarting",
+          "Exited",
+          "Removing",
+          "Dead",
+          "Offline"
+        ],
+        "type": "string"
+      },
+      "ContainerStateType": {
+        "enum": [
+          "Unknown",
+          "Created",
+          "Running",
+          "Paused",
+          "Restarting",
+          "Exited",
+          "Removing",
+          "Dead"
+        ],
+        "type": "string"
       },
       "ContainerStatsView": {
         "required": [

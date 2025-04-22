@@ -86,7 +86,7 @@ export interface ContainerInfoView {
   image: string | null;
   /** @format date-time */
   created: string;
-  state: string | null;
+  state: ContainerStateStatus;
   status: string | null;
   stack: string | null;
   lastStats: ContainerStatView;
@@ -151,6 +151,18 @@ export type ContainerState = {
   finishedAt?: string | null;
   health?: Health;
 };
+
+export enum ContainerStateStatus {
+  Unknown = 'Unknown',
+  Created = 'Created',
+  Running = 'Running',
+  Paused = 'Paused',
+  Restarting = 'Restarting',
+  Exited = 'Exited',
+  Removing = 'Removing',
+  Dead = 'Dead',
+  Offline = 'Offline',
+}
 
 export interface ContainerStatsView {
   stats: ContainerStatView[] | null;

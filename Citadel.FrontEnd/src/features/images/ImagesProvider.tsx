@@ -52,10 +52,10 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
     }
   }, [isSuccess, data]);
 
-  // Create a new wrapper function that handles both original and filtered images
+  // Wrapper function that handles both original and filtered images
   const handleLocalImagesUpdate = useCallback((images: ImageView[]) => {
-    setOriginalLocalImages(images); // Store original images
-    setLocalImages(images); // Also update current images display
+    setOriginalLocalImages(images);
+    setLocalImages(images);
   }, []);
 
   // Filter images whenever search term changes
@@ -70,11 +70,8 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
 
       // Filter images by name OR id containing the search term
       const filtered = originalLocalImages.filter((image) => {
-        // Check image name (if it exists)
         const nameMatches =
           image.name?.toLowerCase().includes(searchLower) || image.tag?.toLowerCase().includes(searchLower) || false;
-
-        // Check image ID (if it exists)
         const idMatches =
           // Short ID format (first 12 characters)
           (image.id && image.id.substring(0, 12).toLowerCase().includes(searchLower)) ||
@@ -82,7 +79,6 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
           (image.id && image.id.toLowerCase().includes(searchLower)) ||
           false;
 
-        // Return true if either name or ID matches
         return nameMatches || idMatches;
       });
 

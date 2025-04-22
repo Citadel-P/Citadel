@@ -27,19 +27,10 @@ public static class InfrastructureModule
     /// <returns>The updated service collection.</returns>
     public static IServiceCollection RegisterInfrastructureModule(this IServiceCollection services, IConfiguration configuration)
         => services
-            .RegisterServices()
             .InitializeDb()
             .AddGrpcClients()
             .AddHttpClients()
             .AddTaskJobs(configuration);
-
-    /// <summary>
-    /// Registers the infrastructure services.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <returns>The updated service collection.</returns>
-    private static IServiceCollection RegisterServices(this IServiceCollection services)
-        => services.AddScoped<ICacheService, CacheService>();
 
     /// <summary>
     /// Adds gRPC clients to the service collection.

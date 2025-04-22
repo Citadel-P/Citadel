@@ -59,11 +59,13 @@ internal class ContainersInfoJob(
             {
                 // Mark containers as offline
                 for (int i = 0; i < containers.Length; i++)
-                    containers[i].PartialUpdate(state: "offline");
+                    containers[i].PartialUpdate(state: ContainerStateStatus.Offline);
             }
 
             await scopedDb.SaveChangesAsync(ct);
-            await containerHub.SendContainersInfo(containers);
+
+            if(containers.Length > 0)
+                await containerHub.SendContainersInfo(containers);
         }
         catch (RpcException ex)
         {
@@ -144,7 +146,7 @@ internal class ContainersInfoJob(
             name: msg.Name,
             image: msg.Image,
             created: msg.Created,
-            state: msg.State,
+            state: msg.State.Map(),
             status: msg.Status,
             stack: msg.Stack,
             ports: msg.Ports.Map());
@@ -188,7 +190,7 @@ internal static class ContainerInfoMapper
                     name: container.Name,
                     image: container.Image,
                     created: container.Created,
-                    state: container.State,
+                    state: container.State.Map(),
                     status: container.Status,
                     ports: container.Ports?.Map(),
                     stack: container.Stack);
@@ -211,6 +213,20 @@ internal static class ContainerInfoMapper
             rxBytes: stat.RxBytes,
             txBytes: stat.TxBytes,
             created: timestamp);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static ContainerStateStatus Map(this ContainerStateType state)
+        => state switch
+        {
+            ContainerStateType.Unknown => ContainerStateStatus.Unknown,
+            ContainerStateType.Running => ContainerStateStatus.Running,
+            ContainerStateType.Paused => ContainerStateStatus.Paused,
+            ContainerStateType.Restarting => ContainerStateStatus.Restarting,
+            ContainerStateType.Dead => ContainerStateStatus.Dead,
+            ContainerStateType.Exited => ContainerStateStatus.Exited,
+            ContainerStateType.Removing => ContainerStateStatus.Removing,
+            _ => ContainerStateStatus.Unknown,
+        };
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ICollection<ContainerPort> Map(this IEnumerable<PortMessage> ports)

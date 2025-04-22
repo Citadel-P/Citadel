@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ContainerInfoView } from '@/api/_generated';
+import { ContainerInfoView, ContainerStateStatus } from '@/api/_generated';
 import { actionType, usePATCHContainers } from './usePATCHContainers';
 
 export const useAvailableActions = (containers: ContainerInfoView[]) => {
@@ -9,15 +9,19 @@ export const useAvailableActions = (containers: ContainerInfoView[]) => {
   const availableActions = useMemo<ContainerActionsState>(() => {
     return containers.reduce<ContainerActionsState>(
       (actions, container) => {
-        const isRunningOrPaused = container.state === 'running' || container.state === 'paused';
-        const canStart = container.state !== 'running' && container.state !== 'offline' && container.state !== 'paused';
-        const canDelete = container.state !== 'offline';
+        const isRunningOrPaused =
+          container.state === ContainerStateStatus.Running || container.state === ContainerStateStatus.Paused;
+        const canStart =
+          container.state !== ContainerStateStatus.Running &&
+          container.state !== ContainerStateStatus.Offline &&
+          container.state !== ContainerStateStatus.Paused;
+        const canDelete = container.state !== ContainerStateStatus.Offline;
 
         return {
           canStart: actions.canStart || canStart,
           canStop: actions.canStop || isRunningOrPaused,
           canRestart: actions.canRestart || isRunningOrPaused,
-          canPause: actions.canPause || container.state === 'running',
+          canPause: actions.canPause || container.state === ContainerStateStatus.Running,
           canDelete: actions.canDelete || canDelete,
         };
       },
