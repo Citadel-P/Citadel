@@ -99,8 +99,8 @@ internal class UpsertPlatformHandler(
         // Save to db
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        // Re-queue job
-        await EnqueueTaskJob(platform.Address, cancellationToken: cancellationToken);
+        // Enqueue job
+        await EnqueueTaskJob(new PlatformData(platform.Address, platform.Id), cancellationToken: cancellationToken);
 
         logger.LogInformation("A new platform has been added, id = {PlatformId}", platform.Id);
         return Result.Success(platform);
@@ -140,20 +140,20 @@ internal class UpsertPlatformHandler(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // Re-queue job
-        await EnqueueTaskJob(platform.Address, oldPlatformAddress, cancellationToken);
+        await EnqueueTaskJob(new PlatformData(platform.Address, platform.Id), oldPlatformAddress, cancellationToken);
 
         logger.LogInformation("The platform with id = {PlatformId} has been updated", platform.Id);
         return Result.Success(platform);
     }
 
-    private async Task EnqueueTaskJob(string newAddress, string oldAddress = null, CancellationToken cancellationToken = default)
+    private async Task EnqueueTaskJob(PlatformData platformData, string oldAddress = null, CancellationToken cancellationToken = default)
     {
         var scheduler = await schedulerFactory.GetScheduler(cancellationToken);
         if (!string.IsNullOrEmpty(oldAddress))
         {
             await scheduler.AbortStreamDaemonEventJob(oldAddress, logger, cancellationToken);
         }
-        await scheduler.EnqueueStreamDaemonEventJob(newAddress, logger, cancellationToken);
+        await scheduler.EnqueueStreamDaemonEventJob(platformData, logger, cancellationToken);
     }
 
 }

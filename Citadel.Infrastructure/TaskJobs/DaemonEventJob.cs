@@ -1,8 +1,6 @@
-﻿using System.Threading;
-using Google.Protobuf.WellKnownTypes;
+﻿using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -20,44 +18,40 @@ internal class DaemonEventJob(
     public async ValueTask Execute(IJobExecutionContext context)
     {
         var scheduler = await schedulerFactory.GetScheduler(context.CancellationToken);
-        var addresses = await dbContext.Platforms.AsNoTracking().Select(s => s.Address).ToListAsync(context.CancellationToken);
-        if (addresses.Count == 0) return;
+        var platforms = await dbContext.Platforms.AsNoTracking().Select(s => new PlatformData(s.Address, s.Id)).ToListAsync(context.CancellationToken);
+        if (platforms.Count == 0) return;
 
-        foreach (var address in addresses)
+        foreach (var platform in platforms)
         {
-            await scheduler.EnqueueStreamDaemonEventJob(address, logger, context.CancellationToken);
+            await scheduler.EnqueueStreamDaemonEventJob(platform, logger, context.CancellationToken);
         }
     }
 }
 
-internal class StreamDaemonEventJob(
-    IGrpcClientFactory clientFactory,
-    ApplicationDbContext dbContext,
-    ILogger<StreamDaemonEventJob> logger,
+internal class StreamDaemonEventJob(IGrpcClientFactory clientFactory, ApplicationDbContext dbContext, ILogger<StreamDaemonEventJob> logger,
     IContainerHubDispatcher containerHub) : IJob
 {
+    private static readonly HashSet<string> ContainerEventNames = ["create", "destroy", "stop", "start", "pause", "restart"];
+
     public async ValueTask Execute(IJobExecutionContext context)
     {    
         try
         {
+            if (!Guid.TryParse(context.MergedJobDataMap.GetString("platformId"), out var platformId) || platformId == Guid.Empty)
+            {
+                logger.LogError("No PlatformId has been set in job params");
+                return;
+            }
             var address = context.MergedJobDataMap.GetString("address");
             var client = clientFactory.GetContainerClient(address);
 
             using var call = client.StreamDaemonEvent(new Empty(), cancellationToken: context.CancellationToken);
             await foreach (var reply in call.ResponseStream.ReadAllAsync(context.CancellationToken))
             {
-                Guid? platformId = platformId = await dbContext.Platforms.AsNoTracking()
-                                    .Where(s => s.DaemonId == reply.Id).Select(s => s.Id)
-                                    .FirstOrDefaultAsync(context.CancellationToken);
-
-                if (platformId == null)
-                {
-                    logger.LogError("Platform does not exists, {daemonId}:", reply.Id);
-                }
 
                 if (reply.EventMessageType == Agent.Server.Containers.EventMessageType.Container)
                 {
-                    var containerInfo = reply.Container.Map(platformId.Value, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                    var containerInfo = reply.Container.Map(platformId, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
                     if (reply.Action == "create")
                     {
@@ -86,9 +80,7 @@ internal class StreamDaemonEventJob(
                     }
 
                     await dbContext.SaveChangesAsync(context.CancellationToken);
-
-                    var containers = await dbContext.ContainersInfo.WithLastStat(platformId.Value).ToListAsync(context.CancellationToken);
-                    await containerHub.SendContainersInfo(containers);
+                    await containerHub.SendContainerEvent(containerInfo, reply.Action);
                 }
             }
         }
@@ -120,16 +112,17 @@ public static class StreamDaemonEventJobExtension
 {
     public static JobKey GetJobKey(string address) => new(address, "StreamDaemonEvent");
 
-    public static async Task EnqueueStreamDaemonEventJob(this IScheduler scheduler, string address, ILogger logger, CancellationToken cancellationToken)
+    public static async Task EnqueueStreamDaemonEventJob(this IScheduler scheduler, PlatformData platformData, ILogger logger, CancellationToken cancellationToken)
     {
-        var jobKey = GetJobKey(address);
+        var jobKey = GetJobKey(platformData.Address);
         try
         {
             if (!await scheduler.CheckExists(jobKey, cancellationToken))
             {
                 var job = JobBuilder.Create<StreamDaemonEventJob>()
                                             .WithIdentity(jobKey)
-                                            .UsingJobData("address", address)
+                                            .UsingJobData("address", platformData.Address)
+                                            .UsingJobData("platformId", platformData.PlatformId.ToString())
                                             .Build();
 
                 var trigger = TriggerBuilder.Create()
@@ -159,3 +152,5 @@ public static class StreamDaemonEventJobExtension
         }
     }
 }
+
+public record PlatformData(string Address, Guid PlatformId);

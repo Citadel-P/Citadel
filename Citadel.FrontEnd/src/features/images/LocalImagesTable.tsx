@@ -125,7 +125,7 @@ export default function LocalImagesTable() {
   );
 
   // Memoized row count
-  const rowCount = useMemo(() => data?.data.images?.length ?? 0, [data]);
+  const rowCount = useMemo(() => localImages?.length ?? 0, [localImages]);
 
   return (
     <div className="flex flex-col gap-3">

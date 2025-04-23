@@ -16,8 +16,45 @@ const useContainersHub = (platformId: string) => {
   }, []);
 
   const handleContainerEventReceived = useCallback((containerInfo: ContainerInfoView, eventType: string) => {
-    console.log('Container event received:', { containerInfo, eventType });
-    // TODO: Implement container event handling
+    setContainersInfo((currentInfo) => {
+      // If we don't have any current info, initialize with empty containers array
+      if (!currentInfo) {
+        return;
+      }
+      const updatedContainers = [...(currentInfo.containers ?? [])];
+
+      const existingIndex = updatedContainers.findIndex(
+        (container) => container.containerId === containerInfo.containerId,
+      );
+
+      switch (eventType) {
+        case 'create':
+          // Add container if it doesn't exist
+          if (existingIndex === -1) {
+            return {
+              ...currentInfo,
+              containers: [containerInfo, ...updatedContainers],
+            };
+          }
+          updatedContainers[existingIndex] = containerInfo;
+          return { ...currentInfo, containers: updatedContainers };
+
+        case 'destroy':
+          if (existingIndex !== -1) {
+            updatedContainers.splice(existingIndex, 1);
+            return { ...currentInfo, containers: updatedContainers };
+          }
+          // No change if container doesn't exist
+          return currentInfo;
+
+        default:
+          // Update container for all other event types (stop, start, etc.)
+          if (existingIndex !== -1) {
+            updatedContainers[existingIndex] = containerInfo;
+            return { ...currentInfo, containers: updatedContainers };
+          }
+      }
+    });
   }, []);
 
   const setupEventListeners = useCallback(
