@@ -2616,6 +2616,94 @@
         ]
       }
     },
+    "/api/v1/networks/{id}": {
+      "get": {
+        "tags": [
+          "Networks"
+        ],
+        "summary": "List all networks",
+        "operationId": "Networks_List",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The platform id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworksView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/networks": {
       "post": {
         "tags": [
@@ -4309,6 +4397,28 @@
           }
         }
       },
+      "IPAMConfigView": {
+        "required": [
+          "subnet",
+          "gateway"
+        ],
+        "type": "object",
+        "properties": {
+          "subnet": {
+            "type": "string",
+            "nullable": true
+          },
+          "gateway": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipRange": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          }
+        }
+      },
       "IPAMInput": {
         "required": [
           "driver"
@@ -4323,6 +4433,36 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/IPAMConfigInput"
+            },
+            "default": null,
+            "nullable": true
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": null,
+            "nullable": true
+          }
+        },
+        "default": null,
+        "nullable": true
+      },
+      "IPAMView": {
+        "required": [
+          "driver"
+        ],
+        "type": "object",
+        "properties": {
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "config": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IPAMConfigView"
             },
             "default": null,
             "nullable": true
@@ -4805,8 +4945,106 @@
         },
         "nullable": true
       },
+      "NetworksView": {
+        "required": [
+          "networks"
+        ],
+        "type": "object",
+        "properties": {
+          "networks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NetworkView"
+            },
+            "nullable": true
+          }
+        }
+      },
       "NetworkView": {
-        "type": "object"
+        "required": [
+          "name",
+          "id",
+          "created",
+          "driver",
+          "scope",
+          "enableIPv4",
+          "enableIPv6",
+          "internal",
+          "attachable",
+          "ingress",
+          "configOnly"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "created": {
+            "type": "string",
+            "nullable": true
+          },
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "scope": {
+            "type": "string",
+            "nullable": true
+          },
+          "enableIPv4": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "enableIPv6": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "internal": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "attachable": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "ingress": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "configOnly": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "configFrom": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          },
+          "ipam": {
+            "$ref": "#/components/schemas/IPAMView"
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": null,
+            "nullable": true
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": null,
+            "nullable": true
+          }
+        }
       },
       "PackageVersionContainerMetadata": {
         "type": "object",

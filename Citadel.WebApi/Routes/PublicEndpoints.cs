@@ -321,6 +321,14 @@ public static class PublicEndpoints
 
     private static void MapNetworkEndpoints(RouteGroupBuilder networks)
     {
+        networks.MapGet("{id}", Networks.List)
+           .WithSummary("List all networks")
+           .ProducesValidationProblem()
+           .ProducesProblem(StatusCodes.Status403Forbidden)
+           .ProducesProblem(StatusCodes.Status401Unauthorized)
+           .ProducesProblem(StatusCodes.Status409Conflict)
+           .WithName(NetworksName + "_" + nameof(Networks.List));
+
         networks.MapPost("/", Networks.Create)
             .WithSummary("Create a network")
             .ProducesValidationProblem()

@@ -495,11 +495,27 @@ export interface IPAMConfigInput {
   gateway: string | null;
 }
 
+export interface IPAMConfigView {
+  subnet: string | null;
+  gateway: string | null;
+  /** @default null */
+  ipRange?: string | null;
+}
+
 /** @default null */
 export type IPAMInput = {
   driver: string | null;
   /** @default null */
   configs?: IPAMConfigInput[] | null;
+  /** @default null */
+  options?: Record<string, string>;
+};
+
+/** @default null */
+export type IPAMView = {
+  driver: string | null;
+  /** @default null */
+  config?: IPAMConfigView[] | null;
   /** @default null */
   options?: Record<string, string>;
 };
@@ -637,7 +653,30 @@ export type NetworkSettingsView = {
   networks: Record<string, EndpointSettingsView>;
 };
 
-export type NetworkView = object;
+export interface NetworksView {
+  networks: NetworkView[] | null;
+}
+
+export interface NetworkView {
+  name: string | null;
+  id: string | null;
+  created: string | null;
+  driver: string | null;
+  scope: string | null;
+  enableIPv4: boolean | null;
+  enableIPv6: boolean | null;
+  internal: boolean | null;
+  attachable: boolean | null;
+  ingress: boolean | null;
+  configOnly: boolean | null;
+  /** @default null */
+  configFrom?: string | null;
+  ipam?: IPAMView;
+  /** @default null */
+  options?: Record<string, string>;
+  /** @default null */
+  labels?: Record<string, string>;
+}
 
 export type PackageVersionContainerMetadata = {
   tags?: string[] | null;
@@ -1891,6 +1930,30 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Networks
+     * @name NetworksList
+     * @summary List all networks
+     * @request GET:/api/v1/networks/{id}
+     * @secure
+     * @response `200` `NetworksView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    networksList: (id: string, params: RequestParams = {}) =>
+      this.request<NetworksView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/networks/${id}`,
+        method: 'GET',
+        secure: true,
         format: 'json',
         ...params,
       }),
