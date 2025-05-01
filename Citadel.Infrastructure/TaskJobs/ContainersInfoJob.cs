@@ -6,66 +6,61 @@ using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Quartz;
 
 namespace Infrastructure.TaskJobs;
 
+[DisallowConcurrentExecution]
 internal class ContainersInfoJob(
-    IGrpcClientFactory clientFactory,
     ApplicationDbContext dbContext,
+    IGrpcClientFactory clientFactory,
     ILogger<ContainersInfoJob> logger,
-    IServiceProvider serviceProvider,
     IContainerHubDispatcher containerHub) : IJob
 {
     public static readonly JobKey JobKey = new(nameof(ContainersInfoJob), "Containers");
-    private static readonly ParallelOptions _parallelOptions = new()
-    {
-        MaxDegreeOfParallelism = Environment.ProcessorCount
-    };
-
+    
     public async ValueTask Execute(IJobExecutionContext context)
     {
-        var platforms = await dbContext.Platforms.AsNoTracking()
+        var platforms = await dbContext.Platforms
+            .FromSqlRaw("SELECT Id, Address, Status FROM Platforms").AsNoTracking()
             .Select(s => new PlatformData(s.Id, s.Address, s.Status))
             .ToArrayAsync(context.CancellationToken);
 
         if (platforms.Length == 0) return;
 
-        // Reuse parallel options to avoid allocation but update cancellation token
-        _parallelOptions.CancellationToken = context.CancellationToken;
-
-        await Parallel.ForEachAsync(platforms, _parallelOptions, ProcessPlatform);
+        foreach (var platform in platforms)
+        {
+            await ProcessPlatform(platform, context.CancellationToken);
+        }
     }
 
-    private async ValueTask ProcessPlatform(PlatformData platform, CancellationToken ct)
+    private async Task ProcessPlatform(PlatformData platform, CancellationToken ct)
     {
-        using var scope = serviceProvider.CreateScope();
-        var scopedDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
         try
         {
-            var containers = await scopedDb.ContainersInfo
+            var containers = await dbContext.ContainersInfo
                 .Where(c => c.PlatformId == platform.Id)
                 .OrderByDescending(c => c.Created)
-                .ToArrayAsync(ct);
+                .ToDictionaryAsync(c => c.ContainerId, ct);
 
             if (platform.Status == PlatformStatus.Online)
             {
-                await SyncContainers(platform, containers, scopedDb, ct);
+                await SyncContainers(platform, containers, ct);
             }
             else
             {
                 // Mark containers as offline
-                for (int i = 0; i < containers.Length; i++)
-                    containers[i].PartialUpdate(state: ContainerStateStatus.Offline);
+                foreach (var container in containers.Values)
+                {
+                    container.PartialUpdate(state: ContainerStateStatus.Offline);
+                }
             }
 
-            await scopedDb.SaveChangesAsync(ct);
+            await dbContext.SaveChangesAsync(ct);
 
-            if(containers.Length > 0)
-                await containerHub.SendContainersInfo(containers);
+            if(containers.Count != 0)
+                await containerHub.SendContainersInfo(containers.Values);
         }
         catch (RpcException ex)
         {
@@ -73,49 +68,44 @@ internal class ContainersInfoJob(
         }
     }
 
-    private async Task SyncContainers(PlatformData platform, ContainerInfo[] containers, ApplicationDbContext dbContext, CancellationToken ct)
+    private async Task SyncContainers(PlatformData platform, Dictionary<string, ContainerInfo> containers, CancellationToken ct)
     {
-        // Preallocate dictionary with capacity to avoid resizing
-        var existingById = new Dictionary<string, ContainerInfo>(containers.Length, StringComparer.Ordinal);
-        for (int i = 0; i < containers.Length; i++)
-        {
-            existingById[containers[i].ContainerId] = containers[i];
-        }
-
         var client = clientFactory.GetContainerClient(platform.Address);
         var response = await client.ListContainersAsync(new ContainersListMessage { All = true }, cancellationToken: ct);
-
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var containersMsg = response.Containers;
 
-        // Use HashSet with initial capacity to avoid resizing
-        var activeIds = new HashSet<string>(response.Containers.Count, StringComparer.Ordinal);
-        foreach (var container in response.Containers)
+        // Remove stale containers
+        var staleContainers = containers
+            .Where(kvp => !containersMsg.ContainsKey(kvp.Key))
+            .Select(kvp => kvp.Value)
+            .ToList();
+
+        if (staleContainers.Count != 0)
         {
-            activeIds.Add(container.Id);
+            dbContext.ContainersInfo.RemoveRange(staleContainers);
         }
 
-        RemoveStaleContainers(dbContext, containers, activeIds);
-
-        // Preallocate collection with expected capacity
-        var containerStats = response.Containers.Count > 0
-            ? new List<ContainerStat>(response.Containers.Count)
+        // Add or update containers, maybe only resize list for running containers
+        var containerStats = containersMsg.Count > 0
+            ? new List<ContainerStat>(containersMsg.Count)
             : null;
 
-        foreach (var msg in response.Containers)
+        foreach (var msg in containersMsg)
         {
-            if (!existingById.TryGetValue(msg.Id, out var existing))
+            if (!containers.TryGetValue(msg.Key, out var existing))
             {
-                dbContext.ContainersInfo.Add(msg.Map(platform.Id, timestamp));
+                dbContext.ContainersInfo.Add(msg.Value.Map(platform.Id, timestamp));
             }
             else
             {
-                UpdateExistingContainer(existing, msg);
+                UpdateExistingContainer(existing, msg.Value);
 
-                if (msg.ContainerStatMessage is not null)
+                if (msg.Value.ContainerStatMessage is not null)
                 {
                     containerStats?.Add(CreateContainerStat(
                         existing.Id,
-                        msg.ContainerStatMessage,
+                        msg.Value.ContainerStatMessage,
                         timestamp));
                 }
             }
@@ -140,6 +130,7 @@ internal class ContainersInfoJob(
             created: timestamp);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void UpdateExistingContainer(ContainerInfo existing, ContainerMessage msg)
     {
         existing.PartialUpdate(
@@ -152,25 +143,6 @@ internal class ContainersInfoJob(
             ports: msg.Ports.Map());
     }
 
-    private static void RemoveStaleContainers(ApplicationDbContext db, ContainerInfo[] containers, HashSet<string> activeIds)
-    {
-        List<ContainerInfo> toRemove = null;
-        for (int i = 0; i < containers.Length; i++)
-        {
-            var container = containers[i];
-            if (!activeIds.Contains(container.ContainerId))
-            {
-                toRemove ??= [];
-                toRemove.Add(container);
-            }
-        }
-
-        if (toRemove?.Count > 0)
-        {
-            db.ContainersInfo.RemoveRange(toRemove);
-        }
-    }
-
     private readonly struct PlatformData(Guid id, string address, PlatformStatus status)
     {
         public Guid Id { get; } = id;
@@ -179,7 +151,7 @@ internal class ContainersInfoJob(
     }
 }
 
-internal static class ContainerInfoMapper
+public static class ContainerInfoMapper
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ContainerInfo Map(this ContainerMessage container, Guid platformId, long timestamp)

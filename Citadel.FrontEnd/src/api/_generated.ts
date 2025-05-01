@@ -55,6 +55,11 @@ export type BindOptions = {
   readOnlyForceRecursive?: boolean | null;
 };
 
+/** @default null */
+export type ConfigFromInput = {
+  network: string | null;
+};
+
 export type ContainerConfig = {
   hostname?: string | null;
   domainname?: string | null;
@@ -136,7 +141,7 @@ export interface ContainersInfoView {
 }
 
 export type ContainerState = {
-  status?: string | null;
+  status?: ContainerStateType;
   running?: boolean | null;
   paused?: boolean | null;
   restarting?: boolean | null;
@@ -164,6 +169,17 @@ export enum ContainerStateStatus {
   Offline = 'Offline',
 }
 
+export enum ContainerStateType {
+  Unknown = 'Unknown',
+  Created = 'Created',
+  Running = 'Running',
+  Paused = 'Paused',
+  Restarting = 'Restarting',
+  Exited = 'Exited',
+  Removing = 'Removing',
+  Dead = 'Dead',
+}
+
 export interface ContainerStatsView {
   stats: ContainerStatView[] | null;
 }
@@ -181,6 +197,26 @@ export interface ContainerStatView {
   txBytes?: number;
   /** @format int64 */
   created?: number;
+}
+
+export interface CreateNetworkInput {
+  /** @format uuid */
+  platformId: string;
+  name: string | null;
+  driver: string | null;
+  scope: string | null;
+  internal: boolean | null;
+  attachable: boolean | null;
+  ingress: boolean | null;
+  enableIPv6: boolean | null;
+  enableIPv4: boolean | null;
+  configOnly: boolean | null;
+  ipam?: IPAMInput;
+  configFrom?: ConfigFromInput;
+  /** @default null */
+  labels?: Record<string, string>;
+  /** @default null */
+  options?: Record<string, string>;
 }
 
 export interface CreateRegistryInput {
@@ -453,6 +489,21 @@ export interface ImageView {
   tag?: string | null;
 }
 
+export interface IPAMConfigInput {
+  subnet: string | null;
+  ipRange: string | null;
+  gateway: string | null;
+}
+
+/** @default null */
+export type IPAMInput = {
+  driver: string | null;
+  /** @default null */
+  configs?: IPAMConfigInput[] | null;
+  /** @default null */
+  options?: Record<string, string>;
+};
+
 export type IRegistryConfiguration = BaseIRegistryConfiguration &
   (
     | BaseIRegistryConfigurationTypeMapping<'AWS', IRegistryConfigurationAWSRegistry>
@@ -585,6 +636,8 @@ export type NetworkSettingsView = {
   macAddress: string | null;
   networks: Record<string, EndpointSettingsView>;
 };
+
+export type NetworkView = object;
 
 export type PackageVersionContainerMetadata = {
   tags?: string[] | null;
@@ -1835,6 +1888,32 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       this.request<DeleteImagesReply, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/images`,
         method: 'DELETE',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Networks
+     * @name NetworksCreate
+     * @summary Create a network
+     * @request POST:/api/v1/networks
+     * @secure
+     * @response `200` `NetworkView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    networksCreate: (data: CreateNetworkInput, params: RequestParams = {}) =>
+      this.request<NetworkView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/networks`,
+        method: 'POST',
         body: data,
         secure: true,
         type: ContentType.Json,

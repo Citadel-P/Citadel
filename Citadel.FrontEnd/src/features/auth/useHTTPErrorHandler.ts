@@ -10,7 +10,7 @@ export function useHTTPErrorHandler() {
     const handleError = (error: ProblemDetails) => {
       if (error?.status === 401) {
         client.invalidateQueries({ queryKey: ['getAccessToken'] });
-      } else if (error?.status != null && error?.status > 400 && error?.status != 404) {
+      } else if (error?.status != null && error?.status > 400 ) {
         toast.error(error.status + ' ' + error.title, {
           description: error.detail,
         });

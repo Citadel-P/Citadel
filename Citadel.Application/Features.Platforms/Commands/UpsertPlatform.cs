@@ -1,17 +1,18 @@
-﻿using Infrastructure.Entities;
-using Hosting.Common.ErrorTypes;
+﻿using Agent.Server.Containers;
+using Citadel.Common;
 using FluentValidation;
+using Grpc.Core;
+using Hosting.Common;
+using Hosting.Common.ErrorTypes;
+using Infrastructure.Entities;
+using Infrastructure.EntityFramework;
+using Infrastructure.Services.Abstractions;
+using Infrastructure.TaskJobs;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Hosting.Common;
-using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
-using Citadel.Common;
 using Quartz;
-using Infrastructure.TaskJobs;
-using Grpc.Core;
 
 namespace Application.Features.Platforms.Commands;
 
@@ -41,13 +42,18 @@ internal class UpsertPlatformHandler(
     {
         try
         {
-            // Get platform system info
-            var client = clientFactory.GetPlatformClient(command.Address);
-            var platformInfo = await client.GetPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
+            // Get platform and containers info
+            var platformClient = clientFactory.GetPlatformClient(command.Address);
+            var containersClient = clientFactory.GetContainerClient(command.Address);
+
+            var platformInfoTsk = platformClient.GetPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
+            var containersTsk = containersClient.ListContainersAsync(new ContainersListMessage { All = true }, cancellationToken: cancellationToken);
+            var platformInfo = await platformInfoTsk;
+            var containers = await containersTsk;
 
             var platform = (command.Id is null)
-                    ? await CreatePlatform(command, platformInfo, cancellationToken)
-                    : await UpdatePlatform(command, platformInfo, cancellationToken);
+                    ? await CreatePlatform(command, platformInfo, containers, cancellationToken)
+                    : await UpdatePlatform(command, platformInfo, containers, cancellationToken);
 
             return platform;
         }
@@ -62,7 +68,7 @@ internal class UpsertPlatformHandler(
         }
     }
 
-    private async Task<Result<Platform>> CreatePlatform(UpsertPlatform command, PlatformInfoMessage platformInfo, CancellationToken cancellationToken)
+    private async Task<Result<Platform>> CreatePlatform(UpsertPlatform command, PlatformInfoMessage platformInfo, ContainersListReply containers, CancellationToken cancellationToken)
     {
         // Check if the platform already exists
         if (await dbContext.Platforms.AsNoTracking()
@@ -96,6 +102,10 @@ internal class UpsertPlatformHandler(
             );
         dbContext.Platforms.Add(platform);
 
+        // Add containers
+        dbContext.ContainersInfo.AddRange(containers.Containers.Select(s => s.Value.Map(platform.Id, DateTimeOffset.UtcNow.ToUnixTimeSeconds())));
+
+
         // Save to db
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -106,7 +116,7 @@ internal class UpsertPlatformHandler(
         return Result.Success(platform);
     }
 
-    private async Task<Result<Platform>> UpdatePlatform(UpsertPlatform command, PlatformInfoMessage platformInfo, CancellationToken cancellationToken)
+    private async Task<Result<Platform>> UpdatePlatform(UpsertPlatform command, PlatformInfoMessage platformInfo, ContainersListReply containers, CancellationToken cancellationToken)
     {
         var platform = await dbContext.Platforms.FirstOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
         if (platform == null)

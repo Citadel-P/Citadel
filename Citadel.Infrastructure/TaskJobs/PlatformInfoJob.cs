@@ -11,6 +11,7 @@ using Quartz;
 
 namespace Infrastructure.TaskJobs;
 
+[DisallowConcurrentExecution]
 internal class PlatformInfoJob(
     IGrpcClientFactory clientFactory,
     ApplicationDbContext dbContext,
@@ -18,11 +19,7 @@ internal class PlatformInfoJob(
     IPlatformHubDispatcher platformHub) : IJob
 {
     public static readonly JobKey JobKey = new(nameof(PlatformInfoJob), "SystemInfo");
-    private static readonly ParallelOptions _parallelOptions = new()
-    {
-        MaxDegreeOfParallelism = Environment.ProcessorCount
-    };
-
+   
     public async ValueTask Execute(IJobExecutionContext context)
     {
         var platforms = await dbContext.Platforms
@@ -31,62 +28,54 @@ internal class PlatformInfoJob(
 
         if (platforms.Length == 0) return;
 
-        // Pre-allocate arrays with known size
-        var updates = new PlatformUpdate[platforms.Length];
         var platformStats = new List<PlatformStat>(platforms.Length);
 
-        // Process platforms in parallel while minimizing allocations
-        _parallelOptions.CancellationToken = context.CancellationToken;
-        await Parallel.ForEachAsync(new ArraySegment<Platform>(platforms), _parallelOptions, ProcessPlatform);
-
-        // Save changes to the database in one batch
-        if (platformStats.Count > 0)
+        foreach (var platform in platforms)
         {
-            dbContext.PlatformStats.AddRange(platformStats);
+            await ProcessPlatform(platform, context.CancellationToken);
         }
 
         await dbContext.SaveChangesAsync(context.CancellationToken);
         await platformHub.PushPlatformsUpdates(platforms);
+    }
 
-        async ValueTask ProcessPlatform(Platform platform, CancellationToken ct)
+    private async Task ProcessPlatform(Platform platform, CancellationToken ct)
+    {
+        var client = clientFactory.GetPlatformClient(platform.Address);
+
+        try
         {
-            int platformIndex = Array.IndexOf(platforms, platform);
-            var client = clientFactory.GetPlatformClient(platform.Address);
+            var info = await client.GetPlatformInfoAsync(new Empty(), cancellationToken: ct);
 
-            try
-            {
-                var info = await client.GetPlatformInfoAsync(new Empty(), cancellationToken: ct);
-                updates[platformIndex] = new PlatformUpdate(platform.Address, PlatformStatus.Online, info);
+            // Update platform
+            platform.PartialUpdate(
+                platformStatus: PlatformStatus.Online,
+                networksCount: info.NetworksCount,
+                volumesCount: info.VolumesCount,
+                containers: info.Containers,
+                containersRunning: info.ContainersRunning,
+                containersPaused: info.ContainersPaused,
+                containersStopped: info.ContainersStopped,
+                images: info.Images,
+                ncpu: info.Ncpu,
+                memTotal: info.MemTotal,
+                serverVersion: info.ServerVersion,
+                agentVersion: info.AgentVersion,
+                osType: info.OsType,
+                osVersion: info.OsVersion,
+                operatingSystem: info.OperatingSystem,
+                driver: info.Driver);
 
-                // Update platform
-                platform.PartialUpdate(
-                    platformStatus: PlatformStatus.Online,
-                    networksCount: info.NetworksCount,
-                    volumesCount: info.VolumesCount,
-                    containers: info.Containers,
-                    containersRunning: info.ContainersRunning,
-                    containersPaused: info.ContainersPaused,
-                    containersStopped: info.ContainersStopped,
-                    images: info.Images,
-                    ncpu: info.Ncpu,
-                    memTotal: info.MemTotal,
-                    serverVersion: info.ServerVersion,
-                    agentVersion: info.AgentVersion,
-                    osType: info.OsType,
-                    osVersion: info.OsVersion,
-                    operatingSystem: info.OperatingSystem,
-                    driver: info.Driver);
+            var stat = CreatePlatformStat(platform.Id, info);
+            platform.Stats.Add(stat);
+            dbContext.PlatformStats.Add(stat);
+        }
+        catch (RpcException ex)
+        {
+            logger.LogWarning(ex, "Error while getting system info from platform {PlatformId}", platform.Id);
 
-                platformStats.Add(CreatePlatformStat(platform.Id, info));
-            }
-            catch (RpcException ex)
-            {
-                logger.LogWarning(ex, "Error while getting system info from platform {PlatformId}", platform.Id);
-                updates[platformIndex] = new PlatformUpdate(platform.Address, PlatformStatus.Offline);
-
-                // Mark platform as offline
-                platform.PartialUpdate(platformStatus: PlatformStatus.Offline);
-            }
+            // Mark platform as offline
+            platform.PartialUpdate(platformStatus: PlatformStatus.Offline);
         }
     }
 
@@ -100,12 +89,5 @@ internal class PlatformInfoJob(
             rxBytes: double.IsNaN(info.RxBytes) ? 0 : info.RxBytes,
             txBytes: double.IsNaN(info.TxBytes) ? 0 : info.TxBytes,
             platformId: platformId);
-    }
-
-    private readonly struct PlatformUpdate(string address, PlatformStatus status, PlatformInfoMessage info = null)
-    {
-        public string Address { get; } = address;
-        public PlatformStatus Status { get; } = status;
-        public PlatformInfoMessage Info { get; } = info;
     }
 }

@@ -4,27 +4,20 @@ interface IProps {
   children?: React.ReactNode;
 }
 
-const retryOnceOn401 = (failureCount: number, error: any): boolean => {
-  // Only retry once (when failureCount is 0) for 401 errors
-  if (error?.response?.status === 401) {
-    return failureCount === 0;
-  }
-
-  // For other errors, use default retry logic
-  return failureCount < 3;
-};
+// do not retry on http errors
+const handleRetry = (failureCount: number, error: any): boolean => false;
 
 const QueryClientWrapper: React.FC<IProps> = ({ children }) => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        retry: retryOnceOn401,
+        retry: handleRetry,
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
         refetchOnMount: true,
       },
       mutations: {
-        retry: retryOnceOn401,
+        retry: handleRetry,
       },
     },
   });

@@ -11,7 +11,7 @@
 	<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4">
 	  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 	</PackageReference>
-    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.8.0" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.9.0" />
 	<PackageReference Include="Quartz.AspNetCore" Version="4.0.0-preview-20250418-1045" />
   </ItemGroup>
 
@@ -24,10 +24,11 @@
   </ItemGroup>
 
    <ItemGroup>
-	   <PackageReference Include="Grpc.AspNetCore" Version="2.70.0" />
+	   <PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\agent.containers.proto" GrpcServices="Client" Link="Protos\agent.containers.proto" />
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\agent.images.proto" GrpcServices="Client" Link="Protos\agent.images.proto" />
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\agent.platform.proto" GrpcServices="Client" Link="Protos\agent.platform.proto" />
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\agent.networks.proto" GrpcServices="Client" Link="Protos\agent.networks.proto" />
 
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\Common\platforms.proto" GrpcServices="None" Link="Protos\Common\platforms.proto" />
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\Common\containers.proto" GrpcServices="None" Link="Protos\Common\containers.proto" />

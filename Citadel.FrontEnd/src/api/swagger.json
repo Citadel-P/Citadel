@@ -2615,6 +2615,91 @@
           }
         ]
       }
+    },
+    "/api/v1/networks": {
+      "post": {
+        "tags": [
+          "Networks"
+        ],
+        "summary": "Create a network",
+        "operationId": "Networks_Create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNetworkInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -2691,6 +2776,20 @@
             "nullable": true
           }
         },
+        "nullable": true
+      },
+      "ConfigFromInput": {
+        "required": [
+          "network"
+        ],
+        "type": "object",
+        "properties": {
+          "network": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "default": null,
         "nullable": true
       },
       "ContainerConfig": {
@@ -3032,8 +3131,7 @@
         "type": "object",
         "properties": {
           "status": {
-            "type": "string",
-            "nullable": true
+            "$ref": "#/components/schemas/ContainerStateType"
           },
           "running": {
             "type": "boolean",
@@ -3097,6 +3195,19 @@
         ],
         "type": "string"
       },
+      "ContainerStateType": {
+        "enum": [
+          "Unknown",
+          "Created",
+          "Running",
+          "Paused",
+          "Restarting",
+          "Exited",
+          "Removing",
+          "Dead"
+        ],
+        "type": "string"
+      },
       "ContainerStatsView": {
         "required": [
           "stats"
@@ -3138,6 +3249,85 @@
           "created": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "CreateNetworkInput": {
+        "required": [
+          "platformId",
+          "name",
+          "driver",
+          "scope",
+          "internal",
+          "attachable",
+          "ingress",
+          "enableIPv6",
+          "enableIPv4",
+          "configOnly"
+        ],
+        "type": "object",
+        "properties": {
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "scope": {
+            "type": "string",
+            "nullable": true
+          },
+          "internal": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "attachable": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "ingress": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "enableIPv6": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "enableIPv4": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "configOnly": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "ipam": {
+            "$ref": "#/components/schemas/IPAMInput"
+          },
+          "configFrom": {
+            "$ref": "#/components/schemas/ConfigFromInput"
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": null,
+            "nullable": true
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": null,
+            "nullable": true
           }
         }
       },
@@ -4097,6 +4287,58 @@
           }
         }
       },
+      "IPAMConfigInput": {
+        "required": [
+          "subnet",
+          "ipRange",
+          "gateway"
+        ],
+        "type": "object",
+        "properties": {
+          "subnet": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipRange": {
+            "type": "string",
+            "nullable": true
+          },
+          "gateway": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "IPAMInput": {
+        "required": [
+          "driver"
+        ],
+        "type": "object",
+        "properties": {
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "configs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IPAMConfigInput"
+            },
+            "default": null,
+            "nullable": true
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": null,
+            "nullable": true
+          }
+        },
+        "default": null,
+        "nullable": true
+      },
       "IRegistryConfiguration": {
         "required": [
           "$type"
@@ -4562,6 +4804,9 @@
           }
         },
         "nullable": true
+      },
+      "NetworkView": {
+        "type": "object"
       },
       "PackageVersionContainerMetadata": {
         "type": "object",
@@ -5312,6 +5557,9 @@
     },
     {
       "name": "Images"
+    },
+    {
+      "name": "Networks"
     }
   ]
 }

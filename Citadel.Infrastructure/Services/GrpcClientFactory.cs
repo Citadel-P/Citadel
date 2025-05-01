@@ -4,6 +4,7 @@ using Infrastructure.Services.Abstractions;
 using static Agent.Server.Containers.Containers;
 using static Agent.Server.GPlatform.gPlatform;
 using static Agent.Server.Images.Images;
+using static Agent.Server.Networks.Networks;
 
 namespace Infrastructure.Services;
 
@@ -20,6 +21,9 @@ internal class GrpcClientFactory : IGrpcClientFactory
 
     public ImagesClient GetImageClient(string address) =>
         GetOrCreateClient(NormalizeAddress(address), channel => new ImagesClient(channel));
+
+    public NetworksClient GetNetworkClient(string address) =>
+        GetOrCreateClient(NormalizeAddress(address), channel => new NetworksClient(channel));
 
     private TClient GetOrCreateClient<TClient>(string address, Func<GrpcChannel, TClient> factory)
     {

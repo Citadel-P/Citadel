@@ -21,7 +21,7 @@ public sealed record ImageView(
     {
         if (RepoTags.Any()) return RepoTags.First().Split(":").FirstOrDefault();
         else if (RepoDigests.Any()) return RepoDigests.FirstOrDefault()?.Split("@").FirstOrDefault();
-        else if (Labels.Any()) return Labels["org.opencontainers.image.title"];
+        else if (Labels.Any()) return Labels.TryGetValue("org.opencontainers.image.title", out var label) ? label : null;
         else return Id;
     }
 

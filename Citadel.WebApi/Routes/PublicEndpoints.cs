@@ -9,6 +9,7 @@ namespace WebApi.Routes;
 public static class PublicEndpoints
 {
     const string ImagesName = nameof(Images);
+    const string NetworksName = nameof(Networks);
     const string PlatformsName = nameof(Platforms);
     const string ContainersName = nameof(Containers);
     const string RegistriesName = nameof(Registries);
@@ -37,6 +38,10 @@ public static class PublicEndpoints
             var images = group.MapGroup("/images").WithTags(ImagesName).RequireAuthorization();
             {
                 MapImageEndpoints(images);
+            }
+            var networks = group.MapGroup("/networks").WithTags(NetworksName).RequireAuthorization();
+            {
+                MapNetworkEndpoints(networks);
             }
         }
 
@@ -312,5 +317,16 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(ImagesName + "_" + nameof(Images.Delete));
+    }
+
+    private static void MapNetworkEndpoints(RouteGroupBuilder networks)
+    {
+        networks.MapPost("/", Networks.Create)
+            .WithSummary("Create a network")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName(NetworksName + "_" + nameof(Networks.Create));
     }
 }
