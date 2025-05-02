@@ -4,7 +4,7 @@ import { useGETRegistries } from './hooks/useGETRegistries';
 import { useEffect, useState } from 'react';
 import { useDELETERegistries } from './hooks/useDELETERegistries';
 import { toast } from 'sonner';
-import { IDeleteDialogData, useDialogState } from './hooks/useDialogState';
+import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
 
 interface IContext {
   isLoading: boolean;
@@ -13,8 +13,8 @@ interface IContext {
   setSelectedRows: (ids: RegistryView[]) => void;
   requestDelete: (ids: string[]) => void;
   deleteIsPending: boolean;
-  dialogData: IDeleteDialogData;
-  setDialogData: (data: IDeleteDialogData) => void;
+  dialogData: IDeleteDialogData<RegistryView>;
+  setDialogData: (data: IDeleteDialogData<RegistryView>) => void;
 }
 interface IProps {
   children?: React.ReactNode;
@@ -32,7 +32,7 @@ const RegistriesProvider: React.FC<IProps> = ({ children }) => {
   const { data, isLoading, isSuccess } = useGETRegistries();
   const [selectedRows, setSelectedRows] = useState<RegistryView[]>([]);
   const [registries, setRegistries] = useState<RegistryView[]>([]);
-  const { dialogData, setDialogData } = useDialogState();
+  const { dialogData, setDialogData } = useDialogState<RegistryView>();
 
   useEffect(() => {
     if (isSuccess && data?.data) {

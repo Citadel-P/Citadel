@@ -6,14 +6,14 @@ import { useGETContainers } from './hooks/useGETContainers';
 import { useParams } from 'react-router';
 import { useDELETEContainers } from './hooks/useDELETEContainers';
 import { toast } from 'sonner';
-import { IDeleteDialogData, useDialogState } from './hooks/useDialogState';
+import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
 
 interface IContext {
   isLoading: boolean;
   platformId: string | undefined;
   containers: ContainerInfoView[];
-  dialogData: IDeleteDialogData;
-  setDialogData: (data: IDeleteDialogData) => void;
+  dialogData: IDeleteDialogData<ContainerInfoView>;
+  setDialogData: (data: IDeleteDialogData<ContainerInfoView>) => void;
   selectedRows: ContainerInfoView[];
   setSelectedRows: (containers: ContainerInfoView[]) => void;
   requestDelete: (data: DeleteContainersRequest) => void;
@@ -40,7 +40,7 @@ const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
   // Dialog state
-  const { dialogData, setDialogData } = useDialogState();
+  const { dialogData, setDialogData } = useDialogState<ContainerInfoView>();
 
   // Update containers when data or hub info changes
   useEffect(() => {

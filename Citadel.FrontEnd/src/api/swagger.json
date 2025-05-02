@@ -2633,6 +2633,38 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "Dangling",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "Driver",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": null
+            }
+          },
+          {
+            "name": "Id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": null
+            }
+          },
+          {
+            "name": "Name",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": null
+            }
           }
         ],
         "responses": {

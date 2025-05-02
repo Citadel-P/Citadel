@@ -1,14 +1,14 @@
-import { Pencil, Trash } from 'lucide-react';
+import { Trash } from 'lucide-react';
 import { useContextSelector } from 'use-context-selector';
 import { useNavigate } from 'react-router';
-import { ImagesContext } from './ImagesProvider';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
+import { NetworksContext } from './NetworksProvider';
 
 export const ActionBar = () => {
   const navigate = useNavigate();
-  const setDialogData = useContextSelector(ImagesContext, (v) => v?.setDialogData)!;
-  const selectedRows = useContextSelector(ImagesContext, (v) => v?.selectedRows) ?? [];
-  const images = useContextSelector(ImagesContext, (v) => v?.localImages) ?? [];
+  const setDialogData = useContextSelector(NetworksContext, (v) => v?.setDialogData)!;
+  const selectedRows = useContextSelector(NetworksContext, (v) => v?.selectedRows) ?? [];
+  const networks = useContextSelector(NetworksContext, (v) => v?.networks) ?? [];
 
   const actions: ImageActionsState = {
     canEdit: selectedRows?.length === 1,
@@ -25,22 +25,16 @@ export const ActionBar = () => {
         width: 'calc(100% - var(--sidebar-width))',
       }}>
       <div className="flex-1 text-xs text-muted-foreground mt-2">
-        {selectedRows.length} of {images.length} image(s) selected.
+        {selectedRows.length} of {networks.length} network(s) selected.
       </div>
       <div className="mt-1">
-        <ActionBarButton
-          onClick={() => navigate('/registries/edit/' + selectedRows?.at(0)?.id)}
-          disabled={!actions.canEdit}
-          icon={Pencil}
-          label="Edit"
-          ariaLabel="Edit selected images"
-        />
+        
         <ActionBarButton
           onClick={() => setDialogData({ open: true, currentSelection: selectedRows })}
           disabled={!actions.canDelete}
           icon={Trash}
           label="Delete"
-          ariaLabel="Delete selected images"
+          ariaLabel="Delete selected networks"
           className="inline-flex items-center rounded-r-md border border-border px-2 py-2 text-background bg-danger enabled:hover:bg-danger/85 enabled:hover:text-background font-medium text-xs disabled:cursor-not-allowed disabled:opacity-60"
         />
       </div>

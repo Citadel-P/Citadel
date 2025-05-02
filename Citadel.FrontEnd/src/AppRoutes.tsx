@@ -16,9 +16,10 @@ export const AppPaths: Record<string, string> = {
   registries: 'registries',
   addRegistry: 'registries/add',
   editRegistry: 'registries/edit/:registryId',
-  platformImages: 'platforms/:platformId/images',
+  images: 'platforms/:platformId/images',
   localImages: 'platforms/:platformId/images/local',
   externalImages: 'platforms/:platformId/images/external',
+  networks: 'platforms/:platformId/networks',
 };
 
 export const AppRoutes = () => {
@@ -88,7 +89,7 @@ export const AppRoutes = () => {
           },
         },
         {
-          path: AppPaths.platformImages,
+          path: AppPaths.images,
           lazy: async () => {
             return { Component: (await import('@/pages/images-page')).default };
           },
@@ -103,6 +104,12 @@ export const AppRoutes = () => {
           path: AppPaths.externalImages,
           lazy: async () => {
             return { Component: (await import('@/pages/images-page')).default };
+          },
+        },
+        {
+          path: AppPaths.networks,
+          lazy: async () => {
+            return { Component: (await import('@/pages/networks-page')).default };
           },
         },
         { path: AppPaths.any, element: <NotFound /> },

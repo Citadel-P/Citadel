@@ -1,1 +1,0 @@
-function useDockerHubSearch(name: string) {}

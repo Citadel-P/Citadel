@@ -7,26 +7,21 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useContextSelector } from 'use-context-selector';
-import { ImagesContext } from '../ImagesProvider';
-import { useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { AppContext } from '@/AppProvider';
-import { SwitchSection } from '@/components/ui/SwitchSection';
+import { NetworksContext } from '../NetworksProvider';
 
-export const DeleteLocalImageDialog = () => {
-  const dialogData = useContextSelector(ImagesContext, (v) => v?.dialogData)!;
-  const setDialogData = useContextSelector(ImagesContext, (v) => v?.setDialogData)!;
-  const requestDelete = useContextSelector(ImagesContext, (v) => v?.requestDelete)!;
-  const deleteIsPending = useContextSelector(ImagesContext, (v) => v?.deleteIsPending) ?? false;
+export const DeleteNetworkDialog = () => {
+  const dialogData = useContextSelector(NetworksContext, (v) => v?.dialogData)!;
+  const setDialogData = useContextSelector(NetworksContext, (v) => v?.setDialogData)!;
+  const requestDelete = useContextSelector(NetworksContext, (v) => v?.requestDelete)!;
+  const deleteIsPending = useContextSelector(NetworksContext, (v) => v?.deleteIsPending) ?? false;
   const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
 
-  const imagesId = dialogData.currentSelection?.map((c) => c.id!) ?? [];
-
-  const [noPrune, setNoPrune] = useState(false);
-  const [force, setForce] = useState(false);
+  const networksId = dialogData.currentSelection?.map((c) => c.id!) ?? [];
 
   const handleDelete = () => {
-    requestDelete({ platformId: currentPlatform?.id ?? '', ids: imagesId, force, noPrune });
+    requestDelete({ platformId: currentPlatform?.id ?? '', ids: networksId });
   };
 
   return (
@@ -35,27 +30,12 @@ export const DeleteLocalImageDialog = () => {
         <DialogHeader>
           <DialogTitle>Delete Confirmation</DialogTitle>
           <DialogDescription>
-            {imagesId.length === 1
-              ? 'Are you sure you want to delete the selected image?'
-              : `Are you sure you want to delete the selected ${imagesId.length} images?`}
+            {networksId.length === 1
+              ? 'Are you sure you want to delete the selected network?'
+              : `Are you sure you want to delete the selected ${networksId.length} networks?`}
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <SwitchSection
-            id="force"
-            label="Force"
-            description="Remove the image(s) even if it is being used by stopped containers or has other tags."
-            checked={force}
-            onToggle={() => setForce((v) => !v)}
-          />
-          <SwitchSection
-            id="noprune"
-            label="No Prune"
-            description="Do not delete untagged parent images."
-            checked={noPrune}
-            onToggle={() => setNoPrune((v) => !v)}
-          />
-        </div>
+        
         <DialogFooter>
           <div className="flex items-center justify-end">
             <button

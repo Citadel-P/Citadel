@@ -1,9 +1,14 @@
 ﻿using System.Reflection;
 using Application.Features.Networks.Queries;
+using Microsoft.AspNetCore.Mvc;
 
 namespace WebApi.Routes.Endpoints.Resources.Networks;
 
-public sealed record ListNetworksRequest(bool? Dangling = false, string Driver = null, string Id = null, string Name = null)
+public sealed record ListNetworksRequest(
+    [FromQuery] bool? Dangling = false,
+    [FromQuery] string Driver = null,
+    [FromQuery] string Id = null,
+    [FromQuery] string Name = null)
 {
     internal ListNetworks ToQuery(Guid platformId) => new (platformId, Dangling, Driver, Id, Name);
 

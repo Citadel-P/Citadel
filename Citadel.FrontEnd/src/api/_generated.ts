@@ -1949,10 +1949,24 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `409` `ProblemDetails` Conflict
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    networksList: (id: string, params: RequestParams = {}) =>
+    networksList: (
+      id: string,
+      query?: {
+        /** @default false */
+        Dangling?: boolean;
+        /** @default null */
+        Driver?: string;
+        /** @default null */
+        Id?: string;
+        /** @default null */
+        Name?: string;
+      },
+      params: RequestParams = {},
+    ) =>
       this.request<NetworksView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/networks/${id}`,
         method: 'GET',
+        query: query,
         secure: true,
         format: 'json',
         ...params,

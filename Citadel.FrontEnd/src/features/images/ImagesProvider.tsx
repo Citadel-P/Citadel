@@ -5,7 +5,7 @@ import { DeleteImagesRequest, ImageView, RegistryView } from '@/api/_generated';
 import { useQueryClient } from '@tanstack/react-query';
 import { useDELETEImages } from './hooks/useDELETEImages';
 import { toast } from 'sonner';
-import { IDeleteDialogData, useDialogState } from './hooks/useDialogState';
+import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
 
 interface IContext {
   isLoading: boolean;
@@ -18,8 +18,8 @@ interface IContext {
   setSelectedRows: (images: ImageView[] | undefined) => void;
   setLocalImages: (images: ImageView[]) => void;
   deleteIsPending: boolean;
-  dialogData: IDeleteDialogData;
-  setDialogData: (data: IDeleteDialogData) => void;
+  dialogData: IDeleteDialogData<ImageView>;
+  setDialogData: (data: IDeleteDialogData<ImageView>) => void;
   onSearch: (searchTerm: string) => void;
 }
 
@@ -40,7 +40,7 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
   const [selectedRegistry, setSelectedRegistry] = useState<RegistryView | undefined>();
   const [localImages, setLocalImages] = useState<ImageView[]>([]);
   const [originalLocalImages, setOriginalLocalImages] = useState<ImageView[]>([]);
-  const { dialogData, setDialogData } = useDialogState();
+  const { dialogData, setDialogData } = useDialogState<ImageView>();
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
   // Update registries and selected registry when data is fetched

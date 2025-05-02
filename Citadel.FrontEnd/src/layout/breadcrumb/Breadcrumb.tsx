@@ -80,7 +80,7 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
         crumbs.push({ title: 'Registries', link: '/registries' });
         crumbs.push({ title: 'Edit Registry', isActive: true });
       },
-      [AppPaths.platformImages]: () => {
+      [AppPaths.images]: () => {
         crumbs.push({ title: 'Platforms', link: '/' });
         crumbs.push({ title: currentPlatform?.name ?? '', link: `/platforms/${currentPlatform?.id}` });
         crumbs.push({ title: 'Images', badge: { title: 'Local' }, isActive: true });
@@ -94,6 +94,11 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
         crumbs.push({ title: 'Platforms', link: '/' });
         crumbs.push({ title: currentPlatform?.name ?? '', link: `/platforms/${currentPlatform?.id}` });
         crumbs.push({ title: 'Images', badge: { title: 'External' }, isActive: true });
+      },
+      [AppPaths.networks]: () => {
+        crumbs.push({ title: 'Platforms', link: '/' });
+        crumbs.push({ title: currentPlatform?.name ?? '', link: `/platforms/${currentPlatform?.id}` });
+        crumbs.push({ title: 'Networks', isActive: true });
       },
     };
 

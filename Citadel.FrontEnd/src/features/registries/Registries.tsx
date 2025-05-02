@@ -1,7 +1,7 @@
 import { AlertMessage } from '@/components/ui/alert-message';
 import { Button } from '@/components/ui/button';
 import Loader from '@/components/ui/loader';
-import { Plus } from 'lucide-react';
+import { Boxes, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router';
 
 import { RegistriesContext } from './RegistriesProvider';
@@ -21,8 +21,12 @@ const Registries = () => {
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
         <div className="w-full rounded-lg border-border bg-background p-4">
           <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h5 className="text-md font-bold text-foreground">Registries</h5>
+            <div className="flex items-baseline gap-1">
+              <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Boxes className="h-4 w-4" />
+                <span className="sr-only">Registries</span>
+              </div>
+              <div className="text-md font-bold text-foreground">Registries</div>
             </div>
             <Button
               type="button"

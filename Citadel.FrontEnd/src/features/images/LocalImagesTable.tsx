@@ -31,7 +31,7 @@ const columns: ColumnDef<ImageView>[] = [
       <Checkbox
         checked={row.getIsSelected()}
         onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select registry"
+        aria-label="Select image"
       />
     ),
     enableSorting: false,
