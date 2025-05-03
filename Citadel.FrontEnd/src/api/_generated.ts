@@ -219,6 +219,10 @@ export interface CreateNetworkInput {
   options?: Record<string, string>;
 }
 
+export interface CreateNetworkView {
+  id: string | null;
+}
+
 export interface CreateRegistryInput {
   name: string | null;
   url: string | null;
@@ -1980,7 +1984,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @summary Create a network
      * @request POST:/api/v1/networks
      * @secure
-     * @response `200` `NetworkView` OK
+     * @response `200` `CreateNetworkView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -1988,7 +1992,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     networksCreate: (data: CreateNetworkInput, params: RequestParams = {}) =>
-      this.request<NetworkView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<CreateNetworkView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/networks`,
         method: 'POST',
         body: data,

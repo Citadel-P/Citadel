@@ -17,7 +17,7 @@ export default function SelectRegistryInput() {
 
   return (
     <Select defaultValue={selectedRegistry?.name ?? ''} onValueChange={setSelectionChange}>
-      <SelectTrigger className="w-[200px]">
+      <SelectTrigger className="w-[200px] shadow-none">
         <SelectValue placeholder="Select a registry" />
       </SelectTrigger>
       <SelectContent className="bg-background">

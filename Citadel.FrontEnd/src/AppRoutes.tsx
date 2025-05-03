@@ -20,6 +20,7 @@ export const AppPaths: Record<string, string> = {
   localImages: 'platforms/:platformId/images/local',
   externalImages: 'platforms/:platformId/images/external',
   networks: 'platforms/:platformId/networks',
+  addNetwork: 'platforms/:platformId/networks/add',
 };
 
 export const AppRoutes = () => {
@@ -110,6 +111,12 @@ export const AppRoutes = () => {
           path: AppPaths.networks,
           lazy: async () => {
             return { Component: (await import('@/pages/networks-page')).default };
+          },
+        },
+        {
+          path: AppPaths.addNetwork,
+          lazy: async () => {
+            return { Component: (await import('@/features/networks/forms/AddNetworkForm')).default };
           },
         },
         { path: AppPaths.any, element: <NotFound /> },

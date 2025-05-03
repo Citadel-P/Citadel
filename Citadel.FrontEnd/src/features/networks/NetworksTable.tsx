@@ -11,7 +11,6 @@ import { useGETNetworks } from './hooks/useGETNetworks';
 import { NetworksContext } from './NetworksProvider';
 import DropdownTableMenu from './DropdownTableMenu';
 import { DeleteNetworkDialog } from './dialogs/DeleteNetworkDialog';
-import { Badge } from '@/components/ui/badge';
 
 const columns: ColumnDef<NetworkView>[] = [
   {

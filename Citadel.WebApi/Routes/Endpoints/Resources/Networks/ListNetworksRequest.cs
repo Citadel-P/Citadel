@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace WebApi.Routes.Endpoints.Resources.Networks;
 
 public sealed record ListNetworksRequest(
-    [FromQuery] bool? Dangling = false,
+    [FromQuery] bool? Dangling = null,
     [FromQuery] string Driver = null,
     [FromQuery] string Id = null,
     [FromQuery] string Name = null)
@@ -28,6 +28,6 @@ public sealed record ListNetworksRequest(
         var name = query.TryGetValue("name", out var nameStr) ? nameStr.ToString() : null;
 
         var result = new ListNetworksRequest(dangling, driver, id, name);
-        return ValueTask.FromResult<ListNetworksRequest>(result);
+        return ValueTask.FromResult(result);
     }
 }

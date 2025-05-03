@@ -1,4 +1,4 @@
-import { Network } from 'lucide-react';
+import { Network, Plus } from 'lucide-react';
 import { useContextSelector } from 'use-context-selector';
 import { AppContext } from '@/AppProvider';
 import { SearchField } from '@/components/ui/SearchField';
@@ -7,8 +7,11 @@ import { PlatformStatus } from '@/api/_generated';
 import { NetworksContext } from './NetworksProvider';
 import NetworksTable from './NetworksTable';
 import { ActionBar } from './ActionBar';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router';
 
 const Networks = () => {
+  const navigate = useNavigate();
   const platformStatus = useContextSelector(AppContext, (v) => v?.currentPlatform?.status);
   const onSearch = useContextSelector(NetworksContext, (v) => v?.onSearch)!;
 
@@ -25,7 +28,15 @@ const Networks = () => {
               </div>
               <div className="text-md font-bold text-foreground">Networks</div>
             </div>
-            <SearchField onSearch={onSearch} />
+            <div className="flex gap-2">
+              <SearchField onSearch={onSearch} />
+              <Button
+                type="button"
+                onClick={() => navigate('./add')}
+                className="inline-flex items-center bg-primary hover:bg-primary/80 font-medium rounded-sm text-xs px-2.5 py-2.5">
+                <Plus className="h-3 w-3" /> Add Network
+              </Button>
+            </div>
           </div>
 
           {/* Warning Message */}

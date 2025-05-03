@@ -15,9 +15,9 @@ public static class Networks
         return EndpointHandlers.HandleResult(result, NetworkView.Map);
     }
 
-    public static async Task<Results<Ok<NetworkView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreateNetworkInput request, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<CreateNetworkView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreateNetworkInput request, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
-        return null; //EndpointHandlers.HandleResult(result, v => v);
+        return EndpointHandlers.HandleResult(result, v => new CreateNetworkView(v.Id));
     }
 }

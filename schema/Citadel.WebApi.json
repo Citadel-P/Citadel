@@ -2639,7 +2639,7 @@
             "in": "query",
             "schema": {
               "type": "boolean",
-              "default": false
+              "default": null
             }
           },
           {
@@ -2768,7 +2768,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NetworkView"
+                  "$ref": "#/components/schemas/CreateNetworkView"
                 }
               }
             }
@@ -3447,6 +3447,18 @@
               "type": "string"
             },
             "default": null,
+            "nullable": true
+          }
+        }
+      },
+      "CreateNetworkView": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
             "nullable": true
           }
         }
@@ -4461,7 +4473,7 @@
             "type": "string",
             "nullable": true
           },
-          "configs": {
+          "config": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/IPAMConfigInput"

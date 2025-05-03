@@ -101,7 +101,7 @@ const GhcrConfiguration = () => {
                     }}
                     {...field}>
                     {mode === 'edit' && <FieldChange form={form} fieldName={field.name} />}
-                    <FormControl className="w-full">
+                    <FormControl className="w-full shadow-none">
                       <SelectTrigger>
                         <SelectValue placeholder="Select your account type" />
                       </SelectTrigger>

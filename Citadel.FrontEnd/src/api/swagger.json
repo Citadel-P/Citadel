@@ -2768,7 +2768,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NetworkView"
+                  "$ref": "#/components/schemas/CreateNetworkView"
                 }
               }
             }
@@ -3447,6 +3447,18 @@
               "type": "string"
             },
             "default": null,
+            "nullable": true
+          }
+        }
+      },
+      "CreateNetworkView": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
             "nullable": true
           }
         }

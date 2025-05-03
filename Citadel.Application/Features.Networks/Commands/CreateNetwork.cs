@@ -1,5 +1,4 @@
-﻿using Agent.Server.Images;
-using Agent.Server.Networks;
+﻿using Agent.Server.Networks;
 using FluentValidation;
 using Grpc.Core;
 using Hosting.Common;
@@ -50,13 +49,13 @@ public sealed record CreateNetwork(
                 .Must(static scope => scopeTypes.Contains(scope))
                 .WithMessage($"Scope must be one of the following: {string.Join(", ", scopeTypes)}");
             });
-            When(s => s.Attachable is not null, () =>
+            When(s => s.Attachable is not null && s.Attachable.Value, () =>
             {
                 RuleFor(s => s)
                     .Must(s => s.Driver == "overlay")
                     .WithMessage("The Attachable option is only relevant for overlay networks, and is not relevant for other network types.");
             });
-            When(s => s.Internal is not null, () =>
+            When(s => s.Internal is not null && s.Internal.HasValue, () =>
             {
                 RuleFor(s => s)
                     .Must(s => s.Driver == "bridge" || s.Driver == "overlay")
@@ -98,18 +97,30 @@ public sealed record CreateNetwork(
         {
             public IPAMConfigValidator()
             {
-                RuleFor(x => x.Gateway).ValidGatewayAddress();
-                RuleFor(x => x.IpRange).ValidIpRangeOrSubnet();
-                RuleFor(x => x.Subnet).ValidIpRangeOrSubnet("Subnet must be a valid CIDR notation (e.g., 172.20.0.0/16)");
+                When(s => !string.IsNullOrEmpty(s.Gateway), () =>
+                {
+                    RuleFor(x => x.Gateway).ValidGatewayAddress();
+                });
+                When(s => !string.IsNullOrEmpty(s.IpRange), () =>
+                {
+                    RuleFor(x => x.IpRange).ValidIpRangeOrSubnet();
+                });
+                When(s => !string.IsNullOrEmpty(s.Subnet), () =>
+                {
+                    RuleFor(x => x.Subnet).ValidIpRangeOrSubnet("Subnet must be a valid CIDR notation (e.g., 172.20.0.0/16)");
+                });
 
-                RuleFor(x => x)
-                    .Custom((config, context) =>
+                When(s => !string.IsNullOrEmpty(s.Gateway), () =>
+                {
+                    RuleFor(x => x).Custom((config, context) =>
                     {
                         if (!IsGatewayInSubnet(config.Gateway, config.Subnet))
                         {
                             context.AddFailure("Gateway", "The Gateway must be within the specified Subnet.");
                         }
                     });
+                });
+               
             }
         }
 
@@ -137,38 +148,43 @@ internal sealed class CreateNetworkHandler(
                 .Where(s => s.Id == command.PlatformId)
                 .Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
 
+            if (address == null)
+            {
+                return Result.Failure<CreateNetworkReply>(new NotFoundError("The provided platform Id doesn't exist"));
+            }
+
             var client = clientFactory.GetNetworkClient(address);
             var request = new CreateNetworkMessage
             {
                 Name = command.Name,
-                Driver = command.Driver,
-                Scope = command.Scope,
+                Driver = command.Driver ?? "bridge",
+                Scope = command.Scope ?? "local",
                 Internal = command.Internal,
                 Attachable = command.Attachable,
                 Ingress = command.Ingress,
                 EnableIPv6 = command.EnableIPv6,
                 EnableIPv4 = command.EnableIPv4,
-                ConfigOnly = command.ConfigOnly,
-                Ipam = command.IPAM is null ? null : new IPAMMessage
+                ConfigOnly = command.ConfigOnly ?? false,
+                Ipam = new IPAMMessage
                 {
-                    Driver = command.IPAM?.Driver,
+                    Driver = command.IPAM?.Driver ?? "default",
                     Config =
                     {
                         command.IPAM?.Config?.Select(c => new IPAMConfigMessage
                         {
-                            Subnet = c.Subnet,
-                            IpRange = c.IpRange,
-                            Gateway = c.Gateway
-                        })
+                            Subnet = c.Subnet ?? "",
+                            IpRange = c.IpRange ?? "",
+                            Gateway = c.Gateway ?? ""
+                        }) ?? []
                     },
-                    Options =
+                        Options =
                     {
-                    command.IPAM?.Options
+                        command.IPAM?.Options ?? []
                     }
                 },
-                ConfigFrom = command.ConfigFrom is null ? null : new ConfigFromMessage
+                ConfigFrom = new ConfigFromMessage
                 {
-                    Network = command.ConfigFrom?.Network
+                    Network = command.ConfigFrom?.Network ?? ""
                 },
                 Labels = { command.Labels ?? [] },
                 Options = { command.Options ?? [] }

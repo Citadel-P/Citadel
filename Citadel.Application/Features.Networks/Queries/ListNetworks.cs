@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Agent.Server.Images;
-using Agent.Server.Networks;
+﻿using Agent.Server.Networks;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
@@ -15,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Networks.Queries;
 
-public sealed record ListNetworks (Guid PlatformId, bool? Dangling = false, string Driver = null, string Id = null, string Name = null) : IQuery<Result<ListNetworksReply>>;
+public sealed record ListNetworks (Guid PlatformId, bool? Dangling = null, string Driver = null, string Id = null, string Name = null) : IQuery<Result<ListNetworksReply>>;
 
 internal class ListNetworksHandler(ApplicationDbContext dbContext, IGrpcClientFactory clientFactory) : IQueryHandler<ListNetworks, Result<ListNetworksReply>>
 {
@@ -33,7 +27,7 @@ internal class ListNetworksHandler(ApplicationDbContext dbContext, IGrpcClientFa
                 Driver = query.Driver,
                 Id = query.Id,
                 Name = query.Name,
-                Dangling = query.Dangling ?? false
+                Dangling = query.Dangling
             };
             var client = clientFactory.GetNetworkClient(address);
             return await client.ListNetworksAsync(args, cancellationToken: cancellationToken);
