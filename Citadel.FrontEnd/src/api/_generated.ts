@@ -510,7 +510,7 @@ export interface IPAMConfigView {
 export type IPAMInput = {
   driver: string | null;
   /** @default null */
-  configs?: IPAMConfigInput[] | null;
+  config?: IPAMConfigInput[] | null;
   /** @default null */
   options?: Record<string, string>;
 };
@@ -672,6 +672,7 @@ export interface NetworkView {
   internal: boolean | null;
   attachable: boolean | null;
   ingress: boolean | null;
+  inUse: boolean | null;
   configOnly: boolean | null;
   /** @default null */
   configFrom?: string | null;
@@ -1956,7 +1957,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     networksList: (
       id: string,
       query?: {
-        /** @default false */
+        /** @default null */
         Dangling?: boolean;
         /** @default null */
         Driver?: string;

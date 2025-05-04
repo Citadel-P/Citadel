@@ -5016,6 +5016,7 @@
           "internal",
           "attachable",
           "ingress",
+          "inUse",
           "configOnly"
         ],
         "type": "object",
@@ -5057,6 +5058,10 @@
             "nullable": true
           },
           "ingress": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "inUse": {
             "type": "boolean",
             "nullable": true
           },

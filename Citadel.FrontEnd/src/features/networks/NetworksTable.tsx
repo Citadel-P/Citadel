@@ -5,12 +5,13 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useContextSelector } from 'use-context-selector';
 import { truncate } from '@/lib/truncate';
-import { useEffect, useCallback, useMemo } from 'react';
+import { useEffect, useCallback, useMemo, memo } from 'react';
 import { AppContext } from '@/AppProvider';
 import { useGETNetworks } from './hooks/useGETNetworks';
 import { NetworksContext } from './NetworksProvider';
 import DropdownTableMenu from './DropdownTableMenu';
 import { DeleteNetworkDialog } from './dialogs/DeleteNetworkDialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const columns: ColumnDef<NetworkView>[] = [
   {
@@ -37,6 +38,9 @@ const columns: ColumnDef<NetworkView>[] = [
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => (
       <div className="flex items-center whitespace-nowrap">
+        <div className="flex items-center">
+          <NetworkStatusTooltip inUse={row.original.inUse ?? false} />
+        </div>
         <span>{truncate(row.original.name ?? '', 35, 'right')}</span>
       </div>
     ),
@@ -167,3 +171,22 @@ export default function NetworksTable() {
     </div>
   );
 }
+
+const NetworkStatusTooltip = memo(({ inUse }: { inUse: boolean }) => {
+  const getStatusClass = () => (inUse ? 'bg-green-500' : 'bg-gray-500');
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className={`${getStatusClass()} mr-2 h-2 w-2 rounded-full`} />
+        </TooltipTrigger>
+        <TooltipContent>
+          <span>{inUse ? 'In use' : 'Unused'}</span>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+});
+
+NetworkStatusTooltip.displayName = 'NetworkStatusTooltip';

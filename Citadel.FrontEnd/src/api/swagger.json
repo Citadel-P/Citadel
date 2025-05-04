@@ -2639,7 +2639,7 @@
             "in": "query",
             "schema": {
               "type": "boolean",
-              "default": false
+              "default": null
             }
           },
           {
@@ -4473,7 +4473,7 @@
             "type": "string",
             "nullable": true
           },
-          "configs": {
+          "config": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/IPAMConfigInput"
@@ -5016,6 +5016,7 @@
           "internal",
           "attachable",
           "ingress",
+          "inUse",
           "configOnly"
         ],
         "type": "object",
@@ -5057,6 +5058,10 @@
             "nullable": true
           },
           "ingress": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "inUse": {
             "type": "boolean",
             "nullable": true
           },
