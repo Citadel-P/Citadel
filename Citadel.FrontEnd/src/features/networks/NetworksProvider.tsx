@@ -1,7 +1,10 @@
 import { createContext } from 'use-context-selector';
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { NetworkView } from '@/api/_generated';
+import { DeleteNetworksInput, NetworkView } from '@/api/_generated';
 import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
+import { useDELETENetworks } from './hooks/useDELETENetworks';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface IContext {
   selectedRows: NetworkView[] | undefined;
@@ -11,13 +14,14 @@ interface IContext {
   dialogData: IDeleteDialogData<NetworkView>;
   setDialogData: (data: IDeleteDialogData<NetworkView>) => void;
   onSearch: (searchTerm: string) => void;
-  requestDelete: (request: any) => void;
+  requestDelete: (request: DeleteNetworksInput) => void;
   deleteIsPending: boolean;
 }
 
 export const NetworksContext = createContext<IContext | undefined>(undefined);
 
 const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+  const client = useQueryClient();
   // State variables
   const [selectedRows, setSelectedRows] = useState<NetworkView[] | undefined>();
   const [networks, setNetworks] = useState<NetworkView[]>([]);
@@ -25,7 +29,8 @@ const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }
 
   const { dialogData, setDialogData } = useDialogState<NetworkView>();
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
-  const deleteIsPending = false;
+
+  const { mutate: deleteNetworks, isSuccess: deleteIsSuccess, isPending: deleteIsPending } = useDELETENetworks();
 
   // Wrapper function that handles both original and filtered networks
   const handleNetworksUpdate = useCallback((networks: NetworkView[]) => {
@@ -65,8 +70,22 @@ const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }
     }
   }, [originalNetworks, currentSearchTerm]);
 
-  // Handle image deletion request
-  const requestDelete = useCallback((request: any) => {}, []);
+  // Handle successful network deletion
+  useEffect(() => {
+    if (deleteIsSuccess) {
+      client.invalidateQueries({ queryKey: ['useGETNetworks'] });
+      setDialogData({ open: false });
+      toast.success('The selected network(s) has been successfully deleted');
+    }
+  }, [deleteIsSuccess, client, setDialogData]);
+
+  // Handle network deletion request
+  const requestDelete = useCallback(
+    (request: DeleteNetworksInput) => {
+      deleteNetworks(request);
+    },
+    [deleteNetworks],
+  );
 
   // Memoized context value
   const contextValue = useMemo(

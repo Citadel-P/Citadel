@@ -10,7 +10,6 @@ import { NetworkView } from '@/api/_generated';
 const DropdownTableMenu = ({ network }: { network: NetworkView }) => {
   const setDialogData = useContextSelector(NetworksContext, (v) => v?.setDialogData)!;
 
-  // Memoized function to open the delete dialog
   const openDialog = useCallback(() => {
     setDialogData({ open: true, currentSelection: [network] });
   }, [setDialogData, network]);
@@ -27,6 +26,7 @@ const DropdownTableMenu = ({ network }: { network: NetworkView }) => {
         {/* Delete Action */}
         <ActionMenuItem
           onClick={openDialog}
+          disabled={network.inUse ?? false}
           icon={<Trash className="mr-2 h-3 w-3 text-danger" />}
           label="Delete"
           className="text-danger"

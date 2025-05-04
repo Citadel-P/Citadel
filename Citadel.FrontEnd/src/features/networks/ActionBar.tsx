@@ -10,9 +10,8 @@ export const ActionBar = () => {
   const selectedRows = useContextSelector(NetworksContext, (v) => v?.selectedRows) ?? [];
   const networks = useContextSelector(NetworksContext, (v) => v?.networks) ?? [];
 
-  const actions: ImageActionsState = {
-    canEdit: selectedRows?.length === 1,
-    canDelete: selectedRows?.length > 0,
+  const actions: NetworkActionsState = {
+    canDelete: selectedRows?.length > 0 && selectedRows.find((row) => row.inUse) === undefined,
   };
 
   if (!selectedRows.length) return null;
@@ -28,7 +27,6 @@ export const ActionBar = () => {
         {selectedRows.length} of {networks.length} network(s) selected.
       </div>
       <div className="mt-1">
-        
         <ActionBarButton
           onClick={() => setDialogData({ open: true, currentSelection: selectedRows })}
           disabled={!actions.canDelete}
@@ -42,7 +40,6 @@ export const ActionBar = () => {
   );
 };
 
-type ImageActionsState = {
-  canEdit: boolean;
+type NetworkActionsState = {
   canDelete: boolean;
 };

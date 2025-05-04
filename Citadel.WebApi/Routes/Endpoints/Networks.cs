@@ -20,4 +20,10 @@ public static class Networks
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResult(result, v => new CreateNetworkView(v.Id));
     }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> Delete(IMediator mediator, [FromBody] DeleteNetworksInput request, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(request.ToCommand(), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
+    }
 }

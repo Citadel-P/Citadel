@@ -336,5 +336,13 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName(NetworksName + "_" + nameof(Networks.Create));
+
+        networks.MapDelete("/", Networks.Delete)
+            .WithSummary("Delete a network(s)")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName(NetworksName + "_" + nameof(Networks.Delete));
     }
 }

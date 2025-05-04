@@ -258,6 +258,12 @@ export interface DeleteImagesRequest {
   noPrune?: boolean;
 }
 
+export interface DeleteNetworksInput {
+  /** @format uuid */
+  platformId: string;
+  ids: string[] | null;
+}
+
 export interface DeleteRegistriesInput {
   ids: string[] | null;
 }
@@ -2000,6 +2006,31 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         secure: true,
         type: ContentType.Json,
         format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Networks
+     * @name NetworksDelete
+     * @summary Delete a network(s)
+     * @request DELETE:/api/v1/networks
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    networksDelete: (data: DeleteNetworksInput, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/networks`,
+        method: 'DELETE',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         ...params,
       }),
   };
