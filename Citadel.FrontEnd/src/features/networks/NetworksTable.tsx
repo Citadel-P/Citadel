@@ -12,8 +12,67 @@ import { NetworksContext } from './NetworksProvider';
 import DropdownTableMenu from './DropdownTableMenu';
 import { DeleteNetworkDialog } from './dialogs/DeleteNetworkDialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { NetworkInspectSheet } from './NetworkInspectSheet';
 
-const columns: ColumnDef<NetworkView>[] = [
+export default function NetworksTable() {
+  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
+  const { data, isLoading, isSuccess } = useGETNetworks(currentPlatform?.id);
+  const setSelectedRows = useContextSelector(NetworksContext, (v) => v?.setSelectedRows)!;
+  const setNetworks = useContextSelector(NetworksContext, (v) => v?.setNetworks)!;
+  const networks = useContextSelector(NetworksContext, (v) => v?.networks);
+  const setSheetOpen = useContextSelector(NetworksContext, (v) => v?.setSheetOpen)!;
+  const setCurrentNetwork = useContextSelector(NetworksContext, (v) => v?.setCurrentNetwork)!;
+  // Update networks when data is fetched
+  useEffect(() => {
+    if (isSuccess && data?.data.networks) {
+      setNetworks(data.data.networks);
+    }
+    return () => {
+      setNetworks([]);
+      setSelectedRows([]);
+    };
+  }, [data, isSuccess, setNetworks, setSelectedRows]);
+
+  // Memoized selection change handler
+  const handleSelectionChange = useCallback(
+    (ids: string[]) => {
+      setSelectedRows(networks?.filter((c) => ids.includes(c.id!)));
+    },
+    [networks, setSelectedRows],
+  );
+
+  // Memoized row count
+  const rowCount = useMemo(() => networks?.length ?? 0, [networks]);
+
+  const handleShowSheet = (network: NetworkView) => {
+    setCurrentNetwork(network);
+    setSheetOpen(true);
+  };
+
+  return (
+    <>
+      <div className="flex flex-col gap-3">
+        <DataTable
+          columns={columns(handleShowSheet)}
+          data={networks ?? []}
+          isLoading={isLoading}
+          onSelectionChange={handleSelectionChange}
+        />
+        <div className="text-muted-foreground text-xs font-normal">
+          {rowCount > 0 && (
+            <span>
+              Showing {rowCount} of {rowCount} network(s)
+            </span>
+          )}
+        </div>
+      </div>
+      <DeleteNetworkDialog />
+      <NetworkInspectSheet />
+    </>
+  );
+}
+
+const columns = (handleShowSheet: (network: NetworkView) => void): ColumnDef<NetworkView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -36,14 +95,7 @@ const columns: ColumnDef<NetworkView>[] = [
   {
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
-    cell: ({ row }) => (
-      <div className="flex items-center whitespace-nowrap">
-        <div className="flex items-center">
-          <NetworkStatusTooltip inUse={row.original.inUse ?? false} />
-        </div>
-        <span>{truncate(row.original.name ?? '', 35, 'right')}</span>
-      </div>
-    ),
+    cell: ({ row }) => <NetworkNameRow network={row.original} onShowSheet={handleShowSheet} />,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
   {
@@ -100,7 +152,6 @@ const columns: ColumnDef<NetworkView>[] = [
       return <span className="text-[13px]">{ipv6?.subnet ?? '-'}</span>;
     },
   },
-
   {
     accessorKey: 'ipam.config.gateway.ipv6',
     header: ({ column }) => <SortableCell cellName="Gateway (IPv6)" column={column} />,
@@ -129,48 +180,34 @@ const columns: ColumnDef<NetworkView>[] = [
   },
 ];
 
-export default function NetworksTable() {
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
-  const { data, isLoading, isSuccess } = useGETNetworks(currentPlatform?.id);
-  const setSelectedRows = useContextSelector(NetworksContext, (v) => v?.setSelectedRows)!;
-  const setNetworks = useContextSelector(NetworksContext, (v) => v?.setNetworks)!;
-  const networks = useContextSelector(NetworksContext, (v) => v?.networks)!;
-  // Update networks when data is fetched
-  useEffect(() => {
-    if (isSuccess && data?.data.networks) {
-      setNetworks(data.data.networks);
-    }
-    return () => {
-      setNetworks([]);
-      setSelectedRows([]);
-    };
-  }, [data, isSuccess, setNetworks, setSelectedRows]);
-
-  // Memoized selection change handler
-  const handleSelectionChange = useCallback(
-    (ids: string[]) => {
-      setSelectedRows(networks.filter((c) => ids.includes(c.id!)));
-    },
-    [networks, setSelectedRows],
-  );
-
-  // Memoized row count
-  const rowCount = useMemo(() => networks?.length ?? 0, [networks]);
-
+const NetworkNameRow = ({
+  network,
+  onShowSheet,
+}: {
+  network: NetworkView;
+  onShowSheet: (network: NetworkView) => void;
+}) => {
   return (
-    <div className="flex flex-col gap-3">
-      <DataTable columns={columns} data={networks} isLoading={isLoading} onSelectionChange={handleSelectionChange} />
-      <div className="text-muted-foreground text-xs font-normal">
-        {rowCount > 0 && (
-          <span>
-            Showing {rowCount} of {rowCount} network(s)
-          </span>
-        )}
+    <div className="flex items-center whitespace-nowrap">
+      <div className="flex items-center">
+        <NetworkStatusTooltip inUse={network.inUse ?? false} />
       </div>
-      <DeleteNetworkDialog />
+      <span
+        className="cursor-pointer hover:underline"
+        onClick={() => onShowSheet(network)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            onShowSheet(network);
+          }
+        }}
+        tabIndex={0}
+        role="button"
+        aria-label="Show network details">
+        {truncate(network.name ?? '', 35, 'right')}
+      </span>
     </div>
   );
-}
+};
 
 const NetworkStatusTooltip = memo(({ inUse }: { inUse: boolean }) => {
   const getStatusClass = () => (inUse ? 'bg-green-500' : 'bg-gray-500');

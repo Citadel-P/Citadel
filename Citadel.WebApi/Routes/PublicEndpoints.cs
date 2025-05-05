@@ -329,6 +329,14 @@ public static class PublicEndpoints
            .ProducesProblem(StatusCodes.Status409Conflict)
            .WithName(NetworksName + "_" + nameof(Networks.List));
 
+        networks.MapGet("{platformId}/{networkId}", Networks.Inspect)
+           .WithSummary("Inspect a network")
+           .ProducesValidationProblem()
+           .ProducesProblem(StatusCodes.Status403Forbidden)
+           .ProducesProblem(StatusCodes.Status401Unauthorized)
+           .ProducesProblem(StatusCodes.Status409Conflict)
+           .WithName(NetworksName + "_" + nameof(Networks.Inspect));
+
         networks.MapPost("/", Networks.Create)
             .WithSummary("Create a network")
             .ProducesValidationProblem()

@@ -1,17 +1,24 @@
-import { Trash } from 'lucide-react';
+import { Trash, SearchCode } from 'lucide-react';
 import { useContextSelector } from 'use-context-selector';
-import { useNavigate } from 'react-router';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
 import { NetworksContext } from './NetworksProvider';
 
 export const ActionBar = () => {
-  const navigate = useNavigate();
   const setDialogData = useContextSelector(NetworksContext, (v) => v?.setDialogData)!;
+  const setSheetOpen = useContextSelector(NetworksContext, (v) => v?.setSheetOpen)!;
+  const setCurrentNetwork = useContextSelector(NetworksContext, (v) => v?.setCurrentNetwork)!;
+
   const selectedRows = useContextSelector(NetworksContext, (v) => v?.selectedRows) ?? [];
   const networks = useContextSelector(NetworksContext, (v) => v?.networks) ?? [];
 
   const actions: NetworkActionsState = {
     canDelete: selectedRows?.length > 0 && selectedRows.find((row) => row.inUse) === undefined,
+    canInspect: selectedRows?.length === 1,
+  };
+
+  const handleInspectClick = () => {
+    setSheetOpen(true);
+    setCurrentNetwork(selectedRows[0]);
   };
 
   if (!selectedRows.length) return null;
@@ -28,6 +35,14 @@ export const ActionBar = () => {
       </div>
       <div className="mt-1">
         <ActionBarButton
+          onClick={handleInspectClick}
+          disabled={!actions.canInspect}
+          icon={SearchCode}
+          label="Inspect"
+          className="rounded-l-lg"
+          ariaLabel="Inspect selected network"
+        />
+        <ActionBarButton
           onClick={() => setDialogData({ open: true, currentSelection: selectedRows })}
           disabled={!actions.canDelete}
           icon={Trash}
@@ -42,4 +57,5 @@ export const ActionBar = () => {
 
 type NetworkActionsState = {
   canDelete: boolean;
+  canInspect: boolean;
 };

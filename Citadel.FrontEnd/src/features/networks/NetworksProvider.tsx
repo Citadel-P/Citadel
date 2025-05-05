@@ -16,6 +16,10 @@ interface IContext {
   onSearch: (searchTerm: string) => void;
   requestDelete: (request: DeleteNetworksInput) => void;
   deleteIsPending: boolean;
+  sheetOpen: boolean;
+  setSheetOpen: (open: boolean) => void;
+  currentNetwork: NetworkView | undefined;
+  setCurrentNetwork: (network: NetworkView | undefined) => void;
 }
 
 export const NetworksContext = createContext<IContext | undefined>(undefined);
@@ -26,6 +30,9 @@ const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }
   const [selectedRows, setSelectedRows] = useState<NetworkView[] | undefined>();
   const [networks, setNetworks] = useState<NetworkView[]>([]);
   const [originalNetworks, setOriginalNetworks] = useState<NetworkView[]>([]);
+  // Sheet state
+  const [currentNetwork, setCurrentNetwork] = useState<NetworkView>();
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const { dialogData, setDialogData } = useDialogState<NetworkView>();
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
@@ -99,6 +106,10 @@ const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }
       onSearch,
       requestDelete,
       deleteIsPending,
+      sheetOpen,
+      setSheetOpen,
+      currentNetwork,
+      setCurrentNetwork,
     }),
     [
       selectedRows,
@@ -110,6 +121,10 @@ const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }
       onSearch,
       handleNetworksUpdate,
       requestDelete,
+      sheetOpen,
+      setSheetOpen,
+      currentNetwork,
+      setCurrentNetwork,
     ],
   );
 

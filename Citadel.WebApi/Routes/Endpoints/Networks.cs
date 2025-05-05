@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using Application.Features.Networks.Queries;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -25,5 +26,11 @@ public static class Networks
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
+    }
+
+    public static async Task<Results<Ok<InspectNetworkView>, ProblemHttpResult>> Inspect(IMediator mediator, Guid platformId, string networkId, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new InspectNetwork(platformId, networkId), cancellationToken);
+        return EndpointHandlers.HandleResult(result, InspectNetworkView.Map);
     }
 }

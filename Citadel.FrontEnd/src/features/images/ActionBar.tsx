@@ -33,7 +33,7 @@ export const ActionBar = () => {
           disabled={!actions.canEdit}
           icon={Pencil}
           label="Edit"
-          ariaLabel="Edit selected images"
+          ariaLabel="Edit selected image"
         />
         <ActionBarButton
           onClick={() => setDialogData({ open: true, currentSelection: selectedRows })}

@@ -499,6 +499,32 @@ export interface ImageView {
   tag?: string | null;
 }
 
+export interface InspectNetworkView {
+  name: string | null;
+  id: string | null;
+  created: string | null;
+  driver: string | null;
+  scope: string | null;
+  enableIPv4: boolean | null;
+  enableIPv6: boolean | null;
+  internal: boolean | null;
+  attachable: boolean | null;
+  ingress: boolean | null;
+  inUse: boolean | null;
+  configOnly: boolean | null;
+  /** @default null */
+  configFrom?: string | null;
+  ipam?: IPAMView;
+  /** @default null */
+  peers?: PeerInfoView[] | null;
+  /** @default null */
+  options?: Record<string, string>;
+  /** @default null */
+  labels?: Record<string, string>;
+  /** @default null */
+  containers?: Record<string, NetworkContainerView>;
+}
+
 export interface IPAMConfigInput {
   subnet: string | null;
   ipRange: string | null;
@@ -640,6 +666,14 @@ export interface MountPoint {
   propagation?: string | null;
 }
 
+export interface NetworkContainerView {
+  name: string | null;
+  endpointId: string | null;
+  macAddress: string | null;
+  iPv4Address: string | null;
+  iPv6Address: string | null;
+}
+
 export type NetworkSettingsView = {
   bridge: string | null;
   sandboxID: string | null;
@@ -704,6 +738,11 @@ export interface PatchRegistryInput {
   url: string | null;
   discriminator: RegistryDiscriminator;
   configuration: IRegistryConfiguration;
+}
+
+export interface PeerInfoView {
+  name: string | null;
+  ip: string | null;
 }
 
 export enum PlatformStatus {
@@ -1978,6 +2017,30 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         path: `/api/v1/networks/${id}`,
         method: 'GET',
         query: query,
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Networks
+     * @name NetworksInspect
+     * @summary Inspect a network
+     * @request GET:/api/v1/networks/{platformId}/{networkId}
+     * @secure
+     * @response `200` `InspectNetworkView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    networksInspect: (platformId: string, networkId: string, params: RequestParams = {}) =>
+      this.request<InspectNetworkView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/networks/${platformId}/${networkId}`,
+        method: 'GET',
         secure: true,
         format: 'json',
         ...params,

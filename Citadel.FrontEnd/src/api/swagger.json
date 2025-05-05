@@ -2736,6 +2736,101 @@
         ]
       }
     },
+    "/api/v1/networks/{platformId}/{networkId}": {
+      "get": {
+        "tags": [
+          "Networks"
+        ],
+        "summary": "Inspect a network",
+        "operationId": "Networks_Inspect",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "networkId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectNetworkView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/networks": {
       "post": {
         "tags": [
@@ -4515,6 +4610,113 @@
           }
         }
       },
+      "InspectNetworkView": {
+        "required": [
+          "name",
+          "id",
+          "created",
+          "driver",
+          "scope",
+          "enableIPv4",
+          "enableIPv6",
+          "internal",
+          "attachable",
+          "ingress",
+          "inUse",
+          "configOnly"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "created": {
+            "type": "string",
+            "nullable": true
+          },
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "scope": {
+            "type": "string",
+            "nullable": true
+          },
+          "enableIPv4": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "enableIPv6": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "internal": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "attachable": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "ingress": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "inUse": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "configOnly": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "configFrom": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          },
+          "ipam": {
+            "$ref": "#/components/schemas/IPAMView"
+          },
+          "peers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PeerInfoView"
+            },
+            "default": null,
+            "nullable": true
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": null,
+            "nullable": true
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": null,
+            "nullable": true
+          },
+          "containers": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NetworkContainerView"
+            },
+            "default": null,
+            "nullable": true
+          }
+        }
+      },
       "IPAMConfigInput": {
         "required": [
           "subnet",
@@ -4980,6 +5182,38 @@
           }
         }
       },
+      "NetworkContainerView": {
+        "required": [
+          "name",
+          "endpointId",
+          "macAddress",
+          "iPv4Address",
+          "iPv6Address"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "endpointId": {
+            "type": "string",
+            "nullable": true
+          },
+          "macAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "iPv4Address": {
+            "type": "string",
+            "nullable": true
+          },
+          "iPv6Address": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "NetworkSettingsView": {
         "required": [
           "bridge",
@@ -5240,6 +5474,23 @@
           },
           "configuration": {
             "$ref": "#/components/schemas/IRegistryConfiguration"
+          }
+        }
+      },
+      "PeerInfoView": {
+        "required": [
+          "name",
+          "ip"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "ip": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
