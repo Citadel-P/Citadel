@@ -21,6 +21,10 @@ interface IContext {
   dialogData: IDeleteDialogData<ImageView>;
   setDialogData: (data: IDeleteDialogData<ImageView>) => void;
   onSearch: (searchTerm: string) => void;
+  currentImage: ImageView | undefined;
+  setCurrentImage: (image: ImageView | undefined) => void;
+  sheetOpen: boolean;
+  setSheetOpen: (open: boolean) => void;
 }
 
 export const ImagesContext = createContext<IContext | undefined>(undefined);
@@ -42,6 +46,9 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
   const [originalLocalImages, setOriginalLocalImages] = useState<ImageView[]>([]);
   const { dialogData, setDialogData } = useDialogState<ImageView>();
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
+  // Sheet state
+  const [currentImage, setCurrentImage] = useState<ImageView>();
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   // Update registries and selected registry when data is fetched
   useEffect(() => {
@@ -142,6 +149,10 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
       dialogData,
       setDialogData,
       onSearch,
+      currentImage,
+      setCurrentImage,
+      sheetOpen,
+      setSheetOpen,
     }),
     [
       isLoading,
@@ -156,6 +167,10 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
       dialogData,
       setDialogData,
       onSearch,
+      currentImage,
+      setCurrentImage,
+      sheetOpen,
+      setSheetOpen,
     ],
   );
 

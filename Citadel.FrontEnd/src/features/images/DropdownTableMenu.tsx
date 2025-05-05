@@ -5,22 +5,27 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, Pencil, Trash } from 'lucide-react';
+import { MoreHorizontal, SearchCode, Trash } from 'lucide-react';
 import { ImageView } from '@/api/_generated';
-import { useNavigate } from 'react-router';
 import { useContextSelector } from 'use-context-selector';
 import { ImagesContext } from './ImagesProvider';
 import { useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
 
 const DropdownTableMenu = ({ image }: { image: ImageView }) => {
-  const navigate = useNavigate();
   const setDialogData = useContextSelector(ImagesContext, (v) => v?.setDialogData)!;
+  const setSheetOpen = useContextSelector(ImagesContext, (v) => v?.setSheetOpen)!;
+  const setCurrentImage = useContextSelector(ImagesContext, (v) => v?.setCurrentImage)!;
 
   // Memoized function to open the delete dialog
   const openDialog = useCallback(() => {
     setDialogData({ open: true, currentSelection: [image] });
   }, [setDialogData, image]);
+
+  const openSheet = useCallback(() => {
+    setSheetOpen(true);
+    setCurrentImage(image);
+  }, [setSheetOpen, setCurrentImage, image]);
 
   return (
     <DropdownMenu>
@@ -31,16 +36,8 @@ const DropdownTableMenu = ({ image }: { image: ImageView }) => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-38 drop-shadow-md shadow-custom bg-background pt-2 pb-2">
-        {/* Edit Action */}
-        <ActionMenuItem
-          onClick={() => navigate(`../registries/edit/${image.id}`)}
-          icon={<Pencil className="mr-2 h-3 w-3" />}
-          label="Edit"
-        />
-
+        <ActionMenuItem onClick={openSheet} icon={<SearchCode className="mr-2 h-3 w-3" />} label="Inspect" />
         <DropdownMenuSeparator />
-
-        {/* Delete Action */}
         <ActionMenuItem
           onClick={openDialog}
           icon={<Trash className="mr-2 h-3 w-3 text-danger" />}

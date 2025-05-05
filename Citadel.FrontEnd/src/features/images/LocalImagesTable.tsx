@@ -16,8 +16,9 @@ import { byteTransform } from '@/lib/bytes.helper';
 import { DeleteLocalImageDialog } from './dialogs/DeleteLocalImageDialog';
 import { AppContext } from '@/AppProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { ImageInspectSheet } from './ImageInspectSheet';
 
-const columns: ColumnDef<ImageView>[] = [
+const columns = (handleShowSheet: (network: ImageView) => void): ColumnDef<ImageView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -40,14 +41,7 @@ const columns: ColumnDef<ImageView>[] = [
   {
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
-    cell: ({ row }) => (
-      <div className="flex items-center whitespace-nowrap">
-        <div className="flex items-center">
-          <ImageStatusTooltip inUse={row.original.isInUse} />
-        </div>
-        <span>{truncate(row.original.name ?? '', 35, 'right')}</span>
-      </div>
-    ),
+    cell: ({ row }) => <ImageNameRow image={row.original} onShowSheet={handleShowSheet} />,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
   {
@@ -84,6 +78,29 @@ const columns: ColumnDef<ImageView>[] = [
   },
 ];
 
+const ImageNameRow = ({ image, onShowSheet }: { image: ImageView; onShowSheet: (image: ImageView) => void }) => {
+  return (
+    <div className="flex items-center whitespace-nowrap">
+      <div className="flex items-center">
+        <ImageStatusTooltip inUse={image.isInUse ?? false} />
+      </div>
+      <span
+        className="cursor-pointer hover:underline"
+        onClick={() => onShowSheet(image)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            onShowSheet(image);
+          }
+        }}
+        tabIndex={0}
+        role="button"
+        aria-label="Show image details">
+        {truncate(image.name ?? '', 35, 'right')}
+      </span>
+    </div>
+  );
+};
+
 const ImageIdRow = ({ image }: { image: ImageView }) => {
   const [copiedWinCmd, copyWinCmdToClipboard] = useCopyToClipboard(5000);
 
@@ -105,6 +122,8 @@ export default function LocalImagesTable() {
   const setSelectedRows = useContextSelector(ImagesContext, (v) => v?.setSelectedRows)!;
   const setLocalImages = useContextSelector(ImagesContext, (v) => v?.setLocalImages)!;
   const localImages = useContextSelector(ImagesContext, (v) => v?.localImages)!;
+  const setCurrentImage = useContextSelector(ImagesContext, (v) => v?.setCurrentImage)!;
+  const setSheetOpen = useContextSelector(ImagesContext, (v) => v?.setSheetOpen)!;
   // Update local images when data is fetched
   useEffect(() => {
     if (isSuccess && data?.data.images) {
@@ -124,12 +143,21 @@ export default function LocalImagesTable() {
     [localImages, setSelectedRows],
   );
 
+  const handleShowSheet = (image: ImageView) => {
+    setCurrentImage(image);
+    setSheetOpen(true);
+  };
   // Memoized row count
   const rowCount = useMemo(() => localImages?.length ?? 0, [localImages]);
 
   return (
     <div className="flex flex-col gap-3">
-      <DataTable columns={columns} data={localImages} isLoading={isLoading} onSelectionChange={handleSelectionChange} />
+      <DataTable
+        columns={columns(handleShowSheet)}
+        data={localImages}
+        isLoading={isLoading}
+        onSelectionChange={handleSelectionChange}
+      />
       <div className="text-muted-foreground text-xs font-normal">
         {rowCount > 0 && (
           <span>
@@ -138,6 +166,7 @@ export default function LocalImagesTable() {
         )}
       </div>
       <DeleteLocalImageDialog />
+      <ImageInspectSheet />
     </div>
   );
 }

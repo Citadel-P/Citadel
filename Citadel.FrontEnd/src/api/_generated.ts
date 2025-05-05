@@ -47,6 +47,10 @@ export enum AppPermission {
   DeleteVolumes = 'DeleteVolumes',
 }
 
+export type AttestationDataView = {
+  for: string | null;
+};
+
 export type BindOptions = {
   propagation?: string | null;
   nonRecursive?: boolean | null;
@@ -58,6 +62,31 @@ export type BindOptions = {
 /** @default null */
 export type ConfigFromInput = {
   network: string | null;
+};
+
+export type ConfigView = {
+  hostname: string | null;
+  domainname: string | null;
+  user: string | null;
+  attachStdin: boolean;
+  attachStdout: boolean;
+  attachStderr: boolean;
+  exposedPorts: Record<string, Empty>;
+  tty: boolean;
+  openStdin: boolean;
+  stdinOnce: boolean;
+  env: string[] | null;
+  cmd: string[] | null;
+  healthcheck: HealthcheckView;
+  argsEscaped: boolean;
+  image: string | null;
+  volumes: Record<string, any>;
+  workingDir: string | null;
+  entrypoint: string[] | null;
+  onBuild: string[] | null;
+  labels: Record<string, string>;
+  stopSignal: string | null;
+  shell: string[] | null;
 };
 
 export type ContainerConfig = {
@@ -268,6 +297,18 @@ export interface DeleteRegistriesInput {
   ids: string[] | null;
 }
 
+export type DescriptorView = {
+  mediaType: string | null;
+  digest: string | null;
+  /** @format int64 */
+  size: number;
+  urls: string[] | null;
+  annotations: Record<string, string>;
+  data: string | null;
+  platform: PlatformDescriptorView;
+  artifactType: string | null;
+};
+
 export interface DockerHubImageModel {
   repo_name?: string | null;
   short_description?: string | null;
@@ -319,6 +360,8 @@ export type DriverConfig = {
   options?: Record<string, string>;
 };
 
+export type Empty = object;
+
 export type EndpointIPAMConfig = {
   ipv4Address?: string | null;
   ipv6Address?: string | null;
@@ -361,10 +404,35 @@ export type GraphDriverData = {
   data?: Record<string, string>;
 };
 
+export type GraphDriverDataView = {
+  mergedDir: string | null;
+  upperDir: string | null;
+  workDir: string | null;
+};
+
+export type GraphDriverView = {
+  name: string | null;
+  data: GraphDriverDataView;
+};
+
 export type Health = {
   status?: string | null;
   /** @format int32 */
   failingStreak?: number | null;
+};
+
+export type HealthcheckView = {
+  test: string[] | null;
+  /** @format int64 */
+  interval: number | null;
+  /** @format int64 */
+  timeout: number | null;
+  /** @format int64 */
+  retries: number | null;
+  /** @format int64 */
+  startPeriod: number | null;
+  /** @format int64 */
+  startInterval: number | null;
 };
 
 export type HostConfig = {
@@ -471,6 +539,12 @@ export interface IImageRepositoryGitHubPackageResponse {
   htmlUrl?: string | null;
 }
 
+export type ImageDataView = {
+  platform: PlatformDescriptorView;
+  containers: string[] | null;
+  size: SizeView;
+};
+
 export enum ImageStatus {
   Active = 'Active',
   Inactive = 'Inactive',
@@ -497,6 +571,31 @@ export interface ImageView {
   labels: Record<string, string>;
   name?: string | null;
   tag?: string | null;
+}
+
+export interface InspectImageView {
+  id: string | null;
+  descriptor: DescriptorView;
+  manifests: ManifestView[] | null;
+  repoTags: string[] | null;
+  repoDigests: string[] | null;
+  parent: string | null;
+  comment: string | null;
+  created: string | null;
+  dockerVersion: string | null;
+  author: string | null;
+  config: ConfigView;
+  architecture: string | null;
+  variant: string | null;
+  os: string | null;
+  osVersion: string | null;
+  /** @format int64 */
+  size: number;
+  /** @format int64 */
+  virtualSize: number;
+  graphDriver: GraphDriverView;
+  rootFS: RootFSView;
+  metadata: MetadataView;
 }
 
 export interface InspectNetworkView {
@@ -635,6 +734,16 @@ export interface LoginResponse {
   permissions: AppPermission[] | null;
 }
 
+export interface ManifestView {
+  id: string | null;
+  descriptor: DescriptorView;
+  available: boolean;
+  size: SizeView;
+  kind: string | null;
+  imageData: ImageDataView;
+  attestationData: AttestationDataView;
+}
+
 export interface MapFieldPortBinding {
   key?: string | null;
   value?: PortBinding[] | null;
@@ -644,6 +753,10 @@ export interface MapFieldPortBindingView {
   key: string | null;
   value: PortBindingView[] | null;
 }
+
+export type MetadataView = {
+  lastTagTime: string | null;
+};
 
 export interface Mount {
   target?: string | null;
@@ -744,6 +857,14 @@ export interface PeerInfoView {
   name: string | null;
   ip: string | null;
 }
+
+export type PlatformDescriptorView = {
+  architecture: string | null;
+  os: string | null;
+  osVersion: string | null;
+  osFeatures: string[] | null;
+  variant: string | null;
+};
 
 export enum PlatformStatus {
   Offline = 'Offline',
@@ -925,6 +1046,20 @@ export type RestartPolicy = {
   name?: string | null;
   /** @format int32 */
   maximumRetryCount?: number | null;
+};
+
+export type RootFSView = {
+  type: string | null;
+  layers: string[] | null;
+};
+
+export type SizeView = {
+  /** @format int64 */
+  total: number | null;
+  /** @format int64 */
+  content: number | null;
+  /** @format int64 */
+  unpacked: number | null;
 };
 
 export interface StreamLogsRequest {
@@ -1987,6 +2122,30 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     /**
      * No description
      *
+     * @tags Images
+     * @name ImagesInspect
+     * @summary Inspect an image
+     * @request GET:/api/v1/images/{platformId}/{imageId}
+     * @secure
+     * @response `200` `InspectImageView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    imagesInspect: (platformId: string, imageId: string, params: RequestParams = {}) =>
+      this.request<InspectImageView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/images/${platformId}/${imageId}`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
      * @tags Networks
      * @name NetworksList
      * @summary List all networks
@@ -2084,7 +2243,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
-     * @response `409` `ProblemDetails` Conflict
+     * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
     networksDelete: (data: DeleteNetworksInput, params: RequestParams = {}) =>

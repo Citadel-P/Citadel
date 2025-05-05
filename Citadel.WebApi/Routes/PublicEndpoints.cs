@@ -317,6 +317,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(ImagesName + "_" + nameof(Images.Delete));
+
+        images.MapGet("{platformId}/{imageId}", Images.Inspect)
+           .WithSummary("Inspect an image")
+           .ProducesValidationProblem()
+           .ProducesProblem(StatusCodes.Status403Forbidden)
+           .ProducesProblem(StatusCodes.Status401Unauthorized)
+           .ProducesProblem(StatusCodes.Status404NotFound)
+           .WithName(ImagesName + "_" + nameof(Images.Inspect));
     }
 
     private static void MapNetworkEndpoints(RouteGroupBuilder networks)
@@ -350,7 +358,7 @@ public static class PublicEndpoints
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName(NetworksName + "_" + nameof(Networks.Delete));
     }
 }

@@ -64,4 +64,10 @@ public static class Images
         return EndpointHandlers.HandleResult(result, v => v);
     }
 
+    public static async Task<Results<Ok<InspectImageView>, ProblemHttpResult>> Inspect(IMediator mediator, Guid platformId, string imageId, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new InspectImage(platformId, imageId), cancellationToken);
+        return EndpointHandlers.HandleResult(result, InspectImageView.Map);
+    }
+
 }

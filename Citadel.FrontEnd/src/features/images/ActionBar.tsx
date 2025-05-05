@@ -1,20 +1,24 @@
-import { Pencil, Trash } from 'lucide-react';
+import { SearchCode, Trash } from 'lucide-react';
 import { useContextSelector } from 'use-context-selector';
-import { useNavigate } from 'react-router';
 import { ImagesContext } from './ImagesProvider';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
 
 export const ActionBar = () => {
-  const navigate = useNavigate();
   const setDialogData = useContextSelector(ImagesContext, (v) => v?.setDialogData)!;
   const selectedRows = useContextSelector(ImagesContext, (v) => v?.selectedRows) ?? [];
   const images = useContextSelector(ImagesContext, (v) => v?.localImages) ?? [];
+  const setSheetOpen = useContextSelector(ImagesContext, (v) => v?.setSheetOpen)!;
+  const setCurrentImage = useContextSelector(ImagesContext, (v) => v?.setCurrentImage)!;
 
   const actions: ImageActionsState = {
-    canEdit: selectedRows?.length === 1,
+    canInspect: selectedRows?.length === 1,
     canDelete: selectedRows?.length > 0,
   };
 
+  const handleInspectClick = () => {
+    setSheetOpen(true);
+    setCurrentImage(selectedRows[0]);
+  };
   if (!selectedRows.length) return null;
 
   return (
@@ -29,11 +33,12 @@ export const ActionBar = () => {
       </div>
       <div className="mt-1">
         <ActionBarButton
-          onClick={() => navigate('/registries/edit/' + selectedRows?.at(0)?.id)}
-          disabled={!actions.canEdit}
-          icon={Pencil}
-          label="Edit"
-          ariaLabel="Edit selected image"
+          onClick={handleInspectClick}
+          disabled={!actions.canInspect}
+          icon={SearchCode}
+          label="Inspect"
+          className="rounded-l-lg"
+          ariaLabel="Inspect selected image"
         />
         <ActionBarButton
           onClick={() => setDialogData({ open: true, currentSelection: selectedRows })}
@@ -49,6 +54,6 @@ export const ActionBar = () => {
 };
 
 type ImageActionsState = {
-  canEdit: boolean;
+  canInspect: boolean;
   canDelete: boolean;
 };

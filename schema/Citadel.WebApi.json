@@ -2616,6 +2616,101 @@
         ]
       }
     },
+    "/api/v1/images/{platformId}/{imageId}": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "summary": "Inspect an image",
+        "operationId": "Images_Inspect",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "imageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectImageView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/networks/{id}": {
       "get": {
         "tags": [
@@ -2974,8 +3069,8 @@
               }
             }
           },
-          "409": {
-            "description": "Conflict",
+          "404": {
+            "description": "Not Found",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3043,6 +3138,19 @@
         ],
         "type": "string"
       },
+      "AttestationDataView": {
+        "required": [
+          "for"
+        ],
+        "type": "object",
+        "properties": {
+          "for": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
       "BindOptions": {
         "type": "object",
         "properties": {
@@ -3081,6 +3189,138 @@
           }
         },
         "default": null,
+        "nullable": true
+      },
+      "ConfigView": {
+        "required": [
+          "hostname",
+          "domainname",
+          "user",
+          "attachStdin",
+          "attachStdout",
+          "attachStderr",
+          "exposedPorts",
+          "tty",
+          "openStdin",
+          "stdinOnce",
+          "env",
+          "cmd",
+          "healthcheck",
+          "argsEscaped",
+          "image",
+          "volumes",
+          "workingDir",
+          "entrypoint",
+          "onBuild",
+          "labels",
+          "stopSignal",
+          "shell"
+        ],
+        "type": "object",
+        "properties": {
+          "hostname": {
+            "type": "string",
+            "nullable": true
+          },
+          "domainname": {
+            "type": "string",
+            "nullable": true
+          },
+          "user": {
+            "type": "string",
+            "nullable": true
+          },
+          "attachStdin": {
+            "type": "boolean"
+          },
+          "attachStdout": {
+            "type": "boolean"
+          },
+          "attachStderr": {
+            "type": "boolean"
+          },
+          "exposedPorts": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Empty"
+            },
+            "nullable": true
+          },
+          "tty": {
+            "type": "boolean"
+          },
+          "openStdin": {
+            "type": "boolean"
+          },
+          "stdinOnce": {
+            "type": "boolean"
+          },
+          "env": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "cmd": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "healthcheck": {
+            "$ref": "#/components/schemas/HealthcheckView"
+          },
+          "argsEscaped": {
+            "type": "boolean"
+          },
+          "image": {
+            "type": "string",
+            "nullable": true
+          },
+          "volumes": {
+            "type": "object",
+            "additionalProperties": { },
+            "nullable": true
+          },
+          "workingDir": {
+            "type": "string",
+            "nullable": true
+          },
+          "entrypoint": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "onBuild": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "stopSignal": {
+            "type": "string",
+            "nullable": true
+          },
+          "shell": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
         "nullable": true
       },
       "ContainerConfig": {
@@ -3777,6 +4017,59 @@
           }
         }
       },
+      "DescriptorView": {
+        "required": [
+          "mediaType",
+          "digest",
+          "size",
+          "urls",
+          "annotations",
+          "data",
+          "platform",
+          "artifactType"
+        ],
+        "type": "object",
+        "properties": {
+          "mediaType": {
+            "type": "string",
+            "nullable": true
+          },
+          "digest": {
+            "type": "string",
+            "nullable": true
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "annotations": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "data": {
+            "type": "string",
+            "nullable": true
+          },
+          "platform": {
+            "$ref": "#/components/schemas/PlatformDescriptorView"
+          },
+          "artifactType": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
       "DockerHubImageModel": {
         "type": "object",
         "properties": {
@@ -3932,6 +4225,9 @@
           }
         },
         "nullable": true
+      },
+      "Empty": {
+        "type": "object"
       },
       "EndpointIPAMConfig": {
         "type": "object",
@@ -4097,6 +4393,46 @@
         },
         "nullable": true
       },
+      "GraphDriverDataView": {
+        "required": [
+          "mergedDir",
+          "upperDir",
+          "workDir"
+        ],
+        "type": "object",
+        "properties": {
+          "mergedDir": {
+            "type": "string",
+            "nullable": true
+          },
+          "upperDir": {
+            "type": "string",
+            "nullable": true
+          },
+          "workDir": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "GraphDriverView": {
+        "required": [
+          "name",
+          "data"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/GraphDriverDataView"
+          }
+        },
+        "nullable": true
+      },
       "Health": {
         "type": "object",
         "properties": {
@@ -4107,6 +4443,52 @@
           "failingStreak": {
             "type": "integer",
             "format": "int32",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "HealthcheckView": {
+        "required": [
+          "test",
+          "interval",
+          "timeout",
+          "retries",
+          "startPeriod",
+          "startInterval"
+        ],
+        "type": "object",
+        "properties": {
+          "test": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "interval": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "timeout": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "retries": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "startPeriod": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "startInterval": {
+            "type": "integer",
+            "format": "int64",
             "nullable": true
           }
         },
@@ -4515,6 +4897,30 @@
           }
         }
       },
+      "ImageDataView": {
+        "required": [
+          "platform",
+          "containers",
+          "size"
+        ],
+        "type": "object",
+        "properties": {
+          "platform": {
+            "$ref": "#/components/schemas/PlatformDescriptorView"
+          },
+          "containers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "size": {
+            "$ref": "#/components/schemas/SizeView"
+          }
+        },
+        "nullable": true
+      },
       "ImageStatus": {
         "enum": [
           "Active",
@@ -4607,6 +5013,117 @@
           "tag": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "InspectImageView": {
+        "required": [
+          "id",
+          "descriptor",
+          "manifests",
+          "repoTags",
+          "repoDigests",
+          "parent",
+          "comment",
+          "created",
+          "dockerVersion",
+          "author",
+          "config",
+          "architecture",
+          "variant",
+          "os",
+          "osVersion",
+          "size",
+          "virtualSize",
+          "graphDriver",
+          "rootFS",
+          "metadata"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "descriptor": {
+            "$ref": "#/components/schemas/DescriptorView"
+          },
+          "manifests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManifestView"
+            },
+            "nullable": true
+          },
+          "repoTags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "repoDigests": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "parent": {
+            "type": "string",
+            "nullable": true
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "created": {
+            "type": "string",
+            "nullable": true
+          },
+          "dockerVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "author": {
+            "type": "string",
+            "nullable": true
+          },
+          "config": {
+            "$ref": "#/components/schemas/ConfigView"
+          },
+          "architecture": {
+            "type": "string",
+            "nullable": true
+          },
+          "variant": {
+            "type": "string",
+            "nullable": true
+          },
+          "os": {
+            "type": "string",
+            "nullable": true
+          },
+          "osVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "virtualSize": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "graphDriver": {
+            "$ref": "#/components/schemas/GraphDriverView"
+          },
+          "rootFS": {
+            "$ref": "#/components/schemas/RootFSView"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MetadataView"
           }
         }
       },
@@ -5078,6 +5595,43 @@
           }
         }
       },
+      "ManifestView": {
+        "required": [
+          "id",
+          "descriptor",
+          "available",
+          "size",
+          "kind",
+          "imageData",
+          "attestationData"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "descriptor": {
+            "$ref": "#/components/schemas/DescriptorView"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "size": {
+            "$ref": "#/components/schemas/SizeView"
+          },
+          "kind": {
+            "type": "string",
+            "nullable": true
+          },
+          "imageData": {
+            "$ref": "#/components/schemas/ImageDataView"
+          },
+          "attestationData": {
+            "$ref": "#/components/schemas/AttestationDataView"
+          }
+        }
+      },
       "MapFieldPortBinding": {
         "type": "object",
         "properties": {
@@ -5113,6 +5667,19 @@
             "nullable": true
           }
         }
+      },
+      "MetadataView": {
+        "required": [
+          "lastTagTime"
+        ],
+        "type": "object",
+        "properties": {
+          "lastTagTime": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "nullable": true
       },
       "Mount": {
         "type": "object",
@@ -5493,6 +6060,42 @@
             "nullable": true
           }
         }
+      },
+      "PlatformDescriptorView": {
+        "required": [
+          "architecture",
+          "os",
+          "osVersion",
+          "osFeatures",
+          "variant"
+        ],
+        "type": "object",
+        "properties": {
+          "architecture": {
+            "type": "string",
+            "nullable": true
+          },
+          "os": {
+            "type": "string",
+            "nullable": true
+          },
+          "osVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "osFeatures": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "variant": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "nullable": true
       },
       "PlatformStatus": {
         "enum": [
@@ -6032,6 +6635,53 @@
           "maximumRetryCount": {
             "type": "integer",
             "format": "int32",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "RootFSView": {
+        "required": [
+          "type",
+          "layers"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "layers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "SizeView": {
+        "required": [
+          "total",
+          "content",
+          "unpacked"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "content": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "unpacked": {
+            "type": "integer",
+            "format": "int64",
             "nullable": true
           }
         },
