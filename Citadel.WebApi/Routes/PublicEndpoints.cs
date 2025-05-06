@@ -9,6 +9,7 @@ namespace WebApi.Routes;
 public static class PublicEndpoints
 {
     const string ImagesName = nameof(Images);
+    const string VolumesName = nameof(Volumes);
     const string NetworksName = nameof(Networks);
     const string PlatformsName = nameof(Platforms);
     const string ContainersName = nameof(Containers);
@@ -43,6 +44,10 @@ public static class PublicEndpoints
             {
                 MapNetworkEndpoints(networks);
             }
+            var volumes = group.MapGroup("/volumes").WithTags(VolumesName).RequireAuthorization();
+            {
+                MapVolumeEndpoints(volumes);
+            }
         }
 
         group.ProducesProblem(StatusCodes.Status500InternalServerError);
@@ -50,6 +55,13 @@ public static class PublicEndpoints
 
     private static void MapAuthEndpoints(RouteGroupBuilder auth)
     {
+        auth.MapGet("/refresh", Authentication.RefreshToken)
+            .WithSummary("Request a new access token")
+            .WithCookie(Constants.RefreshToken, "Refresh Token", true)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName(AuthenticationName + "_" + nameof(Authentication.RefreshToken));
+
         auth.MapPost("/login", Authentication.Login)
             .WithSummary("Check user credentials and issue an access token on successful login")
             .ProduceCookie(Constants.RefreshToken)
@@ -65,13 +77,6 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName(AuthenticationName + "_" + nameof(Authentication.Logout));
-
-        auth.MapGet("/refresh", Authentication.RefreshToken)
-            .WithSummary("Request a new access token")
-            .WithCookie(Constants.RefreshToken, "Refresh Token", true)
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .WithName(AuthenticationName + "_" + nameof(Authentication.RefreshToken));
     }
 
     private static void MapContainerEndpoints(RouteGroupBuilder containers)
@@ -83,6 +88,30 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(ContainersName + "_" + nameof(Containers.GetById));
+
+        containers.MapGet("{id}/stats", Containers.GetStats)
+            .WithSummary("Get container stats")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName(ContainersName + "_" + nameof(Containers.GetStats));
+
+        containers.MapGet("{id}/inspect", Containers.Inspect)
+            .WithSummary("Inspect a container")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName(ContainersName + "_" + nameof(Containers.Inspect));
+
+        containers.MapPost("stream-logs", Containers.StreamLogs)
+            .WithSummary("Stream container logs")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName(ContainersName + "_" + nameof(Containers.StreamLogs));
 
         containers.MapPatch("start", Containers.StartContainers)
             .WithSummary("Starts the given container(s)")
@@ -131,30 +160,6 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(ContainersName + "_" + nameof(Containers.DeleteContainers));
-
-        containers.MapPost("stream-logs", Containers.StreamLogs)
-            .WithSummary("Stream container logs")
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status403Forbidden)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .WithName(ContainersName + "_" + nameof(Containers.StreamLogs));
-
-        containers.MapGet("{id}/stats", Containers.GetStats)
-            .WithSummary("Get container stats")
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status403Forbidden)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .WithName(ContainersName + "_" + nameof(Containers.GetStats));
-
-        containers.MapGet("{id}/inspect", Containers.Inspect)
-            .WithSummary("Inspect a container")
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status403Forbidden)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .WithName(ContainersName + "_" + nameof(Containers.Inspect));
     }
 
     private static void MapPlatformEndpoints(RouteGroupBuilder platforms)
@@ -183,6 +188,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(PlatformsName + "_" + nameof(Platforms.GetInfo));
 
+        platforms.MapGet("{id}/containers", Platforms.ListContainers)
+            .WithSummary("Returns the list of containers of the given platform")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName(PlatformsName + "_" + nameof(Platforms.ListContainers));
+
         platforms.MapPut("/", Platforms.Put)
             .WithSummary("Create or update a platform")
             .ProducesValidationProblem()
@@ -199,31 +212,10 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(PlatformsName + "_" + nameof(Platforms.Delete));
 
-        platforms.MapGet("{id}/containers", Platforms.ListContainers)
-            .WithSummary("Returns the list of containers of the given platform")
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status403Forbidden)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .WithName(PlatformsName + "_" + nameof(Platforms.ListContainers));
     }
 
     private static void MapRegistryEndpoints(RouteGroupBuilder registries)
     {
-        registries.MapPost("/", Registries.Create)
-            .WithSummary("Create a registry")
-            .WithDescription($"A discriminator should be provided in the request, this discriminator is based on {nameof(RegistryDiscriminator)} enum ")
-            .WithExample(RegistryDiscriminator.Azure.ToString(), Examples.Registries.Create.CreateAzureRegistryExample())
-            .WithExample(RegistryDiscriminator.AWS.ToString(), Examples.Registries.Create.CreateAwsRegistryExample())
-            .WithExample(RegistryDiscriminator.Gitlab.ToString(), Examples.Registries.Create.CreateGitlabRegistryExample())
-            .WithExample(RegistryDiscriminator.DockerHub.ToString(), Examples.Registries.Create.CreateDockerHubRegistryExample())
-            .WithExample(RegistryDiscriminator.GitHub.ToString(), Examples.Registries.Create.CreateGitHubRegistryExample())
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status403Forbidden)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .WithName(RegistriesName + "_" + nameof(Registries.Create));
-
         registries.MapGet("/all", Registries.GetAll)
             .WithSummary("Get all registries")
             .ProducesValidationProblem()
@@ -238,12 +230,19 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(RegistriesName + "_" + nameof(Registries.GetById));
 
-        registries.MapDelete("/", Registries.Delete)
-            .WithSummary("Delete registries")
+        registries.MapPost("/", Registries.Create)
+            .WithSummary("Create a registry")
+            .WithDescription($"A discriminator should be provided in the request, this discriminator is based on {nameof(RegistryDiscriminator)} enum ")
+            .WithExample(RegistryDiscriminator.Azure.ToString(), Examples.Registries.Create.CreateAzureRegistryExample())
+            .WithExample(RegistryDiscriminator.AWS.ToString(), Examples.Registries.Create.CreateAwsRegistryExample())
+            .WithExample(RegistryDiscriminator.Gitlab.ToString(), Examples.Registries.Create.CreateGitlabRegistryExample())
+            .WithExample(RegistryDiscriminator.DockerHub.ToString(), Examples.Registries.Create.CreateDockerHubRegistryExample())
+            .WithExample(RegistryDiscriminator.GitHub.ToString(), Examples.Registries.Create.CreateGitHubRegistryExample())
             .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .WithName(RegistriesName + "_" + nameof(Registries.Delete));
+            .WithName(RegistriesName + "_" + nameof(Registries.Create));
 
         registries.MapPatch("/", Registries.Patch)
             .WithSummary("Patch a registry")
@@ -257,6 +256,13 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(RegistriesName + "_" + nameof(Registries.Patch));
+
+        registries.MapDelete("/", Registries.Delete)
+            .WithSummary("Delete registries")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName(RegistriesName + "_" + nameof(Registries.Delete));
     }
 
     private static void MapImageEndpoints(RouteGroupBuilder images)
@@ -303,6 +309,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(ImagesName + "_" + nameof(Images.GetDockerHubPublicImages));
 
+        images.MapGet("{platformId}/{imageId}", Images.Inspect)
+           .WithSummary("Inspect an image")
+           .ProducesValidationProblem()
+           .ProducesProblem(StatusCodes.Status403Forbidden)
+           .ProducesProblem(StatusCodes.Status401Unauthorized)
+           .ProducesProblem(StatusCodes.Status404NotFound)
+           .WithName(ImagesName + "_" + nameof(Images.Inspect));
+
         images.MapPost("/pull", Images.PullImage)
             .WithSummary("Pull an image from a registry and returns logs as a stream")
             .ProducesValidationProblem()
@@ -317,14 +331,6 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(ImagesName + "_" + nameof(Images.Delete));
-
-        images.MapGet("{platformId}/{imageId}", Images.Inspect)
-           .WithSummary("Inspect an image")
-           .ProducesValidationProblem()
-           .ProducesProblem(StatusCodes.Status403Forbidden)
-           .ProducesProblem(StatusCodes.Status401Unauthorized)
-           .ProducesProblem(StatusCodes.Status404NotFound)
-           .WithName(ImagesName + "_" + nameof(Images.Inspect));
     }
 
     private static void MapNetworkEndpoints(RouteGroupBuilder networks)
@@ -360,5 +366,16 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName(NetworksName + "_" + nameof(Networks.Delete));
+    }
+
+    private static void MapVolumeEndpoints(RouteGroupBuilder volumes)
+    {
+        volumes.MapGet("{id}", Volumes.List)
+           .WithSummary("List all volumes")
+           .ProducesValidationProblem()
+           .ProducesProblem(StatusCodes.Status403Forbidden)
+           .ProducesProblem(StatusCodes.Status401Unauthorized)
+           .ProducesProblem(StatusCodes.Status409Conflict)
+           .WithName(VolumesName + "_" + nameof(Volumes.List));
     }
 }

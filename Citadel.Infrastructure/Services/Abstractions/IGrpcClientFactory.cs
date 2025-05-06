@@ -2,6 +2,7 @@
 using static Agent.Server.GPlatform.gPlatform;
 using static Agent.Server.Images.Images;
 using static Agent.Server.Networks.Networks;
+using static Agent.Server.Volumes.Volumes;
 
 namespace Infrastructure.Services.Abstractions;
 
@@ -14,4 +15,5 @@ public interface IGrpcClientFactory
     ContainersClient GetContainerClient(string address);
     ImagesClient GetImageClient(string address);
     NetworksClient GetNetworkClient(string address);
+    VolumesClient GetVolumeClient(string address);
 }

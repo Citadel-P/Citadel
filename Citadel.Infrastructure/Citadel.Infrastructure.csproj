@@ -29,6 +29,7 @@
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\agent.images.proto" GrpcServices="Client" Link="Protos\agent.images.proto" />
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\agent.platform.proto" GrpcServices="Client" Link="Protos\agent.platform.proto" />
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\agent.networks.proto" GrpcServices="Client" Link="Protos\agent.networks.proto" />
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\agent.volumes.proto" GrpcServices="Client" Link="Protos\agent.volumes.proto" />
 
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\Common\platforms.proto" GrpcServices="None" Link="Protos\Common\platforms.proto" />
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\Common\containers.proto" GrpcServices="None" Link="Protos\Common\containers.proto" />
