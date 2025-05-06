@@ -385,5 +385,13 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName(VolumesName + "_" + nameof(Volumes.Delete));
+
+        volumes.MapGet("{platformId}/{name}", Volumes.Inspect)
+           .WithSummary("Inspect a volume")
+           .ProducesValidationProblem()
+           .ProducesProblem(StatusCodes.Status403Forbidden)
+           .ProducesProblem(StatusCodes.Status401Unauthorized)
+           .ProducesProblem(StatusCodes.Status409Conflict)
+           .WithName(VolumesName + "_" + nameof(Volumes.Inspect));
     }
 }

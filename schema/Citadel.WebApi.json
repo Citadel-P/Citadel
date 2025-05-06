@@ -3276,6 +3276,101 @@
           }
         ]
       }
+    },
+    "/api/v1/volumes/{platformId}/{name}": {
+      "get": {
+        "tags": [
+          "Volumes"
+        ],
+        "summary": "Inspect a volume",
+        "operationId": "Volumes_Inspect",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectVolumeView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -3362,6 +3457,84 @@
           },
           "readOnlyForceRecursive": {
             "type": "boolean",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "ClusterVolumeInfoView": {
+        "required": [
+          "capacityBytes",
+          "volumeContext",
+          "volumeID",
+          "accessibleTopology"
+        ],
+        "type": "object",
+        "properties": {
+          "capacityBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "volumeContext": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "volumeID": {
+            "type": "string",
+            "nullable": true
+          },
+          "accessibleTopology": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TopologyEntryView"
+            },
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "ClusterVolumeView": {
+        "required": [
+          "id",
+          "version",
+          "createdAt",
+          "updatedAt",
+          "spec",
+          "info",
+          "publishStatus"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "$ref": "#/components/schemas/VolumVersionView"
+          },
+          "createdAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "spec": {
+            "$ref": "#/components/schemas/VolumeSpecView"
+          },
+          "info": {
+            "$ref": "#/components/schemas/ClusterVolumeInfoView"
+          },
+          "publishStatus": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublishStatusView"
+            },
             "nullable": true
           }
         },
@@ -5449,6 +5622,74 @@
           }
         }
       },
+      "InspectVolumeView": {
+        "required": [
+          "name",
+          "driver",
+          "mountpoint",
+          "createdAt",
+          "scope",
+          "inUse",
+          "usageData",
+          "clusterVolume",
+          "labels",
+          "status",
+          "options"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "mountpoint": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "scope": {
+            "type": "string",
+            "nullable": true
+          },
+          "inUse": {
+            "type": "boolean"
+          },
+          "usageData": {
+            "$ref": "#/components/schemas/UsageDataView"
+          },
+          "clusterVolume": {
+            "$ref": "#/components/schemas/ClusterVolumeView"
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "status": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        }
+      },
       "IPAMConfigInput": {
         "required": [
           "subnet",
@@ -6680,6 +6921,31 @@
           }
         }
       },
+      "PublishStatusView": {
+        "required": [
+          "nodeID",
+          "state",
+          "publishContext"
+        ],
+        "type": "object",
+        "properties": {
+          "nodeID": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "publishContext": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        }
+      },
       "PullImageReply": {
         "type": "object",
         "properties": {
@@ -6989,6 +7255,21 @@
         ],
         "type": "string"
       },
+      "TopologyEntryView": {
+        "required": [
+          "labels"
+        ],
+        "type": "object",
+        "properties": {
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        }
+      },
       "Ulimits": {
         "type": "object",
         "properties": {
@@ -7007,6 +7288,79 @@
             "nullable": true
           }
         }
+      },
+      "UsageDataView": {
+        "required": [
+          "size",
+          "refCount"
+        ],
+        "type": "object",
+        "properties": {
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "refCount": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "VolumeAccessModeView": {
+        "required": [
+          "scope",
+          "sharing",
+          "secrets",
+          "capacityRange",
+          "availability"
+        ],
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/VolumeScopeType"
+          },
+          "sharing": {
+            "$ref": "#/components/schemas/VolumeSharingType"
+          },
+          "secrets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VolumeSecretView"
+            },
+            "nullable": true
+          },
+          "capacityRange": {
+            "$ref": "#/components/schemas/VolumeCapacityRange"
+          },
+          "availability": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "VolumeCapacityRange": {
+        "required": [
+          "requiredBytes",
+          "limitBytes"
+        ],
+        "type": "object",
+        "properties": {
+          "requiredBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "limitBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        },
+        "nullable": true
       },
       "VolumeOptions": {
         "type": "object",
@@ -7028,6 +7382,56 @@
           "subpath": {
             "type": "string",
             "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "VolumeScopeType": {
+        "enum": [
+          "Single",
+          "Multi"
+        ],
+        "type": "string"
+      },
+      "VolumeSecretView": {
+        "required": [
+          "key",
+          "secret"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "nullable": true
+          },
+          "secret": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "VolumeSharingType": {
+        "enum": [
+          "None",
+          "Readonly",
+          "Onewriter",
+          "All"
+        ],
+        "type": "string"
+      },
+      "VolumeSpecView": {
+        "required": [
+          "group",
+          "accessMode"
+        ],
+        "type": "object",
+        "properties": {
+          "group": {
+            "type": "string",
+            "nullable": true
+          },
+          "accessMode": {
+            "$ref": "#/components/schemas/VolumeAccessModeView"
           }
         },
         "nullable": true
@@ -7106,6 +7510,20 @@
             "nullable": true
           }
         }
+      },
+      "VolumVersionView": {
+        "required": [
+          "index"
+        ],
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        },
+        "nullable": true
       }
     },
     "securitySchemes": {
