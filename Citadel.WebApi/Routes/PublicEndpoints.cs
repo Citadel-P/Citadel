@@ -377,5 +377,13 @@ public static class PublicEndpoints
            .ProducesProblem(StatusCodes.Status401Unauthorized)
            .ProducesProblem(StatusCodes.Status409Conflict)
            .WithName(VolumesName + "_" + nameof(Volumes.List));
+
+        volumes.MapDelete("/", Volumes.Delete)
+            .WithSummary("Delete a volume(s)")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName(VolumesName + "_" + nameof(Volumes.Delete));
     }
 }
