@@ -4,12 +4,13 @@ namespace WebApi.Routes.Endpoints.Resources.Volumes;
 
 public sealed record VolumeView
     (
-    string Name,
+    string Id,
     string Driver,
     string Mountpoint,
     string CreatedAt,
     string Scope,
     bool InUse,
+    UsageDataView UsageData,
     Dictionary<string, string> Labels,
     Dictionary<string, string> Status,
     Dictionary<string, string> Options
@@ -21,12 +22,17 @@ public sealed record VolumeView
     public static VolumeView Map(VolumeReply volume)
     {
         return new VolumeView(
-            Name: volume.Name,
+            Id: volume.Name,
             Driver: volume.Driver,
             Mountpoint: volume.Mountpoint,
             CreatedAt: volume.CreatedAt,
             Scope: volume.Scope,
             InUse: volume.InUse,
+            UsageData: volume.UsageData is null 
+                ? null 
+                : new UsageDataView(
+                    volume.UsageData.Size, 
+                    volume.UsageData.RefCount),
             Labels: volume.Labels?.ToDictionary(),
             Status: volume.Status?.ToDictionary(),
             Options: volume.Options?.ToDictionary());

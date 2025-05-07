@@ -55,12 +55,12 @@ const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }
     if (!originalNetworks.length) return;
 
     if (currentSearchTerm.trim() === '') {
-      // If no search term, show all images
+      // If no search term, show all networks
       setNetworks(originalNetworks);
     } else {
       const searchLower = currentSearchTerm.toLowerCase();
 
-      // Filter images by name OR id containing the search term
+      // Filter networks by name OR id containing the search term
       const filtered = originalNetworks.filter((network) => {
         const nameMatches = network.name?.toLowerCase().includes(searchLower) || false;
         const idMatches =

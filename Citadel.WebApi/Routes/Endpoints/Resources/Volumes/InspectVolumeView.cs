@@ -3,7 +3,7 @@
 namespace WebApi.Routes.Endpoints.Resources.Volumes;
 
 public sealed record InspectVolumeView (
-    string Name,
+    string Id,
     string Driver,
     string Mountpoint,
     string CreatedAt,
@@ -19,7 +19,7 @@ public sealed record InspectVolumeView (
     internal static InspectVolumeView Map(VolumeReply volume)
     {
         return new InspectVolumeView(
-            Name: volume.Name,
+            Id: volume.Name,
             Driver: volume.Driver,
             Mountpoint: volume.Mountpoint,
             CreatedAt: volume.CreatedAt,

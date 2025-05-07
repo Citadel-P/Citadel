@@ -5624,7 +5624,7 @@
       },
       "InspectVolumeView": {
         "required": [
-          "name",
+          "id",
           "driver",
           "mountpoint",
           "createdAt",
@@ -5638,7 +5638,7 @@
         ],
         "type": "object",
         "properties": {
-          "name": {
+          "id": {
             "type": "string",
             "nullable": true
           },
@@ -7453,19 +7453,20 @@
       },
       "VolumeView": {
         "required": [
-          "name",
+          "id",
           "driver",
           "mountpoint",
           "createdAt",
           "scope",
           "inUse",
+          "usageData",
           "labels",
           "status",
           "options"
         ],
         "type": "object",
         "properties": {
-          "name": {
+          "id": {
             "type": "string",
             "nullable": true
           },
@@ -7487,6 +7488,9 @@
           },
           "inUse": {
             "type": "boolean"
+          },
+          "usageData": {
+            "$ref": "#/components/schemas/UsageDataView"
           },
           "labels": {
             "type": "object",

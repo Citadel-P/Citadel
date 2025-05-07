@@ -21,6 +21,8 @@ export const AppPaths: Record<string, string> = {
   externalImages: 'platforms/:platformId/images/external',
   networks: 'platforms/:platformId/networks',
   addNetwork: 'platforms/:platformId/networks/add',
+  volumes: 'platforms/:platformId/volumes',
+  addVolume: 'platforms/:platformId/volumes/add',
 };
 
 export const AppRoutes = () => {
@@ -117,6 +119,12 @@ export const AppRoutes = () => {
           path: AppPaths.addNetwork,
           lazy: async () => {
             return { Component: (await import('@/features/networks/forms/AddNetworkForm')).default };
+          },
+        },
+        {
+          path: AppPaths.volumes,
+          lazy: async () => {
+            return { Component: (await import('@/pages/volumes-page')).default };
           },
         },
         { path: AppPaths.any, element: <NotFound /> },

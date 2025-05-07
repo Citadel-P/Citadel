@@ -59,6 +59,24 @@ export type BindOptions = {
   readOnlyForceRecursive?: boolean | null;
 };
 
+export type ClusterVolumeInfoView = {
+  /** @format int64 */
+  capacityBytes: number | null;
+  volumeContext: Record<string, string>;
+  volumeID: string | null;
+  accessibleTopology: TopologyEntryView[] | null;
+};
+
+export type ClusterVolumeView = {
+  id: string | null;
+  version: VolumVersionView;
+  createdAt: string | null;
+  updatedAt: string | null;
+  spec: VolumeSpecView;
+  info: ClusterVolumeInfoView;
+  publishStatus: PublishStatusView[] | null;
+};
+
 /** @default null */
 export type ConfigFromInput = {
   network: string | null;
@@ -295,6 +313,13 @@ export interface DeleteNetworksInput {
 
 export interface DeleteRegistriesInput {
   ids: string[] | null;
+}
+
+export interface DeleteVolumesInput {
+  /** @format uuid */
+  platformId: string;
+  names: string[] | null;
+  force: boolean | null;
 }
 
 export type DescriptorView = {
@@ -622,6 +647,20 @@ export interface InspectNetworkView {
   labels?: Record<string, string>;
   /** @default null */
   containers?: Record<string, NetworkContainerView>;
+}
+
+export interface InspectVolumeView {
+  id: string | null;
+  driver: string | null;
+  mountpoint: string | null;
+  createdAt: string | null;
+  scope: string | null;
+  inUse: boolean;
+  usageData: UsageDataView;
+  clusterVolume: ClusterVolumeView;
+  labels: Record<string, string>;
+  status: Record<string, string>;
+  options: Record<string, string>;
 }
 
 export interface IPAMConfigInput {
@@ -988,6 +1027,12 @@ export interface ProblemDetails {
   instance?: string | null;
 }
 
+export interface PublishStatusView {
+  nodeID: string | null;
+  state: string | null;
+  publishContext: Record<string, string>;
+}
+
 export interface PullImageReply {
   stream?: string | null;
   status?: string | null;
@@ -1091,6 +1136,10 @@ export enum TagStatus {
   Inactive = 'Inactive',
 }
 
+export interface TopologyEntryView {
+  labels: Record<string, string>;
+}
+
 export interface Ulimits {
   name?: string | null;
   /** @format int64 */
@@ -1099,11 +1148,77 @@ export interface Ulimits {
   hard?: number | null;
 }
 
+export type UsageDataView = {
+  /** @format int64 */
+  size: number | null;
+  /** @format int64 */
+  refCount: number | null;
+};
+
+export type VolumeAccessModeView = {
+  scope: VolumeScopeType;
+  sharing: VolumeSharingType;
+  secrets: VolumeSecretView[] | null;
+  capacityRange: VolumeCapacityRange;
+  availability: string | null;
+};
+
+export type VolumeCapacityRange = {
+  /** @format int64 */
+  requiredBytes: number | null;
+  /** @format int64 */
+  limitBytes: number | null;
+};
+
 export type VolumeOptions = {
   noCopy?: boolean | null;
   labels?: Record<string, string>;
   driverConfig?: DriverConfig;
   subpath?: string | null;
+};
+
+export enum VolumeScopeType {
+  Single = 'Single',
+  Multi = 'Multi',
+}
+
+export interface VolumeSecretView {
+  key: string | null;
+  secret: string | null;
+}
+
+export enum VolumeSharingType {
+  None = 'None',
+  Readonly = 'Readonly',
+  Onewriter = 'Onewriter',
+  All = 'All',
+}
+
+export type VolumeSpecView = {
+  group: string | null;
+  accessMode: VolumeAccessModeView;
+};
+
+export interface VolumesView {
+  volumes: VolumeView[] | null;
+}
+
+export interface VolumeView {
+  id: string | null;
+  driver: string | null;
+  mountpoint: string | null;
+  createdAt: string | null;
+  scope: string | null;
+  inUse: boolean;
+  usageData: UsageDataView;
+  labels: Record<string, string>;
+  status: Record<string, string>;
+  options: Record<string, string>;
+}
+
+export type VolumVersionView = {
+  /** @format int64 */
+  index: number | null;
 };
 
 type BaseIImageRepository = object;
@@ -1338,6 +1453,26 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * No description
      *
      * @tags Authentication
+     * @name AuthenticationRefreshToken
+     * @summary Request a new access token
+     * @request GET:/api/v1/authentication/refresh
+     * @response `200` `RefreshTokenResponse` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    authenticationRefreshToken: (params: RequestParams = {}) =>
+      this.request<RefreshTokenResponse, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/authentication/refresh`,
+        method: 'GET',
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Authentication
      * @name AuthenticationLogin
      * @summary Check user credentials and issue an access token on successful login
      * @request POST:/api/v1/authentication/login
@@ -1382,26 +1517,6 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     /**
      * No description
      *
-     * @tags Authentication
-     * @name AuthenticationRefreshToken
-     * @summary Request a new access token
-     * @request GET:/api/v1/authentication/refresh
-     * @response `200` `RefreshTokenResponse` OK
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `404` `ProblemDetails` Not Found
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    authenticationRefreshToken: (params: RequestParams = {}) =>
-      this.request<RefreshTokenResponse, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/authentication/refresh`,
-        method: 'GET',
-        format: 'json',
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
      * @tags Containers
      * @name ContainersGetById
      * @summary Get container by Id
@@ -1419,6 +1534,80 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         path: `/api/v1/containers/${id}`,
         method: 'GET',
         secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Containers
+     * @name ContainersGetStats
+     * @summary Get container stats
+     * @request GET:/api/v1/containers/{id}/stats
+     * @secure
+     * @response `200` `ContainerStatsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    containersGetStats: (id: string, params: RequestParams = {}) =>
+      this.request<ContainerStatsView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/containers/${id}/stats`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Containers
+     * @name ContainersInspect
+     * @summary Inspect a container
+     * @request GET:/api/v1/containers/{id}/inspect
+     * @secure
+     * @response `200` `ContainerInspectView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    containersInspect: (id: string, params: RequestParams = {}) =>
+      this.request<ContainerInspectView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/containers/${id}/inspect`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Containers
+     * @name ContainersStreamLogs
+     * @summary Stream container logs
+     * @request POST:/api/v1/containers/stream-logs
+     * @secure
+     * @response `200` `(ContainerLogReply)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    containersStreamLogs: (data: StreamLogsRequest, params: RequestParams = {}) =>
+      this.request<ContainerLogReply[], HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/containers/stream-logs`,
+        method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: 'json',
         ...params,
       }),
@@ -1570,80 +1759,6 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         body: data,
         secure: true,
         type: ContentType.Json,
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Containers
-     * @name ContainersStreamLogs
-     * @summary Stream container logs
-     * @request POST:/api/v1/containers/stream-logs
-     * @secure
-     * @response `200` `(ContainerLogReply)[]` OK
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    containersStreamLogs: (data: StreamLogsRequest, params: RequestParams = {}) =>
-      this.request<ContainerLogReply[], HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/containers/stream-logs`,
-        method: 'POST',
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Containers
-     * @name ContainersGetStats
-     * @summary Get container stats
-     * @request GET:/api/v1/containers/{id}/stats
-     * @secure
-     * @response `200` `ContainerStatsView` OK
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    containersGetStats: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerStatsView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/containers/${id}/stats`,
-        method: 'GET',
-        secure: true,
-        format: 'json',
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Containers
-     * @name ContainersInspect
-     * @summary Inspect a container
-     * @request GET:/api/v1/containers/{id}/inspect
-     * @secure
-     * @response `200` `ContainerInspectView` OK
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    containersInspect: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerInspectView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/containers/${id}/inspect`,
-        method: 'GET',
-        secure: true,
-        format: 'json',
         ...params,
       }),
 
@@ -1803,82 +1918,6 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       }),
 
     /**
-     * @description A discriminator should be provided in the request, this discriminator is based on RegistryDiscriminator enum
-     *
-     * @tags Registries
-     * @name RegistriesCreate
-     * @summary Create a registry
-     * @request POST:/api/v1/registries
-     * @secure
-     * @response `200` `RegistryView` OK
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    registriesCreate: (data: CreateRegistryInput, params: RequestParams = {}) =>
-      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/registries`,
-        method: 'POST',
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Registries
-     * @name RegistriesDelete
-     * @summary Delete registries
-     * @request DELETE:/api/v1/registries
-     * @secure
-     * @response `200` `RegistriesView` OK
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    registriesDelete: (data: DeleteRegistriesInput, params: RequestParams = {}) =>
-      this.request<RegistriesView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/registries`,
-        method: 'DELETE',
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
-
-    /**
-     * @description A discriminator should be provided in the request, this discriminator is based on RegistryDiscriminator enum
-     *
-     * @tags Registries
-     * @name RegistriesPatch
-     * @summary Patch a registry
-     * @request PATCH:/api/v1/registries
-     * @secure
-     * @response `200` `RegistryView` OK
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    registriesPatch: (data: PatchRegistryInput, params: RequestParams = {}) =>
-      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/registries`,
-        method: 'PATCH',
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
-
-    /**
      * No description
      *
      * @tags Registries
@@ -1920,6 +1959,82 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         path: `/api/v1/registries/${id}`,
         method: 'GET',
         secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * @description A discriminator should be provided in the request, this discriminator is based on RegistryDiscriminator enum
+     *
+     * @tags Registries
+     * @name RegistriesCreate
+     * @summary Create a registry
+     * @request POST:/api/v1/registries
+     * @secure
+     * @response `200` `RegistryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    registriesCreate: (data: CreateRegistryInput, params: RequestParams = {}) =>
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/registries`,
+        method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * @description A discriminator should be provided in the request, this discriminator is based on RegistryDiscriminator enum
+     *
+     * @tags Registries
+     * @name RegistriesPatch
+     * @summary Patch a registry
+     * @request PATCH:/api/v1/registries
+     * @secure
+     * @response `200` `RegistryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    registriesPatch: (data: PatchRegistryInput, params: RequestParams = {}) =>
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/registries`,
+        method: 'PATCH',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Registries
+     * @name RegistriesDelete
+     * @summary Delete registries
+     * @request DELETE:/api/v1/registries
+     * @secure
+     * @response `200` `RegistriesView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    registriesDelete: (data: DeleteRegistriesInput, params: RequestParams = {}) =>
+      this.request<RegistriesView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/registries`,
+        method: 'DELETE',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: 'json',
         ...params,
       }),
@@ -2072,6 +2187,30 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * No description
      *
      * @tags Images
+     * @name ImagesInspect
+     * @summary Inspect an image
+     * @request GET:/api/v1/images/{platformId}/{imageId}
+     * @secure
+     * @response `200` `InspectImageView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    imagesInspect: (platformId: string, imageId: string, params: RequestParams = {}) =>
+      this.request<InspectImageView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/images/${platformId}/${imageId}`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Images
      * @name ImagesPullImage
      * @summary Pull an image from a registry and returns logs as a stream
      * @request POST:/api/v1/images/pull
@@ -2115,30 +2254,6 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Images
-     * @name ImagesInspect
-     * @summary Inspect an image
-     * @request GET:/api/v1/images/{platformId}/{imageId}
-     * @secure
-     * @response `200` `InspectImageView` OK
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    imagesInspect: (platformId: string, imageId: string, params: RequestParams = {}) =>
-      this.request<InspectImageView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/images/${platformId}/${imageId}`,
-        method: 'GET',
-        secure: true,
         format: 'json',
         ...params,
       }),
@@ -2253,6 +2368,91 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         body: data,
         secure: true,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Volumes
+     * @name VolumesList
+     * @summary List all volumes
+     * @request GET:/api/v1/volumes/{id}
+     * @secure
+     * @response `200` `VolumesView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    volumesList: (
+      id: string,
+      query?: {
+        /** @default null */
+        Dangling?: boolean;
+        /** @default null */
+        Driver?: string;
+        /** @default null */
+        Name?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<VolumesView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/volumes/${id}`,
+        method: 'GET',
+        query: query,
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Volumes
+     * @name VolumesDelete
+     * @summary Delete a volume(s)
+     * @request DELETE:/api/v1/volumes
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    volumesDelete: (data: DeleteVolumesInput, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/volumes`,
+        method: 'DELETE',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Volumes
+     * @name VolumesInspect
+     * @summary Inspect a volume
+     * @request GET:/api/v1/volumes/{platformId}/{name}
+     * @secure
+     * @response `200` `InspectVolumeView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    volumesInspect: (platformId: string, name: string, params: RequestParams = {}) =>
+      this.request<InspectVolumeView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/volumes/${platformId}/${name}`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
         ...params,
       }),
   };
