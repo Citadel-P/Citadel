@@ -102,15 +102,15 @@ const ImageNameRow = ({ image, onShowSheet }: { image: ImageView; onShowSheet: (
 };
 
 const ImageIdRow = ({ image }: { image: ImageView }) => {
-  const [copiedWinCmd, copyWinCmdToClipboard] = useCopyToClipboard(5000);
+  const [copyCmd, setCopyCmd] = useCopyToClipboard(5000);
 
   return (
     <div className="flex gap-0.5 items-center">
       <div>{truncate(image.id?.split(':').at(1) ?? '', 12, 'right', true)}</div>
       <button
         className="rounded-full invisible group-hover/trow:visible ml-1 px-1.5 py-1.5 bg-foreground/5 hover:bg-foreground/10 text-sm font-semibold"
-        onClick={() => copyWinCmdToClipboard(image.id ?? '')}>
-        {copiedWinCmd ? <CheckCheck className="w-3 h-3 text-green-500" /> : <Clipboard className="w-3 h-3 " />}
+        onClick={() => setCopyCmd(image.id ?? '')}>
+        {copyCmd ? <CheckCheck className="w-3 h-3 text-green-500" /> : <Clipboard className="w-3 h-3 " />}
       </button>
     </div>
   );

@@ -127,6 +127,12 @@ export const AppRoutes = () => {
             return { Component: (await import('@/pages/volumes-page')).default };
           },
         },
+        {
+          path: AppPaths.addVolume,
+          lazy: async () => {
+            return { Component: (await import('@/features/volumes/forms/AddVolumeForm')).default };
+          },
+        },
         { path: AppPaths.any, element: <NotFound /> },
       ],
     },

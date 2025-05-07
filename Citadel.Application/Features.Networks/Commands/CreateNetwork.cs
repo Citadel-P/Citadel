@@ -144,10 +144,7 @@ internal sealed class CreateNetworkHandler(
     {
         try
         {
-            var address = await dbContext.Platforms
-                .Where(s => s.Id == command.PlatformId)
-                .Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
-
+            var address = await dbContext.Platforms.Where(s => s.Id == command.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
             if (address == null)
             {
                 return Result.Failure<CreateNetworkReply>(new NotFoundError("The provided platform Id doesn't exist"));

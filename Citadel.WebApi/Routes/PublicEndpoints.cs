@@ -378,6 +378,14 @@ public static class PublicEndpoints
            .ProducesProblem(StatusCodes.Status409Conflict)
            .WithName(VolumesName + "_" + nameof(Volumes.List));
 
+        volumes.MapGet("{platformId}/{name}", Volumes.Inspect)
+           .WithSummary("Inspect a volume")
+           .ProducesValidationProblem()
+           .ProducesProblem(StatusCodes.Status403Forbidden)
+           .ProducesProblem(StatusCodes.Status401Unauthorized)
+           .ProducesProblem(StatusCodes.Status409Conflict)
+           .WithName(VolumesName + "_" + nameof(Volumes.Inspect));
+
         volumes.MapDelete("/", Volumes.Delete)
             .WithSummary("Delete a volume(s)")
             .ProducesValidationProblem()
@@ -386,12 +394,12 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName(VolumesName + "_" + nameof(Volumes.Delete));
 
-        volumes.MapGet("{platformId}/{name}", Volumes.Inspect)
-           .WithSummary("Inspect a volume")
-           .ProducesValidationProblem()
-           .ProducesProblem(StatusCodes.Status403Forbidden)
-           .ProducesProblem(StatusCodes.Status401Unauthorized)
-           .ProducesProblem(StatusCodes.Status409Conflict)
-           .WithName(VolumesName + "_" + nameof(Volumes.Inspect));
+        volumes.MapPost("/", Volumes.Create)
+            .WithSummary("Create a volume")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName(VolumesName + "_" + nameof(Volumes.Create));
     }
 }

@@ -15,11 +15,19 @@ public static class Volumes
         var result = await mediator.Send(listNetworksRequest.ToQuery(id), cancellationToken);
         return EndpointHandlers.HandleResult(result, VolumeView.Map);
     }
+
+    public static async Task<Results<Ok<VolumeView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreateVolumeInput request, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(request.ToCommand(), cancellationToken);
+        return EndpointHandlers.HandleResult(result, VolumeView.Map);
+    }
+
     public static async Task<Results<Ok<InspectVolumeView>, ProblemHttpResult>> Inspect(IMediator mediator, Guid platformId, string name, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new InspectVolume(platformId, name), cancellationToken);
         return EndpointHandlers.HandleResult(result, InspectVolumeView.Map);
     }
+
     public static async Task<Results<NoContent, ProblemHttpResult>> Delete(IMediator mediator, [FromBody] DeleteVolumesInput request, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);

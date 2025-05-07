@@ -171,15 +171,6 @@ const AddNetworkForm = () => {
                       </FormItem>
                     )}
                   />
-                  <KeyValuePairInput
-                    name="options"
-                    fields={optionFields}
-                    control={control}
-                    append={appendOption}
-                    remove={removeOption}
-                    label="Driver Options"
-                    addButtonLabel="Add driver option"
-                  />
                 </div>
               </li>
 
@@ -287,7 +278,6 @@ const AddNetworkForm = () => {
                           />
                         </>
                       )}
-
                       <KeyValuePairInput
                         name="labels"
                         fields={labelFields}
@@ -299,6 +289,16 @@ const AddNetworkForm = () => {
                         keyPlaceHolder="com.example.foo"
                         valuePlaceHolder="bar"
                       />
+                      <KeyValuePairInput
+                        name="options"
+                        fields={optionFields}
+                        control={control}
+                        append={appendOption}
+                        remove={removeOption}
+                        label="Driver Options"
+                        addButtonLabel="Add driver option"
+                      />
+
                       <FormField
                         control={form.control}
                         name="internal"

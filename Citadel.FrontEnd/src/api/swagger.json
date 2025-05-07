@@ -3199,6 +3199,101 @@
         ]
       }
     },
+    "/api/v1/volumes/{platformId}/{name}": {
+      "get": {
+        "tags": [
+          "Volumes"
+        ],
+        "summary": "Inspect a volume",
+        "operationId": "Volumes_Inspect",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectVolumeView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/volumes": {
       "delete": {
         "tags": [
@@ -3275,34 +3370,22 @@
             "Bearer": [ ]
           }
         ]
-      }
-    },
-    "/api/v1/volumes/{platformId}/{name}": {
-      "get": {
+      },
+      "post": {
         "tags": [
           "Volumes"
         ],
-        "summary": "Inspect a volume",
-        "operationId": "Volumes_Inspect",
-        "parameters": [
-          {
-            "name": "platformId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
+        "summary": "Create a volume",
+        "operationId": "Volumes_Create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateVolumeInput"
+              }
             }
           }
-        ],
+        },
         "responses": {
           "500": {
             "description": "Internal Server Error",
@@ -3319,7 +3402,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InspectVolumeView"
+                  "$ref": "#/components/schemas/VolumeView"
                 }
               }
             }
@@ -4259,6 +4342,44 @@
           },
           "configuration": {
             "$ref": "#/components/schemas/IRegistryConfiguration"
+          }
+        }
+      },
+      "CreateVolumeInput": {
+        "required": [
+          "platformId",
+          "name",
+          "driver"
+        ],
+        "type": "object",
+        "properties": {
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": null,
+            "nullable": true
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": null,
+            "nullable": true
           }
         }
       },

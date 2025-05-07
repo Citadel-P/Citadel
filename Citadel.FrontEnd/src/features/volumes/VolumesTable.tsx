@@ -101,15 +101,11 @@ const columns = (handleShowSheet: (volume: VolumeView) => void): ColumnDef<Volum
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
   {
-    accessorKey: 'driver',
-    header: ({ column }) => <SortableCell cellName="Driver" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{row.original.driver}</span>,
-    sortingFn: (rowA, rowB) => (rowA.original.driver! < rowB.original.driver! ? 1 : -1),
-  },
-  {
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{fromNow(new Date(row.original.createdAt as any).getTime())}</span>,
+    cell: ({ row }) => (
+      <span className="text-[13px]">{fromNow(new Date(row.original.createdAt as any).getTime())}</span>
+    ),
     sortingFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
   },
   {
@@ -145,7 +141,7 @@ const VolumeNameRow = ({ volume, onShowSheet }: { volume: VolumeView; onShowShee
         tabIndex={0}
         role="button"
         aria-label="Show volume details">
-        {truncate(volume.id ?? '', 64, 'right')}
+        {volume.id}
       </span>
     </div>
   );

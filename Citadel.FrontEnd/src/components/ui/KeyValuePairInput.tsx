@@ -2,7 +2,8 @@ import { FormField, FormItem, FormControl } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, HelpCircle } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface KeyValuePairInputProps {
   name: string;
@@ -14,6 +15,7 @@ interface KeyValuePairInputProps {
   addButtonLabel?: string;
   keyPlaceHolder?: string;
   valuePlaceHolder?: string;
+  helpText?: string;
 }
 
 const KeyValuePairInput = ({
@@ -26,9 +28,22 @@ const KeyValuePairInput = ({
   addButtonLabel = 'Add option',
   keyPlaceHolder = 'com.docker.network.driver.mtu',
   valuePlaceHolder = 'true',
+  helpText,
 }: KeyValuePairInputProps) => (
   <div className="col-span-2">
-    <Label className="flex-none text-xs">{label}</Label>
+    <div className="flex items-center gap-1">
+      <Label className="flex-none text-xs mb-1">{label}</Label>
+      {helpText && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <HelpCircle className="w-3.5 h-3.5 text-muted-foreground cursor-pointer" />
+            </TooltipTrigger>
+            <TooltipContent side="top">{helpText}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </div>
     <div className="space-y-2">
       {fields.map((field, idx: number) => (
         <div key={field.id} className="flex gap-2 items-center">
@@ -62,7 +77,11 @@ const KeyValuePairInput = ({
                     <span className="flex z-10 items-center px-6 bg-accent-foreground/5 border-l rounded-l-sm border-y border-border text-xs h-full">
                       value
                     </span>
-                    <Input placeholder={valuePlaceHolder} className="rounded-l-none focus-visible:ring-transparent" {...field} />
+                    <Input
+                      placeholder={valuePlaceHolder}
+                      className="rounded-l-none focus-visible:ring-transparent"
+                      {...field}
+                    />
                   </div>
                 </FormControl>
               </FormItem>

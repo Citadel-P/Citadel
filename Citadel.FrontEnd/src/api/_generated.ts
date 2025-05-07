@@ -277,6 +277,17 @@ export interface CreateRegistryInput {
   configuration: IRegistryConfiguration;
 }
 
+export interface CreateVolumeInput {
+  /** @format uuid */
+  platformId: string;
+  name: string | null;
+  driver: string | null;
+  /** @default null */
+  labels?: Record<string, string>;
+  /** @default null */
+  options?: Record<string, string>;
+}
+
 export interface DeleteContainersRequest {
   containersIds: string[] | null;
   /** @default false */
@@ -2411,6 +2422,30 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * No description
      *
      * @tags Volumes
+     * @name VolumesInspect
+     * @summary Inspect a volume
+     * @request GET:/api/v1/volumes/{platformId}/{name}
+     * @secure
+     * @response `200` `InspectVolumeView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    volumesInspect: (platformId: string, name: string, params: RequestParams = {}) =>
+      this.request<InspectVolumeView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/volumes/${platformId}/${name}`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Volumes
      * @name VolumesDelete
      * @summary Delete a volume(s)
      * @request DELETE:/api/v1/volumes
@@ -2436,22 +2471,24 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * No description
      *
      * @tags Volumes
-     * @name VolumesInspect
-     * @summary Inspect a volume
-     * @request GET:/api/v1/volumes/{platformId}/{name}
+     * @name VolumesCreate
+     * @summary Create a volume
+     * @request POST:/api/v1/volumes
      * @secure
-     * @response `200` `InspectVolumeView` OK
+     * @response `200` `VolumeView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `409` `ProblemDetails` Conflict
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    volumesInspect: (platformId: string, name: string, params: RequestParams = {}) =>
-      this.request<InspectVolumeView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/volumes/${platformId}/${name}`,
-        method: 'GET',
+    volumesCreate: (data: CreateVolumeInput, params: RequestParams = {}) =>
+      this.request<VolumeView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/volumes`,
+        method: 'POST',
+        body: data,
         secure: true,
+        type: ContentType.Json,
         format: 'json',
         ...params,
       }),

@@ -30,7 +30,8 @@ internal class ListNetworksHandler(ApplicationDbContext dbContext, IGrpcClientFa
                 Dangling = query.Dangling
             };
             var client = clientFactory.GetNetworkClient(address);
-            return await client.ListNetworksAsync(args, cancellationToken: cancellationToken);
+            var response = await client.ListNetworksAsync(args, cancellationToken: cancellationToken);
+            return new ListNetworksReply() { Networks = { response.Networks.OrderByDescending(s => s.Created) } };
         }
         catch (RpcException ex)
         {

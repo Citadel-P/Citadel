@@ -30,7 +30,8 @@ internal class ListVolumesHandler(ApplicationDbContext dbContext, IGrpcClientFac
                 Dangling = query.Dangling
             };
             var client = clientFactory.GetVolumeClient(address);
-            return await client.ListAsync(args, cancellationToken: cancellationToken);
+            var result = await client.ListAsync(args, cancellationToken: cancellationToken);
+            return new VolumeListReply() { Volumes = { result.Volumes.OrderByDescending(s => s.CreatedAt) } };
         }
         catch (RpcException ex)
         {

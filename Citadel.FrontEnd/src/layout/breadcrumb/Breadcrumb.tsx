@@ -111,6 +111,12 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
         crumbs.push({ title: currentPlatform?.name ?? '', link: `/platforms/${currentPlatform?.id}` });
         crumbs.push({ title: 'Volumes', isActive: true });
       },
+      [AppPaths.addVolume]: () => {
+        crumbs.push({ title: 'Platforms', link: '/' });
+        crumbs.push({ title: currentPlatform?.name ?? '', link: `/platforms/${currentPlatform?.id}` });
+        crumbs.push({ title: 'Volumes', link: `/platforms/${currentPlatform?.id}/volumes` });
+        crumbs.push({ title: 'Add Volume', isActive: true });
+      },
     };
 
     routeMap[route?.path ?? '']?.();
