@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Infrastructure.DockerHub;
 using Infrastructure.GithubCr;
@@ -37,9 +38,24 @@ public partial class GitHubCrContext : JsonSerializerContext
 
 internal class HttpClientsContext
 {
-    public static void RegisterContexts(IList<IJsonTypeInfoResolver> typeInfoResolverChain)
+    public static readonly JsonSerializerOptions JsonSerializerOptions = JsonOptions();
+    private static JsonSerializerOptions JsonOptions()
     {
-        typeInfoResolverChain.Add(DockerHubContext.Default);
-        typeInfoResolverChain.Add(GitHubCrContext.Default);
+        var serializerOptions = new JsonSerializerOptions()
+        {
+            PropertyNamingPolicy = null,
+            PropertyNameCaseInsensitive = false,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
+        };
+
+        // Resolvers
+        serializerOptions.TypeInfoResolverChain.Add(DockerHubContext.Default);
+        serializerOptions.TypeInfoResolverChain.Add(GitHubCrContext.Default);
+
+        // Converters
+        serializerOptions.Converters.Add(new JsonStringEnumConverter());
+
+        return serializerOptions;
     }
 }

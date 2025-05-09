@@ -32,13 +32,13 @@ public partial class PaginateImageSearch: Page
 
 public record DockerHubImageModel
 {
-    [JsonPropertyName("repo_name")] public string Name { get; init; }
-    [JsonPropertyName("short_description")] public string Description { get; init; }
-    [JsonPropertyName("is_official")] public bool IsOfficial { get; init; }
-    [JsonPropertyName("star_count")] public long StarCount { get; init; }
-    [JsonPropertyName("pull_count")] public long PullCount { get; init; }
-    [JsonPropertyName("url")] public string Url { get; init; }
-    [JsonPropertyName("icon")] public string Icon { get; init; }
+    [JsonPropertyName("repo_name")] public string Name { get; set; }
+    [JsonPropertyName("short_description")] public string Description { get; set; }
+    [JsonPropertyName("is_official")] public bool IsOfficial { get; set; }
+    [JsonPropertyName("star_count")] public long StarCount { get; set; }
+    [JsonPropertyName("pull_count")] public long PullCount { get; set; }
+    [JsonPropertyName("url")] public string Url { get; set; }
+    [JsonPropertyName("icon")] public string Icon { get; set; }
 
 }
 
