@@ -1,13 +1,11 @@
-﻿using Hosting.Common.ErrorTypes;
+﻿using FluentValidation;
+using Hosting.Common.ErrorTypes;
 using Infrastructure.Entities;
-using FluentValidation;
+using Infrastructure.EntityFramework;
+using Infrastructure.TaskJobs;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
-using Infrastructure.EntityFramework;
-using Infrastructure.Services;
-using Quartz;
-using Infrastructure.TaskJobs;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Platforms.Commands;
@@ -22,8 +20,8 @@ public sealed record DeletePlatform(Guid Id) : ICommand<Result>
 }
 
 internal class DeletePlatformHandler(
-    ApplicationDbContext dbContext, 
-    ISchedulerFactory schedulerFactory,
+    ApplicationDbContext dbContext,
+    IDaemonEventJob daemonEventJob,
     ILogger<DeletePlatformHandler> logger) : ICommandHandler<DeletePlatform, Result>
 {
     public async ValueTask<Result> Handle(DeletePlatform command, CancellationToken cancellationToken)
@@ -40,14 +38,8 @@ internal class DeletePlatformHandler(
         dbContext.Platforms.Remove(platform);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        await AbortTaskJobs(platform.Address, cancellationToken);
+        daemonEventJob.StopMonitoringPlatform(platform.Address);
 
         return Result.Success();
-    }
-
-    private async Task AbortTaskJobs(string address, CancellationToken cancellationToken)
-    {
-        var scheduler = await schedulerFactory.GetScheduler(cancellationToken);
-        await scheduler.AbortStreamDaemonEventJob(address, logger, cancellationToken);
     }
 }

@@ -1,12 +1,22 @@
 ﻿using System.Text.Json.Serialization;
+using Agent.Server.Containers;
+using Agent.Server.Images;
 using Application.Features.Auth.Models;
 using Application.Features.Containers.Models;
+using Application.Features.Images.Queries;
+using Application.Features.Registries.Commands;
 using Citadel.Common;
+using Infrastructure.DockerHub;
 using Infrastructure.Entities;
+using Infrastructure.GithubCr;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources.Auth;
 using WebApi.Routes.Endpoints.Resources.Containers;
+using WebApi.Routes.Endpoints.Resources.Images;
+using WebApi.Routes.Endpoints.Resources.Networks;
 using WebApi.Routes.Endpoints.Resources.Platforms;
+using WebApi.Routes.Endpoints.Resources.Registries;
+using WebApi.Routes.Endpoints.Resources.Volumes;
 
 namespace Application.Models;
 
@@ -20,10 +30,6 @@ namespace Application.Models;
 [JsonSerializable(typeof(List<SwarmPeerView>))]
 [JsonSerializable(typeof(List<PlatformStatView>))]
 [JsonSerializable(typeof(DockerHubRegistry))]
-[JsonSerializable(typeof(AzureRegistry))]
-[JsonSerializable(typeof(AWSRegistry))]
-[JsonSerializable(typeof(GitlabRegistry))]
-[JsonSerializable(typeof(GitHubRegistry))]
 [JsonSerializable(typeof(List<ContainerInfoView>))]
 [JsonSerializable(typeof(List<PortView>))]
 [JsonSerializable(typeof(EndpointSettingsView))]
@@ -38,7 +44,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(List<PortRequest>))]
 [JsonSerializable(typeof(ContainerStatRequest))]
 [JsonSerializable(typeof(ContainerEventRequest))]
-[JsonSerializable(typeof(ContainerLogRequest))]
+[JsonSerializable(typeof(Features.Containers.Models.ContainerLogRequest))]
 [JsonSerializable(typeof(PutPlatformRequest))]
 [JsonSerializable(typeof(ContainerStatsView))]
 [JsonSerializable(typeof(ContainerStatView))]
@@ -53,6 +59,41 @@ namespace Application.Models;
 [JsonSerializable(typeof(NetworkSettingsView))]
 [JsonSerializable(typeof(MapFieldPortBindingView))]
 [JsonSerializable(typeof(Address))]
+[JsonSerializable(typeof(DeleteContainersRequest))]
+[JsonSerializable(typeof(CreateRegistryInput))]
+[JsonSerializable(typeof(PatchRegistryInput))]
+[JsonSerializable(typeof(DeleteRegistriesInput))]
+[JsonSerializable(typeof(RegistriesView))]
+[JsonSerializable(typeof(RegistryView))]
+[JsonSerializable(typeof(RegistryConfigurationBase))]
+[JsonSerializable(typeof(IAsyncEnumerable<PullImageReply>))]
+[JsonSerializable(typeof(DeleteImagesRequest))]
+[JsonSerializable(typeof(DockerHubImageView))]
+[JsonSerializable(typeof(ImageView))]
+[JsonSerializable(typeof(ImagesView))]
+[JsonSerializable(typeof(InspectImageView))]
+[JsonSerializable(typeof(PullImageRequest))]
+[JsonSerializable(typeof(IEnumerable<IImageRepository>))]
+[JsonSerializable(typeof(IEnumerable<GhcrPackageVersion>))]
+[JsonSerializable(typeof(IEnumerable<DockerHubRepository>))]
+[JsonSerializable(typeof(IEnumerable<DockerHubTagView>))]
+[JsonSerializable(typeof(IEnumerable<DockerHubImageModel>))]
+[JsonSerializable(typeof(DeleteImagesReply))]
+[JsonSerializable(typeof(CreateNetworkInput))]
+[JsonSerializable(typeof(CreateNetworkResponse))]
+[JsonSerializable(typeof(CreateNetworkView))]
+[JsonSerializable(typeof(DeleteNetworksInput))]
+[JsonSerializable(typeof(InspectNetworkView))]
+[JsonSerializable(typeof(ListNetworksRequest))]
+[JsonSerializable(typeof(NetworksView))]
+[JsonSerializable(typeof(NetworkView))]
+[JsonSerializable(typeof(CreateVolumeInput))]
+[JsonSerializable(typeof(DeleteVolumesInput))]
+[JsonSerializable(typeof(InspectVolumeView))]
+[JsonSerializable(typeof(ListVolumesRequest))]
+[JsonSerializable(typeof(VolumesView))]
+[JsonSerializable(typeof(VolumeView))]
+[JsonSerializable(typeof(IAsyncEnumerable<ContainerLogReply>))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

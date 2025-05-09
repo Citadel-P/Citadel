@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Xml.Linq;
@@ -26,9 +27,9 @@ public class Registry
     /// <summary>
     /// The registry configuration
     /// </summary>
-    public IRegistryConfiguration Configuration { get; set; }
+    public RegistryConfigurationBase Configuration { get; set; }
 
-    public static Registry Create(string name, string url, RegistryDiscriminator discriminator, IRegistryConfiguration configuration) 
+    public static Registry Create(string name, string url, RegistryDiscriminator discriminator, RegistryConfigurationBase configuration) 
         => new ()
         {
             Id = Guid.CreateVersion7(),
@@ -39,14 +40,14 @@ public class Registry
             Configuration = configuration 
         };
 
-    public void PartialUpdate(string name = null, string url = null, IRegistryConfiguration configuration = null)
+    public void PartialUpdate(string name = null, string url = null, RegistryConfigurationBase configuration = null)
     {
         if (name != null) Name = name;
         if (url != null) Url = url;
         if (configuration != null) Configuration = configuration;
     }
 
-    public static string DefaultRegistryName = "Docker Hub";
+    public static readonly string DefaultRegistryName = "Docker Hub";
     public static Registry DefaultRegistry()
     {
         return new Registry
@@ -62,30 +63,25 @@ public class Registry
 }
 
 [JsonPolymorphic]
+[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 [JsonDerivedType(typeof(AWSRegistry), nameof(RegistryDiscriminator.AWS))]
 [JsonDerivedType(typeof(AzureRegistry), nameof(RegistryDiscriminator.Azure))]
 [JsonDerivedType(typeof(GitlabRegistry), nameof(RegistryDiscriminator.Gitlab))]
 [JsonDerivedType(typeof(DockerHubRegistry), nameof(RegistryDiscriminator.DockerHub))]
 [JsonDerivedType(typeof(GitHubRegistry), nameof(RegistryDiscriminator.GitHub))]
-public interface IRegistryConfiguration
+public abstract class RegistryConfigurationBase
 {
-    string RegistryUrl { get; }
-    string GetRegistryAuth() => throw new NotImplementedException();
+    public virtual string RegistryUrl { get; private set;  }
+    public abstract string GetRegistryAuth();
 }
 
-public class DockerHubRegistry : IRegistryConfiguration
+[method: JsonConstructor]
+public class DockerHubRegistry(string userName = null, string pat = null) : RegistryConfigurationBase
 {
-    public string RegistryUrl => "https://docker.io";
-    [JsonInclude]
-    public string UserName { get; private set; }
-    [JsonInclude]
-    public string PAT { get; private set; }
-    public static DockerHubRegistry Create(string userName, string PAT) 
-        => new()
-        {
-            UserName = userName,
-            PAT = PAT
-        };
+    public override string RegistryUrl => "https://docker.io";
+    public string UserName { get; } = userName;
+    public string PAT { get; } = pat;
+    public static DockerHubRegistry Create(string userName, string PAT) => new (userName, PAT);
 
     public async Task<(bool success, string errorMessage)> CanConnect(IDockerHubApi dockerHub, CancellationToken cancellationToken)
     {
@@ -137,43 +133,35 @@ public class DockerHubRegistry : IRegistryConfiguration
         }
     }
 
-    public string GetRegistryAuth() => new RegistryAuth(UserName, PAT, RegistryUrl).GetAuth();
+    public override string GetRegistryAuth() => new RegistryAuth(UserName, PAT, RegistryUrl).GetAuth();
 }
 
-public class AzureRegistry : IRegistryConfiguration
+[method: JsonConstructor]
+public class AzureRegistry(string userName, string password) : RegistryConfigurationBase
 {
-    public string RegistryUrl => string.Empty;
-    [JsonInclude]
-    public string UserName { get; private set; }
-    [JsonInclude]
-    public string Password { get; private set; }
-
+    public override string RegistryUrl => string.Empty;
+    public string UserName { get; } = userName;
+    public string Password { get; } = password;
 
     public static AzureRegistry Create(string userName, string password) => 
-        new () 
-        {
-            Password = password,
-            UserName = userName 
-        };
+        new (userName, password);
+
+    public override string GetRegistryAuth()
+    {
+        throw new NotImplementedException();
+    }
 }
 
-public class GitHubRegistry : IRegistryConfiguration
+[method: JsonConstructor]
+public class GitHubRegistry(string name, GhcrAccountType? type, string pat) : RegistryConfigurationBase
 {
-    public string RegistryUrl => "https://ghcr.io";
-    [JsonInclude]
-    public string Name { get; private set; }
-    [JsonInclude]
-    public GhcrAccountType? Type { get; private set; }
-    [JsonInclude]
-    public string PAT { get; private set; }
+    public override string RegistryUrl => "https://ghcr.io";
+    public string Name { get; } = name;
+    public GhcrAccountType? Type { get; } = type;
+    public string PAT { get; } = pat;
 
     public static GitHubRegistry Create(string name, string PAT, GhcrAccountType type) =>
-        new()
-        {
-            PAT = PAT,
-            Name = name,
-            Type = type
-        };
+        new (name, type, PAT);
 
     public async Task<(bool success, string errorMessage)> CanConnect(IGithubCrApi githubCrApi, CancellationToken cancellationToken)
     {
@@ -229,57 +217,56 @@ public class GitHubRegistry : IRegistryConfiguration
         }
     }
 
-    public string GetRegistryAuth() => new RegistryAuth(Name, PAT, RegistryUrl).GetAuth();
+    public override string GetRegistryAuth() => new RegistryAuth(Name, PAT, RegistryUrl).GetAuth();
 }
 
-public class AWSRegistry : IRegistryConfiguration
+[method: JsonConstructor]
+public class AWSRegistry(string accessKey, bool authenticationRequired, string secretAccessKey, string region) : RegistryConfigurationBase
 {
-    public string RegistryUrl => string.Empty;
+    public override string RegistryUrl => string.Empty;
     /// <summary>
     /// If true, the credential bellow should be specified in order to connect to a private AWS registry
     /// </summary>
-    [JsonInclude]
-    public bool AuthenticationRequired { get; private set; }
-    [JsonInclude]
-    public string AccessKey { get; private set; }
-    [JsonInclude]
-    public string SecretAccessKey { get; private set; }
-    [JsonInclude]
-    public string Region { get; private set; }
+    public bool AuthenticationRequired { get; } = authenticationRequired;
+    public string AccessKey { get; } = accessKey;
+    public string SecretAccessKey { get; } = secretAccessKey;
+    public string Region { get; } = region;
 
     public static AWSRegistry Create(bool authenticationRequired, string accessKey, string secretAccessKey, string region)
-        => new()
-        {
-            AuthenticationRequired = authenticationRequired,
-            AccessKey = accessKey,
-            SecretAccessKey = secretAccessKey,
-            Region = region
-        };
+        => new (accessKey, authenticationRequired, secretAccessKey, region);
+
+    public override string GetRegistryAuth()
+    {
+        throw new NotImplementedException();
+    }
 }
 
-public class GitlabRegistry : IRegistryConfiguration
+[method: JsonConstructor]
+public class GitlabRegistry(string userName, string pat, string instanceUrl) : RegistryConfigurationBase
 {
-    public string RegistryUrl => string.Empty;
-    [JsonInclude]
-    public string UserName { get; private set; }
-    [JsonInclude]
-    public string PAT { get; private set; }
-    [JsonInclude]
-    public string InstanceUrl { get; private set; }
+    public override string RegistryUrl => string.Empty;
+    public string UserName { get; } = userName;
+    public string PAT { get; } = pat;
+    public string InstanceUrl { get; } = instanceUrl;
 
     public static GitlabRegistry Create(string userName, string PAT, string instanceUrl) 
-        => new ()
-        {
-            UserName = userName,
-            PAT = PAT,
-            InstanceUrl = instanceUrl
-        };
+        => new (userName, PAT, instanceUrl);
+
+    public override string GetRegistryAuth()
+    {
+        throw new NotImplementedException();
+    }
 }
-
-
 
 internal sealed record RegistryAuth(string Username, string Password, string Serveraddress)
 {
     internal string GetAuth()
-        => Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new RegistryAuth(Username, Password, Serveraddress))));
+        => Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new RegistryAuth(Username, Password, Serveraddress), typeof(RegistryAuth), RegistryAuthContext.Default)));
 }
+
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
+[JsonSerializable(typeof(RegistryAuth))]
+internal partial class RegistryAuthContext : JsonSerializerContext
+{
+}
+

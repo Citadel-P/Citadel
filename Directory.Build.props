@@ -6,7 +6,8 @@
   </PropertyGroup>
 	
 	<PropertyGroup>
-		<IsPackable>false</IsPackable>
+		<PublishTrimmed>true</PublishTrimmed>
+		<ImplicitUsings>enable</ImplicitUsings>
 		<TargetFramework>net9.0</TargetFramework>
 		<RepositoryType>git</RepositoryType>
 		<RepositoryUrl>https://github.com/Citadel-P/Citadel.Agent</RepositoryUrl>

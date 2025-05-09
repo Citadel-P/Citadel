@@ -1,13 +1,14 @@
-using Hosting;
-using WebApi;
 using Application;
-using Infrastructure;
-using WebApi.Helpers;
-using Application.Models;
-using Microsoft.AspNetCore.Http.Json;
-using Hosting.OpenApi;
 using Application.Configs;
+using Application.Models;
+using Hosting;
+using Hosting.Common;
+using Hosting.OpenApi;
+using Infrastructure;
+using Infrastructure.EntityFramework.Configurations;
 using Infrastructure.TaskJobs;
+using Microsoft.AspNetCore.Http.Json;
+using WebApi;
 
 CitadelWebApplicationBuilder.Create(args, new CitadelWebApplicationOptions()
 {
@@ -22,7 +23,7 @@ void WithServices(WebApplicationBuilder builder)
     builder.Services
         .RegisterWebApiModule(builder.Configuration)
         .RegisterApplicationModule()
-        .RegisterInfrastructureModule(builder.Configuration)
+        .RegisterInfrastructureModule()
         .AddHealthChecks();
 
     AddIOptionsFromConfiguration(builder.Services, builder.Configuration);
@@ -42,13 +43,15 @@ void Configure(WebApplication app)
     }
 
     app.UseWebApiModule();
-    app.MapHealthChecks("/health", HealthCheckOptionsHelper.GetHealthCheckOptions());
+    app.MapHealthChecks("/health", HealthCheck.GetHealthCheckOptions());
 }
 
 void AdditionalJsonOptions(JsonOptions options)
 {
     options.SerializerOptions.TypeInfoResolverChain.Add(ApplicationJsonContext.Default);
     options.SerializerOptions.TypeInfoResolverChain.Add(ProblemJsonContext.Default);
+    options.SerializerOptions.TypeInfoResolverChain.Add(RegistryJsonContext.Default);
+    options.SerializerOptions.Converters.AddGenericEnumConverters();
 }
 
 static IServiceCollection AddIOptionsFromConfiguration(IServiceCollection services, IConfiguration configuration)

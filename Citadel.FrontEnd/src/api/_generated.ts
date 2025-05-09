@@ -717,40 +717,42 @@ export type IRegistryConfiguration = BaseIRegistryConfiguration &
 export interface IRegistryConfigurationAWSRegistry {
   $type?: 'AWS';
   registryUrl?: string | null;
-  authenticationRequired?: boolean;
-  accessKey?: string | null;
-  secretAccessKey?: string | null;
-  region?: string | null;
+  authenticationRequired: boolean;
+  accessKey: string | null;
+  secretAccessKey: string | null;
+  region: string | null;
 }
 
 export interface IRegistryConfigurationAzureRegistry {
   $type?: 'Azure';
   registryUrl?: string | null;
-  userName?: string | null;
-  password?: string | null;
+  userName: string | null;
+  password: string | null;
 }
 
 export interface IRegistryConfigurationDockerHubRegistry {
   $type?: 'DockerHub';
   registryUrl?: string | null;
+  /** @default null */
   userName?: string | null;
+  /** @default null */
   pat?: string | null;
 }
 
 export interface IRegistryConfigurationGitHubRegistry {
   $type?: 'GitHub';
   registryUrl?: string | null;
-  name?: string | null;
-  type?: 'Organization' | 'User' | null;
-  pat?: string | null;
+  name: string | null;
+  type: 'Organization' | 'User' | null;
+  pat: string | null;
 }
 
 export interface IRegistryConfigurationGitlabRegistry {
   $type?: 'Gitlab';
   registryUrl?: string | null;
-  userName?: string | null;
-  pat?: string | null;
-  instanceUrl?: string | null;
+  userName: string | null;
+  pat: string | null;
+  instanceUrl: string | null;
 }
 
 export type JSONErrorReply = {
@@ -2181,6 +2183,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      */
     imagesGetDockerHubPublicImages: (
       query?: {
+        /** @default null */
         imageName?: string;
       },
       params: RequestParams = {},

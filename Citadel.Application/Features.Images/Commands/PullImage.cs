@@ -55,7 +55,7 @@ internal sealed class PullImageHandler(IGrpcClientFactory clientFactory, Applica
         }
     }
 
-    private static PullImageMessage CreatePullImageRequest(PullImage command, IRegistryConfiguration registryCfg)
+    private static PullImageMessage CreatePullImageRequest(PullImage command, RegistryConfigurationBase registryCfg)
     {
         var request = new PullImageMessage();
 

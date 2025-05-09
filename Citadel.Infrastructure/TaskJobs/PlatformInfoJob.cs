@@ -6,25 +6,47 @@ using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Quartz;
+using Microsoft.Extensions.Options;
 
 namespace Infrastructure.TaskJobs;
 
-[DisallowConcurrentExecution]
 internal class PlatformInfoJob(
     IGrpcClientFactory clientFactory,
-    ApplicationDbContext dbContext,
-    ILogger<PlatformInfoJob> logger,
-    IPlatformHubDispatcher platformHub) : IJob
+    IServiceProvider serviceProvider,
+    IOptions<JobConfiguration> options,
+    ILogger<PlatformInfoJob> logger) : BackgroundService
 {
-    public static readonly JobKey JobKey = new(nameof(PlatformInfoJob), "SystemInfo");
-   
-    public async ValueTask Execute(IJobExecutionContext context)
+    private readonly JobConfiguration jobConfiguration = options.Value;
+
+    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var scope = serviceProvider.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                var platformHub = scope.ServiceProvider.GetRequiredService<IPlatformHubDispatcher>();
+                await RunJob(dbContext, platformHub, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Unhandled exception in PlatformInfoJob");
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(jobConfiguration.SystemInfoInterval), cancellationToken);
+        }
+    }
+
+
+    public async Task RunJob(ApplicationDbContext dbContext, IPlatformHubDispatcher platformHub, CancellationToken cancellationToken)
     {
         var platforms = await dbContext.Platforms
             .OrderByDescending(s => s.Name)
-            .ToArrayAsync(context.CancellationToken);
+            .ToArrayAsync(cancellationToken);
 
         if (platforms.Length == 0) return;
 
@@ -32,14 +54,14 @@ internal class PlatformInfoJob(
 
         foreach (var platform in platforms)
         {
-            await ProcessPlatform(platform, context.CancellationToken);
+            await ProcessPlatform(dbContext, platform, cancellationToken);
         }
 
-        await dbContext.SaveChangesAsync(context.CancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
         await platformHub.PushPlatformsUpdates(platforms);
     }
 
-    private async Task ProcessPlatform(Platform platform, CancellationToken ct)
+    private async Task ProcessPlatform(ApplicationDbContext dbContext, Platform platform, CancellationToken ct)
     {
         var client = clientFactory.GetPlatformClient(platform.Address);
 

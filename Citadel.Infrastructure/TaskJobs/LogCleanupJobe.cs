@@ -1,14 +1,31 @@
 ﻿using Hosting.Common;
-using Quartz;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.TaskJobs
 {
-    internal class LogCleanupJob : IJob
+    internal class LogCleanupJob(ILogger<ContainersInfoJob> logger) : BackgroundService
     {
         private const int RetentionDays = 10;
 
-        public static readonly JobKey JobKey = new(nameof(LogCleanupJob));
-        public ValueTask Execute(IJobExecutionContext context)
+        protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    await RunJob(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Unhandled exception in {Message}", ex.Message);
+                }
+
+                await Task.Delay(TimeSpan.FromHours(24), cancellationToken);
+            }
+        }
+
+        public Task RunJob(CancellationToken cancellationToken)
         {
             try
             {
@@ -24,14 +41,14 @@ namespace Infrastructure.TaskJobs
                     }
                 }
 
-                Console.WriteLine($"Log cleanup completed. Deleted files older than {RetentionDays} days.");
+                logger.LogInformation("Log cleanup completed. Deleted files older than {RetentionDays} days.", RetentionDays);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Log cleanup failed: {ex.Message}");
+                logger.LogError(ex, "Log cleanup failed: {Message}", ex.Message);
             }
 
-            return ValueTask.CompletedTask;
+            return Task.CompletedTask;
         }
     }
 }

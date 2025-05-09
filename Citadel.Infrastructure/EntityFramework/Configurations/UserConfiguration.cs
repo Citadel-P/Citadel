@@ -1,5 +1,4 @@
 ﻿using Infrastructure.Entities.Identity;
-using Infrastructure.EntityFramework.JoiningTables;
 using Infrastructure.EntityFramework.Seed;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;

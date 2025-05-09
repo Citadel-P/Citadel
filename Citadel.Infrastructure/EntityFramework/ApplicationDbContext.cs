@@ -1,6 +1,6 @@
 ﻿using Infrastructure.Entities;
 using Infrastructure.Entities.Identity;
-using Infrastructure.EntityFramework.JoiningTables;
+using Infrastructure.EntityFramework.Configurations;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.EntityFramework;
@@ -25,7 +25,22 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ApplyConfigurationsFromAssembly(GetType().Assembly);
+        modelBuilder.Ignore<ContainerPort>();
+        modelBuilder.Ignore<RegistryConfigurationBase>();
+        // modelBuilder.ApplyConfigurationsFromAssembly(GetType().Assembly); // breaks in trimming mode
+        modelBuilder.ApplyConfiguration(new ContainerInfoConfiguration());
+        modelBuilder.ApplyConfiguration(new ContainerStatConfiguration());
+        modelBuilder.ApplyConfiguration(new PermissionConfiguration());
+        modelBuilder.ApplyConfiguration(new PlatformConfiguration());
+        modelBuilder.ApplyConfiguration(new PlatformStatConfiguration());
+        modelBuilder.ApplyConfiguration(new RegistryConfiguration());
+        modelBuilder.ApplyConfiguration(new RoleConfiguration());
+        modelBuilder.ApplyConfiguration(new SwarmInfoConfiguration());
+        modelBuilder.ApplyConfiguration(new SwarmPeerConfiguration());
+        modelBuilder.ApplyConfiguration(new TeamConfiguration());
+        modelBuilder.ApplyConfiguration(new UserConfiguration());
+        modelBuilder.ApplyConfiguration(new UserTeamConfiguration());
+
     }
 
 }

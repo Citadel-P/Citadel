@@ -1,16 +1,19 @@
-﻿using System.Reflection;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using DbUp;
+using Hosting.Common;
 using Infrastructure.DockerHub;
 using Infrastructure.EntityFramework;
 using Infrastructure.GithubCr;
+using Infrastructure.HttpClients.Serializer;
 using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
 using Infrastructure.TaskJobs;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Refit;
-using Hosting.Common;
 
 namespace Infrastructure;
 
@@ -19,18 +22,18 @@ namespace Infrastructure;
 /// </summary>
 public static class InfrastructureModule
 {
+    private static readonly RefitSettings refitSettings = new() { ContentSerializer = new STJSourceGeneratorSerializer() };
     /// <summary>
     /// Registers the infrastructure module services and configurations.
     /// </summary>
     /// <param name="services">The service collection.</param>
-    /// <param name="configuration">The configuration.</param>
     /// <returns>The updated service collection.</returns>
-    public static IServiceCollection RegisterInfrastructureModule(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection RegisterInfrastructureModule(this IServiceCollection services)
         => services
             .InitializeDb()
             .AddGrpcClients()
             .AddHttpClients()
-            .AddTaskJobs(configuration);
+            .AddBackgroundTasks();
 
     /// <summary>
     /// Adds gRPC clients to the service collection.
@@ -42,6 +45,17 @@ public static class InfrastructureModule
             .AddSingleton<IGrpcClientFactory, GrpcClientFactory>()
             .AddGrpc().Services;
 
+    private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)
+    {
+        services
+            .AddHostedService<ContainersInfoJob>()
+            .AddHostedService<PlatformInfoJob>()
+            .AddHostedService<DaemonEventJob>()
+            .AddHostedService<LogCleanupJob>();
+        services.AddSingleton<IDaemonEventJob, DaemonEventJob>();
+        return services;
+    }
+
     /// <summary>
     /// Adds HTTP clients to the service collection.
     /// </summary>
@@ -49,10 +63,10 @@ public static class InfrastructureModule
     /// <returns>The updated service collection.</returns>
     private static IServiceCollection AddHttpClients(this IServiceCollection services)
         => services
-            .AddRefitClient<IDockerHubApi>()
+            .AddRefitClient<IDockerHubApi>(refitSettings)
                 .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://hub.docker.com"))
             .Services
-            .AddRefitClient<IGithubCrApi>()
+            .AddRefitClient<IGithubCrApi>(refitSettings)
                 .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://api.github.com"))
             .Services;
 
@@ -65,6 +79,7 @@ public static class InfrastructureModule
     {
         EnsureDatabaseFileExists();
         PerformDatabaseUpgrade();
+        EFTrimmingPreserver.PreserveEFCoreTypes();
 
         return services.AddDbContextPool<ApplicationDbContext>(c =>
         {
@@ -98,4 +113,10 @@ public static class InfrastructureModule
             throw new Exception(result.Error.Message, result.Error);
         }
     }
+}
+
+public static class EFTrimmingPreserver
+{
+    [DynamicDependency(DynamicallyAccessedMemberTypes.PublicConstructors, typeof(EntryCurrentValueComparer<Guid>))]
+    public static void PreserveEFCoreTypes() { }
 }

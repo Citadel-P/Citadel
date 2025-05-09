@@ -1,156 +1,126 @@
-﻿using Google.Protobuf.WellKnownTypes;
+﻿using System.Collections.Concurrent;
 using Grpc.Core;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Quartz;
 
 namespace Infrastructure.TaskJobs;
 
-internal class DaemonEventJob(
-    ApplicationDbContext dbContext,
-    ISchedulerFactory schedulerFactory,
-    ILogger<DaemonEventJob> logger) : IJob
+public interface IDaemonEventJob
 {
-    public static readonly JobKey JobKey = new(nameof(DaemonEventJob), "DaemonEvent");
+    void StartMonitoringPlatform(PlatformData platform, CancellationToken cancelationToken);
+    void StopMonitoringPlatform(string address);
+}
 
-    public async ValueTask Execute(IJobExecutionContext context)
+public sealed class DaemonEventJob(
+    IServiceScopeFactory scopeFactory,
+    IGrpcClientFactory clientFactory,
+    ILogger<DaemonEventJob> logger) : BackgroundService, IDaemonEventJob
+{
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var scheduler = await schedulerFactory.GetScheduler(context.CancellationToken);
-        var platforms = await dbContext.Platforms.AsNoTracking().Select(s => new PlatformData(s.Address, s.Id)).ToListAsync(context.CancellationToken);
-        if (platforms.Count == 0) return;
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var platforms = await dbContext.Platforms.AsNoTracking()
+            .Select(p => new PlatformData(p.Address, p.Id))
+            .ToListAsync(stoppingToken);
 
         foreach (var platform in platforms)
         {
-            await scheduler.EnqueueStreamDaemonEventJob(platform, logger, context.CancellationToken);
+            StartMonitoringPlatform(platform, stoppingToken);
         }
     }
-}
 
-internal class StreamDaemonEventJob(IGrpcClientFactory clientFactory, ApplicationDbContext dbContext, ILogger<StreamDaemonEventJob> logger,
-    IContainerHubDispatcher containerHub) : IJob
-{
-    private static readonly HashSet<string> ContainerEventNames = ["create", "destroy", "stop", "start", "pause", "restart"];
-
-    public async ValueTask Execute(IJobExecutionContext context)
-    {    
-        try
+    public void StartMonitoringPlatform(PlatformData platform, CancellationToken cancelationToken)
+    {
+        if (runningStreams.ContainsKey(platform.Address))
         {
-            if (!Guid.TryParse(context.MergedJobDataMap.GetString("platformId"), out var platformId) || platformId == Guid.Empty)
-            {
-                logger.LogError("No PlatformId has been set in job params");
-                return;
-            }
-            var address = context.MergedJobDataMap.GetString("address");
-            var client = clientFactory.GetContainerClient(address);
+            logger.LogWarning("Stream for {Address} is already running.", platform.Address);
+            return;
+        }
 
-            using var call = client.StreamDaemonEvent(new Empty(), cancellationToken: context.CancellationToken);
-            await foreach (var reply in call.ResponseStream.ReadAllAsync(context.CancellationToken))
-            {
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancelationToken);
+        runningStreams[platform.Address] = cts;
 
-                if (reply.EventMessageType == Agent.Server.Containers.EventMessageType.Container)
+        _ = Task.Run(() => MonitorStream(platform, cts.Token), cts.Token);
+    }
+
+    public void StopMonitoringPlatform(string address)
+    {
+        if (runningStreams.TryRemove(address, out var cts))
+        {
+            logger.LogInformation("Aborting stream for {Address}", address);
+            cts.Cancel();
+        }
+    }
+
+    private async Task MonitorStream(PlatformData platform, CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var scope = scopeFactory.CreateAsyncScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                var containerHub = scope.ServiceProvider.GetRequiredService<IContainerHubDispatcher>();
+
+                var client = clientFactory.GetContainerClient(platform.Address);
+                using var call = client.StreamDaemonEvent(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
+
+                await foreach (var reply in call.ResponseStream.ReadAllAsync(cancellationToken))
                 {
-                    var containerInfo = reply.Container.Map(platformId, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                    if (reply.EventMessageType != Agent.Server.Containers.EventMessageType.Container)
+                        continue;
 
-                    if (reply.Action == "create")
+                    var containerInfo = reply.Container.Map(platform.PlatformId, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+
+                    switch (reply.Action)
                     {
-                        dbContext.ContainersInfo.Add(containerInfo);
-                    }
-                    else if (reply.Action == "destroy")
-                    {
-                        var existing = await dbContext.ContainersInfo.FirstOrDefaultAsync(s => s.ContainerId == reply.ContainerId, context.CancellationToken);
-                        dbContext.ContainersInfo.Remove(existing);
-                    }
-                    else
-                    {
-                        var existing = await dbContext.ContainersInfo.FirstOrDefaultAsync(s => s.ContainerId == reply.ContainerId, context.CancellationToken);
-                        if (existing != null)
-                        {
-                            var state = (reply.Action) switch
+                        case "create":
+                            dbContext.ContainersInfo.Add(containerInfo);
+                            break;
+                        case "destroy":
+                            var existingDestroy = await dbContext.ContainersInfo.FirstOrDefaultAsync(c => c.ContainerId == reply.ContainerId, cancellationToken);
+                            if (existingDestroy != null) dbContext.ContainersInfo.Remove(existingDestroy);
+                            break;
+                        default:
+                            var existing = await dbContext.ContainersInfo.FirstOrDefaultAsync(c => c.ContainerId == reply.ContainerId, cancellationToken);
+                            if (existing != null)
                             {
-                                "stop" => "exited",
-                                "start" => "running",
-                                "pause" => "paused",
-                                "restart" => "restarting",
-                                _ => throw new NotImplementedException()
-                            };
-                            existing.PartialUpdate(state: containerInfo.State, status: containerInfo.Status);
-                        }
+                                var state = reply.Action switch
+                                {
+                                    "stop" => "exited",
+                                    "start" => "running",
+                                    "pause" => "paused",
+                                    "restart" => "restarting",
+                                    _ => throw new NotImplementedException()
+                                };
+                                existing.PartialUpdate(state: containerInfo.State, status: containerInfo.Status);
+                            }
+                            break;
                     }
 
-                    await dbContext.SaveChangesAsync(context.CancellationToken);
+                    await dbContext.SaveChangesAsync(cancellationToken);
                     await containerHub.SendContainerEvent(containerInfo, reply.Action);
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            if (ex is RpcException rpc && rpc.Status.StatusCode == StatusCode.Cancelled) {
-                // In case the job was canceled
-                logger.LogInformation("Job was canceled");
-                return;
-            }
-            logger.LogError(ex, "An exception occurred while streaming daemon events");
-            await RescheduleJob(context);
-        }
-    }
-
-    private static async Task RescheduleJob(IJobExecutionContext context)
-    {
-        var oldTrigger = context.Trigger;
-        var newTrigger = TriggerBuilder.Create()
-            .ForJob(context.JobDetail)
-            .WithIdentity($"{oldTrigger.Key.Name}-retry", oldTrigger.Key.Group)
-            .StartAt(DateTimeOffset.UtcNow.AddSeconds(10))
-            .Build();
-        await context.Scheduler.ScheduleJob(newTrigger);
-    }
-}
-
-public static class StreamDaemonEventJobExtension
-{
-    public static JobKey GetJobKey(string address) => new(address, "StreamDaemonEvent");
-
-    public static async Task EnqueueStreamDaemonEventJob(this IScheduler scheduler, PlatformData platformData, ILogger logger, CancellationToken cancellationToken)
-    {
-        var jobKey = GetJobKey(platformData.Address);
-        try
-        {
-            if (!await scheduler.CheckExists(jobKey, cancellationToken))
+            catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)
             {
-                var job = JobBuilder.Create<StreamDaemonEventJob>()
-                                            .WithIdentity(jobKey)
-                                            .UsingJobData("address", platformData.Address)
-                                            .UsingJobData("platformId", platformData.PlatformId.ToString())
-                                            .Build();
-
-                var trigger = TriggerBuilder.Create()
-                                .ForJob(job)
-                                .WithSimpleSchedule()
-                                .StartNow()
-                                .Build();
-
-                await scheduler.ScheduleJob(job, trigger, cancellationToken);
-                logger.LogInformation("Job {JobKey} has been scheduled", jobKey);
-
+                logger.LogInformation("Stream for {Address} was cancelled.", platform.Address);
+                break;
             }
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "{Message}", ex.Message);
-        }
-    }
-
-    public static async Task AbortStreamDaemonEventJob(this IScheduler scheduler, string address, ILogger logger, CancellationToken cancellationToken)
-    {
-        var jobKey = GetJobKey(address);
-        if (await scheduler.CheckExists(jobKey, cancellationToken))
-        {
-            await scheduler.Interrupt(GetJobKey(address), cancellationToken);
-            logger.LogInformation("Job {JobKey} has been aborted", jobKey);
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error while monitoring {Address}, retrying in 10s...", platform.Address);
+                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+            }
         }
     }
 }
-
 public record PlatformData(string Address, Guid PlatformId);

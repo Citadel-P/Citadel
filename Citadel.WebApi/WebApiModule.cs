@@ -2,10 +2,12 @@
 using System.Text.Json.Serialization;
 using Hosting.Common.Converters;
 using Hosting.OpenApi;
+using Infrastructure;
 using Infrastructure.Services.Abstractions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
 using WebApi.Hubs;
@@ -126,9 +128,17 @@ internal static class WebApiModule
         {
             c.PayloadSerializerOptions.TypeInfoResolverChain.Add(SignalRSerializeContext.Default);
             c.PayloadSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-            c.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter());
             c.PayloadSerializerOptions.Converters.Add(new DatetimeOffsetConverter());
             c.PayloadSerializerOptions.Converters.Add(new DatetimeConverter());
+            c.PayloadSerializerOptions.Converters.AddGenericEnumConverters();
         });
+    }
+
+    internal static void AddGenericEnumConverters(this IList<JsonConverter> converters)
+    {
+        converters.Add(new JsonStringEnumConverter<PlatformStatus>());
+        converters.Add(new JsonStringEnumConverter<RegistryDiscriminator>());
+        converters.Add(new JsonStringEnumConverter<GhcrAccountType>());
+        converters.Add(new JsonStringEnumConverter<ContainerStateStatus>());
     }
 }

@@ -1,20 +1,21 @@
-﻿using Infrastructure.Entities;
-using Infrastructure;
-using LightResults;
-using Mediator;
+﻿using System.Text.Json.Serialization;
 using FluentValidation;
 using Hosting.Common;
-using Infrastructure.DockerHub;
-using Infrastructure.EntityFramework;
-using Infrastructure.GithubCr;
-using Microsoft.EntityFrameworkCore;
 using Hosting.Common.ErrorTypes;
-
 using Hosting.Common.Merge;
+using Infrastructure;
+using Infrastructure.DockerHub;
+using Infrastructure.Entities;
+using Infrastructure.EntityFramework;
+using Infrastructure.EntityFramework.Configurations;
+using Infrastructure.GithubCr;
+using LightResults;
+using Mediator;
+using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Registries.Commands;
 
-public sealed record PatchRegistry(Guid Id, RegistryDiscriminator Discriminator, string Name, string Url, IRegistryConfiguration Configuration) : ICommand<Result<Registry>>
+public sealed record PatchRegistry(Guid Id, RegistryDiscriminator Discriminator, string Name, string Url, RegistryConfigurationBase Configuration) : ICommand<Result<Registry>>
 {
     internal sealed class PatchRegistryRequestValidator : AbstractValidator<PatchRegistry>
     {
@@ -120,7 +121,7 @@ internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubAp
             }
         }
 
-        var patchRegistry = MergeExtensions.Merge(registry, command);
+        var patchRegistry = MergeExtensions.Merge(registry, command, RegistryJsonContext.Default.Registry, PatchRegistryJsonContext.Default.PatchRegistry);
         if (patchRegistry.Configuration is DockerHubRegistry cfg)
         {
             var (canConnect, errorMessage) = await cfg.CanConnect(dockerHub, cancellationToken);
@@ -143,4 +144,9 @@ internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubAp
 
         return registry;
     }
+}
+
+[JsonSerializable(typeof(PatchRegistry))]
+internal partial class PatchRegistryJsonContext : JsonSerializerContext
+{
 }

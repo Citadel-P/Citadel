@@ -6,36 +6,57 @@ using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Quartz;
+using Microsoft.Extensions.Options;
 
 namespace Infrastructure.TaskJobs;
 
-[DisallowConcurrentExecution]
 internal class ContainersInfoJob(
-    ApplicationDbContext dbContext,
     IGrpcClientFactory clientFactory,
+    IServiceProvider serviceProvider,
     ILogger<ContainersInfoJob> logger,
-    IContainerHubDispatcher containerHub) : IJob
+    IOptions<JobConfiguration> options) : BackgroundService
 {
-    public static readonly JobKey JobKey = new(nameof(ContainersInfoJob), "Containers");
-    
-    public async ValueTask Execute(IJobExecutionContext context)
+    private readonly JobConfiguration jobConfiguration = options.Value;
+
+    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var scope = serviceProvider.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                var containerHub = scope.ServiceProvider.GetRequiredService<IContainerHubDispatcher>();
+                await RunJob(dbContext, containerHub, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Unhandled exception in ContainersInfoJob");
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(jobConfiguration.ContainersInfoInterval), cancellationToken);
+        }
+    }
+
+    public async Task RunJob(ApplicationDbContext dbContext, IContainerHubDispatcher containerHub, CancellationToken cancellationToken)
     {
         var platforms = await dbContext.Platforms
             .FromSqlRaw("SELECT Id, Address, Status FROM Platforms").AsNoTracking()
             .Select(s => new PlatformData(s.Id, s.Address, s.Status))
-            .ToArrayAsync(context.CancellationToken);
+            .ToArrayAsync(cancellationToken);
 
         if (platforms.Length == 0) return;
 
         foreach (var platform in platforms)
         {
-            await ProcessPlatform(platform, context.CancellationToken);
+            await ProcessPlatform(dbContext, containerHub, platform, cancellationToken);
         }
     }
 
-    private async Task ProcessPlatform(PlatformData platform, CancellationToken ct)
+    private async Task ProcessPlatform(ApplicationDbContext dbContext, IContainerHubDispatcher containerHub, PlatformData platform, CancellationToken ct)
     {
         try
         {
@@ -46,7 +67,7 @@ internal class ContainersInfoJob(
 
             if (platform.Status == PlatformStatus.Online)
             {
-                await SyncContainers(platform, containers, ct);
+                await SyncContainers(dbContext, platform, containers, ct);
             }
             else
             {
@@ -68,7 +89,7 @@ internal class ContainersInfoJob(
         }
     }
 
-    private async Task SyncContainers(PlatformData platform, Dictionary<string, ContainerInfo> containers, CancellationToken ct)
+    private async Task SyncContainers(ApplicationDbContext dbContext, PlatformData platform, Dictionary<string, ContainerInfo> containers, CancellationToken ct)
     {
         var client = clientFactory.GetContainerClient(platform.Address);
         var response = await client.ListContainersAsync(new ContainersListMessage { All = true }, cancellationToken: ct);

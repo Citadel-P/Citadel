@@ -16,7 +16,11 @@ internal sealed class GetAllRegistriesHandler(ApplicationDbContext dbContext) : 
         {
             Registry.DefaultRegistry()
         };
-        registries.AddRange(await dbContext.Registries.AsNoTracking().ToListAsync(cancellationToken));
+        var result = await dbContext.Registries.AsNoTracking().ToListAsync(cancellationToken);
+        if (result.Count != 0)
+        {
+            registries.AddRange(result);
+        }
         return registries.OrderByDescending(s => s.Created).ToList();
     }
 }

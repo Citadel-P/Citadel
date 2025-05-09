@@ -18,8 +18,15 @@ internal sealed class GetDockerHubPublicImagesHandler(IDockerHubApi dockerHub) :
         
         if (string.IsNullOrEmpty(query.ImageName))
         {
-            using FileStream openStream = File.OpenRead(Constants.DefaultImagesDefinitionsPath);
-            return await JsonSerializer.DeserializeAsync(openStream, DockerHubPublicImageContext.Default.ListDockerHubImageModel, cancellationToken);
+            try
+            {
+                using FileStream openStream = File.OpenRead(Constants.DefaultImagesDefinitionsPath);
+                return await JsonSerializer.DeserializeAsync(openStream, DockerHubPublicImageContext.Default.ListDockerHubImageModel, cancellationToken);
+            }
+            catch (JsonException ex)
+            {
+                return Result.Failure<IEnumerable<DockerHubImageModel>>(new InternalServerError(ex.Message));
+            }
         }
         else
         {

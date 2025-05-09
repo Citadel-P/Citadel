@@ -12,13 +12,12 @@
 	  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 	</PackageReference>
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.9.0" />
-	<PackageReference Include="Quartz.AspNetCore" Version="4.0.0-preview-20250418-1045" />
   </ItemGroup>
 
   <ItemGroup>
 	<EmbeddedResource Include="Migrations\*.sql" /> <!--for dbup-->
   </ItemGroup>
-
+	
   <ItemGroup>
 	  <ProjectReference Include="..\Citadel.Contracts\Citadel.Hosting.Common\Citadel.Hosting.Common.csproj" />
   </ItemGroup>
@@ -34,9 +33,6 @@
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\Common\platforms.proto" GrpcServices="None" Link="Protos\Common\platforms.proto" />
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\Common\containers.proto" GrpcServices="None" Link="Protos\Common\containers.proto" />
    </ItemGroup>
-
-   <ItemGroup>
-     <Folder Include="Migrations\" />
-   </ItemGroup>
+	
 
 </Project>

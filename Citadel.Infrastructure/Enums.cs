@@ -35,7 +35,7 @@ public enum AppPermission
     DeleteVolumes,
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[JsonConverter(typeof(JsonStringEnumConverter<PlatformStatus>))]
 public enum PlatformStatus
 {
     [JsonStringEnumMemberName("Offline")]
@@ -44,7 +44,7 @@ public enum PlatformStatus
     Online
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[JsonConverter(typeof(JsonStringEnumConverter<RegistryDiscriminator>))]
 public enum RegistryDiscriminator
 {
     [JsonStringEnumMemberName("DockerHub")] 
@@ -59,7 +59,7 @@ public enum RegistryDiscriminator
     GitHub
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[JsonConverter(typeof(JsonStringEnumConverter<GhcrAccountType>))]
 public enum GhcrAccountType
 {
     [JsonStringEnumMemberName("Organization")]
@@ -68,7 +68,7 @@ public enum GhcrAccountType
     User
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[JsonConverter(typeof(JsonStringEnumConverter<ContainerStateStatus>))]
 public enum ContainerStateStatus
 {
     [JsonStringEnumMemberName("Unknown")]

@@ -81,18 +81,18 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
   // Automatically refresh the token before it expires
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
-
     if (isAuthenticated && accessToken && !isRefreshing.current) {
       const result = parseJwt(accessToken);
 
       if (result?.exp) {
         const currentTime = Math.floor(Date.now() / 1000);
         const timeToExpire = (result.exp - currentTime) * 1000 - 10 * 1000; // Refresh 10 seconds before expiration
-        timer = setTimeout(() => {
-          isRefreshing.current = true;  
-          refetchAccessToken().finally(() => {
-            isRefreshing.current = false;
-          });
+        timer = setTimeout(
+          () => {
+            isRefreshing.current = true;
+            refetchAccessToken().finally(() => {
+              isRefreshing.current = false;
+            });
           },
           Math.max(0, timeToExpire),
         );

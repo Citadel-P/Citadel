@@ -1,4 +1,4 @@
-﻿using Infrastructure.EntityFramework.JoiningTables;
+﻿using Infrastructure.Entities.Identity;
 using Infrastructure.EntityFramework.Seed;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -9,6 +9,8 @@ internal sealed class UserTeamConfiguration : IEntityTypeConfiguration<UserTeam>
 {
     public void Configure(EntityTypeBuilder<UserTeam> builder)
     {
+        builder.HasKey(e => new { e.UserId, e.TeamId });
+
         builder.HasData(DbSeed.UsersTeams);
     }
 }

@@ -12,7 +12,7 @@ using Hosting.Common;
 
 namespace Application.Features.Registries.Commands;
 
-public sealed record CreateRegistry(string Name, string Url, RegistryDiscriminator Discriminator, IRegistryConfiguration Configuration) : ICommand<Result<Registry>>
+public sealed record CreateRegistry(string Name, string Url, RegistryDiscriminator Discriminator, RegistryConfigurationBase Configuration) : ICommand<Result<Registry>>
 {
     internal sealed class CreateRegistryRequestValidator : AbstractValidator<CreateRegistry>
     {

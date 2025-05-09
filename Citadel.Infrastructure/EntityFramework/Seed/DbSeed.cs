@@ -1,5 +1,4 @@
 ﻿using Infrastructure.Entities.Identity;
-using Infrastructure.EntityFramework.JoiningTables;
 
 namespace Infrastructure.EntityFramework.Seed;
 
@@ -89,8 +88,8 @@ internal static class DbSeed
 
     public static UserTeam[] UsersTeams =
     [
-        new() { UserId = Users[0].Id, TeamId = Teams[0].Id },
-        new() { UserId = Users[1].Id, TeamId = Teams[1].Id },
-        new() { UserId = Users[2].Id, TeamId = Teams[2].Id }
+        UserTeam.Create(Users[0].Id, Teams[0].Id),
+        UserTeam.Create(Users[1].Id, Teams[1].Id),
+        UserTeam.Create(Users[2].Id, Teams[2].Id)
     ];
 }

@@ -1,6 +1,5 @@
 import { Images as LucidImages } from 'lucide-react';
 import { useContextSelector } from 'use-context-selector';
-import { AlertMessage } from '@/components/ui/alert-message';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router';
@@ -8,7 +7,6 @@ import { AppContext } from '@/AppProvider';
 import ExternalRepositories from './ExternalRepositories';
 import LocalImagesTable from './LocalImagesTable';
 import { ActionBar } from './ActionBar';
-import { PlatformStatus } from '@/api/_generated';
 import Loader from '@/components/ui/loader';
 import { SearchField } from '@/components/ui/SearchField';
 import { ImagesContext } from './ImagesProvider';
@@ -17,7 +15,6 @@ const Images = () => {
   const navigate = useNavigate();
   const route = useContextSelector(AppContext, (v) => v?.route);
   const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
-  const platformStatus = useContextSelector(AppContext, (v) => v?.currentPlatform?.status);
   const isLoading = useContextSelector(AppContext, (v) => v?.isLoading);
   const onSearch = useContextSelector(ImagesContext, (v) => v?.onSearch)!;
 
@@ -64,14 +61,6 @@ const Images = () => {
             </div>
             {currentTab == 'local' && <SearchField onSearch={onSearch} />}
           </div>
-
-          {/* Warning Message */}
-          {platformStatus === PlatformStatus.Offline && (
-            <AlertMessage type="warning" hasTitle={true}>
-              This platform is not connected. Please try to update or reconnect the platform.
-            </AlertMessage>
-          )}
-
           {/* Tabs */}
           <Tabs value={currentTab} onValueChange={onValueChange}>
             <TabsList className="w-full justify-start bg-muted/20 rounded-sm">

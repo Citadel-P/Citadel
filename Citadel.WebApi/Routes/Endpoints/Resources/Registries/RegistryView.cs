@@ -3,7 +3,7 @@ using Infrastructure.Entities;
 
 namespace WebApi.Routes.Endpoints.Resources.Registries;
 
-public sealed record RegistryView(Guid Id, string Name, string Url, RegistryDiscriminator Discriminator, DateTime Created, IRegistryConfiguration Configuration)
+public sealed record RegistryView(Guid Id, string Name, string Url, RegistryDiscriminator Discriminator, DateTime Created, RegistryConfigurationBase Configuration)
 {
     /// <summary>
     /// Default registry can't be edited or deleted

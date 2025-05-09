@@ -12,7 +12,6 @@ using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Quartz;
 
 namespace Application.Features.Platforms.Commands;
 
@@ -33,7 +32,7 @@ public sealed record UpsertPlatform(Guid? Id, string Name, string Address) : ICo
 
 internal class UpsertPlatformHandler(
     IGrpcClientFactory clientFactory,
-    ISchedulerFactory schedulerFactory,
+    IDaemonEventJob daemonEventJob,
     ApplicationDbContext dbContext,
     ILogger<UpsertPlatformHandler> logger)
     : ICommandHandler<UpsertPlatform, Result<Platform>>
@@ -110,7 +109,7 @@ internal class UpsertPlatformHandler(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // Enqueue job
-        await EnqueueTaskJob(new PlatformData(platform.Address, platform.Id), cancellationToken: cancellationToken);
+        EnqueueTaskJob(new PlatformData(platform.Address, platform.Id), cancellationToken: cancellationToken);
 
         logger.LogInformation("A new platform has been added, id = {PlatformId}", platform.Id);
         return Result.Success(platform);
@@ -150,20 +149,19 @@ internal class UpsertPlatformHandler(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // Re-queue job
-        await EnqueueTaskJob(new PlatformData(platform.Address, platform.Id), oldPlatformAddress, cancellationToken);
+        EnqueueTaskJob(new PlatformData(platform.Address, platform.Id), oldPlatformAddress, cancellationToken);
 
         logger.LogInformation("The platform with id = {PlatformId} has been updated", platform.Id);
         return Result.Success(platform);
     }
 
-    private async Task EnqueueTaskJob(PlatformData platformData, string oldAddress = null, CancellationToken cancellationToken = default)
+    private void EnqueueTaskJob(PlatformData platformData, string oldAddress = null, CancellationToken cancellationToken = default)
     {
-        var scheduler = await schedulerFactory.GetScheduler(cancellationToken);
         if (!string.IsNullOrEmpty(oldAddress))
         {
-            await scheduler.AbortStreamDaemonEventJob(oldAddress, logger, cancellationToken);
+            daemonEventJob.StopMonitoringPlatform(oldAddress);
         }
-        await scheduler.EnqueueStreamDaemonEventJob(platformData, logger, cancellationToken);
+        daemonEventJob.StartMonitoringPlatform(platformData, cancellationToken);
     }
 
 }

@@ -1,8 +1,9 @@
 ﻿using System.Text.Json;
-using Hosting.Common;
+using System.Text.Json.Serialization;
 using Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Infrastructure.EntityFramework.Configurations;
 
@@ -26,8 +27,22 @@ internal sealed class RegistryConfiguration : IEntityTypeConfiguration<Registry>
                                                 v => v.ToString(),
                                                 v => Enum.Parse<RegistryDiscriminator>(v));
 
-        builder.Property(p => p.Configuration).HasConversion(
-                                                v => JsonSerializer.Serialize(v, Helpers.CommonJsonOptions),
-                                                v => JsonSerializer.Deserialize<IRegistryConfiguration>(v, Helpers.CommonJsonOptions));
+        builder.Property(p => p.Configuration).HasColumnType("TEXT")
+            .HasConversion(
+                v => JsonSerializer.Serialize(v, RegistryJsonContext.Default.RegistryConfigurationBase),
+                v => JsonSerializer.Deserialize(v, RegistryJsonContext.Default.RegistryConfigurationBase));
+
     }
+}
+
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
+[JsonSerializable(typeof(Registry))]
+[JsonSerializable(typeof(AWSRegistry))]
+[JsonSerializable(typeof(AzureRegistry))]
+[JsonSerializable(typeof(GitlabRegistry))]
+[JsonSerializable(typeof(DockerHubRegistry))]
+[JsonSerializable(typeof(GitHubRegistry))]
+[JsonSerializable(typeof(RegistryConfigurationBase))]
+public partial class RegistryJsonContext : JsonSerializerContext
+{
 }

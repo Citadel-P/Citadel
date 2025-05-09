@@ -81,7 +81,8 @@
                 "$ref": "#/components/schemas/LoginRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -489,7 +490,8 @@
                 "$ref": "#/components/schemas/StreamLogsRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -580,7 +582,8 @@
                 }
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -661,7 +664,8 @@
                 }
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -742,7 +746,8 @@
                 }
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -823,7 +828,8 @@
                 }
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -904,7 +910,8 @@
                 }
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -982,7 +989,8 @@
                 "$ref": "#/components/schemas/DeleteContainersRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -1134,7 +1142,8 @@
                 "$ref": "#/components/schemas/PutPlatformRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -1724,7 +1733,8 @@
                 }
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -1825,7 +1835,8 @@
                 }
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -1898,7 +1909,8 @@
                 "$ref": "#/components/schemas/DeleteRegistriesInput"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -2387,7 +2399,8 @@
             "name": "imageName",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "default": null
             }
           }
         ],
@@ -2562,7 +2575,8 @@
                 "$ref": "#/components/schemas/PullImageRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -2640,7 +2654,8 @@
                 "$ref": "#/components/schemas/DeleteImagesRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -2940,7 +2955,8 @@
                 "$ref": "#/components/schemas/CreateNetworkInput"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -3023,7 +3039,8 @@
                 "$ref": "#/components/schemas/DeleteNetworksInput"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -3308,7 +3325,8 @@
                 "$ref": "#/components/schemas/DeleteVolumesInput"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -3384,7 +3402,8 @@
                 "$ref": "#/components/schemas/CreateVolumeInput"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "500": {
@@ -5950,6 +5969,12 @@
         }
       },
       "IRegistryConfigurationAWSRegistry": {
+        "required": [
+          "authenticationRequired",
+          "accessKey",
+          "secretAccessKey",
+          "region"
+        ],
         "properties": {
           "$type": {
             "enum": [
@@ -5979,6 +6004,10 @@
         }
       },
       "IRegistryConfigurationAzureRegistry": {
+        "required": [
+          "userName",
+          "password"
+        ],
         "properties": {
           "$type": {
             "enum": [
@@ -6014,15 +6043,22 @@
           },
           "userName": {
             "type": "string",
+            "default": null,
             "nullable": true
           },
           "pat": {
             "type": "string",
+            "default": null,
             "nullable": true
           }
         }
       },
       "IRegistryConfigurationGitHubRegistry": {
+        "required": [
+          "name",
+          "type",
+          "pat"
+        ],
         "properties": {
           "$type": {
             "enum": [
@@ -6053,6 +6089,11 @@
         }
       },
       "IRegistryConfigurationGitlabRegistry": {
+        "required": [
+          "userName",
+          "pat",
+          "instanceUrl"
+        ],
         "properties": {
           "$type": {
             "enum": [

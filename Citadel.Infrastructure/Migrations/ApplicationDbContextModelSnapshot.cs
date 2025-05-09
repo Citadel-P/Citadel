@@ -39,6 +39,9 @@ namespace Infrastructure.Migrations
                     b.Property<Guid>("PlatformId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Ports")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Stack")
                         .HasColumnType("TEXT");
 
@@ -115,315 +118,315 @@ namespace Infrastructure.Migrations
                     b.HasData(
                         new
                         {
-                            Id = new Guid("01968397-20e1-70c5-892b-ef4f871506bd"),
+                            Id = new Guid("0196b1e0-492b-7585-b815-32e824a89b33"),
                             PermissionCode = 1,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-782b-a657-33d489003914"),
+                            Id = new Guid("0196b1e0-492b-71ee-81d6-79e231bb8f6f"),
                             PermissionCode = 2,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7d43-951e-24a7f5d5fb65"),
+                            Id = new Guid("0196b1e0-492b-71e3-9341-fb5bdd5fc539"),
                             PermissionCode = 3,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7b81-86ea-5cbe6b42f7b8"),
+                            Id = new Guid("0196b1e0-492b-7415-be6f-99f83b24c145"),
                             PermissionCode = 4,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-78ef-aa95-963dd4cd7409"),
+                            Id = new Guid("0196b1e0-492b-70d2-b54c-1772d4405564"),
                             PermissionCode = 5,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-720e-8af7-fdbfc39c5c62"),
+                            Id = new Guid("0196b1e0-492b-78a6-89d1-e0e18555f533"),
                             PermissionCode = 6,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7e8c-8ba8-c87f58218a7b"),
+                            Id = new Guid("0196b1e0-492b-7d9d-8c84-11fc2cb82a89"),
                             PermissionCode = 7,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-738d-a232-335814efec6d"),
+                            Id = new Guid("0196b1e0-492b-7814-9760-710c2afaa026"),
                             PermissionCode = 8,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-754f-84a8-bcc1e310ea9e"),
+                            Id = new Guid("0196b1e0-492b-7a98-8f09-169a65e58599"),
                             PermissionCode = 9,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7db9-9d60-8c574eab49b9"),
+                            Id = new Guid("0196b1e0-492b-7969-807e-b296e8ccc6a4"),
                             PermissionCode = 10,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7761-987c-b26ee9f21dd9"),
+                            Id = new Guid("0196b1e0-492b-7db5-bae1-9c0d7854e530"),
                             PermissionCode = 11,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-709b-bd47-0b8166ecf686"),
+                            Id = new Guid("0196b1e0-492b-795f-80a9-daaaa92b0073"),
                             PermissionCode = 12,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7797-9522-09da5270fef8"),
+                            Id = new Guid("0196b1e0-492b-75a4-a02c-4fa4fca755ee"),
                             PermissionCode = 13,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7326-b0ef-4611b5727c7f"),
+                            Id = new Guid("0196b1e0-492b-7626-8981-3935f25c1a08"),
                             PermissionCode = 14,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7951-8ad3-b89889f890e0"),
+                            Id = new Guid("0196b1e0-492b-7216-b4fb-037f6797681f"),
                             PermissionCode = 15,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7fa4-8679-c49c558fe2ee"),
+                            Id = new Guid("0196b1e0-492b-7f5b-ab40-577a46f08869"),
                             PermissionCode = 16,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7329-8fa6-0b102d7a2507"),
+                            Id = new Guid("0196b1e0-492b-7471-be83-d10b94434bae"),
                             PermissionCode = 17,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7eeb-95ce-352efdc93abd"),
+                            Id = new Guid("0196b1e0-492b-73de-a204-72647423c2a6"),
                             PermissionCode = 18,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7055-9b45-c053caf66230"),
+                            Id = new Guid("0196b1e0-492b-78ec-9b2d-2076d73c6f51"),
                             PermissionCode = 19,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7dc3-8751-baefcae9d7fe"),
+                            Id = new Guid("0196b1e0-492b-70d3-9db0-3e2de176cdbe"),
                             PermissionCode = 20,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7624-9991-3bb45e2960dd"),
+                            Id = new Guid("0196b1e0-492b-7b91-a176-243bda513513"),
                             PermissionCode = 21,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-71e3-b1f8-a529651df6e1"),
+                            Id = new Guid("0196b1e0-492b-7738-9197-f8b9854f317a"),
                             PermissionCode = 22,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7da8-89d8-22936106577f"),
+                            Id = new Guid("0196b1e0-492b-78be-af08-868a0659f8e7"),
                             PermissionCode = 23,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7cbb-933e-a79690e3cb0d"),
+                            Id = new Guid("0196b1e0-492b-70b1-a22e-5638d8cacd75"),
                             PermissionCode = 24,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7f63-95a2-71a7fbdbcda6"),
+                            Id = new Guid("0196b1e0-492b-71d2-bdd4-b7359f539384"),
                             PermissionCode = 25,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7bc2-ae0f-7d582c3d670d"),
+                            Id = new Guid("0196b1e0-492b-7ed9-b15a-a080ecd69686"),
                             PermissionCode = 26,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-779b-a217-a6b7b9589844"),
+                            Id = new Guid("0196b1e0-492b-754f-8e24-83e3e6e703f4"),
                             PermissionCode = 27,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-74fa-aa81-31a5e5e3d327"),
+                            Id = new Guid("0196b1e0-492b-7a71-b140-c72779dcf1b0"),
                             PermissionCode = 28,
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7359-a096-f9e26bd136b6"),
+                            Id = new Guid("0196b1e0-492b-70bf-a199-7d1864a0b525"),
                             PermissionCode = 1,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-70c5-be1b-6c87796d12b5"),
+                            Id = new Guid("0196b1e0-492b-7347-a657-1714d2889aa4"),
                             PermissionCode = 5,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-77db-9e82-4efce9d44505"),
+                            Id = new Guid("0196b1e0-492b-704b-8b5d-4588441a02f3"),
                             PermissionCode = 9,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-71dc-aa7f-b46897fa667b"),
+                            Id = new Guid("0196b1e0-492b-7291-8994-92f17b0769ac"),
                             PermissionCode = 13,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-71e3-9cf0-f225dcffb977"),
+                            Id = new Guid("0196b1e0-492b-7e05-a019-766067b1824b"),
                             PermissionCode = 14,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7221-aa45-68b9514b36c6"),
+                            Id = new Guid("0196b1e0-492b-700d-9497-9371c945a1de"),
                             PermissionCode = 15,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-74f6-9db0-bc4dd2960510"),
+                            Id = new Guid("0196b1e0-492b-730a-8f7a-9a64a32d8735"),
                             PermissionCode = 16,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7a80-9fa3-b23e80513292"),
+                            Id = new Guid("0196b1e0-492b-7a60-b71b-8eea68d52d24"),
                             PermissionCode = 17,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7df6-82c2-3135354a918e"),
+                            Id = new Guid("0196b1e0-492b-7ff0-bced-7c61179fadb3"),
                             PermissionCode = 18,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7fae-b1a7-86cee69a959c"),
+                            Id = new Guid("0196b1e0-492b-73c9-b1d7-2a538f10e560"),
                             PermissionCode = 19,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7314-a253-c35f0ae4d117"),
+                            Id = new Guid("0196b1e0-492b-77aa-b692-4c05dcf61ffa"),
                             PermissionCode = 20,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7ea0-bb14-21dd58b3b73f"),
+                            Id = new Guid("0196b1e0-492b-70fb-8ca0-9d3eb60f3461"),
                             PermissionCode = 21,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-782e-b20f-fc9b67c5c167"),
+                            Id = new Guid("0196b1e0-492b-726c-a739-46f3a66d5466"),
                             PermissionCode = 22,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7398-a54a-fcf8769d4be8"),
+                            Id = new Guid("0196b1e0-492b-75a4-b2de-ef47a39a4cc1"),
                             PermissionCode = 24,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-717b-af0e-8822f6729da2"),
+                            Id = new Guid("0196b1e0-492b-726e-9fc3-fd5034e731c7"),
                             PermissionCode = 26,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7a66-ba32-c1fa2938b6c1"),
+                            Id = new Guid("0196b1e0-492b-7f39-b85f-ab3482c67d0f"),
                             PermissionCode = 27,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-734a-bdeb-8158e83d5732"),
+                            Id = new Guid("0196b1e0-492b-7f15-ab8a-f67df34e6a2f"),
                             PermissionCode = 28,
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-763a-8ab0-cf36a8c77ba8"),
+                            Id = new Guid("0196b1e0-492b-7b3f-93b5-84a008729064"),
                             PermissionCode = 1,
-                            RoleId = new Guid("01968397-20e1-7549-bd8f-2783ebd4a988")
+                            RoleId = new Guid("0196b1e0-492b-7f03-91bc-4a84099966e3")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7fb9-a066-d14799ee0131"),
+                            Id = new Guid("0196b1e0-492b-75a2-94d4-be7421b0d246"),
                             PermissionCode = 5,
-                            RoleId = new Guid("01968397-20e1-7549-bd8f-2783ebd4a988")
+                            RoleId = new Guid("0196b1e0-492b-7f03-91bc-4a84099966e3")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-76eb-989f-a83a04a5d558"),
+                            Id = new Guid("0196b1e0-492b-703a-a18d-df37845d4a1a"),
                             PermissionCode = 9,
-                            RoleId = new Guid("01968397-20e1-7549-bd8f-2783ebd4a988")
+                            RoleId = new Guid("0196b1e0-492b-7f03-91bc-4a84099966e3")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-736b-bf4e-82375c3b3088"),
+                            Id = new Guid("0196b1e0-492b-736c-a524-d5f0721a14e6"),
                             PermissionCode = 13,
-                            RoleId = new Guid("01968397-20e1-7549-bd8f-2783ebd4a988")
+                            RoleId = new Guid("0196b1e0-492b-7f03-91bc-4a84099966e3")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-73fb-ac2d-160cd970793b"),
+                            Id = new Guid("0196b1e0-492b-7b60-9904-b8e036fa195f"),
                             PermissionCode = 17,
-                            RoleId = new Guid("01968397-20e1-7549-bd8f-2783ebd4a988")
+                            RoleId = new Guid("0196b1e0-492b-7f03-91bc-4a84099966e3")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-721f-b65c-9b2d5d2cffe5"),
+                            Id = new Guid("0196b1e0-492b-7711-a0d6-920a4124327b"),
                             PermissionCode = 21,
-                            RoleId = new Guid("01968397-20e1-7549-bd8f-2783ebd4a988")
+                            RoleId = new Guid("0196b1e0-492b-7f03-91bc-4a84099966e3")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7e03-88ef-22f9bad08236"),
+                            Id = new Guid("0196b1e0-492b-79ba-acf6-f95fa8e855f6"),
                             PermissionCode = 25,
-                            RoleId = new Guid("01968397-20e1-7549-bd8f-2783ebd4a988")
+                            RoleId = new Guid("0196b1e0-492b-7f03-91bc-4a84099966e3")
                         });
                 });
 
@@ -455,7 +458,7 @@ namespace Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
-                        .HasDefaultValue(new DateTime(2025, 4, 29, 22, 7, 21, 972, DateTimeKind.Utc).AddTicks(5232))
+                        .HasDefaultValue(new DateTime(2025, 5, 8, 21, 49, 48, 237, DateTimeKind.Utc).AddTicks(9522))
                         .HasColumnName("CreatedAt");
 
                     b.Property<string>("Name")
@@ -467,7 +470,7 @@ namespace Infrastructure.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
-                        .HasDefaultValue(new DateTime(2025, 4, 29, 22, 7, 21, 974, DateTimeKind.Utc).AddTicks(3070))
+                        .HasDefaultValue(new DateTime(2025, 5, 8, 21, 49, 48, 239, DateTimeKind.Utc).AddTicks(4092))
                         .HasColumnName("UpdatedAt");
 
                     b.HasKey("Id");
@@ -477,22 +480,22 @@ namespace Infrastructure.Migrations
                     b.HasData(
                         new
                         {
-                            Id = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966"),
-                            CreatedAt = new DateTime(2025, 4, 29, 22, 7, 21, 825, DateTimeKind.Utc).AddTicks(3257),
+                            Id = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5"),
+                            CreatedAt = new DateTime(2025, 5, 8, 21, 49, 48, 203, DateTimeKind.Utc).AddTicks(1097),
                             Name = "Administrator",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0"),
-                            CreatedAt = new DateTime(2025, 4, 29, 22, 7, 21, 825, DateTimeKind.Utc).AddTicks(3565),
+                            Id = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1"),
+                            CreatedAt = new DateTime(2025, 5, 8, 21, 49, 48, 203, DateTimeKind.Utc).AddTicks(1365),
                             Name = "Developer",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7549-bd8f-2783ebd4a988"),
-                            CreatedAt = new DateTime(2025, 4, 29, 22, 7, 21, 825, DateTimeKind.Utc).AddTicks(3568),
+                            Id = new Guid("0196b1e0-492b-7f03-91bc-4a84099966e3"),
+                            CreatedAt = new DateTime(2025, 5, 8, 21, 49, 48, 203, DateTimeKind.Utc).AddTicks(1368),
                             Name = "QA",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         });
@@ -521,21 +524,21 @@ namespace Infrastructure.Migrations
                     b.HasData(
                         new
                         {
-                            Id = new Guid("01968397-20e1-7023-948b-68d5b20307f6"),
+                            Id = new Guid("0196b1e0-492b-79ff-984d-62a33392544c"),
                             Name = "Admins",
-                            RoleId = new Guid("01968397-20e1-78f5-ba61-f6d18b58e966")
+                            RoleId = new Guid("0196b1e0-492b-7a8a-92f9-bc554a2558c5")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-7226-b60b-140d2e6e6d1c"),
+                            Id = new Guid("0196b1e0-492b-71ee-9a1a-022d58d8c8cc"),
                             Name = "Devs",
-                            RoleId = new Guid("01968397-20e1-768b-ba1e-75aca20fd1e0")
+                            RoleId = new Guid("0196b1e0-492b-76de-befb-6a62e6c3cbb1")
                         },
                         new
                         {
-                            Id = new Guid("01968397-20e1-72a2-91d9-3cddf518d12a"),
+                            Id = new Guid("0196b1e0-492b-7e5d-9395-10e838cb3622"),
                             Name = "QA",
-                            RoleId = new Guid("01968397-20e1-7549-bd8f-2783ebd4a988")
+                            RoleId = new Guid("0196b1e0-492b-7f03-91bc-4a84099966e3")
                         });
                 });
 
@@ -549,7 +552,7 @@ namespace Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
-                        .HasDefaultValue(new DateTime(2025, 4, 29, 22, 7, 21, 992, DateTimeKind.Utc).AddTicks(2321))
+                        .HasDefaultValue(new DateTime(2025, 5, 8, 21, 49, 48, 247, DateTimeKind.Utc).AddTicks(2411))
                         .HasColumnName("CreatedAt");
 
                     b.Property<string>("Email")
@@ -572,7 +575,7 @@ namespace Infrastructure.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
-                        .HasDefaultValue(new DateTime(2025, 4, 29, 22, 7, 21, 992, DateTimeKind.Utc).AddTicks(3244))
+                        .HasDefaultValue(new DateTime(2025, 5, 8, 21, 49, 48, 247, DateTimeKind.Utc).AddTicks(3352))
                         .HasColumnName("UpdatedAt");
 
                     b.HasKey("Id");
@@ -586,30 +589,62 @@ namespace Infrastructure.Migrations
                     b.HasData(
                         new
                         {
-                            Id = new Guid("01968397-20e1-75ce-9292-2b1010dcd92c"),
-                            CreatedAt = new DateTime(2025, 4, 29, 22, 7, 21, 826, DateTimeKind.Utc).AddTicks(584),
+                            Id = new Guid("0196b1e0-492b-7ca4-8cde-26605ba867c0"),
+                            CreatedAt = new DateTime(2025, 5, 8, 21, 49, 48, 203, DateTimeKind.Utc).AddTicks(8175),
                             Email = "admin@admin.com",
                             Name = "admin",
-                            Password = "z3+rEL+8qBOywW3oL7ibQ1XzZeYenTfhqoQBDICpKUqqHiWg",
+                            Password = "UC6Q2farx8LScvyfNsHA99c8ZA7vItC4rfFHQYuN4Or00cry",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
-                            Id = new Guid("01968397-20ed-73e1-905f-dc138a2c0bde"),
-                            CreatedAt = new DateTime(2025, 4, 29, 22, 7, 21, 837, DateTimeKind.Utc).AddTicks(8537),
+                            Id = new Guid("0196b1e0-4936-79ea-941f-7666e1922dad"),
+                            CreatedAt = new DateTime(2025, 5, 8, 21, 49, 48, 214, DateTimeKind.Utc).AddTicks(8986),
                             Email = "dev@dev.com",
                             Name = "dev",
-                            Password = "6kQsexQTUZFZhmDTmCjL/y8D3SXPsULBd81ivyKZdVNbrnzz",
+                            Password = "CUro6w0VVGmrSwf1IXcneYi/1liBoSZxp4et9I5xkowrSuEM",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
-                            Id = new Guid("01968397-20f3-7ab4-b0b3-649133fac306"),
-                            CreatedAt = new DateTime(2025, 4, 29, 22, 7, 21, 843, DateTimeKind.Utc).AddTicks(9246),
+                            Id = new Guid("0196b1e0-493c-75c0-a56c-058af194621b"),
+                            CreatedAt = new DateTime(2025, 5, 8, 21, 49, 48, 220, DateTimeKind.Utc).AddTicks(1297),
                             Email = "qa@qa.com",
                             Name = "qa",
-                            Password = "GKgD3xbni671kItljE6VOEhjuprtOIHBIRdMRPd0OQBZABzI",
+                            Password = "dnby9q+gleI5kInorTiRNmBj3nx8Rv7+p84g/Oxu010CRnTT",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
+                        });
+                });
+
+            modelBuilder.Entity("Infrastructure.Entities.Identity.UserTeam", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TeamId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId", "TeamId");
+
+                    b.HasIndex("TeamId");
+
+                    b.ToTable("UsersTeams");
+
+                    b.HasData(
+                        new
+                        {
+                            UserId = new Guid("0196b1e0-492b-7ca4-8cde-26605ba867c0"),
+                            TeamId = new Guid("0196b1e0-492b-79ff-984d-62a33392544c")
+                        },
+                        new
+                        {
+                            UserId = new Guid("0196b1e0-4936-79ea-941f-7666e1922dad"),
+                            TeamId = new Guid("0196b1e0-492b-71ee-9a1a-022d58d8c8cc")
+                        },
+                        new
+                        {
+                            UserId = new Guid("0196b1e0-493c-75c0-a56c-058af194621b"),
+                            TeamId = new Guid("0196b1e0-492b-7e5d-9395-10e838cb3622")
                         });
                 });
 
@@ -830,38 +865,6 @@ namespace Infrastructure.Migrations
                     b.ToTable("SwarmsPeer", (string)null);
                 });
 
-            modelBuilder.Entity("Infrastructure.EntityFramework.JoiningTables.UserTeam", b =>
-                {
-                    b.Property<Guid>("TeamId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("TeamId", "UserId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("UsersTeams");
-
-                    b.HasData(
-                        new
-                        {
-                            TeamId = new Guid("01968397-20e1-7023-948b-68d5b20307f6"),
-                            UserId = new Guid("01968397-20e1-75ce-9292-2b1010dcd92c")
-                        },
-                        new
-                        {
-                            TeamId = new Guid("01968397-20e1-7226-b60b-140d2e6e6d1c"),
-                            UserId = new Guid("01968397-20ed-73e1-905f-dc138a2c0bde")
-                        },
-                        new
-                        {
-                            TeamId = new Guid("01968397-20e1-72a2-91d9-3cddf518d12a"),
-                            UserId = new Guid("01968397-20f3-7ab4-b0b3-649133fac306")
-                        });
-                });
-
             modelBuilder.Entity("Infrastructure.Entities.ContainerInfo", b =>
                 {
                     b.HasOne("Infrastructure.Entities.Platform", "Platform")
@@ -870,37 +873,7 @@ namespace Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.OwnsMany("Infrastructure.Entities.ContainerPort", "Ports", b1 =>
-                        {
-                            b1.Property<Guid>("ContainerInfoId")
-                                .HasColumnType("TEXT");
-
-                            b1.Property<int>("__synthesizedOrdinal")
-                                .ValueGeneratedOnAddOrUpdate()
-                                .HasColumnType("INTEGER");
-
-                            b1.Property<string>("IP")
-                                .HasColumnType("TEXT");
-
-                            b1.Property<int?>("PrivatePort")
-                                .HasColumnType("INTEGER");
-
-                            b1.Property<int?>("PublicPort")
-                                .HasColumnType("INTEGER");
-
-                            b1.HasKey("ContainerInfoId", "__synthesizedOrdinal");
-
-                            b1.ToTable("ContainersInfo");
-
-                            b1.ToJson("Ports");
-
-                            b1.WithOwner()
-                                .HasForeignKey("ContainerInfoId");
-                        });
-
                     b.Navigation("Platform");
-
-                    b.Navigation("Ports");
                 });
 
             modelBuilder.Entity("Infrastructure.Entities.ContainerStat", b =>
@@ -943,6 +916,25 @@ namespace Infrastructure.Migrations
                     b.Navigation("Role");
                 });
 
+            modelBuilder.Entity("Infrastructure.Entities.Identity.UserTeam", b =>
+                {
+                    b.HasOne("Infrastructure.Entities.Identity.Team", "Team")
+                        .WithMany("UserTeams")
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Infrastructure.Entities.Identity.User", "User")
+                        .WithMany("UserTeams")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Team");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Infrastructure.Entities.PlatformStat", b =>
                 {
                     b.HasOne("Infrastructure.Entities.Platform", null)
@@ -974,21 +966,6 @@ namespace Infrastructure.Migrations
                     b.Navigation("SwarmInfo");
                 });
 
-            modelBuilder.Entity("Infrastructure.EntityFramework.JoiningTables.UserTeam", b =>
-                {
-                    b.HasOne("Infrastructure.Entities.Identity.Team", null)
-                        .WithMany()
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Infrastructure.Entities.Identity.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("Infrastructure.Entities.ContainerInfo", b =>
                 {
                     b.Navigation("Stats");
@@ -999,9 +976,16 @@ namespace Infrastructure.Migrations
                     b.Navigation("Permissions");
                 });
 
+            modelBuilder.Entity("Infrastructure.Entities.Identity.Team", b =>
+                {
+                    b.Navigation("UserTeams");
+                });
+
             modelBuilder.Entity("Infrastructure.Entities.Identity.User", b =>
                 {
                     b.Navigation("RefreshTokens");
+
+                    b.Navigation("UserTeams");
                 });
 
             modelBuilder.Entity("Infrastructure.Entities.Platform", b =>

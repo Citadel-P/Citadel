@@ -3,7 +3,7 @@
 public class SwarmInfo
 {
     public Guid Id { get; private set; }
-    public Guid PlatformId { get; }
+    public Guid PlatformId { get; private set; }
     public string NodeID { get; private set; }
     public string NodeAddr { get; private set; }
     public string LocalNodeState { get; private set; }

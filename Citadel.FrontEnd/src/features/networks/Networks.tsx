@@ -1,9 +1,6 @@
 import { Network, Plus } from 'lucide-react';
 import { useContextSelector } from 'use-context-selector';
-import { AppContext } from '@/AppProvider';
 import { SearchField } from '@/components/ui/SearchField';
-import { AlertMessage } from '@/components/ui/alert-message';
-import { PlatformStatus } from '@/api/_generated';
 import { NetworksContext } from './NetworksProvider';
 import NetworksTable from './NetworksTable';
 import { ActionBar } from './ActionBar';
@@ -12,7 +9,6 @@ import { useNavigate } from 'react-router';
 
 const Networks = () => {
   const navigate = useNavigate();
-  const platformStatus = useContextSelector(AppContext, (v) => v?.currentPlatform?.status);
   const onSearch = useContextSelector(NetworksContext, (v) => v?.onSearch)!;
 
   return (
@@ -38,13 +34,6 @@ const Networks = () => {
               </Button>
             </div>
           </div>
-
-          {/* Warning Message */}
-          {platformStatus === PlatformStatus.Offline && (
-            <AlertMessage type="warning" hasTitle={true}>
-              This platform is not connected. Please try to update or reconnect the platform.
-            </AlertMessage>
-          )}
           <NetworksTable />
         </div>
       </div>
