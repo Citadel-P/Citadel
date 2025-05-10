@@ -7,6 +7,7 @@
 	
 	<PropertyGroup>
 		<PublishTrimmed>true</PublishTrimmed>
+		<InvariantGlobalization>true</InvariantGlobalization>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<TargetFramework>net9.0</TargetFramework>
 		<RepositoryType>git</RepositoryType>

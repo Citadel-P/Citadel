@@ -4108,18 +4108,32 @@
           }
         }
       },
-      "ContainersInfoView": {
-        "required": [
-          "containers"
-        ],
+      "ContainerStatView": {
         "type": "object",
         "properties": {
-          "containers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ContainerInfoView"
-            },
-            "nullable": true
+          "memoryUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "cpuUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "memoryLimit": {
+            "type": "number",
+            "format": "double"
+          },
+          "rxBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "txBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -4219,32 +4233,18 @@
           }
         }
       },
-      "ContainerStatView": {
+      "ContainersInfoView": {
+        "required": [
+          "containers"
+        ],
         "type": "object",
         "properties": {
-          "memoryUsage": {
-            "type": "number",
-            "format": "double"
-          },
-          "cpuUsage": {
-            "type": "number",
-            "format": "double"
-          },
-          "memoryLimit": {
-            "type": "number",
-            "format": "double"
-          },
-          "rxBytes": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "txBytes": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "created": {
-            "type": "integer",
-            "format": "int64"
+          "containers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerInfoView"
+            },
+            "nullable": true
           }
         }
       },
@@ -5425,6 +5425,110 @@
           }
         }
       },
+      "IPAMConfigInput": {
+        "required": [
+          "subnet",
+          "ipRange",
+          "gateway"
+        ],
+        "type": "object",
+        "properties": {
+          "subnet": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipRange": {
+            "type": "string",
+            "nullable": true
+          },
+          "gateway": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "IPAMConfigView": {
+        "required": [
+          "subnet",
+          "gateway"
+        ],
+        "type": "object",
+        "properties": {
+          "subnet": {
+            "type": "string",
+            "nullable": true
+          },
+          "gateway": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipRange": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          }
+        }
+      },
+      "IPAMInput": {
+        "required": [
+          "driver"
+        ],
+        "type": "object",
+        "properties": {
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "config": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IPAMConfigInput"
+            },
+            "default": null,
+            "nullable": true
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": null,
+            "nullable": true
+          }
+        },
+        "default": null,
+        "nullable": true
+      },
+      "IPAMView": {
+        "required": [
+          "driver"
+        ],
+        "type": "object",
+        "properties": {
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "config": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IPAMConfigView"
+            },
+            "default": null,
+            "nullable": true
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": null,
+            "nullable": true
+          }
+        },
+        "default": null,
+        "nullable": true
+      },
       "ImageDataView": {
         "required": [
           "platform",
@@ -5455,21 +5559,6 @@
           "Inactive"
         ],
         "type": "string"
-      },
-      "ImagesView": {
-        "required": [
-          "images"
-        ],
-        "type": "object",
-        "properties": {
-          "images": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ImageView"
-            },
-            "nullable": true
-          }
-        }
       },
       "ImageView": {
         "required": [
@@ -5540,6 +5629,21 @@
           },
           "tag": {
             "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ImagesView": {
+        "required": [
+          "images"
+        ],
+        "type": "object",
+        "properties": {
+          "images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageView"
+            },
             "nullable": true
           }
         }
@@ -5829,110 +5933,6 @@
             "nullable": true
           }
         }
-      },
-      "IPAMConfigInput": {
-        "required": [
-          "subnet",
-          "ipRange",
-          "gateway"
-        ],
-        "type": "object",
-        "properties": {
-          "subnet": {
-            "type": "string",
-            "nullable": true
-          },
-          "ipRange": {
-            "type": "string",
-            "nullable": true
-          },
-          "gateway": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "IPAMConfigView": {
-        "required": [
-          "subnet",
-          "gateway"
-        ],
-        "type": "object",
-        "properties": {
-          "subnet": {
-            "type": "string",
-            "nullable": true
-          },
-          "gateway": {
-            "type": "string",
-            "nullable": true
-          },
-          "ipRange": {
-            "type": "string",
-            "default": null,
-            "nullable": true
-          }
-        }
-      },
-      "IPAMInput": {
-        "required": [
-          "driver"
-        ],
-        "type": "object",
-        "properties": {
-          "driver": {
-            "type": "string",
-            "nullable": true
-          },
-          "config": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/IPAMConfigInput"
-            },
-            "default": null,
-            "nullable": true
-          },
-          "options": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "default": null,
-            "nullable": true
-          }
-        },
-        "default": null,
-        "nullable": true
-      },
-      "IPAMView": {
-        "required": [
-          "driver"
-        ],
-        "type": "object",
-        "properties": {
-          "driver": {
-            "type": "string",
-            "nullable": true
-          },
-          "config": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/IPAMConfigView"
-            },
-            "default": null,
-            "nullable": true
-          },
-          "options": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "default": null,
-            "nullable": true
-          }
-        },
-        "default": null,
-        "nullable": true
       },
       "JSONErrorReply": {
         "type": "object",
@@ -6319,21 +6319,6 @@
         },
         "nullable": true
       },
-      "NetworksView": {
-        "required": [
-          "networks"
-        ],
-        "type": "object",
-        "properties": {
-          "networks": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NetworkView"
-            },
-            "nullable": true
-          }
-        }
-      },
       "NetworkView": {
         "required": [
           "name",
@@ -6421,6 +6406,21 @@
               "type": "string"
             },
             "default": null,
+            "nullable": true
+          }
+        }
+      },
+      "NetworksView": {
+        "required": [
+          "networks"
+        ],
+        "type": "object",
+        "properties": {
+          "networks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NetworkView"
+            },
             "nullable": true
           }
         }
@@ -6530,13 +6530,6 @@
         },
         "nullable": true
       },
-      "PlatformStatus": {
-        "enum": [
-          "Offline",
-          "Online"
-        ],
-        "type": "string"
-      },
       "PlatformStatView": {
         "type": "object",
         "properties": {
@@ -6562,20 +6555,12 @@
           }
         }
       },
-      "PlatformsView": {
-        "required": [
-          "platforms"
+      "PlatformStatus": {
+        "enum": [
+          "Offline",
+          "Online"
         ],
-        "type": "object",
-        "properties": {
-          "platforms": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlatformView2"
-            },
-            "nullable": true
-          }
-        }
+        "type": "string"
       },
       "PlatformView": {
         "required": [
@@ -6820,6 +6805,21 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PlatformStatView"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "PlatformsView": {
+        "required": [
+          "platforms"
+        ],
+        "type": "object",
+        "properties": {
+          "platforms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformView2"
             },
             "nullable": true
           }
@@ -7471,6 +7471,20 @@
         },
         "nullable": true
       },
+      "VolumVersionView": {
+        "required": [
+          "index"
+        ],
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
       "VolumeAccessModeView": {
         "required": [
           "scope",
@@ -7598,21 +7612,6 @@
         },
         "nullable": true
       },
-      "VolumesView": {
-        "required": [
-          "volumes"
-        ],
-        "type": "object",
-        "properties": {
-          "volumes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/VolumeView"
-            },
-            "nullable": true
-          }
-        }
-      },
       "VolumeView": {
         "required": [
           "id",
@@ -7677,19 +7676,20 @@
           }
         }
       },
-      "VolumVersionView": {
+      "VolumesView": {
         "required": [
-          "index"
+          "volumes"
         ],
         "type": "object",
         "properties": {
-          "index": {
-            "type": "integer",
-            "format": "int64",
+          "volumes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VolumeView"
+            },
             "nullable": true
           }
-        },
-        "nullable": true
+        }
       }
     },
     "securitySchemes": {

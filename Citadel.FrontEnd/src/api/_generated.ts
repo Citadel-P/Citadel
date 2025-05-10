@@ -183,8 +183,19 @@ export interface ContainerLogReply {
   log?: string | null;
 }
 
-export interface ContainersInfoView {
-  containers: ContainerInfoView[] | null;
+export interface ContainerStatView {
+  /** @format double */
+  memoryUsage?: number;
+  /** @format double */
+  cpuUsage?: number;
+  /** @format double */
+  memoryLimit?: number;
+  /** @format int64 */
+  rxBytes?: number;
+  /** @format int64 */
+  txBytes?: number;
+  /** @format int64 */
+  created?: number;
 }
 
 export type ContainerState = {
@@ -231,19 +242,8 @@ export interface ContainerStatsView {
   stats: ContainerStatView[] | null;
 }
 
-export interface ContainerStatView {
-  /** @format double */
-  memoryUsage?: number;
-  /** @format double */
-  cpuUsage?: number;
-  /** @format double */
-  memoryLimit?: number;
-  /** @format int64 */
-  rxBytes?: number;
-  /** @format int64 */
-  txBytes?: number;
-  /** @format int64 */
-  created?: number;
+export interface ContainersInfoView {
+  containers: ContainerInfoView[] | null;
 }
 
 export interface CreateNetworkInput {
@@ -575,6 +575,37 @@ export interface IImageRepositoryGitHubPackageResponse {
   htmlUrl?: string | null;
 }
 
+export interface IPAMConfigInput {
+  subnet: string | null;
+  ipRange: string | null;
+  gateway: string | null;
+}
+
+export interface IPAMConfigView {
+  subnet: string | null;
+  gateway: string | null;
+  /** @default null */
+  ipRange?: string | null;
+}
+
+/** @default null */
+export type IPAMInput = {
+  driver: string | null;
+  /** @default null */
+  config?: IPAMConfigInput[] | null;
+  /** @default null */
+  options?: Record<string, string>;
+};
+
+/** @default null */
+export type IPAMView = {
+  driver: string | null;
+  /** @default null */
+  config?: IPAMConfigView[] | null;
+  /** @default null */
+  options?: Record<string, string>;
+};
+
 export type ImageDataView = {
   platform: PlatformDescriptorView;
   containers: string[] | null;
@@ -584,10 +615,6 @@ export type ImageDataView = {
 export enum ImageStatus {
   Active = 'Active',
   Inactive = 'Inactive',
-}
-
-export interface ImagesView {
-  images: ImageView[] | null;
 }
 
 export interface ImageView {
@@ -607,6 +634,10 @@ export interface ImageView {
   labels: Record<string, string>;
   name?: string | null;
   tag?: string | null;
+}
+
+export interface ImagesView {
+  images: ImageView[] | null;
 }
 
 export interface InspectImageView {
@@ -673,37 +704,6 @@ export interface InspectVolumeView {
   status: Record<string, string>;
   options: Record<string, string>;
 }
-
-export interface IPAMConfigInput {
-  subnet: string | null;
-  ipRange: string | null;
-  gateway: string | null;
-}
-
-export interface IPAMConfigView {
-  subnet: string | null;
-  gateway: string | null;
-  /** @default null */
-  ipRange?: string | null;
-}
-
-/** @default null */
-export type IPAMInput = {
-  driver: string | null;
-  /** @default null */
-  config?: IPAMConfigInput[] | null;
-  /** @default null */
-  options?: Record<string, string>;
-};
-
-/** @default null */
-export type IPAMView = {
-  driver: string | null;
-  /** @default null */
-  config?: IPAMConfigView[] | null;
-  /** @default null */
-  options?: Record<string, string>;
-};
 
 export type JSONErrorReply = {
   /** @format int64 */
@@ -812,10 +812,6 @@ export type NetworkSettingsView = {
   networks: Record<string, EndpointSettingsView>;
 };
 
-export interface NetworksView {
-  networks: NetworkView[] | null;
-}
-
 export interface NetworkView {
   name: string | null;
   id: string | null;
@@ -836,6 +832,10 @@ export interface NetworkView {
   options?: Record<string, string>;
   /** @default null */
   labels?: Record<string, string>;
+}
+
+export interface NetworksView {
+  networks: NetworkView[] | null;
 }
 
 export type PackageVersionContainerMetadata = {
@@ -868,11 +868,6 @@ export type PlatformDescriptorView = {
   variant: string | null;
 };
 
-export enum PlatformStatus {
-  Offline = 'Offline',
-  Online = 'Online',
-}
-
 export interface PlatformStatView {
   /** @format double */
   memoryUsage?: number;
@@ -886,8 +881,9 @@ export interface PlatformStatView {
   txBytes?: number;
 }
 
-export interface PlatformsView {
-  platforms: PlatformView2[] | null;
+export enum PlatformStatus {
+  Offline = 'Offline',
+  Online = 'Online',
 }
 
 /** @default null */
@@ -961,6 +957,10 @@ export interface PlatformView2 {
   agentVersion: string | null;
   swarmInfo: SwarmInfoView;
   stats: PlatformStatView[] | null;
+}
+
+export interface PlatformsView {
+  platforms: PlatformView2[] | null;
 }
 
 export interface PortBinding {
@@ -1168,6 +1168,11 @@ export type UsageDataView = {
   refCount: number | null;
 };
 
+export type VolumVersionView = {
+  /** @format int64 */
+  index: number | null;
+};
+
 export type VolumeAccessModeView = {
   scope: VolumeScopeType;
   sharing: VolumeSharingType;
@@ -1212,10 +1217,6 @@ export type VolumeSpecView = {
   accessMode: VolumeAccessModeView;
 };
 
-export interface VolumesView {
-  volumes: VolumeView[] | null;
-}
-
 export interface VolumeView {
   id: string | null;
   driver: string | null;
@@ -1229,10 +1230,9 @@ export interface VolumeView {
   options: Record<string, string>;
 }
 
-export type VolumVersionView = {
-  /** @format int64 */
-  index: number | null;
-};
+export interface VolumesView {
+  volumes: VolumeView[] | null;
+}
 
 type BaseIImageRepository = object;
 
