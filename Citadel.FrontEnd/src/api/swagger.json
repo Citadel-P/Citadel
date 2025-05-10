@@ -4360,7 +4360,7 @@
             "$ref": "#/components/schemas/RegistryDiscriminator"
           },
           "configuration": {
-            "$ref": "#/components/schemas/IRegistryConfiguration"
+            "$ref": "#/components/schemas/RegistryConfigurationBase"
           }
         }
       },
@@ -4836,7 +4836,7 @@
           },
           "ipPrefixLen": {
             "type": "integer",
-            "format": "int32",
+            "format": "int64",
             "nullable": true
           },
           "iPv6Gateway": {
@@ -5934,191 +5934,6 @@
         "default": null,
         "nullable": true
       },
-      "IRegistryConfiguration": {
-        "required": [
-          "$type"
-        ],
-        "type": "object",
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/IRegistryConfigurationAWSRegistry"
-          },
-          {
-            "$ref": "#/components/schemas/IRegistryConfigurationAzureRegistry"
-          },
-          {
-            "$ref": "#/components/schemas/IRegistryConfigurationGitlabRegistry"
-          },
-          {
-            "$ref": "#/components/schemas/IRegistryConfigurationDockerHubRegistry"
-          },
-          {
-            "$ref": "#/components/schemas/IRegistryConfigurationGitHubRegistry"
-          }
-        ],
-        "nullable": true,
-        "discriminator": {
-          "propertyName": "$type",
-          "mapping": {
-            "AWS": "#/components/schemas/IRegistryConfigurationAWSRegistry",
-            "Azure": "#/components/schemas/IRegistryConfigurationAzureRegistry",
-            "Gitlab": "#/components/schemas/IRegistryConfigurationGitlabRegistry",
-            "DockerHub": "#/components/schemas/IRegistryConfigurationDockerHubRegistry",
-            "GitHub": "#/components/schemas/IRegistryConfigurationGitHubRegistry"
-          }
-        }
-      },
-      "IRegistryConfigurationAWSRegistry": {
-        "required": [
-          "authenticationRequired",
-          "accessKey",
-          "secretAccessKey",
-          "region"
-        ],
-        "properties": {
-          "$type": {
-            "enum": [
-              "AWS"
-            ],
-            "type": "string"
-          },
-          "registryUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "authenticationRequired": {
-            "type": "boolean"
-          },
-          "accessKey": {
-            "type": "string",
-            "nullable": true
-          },
-          "secretAccessKey": {
-            "type": "string",
-            "nullable": true
-          },
-          "region": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "IRegistryConfigurationAzureRegistry": {
-        "required": [
-          "userName",
-          "password"
-        ],
-        "properties": {
-          "$type": {
-            "enum": [
-              "Azure"
-            ],
-            "type": "string"
-          },
-          "registryUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "userName": {
-            "type": "string",
-            "nullable": true
-          },
-          "password": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "IRegistryConfigurationDockerHubRegistry": {
-        "properties": {
-          "$type": {
-            "enum": [
-              "DockerHub"
-            ],
-            "type": "string"
-          },
-          "registryUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "userName": {
-            "type": "string",
-            "default": null,
-            "nullable": true
-          },
-          "pat": {
-            "type": "string",
-            "default": null,
-            "nullable": true
-          }
-        }
-      },
-      "IRegistryConfigurationGitHubRegistry": {
-        "required": [
-          "name",
-          "type",
-          "pat"
-        ],
-        "properties": {
-          "$type": {
-            "enum": [
-              "GitHub"
-            ],
-            "type": "string"
-          },
-          "registryUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "name": {
-            "type": "string",
-            "nullable": true
-          },
-          "type": {
-            "enum": [
-              "Organization",
-              "User",
-              null
-            ],
-            "nullable": true
-          },
-          "pat": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "IRegistryConfigurationGitlabRegistry": {
-        "required": [
-          "userName",
-          "pat",
-          "instanceUrl"
-        ],
-        "properties": {
-          "$type": {
-            "enum": [
-              "Gitlab"
-            ],
-            "type": "string"
-          },
-          "registryUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "userName": {
-            "type": "string",
-            "nullable": true
-          },
-          "pat": {
-            "type": "string",
-            "nullable": true
-          },
-          "instanceUrl": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
       "JSONErrorReply": {
         "type": "object",
         "properties": {
@@ -6439,7 +6254,7 @@
           },
           "linkLocalIPv6PrefixLen": {
             "type": "integer",
-            "format": "int32",
+            "format": "int64",
             "nullable": true
           },
           "ports": {
@@ -6474,7 +6289,7 @@
           },
           "globalIPv6PrefixLen": {
             "type": "integer",
-            "format": "int32",
+            "format": "int64",
             "nullable": true
           },
           "ipAddress": {
@@ -6483,7 +6298,7 @@
           },
           "ipPrefixLen": {
             "type": "integer",
-            "format": "int32",
+            "format": "int64",
             "nullable": true
           },
           "iPv6Gateway": {
@@ -6658,7 +6473,7 @@
             "$ref": "#/components/schemas/RegistryDiscriminator"
           },
           "configuration": {
-            "$ref": "#/components/schemas/IRegistryConfiguration"
+            "$ref": "#/components/schemas/RegistryConfigurationBase"
           }
         }
       },
@@ -7220,6 +7035,191 @@
           }
         }
       },
+      "RegistryConfigurationBase": {
+        "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/RegistryConfigurationBaseAWSRegistry"
+          },
+          {
+            "$ref": "#/components/schemas/RegistryConfigurationBaseAzureRegistry"
+          },
+          {
+            "$ref": "#/components/schemas/RegistryConfigurationBaseGitlabRegistry"
+          },
+          {
+            "$ref": "#/components/schemas/RegistryConfigurationBaseDockerHubRegistry"
+          },
+          {
+            "$ref": "#/components/schemas/RegistryConfigurationBaseGitHubRegistry"
+          }
+        ],
+        "nullable": true,
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "AWS": "#/components/schemas/RegistryConfigurationBaseAWSRegistry",
+            "Azure": "#/components/schemas/RegistryConfigurationBaseAzureRegistry",
+            "Gitlab": "#/components/schemas/RegistryConfigurationBaseGitlabRegistry",
+            "DockerHub": "#/components/schemas/RegistryConfigurationBaseDockerHubRegistry",
+            "GitHub": "#/components/schemas/RegistryConfigurationBaseGitHubRegistry"
+          }
+        }
+      },
+      "RegistryConfigurationBaseAWSRegistry": {
+        "required": [
+          "authenticationRequired",
+          "accessKey",
+          "secretAccessKey",
+          "region"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "AWS"
+            ],
+            "type": "string"
+          },
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "authenticationRequired": {
+            "type": "boolean"
+          },
+          "accessKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "secretAccessKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "region": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "RegistryConfigurationBaseAzureRegistry": {
+        "required": [
+          "userName",
+          "password"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Azure"
+            ],
+            "type": "string"
+          },
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "userName": {
+            "type": "string",
+            "nullable": true
+          },
+          "password": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "RegistryConfigurationBaseDockerHubRegistry": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "DockerHub"
+            ],
+            "type": "string"
+          },
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "userName": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          },
+          "pat": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          }
+        }
+      },
+      "RegistryConfigurationBaseGitHubRegistry": {
+        "required": [
+          "name",
+          "type",
+          "pat"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "GitHub"
+            ],
+            "type": "string"
+          },
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "enum": [
+              "Organization",
+              "User",
+              null
+            ],
+            "nullable": true
+          },
+          "pat": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "RegistryConfigurationBaseGitlabRegistry": {
+        "required": [
+          "userName",
+          "pat",
+          "instanceUrl"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Gitlab"
+            ],
+            "type": "string"
+          },
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "userName": {
+            "type": "string",
+            "nullable": true
+          },
+          "pat": {
+            "type": "string",
+            "nullable": true
+          },
+          "instanceUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "RegistryDiscriminator": {
         "enum": [
           "DockerHub",
@@ -7261,7 +7261,7 @@
             "format": "date-time"
           },
           "configuration": {
-            "$ref": "#/components/schemas/IRegistryConfiguration"
+            "$ref": "#/components/schemas/RegistryConfigurationBase"
           },
           "isDefault": {
             "type": "boolean"

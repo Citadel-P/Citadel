@@ -29,7 +29,30 @@ public sealed record ContainerInspectView(
     ContainerConfig Config,
     NetworkSettingsView NetworkSettings)
 {
-    internal static ContainerInspectView Map(ContainerInspectReply containerInspect) 
-        => containerInspect.Map();
+    internal static ContainerInspectView Map(ContainerInspectReply containerInspect) => new(
+            Id: containerInspect.Id,
+            Created: containerInspect.Created,
+            Path: containerInspect.Path,
+            Args: [.. containerInspect.Args],
+            State: containerInspect.State,
+            Image: containerInspect.Image,
+            ResolvConfPath: containerInspect.ResolvConfPath,
+            HostnamePath: containerInspect.HostnamePath,
+            HostsPath: containerInspect.HostsPath,
+            LogPath: containerInspect.LogPath,
+            Name: containerInspect.Name,
+            RestartCount: containerInspect.RestartCount,
+            Driver: containerInspect.Driver,
+            Platform: containerInspect.Platform,
+            MountLabel: containerInspect.MountLabel,
+            ProcessLabel: containerInspect.ProcessLabel,
+            AppArmorProfile: containerInspect.AppArmorProfile,
+            ExecIDs: [.. containerInspect.ExecIDs],
+            HostConfig: containerInspect.HostConfig,
+            GraphDriver: containerInspect.GraphDriver,
+            SizeRw: containerInspect.SizeRw,
+            SizeRootFs: containerInspect.SizeRootFs,
+            Mounts: [.. containerInspect.Mounts],
+            Config: containerInspect.Config,
+            NetworkSettings: containerInspect.NetworkSettings.Map());
 }
-

@@ -274,7 +274,7 @@ export interface CreateRegistryInput {
   name: string | null;
   url: string | null;
   discriminator: RegistryDiscriminator;
-  configuration: IRegistryConfiguration;
+  configuration: RegistryConfigurationBase;
 }
 
 export interface CreateVolumeInput {
@@ -413,7 +413,7 @@ export interface EndpointSettingsView {
   endpointID: string | null;
   gateway: string | null;
   ipAddress: string | null;
-  /** @format int32 */
+  /** @format int64 */
   ipPrefixLen: number | null;
   iPv6Gateway: string | null;
   globalIPv6Address: string | null;
@@ -705,56 +705,6 @@ export type IPAMView = {
   options?: Record<string, string>;
 };
 
-export type IRegistryConfiguration = BaseIRegistryConfiguration &
-  (
-    | BaseIRegistryConfigurationTypeMapping<'AWS', IRegistryConfigurationAWSRegistry>
-    | BaseIRegistryConfigurationTypeMapping<'Azure', IRegistryConfigurationAzureRegistry>
-    | BaseIRegistryConfigurationTypeMapping<'Gitlab', IRegistryConfigurationGitlabRegistry>
-    | BaseIRegistryConfigurationTypeMapping<'DockerHub', IRegistryConfigurationDockerHubRegistry>
-    | BaseIRegistryConfigurationTypeMapping<'GitHub', IRegistryConfigurationGitHubRegistry>
-  );
-
-export interface IRegistryConfigurationAWSRegistry {
-  $type?: 'AWS';
-  registryUrl?: string | null;
-  authenticationRequired: boolean;
-  accessKey: string | null;
-  secretAccessKey: string | null;
-  region: string | null;
-}
-
-export interface IRegistryConfigurationAzureRegistry {
-  $type?: 'Azure';
-  registryUrl?: string | null;
-  userName: string | null;
-  password: string | null;
-}
-
-export interface IRegistryConfigurationDockerHubRegistry {
-  $type?: 'DockerHub';
-  registryUrl?: string | null;
-  /** @default null */
-  userName?: string | null;
-  /** @default null */
-  pat?: string | null;
-}
-
-export interface IRegistryConfigurationGitHubRegistry {
-  $type?: 'GitHub';
-  registryUrl?: string | null;
-  name: string | null;
-  type: 'Organization' | 'User' | null;
-  pat: string | null;
-}
-
-export interface IRegistryConfigurationGitlabRegistry {
-  $type?: 'Gitlab';
-  registryUrl?: string | null;
-  userName: string | null;
-  pat: string | null;
-  instanceUrl: string | null;
-}
-
 export type JSONErrorReply = {
   /** @format int64 */
   code?: number | null;
@@ -844,7 +794,7 @@ export type NetworkSettingsView = {
   sandboxID: string | null;
   hairpinMode: boolean | null;
   linkLocalIPv6Address: string | null;
-  /** @format int32 */
+  /** @format int64 */
   linkLocalIPv6PrefixLen: number | null;
   ports: MapFieldPortBindingView[] | null;
   sandboxKey: string | null;
@@ -852,10 +802,10 @@ export type NetworkSettingsView = {
   endpointID: string | null;
   gateway: string | null;
   globalIPv6Address: string | null;
-  /** @format int32 */
+  /** @format int64 */
   globalIPv6PrefixLen: number | null;
   ipAddress: string | null;
-  /** @format int32 */
+  /** @format int64 */
   ipPrefixLen: number | null;
   iPv6Gateway: string | null;
   macAddress: string | null;
@@ -902,7 +852,7 @@ export interface PatchRegistryInput {
   name: string | null;
   url: string | null;
   discriminator: RegistryDiscriminator;
-  configuration: IRegistryConfiguration;
+  configuration: RegistryConfigurationBase;
 }
 
 export interface PeerInfoView {
@@ -1080,6 +1030,56 @@ export interface RegistriesView {
   registries: RegistryView[] | null;
 }
 
+export type RegistryConfigurationBase = BaseRegistryConfigurationBase &
+  (
+    | BaseRegistryConfigurationBaseTypeMapping<'AWS', RegistryConfigurationBaseAWSRegistry>
+    | BaseRegistryConfigurationBaseTypeMapping<'Azure', RegistryConfigurationBaseAzureRegistry>
+    | BaseRegistryConfigurationBaseTypeMapping<'Gitlab', RegistryConfigurationBaseGitlabRegistry>
+    | BaseRegistryConfigurationBaseTypeMapping<'DockerHub', RegistryConfigurationBaseDockerHubRegistry>
+    | BaseRegistryConfigurationBaseTypeMapping<'GitHub', RegistryConfigurationBaseGitHubRegistry>
+  );
+
+export interface RegistryConfigurationBaseAWSRegistry {
+  $type?: 'AWS';
+  registryUrl?: string | null;
+  authenticationRequired: boolean;
+  accessKey: string | null;
+  secretAccessKey: string | null;
+  region: string | null;
+}
+
+export interface RegistryConfigurationBaseAzureRegistry {
+  $type?: 'Azure';
+  registryUrl?: string | null;
+  userName: string | null;
+  password: string | null;
+}
+
+export interface RegistryConfigurationBaseDockerHubRegistry {
+  $type?: 'DockerHub';
+  registryUrl?: string | null;
+  /** @default null */
+  userName?: string | null;
+  /** @default null */
+  pat?: string | null;
+}
+
+export interface RegistryConfigurationBaseGitHubRegistry {
+  $type?: 'GitHub';
+  registryUrl?: string | null;
+  name: string | null;
+  type: 'Organization' | 'User' | null;
+  pat: string | null;
+}
+
+export interface RegistryConfigurationBaseGitlabRegistry {
+  $type?: 'Gitlab';
+  registryUrl?: string | null;
+  userName: string | null;
+  pat: string | null;
+  instanceUrl: string | null;
+}
+
 export enum RegistryDiscriminator {
   DockerHub = 'DockerHub',
   Azure = 'Azure',
@@ -1096,7 +1096,7 @@ export interface RegistryView {
   discriminator: RegistryDiscriminator;
   /** @format date-time */
   created: string;
-  configuration: IRegistryConfiguration;
+  configuration: RegistryConfigurationBase;
   isDefault?: boolean;
 }
 
@@ -1240,9 +1240,9 @@ type BaseIImageRepositoryTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
-type BaseIRegistryConfiguration = object | null;
+type BaseRegistryConfigurationBase = object | null;
 
-type BaseIRegistryConfigurationTypeMapping<Key, Type> = {
+type BaseRegistryConfigurationBaseTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 

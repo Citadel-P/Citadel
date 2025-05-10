@@ -11,7 +11,7 @@ public record EndpointSettingsView(
         string EndpointID,
         string Gateway,
         string IPAddress,
-        int? IPPrefixLen,
+        long? IPPrefixLen,
         string IPv6Gateway,
         string GlobalIPv6Address,
         long? GlobalIPv6PrefixLen,

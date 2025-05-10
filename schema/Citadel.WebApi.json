@@ -4836,7 +4836,7 @@
           },
           "ipPrefixLen": {
             "type": "integer",
-            "format": "int32",
+            "format": "int64",
             "nullable": true
           },
           "iPv6Gateway": {
@@ -6254,7 +6254,7 @@
           },
           "linkLocalIPv6PrefixLen": {
             "type": "integer",
-            "format": "int32",
+            "format": "int64",
             "nullable": true
           },
           "ports": {
@@ -6289,7 +6289,7 @@
           },
           "globalIPv6PrefixLen": {
             "type": "integer",
-            "format": "int32",
+            "format": "int64",
             "nullable": true
           },
           "ipAddress": {
@@ -6298,7 +6298,7 @@
           },
           "ipPrefixLen": {
             "type": "integer",
-            "format": "int32",
+            "format": "int64",
             "nullable": true
           },
           "iPv6Gateway": {

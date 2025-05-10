@@ -107,9 +107,9 @@ internal class ContainersInfoJob(
             dbContext.ContainersInfo.RemoveRange(staleContainers);
         }
 
-        // Add or update containers, maybe only resize list for running containers
+        // Add or update containers
         var containerStats = containersMsg.Count > 0
-            ? new List<ContainerStat>(containersMsg.Count)
+            ? new List<ContainerStat>(containersMsg.Count(s => s.Value.State == ContainerStateType.Running))
             : null;
 
         foreach (var msg in containersMsg)
