@@ -43,12 +43,11 @@ internal class ContainersInfoJob(
 
     public async Task RunJob(ApplicationDbContext dbContext, IContainerHubDispatcher containerHub, CancellationToken cancellationToken)
     {
-        var platforms = await dbContext.Platforms
-            .FromSqlRaw("SELECT Id, Address, Status FROM Platforms").AsNoTracking()
-            .Select(s => new PlatformData(s.Id, s.Address, s.Status))
-            .ToArrayAsync(cancellationToken);
+        var platforms = await dbContext.Platforms.AsNoTracking()
+                 .Select(s => new PlatformData(s.Id, s.Address, s.Status))
+                 .ToListAsync(cancellationToken);
 
-        if (platforms.Length == 0) return;
+        if (platforms.Count == 0) return;
 
         foreach (var platform in platforms)
         {
@@ -60,10 +59,8 @@ internal class ContainersInfoJob(
     {
         try
         {
-            var containers = await dbContext.ContainersInfo
-                .Where(c => c.PlatformId == platform.Id)
-                .OrderByDescending(c => c.Created)
-                .ToDictionaryAsync(c => c.ContainerId, ct);
+            var containers = await dbContext.ContainersInfo.Where(c => c.PlatformId == platform.Id)
+                    .OrderByDescending(c => c.Created).ToDictionaryAsync(c => c.ContainerId, ct);
 
             if (platform.Status == PlatformStatus.Online)
             {
@@ -163,13 +160,13 @@ internal class ContainersInfoJob(
             stack: msg.Stack,
             ports: msg.Ports.Map());
     }
+}
 
-    private readonly struct PlatformData(Guid id, string address, PlatformStatus status)
-    {
-        public Guid Id { get; } = id;
-        public string Address { get; } = address;
-        public PlatformStatus Status { get; } = status;
-    }
+public readonly struct PlatformData(Guid Id, string Address, PlatformStatus Status)
+{
+    public Guid Id { get; } = Id;
+    public string Address { get; } = Address;
+    public PlatformStatus Status { get; } = Status;
 }
 
 public static class ContainerInfoMapper

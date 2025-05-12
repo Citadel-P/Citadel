@@ -109,7 +109,7 @@ internal class UpsertPlatformHandler(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // Enqueue job
-        EnqueueTaskJob(new PlatformData(platform.Address, platform.Id), cancellationToken: cancellationToken);
+        EnqueueTaskJob(new PlatformData (platform.Id, platform.Address, platform.Status), cancellationToken: cancellationToken);
 
         logger.LogInformation("A new platform has been added, id = {PlatformId}", platform.Id);
         return Result.Success(platform);
@@ -149,7 +149,7 @@ internal class UpsertPlatformHandler(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // Re-queue job
-        EnqueueTaskJob(new PlatformData(platform.Address, platform.Id), oldPlatformAddress, cancellationToken);
+        EnqueueTaskJob(new PlatformData(platform.Id, platform.Address, platform.Status), oldPlatformAddress, cancellationToken);
 
         logger.LogInformation("The platform with id = {PlatformId} has been updated", platform.Id);
         return Result.Success(platform);

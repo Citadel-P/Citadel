@@ -22,30 +22,30 @@ public sealed class DaemonEventJob(
 {
     private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         var platforms = await dbContext.Platforms.AsNoTracking()
-            .Select(p => new PlatformData(p.Address, p.Id))
-            .ToListAsync(stoppingToken);
+                 .Select(s => new PlatformData(s.Id, s.Address, s.Status))
+                 .ToListAsync(cancellationToken);
 
         foreach (var platform in platforms)
         {
-            StartMonitoringPlatform(platform, stoppingToken);
+            StartMonitoringPlatform(platform, cancellationToken);
         }
     }
 
-    public void StartMonitoringPlatform(PlatformData platform, CancellationToken cancelationToken)
+    public void StartMonitoringPlatform(PlatformData platform, CancellationToken cancellationToken)
     {
         if (runningStreams.ContainsKey(platform.Address))
         {
-            logger.LogWarning("Stream for {Address} is already running.", platform.Address);
+            logger.LogWarning("Monitoring daemon events for {Address} is already running.", platform.Address);
             return;
         }
 
-        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancelationToken);
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         runningStreams[platform.Address] = cts;
 
         _ = Task.Run(() => MonitorStream(platform, cts.Token), cts.Token);
@@ -55,7 +55,7 @@ public sealed class DaemonEventJob(
     {
         if (runningStreams.TryRemove(address, out var cts))
         {
-            logger.LogInformation("Aborting stream for {Address}", address);
+            logger.LogInformation("Aborting monitoring daemon events for {Address}", address);
             cts.Cancel();
         }
     }
@@ -78,7 +78,7 @@ public sealed class DaemonEventJob(
                     if (reply.EventMessageType != Agent.Server.Containers.EventMessageType.Container)
                         continue;
 
-                    var containerInfo = reply.Container.Map(platform.PlatformId, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                    var containerInfo = reply.Container.Map(platform.Id, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
                     switch (reply.Action)
                     {
@@ -123,4 +123,3 @@ public sealed class DaemonEventJob(
         }
     }
 }
-public record PlatformData(string Address, Guid PlatformId);
