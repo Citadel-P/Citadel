@@ -78,7 +78,7 @@ internal static class PlatformMapperExtension
         Error: swarmInfo.Error,
         Nodes: swarmInfo.Nodes,
         Managers: swarmInfo.Managers,
-        RemoteManagers: [.. swarmInfo.RemoteManagers.Select(x => new SwarmPeerView(x.NodeID, x.Addr))]
+        RemoteManagers: swarmInfo.RemoteManagers is null ? null : [.. swarmInfo.RemoteManagers.Select(x => new SwarmPeerView(x.NodeID, x.Addr))]
         );
 
     internal static PlatformStatView Map(this PlatformStat stat) => new (
