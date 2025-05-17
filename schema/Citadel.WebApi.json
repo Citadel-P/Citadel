@@ -3491,40 +3491,6 @@
           }
         }
       },
-      "AppPermission": {
-        "enum": [
-          "None",
-          "ListUsers",
-          "AddUsers",
-          "EditUsers",
-          "DeleteUsers",
-          "ListRoles",
-          "AddRoles",
-          "EditRoles",
-          "DeleteRoles",
-          "ListTeams",
-          "AddTeams",
-          "EditTeams",
-          "DeleteTeams",
-          "ListPlatforms",
-          "AddPlatforms",
-          "EditPlatforms",
-          "DeletePlatforms",
-          "ListContainers",
-          "AddContainers",
-          "EditContainers",
-          "DeleteContainers",
-          "ListNetworks",
-          "AddNetworks",
-          "EditNetworks",
-          "DeleteNetworks",
-          "ListVolumes",
-          "AddVolumes",
-          "EditVolumes",
-          "DeleteVolumes"
-        ],
-        "type": "string"
-      },
       "AttestationDataView": {
         "required": [
           "for"
@@ -3953,6 +3919,9 @@
           },
           "platform": {
             "$ref": "#/components/schemas/PlatformView"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/EndpointMetadata"
           }
         }
       },
@@ -4776,6 +4745,23 @@
             "nullable": true
           }
         },
+        "nullable": true
+      },
+      "EndpointMetadata": {
+        "type": "object",
+        "properties": {
+          "canEdit": {
+            "type": "boolean",
+            "default": false,
+            "nullable": true
+          },
+          "canDelete": {
+            "type": "boolean",
+            "default": false,
+            "nullable": true
+          }
+        },
+        "default": null,
         "nullable": true
       },
       "EndpointSettingsView": {
@@ -6010,20 +5996,12 @@
       },
       "LoginResponse": {
         "required": [
-          "accessToken",
-          "permissions"
+          "accessToken"
         ],
         "type": "object",
         "properties": {
           "accessToken": {
             "type": "string",
-            "nullable": true
-          },
-          "permissions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AppPermission"
-            },
             "nullable": true
           }
         }

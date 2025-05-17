@@ -1,9 +1,12 @@
 ﻿using System.Reflection;
+using Application.Permissions;
+using Application.Permissions.Requirements;
 using Application.Services;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Pipelines;
 using Mediator;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Application;
@@ -23,6 +26,7 @@ public static class ApplicationModule
             {
                 options.ServiceLifetime = ServiceLifetime.Scoped;
             })
+            .AddPermissions()
             .AddSingleton(typeof(IPipelineBehavior<,>), typeof(ValidatorBehavior<,>));
 
         EnsureDefaultImagesDefinitionsExists();
@@ -43,5 +47,14 @@ public static class ApplicationModule
                 Console.WriteLine(ex);
             }
         }
+    }
+
+    private static IServiceCollection AddPermissions(this IServiceCollection services)
+    {
+        return
+            services
+            .AddScoped<IContainerPermissionService, ContainerPermissionService>()
+            .AddScoped<IAuthorizationHandler, EditContainerHandler>()
+            .AddScoped<IAuthorizationHandler, DeleteContainerHandler>();
     }
 }

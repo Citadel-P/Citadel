@@ -15,38 +15,6 @@ export interface Address {
   prefixLen?: number | null;
 }
 
-export enum AppPermission {
-  None = 'None',
-  ListUsers = 'ListUsers',
-  AddUsers = 'AddUsers',
-  EditUsers = 'EditUsers',
-  DeleteUsers = 'DeleteUsers',
-  ListRoles = 'ListRoles',
-  AddRoles = 'AddRoles',
-  EditRoles = 'EditRoles',
-  DeleteRoles = 'DeleteRoles',
-  ListTeams = 'ListTeams',
-  AddTeams = 'AddTeams',
-  EditTeams = 'EditTeams',
-  DeleteTeams = 'DeleteTeams',
-  ListPlatforms = 'ListPlatforms',
-  AddPlatforms = 'AddPlatforms',
-  EditPlatforms = 'EditPlatforms',
-  DeletePlatforms = 'DeletePlatforms',
-  ListContainers = 'ListContainers',
-  AddContainers = 'AddContainers',
-  EditContainers = 'EditContainers',
-  DeleteContainers = 'DeleteContainers',
-  ListNetworks = 'ListNetworks',
-  AddNetworks = 'AddNetworks',
-  EditNetworks = 'EditNetworks',
-  DeleteNetworks = 'DeleteNetworks',
-  ListVolumes = 'ListVolumes',
-  AddVolumes = 'AddVolumes',
-  EditVolumes = 'EditVolumes',
-  DeleteVolumes = 'DeleteVolumes',
-}
-
 export type AttestationDataView = {
   for: string | null;
 };
@@ -733,7 +701,6 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   accessToken: string | null;
-  permissions: AppPermission[] | null;
 }
 
 export interface ManifestView {

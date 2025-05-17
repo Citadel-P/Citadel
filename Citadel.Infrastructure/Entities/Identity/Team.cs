@@ -8,9 +8,9 @@ public class Team
     public Role Role { get; private set; }
     public ICollection<User> Users { get; } = [];
 
-    public static Team Create(string name, Guid roleId) => new()
+    public static Team Create(string name, Guid roleId, Guid? id = null) => new()
     {
-        Id = Guid.CreateVersion7(),
+        Id = id ?? Guid.CreateVersion7(),
         Name = name,
         RoleId = roleId
     };

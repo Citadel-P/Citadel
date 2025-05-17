@@ -33,6 +33,10 @@
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\Common\platforms.proto" GrpcServices="None" Link="Protos\Common\platforms.proto" />
 	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.Common\Protos\Common\containers.proto" GrpcServices="None" Link="Protos\Common\containers.proto" />
    </ItemGroup>
+
+   <ItemGroup>
+     <Folder Include="Migrations\" />
+   </ItemGroup>
 	
 
 </Project>

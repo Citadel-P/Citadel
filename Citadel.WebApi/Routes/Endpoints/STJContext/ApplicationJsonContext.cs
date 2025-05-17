@@ -10,6 +10,7 @@ using Infrastructure.DockerHub;
 using Infrastructure.Entities;
 using Infrastructure.GithubCr;
 using Microsoft.AspNetCore.Mvc;
+using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Auth;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Images;
@@ -94,6 +95,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(VolumesView))]
 [JsonSerializable(typeof(VolumeView))]
 [JsonSerializable(typeof(IAsyncEnumerable<ContainerLogReply>))]
+[JsonSerializable(typeof(EndpointMetadata))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

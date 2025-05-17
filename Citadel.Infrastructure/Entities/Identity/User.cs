@@ -21,9 +21,9 @@ public class User
     /// <param name="name">user name</param>
     /// <param name="email">email</param>
     /// <param name="password">plain text password</param>
-    public static User Create(string name, string email, string password) => new()
+    public static User Create(string name, string email, string password, Guid? id = null) => new()
     {
-        Id = Guid.CreateVersion7(),
+        Id = id ?? Guid.CreateVersion7(),
         Name = name,
         Email = email,
         CreatedAt = DateTime.UtcNow,
@@ -55,26 +55,35 @@ public class User
         return true;
     }
 
-    /// <summary>
-    /// Get user permissions
-    /// </summary>
-    public IEnumerable<AppPermission> GetPermissions()
-    {
-        foreach (var team in Teams)
-        {
-            foreach (var permission in team.Role.Permissions)
-            {
-                yield return permission.PermissionCode;
-            }
-        }
-    }
-
     public IEnumerable<Claim> GetJwtClaims() 
     {
         yield return new Claim(JwtRegisteredClaimNames.Name, Name);
         yield return new Claim(JwtRegisteredClaimNames.Email, Email);
         yield return new Claim(JwtRegisteredClaimNames.Sub, Id.ToString());
         yield return new Claim(JwtRegisteredClaimNames.Jti, Guid.CreateVersion7().ToString());
+
+        yield return new Claim("permissions", string.Join(";", GetPermissions()));
+        foreach (var role in Teams.Select(s => s.Role.Name))
+        {
+            yield return new Claim("role", role);
+        }
+    }
+
+    /// <summary>
+    /// Get user permissions
+    /// </summary>
+    private IEnumerable<AppPermission> GetPermissions()
+    {
+        var permissions = new HashSet<AppPermission>();
+        foreach (var team in Teams)
+        {
+            foreach (var permission in team.Role.Permissions)
+            {
+                permissions.Add(permission.PermissionCode);
+            }
+        }
+
+        return permissions;
     }
 
     /// <summary>

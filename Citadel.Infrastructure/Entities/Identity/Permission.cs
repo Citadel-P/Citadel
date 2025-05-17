@@ -17,9 +17,9 @@ public class Permission
     /// </summary>
     public AppPermission PermissionCode { get; private set; }
 
-    public static Permission Create(Guid roleId, AppPermission permission) => new ()
+    public static Permission Create(Guid roleId, AppPermission permission, Guid? id = null) => new ()
     {
-        Id = Guid.CreateVersion7(),
+        Id = id ?? Guid.CreateVersion7(),
         RoleId = roleId,
         PermissionCode = permission
     };

@@ -1,5 +1,3 @@
-﻿using Infrastructure;
+﻿namespace Application.Features.Auth.Models;
 
-namespace Application.Features.Auth.Models;
-
-public sealed record LoginResponse(string AccessToken, IEnumerable<AppPermission> Permissions);
+public sealed record LoginResponse(string AccessToken);

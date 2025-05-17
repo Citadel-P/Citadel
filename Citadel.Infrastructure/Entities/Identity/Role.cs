@@ -27,9 +27,9 @@ public class Role
     /// </summary>
     public ICollection<Permission> Permissions { get; } = [];
 
-    public static Role Create(string name) => new () 
+    public static Role Create(string name, Guid? id = null) => new () 
     {
-        Id = Guid.CreateVersion7(),
+        Id = id ?? Guid.CreateVersion7(),
         Name = name,
         CreatedAt = DateTime.UtcNow,
     };

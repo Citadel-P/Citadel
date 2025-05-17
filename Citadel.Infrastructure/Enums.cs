@@ -31,8 +31,10 @@ public enum AppPermission
     DeleteNetworks,
     ListVolumes,
     AddVolumes,
-    EditVolumes,
     DeleteVolumes,
+    ListImages,
+    AddImages,
+    DeleteImages,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<PlatformStatus>))]

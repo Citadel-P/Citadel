@@ -46,7 +46,7 @@ internal sealed class LoginCommandHandler(
 
         var (accessToken, refreshToken) = await CreateTokens(user, cancellationToken);
 
-        return Result.Success(new LoginResponse(accessToken, user.GetPermissions()));
+        return Result.Success(new LoginResponse(accessToken));
     }
 
     private async Task<(string accessToken, string refreshToken)> CreateTokens(User user, CancellationToken cancellationToken)
