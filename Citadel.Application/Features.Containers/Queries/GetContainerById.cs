@@ -1,6 +1,8 @@
 ﻿using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
+using Infrastructure;
 using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
 using LightResults;
@@ -9,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Containers.Queries;
 
+[RequirePermission(nameof(AppPermission.ListContainers))]
 public sealed record GetContainerById(string ContainerId) : IQuery<Result<ContainerInfo>>
 {
     internal class Validator : AbstractValidator<GetContainerById>

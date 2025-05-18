@@ -1,4 +1,5 @@
-﻿using Infrastructure;
+﻿using Hosting.Common.Extensions;
+using Infrastructure;
 using Infrastructure.Entities;
 using Microsoft.AspNetCore.Authorization;
 
@@ -18,7 +19,7 @@ internal class DeleteContainerHandler : AuthorizationHandler<DeleteContainerRequ
         }
         else
         {
-            if (context.User.HasPermission(AppPermission.DeleteContainers))
+            if (context.User.HasPermission(nameof(AppPermission.DeleteContainers)))
             {
                 context.Succeed(requirement);
             }

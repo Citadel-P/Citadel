@@ -1,4 +1,5 @@
-﻿using Infrastructure;
+﻿using Hosting.Common.Extensions;
+using Infrastructure;
 using Infrastructure.Entities;
 using Microsoft.AspNetCore.Authorization;
 
@@ -18,7 +19,7 @@ internal class EditContainerHandler : AuthorizationHandler<EditContainerRequirem
         }
         else
         {
-            if (context.User.HasPermission(AppPermission.EditContainers))
+            if (context.User.HasPermission(nameof(AppPermission.EditContainers)))
             {
                 context.Succeed(requirement);
             }
