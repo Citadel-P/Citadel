@@ -27,6 +27,7 @@ public static class ApplicationModule
                 options.ServiceLifetime = ServiceLifetime.Scoped;
             })
             .AddPermissions()
+            .AddSingleton<IPermissionMetadataProvider, GeneratedPermissionMetadataProvider>()
             .AddSingleton(typeof(IPipelineBehavior<,>), typeof(PermissionBehavior<,>))
             .AddSingleton(typeof(IPipelineBehavior<,>), typeof(ValidatorBehavior<,>));
 

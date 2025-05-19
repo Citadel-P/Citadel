@@ -6,13 +6,14 @@
   </PropertyGroup>
 	
 	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
 		<PublishTrimmed>true</PublishTrimmed>
 		<InvariantGlobalization>true</InvariantGlobalization>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<TargetFramework>net9.0</TargetFramework>
 		<RepositoryType>git</RepositoryType>
-		<RepositoryUrl>https://github.com/Citadel-P/Citadel.Agent</RepositoryUrl>
 		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<RepositoryUrl>https://github.com/Citadel-P/Citadel.Agent</RepositoryUrl>
 	</PropertyGroup>
 
 </Project>

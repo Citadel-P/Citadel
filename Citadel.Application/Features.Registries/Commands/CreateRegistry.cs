@@ -29,23 +29,23 @@ public sealed record CreateRegistry(string Name, string Url, RegistryDiscriminat
             });
             When(x => x.Configuration is DockerHubRegistry, () =>
             {
-                RuleFor(x => x.Configuration as DockerHubRegistry).SetValidator(new DockerHubRegistryValidator());
+                RuleFor(x => x.Configuration as DockerHubRegistry).SetValidator(new DockerHubRegistryValidator()!);
             });
             When(x => x.Configuration is AzureRegistry, () =>
             {
-                RuleFor(x => x.Configuration as AzureRegistry).SetValidator(new AzureRegistryValidator());
+                RuleFor(x => x.Configuration as AzureRegistry).SetValidator(new AzureRegistryValidator()!);
             });
             When(x => x.Configuration is AWSRegistry, () =>
             {
-                RuleFor(x => x.Configuration as AWSRegistry).SetValidator(new AWSRegistryValidator());
+                RuleFor(x => x.Configuration as AWSRegistry).SetValidator(new AWSRegistryValidator()!);
             });
             When(x => x.Configuration is GitlabRegistry, () =>
             {
-                RuleFor(x => x.Configuration as GitlabRegistry).SetValidator(new GitlabRegistryValidator());
+                RuleFor(x => x.Configuration as GitlabRegistry).SetValidator(new GitlabRegistryValidator()!);
             });
             When(x => x.Configuration is GitHubRegistry, () =>
             {
-                RuleFor(x => x.Configuration as GitHubRegistry).SetValidator(new GitHubRegistryValidator());
+                RuleFor(x => x.Configuration as GitHubRegistry).SetValidator(new GitHubRegistryValidator()!);
             });
         }
     }
@@ -113,7 +113,7 @@ internal class CreateRegistryHandler(ApplicationDbContext dbContext, IDockerHubA
             var (canConnect, errorMessage) = await cfg.CanConnect(dockerHub, cancellationToken);
             if (!canConnect)
             {
-                return Result.Failure<Registry>(new BadRequestError(errorMessage));
+                return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
             }
         }
         else if (command.Configuration is GitHubRegistry githubRegistry) 

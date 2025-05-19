@@ -1,5 +1,4 @@
-﻿using System.Net.Http.Json;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 using Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -22,7 +21,7 @@ internal class ContainerInfoConfiguration : IEntityTypeConfiguration<ContainerIn
         builder.Property(p => p.Ports).HasColumnType("TEXT")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, ContainerPortsContext.Default.ICollectionContainerPort),
-                v => JsonSerializer.Deserialize(v, ContainerPortsContext.Default.ICollectionContainerPort));
+                v => JsonSerializer.Deserialize(v, ContainerPortsContext.Default.ICollectionContainerPort) ?? Array.Empty<ContainerPort>());
 
         // Converters
         builder.Property(p => p.State).HasConversion(

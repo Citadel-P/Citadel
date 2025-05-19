@@ -21,16 +21,17 @@ COPY ["Citadel.Application/Citadel.Application.csproj", "Citadel.Application/"]
 COPY ["Citadel.Infrastructure/Citadel.Infrastructure.csproj", "Citadel.Infrastructure/"]
 COPY ["Citadel.Contracts/Citadel.Hosting/Citadel.Hosting.csproj", "Citadel.Contracts/Citadel.Hosting/"]
 COPY ["Citadel.Contracts/Citadel.Hosting.Common/Citadel.Hosting.Common.csproj", "Citadel.Contracts/Citadel.Hosting.Common/"]
+COPY ["Citadel.Contracts/Citadel.SourceGen/Citadel.SourceGen.csproj", "Citadel.Contracts/Citadel.SourceGen/"]
+
 RUN dotnet restore "./Citadel.WebApi/Citadel.WebApi.csproj"
 
 COPY . .
 WORKDIR "/src/Citadel.WebApi"
 RUN dotnet build "./Citadel.WebApi.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
-# === Publish for trimming ===
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./Citadel.WebApi.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=true /p:PublishTrimmed=true /p:InvariantGlobalization=true
+RUN dotnet publish "./Citadel.WebApi.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=true 
 
 FROM base AS final
 WORKDIR /app

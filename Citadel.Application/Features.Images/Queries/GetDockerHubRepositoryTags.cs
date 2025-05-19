@@ -46,6 +46,6 @@ public sealed class GetDockerHubRepositoryTagsHandler(
             return Result.Failure<IEnumerable<Tag>>(new BadRequestError(errorMessage));
         }
 
-        return tags.ToList();
+        return tags?.ToList() ?? [];
     }
 }

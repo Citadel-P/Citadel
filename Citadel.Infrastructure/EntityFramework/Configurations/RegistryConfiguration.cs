@@ -3,7 +3,6 @@ using System.Text.Json.Serialization;
 using Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Infrastructure.EntityFramework.Configurations;
 
@@ -30,7 +29,7 @@ internal sealed class RegistryConfiguration : IEntityTypeConfiguration<Registry>
         builder.Property(p => p.Configuration).HasColumnType("TEXT")
             .HasConversion(
                 v => JsonSerializer.Serialize(v, RegistryJsonContext.Default.RegistryConfigurationBase),
-                v => JsonSerializer.Deserialize(v, RegistryJsonContext.Default.RegistryConfigurationBase));
+                v => JsonSerializer.Deserialize(v, RegistryJsonContext.Default.RegistryConfigurationBase)!);
 
     }
 }

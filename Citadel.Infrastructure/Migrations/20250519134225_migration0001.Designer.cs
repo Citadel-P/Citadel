@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20250517151856_migration0001")]
+    [Migration("20250519134225_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -27,6 +27,7 @@ namespace Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ContainerId")
+                        .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
@@ -34,15 +35,18 @@ namespace Infrastructure.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Image")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("PlatformId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Ports")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Stack")
@@ -299,7 +303,7 @@ namespace Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
-                        .HasDefaultValue(new DateTime(2025, 5, 17, 15, 18, 55, 849, DateTimeKind.Utc).AddTicks(3047))
+                        .HasDefaultValue(new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc))
                         .HasColumnName("CreatedAt");
 
                     b.Property<string>("Name")
@@ -311,7 +315,7 @@ namespace Infrastructure.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
-                        .HasDefaultValue(new DateTime(2025, 5, 17, 15, 18, 55, 850, DateTimeKind.Utc).AddTicks(7004))
+                        .HasDefaultValue(new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc))
                         .HasColumnName("UpdatedAt");
 
                     b.HasKey("Id");
@@ -322,21 +326,21 @@ namespace Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("0196debd-033b-7512-a11b-98533d063a04"),
-                            CreatedAt = new DateTime(2025, 5, 17, 15, 18, 55, 813, DateTimeKind.Utc).AddTicks(3542),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Admin",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
                             Id = new Guid("0196debe-0c94-7467-9b2d-397e0200276f"),
-                            CreatedAt = new DateTime(2025, 5, 17, 15, 18, 55, 813, DateTimeKind.Utc).AddTicks(3889),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Dev",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
                             Id = new Guid("0196debe-2d80-76dd-b351-ade38fa29169"),
-                            CreatedAt = new DateTime(2025, 5, 17, 15, 18, 55, 813, DateTimeKind.Utc).AddTicks(3891),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "QA",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         });
@@ -393,7 +397,7 @@ namespace Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
-                        .HasDefaultValue(new DateTime(2025, 5, 17, 15, 18, 55, 862, DateTimeKind.Utc).AddTicks(4090))
+                        .HasDefaultValue(new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc))
                         .HasColumnName("CreatedAt");
 
                     b.Property<string>("Email")
@@ -403,6 +407,7 @@ namespace Infrastructure.Migrations
                         .HasColumnName("Email");
 
                     b.Property<string>("Name")
+                        .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("TEXT")
                         .HasColumnName("Name");
@@ -416,7 +421,7 @@ namespace Infrastructure.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
-                        .HasDefaultValue(new DateTime(2025, 5, 17, 15, 18, 55, 862, DateTimeKind.Utc).AddTicks(4991))
+                        .HasDefaultValue(new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc))
                         .HasColumnName("UpdatedAt");
 
                     b.HasKey("Id");
@@ -431,28 +436,28 @@ namespace Infrastructure.Migrations
                         new
                         {
                             Id = new Guid("0196ded1-13f1-77ce-884e-3cb636ec09a8"),
-                            CreatedAt = new DateTime(2025, 5, 17, 15, 18, 55, 814, DateTimeKind.Utc).AddTicks(825),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "admin@admin.com",
                             Name = "admin",
-                            Password = "EM7te8rWhVPqXBuaXT5SjtrHLt+otJmPj0EnjviIf/jQSPwe",
+                            Password = "/VtxS3rzyzEIhP0i6Ehq72mGCarCK+xxCMcMXo4N5WMavIl/",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
                             Id = new Guid("0196ded1-13f1-73fb-acf0-188115c01c0e"),
-                            CreatedAt = new DateTime(2025, 5, 17, 15, 18, 55, 825, DateTimeKind.Utc).AddTicks(7228),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "dev@dev.com",
                             Name = "dev",
-                            Password = "7TO2PMxA2Z/tac0t3qCcRHXU+TNOYbVpXHYJj/oBoOGuADd5",
+                            Password = "bstIzQ7Axj+ZtX0eo89tp/8G1+oTO4BTrI+54+Ou7MKVKBwX",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
                             Id = new Guid("0196ded1-13f1-743a-8a1b-5e243048c77e"),
-                            CreatedAt = new DateTime(2025, 5, 17, 15, 18, 55, 831, DateTimeKind.Utc).AddTicks(3565),
+                            CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "qa@qa.com",
                             Name = "qa",
-                            Password = "H8qXcmLJ6DNZJKIjfG/y4Qbzpd9B1qeDVFYClMXZK8dLSvAg",
+                            Password = "DZrfPl29P870AAeeCz/rDj2K/68NYT2gECxx5KSnEBZdjZ1i",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         });
                 });
@@ -496,6 +501,7 @@ namespace Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Address")
+                        .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
@@ -519,6 +525,7 @@ namespace Infrastructure.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("DaemonId")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Driver")
@@ -531,6 +538,7 @@ namespace Infrastructure.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Name")
+                        .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
@@ -824,7 +832,8 @@ namespace Infrastructure.Migrations
 
                     b.Navigation("Stats");
 
-                    b.Navigation("SwarmInfo");
+                    b.Navigation("SwarmInfo")
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Infrastructure.Entities.SwarmInfo", b =>

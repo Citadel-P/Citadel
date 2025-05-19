@@ -22,7 +22,7 @@ public class ContainerStat
         ) => new()
         {
             Id = Guid.CreateVersion7(),
-            Created = created.Value,
+            Created = created is not null ? created.Value : DateTimeOffset.UtcNow.Ticks,
             MemoryUsage = memoryUsage,
             CpuUsage = cpuUsage,
             MemoryLimit = memoryLimit,

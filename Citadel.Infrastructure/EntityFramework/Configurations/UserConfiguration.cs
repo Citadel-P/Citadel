@@ -7,6 +7,7 @@ namespace Infrastructure.EntityFramework.Configurations;
 
 internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
 {
+    private static readonly DateTime dateTime = new(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
     public void Configure(EntityTypeBuilder<User> builder)
     {
         builder.ToTable("Users");
@@ -23,8 +24,8 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(p => p.Name).HasColumnName("Name").HasMaxLength(128);
         builder.Property(p => p.Email).HasColumnName("Email").HasMaxLength(128).IsRequired();
         builder.Property(p => p.Password).HasColumnName("Password").HasMaxLength(128).IsRequired();
-        builder.Property(p => p.CreatedAt).HasColumnName("CreatedAt").HasDefaultValue(DateTime.UtcNow).IsRequired();
-        builder.Property(p => p.UpdatedAt).HasColumnName("UpdatedAt").HasDefaultValue(DateTime.UtcNow).IsRequired();
+        builder.Property(p => p.CreatedAt).HasColumnName("CreatedAt").HasDefaultValue(dateTime).IsRequired();
+        builder.Property(p => p.UpdatedAt).HasColumnName("UpdatedAt").HasDefaultValue(dateTime).IsRequired();
 
         builder.HasData(DbSeed.Users);
     }

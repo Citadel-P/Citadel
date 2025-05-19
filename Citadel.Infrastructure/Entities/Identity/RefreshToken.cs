@@ -6,7 +6,7 @@ public class RefreshToken
     public Guid UserId { get; private set; }
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
 
-    public User User { get; private set; }
+    public User User { get; private set; } = null!;
 
     public static RefreshToken Create(Guid id, Guid userId) => new()
     {

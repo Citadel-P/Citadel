@@ -3,9 +3,9 @@
 public class Platform
 {
     public Guid Id { get; private set; }
-    public string Name { get; private set; }
-    public string Address { get; private set; }
-    public string DaemonId { get; private set; }
+    public string Name { get; private set; } = null!;
+    public string Address { get; private set; } = null!;
+    public string DaemonId { get; private set; } = null!;
     public PlatformStatus Status { get; private set; }
     public int NetworksCount { get; private set; }
     public int VolumesCount { get; private set; }
@@ -14,16 +14,16 @@ public class Platform
     public long ContainersPaused { get; private set; }
     public long ContainersStopped { get; private set; }
     public long Images { get; private set; }
-    public string Driver { get; private set; }
-    public string OperatingSystem { get; private set; }
-    public string OsVersion { get; private set; }
-    public string OsType { get; private set; }
-    public string Architecture { get; private set; }
+    public string? Driver { get; private set; }
+    public string? OperatingSystem { get; private set; }
+    public string? OsVersion { get; private set; }
+    public string? OsType { get; private set; }
+    public string? Architecture { get; private set; }
     public long Ncpu { get; private set; }
     public long MemTotal { get; private set; }
-    public string ServerVersion { get; private set; }
-    public string AgentVersion { get; private set; }
-    public SwarmInfo SwarmInfo { get; private set; }
+    public string? ServerVersion { get; private set; }
+    public string? AgentVersion { get; private set; }
+    public SwarmInfo SwarmInfo { get; private set; } = null!;
     public ICollection<ContainerInfo> ContainersInfo { get; private set; } = [];
     public ICollection<PlatformStat> Stats { get; private set; } = [];
 
@@ -48,7 +48,7 @@ public class Platform
         string serverVersion,
         string agentVersion,
         SwarmInfo swarmInfo,
-        IEnumerable<PlatformStat> stats = null)
+        IEnumerable<PlatformStat>? stats = null)
         => new () { 
             Id = Guid.CreateVersion7(),
             Name = name, 
@@ -76,9 +76,9 @@ public class Platform
         };
 
     public void PartialUpdate(
-        string name = null,
-        string address = null,
-        string daemonId = null,
+        string? name = null,
+        string? address = null,
+        string? daemonId = null,
         int? networksCount = null,
         int? volumesCount = null,
         long? containers = null,
@@ -86,15 +86,15 @@ public class Platform
         long? containersPaused = null,
         long? containersStopped = null,
         long? images = null,
-        string driver = null,
-        string operatingSystem = null,
-        string osVersion = null,
-        string osType = null,
-        string architecture = null,
+        string? driver = null,
+        string? operatingSystem = null,
+        string? osVersion = null,
+        string? osType = null,
+        string? architecture = null,
         long? ncpu = null,
         long? memTotal = null,
-        string serverVersion = null,
-        string agentVersion = null,
+        string? serverVersion = null,
+        string? agentVersion = null,
         PlatformStatus? platformStatus = null)
     {
         if (name != null) Name = name;

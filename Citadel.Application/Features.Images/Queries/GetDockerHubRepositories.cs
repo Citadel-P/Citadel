@@ -44,6 +44,6 @@ internal sealed class GetDockerHubRepositoriesHandler(
             return Result.Failure< IEnumerable<DockerHubRepository>>(new BadRequestError(error));
         }
 
-        return Result.Success(repos);
+        return repos?.ToList() ?? [];
     }
 }

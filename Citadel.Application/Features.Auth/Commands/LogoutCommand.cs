@@ -17,12 +17,12 @@ internal sealed class LogoutCommandHandler(
 {
     public async ValueTask<Result> Handle(LogoutCommand query, CancellationToken cancellationToken)
     {
-        var refreshToken = context.HttpContext.Request.Cookies[Constants.RefreshToken];
+        var refreshToken = context.HttpContext?.Request.Cookies[Constants.RefreshToken];
 
         if (string.IsNullOrWhiteSpace(refreshToken))
             return Result.Success();
 
-        context.HttpContext.Response.Cookies.Delete(Constants.RefreshToken);
+        context.HttpContext?.Response.Cookies.Delete(Constants.RefreshToken);
 
         if (!jwtService.TryValidate(refreshToken, out var tokenId))
             return Result.Success();

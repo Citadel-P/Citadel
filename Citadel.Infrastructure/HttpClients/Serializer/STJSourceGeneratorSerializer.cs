@@ -11,13 +11,13 @@ public sealed class STJSourceGeneratorSerializer(JsonSerializerOptions jsonSeria
 {
     public STJSourceGeneratorSerializer() : this(HttpClientsContext.JsonSerializerOptions) { }
 
-    public Task<T> FromHttpContentAsync<T>(HttpContent content, CancellationToken cancellationToken = default)
+    public Task<T?> FromHttpContentAsync<T>(HttpContent content, CancellationToken cancellationToken = default)
         => content.ReadFromJsonAsync((JsonTypeInfo<T>)jsonSerializerOptions.GetTypeInfo(typeof(T)), cancellationToken);
 
     public HttpContent ToHttpContent<T>(T item)
         => JsonContent.Create(item, (JsonTypeInfo<T>)jsonSerializerOptions.GetTypeInfo(typeof(T)));
 
-    public string GetFieldNameForProperty(PropertyInfo propertyInfo) =>
+    public string? GetFieldNameForProperty(PropertyInfo propertyInfo) =>
         propertyInfo?.GetCustomAttribute<JsonPropertyNameAttribute>(true)?.Name;
 
 }

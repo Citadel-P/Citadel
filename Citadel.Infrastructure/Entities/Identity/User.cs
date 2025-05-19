@@ -7,9 +7,9 @@ namespace Infrastructure.Entities.Identity;
 public class User
 {
     public Guid Id { get; private set; }
-    public string Name { get; private set; }
-    public string Email { get; private set; }
-    public string Password { get; private set; }
+    public string Name { get; private set; } = null!;
+    public string Email { get; private set; } = null!;
+    public string Password { get; private set; } = null!;
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
     public ICollection<Team> Teams { get; } = [];
@@ -21,12 +21,12 @@ public class User
     /// <param name="name">user name</param>
     /// <param name="email">email</param>
     /// <param name="password">plain text password</param>
-    public static User Create(string name, string email, string password, Guid? id = null) => new()
+    public static User Create(string name, string email, string password, Guid? id = null, DateTime? createdAt = null) => new()
     {
         Id = id ?? Guid.CreateVersion7(),
         Name = name,
         Email = email,
-        CreatedAt = DateTime.UtcNow,
+        CreatedAt = createdAt ?? DateTime.UtcNow,
         Password = HashPassword(password),
     };
 

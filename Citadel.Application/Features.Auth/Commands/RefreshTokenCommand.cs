@@ -18,7 +18,7 @@ internal sealed class RefreshTokenCommandHandler(
 {
     public async ValueTask<Result<string>> Handle(RefreshTokenCommand query, CancellationToken cancellationToken)
     {
-        var refreshToken = context.HttpContext.Request.Cookies[Constants.RefreshToken];
+        var refreshToken = context.HttpContext?.Request.Cookies[Constants.RefreshToken];
 
         if (string.IsNullOrWhiteSpace(refreshToken))
             return Result.Failure<string>(new BadRequestError("Please include a refresh token in the request."));
@@ -26,7 +26,8 @@ internal sealed class RefreshTokenCommandHandler(
         if (!jwtService.TryValidate(refreshToken, out var tokenId))
             return Result.Failure<string>(new UnauthorizedError("Invalid refresh token."));
 
-        var existing = await dbContext.RefreshTokens.AsNoTracking().Include(s => s.User)
+        var existing = await dbContext.RefreshTokens.AsNoTracking().Include(s => s.User).ThenInclude(s => s.Teams).ThenInclude(s => s.Role)
+           
             .FirstOrDefaultAsync(s => s.Id == tokenId, cancellationToken);
         
         if (existing == null)

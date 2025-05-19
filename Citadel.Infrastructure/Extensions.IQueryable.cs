@@ -12,7 +12,7 @@ public static partial class Extensions
             .Include(s => s.Stats.OrderByDescending(s => s.Created).Take(1))
             .Where(s => s.PlatformId == platformId);
 
-    public static async Task<string> GetPlatformAddress(this DbSet<ContainerInfo> containersInfo, string containerId, CancellationToken cancellationToken)
+    public static async Task<string?> GetPlatformAddress(this DbSet<ContainerInfo> containersInfo, string containerId, CancellationToken cancellationToken)
         => await containersInfo
             .AsNoTracking()
             .Include(s => s.Platform)

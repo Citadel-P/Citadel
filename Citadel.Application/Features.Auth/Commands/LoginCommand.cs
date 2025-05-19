@@ -28,7 +28,7 @@ internal sealed class LoginCommandHandler(
 {
     public async ValueTask<Result<LoginResponse>> Handle(LoginCommand query, CancellationToken cancellationToken)
     {
-        User user = await dbContext.Users.AsNoTracking()
+        var user = await dbContext.Users.AsNoTracking()
             .Include(s => s.Teams)
             .ThenInclude(s => s.Role)
             .ThenInclude(s => s.Permissions)

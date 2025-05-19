@@ -4,11 +4,12 @@ namespace Infrastructure.EntityFramework.Seed;
 
 internal static class DbSeed
 {
+    private static readonly DateTime dateTime = new (2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
     public static Role[] Roles =
     [
-        Role.Create("Admin", Guid.Parse("0196debd-033b-7512-a11b-98533d063a04")),
-        Role.Create("Dev", Guid.Parse("0196debe-0c94-7467-9b2d-397e0200276f")),
-        Role.Create("QA", Guid.Parse("0196debe-2d80-76dd-b351-ade38fa29169"))
+        Role.Create("Admin", Guid.Parse("0196debd-033b-7512-a11b-98533d063a04"), dateTime),
+        Role.Create("Dev", Guid.Parse("0196debe-0c94-7467-9b2d-397e0200276f"), dateTime),
+        Role.Create("QA", Guid.Parse("0196debe-2d80-76dd-b351-ade38fa29169"), dateTime)
     ];
 
     public static Permission[] Permissions =
@@ -54,9 +55,9 @@ internal static class DbSeed
 
     public static User[] Users =
     [
-        User.Create("admin", "admin@admin.com", "admin123", Guid.Parse("0196ded1-13f1-77ce-884e-3cb636ec09a8")),
-        User.Create("dev", "dev@dev.com", "dev123", Guid.Parse("0196ded1-13f1-73fb-acf0-188115c01c0e")),
-        User.Create("qa", "qa@qa.com", "qa123", Guid.Parse("0196ded1-13f1-743a-8a1b-5e243048c77e"))
+        User.Create("admin", "admin@admin.com", "admin123", Guid.Parse("0196ded1-13f1-77ce-884e-3cb636ec09a8"), dateTime),
+        User.Create("dev", "dev@dev.com", "dev123dev", Guid.Parse("0196ded1-13f1-73fb-acf0-188115c01c0e"), dateTime),
+        User.Create("qa", "qa@qa.com", "qa123qa@", Guid.Parse("0196ded1-13f1-743a-8a1b-5e243048c77e"), dateTime)
     ];
 
     public static UserTeam[] UsersTeams =

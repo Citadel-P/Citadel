@@ -7,6 +7,7 @@ namespace Infrastructure.EntityFramework.Configurations;
 
 internal sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
 {
+    private static readonly DateTime dateTime = new(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
     public void Configure(EntityTypeBuilder<Role> builder)
     {
         builder.ToTable("Roles");
@@ -19,8 +20,8 @@ internal sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
 
         // Properties
         builder.Property(p => p.Name).HasColumnName("Name").HasMaxLength(128).IsRequired();
-        builder.Property(p => p.CreatedAt).HasColumnName("CreatedAt").HasDefaultValue(DateTime.UtcNow);
-        builder.Property(p => p.UpdatedAt).HasColumnName("UpdatedAt").HasDefaultValue(DateTime.UtcNow);
+        builder.Property(p => p.CreatedAt).HasColumnName("CreatedAt").HasDefaultValue(dateTime);
+        builder.Property(p => p.UpdatedAt).HasColumnName("UpdatedAt").HasDefaultValue(dateTime);
 
         builder.HasData(DbSeed.Roles);
     }

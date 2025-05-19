@@ -43,7 +43,6 @@ internal class GetGithubPackageVersionsHander(ApplicationDbContext dbContext, IG
             return Result.Failure<IEnumerable<GhcrPackageVersion>>(new BadRequestError(errorMessage));
         }
 
-        return Result.Success(versions);
-
+        return versions?.ToList() ?? [];
     }
 }

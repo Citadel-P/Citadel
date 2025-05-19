@@ -10,7 +10,7 @@ public class Role
     /// <summary>
     /// Role name
     /// </summary>
-    public string Name { get; private set; }
+    public string Name { get; private set; } = null!;
 
     /// <summary>
     /// Creation date
@@ -27,11 +27,11 @@ public class Role
     /// </summary>
     public ICollection<Permission> Permissions { get; } = [];
 
-    public static Role Create(string name, Guid? id = null) => new () 
+    public static Role Create(string name, Guid? id = null, DateTime? createdAt = null) => new () 
     {
-        Id = id ?? Guid.CreateVersion7(),
         Name = name,
-        CreatedAt = DateTime.UtcNow,
+        Id = id ?? Guid.CreateVersion7(),
+        CreatedAt = createdAt ?? DateTime.UtcNow,
     };
     
 }

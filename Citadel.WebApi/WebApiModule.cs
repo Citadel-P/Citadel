@@ -7,7 +7,6 @@ using Infrastructure.Services.Abstractions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Connections;
-using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
 using WebApi.Hubs;
@@ -29,15 +28,18 @@ internal static class WebApiModule
                 cfg.AddOperationTransformer<AddCookieOperationTransformer>();
                 cfg.AddOperationTransformer<ProduceCookieOperationTransformer>();
                 cfg.AddOperationTransformer<ExampleOperationTransformer>();
+                cfg.AddOperationTransformer<RequirePermissionOperationTransformer>();
             })
             .AddCors();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
-                string key = string.IsNullOrEmpty(configuration["Jwt:Key"])
+                var key = string.IsNullOrEmpty(configuration["Jwt:Key"])
                                         ? Hosting.Common.Helpers.GetJwtSecretFromFile()
                                         : configuration["Jwt:Key"];
+
+                if (key is null) throw new ArgumentNullException("Jwt:Key is missing from configuration");
 
                 options.TokenValidationParameters = new TokenValidationParameters()
                 {

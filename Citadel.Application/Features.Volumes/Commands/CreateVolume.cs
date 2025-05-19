@@ -15,8 +15,8 @@ public sealed record CreateVolume(
     Guid PlatformId,
     string Name,
     string Driver,
-    Dictionary<string, string> Labels = null,
-    Dictionary<string, string> Options = null) : ICommand<Result<VolumeReply>>
+    Dictionary<string, string>? Labels = null,
+    Dictionary<string, string>? Options = null) : ICommand<Result<VolumeReply>>
 {
     internal class Validator : AbstractValidator<CreateVolume>
     {
@@ -70,6 +70,5 @@ internal sealed class CreateVolumeHandler(IGrpcClientFactory clientFactory,Appli
         {
             return Result.Failure<VolumeReply>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
-        
     }
 }

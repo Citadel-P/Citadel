@@ -2,7 +2,6 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Xml.Linq;
 using Infrastructure.DockerHub;
 using Infrastructure.GithubCr;
 using Refit;
@@ -15,8 +14,8 @@ namespace Infrastructure.Entities;
 public class Registry
 {
     public Guid Id { get; private set; }
-    public string Name { get; private set; }
-    public string Url { get; private set; }
+    public string Name { get; private set; } = null!;
+    public string Url { get; private set; } = null!;
     public DateTime Created { get; private set; }
 
     /// <summary>
@@ -27,7 +26,7 @@ public class Registry
     /// <summary>
     /// The registry configuration
     /// </summary>
-    public RegistryConfigurationBase Configuration { get; set; }
+    public RegistryConfigurationBase Configuration { get; set; } = null!;
 
     public static Registry Create(string name, string url, RegistryDiscriminator discriminator, RegistryConfigurationBase configuration) 
         => new ()
@@ -40,7 +39,7 @@ public class Registry
             Configuration = configuration 
         };
 
-    public void PartialUpdate(string name = null, string url = null, RegistryConfigurationBase configuration = null)
+    public void PartialUpdate(string? name = null, string? url = null, RegistryConfigurationBase? configuration = null)
     {
         if (name != null) Name = name;
         if (url != null) Url = url;
@@ -71,19 +70,19 @@ public class Registry
 [JsonDerivedType(typeof(GitHubRegistry), nameof(RegistryDiscriminator.GitHub))]
 public abstract class RegistryConfigurationBase
 {
-    public virtual string RegistryUrl { get; private set;  }
+    public virtual string RegistryUrl { get; private set;  } = null!;
     public abstract string GetRegistryAuth();
 }
 
 [method: JsonConstructor]
-public class DockerHubRegistry(string userName = null, string pat = null) : RegistryConfigurationBase
+public class DockerHubRegistry(string? userName = null, string? pat = null) : RegistryConfigurationBase
 {
     public override string RegistryUrl => "https://docker.io";
-    public string UserName { get; } = userName;
-    public string PAT { get; } = pat;
+    public string UserName { get; } = userName ?? string.Empty;
+    public string PAT { get; } = pat ?? string.Empty;
     public static DockerHubRegistry Create(string userName, string PAT) => new (userName, PAT);
 
-    public async Task<(bool success, string errorMessage)> CanConnect(IDockerHubApi dockerHub, CancellationToken cancellationToken)
+    public async Task<(bool success, string? errorMessage)> CanConnect(IDockerHubApi dockerHub, CancellationToken cancellationToken)
     {
         try
         {
@@ -99,7 +98,7 @@ public class DockerHubRegistry(string userName = null, string pat = null) : Regi
         }
     }
 
-    public async Task<(IEnumerable<DockerHubRepository> repositories, string errorMessage)> GetRepositories(IDockerHubApi dockerHub, CancellationToken cancellationToken)
+    public async Task<(IEnumerable<DockerHubRepository>? repositories, string? errorMessage)> GetRepositories(IDockerHubApi dockerHub, CancellationToken cancellationToken)
     {
         try
         {
@@ -116,7 +115,7 @@ public class DockerHubRegistry(string userName = null, string pat = null) : Regi
         }
     }
 
-    public async Task<(ICollection<Tag> tags, string errorMessage)> GetRepositoryTags(IDockerHubApi dockerHub, string repositoryName, CancellationToken cancellationToken)
+    public async Task<(ICollection<Tag>? tags, string? errorMessage)> GetRepositoryTags(IDockerHubApi dockerHub, string repositoryName, CancellationToken cancellationToken)
     {
         try
         {
@@ -163,7 +162,7 @@ public class GitHubRegistry(string name, GhcrAccountType? type, string pat) : Re
     public static GitHubRegistry Create(string name, string PAT, GhcrAccountType type) =>
         new (name, type, PAT);
 
-    public async Task<(bool success, string errorMessage)> CanConnect(IGithubCrApi githubCrApi, CancellationToken cancellationToken)
+    public async Task<(bool success, string? errorMessage)> CanConnect(IGithubCrApi githubCrApi, CancellationToken cancellationToken)
     {
         try
         {
@@ -181,7 +180,7 @@ public class GitHubRegistry(string name, GhcrAccountType? type, string pat) : Re
         }
     }
 
-    public async Task<(IEnumerable<GhcrPackage> packages, string errorMessage)> GetPackages(IGithubCrApi githubCrApi, CancellationToken cancellationToken)
+    public async Task<(IEnumerable<GhcrPackage>? packages, string? errorMessage)> GetPackages(IGithubCrApi githubCrApi, CancellationToken cancellationToken)
     {
         try
         {
@@ -199,7 +198,7 @@ public class GitHubRegistry(string name, GhcrAccountType? type, string pat) : Re
         }
     }
 
-    public async Task<(IEnumerable<GhcrPackageVersion> versions, string errorMessage)> GetPackageVersions(IGithubCrApi githubCrApi, string packageName, CancellationToken cancellationToken)
+    public async Task<(IEnumerable<GhcrPackageVersion>? versions, string? errorMessage)> GetPackageVersions(IGithubCrApi githubCrApi, string packageName, CancellationToken cancellationToken)
     {
         try
         {

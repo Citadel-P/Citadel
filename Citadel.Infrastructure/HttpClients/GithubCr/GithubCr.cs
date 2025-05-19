@@ -60,60 +60,68 @@ namespace Infrastructure.GithubCr
     }
     public class GhcrPackage
     {
-        public int Id { get; init; }
-        public string Name { get; init; }
-        public string Url { get; init; }
+        [JsonPropertyName("id")]
+        required public int Id { get; init; }
+        [JsonPropertyName("name")]
+        required public string Name { get; init; }
+        public string? Url { get; init; }
         [JsonPropertyName("package_type")]
-        public string PackageType { get; init; }
+        public string? PackageType { get; init; }
         [JsonPropertyName("version_count")]
-        public string VersionCount { get; init; }
+        public string? VersionCount { get; init; }
         [JsonPropertyName("created_at")]
-        public string CreatedAt { get; init; }
+        public string? CreatedAt { get; init; }
         [JsonPropertyName("updated_at")]
-        public string UpdatedAt { get; init; }
+        public string? UpdatedAt { get; init; }
         [JsonPropertyName("html_url")]
-        public string HtmlUrl { get; init; }
-        public Owner Owner { get; init; }
+        public string? HtmlUrl { get; init; }
+        [JsonPropertyName("owner")]
+        public Owner? Owner { get; init; }
     }
 
     public class Owner
     {
-        public int Id { get; init; }
-        public string Url { get; init; }
+        [JsonPropertyName("id")]
+        required public int Id { get; init; }
+        [JsonPropertyName("url")]
+        public string? Url { get; init; }
         [JsonPropertyName("html_url")]
-        public string HmlUrl { get; init; }
+        public string? HmlUrl { get; init; }
         [JsonPropertyName("node_id")]
-        public string NodeId { get; init; }
+        public string? NodeId { get; init; }
         [JsonPropertyName("gists_url")]
-        public string GistsUrl { get; init; }
+        public string? GistsUrl { get; init; }
     }
 
     public record GhcrPackageVersion
     {
-        public int Id { get; init; }
-        public string Name { get; init; }
-        public string Url { get; init; }
+        [JsonPropertyName("id")]
+        required public int Id { get; init; }
+        [JsonPropertyName("name")]
+        required public string Name { get; init; }
+        [JsonPropertyName("url")]
+        required public string Url { get; init; }
         [JsonPropertyName("package_html_url")]
-        public string PackageHtmlUrl { get; init; }
+        public string? PackageHtmlUrl { get; init; }
         [JsonPropertyName("created_at")]
-        public string CreatedAt { get; init; }
+        public string? CreatedAt { get; init; }
         [JsonPropertyName("updated_at")]
-        public string UpdatedAt { get; init; }
+        public string? UpdatedAt { get; init; }
         [JsonPropertyName("html_url")]
-        public string HtmlUrl { get; init; }
+        public string? HtmlUrl { get; init; }
         [JsonPropertyName("metadata")]
-        public PackageVersionMetadata Metadata { get; init; }
+        public PackageVersionMetadata? Metadata { get; init; }
     }
 
     public record PackageVersionMetadata
     {
         [JsonPropertyName("container")]
-        public PackageVersionContainerMetadata Container {  get; init; }
+        public PackageVersionContainerMetadata? Container {  get; init; }
     }
     public record PackageVersionContainerMetadata
     {
         [JsonPropertyName("tags")]
-        public IEnumerable<string> Tags { get; init; }
+        public IEnumerable<string>? Tags { get; init; }
 
     }
 }

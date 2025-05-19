@@ -1,4 +1,5 @@
-﻿using Application.Permissions.Requirements;
+﻿using System.Security.Claims;
+using Application.Permissions.Requirements;
 using Infrastructure.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -14,7 +15,9 @@ internal class ContainerPermissionService(IAuthorizationService authorizationSer
 {
     public async Task<PermissionsMetadata> GetContainerPermissions(ContainerInfo containerInfo)
     {
-        var user = httpContextAccessor.HttpContext?.User;
+        var user = httpContextAccessor.HttpContext?.User 
+            ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
+
         var canEdit = (await authorizationService.AuthorizeAsync(user, containerInfo, new EditContainerRequirement())).Succeeded;
         var canDelete = (await authorizationService.AuthorizeAsync(user, containerInfo, new DeleteContainerRequirement())).Succeeded;
 

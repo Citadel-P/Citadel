@@ -22,7 +22,7 @@ internal class AuthorizationResultHandler : IAuthorizationMiddlewareResultHandle
                 ? StatusCodes.Status403Forbidden
                 : StatusCodes.Status401Unauthorized;
 
-            var problemFactory = context.RequestServices.GetService<ProblemDetailsFactory>();
+            var problemFactory = context.RequestServices.GetRequiredService<ProblemDetailsFactory>();
             var problem = problemFactory.CreateProblemDetails(context, context.Response.StatusCode);
 
             await context.Response.WriteAsJsonAsync(

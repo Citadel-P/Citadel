@@ -1,18 +1,16 @@
-﻿using Citadel.Common;
-
-namespace Infrastructure.Entities;
+﻿namespace Infrastructure.Entities;
 
 public class ContainerInfo
 {
     public Guid Id { get; private set; }
     public Guid PlatformId { get; private set; }
-    public string ContainerId { get; private set; }
-    public string Name { get; private set; }
-    public string Image { get; private set; }
+    public string ContainerId { get; private set; } = null!;
+    public string Name { get; private set; } = null!;
+    public string Image { get; private set; } = null!;
     public long Created { get; private set; }
     public ContainerStateStatus State { get; set; }
-    public string Stack { get; set; }
-    public string Status { get; private set; }
+    public string? Stack { get; set; }
+    public string? Status { get; private set; }
     public ICollection<ContainerPort> Ports { get; private set; } = [];
     public ICollection<ContainerStat> Stats { get; private set; } = [];
     public Platform Platform { get; private set; } = null!;
@@ -26,7 +24,7 @@ public class ContainerInfo
         string status,
         string stack,
         long? created = null, 
-        IEnumerable<ContainerPort> ports = null)
+        IEnumerable<ContainerPort>? ports = null)
         => new()
         {
             Id = Guid.CreateVersion7(),
@@ -37,18 +35,18 @@ public class ContainerInfo
             State = state,
             Stack = stack,
             Status = status,
-            Created = created.Value,
-            Ports = ports?.ToList(),
+            Created = created is not null ? created.Value : DateTimeOffset.UtcNow.Ticks,
+            Ports = ports is not null ? ports.ToList() : [],
         };
 
     public void PartialUpdate(
-        string name = null,
-        string image = null,
+        string? name = null,
+        string? image = null,
         ContainerStateStatus? state = null,
-        string status = null,
-        string stack = null,
+        string? status = null,
+        string? stack = null,
         long? created = null,
-        IEnumerable<ContainerPort> ports = null)
+        IEnumerable<ContainerPort>? ports = null)
     {
         if (name != null) Name = name;
         if (image != null) Image = image;

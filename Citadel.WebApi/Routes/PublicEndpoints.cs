@@ -1,4 +1,5 @@
 ﻿using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.OpenApi;
 using Infrastructure;
 using WebApi.Routes.Endpoints;

@@ -26,7 +26,7 @@ internal class DeletePlatformHandler(
 {
     public async ValueTask<Result> Handle(DeletePlatform command, CancellationToken cancellationToken)
     {
-        Platform platform = await dbContext.Platforms
+        var platform = await dbContext.Platforms
             .AsNoTracking()
             .SingleOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
 

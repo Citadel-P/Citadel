@@ -13,18 +13,18 @@ public interface IImageRepository
 
 public class GitHubPackageResponse : IImageRepository
 {
-    public string Id { get; init; }
-    public string Name { get; init; }
-    public string CreatedAt { get; init; }
-    public string UpdatedAt { get; init; }
-    public string Url { get; init; }
-    public string HtmlUrl { get; init; }
+    public string Id { get; init; } = null!;
+    public string Name { get; init; } = null!;
+    public string? CreatedAt { get; init; }
+    public string? UpdatedAt { get; init; }
+    public string? Url { get; init; }
+    public string? HtmlUrl { get; init; }
 }
 
 public class DockerHubRepositoryResponse : IImageRepository
 {
-    public string Name { get; init; }
-    public string Namespace { get; set; }
+    public string? Name { get; init; }
+    public string? Namespace { get; set; }
     public DateTime LastUpdated { get; set; }
     public bool IsPrivate { get; set; }
     public int PullCount { get; set; }

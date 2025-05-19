@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Volumes.Queries;
 
-public sealed record ListVolumes(Guid PlatformId, bool? Dangling = null, string Driver = null, string Name = null) 
+public sealed record ListVolumes(Guid PlatformId, bool? Dangling = null, string? Driver = null, string? Name = null) 
     : IQuery<Result<VolumeListReply>>;
 
 internal class ListVolumesHandler(ApplicationDbContext dbContext, IGrpcClientFactory clientFactory) : IQueryHandler<ListVolumes, Result<VolumeListReply>>

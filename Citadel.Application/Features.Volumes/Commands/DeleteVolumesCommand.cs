@@ -1,7 +1,6 @@
 ﻿using Agent.Server.Volumes;
 using FluentValidation;
 using Grpc.Core;
-using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;

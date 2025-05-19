@@ -18,9 +18,9 @@ namespace Infrastructure.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
-                    Address = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
-                    DaemonId = table.Column<string>(type: "TEXT", nullable: true),
+                    Name = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
+                    Address = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
+                    DaemonId = table.Column<string>(type: "TEXT", nullable: false),
                     Status = table.Column<string>(type: "TEXT", nullable: false),
                     NetworksCount = table.Column<int>(type: "INTEGER", nullable: false),
                     VolumesCount = table.Column<int>(type: "INTEGER", nullable: false),
@@ -66,8 +66,8 @@ namespace Infrastructure.Migrations
                 {
                     Id = table.Column<Guid>(type: "TEXT", nullable: false),
                     Name = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValue: new DateTime(2025, 5, 17, 15, 18, 55, 849, DateTimeKind.Utc).AddTicks(3047)),
-                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValue: new DateTime(2025, 5, 17, 15, 18, 55, 850, DateTimeKind.Utc).AddTicks(7004))
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValue: new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)),
+                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValue: new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc))
                 },
                 constraints: table =>
                 {
@@ -79,11 +79,11 @@ namespace Infrastructure.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
+                    Name = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     Email = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     Password = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValue: new DateTime(2025, 5, 17, 15, 18, 55, 862, DateTimeKind.Utc).AddTicks(4090)),
-                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValue: new DateTime(2025, 5, 17, 15, 18, 55, 862, DateTimeKind.Utc).AddTicks(4991))
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValue: new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)),
+                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValue: new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc))
                 },
                 constraints: table =>
                 {
@@ -96,14 +96,14 @@ namespace Infrastructure.Migrations
                 {
                     Id = table.Column<Guid>(type: "TEXT", nullable: false),
                     PlatformId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ContainerId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    Name = table.Column<string>(type: "TEXT", nullable: true),
-                    Image = table.Column<string>(type: "TEXT", nullable: true),
+                    ContainerId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    Image = table.Column<string>(type: "TEXT", nullable: false),
                     Created = table.Column<long>(type: "INTEGER", nullable: false),
                     State = table.Column<string>(type: "TEXT", nullable: false),
                     Stack = table.Column<string>(type: "TEXT", nullable: true),
                     Status = table.Column<string>(type: "TEXT", nullable: true),
-                    Ports = table.Column<string>(type: "TEXT", nullable: true)
+                    Ports = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -294,9 +294,9 @@ namespace Infrastructure.Migrations
                 columns: new[] { "Id", "CreatedAt", "Name" },
                 values: new object[,]
                 {
-                    { new Guid("0196debd-033b-7512-a11b-98533d063a04"), new DateTime(2025, 5, 17, 15, 18, 55, 813, DateTimeKind.Utc).AddTicks(3542), "Admin" },
-                    { new Guid("0196debe-0c94-7467-9b2d-397e0200276f"), new DateTime(2025, 5, 17, 15, 18, 55, 813, DateTimeKind.Utc).AddTicks(3889), "Dev" },
-                    { new Guid("0196debe-2d80-76dd-b351-ade38fa29169"), new DateTime(2025, 5, 17, 15, 18, 55, 813, DateTimeKind.Utc).AddTicks(3891), "QA" }
+                    { new Guid("0196debd-033b-7512-a11b-98533d063a04"), new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Admin" },
+                    { new Guid("0196debe-0c94-7467-9b2d-397e0200276f"), new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Dev" },
+                    { new Guid("0196debe-2d80-76dd-b351-ade38fa29169"), new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "QA" }
                 });
 
             migrationBuilder.InsertData(
@@ -304,9 +304,9 @@ namespace Infrastructure.Migrations
                 columns: new[] { "Id", "CreatedAt", "Email", "Name", "Password" },
                 values: new object[,]
                 {
-                    { new Guid("0196ded1-13f1-73fb-acf0-188115c01c0e"), new DateTime(2025, 5, 17, 15, 18, 55, 825, DateTimeKind.Utc).AddTicks(7228), "dev@dev.com", "dev", "7TO2PMxA2Z/tac0t3qCcRHXU+TNOYbVpXHYJj/oBoOGuADd5" },
-                    { new Guid("0196ded1-13f1-743a-8a1b-5e243048c77e"), new DateTime(2025, 5, 17, 15, 18, 55, 831, DateTimeKind.Utc).AddTicks(3565), "qa@qa.com", "qa", "H8qXcmLJ6DNZJKIjfG/y4Qbzpd9B1qeDVFYClMXZK8dLSvAg" },
-                    { new Guid("0196ded1-13f1-77ce-884e-3cb636ec09a8"), new DateTime(2025, 5, 17, 15, 18, 55, 814, DateTimeKind.Utc).AddTicks(825), "admin@admin.com", "admin", "EM7te8rWhVPqXBuaXT5SjtrHLt+otJmPj0EnjviIf/jQSPwe" }
+                    { new Guid("0196ded1-13f1-73fb-acf0-188115c01c0e"), new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "dev@dev.com", "dev", "bstIzQ7Axj+ZtX0eo89tp/8G1+oTO4BTrI+54+Ou7MKVKBwX" },
+                    { new Guid("0196ded1-13f1-743a-8a1b-5e243048c77e"), new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "qa@qa.com", "qa", "DZrfPl29P870AAeeCz/rDj2K/68NYT2gECxx5KSnEBZdjZ1i" },
+                    { new Guid("0196ded1-13f1-77ce-884e-3cb636ec09a8"), new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "admin@admin.com", "admin", "/VtxS3rzyzEIhP0i6Ehq72mGCarCK+xxCMcMXo4N5WMavIl/" }
                 });
 
             migrationBuilder.InsertData(

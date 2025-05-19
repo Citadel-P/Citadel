@@ -23,10 +23,10 @@ public sealed record CreateNetwork(
     bool? EnableIPv6,
     bool? EnableIPv4,
     bool? ConfigOnly,
-    IPAM IPAM = null,
-    ConfigFrom ConfigFrom = null,
-    Dictionary<string, string> Labels = null,
-    Dictionary<string, string> Options = null) : ICommand<Result<CreateNetworkReply>>
+    IPAM? IPAM = null,
+    ConfigFrom? ConfigFrom = null,
+    Dictionary<string, string>? Labels = null,
+    Dictionary<string, string>? Options = null) : ICommand<Result<CreateNetworkReply>>
 {
 
     internal class Validator : AbstractValidator<CreateNetwork>
@@ -129,8 +129,8 @@ public sealed record CreateNetwork(
 
 public sealed record IPAM(
     string Driver,
-    List<IPAMConfig> Config = null,
-    Dictionary<string, string> Options = null);
+    List<IPAMConfig>? Config = null,
+    Dictionary<string, string>? Options = null);
 
 public sealed record IPAMConfig(string Subnet, string IpRange, string Gateway);
 public sealed record ConfigFrom(string Network);

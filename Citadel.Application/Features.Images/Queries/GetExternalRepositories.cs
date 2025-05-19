@@ -1,5 +1,4 @@
-﻿using System.Linq;
-using FluentValidation;
+﻿using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.DockerHub;
@@ -43,7 +42,7 @@ internal sealed class GetExternalRepositoriesHander(
             {
                 return Result.Failure<IEnumerable<IImageRepository>>(new BadRequestError(errorMessage));
             }
-            return Result.Success(packages.Map());
+            return Result.Success(packages?.Map() ?? []);
         }
 
         if (registry.Configuration is DockerHubRegistry dhCfg)
@@ -53,7 +52,7 @@ internal sealed class GetExternalRepositoriesHander(
             {
                 return Result.Failure<IEnumerable<IImageRepository>>(new BadRequestError(errorMessage));
             }
-            return Result.Success(repositories.Map());
+            return Result.Success(repositories?.Map() ?? []);
         }
 
         return Result.Failure<IEnumerable<IImageRepository>>();

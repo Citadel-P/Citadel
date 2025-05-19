@@ -120,7 +120,7 @@ internal class UpsertPlatformHandler(
         var platform = await dbContext.Platforms.FirstOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
         if (platform == null)
         {
-            Result.Failure<Platform>(new NotFoundError("The provided platform Id does not exists"));
+            return Result.Failure<Platform>(new NotFoundError("The provided platform Id does not exists"));
         }
 
         var oldPlatformAddress = platform.Address;
@@ -152,10 +152,10 @@ internal class UpsertPlatformHandler(
         EnqueueTaskJob(new PlatformData(platform.Id, platform.Address, platform.Status), oldPlatformAddress, cancellationToken);
 
         logger.LogInformation("The platform with id = {PlatformId} has been updated", platform.Id);
-        return Result.Success(platform);
+        return platform;
     }
 
-    private void EnqueueTaskJob(PlatformData platformData, string oldAddress = null, CancellationToken cancellationToken = default)
+    private void EnqueueTaskJob(PlatformData platformData, string? oldAddress = null, CancellationToken cancellationToken = default)
     {
         if (!string.IsNullOrEmpty(oldAddress))
         {

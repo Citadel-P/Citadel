@@ -4,11 +4,11 @@ public class SwarmInfo
 {
     public Guid Id { get; private set; }
     public Guid PlatformId { get; private set; }
-    public string NodeID { get; private set; }
-    public string NodeAddr { get; private set; }
-    public string LocalNodeState { get; private set; }
+    public string? NodeID { get; private set; }
+    public string? NodeAddr { get; private set; }
+    public string? LocalNodeState { get; private set; }
     public bool ControlAvailable { get; private set; }
-    public string Error { get; private set; }
+    public string? Error { get; private set; }
     public long Nodes { get; private set; }
     public long Managers { get; private set; }
     public ICollection<SwarmPeer> RemoteManagers { get; private set; } = [];
@@ -19,14 +19,14 @@ public class SwarmInfo
     public Platform Platform { get; private set; }
 
     public static SwarmInfo Create(
-        string nodeID,
-        string nodeAddr,
-        string localNodeState,
+        string? nodeID,
+        string? nodeAddr,
+        string? localNodeState,
         bool controlAvailable,
-        string error,
+        string? error,
         long nodes,
         long managers,
-        IEnumerable<SwarmPeer> remoteManagers)
+        IEnumerable<SwarmPeer>? remoteManagers)
         => new()
         {
             Id = Guid.CreateVersion7(),
@@ -37,6 +37,6 @@ public class SwarmInfo
             Error = error,
             Nodes = nodes,
             Managers = managers,
-            RemoteManagers = remoteManagers?.ToList(),
+            RemoteManagers = remoteManagers is not null ? remoteManagers.ToList() : [],
         };
 }

@@ -34,9 +34,10 @@ const versionColumnHelper = createColumnHelper<GhcrPackageVersion>();
 // Nested table component
 function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubPackageResponse }) {
   const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
-  const { isLoading, data } = useGETPackageVersions(selectedRegistry?.name ?? undefined, ghPackage?.name ?? undefined);
+  const { isLoading, data } = useGETPackageVersions(selectedRegistry?.name, ghPackage?.name);
   const { sheetState, openSheet, closeSheet } = useSheetState<GhcrPackageVersion>();
 
+  console.log(selectedRegistry?.name, ghPackage);
   const versionColumns = useMemo(
     () => [
       versionColumnHelper.accessor('name', {
@@ -158,7 +159,7 @@ const VersionRow = ({ version }: { version: string }) => {
 export default function GhcrImagesTable({ registryName }: { registryName: string }) {
   const { isLoading, data } = useGETExternalRepositories(registryName);
   const [expanded, setExpanded] = useState<ExpandedState>({});
-
+console.log(data?.data)
   const columns = useMemo(
     () => [
       packageColumnHelper.display({

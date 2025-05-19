@@ -9,7 +9,7 @@ using Refit;
 
 namespace Application.Features.Images.Queries;
 
-public sealed record GetDockerHubPublicImages(string ImageName): IQuery<Result<IEnumerable<DockerHubImageModel>>>;
+public sealed record GetDockerHubPublicImages(string? ImageName): IQuery<Result<IEnumerable<DockerHubImageModel>>>;
 
 internal sealed class GetDockerHubPublicImagesHandler(IDockerHubApi dockerHub) : IQueryHandler<GetDockerHubPublicImages, Result<IEnumerable<DockerHubImageModel>>>
 {
@@ -21,7 +21,7 @@ internal sealed class GetDockerHubPublicImagesHandler(IDockerHubApi dockerHub) :
             try
             {
                 using FileStream openStream = File.OpenRead(Constants.DefaultImagesDefinitionsPath);
-                return await JsonSerializer.DeserializeAsync(openStream, DockerHubPublicImageContext.Default.ListDockerHubImageModel, cancellationToken);
+                return (await JsonSerializer.DeserializeAsync(openStream, DockerHubPublicImageContext.Default.ListDockerHubImageModel, cancellationToken) ?? []);
             }
             catch (JsonException ex)
             {

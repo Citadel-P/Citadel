@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Networks.Queries;
 
-public sealed record ListNetworks (Guid PlatformId, bool? Dangling = null, string Driver = null, string Id = null, string Name = null) : IQuery<Result<ListNetworksReply>>;
+public sealed record ListNetworks (Guid PlatformId, bool? Dangling = null, string? Driver = null, string? Id = null, string? Name = null) : IQuery<Result<ListNetworksReply>>;
 
 internal class ListNetworksHandler(ApplicationDbContext dbContext, IGrpcClientFactory clientFactory) : IQueryHandler<ListNetworks, Result<ListNetworksReply>>
 {

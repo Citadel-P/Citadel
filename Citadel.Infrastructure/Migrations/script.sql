@@ -6,9 +6,9 @@
 BEGIN TRANSACTION;
 CREATE TABLE "Platforms" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Platforms" PRIMARY KEY,
-    "Name" TEXT NULL,
-    "Address" TEXT NULL,
-    "DaemonId" TEXT NULL,
+    "Name" TEXT NOT NULL,
+    "Address" TEXT NOT NULL,
+    "DaemonId" TEXT NOT NULL,
     "Status" TEXT NOT NULL,
     "NetworksCount" INTEGER NOT NULL,
     "VolumesCount" INTEGER NOT NULL,
@@ -40,30 +40,30 @@ CREATE TABLE "Registries" (
 CREATE TABLE "Roles" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Roles" PRIMARY KEY,
     "Name" TEXT NOT NULL,
-    "CreatedAt" TEXT NOT NULL DEFAULT '2025-05-17 15:18:55.8493047',
-    "UpdatedAt" TEXT NOT NULL DEFAULT '2025-05-17 15:18:55.8507004'
+    "CreatedAt" TEXT NOT NULL DEFAULT '2000-01-01 00:00:00',
+    "UpdatedAt" TEXT NOT NULL DEFAULT '2000-01-01 00:00:00'
 );
 
 CREATE TABLE "Users" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Users" PRIMARY KEY,
-    "Name" TEXT NULL,
+    "Name" TEXT NOT NULL,
     "Email" TEXT NOT NULL,
     "Password" TEXT NOT NULL,
-    "CreatedAt" TEXT NOT NULL DEFAULT '2025-05-17 15:18:55.862409',
-    "UpdatedAt" TEXT NOT NULL DEFAULT '2025-05-17 15:18:55.8624991'
+    "CreatedAt" TEXT NOT NULL DEFAULT '2000-01-01 00:00:00',
+    "UpdatedAt" TEXT NOT NULL DEFAULT '2000-01-01 00:00:00'
 );
 
 CREATE TABLE "ContainersInfo" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_ContainersInfo" PRIMARY KEY,
     "PlatformId" TEXT NOT NULL,
-    "ContainerId" TEXT NULL,
-    "Name" TEXT NULL,
-    "Image" TEXT NULL,
+    "ContainerId" TEXT NOT NULL,
+    "Name" TEXT NOT NULL,
+    "Image" TEXT NOT NULL,
     "Created" INTEGER NOT NULL,
     "State" TEXT NOT NULL,
     "Stack" TEXT NULL,
     "Status" TEXT NULL,
-    "Ports" TEXT NULL,
+    "Ports" TEXT NOT NULL,
     CONSTRAINT "FK_ContainersInfo_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
 );
 
@@ -141,28 +141,28 @@ CREATE TABLE "UsersTeams" (
 );
 
 INSERT INTO "Roles" ("Id", "CreatedAt", "Name")
-VALUES ('0196DEBD-033B-7512-A11B-98533D063A04', '2025-05-17 15:18:55.8133542', 'Admin');
+VALUES ('0196DEBD-033B-7512-A11B-98533D063A04', '2025-01-01 00:00:00', 'Admin');
 SELECT changes();
 
 INSERT INTO "Roles" ("Id", "CreatedAt", "Name")
-VALUES ('0196DEBE-0C94-7467-9B2D-397E0200276F', '2025-05-17 15:18:55.8133889', 'Dev');
+VALUES ('0196DEBE-0C94-7467-9B2D-397E0200276F', '2025-01-01 00:00:00', 'Dev');
 SELECT changes();
 
 INSERT INTO "Roles" ("Id", "CreatedAt", "Name")
-VALUES ('0196DEBE-2D80-76DD-B351-ADE38FA29169', '2025-05-17 15:18:55.8133891', 'QA');
+VALUES ('0196DEBE-2D80-76DD-B351-ADE38FA29169', '2025-01-01 00:00:00', 'QA');
 SELECT changes();
 
 
 INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
-VALUES ('0196DED1-13F1-73FB-ACF0-188115C01C0E', '2025-05-17 15:18:55.8257228', 'dev@dev.com', 'dev', '7TO2PMxA2Z/tac0t3qCcRHXU+TNOYbVpXHYJj/oBoOGuADd5');
+VALUES ('0196DED1-13F1-73FB-ACF0-188115C01C0E', '2025-01-01 00:00:00', 'dev@dev.com', 'dev', 'bstIzQ7Axj+ZtX0eo89tp/8G1+oTO4BTrI+54+Ou7MKVKBwX');
 SELECT changes();
 
 INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
-VALUES ('0196DED1-13F1-743A-8A1B-5E243048C77E', '2025-05-17 15:18:55.8313565', 'qa@qa.com', 'qa', 'H8qXcmLJ6DNZJKIjfG/y4Qbzpd9B1qeDVFYClMXZK8dLSvAg');
+VALUES ('0196DED1-13F1-743A-8A1B-5E243048C77E', '2025-01-01 00:00:00', 'qa@qa.com', 'qa', 'DZrfPl29P870AAeeCz/rDj2K/68NYT2gECxx5KSnEBZdjZ1i');
 SELECT changes();
 
 INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
-VALUES ('0196DED1-13F1-77CE-884E-3CB636EC09A8', '2025-05-17 15:18:55.8140825', 'admin@admin.com', 'admin', 'EM7te8rWhVPqXBuaXT5SjtrHLt+otJmPj0EnjviIf/jQSPwe');
+VALUES ('0196DED1-13F1-77CE-884E-3CB636EC09A8', '2025-01-01 00:00:00', 'admin@admin.com', 'admin', '/VtxS3rzyzEIhP0i6Ehq72mGCarCK+xxCMcMXo4N5WMavIl/');
 SELECT changes();
 
 
@@ -322,7 +322,7 @@ CREATE UNIQUE INDEX "EmailIndex" ON "Users" ("Email");
 CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20250517151856_migration0001', '9.0.4');
+VALUES ('20250519134225_migration0001', '9.0.4');
 
 COMMIT;
 

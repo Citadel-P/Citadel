@@ -11,7 +11,6 @@ using Infrastructure.Services.Abstractions;
 using Infrastructure.TaskJobs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Refit;
 

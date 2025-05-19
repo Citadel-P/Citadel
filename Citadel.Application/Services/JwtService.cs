@@ -58,7 +58,7 @@ internal sealed class JwtService(IHttpContextAccessor context, IOptions<JwtConfi
         var tokenHandler = new JwtSecurityTokenHandler();
         var refreshToken = tokenHandler.WriteToken(tokenHandler.CreateToken(tokenDescriptor));
 
-        context.HttpContext.Response.Cookies.Append(Constants.RefreshToken, refreshToken, new CookieOptions
+        context.HttpContext?.Response.Cookies.Append(Constants.RefreshToken, refreshToken, new CookieOptions
         {
             HttpOnly = true,
             Secure = true,
