@@ -15,9 +15,9 @@ export interface Address {
   prefixLen?: number | null;
 }
 
-export interface AttestationDataView {
+export type AttestationDataView = {
   for: string;
-}
+} | null;
 
 export type BindOptions = {
   propagation?: string | null;
@@ -27,30 +27,30 @@ export type BindOptions = {
   readOnlyForceRecursive?: boolean | null;
 };
 
-export interface ClusterVolumeInfoView {
+export type ClusterVolumeInfoView = {
   /** @format int64 */
   capacityBytes: number | null;
   volumeContext: Record<string, string>;
   volumeID: string;
-  accessibleTopology: TopologyEntryView[];
-}
+  accessibleTopology: TopologyEntryView[] | null;
+};
 
-export interface ClusterVolumeView {
+export type ClusterVolumeView = {
   id: string;
-  version: VolumVersionView;
+  version: VolumeVersionView;
   createdAt: string;
   updatedAt: string;
   spec: VolumeSpecView;
   info: ClusterVolumeInfoView;
-  publishStatus: PublishStatusView[];
-}
+  publishStatus: PublishStatusView[] | null;
+};
 
 /** @default null */
-export interface ConfigFromInput {
+export type ConfigFromInput = {
   network: string;
-}
+} | null;
 
-export interface ConfigView {
+export type ConfigView = {
   hostname: string;
   domainname: string;
   user: string;
@@ -73,7 +73,7 @@ export interface ConfigView {
   labels: Record<string, string>;
   stopSignal: string;
   shell: string[];
-}
+} | null;
 
 export interface ContainerConfig {
   hostname?: string | null;
@@ -108,10 +108,10 @@ export interface ContainerInfoView {
   created: string;
   state: ContainerStateStatus;
   status: string;
-  stack: string;
-  lastStats: ContainerStatView;
+  stack: string | null;
+  lastStats: NullableOfContainerStatView;
   /** @default null */
-  ports?: PortView[];
+  ports?: PortView[] | null;
   platform?: PlatformView;
   metadata?: EndpointMetadata;
 }
@@ -314,16 +314,28 @@ export interface DescriptorView {
   artifactType: string;
 }
 
+export type DescriptorView2 = {
+  mediaType: string;
+  digest: string;
+  /** @format int64 */
+  size: number;
+  urls: string[];
+  annotations: Record<string, string>;
+  data: string;
+  platform: any;
+  artifactType: string;
+} | null;
+
 export interface DockerHubImageModel {
-  repo_name?: string;
-  short_description?: string;
+  repo_name?: string | null;
+  short_description?: string | null;
   is_official?: boolean;
   /** @format int64 */
   star_count?: number;
   /** @format int64 */
   pull_count?: number;
-  url?: string;
-  icon?: string;
+  url?: string | null;
+  icon?: string | null;
 }
 
 export interface DockerHubImageView {
@@ -337,8 +349,8 @@ export interface DockerHubImageView {
 }
 
 export interface DockerHubRepository {
-  name?: string;
-  namespace?: string;
+  name?: string | null;
+  namespace?: string | null;
   /** @format date-time */
   last_updated?: string;
   is_private?: boolean;
@@ -374,12 +386,12 @@ export interface EndpointIPAMConfig {
 }
 
 /** @default null */
-export interface EndpointMetadata {
+export type EndpointMetadata = {
   /** @default false */
   canEdit?: boolean | null;
   /** @default false */
   canDelete?: boolean | null;
-}
+};
 
 export interface EndpointSettingsView {
   ipamConfig: EndpointIPAMConfig;
@@ -402,13 +414,13 @@ export interface EndpointSettingsView {
 
 export interface GhcrPackageVersion {
   /** @format int32 */
-  id?: number;
-  name?: string;
-  url?: string;
-  package_html_url?: string;
-  created_at?: string;
-  updated_at?: string;
-  html_url?: string;
+  id: number;
+  name: string;
+  url: string;
+  package_html_url?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  html_url?: string | null;
   metadata?: PackageVersionMetadata;
 }
 
@@ -417,11 +429,11 @@ export interface GraphDriverData {
   data?: Record<string, string>;
 }
 
-export interface GraphDriverDataView {
+export type GraphDriverDataView = {
   mergedDir: string;
   upperDir: string;
   workDir: string;
-}
+} | null;
 
 export interface GraphDriverView {
   name: string;
@@ -434,7 +446,7 @@ export type Health = {
   failingStreak?: number | null;
 };
 
-export interface HealthcheckView {
+export type HealthcheckView = {
   test: string[];
   /** @format int64 */
   interval: number | null;
@@ -446,7 +458,7 @@ export interface HealthcheckView {
   startPeriod: number | null;
   /** @format int64 */
   startInterval: number | null;
-}
+};
 
 export interface HostConfig {
   binds?: string[] | null;
@@ -562,32 +574,32 @@ export interface IPAMConfigView {
   subnet: string;
   gateway: string;
   /** @default null */
-  ipRange?: string;
+  ipRange?: string | null;
 }
 
 /** @default null */
-export interface IPAMInput {
+export type IPAMInput = {
   driver: string;
   /** @default null */
-  config?: IPAMConfigInput[];
+  config?: IPAMConfigInput[] | null;
   /** @default null */
   options?: Record<string, string>;
-}
+};
 
 /** @default null */
-export interface IPAMView {
+export type IPAMView = {
   driver: string;
   /** @default null */
-  config?: IPAMConfigView[];
+  config?: IPAMConfigView[] | null;
   /** @default null */
   options?: Record<string, string>;
-}
+};
 
-export interface ImageDataView {
+export type ImageDataView = {
   platform: PlatformDescriptorView;
-  containers: string[];
+  containers: string[] | null;
   size: SizeView;
-}
+};
 
 export enum ImageStatus {
   Active = 'Active',
@@ -656,10 +668,10 @@ export interface InspectNetworkView {
   inUse: boolean | null;
   configOnly: boolean | null;
   /** @default null */
-  configFrom?: string;
+  configFrom?: string | null;
   ipam?: IPAMView;
   /** @default null */
-  peers?: PeerInfoView[];
+  peers?: PeerInfoView[] | null;
   /** @default null */
   options?: Record<string, string>;
   /** @default null */
@@ -714,7 +726,7 @@ export interface LoginResponse {
 
 export interface ManifestView {
   id: string;
-  descriptor: DescriptorView;
+  descriptor: DescriptorView2;
   available: boolean;
   size: SizeView;
   kind: string;
@@ -802,7 +814,7 @@ export interface NetworkView {
   inUse: boolean | null;
   configOnly: boolean | null;
   /** @default null */
-  configFrom?: string;
+  configFrom?: string | null;
   ipam?: IPAMView;
   /** @default null */
   options?: Record<string, string>;
@@ -814,13 +826,28 @@ export interface NetworksView {
   networks: NetworkView[];
 }
 
-export interface PackageVersionContainerMetadata {
-  tags?: string[];
-}
+export type NullableOfContainerStatView = {
+  /** @format double */
+  memoryUsage?: number;
+  /** @format double */
+  cpuUsage?: number;
+  /** @format double */
+  memoryLimit?: number;
+  /** @format int64 */
+  rxBytes?: number;
+  /** @format int64 */
+  txBytes?: number;
+  /** @format int64 */
+  created?: number;
+} | null;
 
-export interface PackageVersionMetadata {
+export type PackageVersionContainerMetadata = {
+  tags?: string[] | null;
+};
+
+export type PackageVersionMetadata = {
   container?: PackageVersionContainerMetadata;
-}
+} | null;
 
 export interface PatchRegistryInput {
   /** @format uuid */
@@ -836,13 +863,13 @@ export interface PeerInfoView {
   ip: string;
 }
 
-export interface PlatformDescriptorView {
+export type PlatformDescriptorView = {
   architecture: string;
   os: string;
   osVersion: string;
   osFeatures: string[];
   variant: string;
-}
+} | null;
 
 export interface PlatformStatView {
   /** @format double */
@@ -863,7 +890,7 @@ export enum PlatformStatus {
 }
 
 /** @default null */
-export interface PlatformView {
+export type PlatformView = {
   /** @format uuid */
   id: string;
   name: string;
@@ -884,20 +911,20 @@ export interface PlatformView {
   containersStopped: number;
   /** @format int64 */
   images: number;
-  driver: string;
-  operatingSystem: string;
-  osVersion: string;
-  osType: string;
-  architecture: string;
+  driver: string | null;
+  operatingSystem: string | null;
+  osVersion: string | null;
+  osType: string | null;
+  architecture: string | null;
   /** @format int64 */
   ncpu: number;
   /** @format int64 */
   memTotal: number;
-  serverVersion: string;
-  agentVersion: string;
+  serverVersion: string | null;
+  agentVersion: string | null;
   swarmInfo: SwarmInfoView;
-  stats: PlatformStatView[];
-}
+  stats: PlatformStatView[] | null;
+};
 
 export interface PlatformView2 {
   /** @format uuid */
@@ -920,19 +947,19 @@ export interface PlatformView2 {
   containersStopped: number;
   /** @format int64 */
   images: number;
-  driver: string;
-  operatingSystem: string;
-  osVersion: string;
-  osType: string;
-  architecture: string;
+  driver: string | null;
+  operatingSystem: string | null;
+  osVersion: string | null;
+  osType: string | null;
+  architecture: string | null;
   /** @format int64 */
   ncpu: number;
   /** @format int64 */
   memTotal: number;
-  serverVersion: string;
-  agentVersion: string;
+  serverVersion: string | null;
+  agentVersion: string | null;
   swarmInfo: SwarmInfoView;
-  stats: PlatformStatView[];
+  stats: PlatformStatView[] | null;
 }
 
 export interface PlatformsView {
@@ -1087,37 +1114,37 @@ export interface RootFSView {
   layers: string[];
 }
 
-export interface SizeView {
+export type SizeView = {
   /** @format int64 */
   total: number | null;
   /** @format int64 */
   content: number | null;
   /** @format int64 */
   unpacked: number | null;
-}
+};
 
 export interface StreamLogsRequest {
   containerId: string;
 }
 
-export interface SwarmInfoView {
+export type SwarmInfoView = {
   /** @format uuid */
   id: string;
-  nodeID: string;
-  nodeAddr: string;
-  localNodeState: string;
+  nodeID: string | null;
+  nodeAddr: string | null;
+  localNodeState: string | null;
   controlAvailable: boolean;
-  error: string;
+  error: string | null;
   /** @format int64 */
   nodes: number;
   /** @format int64 */
   managers: number;
-  remoteManagers: SwarmPeerView[];
-}
+  remoteManagers: SwarmPeerView[] | null;
+};
 
 export interface SwarmPeerView {
-  nodeID?: string;
-  addr?: string;
+  nodeID?: string | null;
+  addr?: string | null;
 }
 
 export enum TagStatus {
@@ -1137,32 +1164,27 @@ export interface Ulimits {
   hard?: number | null;
 }
 
-export interface UsageDataView {
+export type UsageDataView = {
   /** @format int64 */
   size: number | null;
   /** @format int64 */
   refCount: number | null;
-}
+};
 
-export interface VolumVersionView {
-  /** @format int64 */
-  index: number | null;
-}
-
-export interface VolumeAccessModeView {
+export type VolumeAccessModeView = {
   scope: VolumeScopeType;
   sharing: VolumeSharingType;
-  secrets: VolumeSecretView[];
+  secrets: VolumeSecretView[] | null;
   capacityRange: VolumeCapacityRange;
   availability: string;
-}
+};
 
-export interface VolumeCapacityRange {
+export type VolumeCapacityRange = {
   /** @format int64 */
   requiredBytes: number | null;
   /** @format int64 */
   limitBytes: number | null;
-}
+};
 
 export type VolumeOptions = {
   noCopy?: boolean | null;
@@ -1188,10 +1210,15 @@ export enum VolumeSharingType {
   All = 'All',
 }
 
-export interface VolumeSpecView {
+export type VolumeSpecView = {
   group: string;
   accessMode: VolumeAccessModeView;
-}
+} | null;
+
+export type VolumeVersionView = {
+  /** @format int64 */
+  index: number | null;
+};
 
 export interface VolumeView {
   id: string;

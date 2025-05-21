@@ -14,10 +14,10 @@ public sealed record ImageView(
     bool IsInUse,
     IDictionary<string, string> Labels)
 {
-    public string Name => GetImageName();
+    public string? Name => GetImageName();
     public string Tag => GetTag();
 
-    private string GetImageName()
+    private string? GetImageName()
     {
         if (RepoTags.Any()) return RepoTags.First().Split(":").FirstOrDefault();
         else if (RepoDigests.Any()) return RepoDigests.FirstOrDefault()?.Split("@").FirstOrDefault();

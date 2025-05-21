@@ -141,7 +141,7 @@ internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubAp
             var (canConnect, errorMessage) = await githubRegistry.CanConnect(githubCrApi, cancellationToken);
             if (!canConnect)
             {
-                return Result.Failure<Registry>(new BadRequestError(errorMessage));
+                return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
             }
         }
 

@@ -35,7 +35,7 @@ internal static class MapperExtension
             HairpinMode: networkSettings.HairpinMode,
             LinkLocalIPv6Address: networkSettings.LinkLocalIPv6Address,
             LinkLocalIPv6PrefixLen: networkSettings.LinkLocalIPv6PrefixLen,
-            Ports: networkSettings.Ports.Select(x => new MapFieldPortBindingView(x.Key, x.Value?.Select(Map))),
+            Ports: networkSettings.Ports.Select(x => new MapFieldPortBindingView(x.Key, x.Value?.Select(Map) ?? [])),
             SandboxKey: networkSettings.SandboxKey,
             SecondaryIPAddresses: networkSettings.SecondaryIPAddresses,
             EndpointID: networkSettings.EndpointID,

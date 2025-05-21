@@ -13,14 +13,14 @@ public sealed record ContainerInfoView(
     DateTimeOffset Created,
      ContainerStateStatus State,
     string Status,
-    string Stack,
-    ContainerStatView LastStats,
-    IEnumerable<PortView> Ports = null,
-    PlatformView Platform = null,
-    EndpointMetadata Metadata = null)
+    string? Stack,
+    ContainerStatView? LastStats,
+    IEnumerable<PortView>? Ports = null,
+    PlatformView? Platform = null,
+    EndpointMetadata? Metadata = null)
 {
     internal static IEnumerable<ContainerInfoView> Map(IEnumerable<ContainerInfo> containersInfo)
-        => containersInfo?.Select(Map);
+        => containersInfo?.Select(Map) ?? [];
 
     internal static ContainerInfoView Map(ContainerInfo container)
     {
@@ -31,9 +31,9 @@ public sealed record ContainerInfoView(
             Image: container.Image,
             Created: DateTimeOffset.FromUnixTimeSeconds(container.Created),
             State: container.State,
-            Status: container.Status,
+            Status: container.Status ?? "",
             Stack: container.Stack,
-            LastStats: ContainerStatView.Map(container.Stats?.FirstOrDefault()),
+            LastStats: container.Stats is not null && container.Stats.Count > 0 ? ContainerStatView.Map(container.Stats.First()) : null,
             Ports: container.Ports == null ? null : PortView.Map(container.Ports),
             Platform: container.Platform == null ? null : PlatformView.Map(container.Platform));
     }

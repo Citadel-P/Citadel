@@ -10,10 +10,10 @@ public sealed record VolumeView
     string CreatedAt,
     string Scope,
     bool InUse,
-    UsageDataView UsageData,
-    Dictionary<string, string> Labels,
-    Dictionary<string, string> Status,
-    Dictionary<string, string> Options
+    UsageDataView? UsageData,
+    Dictionary<string, string>? Labels,
+    Dictionary<string, string>? Status,
+    Dictionary<string, string>? Options
     )
 {
     public static VolumesView Map(VolumeListReply reply)

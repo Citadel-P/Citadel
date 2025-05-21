@@ -9,11 +9,11 @@ public sealed record InspectVolumeView (
     string CreatedAt,
     string Scope,
     bool InUse,
-    UsageDataView UsageData,
-    ClusterVolumeView ClusterVolume,
-    Dictionary<string, string> Labels,
-    Dictionary<string, string> Status,
-    Dictionary<string, string> Options
+    UsageDataView? UsageData,
+    ClusterVolumeView? ClusterVolume,
+    Dictionary<string, string>? Labels,
+    Dictionary<string, string>? Status,
+    Dictionary<string, string>? Options
     )
 {
     internal static InspectVolumeView Map(VolumeReply volume)
@@ -28,7 +28,7 @@ public sealed record InspectVolumeView (
             UsageData: volume.UsageData is null ? null : new UsageDataView(volume.UsageData.Size, volume.UsageData.RefCount),
             ClusterVolume: volume.ClusterVolume is null ? null : new ClusterVolumeView(
                 Id: volume.ClusterVolume.Id,
-                Version: volume.ClusterVolume.Version is null ? null : new VolumVersionView(volume.ClusterVolume.Version.Index),
+                Version: volume.ClusterVolume.Version is null ? null : new VolumeVersionView(volume.ClusterVolume.Version.Index),
                 CreatedAt: volume.ClusterVolume.CreatedAt,
                 UpdatedAt: volume.ClusterVolume.UpdatedAt,
                 Spec: volume.ClusterVolume.Spec is null ? null : VolumeSpecView.Map(volume.ClusterVolume.Spec),
@@ -44,25 +44,25 @@ public sealed record InspectVolumeView (
 
 public sealed record ClusterVolumeView(
     string Id,
-    VolumVersionView Version,
+    VolumeVersionView? Version,
     string CreatedAt,
     string UpdatedAt,
-    VolumeSpecView Spec,
-    ClusterVolumeInfoView Info,
-    List<PublishStatusView> PublishStatus);
+    VolumeSpecView? Spec,
+    ClusterVolumeInfoView? Info,
+    List<PublishStatusView>? PublishStatus);
 
 public record UsageDataView(
     long? Size,
     long? RefCount
 );
 
-public record VolumVersionView(
+public record VolumeVersionView(
     long? Index 
 );
 
 public record VolumeSpecView(
     string Group,
-    VolumeAccessModeView AccessMode
+    VolumeAccessModeView? AccessMode
 )
 {
     internal static VolumeSpecView Map(VolumeSpecMessage spec)
@@ -96,16 +96,16 @@ public record VolumeCapacityRange(
 public record VolumeAccessModeView(
     VolumeScopeType Scope,
     VolumeSharingType Sharing,
-    List<VolumeSecretView> Secrets,
-    VolumeCapacityRange CapacityRange,
+    List<VolumeSecretView>? Secrets,
+    VolumeCapacityRange? CapacityRange,
     string Availability
 );
 
 public record ClusterVolumeInfoView(
     long? CapacityBytes,
-    Dictionary<string, string> VolumeContext,
+    Dictionary<string, string>? VolumeContext,
     string VolumeID,
-    List<TopologyEntryView> AccessibleTopology
+    List<TopologyEntryView>? AccessibleTopology
 )
 {
     internal static ClusterVolumeInfoView Map(ClusterVolumeInfoMessage info)

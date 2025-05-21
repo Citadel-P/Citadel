@@ -15,10 +15,10 @@ public sealed record NetworkView(
     bool? Ingress,
     bool? InUse,
     bool? ConfigOnly,
-    string ConfigFrom = null,
-    IPAMView Ipam = null,
-    Dictionary<string, string> Options = null,
-    Dictionary<string, string> Labels = null
+    string? ConfigFrom = null,
+    IPAMView? Ipam = null,
+    Dictionary<string, string>? Options = null,
+    Dictionary<string, string>? Labels = null
     )
 {
     public static NetworksView Map(ListNetworksReply reply)
@@ -40,7 +40,7 @@ public sealed record NetworkView(
             InUse: network.InUse,
             ConfigOnly: network.ConfigOnly,
             ConfigFrom: network.ConfigFrom,
-            network.Ipam != null ? new IPAMView(network.Ipam.Driver, IPAMConfigView.Map(network.Ipam.Config?.ToList()), network.Ipam.Options?.ToDictionary()) : null,
+            network.Ipam != null ? new IPAMView(network.Ipam.Driver, IPAMConfigView.Map(network.Ipam.Config?.ToList() ?? []), network.Ipam.Options?.ToDictionary() ?? []) : null,
             Options: network.Options?.ToDictionary(),
             Labels: network.Labels?.ToDictionary()
         );
@@ -49,14 +49,14 @@ public sealed record NetworkView(
 
 public sealed record IPAMView(
     string Driver,
-    List<IPAMConfigView> Config = null,
-    Dictionary<string, string> Options = null
+    List<IPAMConfigView>? Config = null,
+    Dictionary<string, string>? Options = null
 );
 
 public sealed record IPAMConfigView(
     string Subnet,
     string Gateway,
-    string IPRange = null
+    string? IPRange = null
 )
 {
     internal static List<IPAMConfigView> Map(List<IPAMConfigMessage> ipamConfigs)

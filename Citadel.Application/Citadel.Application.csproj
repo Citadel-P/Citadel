@@ -24,8 +24,7 @@
 
   <ItemGroup>
 	 <ProjectReference Include="..\Citadel.Infrastructure\Citadel.Infrastructure.csproj" />
-	 <ProjectReference Include="..\Citadel.Contracts\Citadel.SourceGen\Citadel.SourceGen.csproj"
-					   OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all"/>
+	 <ProjectReference Include="..\Citadel.Contracts\Citadel.SourceGen\Citadel.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

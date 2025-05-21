@@ -16,17 +16,17 @@ public sealed record PlatformView(
     long ContainersPaused,
     long ContainersStopped,
     long Images,
-    string Driver,
-    string OperatingSystem,
-    string OsVersion,
-    string OsType,
-    string Architecture,
+    string? Driver,
+    string? OperatingSystem,
+    string? OsVersion,
+    string? OsType,
+    string? Architecture,
     long Ncpu,
     long MemTotal,
-    string ServerVersion,
-    string AgentVersion,
-    SwarmInfoView SwarmInfo,
-    IEnumerable<PlatformStatView> Stats
+    string? ServerVersion,
+    string? AgentVersion,
+    SwarmInfoView? SwarmInfo,
+    IEnumerable<PlatformStatView>? Stats
     )
 {
     internal static IEnumerable<PlatformView> Map(IEnumerable<Platform> platforms)

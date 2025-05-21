@@ -5,9 +5,11 @@ using Application.Services;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Pipelines;
+using Hosting.Common.Pipelines.Interfaces;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using Citadel.SourceGen;
 
 namespace Application;
 
@@ -21,13 +23,14 @@ public static class ApplicationModule
         services
             .AddMemoryCache()
             .AddSingleton<IJwtService, JwtService>()
-            .AddValidatorsFromAssembly(Assembly.GetExecutingAssembly(), includeInternalTypes: true, lifetime: ServiceLifetime.Singleton)
             .AddMediator(options =>
             {
                 options.ServiceLifetime = ServiceLifetime.Scoped;
             })
             .AddPermissions()
-            .AddSingleton<IPermissionMetadataProvider, GeneratedPermissionMetadataProvider>()
+            .AddSingleton<IErrorFactoryProvider, ErrorFactoryProvider>()
+            .AddSingleton<IValidatorMetadataProvider, ValidatorMetadataProvider>()
+            .AddSingleton<IPermissionMetadataProvider, PermissionMetadataProvider>()
             .AddSingleton(typeof(IPipelineBehavior<,>), typeof(PermissionBehavior<,>))
             .AddSingleton(typeof(IPipelineBehavior<,>), typeof(ValidatorBehavior<,>));
 

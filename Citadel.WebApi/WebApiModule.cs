@@ -28,7 +28,6 @@ internal static class WebApiModule
                 cfg.AddOperationTransformer<AddCookieOperationTransformer>();
                 cfg.AddOperationTransformer<ProduceCookieOperationTransformer>();
                 cfg.AddOperationTransformer<ExampleOperationTransformer>();
-                cfg.AddOperationTransformer<RequirePermissionOperationTransformer>();
             })
             .AddCors();
 

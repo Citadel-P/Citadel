@@ -6,8 +6,8 @@ public sealed record CreateVolumeInput(
     Guid PlatformId,
     string Name,
     string Driver,
-    Dictionary<string, string> Labels = null,
-    Dictionary<string, string> Options = null)
+    Dictionary<string, string>? Labels = null,
+    Dictionary<string, string>? Options = null)
 {
     internal CreateVolume ToCommand()
         => new (

@@ -33,7 +33,7 @@ internal sealed class GetDockerHubPublicImagesHandler(IDockerHubApi dockerHub) :
             try
             {
                 var pagedResult = await dockerHub.SearchImage(query.ImageName, cancellationToken);
-                return Result.Success(pagedResult.Results.OrderByDescending(s => s.StarCount).ThenByDescending(s => s.PullCount).Select(Mapper.Map));
+                return pagedResult.Results?.OrderByDescending(s => s.StarCount).ThenByDescending(s => s.PullCount).Select(Mapper.Map).ToList() ?? [];
             }
             catch (ApiException ex)
             {

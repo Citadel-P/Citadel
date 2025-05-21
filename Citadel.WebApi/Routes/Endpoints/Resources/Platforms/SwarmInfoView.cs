@@ -2,16 +2,16 @@
 
 public sealed record SwarmInfoView(
      Guid Id,
-     string NodeID,
-     string NodeAddr,
-     string LocalNodeState,
+     string? NodeID,
+     string? NodeAddr,
+     string? LocalNodeState,
      bool ControlAvailable,
-     string Error,
+     string? Error,
      long Nodes,
      long Managers,
-     IList<SwarmPeerView> RemoteManagers
+     IList<SwarmPeerView>? RemoteManagers
     );
 
 public record struct SwarmPeerView(
-    string NodeID,
-    string Addr);
+    string? NodeID,
+    string? Addr);

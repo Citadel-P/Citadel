@@ -3500,7 +3500,8 @@
           "for": {
             "type": "string"
           }
-        }
+        },
+        "nullable": true
       },
       "BindOptions": {
         "type": "object",
@@ -3546,7 +3547,8 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            }
+            },
+            "nullable": true
           },
           "volumeID": {
             "type": "string"
@@ -3555,9 +3557,11 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/TopologyEntryView"
-            }
+            },
+            "nullable": true
           }
-        }
+        },
+        "nullable": true
       },
       "ClusterVolumeView": {
         "required": [
@@ -3575,7 +3579,7 @@
             "type": "string"
           },
           "version": {
-            "$ref": "#/components/schemas/VolumVersionView"
+            "$ref": "#/components/schemas/VolumeVersionView"
           },
           "createdAt": {
             "type": "string"
@@ -3593,9 +3597,11 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PublishStatusView"
-            }
+            },
+            "nullable": true
           }
-        }
+        },
+        "nullable": true
       },
       "ConfigFromInput": {
         "required": [
@@ -3607,7 +3613,8 @@
             "type": "string"
           }
         },
-        "default": null
+        "default": null,
+        "nullable": true
       },
       "ConfigView": {
         "required": [
@@ -3724,7 +3731,8 @@
               "type": "string"
             }
           }
-        }
+        },
+        "nullable": true
       },
       "ContainerConfig": {
         "type": "object",
@@ -3870,17 +3878,19 @@
             "type": "string"
           },
           "stack": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "lastStats": {
-            "$ref": "#/components/schemas/ContainerStatView"
+            "$ref": "#/components/schemas/NullableOfContainerStatView"
           },
           "ports": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PortView"
             },
-            "default": null
+            "default": null,
+            "nullable": true
           },
           "platform": {
             "$ref": "#/components/schemas/PlatformView"
@@ -4225,14 +4235,16 @@
             "additionalProperties": {
               "type": "string"
             },
-            "default": null
+            "default": null,
+            "nullable": true
           },
           "options": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
             },
-            "default": null
+            "default": null,
+            "nullable": true
           }
         }
       },
@@ -4293,14 +4305,16 @@
             "additionalProperties": {
               "type": "string"
             },
-            "default": null
+            "default": null,
+            "nullable": true
           },
           "options": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
             },
-            "default": null
+            "default": null,
+            "nullable": true
           }
         }
       },
@@ -4488,14 +4502,63 @@
           }
         }
       },
+      "DescriptorView2": {
+        "required": [
+          "mediaType",
+          "digest",
+          "size",
+          "urls",
+          "annotations",
+          "data",
+          "platform",
+          "artifactType"
+        ],
+        "type": "object",
+        "properties": {
+          "mediaType": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "annotations": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "data": {
+            "type": "string"
+          },
+          "platform": {
+            "nullable": true
+          },
+          "artifactType": {
+            "type": "string"
+          }
+        },
+        "nullable": true
+      },
       "DockerHubImageModel": {
         "type": "object",
         "properties": {
           "repo_name": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "short_description": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "is_official": {
             "type": "boolean"
@@ -4509,10 +4572,12 @@
             "format": "int64"
           },
           "url": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "icon": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -4552,10 +4617,12 @@
         "type": "object",
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "namespace": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "last_updated": {
             "type": "string",
@@ -4667,7 +4734,8 @@
             "nullable": true
           }
         },
-        "default": null
+        "default": null,
+        "nullable": true
       },
       "EndpointSettingsView": {
         "required": [
@@ -4749,6 +4817,11 @@
         }
       },
       "GhcrPackageVersion": {
+        "required": [
+          "id",
+          "name",
+          "url"
+        ],
         "type": "object",
         "properties": {
           "id": {
@@ -4762,16 +4835,20 @@
             "type": "string"
           },
           "package_html_url": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "created_at": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "updated_at": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "html_url": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "metadata": {
             "$ref": "#/components/schemas/PackageVersionMetadata"
@@ -4811,7 +4888,8 @@
           "workDir": {
             "type": "string"
           }
-        }
+        },
+        "nullable": true
       },
       "GraphDriverView": {
         "required": [
@@ -4885,7 +4963,8 @@
             "format": "int64",
             "nullable": true
           }
-        }
+        },
+        "nullable": true
       },
       "HostConfig": {
         "type": "object",
@@ -5321,7 +5400,8 @@
           },
           "ipRange": {
             "type": "string",
-            "default": null
+            "default": null,
+            "nullable": true
           }
         }
       },
@@ -5339,17 +5419,20 @@
             "items": {
               "$ref": "#/components/schemas/IPAMConfigInput"
             },
-            "default": null
+            "default": null,
+            "nullable": true
           },
           "options": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
             },
-            "default": null
+            "default": null,
+            "nullable": true
           }
         },
-        "default": null
+        "default": null,
+        "nullable": true
       },
       "IPAMView": {
         "required": [
@@ -5365,17 +5448,20 @@
             "items": {
               "$ref": "#/components/schemas/IPAMConfigView"
             },
-            "default": null
+            "default": null,
+            "nullable": true
           },
           "options": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
             },
-            "default": null
+            "default": null,
+            "nullable": true
           }
         },
-        "default": null
+        "default": null,
+        "nullable": true
       },
       "ImageDataView": {
         "required": [
@@ -5392,12 +5478,14 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "nullable": true
           },
           "size": {
             "$ref": "#/components/schemas/SizeView"
           }
-        }
+        },
+        "nullable": true
       },
       "ImageStatus": {
         "enum": [
@@ -5648,7 +5736,8 @@
           },
           "configFrom": {
             "type": "string",
-            "default": null
+            "default": null,
+            "nullable": true
           },
           "ipam": {
             "$ref": "#/components/schemas/IPAMView"
@@ -5658,28 +5747,32 @@
             "items": {
               "$ref": "#/components/schemas/PeerInfoView"
             },
-            "default": null
+            "default": null,
+            "nullable": true
           },
           "options": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
             },
-            "default": null
+            "default": null,
+            "nullable": true
           },
           "labels": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
             },
-            "default": null
+            "default": null,
+            "nullable": true
           },
           "containers": {
             "type": "object",
             "additionalProperties": {
               "$ref": "#/components/schemas/NetworkContainerView"
             },
-            "default": null
+            "default": null,
+            "nullable": true
           }
         }
       },
@@ -5727,19 +5820,22 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            }
+            },
+            "nullable": true
           },
           "status": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            }
+            },
+            "nullable": true
           },
           "options": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            }
+            },
+            "nullable": true
           }
         }
       },
@@ -5842,7 +5938,7 @@
             "type": "string"
           },
           "descriptor": {
-            "$ref": "#/components/schemas/DescriptorView"
+            "$ref": "#/components/schemas/DescriptorView2"
           },
           "available": {
             "type": "boolean"
@@ -6154,7 +6250,8 @@
           },
           "configFrom": {
             "type": "string",
-            "default": null
+            "default": null,
+            "nullable": true
           },
           "ipam": {
             "$ref": "#/components/schemas/IPAMView"
@@ -6164,14 +6261,16 @@
             "additionalProperties": {
               "type": "string"
             },
-            "default": null
+            "default": null,
+            "nullable": true
           },
           "labels": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
             },
-            "default": null
+            "default": null,
+            "nullable": true
           }
         }
       },
@@ -6189,6 +6288,36 @@
           }
         }
       },
+      "NullableOfContainerStatView": {
+        "type": "object",
+        "properties": {
+          "memoryUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "cpuUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "memoryLimit": {
+            "type": "number",
+            "format": "double"
+          },
+          "rxBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "txBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "nullable": true
+      },
       "PackageVersionContainerMetadata": {
         "type": "object",
         "properties": {
@@ -6196,9 +6325,11 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "nullable": true
           }
-        }
+        },
+        "nullable": true
       },
       "PackageVersionMetadata": {
         "type": "object",
@@ -6206,7 +6337,8 @@
           "container": {
             "$ref": "#/components/schemas/PackageVersionContainerMetadata"
           }
-        }
+        },
+        "nullable": true
       },
       "PatchRegistryInput": {
         "required": [
@@ -6279,7 +6411,8 @@
           "variant": {
             "type": "string"
           }
-        }
+        },
+        "nullable": true
       },
       "PlatformStatView": {
         "type": "object",
@@ -6386,19 +6519,24 @@
             "format": "int64"
           },
           "driver": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "operatingSystem": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "osVersion": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "osType": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "architecture": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "ncpu": {
             "type": "integer",
@@ -6409,10 +6547,12 @@
             "format": "int64"
           },
           "serverVersion": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "agentVersion": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "swarmInfo": {
             "$ref": "#/components/schemas/SwarmInfoView"
@@ -6421,10 +6561,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PlatformStatView"
-            }
+            },
+            "nullable": true
           }
         },
-        "default": null
+        "default": null,
+        "nullable": true
       },
       "PlatformView2": {
         "required": [
@@ -6499,19 +6641,24 @@
             "format": "int64"
           },
           "driver": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "operatingSystem": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "osVersion": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "osType": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "architecture": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "ncpu": {
             "type": "integer",
@@ -6522,10 +6669,12 @@
             "format": "int64"
           },
           "serverVersion": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "agentVersion": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "swarmInfo": {
             "$ref": "#/components/schemas/SwarmInfoView"
@@ -6534,7 +6683,8 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PlatformStatView"
-            }
+            },
+            "nullable": true
           }
         }
       },
@@ -7025,7 +7175,8 @@
             "format": "int64",
             "nullable": true
           }
-        }
+        },
+        "nullable": true
       },
       "StreamLogsRequest": {
         "required": [
@@ -7057,19 +7208,23 @@
             "format": "uuid"
           },
           "nodeID": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "nodeAddr": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "localNodeState": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "controlAvailable": {
             "type": "boolean"
           },
           "error": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "nodes": {
             "type": "integer",
@@ -7083,18 +7238,22 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SwarmPeerView"
-            }
+            },
+            "nullable": true
           }
-        }
+        },
+        "nullable": true
       },
       "SwarmPeerView": {
         "type": "object",
         "properties": {
           "nodeID": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "addr": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -7155,20 +7314,8 @@
             "format": "int64",
             "nullable": true
           }
-        }
-      },
-      "VolumVersionView": {
-        "required": [
-          "index"
-        ],
-        "type": "object",
-        "properties": {
-          "index": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          }
-        }
+        },
+        "nullable": true
       },
       "VolumeAccessModeView": {
         "required": [
@@ -7190,7 +7337,8 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/VolumeSecretView"
-            }
+            },
+            "nullable": true
           },
           "capacityRange": {
             "$ref": "#/components/schemas/VolumeCapacityRange"
@@ -7198,7 +7346,8 @@
           "availability": {
             "type": "string"
           }
-        }
+        },
+        "nullable": true
       },
       "VolumeCapacityRange": {
         "required": [
@@ -7217,7 +7366,8 @@
             "format": "int64",
             "nullable": true
           }
-        }
+        },
+        "nullable": true
       },
       "VolumeOptions": {
         "type": "object",
@@ -7287,7 +7437,22 @@
           "accessMode": {
             "$ref": "#/components/schemas/VolumeAccessModeView"
           }
-        }
+        },
+        "nullable": true
+      },
+      "VolumeVersionView": {
+        "required": [
+          "index"
+        ],
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        },
+        "nullable": true
       },
       "VolumeView": {
         "required": [
@@ -7329,19 +7494,22 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            }
+            },
+            "nullable": true
           },
           "status": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            }
+            },
+            "nullable": true
           },
           "options": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            }
+            },
+            "nullable": true
           }
         }
       },

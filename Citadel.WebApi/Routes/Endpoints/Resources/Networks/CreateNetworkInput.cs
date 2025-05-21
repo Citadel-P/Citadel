@@ -13,10 +13,10 @@ public sealed record CreateNetworkInput(
     bool? EnableIPv6,
     bool? EnableIPv4,
     bool? ConfigOnly,
-    IPAMInput Ipam = null,
-    ConfigFromInput ConfigFrom = null,
-    Dictionary<string, string> Labels = null,
-    Dictionary<string, string> Options = null
+    IPAMInput? Ipam = null,
+    ConfigFromInput? ConfigFrom = null,
+    Dictionary<string, string>? Labels = null,
+    Dictionary<string, string>? Options = null
     )
 {
     internal CreateNetwork ToCommand() =>
@@ -40,8 +40,8 @@ public sealed record CreateNetworkInput(
 
 public sealed record IPAMInput(
     string Driver,
-    List<IPAMConfigInput> Config = null,
-    Dictionary<string, string> Options = null
+    List<IPAMConfigInput>? Config = null,
+    Dictionary<string, string>? Options = null
     )
 {
     internal IPAM ToCommand() =>

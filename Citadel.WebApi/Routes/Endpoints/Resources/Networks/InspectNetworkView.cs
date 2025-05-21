@@ -15,12 +15,12 @@ public sealed record InspectNetworkView(
     bool? Ingress,
     bool? InUse,
     bool? ConfigOnly,
-    string ConfigFrom = null,
-    IPAMView Ipam = null,
-    IEnumerable<PeerInfoView> Peers = null,
-    Dictionary<string, string> Options = null,
-    Dictionary<string, string> Labels = null,
-    Dictionary<string, NetworkContainerView> Containers = null
+    string? ConfigFrom = null,
+    IPAMView? Ipam = null,
+    IEnumerable<PeerInfoView>? Peers = null,
+    Dictionary<string, string>? Options = null,
+    Dictionary<string, string>? Labels = null,
+    Dictionary<string, NetworkContainerView>? Containers = null
     )
 {
     public static InspectNetworkView Map(InspectNetworkReply network) 
@@ -35,10 +35,10 @@ public sealed record InspectNetworkView(
             Internal: network.Internal,
             Attachable: network.Attachable,
             Ingress: network.Ingress,
-            InUse: network.Containers?.Any(),
+            InUse: network.Containers?.Count > 0,
             ConfigOnly: network.ConfigOnly,
             ConfigFrom: network.ConfigFrom,
-            network.Ipam != null ? new IPAMView(network.Ipam.Driver, IPAMConfigView.Map(network.Ipam.Config?.ToList()), network.Ipam.Options?.ToDictionary()) : null,
+            network.Ipam != null ? new IPAMView(network.Ipam.Driver, IPAMConfigView.Map(network.Ipam.Config?.ToList() ?? []), network.Ipam.Options?.ToDictionary() ?? []) : null,
             Options: network.Options?.ToDictionary(),
             Labels: network.Labels?.ToDictionary(),
             Peers: network.Peers?.Select(PeerInfoView.Map),

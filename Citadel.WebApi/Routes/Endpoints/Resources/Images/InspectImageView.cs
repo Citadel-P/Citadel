@@ -13,7 +13,7 @@ public record InspectImageView(
     string Created,
     string DockerVersion,
     string Author,
-    ConfigView Config,
+    ConfigView? Config,
     string Architecture,
     string Variant,
     string Os,
@@ -30,7 +30,7 @@ public record InspectImageView(
         return new InspectImageView(
             Id: image.Id,
             Descriptor: image.Descriptor_.Map(),
-            Manifests: image.Manifests?.Select(InspectImageViewExtensions.Map).ToList(),
+            Manifests: image.Manifests?.Select(InspectImageViewExtensions.Map).ToList() ?? [],
             RepoTags: image.RepoTags?.ToList() ?? [],
             RepoDigests: image.RepoDigests?.ToList() ?? [],
             Parent: image.Parent,
@@ -38,7 +38,7 @@ public record InspectImageView(
             Created: image.Created,
             DockerVersion: image.DockerVersion,
             Author: image.Author,
-            Config: image.Config.Map(),
+            Config: image.Config?.Map(),
             Architecture: image.Architecture,
             Variant: image.Variant,
             Os: image.Os,
@@ -59,7 +59,7 @@ public record DescriptorView(
     List<string> Urls,
     Dictionary<string, string> Annotations,
     string Data,
-    PlatformDescriptorView Platform,
+    PlatformDescriptorView? Platform,
     string ArtifactType
 );
 
@@ -78,9 +78,9 @@ public record PlatformDescriptorView(
 );
 
 public record ImageDataView(
-    PlatformDescriptorView Platform,
-    List<string> Containers,
-    SizeView Size
+    PlatformDescriptorView? Platform,
+    List<string>? Containers,
+    SizeView? Size
 );
 
 public record AttestationDataView(
@@ -89,12 +89,12 @@ public record AttestationDataView(
 
 public record ManifestView(
     string Id,
-    DescriptorView Descriptor,
+    DescriptorView? Descriptor,
     bool Available,
-    SizeView Size,
+    SizeView? Size,
     string Kind,
-    ImageDataView ImageData,
-    AttestationDataView AttestationData
+    ImageDataView? ImageData,
+    AttestationDataView? AttestationData
 );
 
 public record ConfigView(
@@ -110,7 +110,7 @@ public record ConfigView(
     bool StdinOnce,
     List<string> Env,
     List<string> Cmd,
-    HealthcheckView Healthcheck,
+    HealthcheckView? Healthcheck,
     bool ArgsEscaped,
     string Image,
     Dictionary<string, Empty> Volumes,
@@ -139,7 +139,7 @@ public record GraphDriverDataView(
 
 public record GraphDriverView(
     string Name,
-    GraphDriverDataView Data
+    GraphDriverDataView? Data
 );
 
 public record RootFSView(
@@ -147,18 +147,14 @@ public record RootFSView(
     List<string> Layers
 );
 
-public record MetadataView(
-    string LastTagTime
-);
+public record MetadataView(string LastTagTime);
 
 public record Empty();
 
 internal static class InspectImageViewExtensions
 {
-    public static DescriptorView Map(this DescriptorMessage descriptor) =>
-        descriptor == null
-            ? null
-            : new DescriptorView(
+    public static DescriptorView Map(this DescriptorMessage descriptor) => 
+        new (
                 MediaType: descriptor.MediaType,
                 Digest: descriptor.Digest,
                 Size: descriptor.Size,
@@ -176,9 +172,7 @@ internal static class InspectImageViewExtensions
             );
 
     public static ManifestView Map(this ManifestMessage manifest) =>
-       manifest == null
-           ? null
-           : new ManifestView(
+        new (
                Id: manifest.Id,
                Descriptor: manifest.Descriptor_?.Map(),
                Available: manifest.Available,
@@ -208,10 +202,8 @@ internal static class InspectImageViewExtensions
                )
            );
 
-    internal static ConfigView Map(this ConfigMessage config) =>
-        config == null
-            ? null
-            : new ConfigView(
+    internal static ConfigView Map(this ConfigMessage config) => 
+        new (
                 Hostname: config.Hostname,
                 Domainname: config.Domainname,
                 User: config.User,
@@ -244,9 +236,7 @@ internal static class InspectImageViewExtensions
             );
 
     internal static GraphDriverView Map(this GraphDriverMessage graphDriver) =>
-        graphDriver == null
-            ? null
-            : new GraphDriverView(
+        new (
                 Name: graphDriver.Name,
                 Data: graphDriver.Data == null ? null : new GraphDriverDataView(
                     MergedDir: graphDriver.Data.MergedDir,
@@ -255,18 +245,11 @@ internal static class InspectImageViewExtensions
                 )
             );
 
-    internal static RootFSView Map(this RootFSMessage rootFS) =>
-        rootFS == null
-            ? null
-            : new RootFSView(
+    internal static RootFSView Map(this RootFSMessage rootFS) => 
+        new (
                 Type: rootFS.Type,
                 Layers: rootFS.Layers?.ToList() ?? []
             );
 
-    internal static MetadataView Map(this MetadataMessage metadata) =>
-        metadata == null
-            ? null
-            : new MetadataView(
-                LastTagTime: metadata.LastTagTime
-            );
+    internal static MetadataView Map(this MetadataMessage metadata) => new (LastTagTime: metadata.LastTagTime);
 }

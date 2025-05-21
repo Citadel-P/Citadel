@@ -18,7 +18,7 @@ public partial class PaginateRepositories : Page
 {
 
     [JsonPropertyName("results")]
-    public ICollection<DockerHubRepository> Results { get; set; }
+    public ICollection<DockerHubRepository>? Results { get; set; }
 
 }
 
@@ -27,18 +27,18 @@ public partial class PaginateRepositories : Page
 public partial class PaginateImageSearch: Page
 {
     [JsonPropertyName("results")]
-    public ICollection<DockerHubImageModel> Results { get; set; }
+    public ICollection<DockerHubImageModel>? Results { get; set; }
 }
 
 public record DockerHubImageModel
 {
-    [JsonPropertyName("repo_name")] public string Name { get; set; }
-    [JsonPropertyName("short_description")] public string Description { get; set; }
+    [JsonPropertyName("repo_name")] public string? Name { get; set; }
+    [JsonPropertyName("short_description")] public string? Description { get; set; }
     [JsonPropertyName("is_official")] public bool IsOfficial { get; set; }
     [JsonPropertyName("star_count")] public long StarCount { get; set; }
     [JsonPropertyName("pull_count")] public long PullCount { get; set; }
-    [JsonPropertyName("url")] public string Url { get; set; }
-    [JsonPropertyName("icon")] public string Icon { get; set; }
+    [JsonPropertyName("url")] public string? Url { get; set; }
+    [JsonPropertyName("icon")] public string? Icon { get; set; }
 
 }
 
@@ -49,12 +49,12 @@ public partial class DockerHubRepository
     /// The name of the repository.
     /// </summary>
     [JsonPropertyName("name")]
-    public string Name { get; set; }
+    public string? Name { get; set; }
     /// <summary>
     /// The namespace under which the repository exists.
     /// </summary>
     [JsonPropertyName("namespace")]
-    public string Namespace { get; set; }
+    public string? Namespace { get; set; }
     /// <summary>
     /// Timestamp of the last update to the repository.
     /// </summary
