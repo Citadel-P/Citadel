@@ -41,7 +41,13 @@ internal sealed class DeleteContainersHandler(
                         .AsNoTracking()
                         .ToListAsync(cancellationToken);
 
-        var exceptions = new ConcurrentBag<Exception>();
+        if (platforms.Count == 0)
+        {
+            return Result.Failure(new NotFoundError("No containers found for the given IDs."));
+        }
+
+        var exceptions = new Exception[platforms.Sum(s => s.ContainersId.Count())];
+        var exceptionIndex = 0;
         var parallelOptions = new ParallelOptions
         {
             MaxDegreeOfParallelism = Environment.ProcessorCount,
@@ -63,12 +69,16 @@ internal sealed class DeleteContainersHandler(
             }
             catch (Exception ex)
             {
-                exceptions.Add(ex);
+                var idx = Interlocked.Increment(ref exceptionIndex) - 1;
+                if (idx < exceptions.Length)
+                    exceptions[idx] = ex;
                 logger.LogError(ex, "Error while processing container {ContainerIds} on platform {PlatformAddress}", platform.ContainersId, platform.Address);
             }
         });
 
-        if (exceptions.IsEmpty)
+        exceptions = [.. exceptions.Where(e => e is not null)]; // Filter out null exceptions
+
+        if (exceptions.Length == 0)
         {
             return Result.Success();
         }

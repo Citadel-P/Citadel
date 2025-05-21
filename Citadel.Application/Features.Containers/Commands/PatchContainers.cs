@@ -1,17 +1,18 @@
-﻿using FluentValidation;
+﻿using System.Collections.Concurrent;
+using System.ComponentModel;
+using Agent.Server.Containers;
+using FluentValidation;
+using Google.Protobuf.WellKnownTypes;
+using Grpc.Core;
+using Hosting.Common;
+using Hosting.Common.ErrorTypes;
+using Infrastructure.EntityFramework;
+using Infrastructure.Services.Abstractions;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
-using Hosting.Common;
-using Infrastructure.EntityFramework;
-using static Agent.Server.Containers.Containers;
-using Agent.Server.Containers;
-using Infrastructure.Services.Abstractions;
-using Google.Protobuf.WellKnownTypes;
-using Hosting.Common.ErrorTypes;
 using Microsoft.Extensions.Logging;
-using Grpc.Core;
-using System.Collections.Concurrent;
+using static Agent.Server.Containers.Containers;
 
 namespace Application.Features.Containers.Commands;
 
@@ -52,7 +53,14 @@ internal class PatchContainersHandler(
                         .AsNoTracking()
                         .ToListAsync(cancellationToken);
 
-        var exceptions = new ConcurrentBag<Exception>();
+        if (platforms.Count == 0)
+        {
+            return Result.Failure(new NotFoundError("No containers found for the given IDs."));
+        }
+
+        // Pre-allocate array for results
+        var exceptions = new Exception[platforms.Sum(s => s.ContainersId.Count())];
+        var exceptionIndex = 0;
         var parallelOptions = new ParallelOptions
         {
             MaxDegreeOfParallelism = Environment.ProcessorCount,
@@ -67,7 +75,9 @@ internal class PatchContainersHandler(
             }
             catch (Exception ex)
             {
-                exceptions.Add(ex);
+                var idx = Interlocked.Increment(ref exceptionIndex) - 1;
+                if (idx < exceptions.Length)
+                    exceptions[idx] = ex;
                 logger.LogError(ex, "Error while processing container {ContainerIds} on platform {PlatformAddress}", platform.ContainersId, platform.Address);
             }
         });
@@ -82,7 +92,9 @@ internal class PatchContainersHandler(
             _ => throw new NotImplementedException()
         };
 
-        if (exceptions.IsEmpty)
+        exceptions = [.. exceptions.Where(e => e is not null)]; // Filter out null exceptions
+
+        if (exceptions.Length == 0)
         {
             return Result.Success();
         }
