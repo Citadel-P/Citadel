@@ -6,5 +6,6 @@ public interface IContainerHubDispatcher
 {
     Task SendContainerEvent(ContainerInfo container, string @event);
     Task SendContainersInfo(IEnumerable<ContainerInfo> containers);
+    Task SendContainersStats(IEnumerable<ContainerStat> containers, Guid platformId);
 }
 

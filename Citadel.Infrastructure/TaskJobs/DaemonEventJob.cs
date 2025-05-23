@@ -78,16 +78,23 @@ public sealed class DaemonEventJob(
                     if (reply.EventMessageType != Agent.Server.Containers.EventMessageType.Container)
                         continue;
 
-                    var containerInfo = reply.Container.Map(platform.Id, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
                     switch (reply.Action)
                     {
                         case "create":
+                            var containerInfo = reply.Container.Map(platform.Id, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
                             dbContext.ContainersInfo.Add(containerInfo);
+                            await dbContext.SaveChangesAsync(cancellationToken);
+                            await containerHub.SendContainerEvent(containerInfo, reply.Action);
                             break;
                         case "destroy":
                             var existingDestroy = await dbContext.ContainersInfo.FirstOrDefaultAsync(c => c.ContainerId == reply.ContainerId, cancellationToken);
-                            if (existingDestroy != null) dbContext.ContainersInfo.Remove(existingDestroy);
+                            if (existingDestroy != null)
+                            {
+                                dbContext.ContainersInfo.Remove(existingDestroy);
+                                await dbContext.SaveChangesAsync(cancellationToken);
+                                await containerHub.SendContainerEvent(existingDestroy, reply.Action);
+                            }
                             break;
                         default:
                             var existing = await dbContext.ContainersInfo.FirstOrDefaultAsync(c => c.ContainerId == reply.ContainerId, cancellationToken);
@@ -101,18 +108,18 @@ public sealed class DaemonEventJob(
                                     "restart" => "restarting",
                                     _ => throw new NotImplementedException()
                                 };
-                                existing.PartialUpdate(state: containerInfo.State, status: containerInfo.Status);
+
+                                existing.PartialUpdate(state: ContainerInfoMapper.Map(reply.Container.State), status: reply.Container.Status);
+                                await dbContext.SaveChangesAsync(cancellationToken);
+                                await containerHub.SendContainerEvent(existing, reply.Action);
                             }
                             break;
                     }
-
-                    await dbContext.SaveChangesAsync(cancellationToken);
-                    await containerHub.SendContainerEvent(containerInfo, reply.Action);
                 }
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)
             {
-                logger.LogInformation("Stream for {Address} was cancelled.", platform.Address);
+                logger.LogInformation("Stream for {Address} was canceled.", platform.Address);
                 break;
             }
             catch (Exception ex)

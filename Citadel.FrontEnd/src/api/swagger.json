@@ -4038,6 +4038,10 @@
       "ContainerStatView": {
         "type": "object",
         "properties": {
+          "containerId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "memoryUsage": {
             "type": "number",
             "format": "double"
@@ -4051,12 +4055,12 @@
             "format": "double"
           },
           "rxBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "number",
+            "format": "double"
           },
           "txBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "number",
+            "format": "double"
           },
           "created": {
             "type": "integer",
@@ -6291,6 +6295,10 @@
       "NullableOfContainerStatView": {
         "type": "object",
         "properties": {
+          "containerId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "memoryUsage": {
             "type": "number",
             "format": "double"
@@ -6304,12 +6312,12 @@
             "format": "double"
           },
           "rxBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "number",
+            "format": "double"
           },
           "txBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "number",
+            "format": "double"
           },
           "created": {
             "type": "integer",

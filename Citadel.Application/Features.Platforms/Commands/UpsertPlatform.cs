@@ -33,6 +33,7 @@ public sealed record UpsertPlatform(Guid? Id, string Name, string Address) : ICo
 internal class UpsertPlatformHandler(
     IGrpcClientFactory clientFactory,
     IDaemonEventJob daemonEventJob,
+    IContainersStatsJob containersStatsJob,
     ApplicationDbContext dbContext,
     ILogger<UpsertPlatformHandler> logger)
     : ICommandHandler<UpsertPlatform, Result<Platform>>
@@ -160,10 +161,12 @@ internal class UpsertPlatformHandler(
         if (!string.IsNullOrEmpty(oldAddress))
         {
             daemonEventJob.StopMonitoringPlatform(oldAddress);
+            containersStatsJob.StopStreamStatsForPlatform(oldAddress);
         }
-        daemonEventJob.StartMonitoringPlatform(platformData, cancellationToken);
-    }
 
+        daemonEventJob.StartMonitoringPlatform(platformData, cancellationToken);
+        containersStatsJob.StartStreamStatsForPlatform(platformData, cancellationToken);
+    }
 }
 
 internal static class Mapper 

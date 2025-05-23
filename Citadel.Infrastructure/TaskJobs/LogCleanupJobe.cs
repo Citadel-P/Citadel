@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.TaskJobs
 {
-    internal class LogCleanupJob(ILogger<ContainersInfoJob> logger) : BackgroundService
+    internal class LogCleanupJob(ILogger<LogCleanupJob> logger) : BackgroundService
     {
         private const int RetentionDays = 10;
 

@@ -7,6 +7,9 @@ namespace WebApi.Hubs;
 
 internal sealed class ContainerHubDispatcher(IHubContext<ContainerHub, ITypedContainerHub> hubContext) : IContainerHubDispatcher
 {
+    public Task SendContainersStats(IEnumerable<ContainerStat> containers, Guid platformId)
+    => hubContext.Clients.Group($"ContainersInfo/{platformId}").ContainersStatsUpdated(ContainerStatView.Map(containers));
+
     public Task SendContainersInfo(IEnumerable<ContainerInfo> containers) 
         => hubContext.Clients.Group($"ContainersInfo/{containers.First().PlatformId}").ContainersInfoUpdated(ContainersInfoView.Map(containers));
 

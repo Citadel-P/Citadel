@@ -2,6 +2,7 @@
 using Infrastructure.Entities.Identity;
 using Infrastructure.EntityFramework.Configurations;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Infrastructure.EntityFramework;
 
@@ -25,6 +26,16 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        var guidToBlob = new ValueConverter<Guid, byte[]>(v => v.ToByteArray(), v => new Guid(v));
+        foreach (var entity in modelBuilder.Model.GetEntityTypes())
+        {
+            foreach (var property in entity.GetProperties().Where(p => p.ClrType == typeof(Guid)))
+            {
+                property.SetValueConverter(guidToBlob);
+                property.SetColumnType("BLOB"); // Store Guid as BLOB instead of TEXT
+            }
+        }
+
         modelBuilder.Ignore<ContainerPort>();
         modelBuilder.Ignore<RegistryConfigurationBase>();
         // modelBuilder.ApplyConfigurationsFromAssembly(GetType().Assembly); // breaks in trimming mode

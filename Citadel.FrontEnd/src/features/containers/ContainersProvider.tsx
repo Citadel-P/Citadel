@@ -2,7 +2,6 @@ import { ContainerInfoView, DeleteContainersRequest } from '@/api/_generated';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { createContext } from 'use-context-selector';
 import useContainersHub from './hooks/useContainersHub';
-import { useGETContainers } from './hooks/useGETContainers';
 import { useParams } from 'react-router';
 import { useDELETEContainers } from './hooks/useDELETEContainers';
 import { toast } from 'sonner';
@@ -27,8 +26,7 @@ const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children
   const { platformId } = useParams<{ platformId: string }>();
 
   // Fetch containers data
-  const { data, isLoading, isSuccess } = useGETContainers(platformId!);
-  const { containersInfo } = useContainersHub(platformId!);
+  const { containersInfo, isLoading } = useContainersHub(platformId!);
 
   // Handle container deletion
   const { mutate, isSuccess: deleteIsSuccess, isPending: deleteIsPending } = useDELETEContainers();
@@ -42,15 +40,12 @@ const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children
   // Dialog state
   const { dialogData, setDialogData } = useDialogState<ContainerInfoView>();
 
-  // Update containers when data or hub info changes
+  // Update containers when hub info changes
   useEffect(() => {
-    // Order matters
     if (containersInfo?.containers) {
       setOriginalContainers(containersInfo.containers);
-    } else if (isSuccess && data?.data?.containers) {
-      setOriginalContainers(data.data.containers);
     }
-  }, [data, isSuccess, containersInfo]);
+  }, [containersInfo]);
 
   // Filter containers whenever original containers or search term changes
   useEffect(() => {

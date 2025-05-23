@@ -47,11 +47,13 @@ public static class InfrastructureModule
     private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)
     {
         services
-            .AddHostedService<ContainersInfoJob>()
+            .AddHostedService<ContainersStatsJob>()
             .AddHostedService<PlatformInfoJob>()
             .AddHostedService<DaemonEventJob>()
             .AddHostedService<LogCleanupJob>();
-        services.AddSingleton<IDaemonEventJob, DaemonEventJob>();
+        services
+            .AddSingleton<IContainersStatsJob, ContainersStatsJob>()
+            .AddSingleton<IDaemonEventJob, DaemonEventJob>();
         return services;
     }
 

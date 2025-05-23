@@ -8,16 +8,16 @@ public class ContainerStat
     public double? MemoryUsage { get; private set; }
     public double? CpuUsage { get; private set; }
     public double? MemoryLimit { get; private set; }
-    public long? RxBytes { get; private set; }
-    public long? TxBytes { get; private set; }
+    public double? RxBytes { get; private set; }
+    public double? TxBytes { get; private set; }
 
     public static ContainerStat Create(
         Guid containerInfoId,
         double? memoryUsage,
         double? cpuUsage,
         double? memoryLimit,
-        long? rxBytes,
-        long? txBytes,
+        double? rxBytes,
+        double? txBytes,
         long? created
         ) => new()
         {

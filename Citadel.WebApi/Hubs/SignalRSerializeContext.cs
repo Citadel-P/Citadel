@@ -9,6 +9,7 @@ namespace WebApi.Hubs;
 [JsonSerializable(typeof(ContainerInfoView))]
 [JsonSerializable(typeof(List<ContainerInfoView>))]
 [JsonSerializable(typeof(List<ContainerStatView>))]
+[JsonSerializable(typeof(IEnumerable<ContainerStatView>))]
 [JsonSerializable(typeof(ContainerStatView))]
 [JsonSerializable(typeof(PortView))]
 [JsonSerializable(typeof(List<PortView>))]

@@ -17,7 +17,7 @@ namespace Infrastructure.Migrations
                 name: "Platforms",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<byte[]>(type: "BLOB", nullable: false),
                     Name = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     Address = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     DaemonId = table.Column<string>(type: "TEXT", nullable: false),
@@ -48,7 +48,7 @@ namespace Infrastructure.Migrations
                 name: "Registries",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<byte[]>(type: "BLOB", nullable: false),
                     Name = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     Url = table.Column<string>(type: "TEXT", maxLength: 256, nullable: false),
                     Created = table.Column<DateTime>(type: "TEXT", nullable: false),
@@ -64,7 +64,7 @@ namespace Infrastructure.Migrations
                 name: "Roles",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<byte[]>(type: "BLOB", nullable: false),
                     Name = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValue: new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)),
                     UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValue: new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc))
@@ -78,7 +78,7 @@ namespace Infrastructure.Migrations
                 name: "Users",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<byte[]>(type: "BLOB", nullable: false),
                     Name = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     Email = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     Password = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
@@ -94,8 +94,8 @@ namespace Infrastructure.Migrations
                 name: "ContainersInfo",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PlatformId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<byte[]>(type: "BLOB", nullable: false),
+                    PlatformId = table.Column<byte[]>(type: "BLOB", nullable: false),
                     ContainerId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
                     Image = table.Column<string>(type: "TEXT", nullable: false),
@@ -120,8 +120,8 @@ namespace Infrastructure.Migrations
                 name: "PlatformStats",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PlatformId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<byte[]>(type: "BLOB", nullable: false),
+                    PlatformId = table.Column<byte[]>(type: "BLOB", nullable: false),
                     Created = table.Column<long>(type: "INTEGER", nullable: false),
                     MemoryUsage = table.Column<double>(type: "REAL", nullable: false),
                     CpuUsage = table.Column<double>(type: "REAL", nullable: false),
@@ -143,8 +143,8 @@ namespace Infrastructure.Migrations
                 name: "SwarmsInfo",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PlatformId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<byte[]>(type: "BLOB", nullable: false),
+                    PlatformId = table.Column<byte[]>(type: "BLOB", nullable: false),
                     NodeID = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
                     NodeAddr = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
                     LocalNodeState = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
@@ -168,8 +168,8 @@ namespace Infrastructure.Migrations
                 name: "Permissions",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RoleId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<byte[]>(type: "BLOB", nullable: false),
+                    RoleId = table.Column<byte[]>(type: "BLOB", nullable: false),
                     PermissionCode = table.Column<int>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
@@ -187,8 +187,8 @@ namespace Infrastructure.Migrations
                 name: "Teams",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RoleId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<byte[]>(type: "BLOB", nullable: false),
+                    RoleId = table.Column<byte[]>(type: "BLOB", nullable: false),
                     Name = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false)
                 },
                 constraints: table =>
@@ -206,8 +206,8 @@ namespace Infrastructure.Migrations
                 name: "RefreshTokens",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UserId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<byte[]>(type: "BLOB", nullable: false),
+                    UserId = table.Column<byte[]>(type: "BLOB", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
@@ -225,14 +225,14 @@ namespace Infrastructure.Migrations
                 name: "ContainerStats",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ContainerInfoId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<byte[]>(type: "BLOB", nullable: false),
+                    ContainerInfoId = table.Column<byte[]>(type: "BLOB", nullable: false),
                     Created = table.Column<long>(type: "INTEGER", nullable: false),
                     MemoryUsage = table.Column<double>(type: "REAL", nullable: true),
                     CpuUsage = table.Column<double>(type: "REAL", nullable: true),
                     MemoryLimit = table.Column<double>(type: "REAL", nullable: true),
-                    RxBytes = table.Column<long>(type: "INTEGER", nullable: true),
-                    TxBytes = table.Column<long>(type: "INTEGER", nullable: true)
+                    RxBytes = table.Column<double>(type: "REAL", nullable: true),
+                    TxBytes = table.Column<double>(type: "REAL", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -249,8 +249,8 @@ namespace Infrastructure.Migrations
                 name: "SwarmsPeer",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SwarmInfoId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<byte[]>(type: "BLOB", nullable: false),
+                    SwarmInfoId = table.Column<byte[]>(type: "BLOB", nullable: false),
                     NodeID = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
                     Addr = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true)
                 },
@@ -269,8 +269,8 @@ namespace Infrastructure.Migrations
                 name: "UsersTeams",
                 columns: table => new
                 {
-                    UserId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    TeamId = table.Column<Guid>(type: "TEXT", nullable: false)
+                    UserId = table.Column<byte[]>(type: "BLOB", nullable: false),
+                    TeamId = table.Column<byte[]>(type: "BLOB", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -294,9 +294,9 @@ namespace Infrastructure.Migrations
                 columns: new[] { "Id", "CreatedAt", "Name" },
                 values: new object[,]
                 {
-                    { new Guid("0196debd-033b-7512-a11b-98533d063a04"), new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Admin" },
-                    { new Guid("0196debe-0c94-7467-9b2d-397e0200276f"), new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Dev" },
-                    { new Guid("0196debe-2d80-76dd-b351-ade38fa29169"), new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "QA" }
+                    { new byte[] { 189, 222, 150, 1, 59, 3, 18, 117, 161, 27, 152, 83, 61, 6, 58, 4 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Admin" },
+                    { new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Dev" },
+                    { new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "QA" }
                 });
 
             migrationBuilder.InsertData(
@@ -304,9 +304,9 @@ namespace Infrastructure.Migrations
                 columns: new[] { "Id", "CreatedAt", "Email", "Name", "Password" },
                 values: new object[,]
                 {
-                    { new Guid("0196ded1-13f1-73fb-acf0-188115c01c0e"), new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "dev@dev.com", "dev", "bstIzQ7Axj+ZtX0eo89tp/8G1+oTO4BTrI+54+Ou7MKVKBwX" },
-                    { new Guid("0196ded1-13f1-743a-8a1b-5e243048c77e"), new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "qa@qa.com", "qa", "DZrfPl29P870AAeeCz/rDj2K/68NYT2gECxx5KSnEBZdjZ1i" },
-                    { new Guid("0196ded1-13f1-77ce-884e-3cb636ec09a8"), new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "admin@admin.com", "admin", "/VtxS3rzyzEIhP0i6Ehq72mGCarCK+xxCMcMXo4N5WMavIl/" }
+                    { new byte[] { 209, 222, 150, 1, 241, 19, 206, 119, 136, 78, 60, 182, 54, 236, 9, 168 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "admin@admin.com", "admin", "MVVL7tb6TKxZwACNu2a4RtOJAYtlE/9fStSFXf9/p1H0XxMm" },
+                    { new byte[] { 209, 222, 150, 1, 241, 19, 251, 115, 172, 240, 24, 129, 21, 192, 28, 14 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "dev@dev.com", "dev", "PU5MutM3Zk/QgVpuB1BjYL8ShixKUIYDpUTX2HrcXuikrjp5" },
+                    { new byte[] { 209, 222, 150, 1, 241, 19, 58, 116, 138, 27, 94, 36, 48, 72, 199, 126 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "qa@qa.com", "qa", "a+j1Nv1s/Sbwdbs5MpS4lWOfZQAFuDpWOpQQ2IK5w/7I5sQG" }
                 });
 
             migrationBuilder.InsertData(
@@ -314,31 +314,31 @@ namespace Infrastructure.Migrations
                 columns: new[] { "Id", "PermissionCode", "RoleId" },
                 values: new object[,]
                 {
-                    { new Guid("0196debe-3a01-4b2d-8e1f-1a2b3c4d5e6f"), 13, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a02-4b2d-8e1f-1a2b3c4d5e6f"), 14, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a03-4b2d-8e1f-1a2b3c4d5e6f"), 15, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a04-4b2d-8e1f-1a2b3c4d5e6f"), 16, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a05-4b2d-8e1f-1a2b3c4d5e6f"), 17, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a06-4b2d-8e1f-1a2b3c4d5e6f"), 18, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a07-4b2d-8e1f-1a2b3c4d5e6f"), 19, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a08-4b2d-8e1f-1a2b3c4d5e6f"), 20, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a09-4b2d-8e1f-1a2b3c4d5e6f"), 21, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a0a-4b2d-8e1f-1a2b3c4d5e6f"), 22, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a0b-4b2d-8e1f-1a2b3c4d5e6f"), 24, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a0c-4b2d-8e1f-1a2b3c4d5e6f"), 25, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a0d-4b2d-8e1f-1a2b3c4d5e6f"), 26, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a0e-4b2d-8e1f-1a2b3c4d5e6f"), 27, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a0f-4b2d-8e1f-1a2b3c4d5e6f"), 28, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a10-4b2d-8e1f-1a2b3c4d5e6f"), 30, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a11-4b2d-8e1f-1a2b3c4d5e6f"), 29, new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196debe-3a12-4b2d-8e1f-1a2b3c4d5e6f"), 1, new Guid("0196debe-2d80-76dd-b351-ade38fa29169") },
-                    { new Guid("0196debe-3a13-4b2d-8e1f-1a2b3c4d5e6f"), 5, new Guid("0196debe-2d80-76dd-b351-ade38fa29169") },
-                    { new Guid("0196debe-3a14-4b2d-8e1f-1a2b3c4d5e6f"), 9, new Guid("0196debe-2d80-76dd-b351-ade38fa29169") },
-                    { new Guid("0196debe-3a15-4b2d-8e1f-1a2b3c4d5e6f"), 13, new Guid("0196debe-2d80-76dd-b351-ade38fa29169") },
-                    { new Guid("0196debe-3a16-4b2d-8e1f-1a2b3c4d5e6f"), 17, new Guid("0196debe-2d80-76dd-b351-ade38fa29169") },
-                    { new Guid("0196debe-3a17-4b2d-8e1f-1a2b3c4d5e6f"), 21, new Guid("0196debe-2d80-76dd-b351-ade38fa29169") },
-                    { new Guid("0196debe-3a18-4b2d-8e1f-1a2b3c4d5e6f"), 25, new Guid("0196debe-2d80-76dd-b351-ade38fa29169") },
-                    { new Guid("0196debe-3a19-4b2d-8e1f-1a2b3c4d5e6f"), 28, new Guid("0196debe-2d80-76dd-b351-ade38fa29169") }
+                    { new byte[] { 190, 222, 150, 1, 13, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 26, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 21, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 13, new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 } },
+                    { new byte[] { 190, 222, 150, 1, 20, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 9, new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 } },
+                    { new byte[] { 190, 222, 150, 1, 19, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 5, new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 } },
+                    { new byte[] { 190, 222, 150, 1, 18, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 1, new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 } },
+                    { new byte[] { 190, 222, 150, 1, 24, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 25, new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 } },
+                    { new byte[] { 190, 222, 150, 1, 17, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 29, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 16, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 30, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 15, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 28, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 14, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 27, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 25, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 28, new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 } },
+                    { new byte[] { 190, 222, 150, 1, 22, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 17, new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 } },
+                    { new byte[] { 190, 222, 150, 1, 12, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 25, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 10, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 22, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 9, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 21, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 8, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 20, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 7, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 19, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 6, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 18, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 5, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 17, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 4, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 16, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 3, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 15, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 2, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 14, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 1, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 13, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 11, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 24, new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 190, 222, 150, 1, 23, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 }, 21, new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 } }
                 });
 
             migrationBuilder.InsertData(
@@ -346,9 +346,9 @@ namespace Infrastructure.Migrations
                 columns: new[] { "Id", "Name", "RoleId" },
                 values: new object[,]
                 {
-                    { new Guid("0196dece-e967-755f-9c6a-5ba5a34577f1"), "QA", new Guid("0196debe-2d80-76dd-b351-ade38fa29169") },
-                    { new Guid("0196dece-e967-7965-afb9-f33ff2b3f0dc"), "Devs", new Guid("0196debe-0c94-7467-9b2d-397e0200276f") },
-                    { new Guid("0196dece-e967-7d50-832c-0ca0155465a1"), "Admins", new Guid("0196debd-033b-7512-a11b-98533d063a04") }
+                    { new byte[] { 206, 222, 150, 1, 103, 233, 80, 125, 131, 44, 12, 160, 21, 84, 101, 161 }, "Admins", new byte[] { 189, 222, 150, 1, 59, 3, 18, 117, 161, 27, 152, 83, 61, 6, 58, 4 } },
+                    { new byte[] { 206, 222, 150, 1, 103, 233, 101, 121, 175, 185, 243, 63, 242, 179, 240, 220 }, "Devs", new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 } },
+                    { new byte[] { 206, 222, 150, 1, 103, 233, 95, 117, 156, 106, 91, 165, 163, 69, 119, 241 }, "QA", new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 } }
                 });
 
             migrationBuilder.InsertData(
@@ -356,9 +356,9 @@ namespace Infrastructure.Migrations
                 columns: new[] { "TeamId", "UserId" },
                 values: new object[,]
                 {
-                    { new Guid("0196dece-e967-7965-afb9-f33ff2b3f0dc"), new Guid("0196ded1-13f1-73fb-acf0-188115c01c0e") },
-                    { new Guid("0196dece-e967-755f-9c6a-5ba5a34577f1"), new Guid("0196ded1-13f1-743a-8a1b-5e243048c77e") },
-                    { new Guid("0196dece-e967-7d50-832c-0ca0155465a1"), new Guid("0196ded1-13f1-77ce-884e-3cb636ec09a8") }
+                    { new byte[] { 206, 222, 150, 1, 103, 233, 80, 125, 131, 44, 12, 160, 21, 84, 101, 161 }, new byte[] { 209, 222, 150, 1, 241, 19, 206, 119, 136, 78, 60, 182, 54, 236, 9, 168 } },
+                    { new byte[] { 206, 222, 150, 1, 103, 233, 101, 121, 175, 185, 243, 63, 242, 179, 240, 220 }, new byte[] { 209, 222, 150, 1, 241, 19, 251, 115, 172, 240, 24, 129, 21, 192, 28, 14 } },
+                    { new byte[] { 206, 222, 150, 1, 103, 233, 95, 117, 156, 106, 91, 165, 163, 69, 119, 241 }, new byte[] { 209, 222, 150, 1, 241, 19, 58, 116, 138, 27, 94, 36, 48, 72, 199, 126 } }
                 });
 
             migrationBuilder.CreateIndex(

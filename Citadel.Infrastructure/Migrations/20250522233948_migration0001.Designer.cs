@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20250519134225_migration0001")]
+    [Migration("20250522233948_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -22,9 +22,9 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Entities.ContainerInfo", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("BLOB");
 
                     b.Property<string>("ContainerId")
                         .IsRequired()
@@ -42,8 +42,9 @@ namespace Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("PlatformId")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("PlatformId")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
 
                     b.Property<string>("Ports")
                         .IsRequired()
@@ -71,12 +72,13 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Entities.ContainerStat", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("BLOB");
 
-                    b.Property<Guid>("ContainerInfoId")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("ContainerInfoId")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
 
                     b.Property<double?>("CpuUsage")
                         .HasColumnType("REAL");
@@ -90,11 +92,11 @@ namespace Infrastructure.Migrations
                     b.Property<double?>("MemoryUsage")
                         .HasColumnType("REAL");
 
-                    b.Property<long?>("RxBytes")
-                        .HasColumnType("INTEGER");
+                    b.Property<double?>("RxBytes")
+                        .HasColumnType("REAL");
 
-                    b.Property<long?>("TxBytes")
-                        .HasColumnType("INTEGER");
+                    b.Property<double?>("TxBytes")
+                        .HasColumnType("REAL");
 
                     b.HasKey("Id");
 
@@ -105,16 +107,17 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Entities.Identity.Permission", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("BLOB");
 
                     b.Property<int>("PermissionCode")
                         .HasColumnType("INTEGER")
                         .HasColumnName("PermissionCode");
 
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("RoleId")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
 
                     b.HasKey("Id");
 
@@ -125,167 +128,168 @@ namespace Infrastructure.Migrations
                     b.HasData(
                         new
                         {
-                            Id = new Guid("0196debe-3a01-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 1, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 13,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a02-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 2, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 14,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a03-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 3, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 15,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a04-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 4, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 16,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a05-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 5, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 17,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a06-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 6, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 18,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a07-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 7, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 19,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a08-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 8, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 20,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a09-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 9, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 21,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a0a-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 10, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 22,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a0b-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 11, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 24,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a0c-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 12, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 25,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a0d-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 13, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 26,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a0e-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 14, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 27,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a0f-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 15, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 28,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a10-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 16, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 30,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a11-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 17, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 29,
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a12-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 18, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 1,
-                            RoleId = new Guid("0196debe-2d80-76dd-b351-ade38fa29169")
+                            RoleId = new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a13-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 19, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 5,
-                            RoleId = new Guid("0196debe-2d80-76dd-b351-ade38fa29169")
+                            RoleId = new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a14-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 20, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 9,
-                            RoleId = new Guid("0196debe-2d80-76dd-b351-ade38fa29169")
+                            RoleId = new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a15-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 21, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 13,
-                            RoleId = new Guid("0196debe-2d80-76dd-b351-ade38fa29169")
+                            RoleId = new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a16-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 22, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 17,
-                            RoleId = new Guid("0196debe-2d80-76dd-b351-ade38fa29169")
+                            RoleId = new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a17-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 23, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 21,
-                            RoleId = new Guid("0196debe-2d80-76dd-b351-ade38fa29169")
+                            RoleId = new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a18-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 24, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 25,
-                            RoleId = new Guid("0196debe-2d80-76dd-b351-ade38fa29169")
+                            RoleId = new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 }
                         },
                         new
                         {
-                            Id = new Guid("0196debe-3a19-4b2d-8e1f-1a2b3c4d5e6f"),
+                            Id = new byte[] { 190, 222, 150, 1, 25, 58, 45, 75, 142, 31, 26, 43, 60, 77, 94, 111 },
                             PermissionCode = 28,
-                            RoleId = new Guid("0196debe-2d80-76dd-b351-ade38fa29169")
+                            RoleId = new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 }
                         });
                 });
 
             modelBuilder.Entity("Infrastructure.Entities.Identity.RefreshToken", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("BLOB");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("UserId")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
 
                     b.HasKey("Id");
 
@@ -296,9 +300,9 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Entities.Identity.Role", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("BLOB");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -325,21 +329,21 @@ namespace Infrastructure.Migrations
                     b.HasData(
                         new
                         {
-                            Id = new Guid("0196debd-033b-7512-a11b-98533d063a04"),
+                            Id = new byte[] { 189, 222, 150, 1, 59, 3, 18, 117, 161, 27, 152, 83, 61, 6, 58, 4 },
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Admin",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
-                            Id = new Guid("0196debe-0c94-7467-9b2d-397e0200276f"),
+                            Id = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 },
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Dev",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
-                            Id = new Guid("0196debe-2d80-76dd-b351-ade38fa29169"),
+                            Id = new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 },
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "QA",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
@@ -348,17 +352,18 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Entities.Identity.Team", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("BLOB");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("RoleId")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
 
                     b.HasKey("Id");
 
@@ -369,29 +374,29 @@ namespace Infrastructure.Migrations
                     b.HasData(
                         new
                         {
-                            Id = new Guid("0196dece-e967-7d50-832c-0ca0155465a1"),
+                            Id = new byte[] { 206, 222, 150, 1, 103, 233, 80, 125, 131, 44, 12, 160, 21, 84, 101, 161 },
                             Name = "Admins",
-                            RoleId = new Guid("0196debd-033b-7512-a11b-98533d063a04")
+                            RoleId = new byte[] { 189, 222, 150, 1, 59, 3, 18, 117, 161, 27, 152, 83, 61, 6, 58, 4 }
                         },
                         new
                         {
-                            Id = new Guid("0196dece-e967-7965-afb9-f33ff2b3f0dc"),
+                            Id = new byte[] { 206, 222, 150, 1, 103, 233, 101, 121, 175, 185, 243, 63, 242, 179, 240, 220 },
                             Name = "Devs",
-                            RoleId = new Guid("0196debe-0c94-7467-9b2d-397e0200276f")
+                            RoleId = new byte[] { 190, 222, 150, 1, 148, 12, 103, 116, 155, 45, 57, 126, 2, 0, 39, 111 }
                         },
                         new
                         {
-                            Id = new Guid("0196dece-e967-755f-9c6a-5ba5a34577f1"),
+                            Id = new byte[] { 206, 222, 150, 1, 103, 233, 95, 117, 156, 106, 91, 165, 163, 69, 119, 241 },
                             Name = "QA",
-                            RoleId = new Guid("0196debe-2d80-76dd-b351-ade38fa29169")
+                            RoleId = new byte[] { 190, 222, 150, 1, 128, 45, 221, 118, 179, 81, 173, 227, 143, 162, 145, 105 }
                         });
                 });
 
             modelBuilder.Entity("Infrastructure.Entities.Identity.User", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("BLOB")
                         .HasColumnName("Id");
 
                     b.Property<DateTime>("CreatedAt")
@@ -435,40 +440,40 @@ namespace Infrastructure.Migrations
                     b.HasData(
                         new
                         {
-                            Id = new Guid("0196ded1-13f1-77ce-884e-3cb636ec09a8"),
+                            Id = new byte[] { 209, 222, 150, 1, 241, 19, 206, 119, 136, 78, 60, 182, 54, 236, 9, 168 },
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "admin@admin.com",
                             Name = "admin",
-                            Password = "/VtxS3rzyzEIhP0i6Ehq72mGCarCK+xxCMcMXo4N5WMavIl/",
+                            Password = "MVVL7tb6TKxZwACNu2a4RtOJAYtlE/9fStSFXf9/p1H0XxMm",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
-                            Id = new Guid("0196ded1-13f1-73fb-acf0-188115c01c0e"),
+                            Id = new byte[] { 209, 222, 150, 1, 241, 19, 251, 115, 172, 240, 24, 129, 21, 192, 28, 14 },
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "dev@dev.com",
                             Name = "dev",
-                            Password = "bstIzQ7Axj+ZtX0eo89tp/8G1+oTO4BTrI+54+Ou7MKVKBwX",
+                            Password = "PU5MutM3Zk/QgVpuB1BjYL8ShixKUIYDpUTX2HrcXuikrjp5",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
                         {
-                            Id = new Guid("0196ded1-13f1-743a-8a1b-5e243048c77e"),
+                            Id = new byte[] { 209, 222, 150, 1, 241, 19, 58, 116, 138, 27, 94, 36, 48, 72, 199, 126 },
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "qa@qa.com",
                             Name = "qa",
-                            Password = "DZrfPl29P870AAeeCz/rDj2K/68NYT2gECxx5KSnEBZdjZ1i",
+                            Password = "a+j1Nv1s/Sbwdbs5MpS4lWOfZQAFuDpWOpQQ2IK5w/7I5sQG",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         });
                 });
 
             modelBuilder.Entity("Infrastructure.Entities.Identity.UserTeam", b =>
                 {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("UserId")
+                        .HasColumnType("BLOB");
 
-                    b.Property<Guid>("TeamId")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("TeamId")
+                        .HasColumnType("BLOB");
 
                     b.HasKey("UserId", "TeamId");
 
@@ -479,26 +484,26 @@ namespace Infrastructure.Migrations
                     b.HasData(
                         new
                         {
-                            UserId = new Guid("0196ded1-13f1-77ce-884e-3cb636ec09a8"),
-                            TeamId = new Guid("0196dece-e967-7d50-832c-0ca0155465a1")
+                            UserId = new byte[] { 209, 222, 150, 1, 241, 19, 206, 119, 136, 78, 60, 182, 54, 236, 9, 168 },
+                            TeamId = new byte[] { 206, 222, 150, 1, 103, 233, 80, 125, 131, 44, 12, 160, 21, 84, 101, 161 }
                         },
                         new
                         {
-                            UserId = new Guid("0196ded1-13f1-73fb-acf0-188115c01c0e"),
-                            TeamId = new Guid("0196dece-e967-7965-afb9-f33ff2b3f0dc")
+                            UserId = new byte[] { 209, 222, 150, 1, 241, 19, 251, 115, 172, 240, 24, 129, 21, 192, 28, 14 },
+                            TeamId = new byte[] { 206, 222, 150, 1, 103, 233, 101, 121, 175, 185, 243, 63, 242, 179, 240, 220 }
                         },
                         new
                         {
-                            UserId = new Guid("0196ded1-13f1-743a-8a1b-5e243048c77e"),
-                            TeamId = new Guid("0196dece-e967-755f-9c6a-5ba5a34577f1")
+                            UserId = new byte[] { 209, 222, 150, 1, 241, 19, 58, 116, 138, 27, 94, 36, 48, 72, 199, 126 },
+                            TeamId = new byte[] { 206, 222, 150, 1, 103, 233, 95, 117, 156, 106, 91, 165, 163, 69, 119, 241 }
                         });
                 });
 
             modelBuilder.Entity("Infrastructure.Entities.Platform", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("BLOB");
 
                     b.Property<string>("Address")
                         .IsRequired()
@@ -582,9 +587,9 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Entities.PlatformStat", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("BLOB");
 
                     b.Property<double>("CpuUsage")
                         .HasColumnType("REAL");
@@ -595,8 +600,9 @@ namespace Infrastructure.Migrations
                     b.Property<double>("MemoryUsage")
                         .HasColumnType("REAL");
 
-                    b.Property<Guid>("PlatformId")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("PlatformId")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
 
                     b.Property<double>("RxBytes")
                         .HasColumnType("REAL");
@@ -616,9 +622,9 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Entities.Registry", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("BLOB");
 
                     b.Property<string>("Configuration")
                         .IsRequired()
@@ -651,9 +657,9 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Entities.SwarmInfo", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("BLOB");
 
                     b.Property<bool>("ControlAvailable")
                         .HasColumnType("INTEGER");
@@ -679,8 +685,9 @@ namespace Infrastructure.Migrations
                     b.Property<long>("Nodes")
                         .HasColumnType("INTEGER");
 
-                    b.Property<Guid>("PlatformId")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("PlatformId")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
 
                     b.HasKey("Id");
 
@@ -692,9 +699,9 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Entities.SwarmPeer", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("BLOB");
 
                     b.Property<string>("Addr")
                         .HasMaxLength(64)
@@ -704,8 +711,9 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("SwarmInfoId")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("SwarmInfoId")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
 
                     b.HasKey("Id");
 

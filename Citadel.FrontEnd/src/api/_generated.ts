@@ -153,15 +153,17 @@ export interface ContainerLogReply {
 }
 
 export interface ContainerStatView {
+  /** @format uuid */
+  containerId?: string;
   /** @format double */
   memoryUsage?: number;
   /** @format double */
   cpuUsage?: number;
   /** @format double */
   memoryLimit?: number;
-  /** @format int64 */
+  /** @format double */
   rxBytes?: number;
-  /** @format int64 */
+  /** @format double */
   txBytes?: number;
   /** @format int64 */
   created?: number;
@@ -827,15 +829,17 @@ export interface NetworksView {
 }
 
 export type NullableOfContainerStatView = {
+  /** @format uuid */
+  containerId?: string;
   /** @format double */
   memoryUsage?: number;
   /** @format double */
   cpuUsage?: number;
   /** @format double */
   memoryLimit?: number;
-  /** @format int64 */
+  /** @format double */
   rxBytes?: number;
-  /** @format int64 */
+  /** @format double */
   txBytes?: number;
   /** @format int64 */
   created?: number;

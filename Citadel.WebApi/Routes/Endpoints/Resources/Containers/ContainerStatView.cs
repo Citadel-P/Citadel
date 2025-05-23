@@ -3,11 +3,12 @@
 namespace WebApi.Routes.Endpoints.Resources.Containers;
 
 public record struct ContainerStatView(
+        Guid ContainerId,
         double MemoryUsage,
         double CpuUsage,
         double MemoryLimit,
-        long RxBytes,
-        long TxBytes,
+        double RxBytes,
+        double TxBytes,
         long Created)
 {
     internal static IEnumerable<ContainerStatView> Map(IEnumerable<ContainerStat> stats)
@@ -15,6 +16,7 @@ public record struct ContainerStatView(
 
     internal static ContainerStatView Map(ContainerStat stats)
         => new (
+            ContainerId: stats.ContainerInfoId,
             MemoryUsage: stats?.MemoryUsage ?? 0,
             CpuUsage: stats?.CpuUsage ?? 0,
             MemoryLimit: stats?.MemoryLimit ?? 0,
