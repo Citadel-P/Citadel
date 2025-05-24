@@ -60,9 +60,9 @@ CREATE TABLE "ContainersInfo" (
     "Name" TEXT NOT NULL,
     "Image" TEXT NOT NULL,
     "Created" INTEGER NOT NULL,
+    "Updated" INTEGER NOT NULL,
     "State" TEXT NOT NULL,
     "Stack" TEXT NULL,
-    "Status" TEXT NULL,
     "Ports" TEXT NOT NULL,
     CONSTRAINT "FK_ContainersInfo_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
 );
@@ -154,15 +154,15 @@ SELECT changes();
 
 
 INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
-VALUES (X'D1DE9601F113CE77884E3CB636EC09A8', '2025-01-01 00:00:00', 'admin@admin.com', 'admin', 'MVVL7tb6TKxZwACNu2a4RtOJAYtlE/9fStSFXf9/p1H0XxMm');
+VALUES (X'D1DE9601F113CE77884E3CB636EC09A8', '2025-01-01 00:00:00', 'admin@admin.com', 'admin', 'pkRzKY2S/if3x2xhJEABZ2LPbIoub0oE4YPTwuHP13oHyh3Q');
 SELECT changes();
 
 INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
-VALUES (X'D1DE9601F113FB73ACF0188115C01C0E', '2025-01-01 00:00:00', 'dev@dev.com', 'dev', 'PU5MutM3Zk/QgVpuB1BjYL8ShixKUIYDpUTX2HrcXuikrjp5');
+VALUES (X'D1DE9601F113FB73ACF0188115C01C0E', '2025-01-01 00:00:00', 'dev@dev.com', 'dev', '2R4ZVpcIE5Tx/RlvnOYFWsdzVxvC68KDmLgr1sAvtgmSB0qh');
 SELECT changes();
 
 INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
-VALUES (X'D1DE9601F1133A748A1B5E243048C77E', '2025-01-01 00:00:00', 'qa@qa.com', 'qa', 'a+j1Nv1s/Sbwdbs5MpS4lWOfZQAFuDpWOpQQ2IK5w/7I5sQG');
+VALUES (X'D1DE9601F1133A748A1B5E243048C77E', '2025-01-01 00:00:00', 'qa@qa.com', 'qa', 'IuAHlhLO/S+ro2exbcSJvR02oxlCx6OLpc2IpKxfnL77ue1H');
 SELECT changes();
 
 
@@ -322,7 +322,7 @@ CREATE UNIQUE INDEX "EmailIndex" ON "Users" ("Email");
 CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20250522233948_migration0001', '9.0.4');
+VALUES ('20250524132955_migration0001', '9.0.4');
 
 COMMIT;
 

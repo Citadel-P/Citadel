@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.TaskJobs;
 
-public interface IDaemonEventJob
+public interface IDaemonEventJob : IHostedService
 {
     void StartMonitoringPlatform(PlatformData platform, CancellationToken cancelationToken);
     void StopMonitoringPlatform(string address);
@@ -109,7 +109,7 @@ public sealed class DaemonEventJob(
                                     _ => throw new NotImplementedException()
                                 };
 
-                                existing.PartialUpdate(state: ContainerInfoMapper.Map(reply.Container.State), status: reply.Container.Status);
+                                existing.PartialUpdate(state: ContainerInfoMapper.Map(reply.Container.State));
                                 await dbContext.SaveChangesAsync(cancellationToken);
                                 await containerHub.SendContainerEvent(existing, reply.Action);
                             }

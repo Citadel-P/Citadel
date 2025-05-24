@@ -12,6 +12,10 @@ const useContainersHub = (platformId: string) => {
   const groupName = `ContainersInfo/${platformId}`;
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
+  const handleContainersInfoUpdated = useCallback((containers: ContainersInfoView) => {
+    setContainersInfo(containers);
+  }, []);
+
   const handleContainersStatsUpdated = useCallback((stats: ContainerStatView[]) => {
     setContainersInfo((currentInfo) => {
       if (!currentInfo || !currentInfo.containers) return;
@@ -86,6 +90,8 @@ const useContainersHub = (platformId: string) => {
         console.log('Reconnected');
         GetContainersList(hubConnection);
       });
+
+      hubConnection.on('ContainersInfoUpdated', handleContainersInfoUpdated);
       hubConnection.on('ContainersStatsUpdated', handleContainersStatsUpdated);
       hubConnection.on('ContainerEventReceived', handleContainerEventReceived);
     },
@@ -94,6 +100,7 @@ const useContainersHub = (platformId: string) => {
 
   const removeEventListeners = useCallback((hubConnection: HubConnection) => {
     hubConnection.off('ContainersInfoUpdated');
+    hubConnection.off('ContainersStatsUpdated');
     hubConnection.off('ContainerEventReceived');
   }, []);
 

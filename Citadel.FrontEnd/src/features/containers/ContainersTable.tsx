@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Link } from 'react-router';
 import DropdownTableMenu from './DropdownTableMenu';
 import { memo } from 'react';
+import { fromNow } from '@/lib/dayjs.helper';
 
 const columns: ColumnDef<ContainerInfoView>[] = [
   {
@@ -115,7 +116,7 @@ const columns: ColumnDef<ContainerInfoView>[] = [
   {
     accessorKey: 'status',
     header: ({ column }) => <SortableCell cellName="Status" column={column} />,
-    cell: ({ row }) => <div className="text-[12px]">{row.original?.status && truncate(row.original.status, 25)}</div>,
+    cell: ({ row }) => <div className="text-[12px]">{fromNow(new Date(row.original.updated).getTime())}</div>,
   },
   {
     accessorKey: 'stack',

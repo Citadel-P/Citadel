@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20250522233948_migration0001")]
+    [Migration("20250524132955_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -57,8 +57,8 @@ namespace Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Status")
-                        .HasColumnType("TEXT");
+                    b.Property<long>("Updated")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -444,7 +444,7 @@ namespace Infrastructure.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "admin@admin.com",
                             Name = "admin",
-                            Password = "MVVL7tb6TKxZwACNu2a4RtOJAYtlE/9fStSFXf9/p1H0XxMm",
+                            Password = "pkRzKY2S/if3x2xhJEABZ2LPbIoub0oE4YPTwuHP13oHyh3Q",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
@@ -453,7 +453,7 @@ namespace Infrastructure.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "dev@dev.com",
                             Name = "dev",
-                            Password = "PU5MutM3Zk/QgVpuB1BjYL8ShixKUIYDpUTX2HrcXuikrjp5",
+                            Password = "2R4ZVpcIE5Tx/RlvnOYFWsdzVxvC68KDmLgr1sAvtgmSB0qh",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
@@ -462,7 +462,7 @@ namespace Infrastructure.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "qa@qa.com",
                             Name = "qa",
-                            Password = "a+j1Nv1s/Sbwdbs5MpS4lWOfZQAFuDpWOpQQ2IK5w/7I5sQG",
+                            Password = "IuAHlhLO/S+ro2exbcSJvR02oxlCx6OLpc2IpKxfnL77ue1H",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         });
                 });

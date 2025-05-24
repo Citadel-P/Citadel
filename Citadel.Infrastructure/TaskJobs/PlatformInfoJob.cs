@@ -106,10 +106,10 @@ internal class PlatformInfoJob(
     {
         return PlatformStat.Create(
             created: double.IsNaN(info.Created) ? 0 : info.Created,
-            memoryUsage: double.IsNaN(info.MemoryUsage) ? 0 : info.MemoryUsage,
-            cpuUsage: double.IsNaN(info.CpuUsage) ? 0 : info.CpuUsage,
-            rxBytes: double.IsNaN(info.RxBytes) ? 0 : info.RxBytes,
-            txBytes: double.IsNaN(info.TxBytes) ? 0 : info.TxBytes,
+            memoryUsage: double.IsNaN(info.PlatformStat.MemoryUsage) ? 0 : info.PlatformStat.MemoryUsage,
+            cpuUsage: double.IsNaN(info.PlatformStat.CpuUsage) ? 0 : info.PlatformStat.CpuUsage,
+            rxBytes: double.IsNaN(info.PlatformStat.RxBytes) ? 0 : info.PlatformStat.RxBytes,
+            txBytes: double.IsNaN(info.PlatformStat.TxBytes) ? 0 : info.PlatformStat.TxBytes,
             platformId: platformId);
     }
 }

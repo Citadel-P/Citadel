@@ -35,6 +35,7 @@ internal class UpsertPlatformHandler(
     IDaemonEventJob daemonEventJob,
     IContainersStatsJob containersStatsJob,
     ApplicationDbContext dbContext,
+    IGrpcHealthMonitorJob grpcHealthMonitorJob,
     ILogger<UpsertPlatformHandler> logger)
     : ICommandHandler<UpsertPlatform, Result<Platform>>
 {
@@ -160,10 +161,12 @@ internal class UpsertPlatformHandler(
     {
         if (!string.IsNullOrEmpty(oldAddress))
         {
+            grpcHealthMonitorJob.UntrackAddress(oldAddress);
             daemonEventJob.StopMonitoringPlatform(oldAddress);
             containersStatsJob.StopStreamStatsForPlatform(oldAddress);
         }
 
+        grpcHealthMonitorJob.TrackAddress(platformData.Address);
         daemonEventJob.StartMonitoringPlatform(platformData, cancellationToken);
         containersStatsJob.StartStreamStatsForPlatform(platformData, cancellationToken);
     }
@@ -185,10 +188,10 @@ internal static class Mapper
 
     internal static PlatformStat MapStat(this PlatformInfoMessage systemInfo)
         => PlatformStat.Create(
-            memoryUsage: systemInfo.MemoryUsage,
-            cpuUsage: systemInfo.CpuUsage,
             created: systemInfo.Created,
-            rxBytes: systemInfo.RxBytes,
-            txBytes: systemInfo.TxBytes
+            memoryUsage: systemInfo.PlatformStat.MemoryUsage,
+            cpuUsage: systemInfo.PlatformStat.CpuUsage,
+            rxBytes: systemInfo.PlatformStat.RxBytes,
+            txBytes: systemInfo.PlatformStat.TxBytes
             );
 }

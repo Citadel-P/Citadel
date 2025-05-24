@@ -8,9 +8,9 @@ public class ContainerInfo
     public string Name { get; private set; } = null!;
     public string Image { get; private set; } = null!;
     public long Created { get; private set; }
+    public long Updated { get; private set; }
     public ContainerStateStatus State { get; set; }
     public string? Stack { get; set; }
-    public string? Status { get; private set; }
     public ICollection<ContainerPort> Ports { get; private set; } = [];
     public ICollection<ContainerStat> Stats { get; private set; } = [];
     public Platform Platform { get; private set; } = null!;
@@ -21,7 +21,6 @@ public class ContainerInfo
         string name,
         string image,
         ContainerStateStatus state,
-        string status,
         string stack,
         long? created = null, 
         IEnumerable<ContainerPort>? ports = null)
@@ -34,8 +33,8 @@ public class ContainerInfo
             Image = image,
             State = state,
             Stack = stack,
-            Status = status,
-            Created = created is not null ? created.Value : DateTimeOffset.UtcNow.Ticks,
+            Updated = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            Created = created is not null ? created.Value : DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             Ports = ports is not null ? ports.ToList() : [],
         };
 
@@ -43,7 +42,6 @@ public class ContainerInfo
         string? name = null,
         string? image = null,
         ContainerStateStatus? state = null,
-        string? status = null,
         string? stack = null,
         long? created = null,
         IEnumerable<ContainerPort>? ports = null)
@@ -51,9 +49,9 @@ public class ContainerInfo
         if (name != null) Name = name;
         if (image != null) Image = image;
         if (state != null) State = state.Value;
-        if (status != null) Status = status;
         if (stack != null) Stack = stack;
         if (ports != null) Ports = [.. ports];
         if (created != null) Created = created.Value;
+        Updated = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     }
 }

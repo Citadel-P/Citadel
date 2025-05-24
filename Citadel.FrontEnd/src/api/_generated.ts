@@ -107,7 +107,8 @@ export interface ContainerInfoView {
   /** @format date-time */
   created: string;
   state: ContainerStateStatus;
-  status: string;
+  /** @format date-time */
+  updated: string;
   stack: string | null;
   lastStats: NullableOfContainerStatView;
   /** @default null */

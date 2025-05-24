@@ -15,7 +15,7 @@ using Microsoft.Extensions.Options;
 
 namespace Infrastructure.TaskJobs;
 
-public interface IContainersStatsJob
+public interface IContainersStatsJob : IHostedService
 {
     void StartStreamStatsForPlatform(PlatformData platform, CancellationToken cancellationToken);
     void StopStreamStatsForPlatform(string address);
@@ -37,7 +37,7 @@ internal class ContainersStatsJob(
 
         var platforms = await dbContext.Platforms.AsNoTracking()
                  .Select(s => new PlatformData(s.Id, s.Address, s.Status))
-                 .ToListAsync(cancellationToken);
+                 .ToArrayAsync(cancellationToken);
 
         foreach (var platform in platforms)
         {
@@ -131,7 +131,6 @@ internal class ContainersStatsJob(
             image: msg.Image,
             created: msg.Created,
             state: msg.State.Map(),
-            status: msg.Status,
             stack: msg.Stack,
             ports: msg.Ports.Map());
     }
@@ -156,7 +155,6 @@ public static class ContainerInfoMapper
                     image: container.Image,
                     created: container.Created,
                     state: container.State.Map(),
-                    status: container.Status,
                     ports: container.Ports?.Map(),
                     stack: container.Stack);
 

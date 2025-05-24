@@ -1,0 +1,105 @@
+﻿using Agent.Server.Containers;
+using Infrastructure.Entities;
+using Infrastructure.EntityFramework;
+using Infrastructure.Services.Abstractions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+namespace Infrastructure.TaskJobs;
+
+/// <summary>
+/// Background service that trigger the monitors of gRPC services and synchronizes platform and container information.
+/// </summary>
+internal class SyncTriggerService(
+    IGrpcHealthMonitorJob grpcHealthMonitorJob, 
+    IGrpcClientFactory clientFactory, 
+    IServiceScopeFactory scopeFactory) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+    {
+        string[]? addresses;
+        // Create a scope and dbContext only for the initial fetch
+        await using (var scope = scopeFactory.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            addresses = await dbContext.Platforms.AsNoTracking().Select(s => s.Address).ToArrayAsync(cancellationToken);
+        }
+
+        if (addresses != null && addresses.Length > 0)
+        {
+            grpcHealthMonitorJob.TrackAddress(addresses);
+        }
+
+        await foreach (var evt in grpcHealthMonitorJob.StatusUpdates.ReadAllAsync(cancellationToken))
+        {
+            await SyncPlatform(evt, cancellationToken);
+        }
+    }
+
+    private async Task SyncPlatform(GrpcServiceHealthChangedEventArgs evt, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var platform = await dbContext.Platforms.FirstOrDefaultAsync(s => s.Address == evt.Address, cancellationToken);
+        if (platform == null)
+        {
+            return;
+        }
+        ContainerInfo[]? containers;
+        var platformHub = scope.ServiceProvider.GetRequiredService<IPlatformHubDispatcher>();
+        var containerHub = scope.ServiceProvider.GetRequiredService<IContainerHubDispatcher>();
+
+        if (evt.IsOnline)
+        {
+            var platformClient = clientFactory.GetPlatformClient(evt.Address);
+            var containersClient = clientFactory.GetContainerClient(evt.Address);
+
+            var platformInfoTsk = platformClient.GetPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
+            var containersTsk = containersClient.ListContainersAsync(new ContainersListMessage { All = true }, cancellationToken: cancellationToken);
+
+            var platformInfo = await platformInfoTsk;
+            var containersReply = await containersTsk;
+            containers = containersReply.Containers.Select(s => s.Value.Map(platform.Id, DateTimeOffset.UtcNow.ToUnixTimeSeconds())).ToArray();
+
+            // Override containers
+            dbContext.ContainersInfo.Where(c => c.PlatformId == platform.Id).ExecuteDelete();
+            dbContext.ContainersInfo.AddRange(containers);
+
+            // Update platform 
+            platform.PartialUpdate(
+                platformStatus: PlatformStatus.Online,
+                daemonId: platformInfo.Id,
+                networksCount: platformInfo.NetworksCount,
+                volumesCount: platformInfo.VolumesCount,
+                containers: platformInfo.Containers,
+                containersRunning: platformInfo.ContainersRunning,
+                containersPaused: platformInfo.ContainersPaused,
+                containersStopped: platformInfo.ContainersStopped,
+                images: platformInfo.Images,
+                driver: platformInfo.Driver,
+                operatingSystem: platformInfo.OperatingSystem,
+                osVersion: platformInfo.OsVersion,
+                osType: platformInfo.OsType,
+                architecture: platformInfo.Architecture,
+                ncpu: platformInfo.Ncpu,
+                memTotal: platformInfo.MemTotal,
+                serverVersion: platformInfo.ServerVersion,
+                agentVersion: platformInfo.AgentVersion);
+
+        }
+        else
+        {
+            platform.PartialUpdate(platformStatus: PlatformStatus.Offline);
+            containers = await dbContext.ContainersInfo.Where(c => c.PlatformId == platform.Id).ToArrayAsync(cancellationToken);
+            foreach (var container in containers)
+            {
+                container.PartialUpdate(state: ContainerStateStatus.Offline);
+            }
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await platformHub.PushPlatformsUpdates([platform]);
+        if(containers != null) await containerHub.SendContainersInfo(containers);
+    }
+}

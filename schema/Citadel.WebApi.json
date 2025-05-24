@@ -3848,7 +3848,7 @@
           "image",
           "created",
           "state",
-          "status",
+          "updated",
           "stack",
           "lastStats"
         ],
@@ -3874,8 +3874,9 @@
           "state": {
             "$ref": "#/components/schemas/ContainerStateStatus"
           },
-          "status": {
-            "type": "string"
+          "updated": {
+            "type": "string",
+            "format": "date-time"
           },
           "stack": {
             "type": "string",
