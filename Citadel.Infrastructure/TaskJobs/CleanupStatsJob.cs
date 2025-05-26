@@ -19,8 +19,10 @@ internal class CleanupStatsJob(IServiceScopeFactory scopeFactory, ILogger<Cleanu
                 using var scope = scopeFactory.CreateScope();
                 var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-                var thresholdTicks = DateTimeOffset.UtcNow.AddDays(-purgeDays).Ticks;
-                var oldStats = dbContext.ContainerStats.Where(stat => stat.Created < thresholdTicks);
+                var thresholdDate = DateTimeOffset.UtcNow.AddDays(-purgeDays);
+                var thresholdEpochSeconds = thresholdDate.ToUnixTimeSeconds();
+
+                var oldStats = dbContext.ContainerStats.Where(stat => stat.Created < thresholdEpochSeconds);
 
                 dbContext.ContainerStats.RemoveRange(oldStats);
                 await dbContext.SaveChangesAsync(stoppingToken);

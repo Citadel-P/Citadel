@@ -10,6 +10,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<PublishTrimmed>true</PublishTrimmed>
+		<UseAppHost>true</UseAppHost>
 		<InvariantGlobalization>true</InvariantGlobalization>
 		<RepositoryType>git</RepositoryType>
 		<PublishRepositoryUrl>true</PublishRepositoryUrl>

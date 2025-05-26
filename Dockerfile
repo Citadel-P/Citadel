@@ -3,15 +3,13 @@ WORKDIR /app
 EXPOSE 8000
 EXPOSE 8001
 
-ENV DOTNET_GCServer=1 \
-    DOTNET_GCHighMemoryPercent=20 \
-    DOTNET_GCHeapCount=2 \
+ENV \
+    DOTNET_GCServer=1 \
+    DOTNET_System_GC_RetainVM=0 \
     DOTNET_TC_OptimizeForContainer=1 \
-    DOTNET_GCHeapHardLimitPercent=75 \
-    DOTNET_ThreadPool_ForceMinWorkerThreads=4
+    DOTNET_GCHeapHardLimitPercent=75
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
-ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
 COPY ["Directory.Build.props", "."]
@@ -27,13 +25,17 @@ RUN dotnet restore "./Citadel.WebApi/Citadel.WebApi.csproj"
 
 COPY . .
 WORKDIR "/src/Citadel.WebApi"
-RUN dotnet build "./Citadel.WebApi.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet build "./Citadel.WebApi.csproj" -c Release -o /app/build
 
 FROM build AS publish
-ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./Citadel.WebApi.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=true 
+RUN dotnet publish "./Citadel.WebApi.csproj" -c Release -o /app/publish
 
 FROM base AS final
 WORKDIR /app
+
 COPY --from=publish /app/publish .
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
 ENTRYPOINT ["dotnet", "Citadel.WebApi.dll"]

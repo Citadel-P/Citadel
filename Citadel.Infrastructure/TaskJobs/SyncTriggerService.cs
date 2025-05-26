@@ -60,11 +60,35 @@ internal class SyncTriggerService(
 
             var platformInfo = await platformInfoTsk;
             var containersReply = await containersTsk;
-            containers = containersReply.Containers.Select(s => s.Value.Map(platform.Id, DateTimeOffset.UtcNow.ToUnixTimeSeconds())).ToArray();
+            containers = [.. containersReply.Containers.Select(s => s.Value.Map(platform.Id, DateTimeOffset.UtcNow.ToUnixTimeSeconds()))];
 
-            // Override containers
-            dbContext.ContainersInfo.Where(c => c.PlatformId == platform.Id).ExecuteDelete();
-            dbContext.ContainersInfo.AddRange(containers);
+            // Update or add containers
+            var existingContainers = await dbContext.ContainersInfo
+                .Where(c => c.PlatformId == platform.Id)
+                .ToDictionaryAsync(c => c.ContainerId, cancellationToken);
+
+            foreach (var container in containers)
+            {
+                if (existingContainers.TryGetValue(container.ContainerId, out var existing))
+                {
+                    existing.PartialUpdate(
+                        name: container.Name,
+                        image: container.Image,
+                        state: container.State,
+                        stack: container.Stack,
+                        created: container.Created,
+                        ports: container.Ports
+                    );
+                }
+                else
+                {
+                    dbContext.ContainersInfo.Add(container);
+                }
+            }
+
+            // Remove stale containers
+            var stale = existingContainers.Where(c => !containers.Any(s => s.ContainerId == c.Key)).Select(s => s.Value).ToArray();
+            dbContext.ContainersInfo.RemoveRange(stale);
 
             // Update platform 
             platform.PartialUpdate(
