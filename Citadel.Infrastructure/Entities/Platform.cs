@@ -118,4 +118,14 @@ public class Platform
         if (agentVersion != null) AgentVersion = agentVersion;
         if (platformStatus != null) Status = platformStatus.Value;
     }
+
+    public void AppendStats(IEnumerable<PlatformStat> stats)
+    {
+        if (stats == null || !stats.Any()) return;
+        
+        foreach (var stat in stats)
+        {
+            Stats.Add(stat);
+        }
+    }
 }

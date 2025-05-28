@@ -20,6 +20,7 @@ namespace WebApi.Hubs;
 [JsonSerializable(typeof(SwarmInfoView))]
 [JsonSerializable(typeof(List<SwarmPeerView>))]
 [JsonSerializable(typeof(ContainerLogView))]
+[JsonSerializable(typeof(PlatformsView))]
 internal partial class SignalRSerializeContext : JsonSerializerContext
 {
 }

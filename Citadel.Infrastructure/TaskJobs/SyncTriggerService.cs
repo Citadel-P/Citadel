@@ -123,7 +123,7 @@ internal class SyncTriggerService(
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
-        await platformHub.PushPlatformsUpdates([platform]);
+        await platformHub.PushPlatformUpdate(platform);
         if(containers != null) await containerHub.SendContainersInfo(containers);
     }
 }

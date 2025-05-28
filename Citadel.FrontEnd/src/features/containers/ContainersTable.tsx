@@ -115,7 +115,7 @@ const columns: ColumnDef<ContainerInfoView>[] = [
   },
   {
     accessorKey: 'status',
-    header: ({ column }) => <SortableCell cellName="Status" column={column} />,
+    header: ({ column }) => <SortableCell cellName="Updated" column={column} />,
     cell: ({ row }) => <div className="text-[12px]">{fromNow(new Date(row.original.updated).getTime())}</div>,
   },
   {

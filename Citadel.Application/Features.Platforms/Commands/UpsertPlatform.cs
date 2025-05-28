@@ -33,6 +33,7 @@ public sealed record UpsertPlatform(Guid? Id, string Name, string Address) : ICo
 internal class UpsertPlatformHandler(
     IGrpcClientFactory clientFactory,
     IDaemonEventJob daemonEventJob,
+    IPlatformInfoJob platformInfoJob,
     IContainersStatsJob containersStatsJob,
     ApplicationDbContext dbContext,
     IGrpcHealthMonitorJob grpcHealthMonitorJob,
@@ -163,11 +164,13 @@ internal class UpsertPlatformHandler(
         {
             grpcHealthMonitorJob.UntrackAddress(oldAddress);
             daemonEventJob.StopMonitoringPlatform(oldAddress);
+            platformInfoJob.StopStreamStatsForPlatform(oldAddress);
             containersStatsJob.StopStreamStatsForPlatform(oldAddress);
         }
 
         grpcHealthMonitorJob.TrackAddress(platformData.Address);
         daemonEventJob.StartMonitoringPlatform(platformData, cancellationToken);
+        platformInfoJob.StartStreamStatsForPlatform(platformData, cancellationToken);
         containersStatsJob.StartStreamStatsForPlatform(platformData, cancellationToken);
     }
 }

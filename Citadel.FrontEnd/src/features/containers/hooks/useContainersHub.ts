@@ -72,13 +72,14 @@ const useContainersHub = (platformId: string) => {
     });
   }, []);
 
-  const GetContainersList = useCallback(
+  const getContainersList = useCallback(
     async (hubConnection: HubConnection) => {
       setIsLoading(true);
-      hubConnection
-        .invoke('GetContainers', platformId)
-        .then((containers) => setContainersInfo(containers))
-        .finally(() => setIsLoading(false));
+      const containers = await hubConnection.invoke<ContainersInfoView>('GetContainers', platformId);
+      if (containers) {
+        setContainersInfo(containers);
+      }
+      setIsLoading(false);
     },
     [platformId],
   );
@@ -88,14 +89,14 @@ const useContainersHub = (platformId: string) => {
       hubConnection.onreconnecting(() => console.log('Reconnecting...'));
       hubConnection.onreconnected(() => {
         console.log('Reconnected');
-        GetContainersList(hubConnection);
+        getContainersList(hubConnection);
       });
 
       hubConnection.on('ContainersInfoUpdated', handleContainersInfoUpdated);
       hubConnection.on('ContainersStatsUpdated', handleContainersStatsUpdated);
       hubConnection.on('ContainerEventReceived', handleContainerEventReceived);
     },
-    [handleContainerEventReceived, handleContainersStatsUpdated, GetContainersList],
+    [handleContainerEventReceived, handleContainersStatsUpdated, handleContainersInfoUpdated, getContainersList],
   );
 
   const removeEventListeners = useCallback((hubConnection: HubConnection) => {
@@ -121,7 +122,7 @@ const useContainersHub = (platformId: string) => {
     const onConnected = () => {
       hubConnection
         .send('JoinGroup', groupName)
-        .then(() => GetContainersList(hubConnection))
+        .then(() => getContainersList(hubConnection))
         .catch((error) => console.error('Failed to join group:', error));
     };
 
@@ -142,7 +143,7 @@ const useContainersHub = (platformId: string) => {
     connect();
 
     return cleanup;
-  }, [accessToken, baseUrl, groupName, setupEventListeners, removeEventListeners, GetContainersList]);
+  }, [accessToken, baseUrl, groupName, setupEventListeners, removeEventListeners, getContainersList]);
 
   return { containersInfo, isLoading };
 };

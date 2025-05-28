@@ -51,12 +51,13 @@ public static class InfrastructureModule
             .AddHostedService<SyncTriggerService>()
             .AddHostedService(s => s.GetRequiredService<IGrpcHealthMonitorJob>())
             .AddHostedService(s => s.GetRequiredService<IContainersStatsJob>())
+            .AddHostedService(s => s.GetRequiredService<IPlatformInfoJob>())
             .AddHostedService(s => s.GetRequiredService<IDaemonEventJob>())
-            .AddHostedService<PlatformInfoJob>()
             .AddHostedService<CleanupStatsJob>()
             .AddHostedService<LogCleanupJob>();
         services
             .AddSingleton<IDaemonEventJob, DaemonEventJob>()
+            .AddSingleton<IPlatformInfoJob, PlatformInfoJob>()
             .AddSingleton<IContainersStatsJob, ContainersStatsJob>()
             .AddSingleton<IGrpcHealthMonitorJob, GrpcHealthMonitorJob>();
         return services;

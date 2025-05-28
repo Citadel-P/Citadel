@@ -1,6 +1,8 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+using Agent.Server.Containers;
+using Agent.Server.GPlatform;
 using Citadel.Common;
-using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
@@ -13,103 +15,117 @@ using Microsoft.Extensions.Options;
 
 namespace Infrastructure.TaskJobs;
 
+public interface IPlatformInfoJob : IHostedService
+{
+    void StartStreamStatsForPlatform(PlatformData platform, CancellationToken cancellationToken);
+    void StopStreamStatsForPlatform(string address);
+}
+
 internal class PlatformInfoJob(
     IGrpcClientFactory clientFactory,
-    IServiceProvider serviceProvider,
+    IServiceScopeFactory scopeFactory,
     IOptions<JobConfiguration> options,
-    ILogger<PlatformInfoJob> logger) : BackgroundService
+    ILogger<PlatformInfoJob> logger) : BackgroundService, IPlatformInfoJob
 {
     private readonly JobConfiguration jobConfiguration = options.Value;
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var platforms = await dbContext.Platforms.AsNoTracking()
+                 .Select(s => new PlatformData(s.Id, s.Address, s.Status))
+                 .ToArrayAsync(cancellationToken);
+
+        foreach (var platform in platforms)
+        {
+            StartStreamStatsForPlatform(platform, cancellationToken);
+        }
+    }
+
+    public void StartStreamStatsForPlatform(PlatformData platform, CancellationToken cancellationToken)
+    {
+        if (runningStreams.ContainsKey(platform.Address))
+        {
+            logger.LogWarning("Streaming platform stats for {Address} is already running.", platform.Address);
+            return;
+        }
+
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        runningStreams[platform.Address] = cts;
+
+        _ = Task.Run(() => StreamPlatformStats(platform, cts.Token), cts.Token);
+    }
+
+    public void StopStreamStatsForPlatform(string address)
+    {
+        if (runningStreams.TryRemove(address, out var cts))
+        {
+            logger.LogInformation("Aborting streaming containers stats for {Address}", address);
+            cts.Cancel();
+        }
+    }
+
+    private async Task StreamPlatformStats(PlatformData platform, CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                using var scope = serviceProvider.CreateScope();
-                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                var platformHub = scope.ServiceProvider.GetRequiredService<IPlatformHubDispatcher>();
-                await RunJob(dbContext, platformHub, cancellationToken);
+                var client = clientFactory.GetPlatformClient(platform.Address);
+                using var stream = client.StreamPlatformStats(new PlatformStatsRequest { FetchIntervalMs = jobConfiguration.SystemInfoInterval * 1000 }, cancellationToken: cancellationToken);
+                await foreach (var reply in stream.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
+                {
+                    using var scope = scopeFactory.CreateAsyncScope();
+                    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                    var platformHub = scope.ServiceProvider.GetRequiredService<IPlatformHubDispatcher>();
+
+                    var existing = await dbContext.Platforms.FirstOrDefaultAsync(p => p.Address == platform.Address, cancellationToken);
+                    if (existing == null)
+                    {
+                        logger.LogWarning("Platform with address {Address} not found in the database.", platform.Address);
+                        return;
+                    }
+
+                    existing.PartialUpdate(
+                        platformStatus: PlatformStatus.Online,
+                        networksCount: reply.NetworksCount,
+                        volumesCount: reply.VolumesCount,
+                        containers: reply.Containers,
+                        containersRunning: reply.ContainersRunning,
+                        containersPaused: reply.ContainersPaused,
+                        containersStopped: reply.ContainersStopped,
+                        images: reply.Images,
+                        memTotal: reply.MemTotal);
+
+                    dbContext.PlatformStats.Add(CreatePlatformStat(existing.Id, reply.Stat));
+
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                    await platformHub.PushPlatformUpdate(existing);
+                }
+            }
+            catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)
+            {
+                logger.LogInformation("Stream for {Address} was canceled.", platform.Address);
+                break;
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Unhandled exception in PlatformInfoJob");
+                logger.LogError(ex, "Error while streaming containers stats for {Address}, retrying in 10s...", platform.Address);
+                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
             }
-
-            await Task.Delay(TimeSpan.FromSeconds(jobConfiguration.SystemInfoInterval), cancellationToken);
-        }
-    }
-
-
-    public async Task RunJob(ApplicationDbContext dbContext, IPlatformHubDispatcher platformHub, CancellationToken cancellationToken)
-    {
-        var platforms = await dbContext.Platforms
-            .OrderByDescending(s => s.Name)
-            .ToArrayAsync(cancellationToken);
-
-        if (platforms.Length == 0) return;
-
-        var platformStats = new List<PlatformStat>(platforms.Length);
-
-        foreach (var platform in platforms)
-        {
-            await ProcessPlatform(dbContext, platform, cancellationToken);
-        }
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-        await platformHub.PushPlatformsUpdates(platforms);
-    }
-
-    private async Task ProcessPlatform(ApplicationDbContext dbContext, Platform platform, CancellationToken ct)
-    {
-        var client = clientFactory.GetPlatformClient(platform.Address);
-
-        try
-        {
-            var info = await client.GetPlatformInfoAsync(new Empty(), cancellationToken: ct);
-
-            // Update platform
-            platform.PartialUpdate(
-                platformStatus: PlatformStatus.Online,
-                networksCount: info.NetworksCount,
-                volumesCount: info.VolumesCount,
-                containers: info.Containers,
-                containersRunning: info.ContainersRunning,
-                containersPaused: info.ContainersPaused,
-                containersStopped: info.ContainersStopped,
-                images: info.Images,
-                ncpu: info.Ncpu,
-                memTotal: info.MemTotal,
-                serverVersion: info.ServerVersion,
-                agentVersion: info.AgentVersion,
-                osType: info.OsType,
-                osVersion: info.OsVersion,
-                operatingSystem: info.OperatingSystem,
-                driver: info.Driver);
-
-            var stat = CreatePlatformStat(platform.Id, info);
-            platform.Stats.Add(stat);
-            dbContext.PlatformStats.Add(stat);
-        }
-        catch (RpcException ex)
-        {
-            logger.LogWarning(ex, "Error while getting system info from platform {PlatformId}", platform.Id);
-
-            // Mark platform as offline
-            platform.PartialUpdate(platformStatus: PlatformStatus.Offline);
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static PlatformStat CreatePlatformStat(Guid platformId, PlatformInfoMessage info)
-    {
-        return PlatformStat.Create(
-            created: double.IsNaN(info.Created) ? 0 : info.Created,
-            memoryUsage: double.IsNaN(info.PlatformStat.MemoryUsage) ? 0 : info.PlatformStat.MemoryUsage,
-            cpuUsage: double.IsNaN(info.PlatformStat.CpuUsage) ? 0 : info.PlatformStat.CpuUsage,
-            rxBytes: double.IsNaN(info.PlatformStat.RxBytes) ? 0 : info.PlatformStat.RxBytes,
-            txBytes: double.IsNaN(info.PlatformStat.TxBytes) ? 0 : info.PlatformStat.TxBytes,
-            platformId: platformId);
-    }
+    private static PlatformStat CreatePlatformStat(Guid platformId, PlatformStatMessage reply)
+        => PlatformStat.Create(
+            memoryUsage: reply.MemoryUsage,
+            cpuUsage: reply.CpuUsage,
+            rxBytes: reply.RxBytes,
+            txBytes: reply.TxBytes,
+            platformId: platformId,
+            created: DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 }
