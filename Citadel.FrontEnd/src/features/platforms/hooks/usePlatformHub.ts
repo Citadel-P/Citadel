@@ -1,22 +1,18 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { PlatformsView, PlatformView } from '@/api/_generated';
 import { HubConnection } from '@microsoft/signalr';
 import { useContextSelector } from 'use-context-selector';
 import { AuthContext } from '@/features/auth/AuthProvider';
 import { configureHub, IHubConfig, startConnectionWithRetry } from '@/lib/signalr.helpers';
-
-export enum ConnectionState {
-  unknown,
-  connecting,
-  connected,
-}
+import { PlatformStatsBatchView } from '@/api/models';
 
 const usePlatformHub = () => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [connectionState, setConnectionState] = useState(ConnectionState.unknown);
+  const [isLoading, setIsLoading] = useState(true);
   const [platformsMessage, setPlatformsMessage] = useState<PlatformView[] | undefined>();
   const accessToken = useContextSelector(AuthContext, (v) => v?.accessToken);
+  const groupName = `Platforms`;
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
+  const isCanceledRef = useRef(false);
 
   // Callback to handle platform updates
   const handlePlatformsUpdated = useCallback((platforms: PlatformView[]) => {
@@ -44,39 +40,81 @@ const usePlatformHub = () => {
     });
   }, []);
 
+  const handlePlatformDeleted = useCallback((id: string) => {
+    setPlatformsMessage((currentPlatforms) => {
+      if (!currentPlatforms) return;
+
+      const updatedPlatforms = currentPlatforms.filter((p) => p.id !== id);
+      if (updatedPlatforms.length === currentPlatforms.length) {
+        return currentPlatforms;
+      }
+      return updatedPlatforms;
+    });
+  }, []);
+
+  const handlePlatformStatsUpdated = useCallback((platform: PlatformStatsBatchView) => {
+    setPlatformsMessage((currentPlatforms) => {
+      if (!currentPlatforms) return;
+      const updatedPlatforms = [...(currentPlatforms ?? [])];
+      const existingIndex = updatedPlatforms.findIndex((p) => p.id === platform.platformId);
+
+      if (existingIndex !== -1) {
+        updatedPlatforms[existingIndex].stats = [platform.stat];
+        updatedPlatforms[existingIndex].networksCount = platform.networksCount;
+        updatedPlatforms[existingIndex].volumesCount = platform.volumesCount;
+        updatedPlatforms[existingIndex].containers = platform.containers;
+        updatedPlatforms[existingIndex].containersRunning = platform.containersRunning;
+        updatedPlatforms[existingIndex].containersPaused = platform.containersPaused;
+        updatedPlatforms[existingIndex].containersStopped = platform.containersStopped;
+        updatedPlatforms[existingIndex].images = platform.images;
+        updatedPlatforms[existingIndex].memTotal = platform.memTotal;
+      }
+      return updatedPlatforms;
+    });
+  }, []);
+
   const getPlatformsList = useCallback(async (hubConnection: HubConnection) => {
+    setIsLoading(true);
     const response = await hubConnection.invoke<PlatformsView>('GetPlatforms');
     if (response) {
       setPlatformsMessage(response.platforms);
     }
-    return () => {};
+    setIsLoading(false);
   }, []);
 
   // Setup event listeners for the hub connection
   const setupEventListeners = useCallback(
     (hubConnection: HubConnection) => {
-      hubConnection.onreconnecting(() => setConnectionState(ConnectionState.connecting));
+      hubConnection.onreconnecting(() => console.log('Reconnecting...'));
       hubConnection.onreconnected(() => {
         getPlatformsList(hubConnection);
-        setConnectionState(ConnectionState.connected);
       });
       hubConnection.on('PlatformsUpdated', handlePlatformsUpdated);
       hubConnection.on('PlatformUpdated', handlePlatformUpdated);
+      hubConnection.on('PlatformsDeleted', handlePlatformDeleted);
+      hubConnection.on('PlatformStatsUpdated', handlePlatformStatsUpdated);
     },
-    [handlePlatformsUpdated, handlePlatformUpdated, getPlatformsList],
+    [
+      handlePlatformsUpdated,
+      handlePlatformUpdated,
+      handlePlatformDeleted,
+      handlePlatformStatsUpdated,
+      getPlatformsList,
+    ],
   );
 
   // Remove event listeners from the hub connection
   const removeEventListeners = useCallback((hubConnection: HubConnection) => {
     hubConnection.off('PlatformsUpdated');
     hubConnection.off('PlatformUpdated');
+    hubConnection.off('PlatformsDeleted');
+    hubConnection.off('PlatformStatsUpdated');
   }, []);
 
   useEffect(() => {
     if (!accessToken) return;
 
     let hubConnection: HubConnection;
-    let isCanceled = false;
 
     const initHub = () => {
       const config: IHubConfig = {
@@ -86,18 +124,21 @@ const usePlatformHub = () => {
       hubConnection = configureHub(config);
     };
     const onConnected = () => {
-      getPlatformsList(hubConnection);
-      setConnectionState(ConnectionState.connected);
+      hubConnection
+        .send('JoinGroup', groupName)
+        .then(() => getPlatformsList(hubConnection))
+        .catch((error) => console.error('Failed to join group:', error));
     };
 
     const connect = async () => {
       setupEventListeners(hubConnection);
-      await startConnectionWithRetry(hubConnection, onConnected, isCanceled);
+      await startConnectionWithRetry(hubConnection, onConnected, isCanceledRef);
     };
 
     const cleanup = () => {
-      isCanceled = true;
+      isCanceledRef.current = true;
       if (hubConnection) {
+        hubConnection.send('LeaveGroup', groupName);
         removeEventListeners(hubConnection);
         hubConnection.stop();
       }
@@ -107,10 +148,9 @@ const usePlatformHub = () => {
     connect();
 
     return cleanup;
-  }, [accessToken, baseUrl, setupEventListeners, removeEventListeners, getPlatformsList]);
+  }, [accessToken, baseUrl, groupName, setupEventListeners, removeEventListeners, getPlatformsList]);
 
   return {
-    connectionState,
     platformsMessage,
     isLoading,
   };

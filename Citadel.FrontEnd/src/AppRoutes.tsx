@@ -8,7 +8,8 @@ export const AppPaths: Record<string, string> = {
   any: '*',
   login: 'login',
   main: '/',
-  addDockerPlatform: 'add-docker-platform',
+  platforms: 'platforms',
+  addPlatform: 'platforms/add',
   platformContainers: 'platforms/:platformId/containers',
   containerLogs: 'containers/:containerId/logs',
   containerStats: 'containers/:containerId/stats',
@@ -44,9 +45,15 @@ export const AppRoutes = () => {
           },
         },
         {
-          path: AppPaths.addDockerPlatform,
+          path: AppPaths.platforms,
           lazy: async () => {
-            return { Component: (await import('@/features/platforms/addDockerPlatform/AddDockerPltaform')).default };
+            return { Component: (await import('@/pages/platforms-page')).default };
+          },
+        },
+        {
+          path: AppPaths.addPlatform,
+          lazy: async () => {
+            return { Component: (await import('@/features/platforms/forms/AddPlatform')).default };
           },
         },
         {

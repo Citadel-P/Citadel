@@ -17,7 +17,7 @@ internal class CleanupStatsJob(IServiceScopeFactory scopeFactory, ILogger<Cleanu
             try
             {
                 using var scope = scopeFactory.CreateScope();
-                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
                 var thresholdDate = DateTimeOffset.UtcNow.AddDays(-purgeDays);
                 var thresholdEpochSeconds = thresholdDate.ToUnixTimeSeconds();

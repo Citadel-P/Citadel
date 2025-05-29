@@ -1,7 +1,7 @@
 ﻿using FluentValidation;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
+using Infrastructure.Services.Abstractions;
 using Infrastructure.TaskJobs;
 using LightResults;
 using Mediator;
@@ -22,6 +22,8 @@ public sealed record DeletePlatform(Guid Id) : ICommand<Result>
 internal class DeletePlatformHandler(
     ApplicationDbContext dbContext,
     IDaemonEventJob daemonEventJob,
+    IGrpcHealthMonitorJob grpcHealthMonitorJob,
+    IPlatformHubDispatcher platformHubDispatcher,
     ILogger<DeletePlatformHandler> logger) : ICommandHandler<DeletePlatform, Result>
 {
     public async ValueTask<Result> Handle(DeletePlatform command, CancellationToken cancellationToken)
@@ -39,6 +41,10 @@ internal class DeletePlatformHandler(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         daemonEventJob.StopMonitoringPlatform(platform.Address);
+        grpcHealthMonitorJob.UntrackAddress(platform.Address);
+
+        // Notify subscribers about the platform deletion
+        await platformHubDispatcher.PlatformDeleted(command.Id);
 
         return Result.Success();
     }

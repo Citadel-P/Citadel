@@ -125,6 +125,8 @@ internal static class WebApiModule
             return new PlatformHubDispatcher(context);
         });
 
+        services.AddSingleton<ISignalRConnectionTracker, SignalRConnectionTracker>();
+
         services.AddSignalR().AddJsonProtocol(c =>
         {
             c.PayloadSerializerOptions.TypeInfoResolverChain.Add(SignalRSerializeContext.Default);

@@ -1,10 +1,12 @@
-﻿using Agent.Server.Containers;
+﻿using System.Threading.Channels;
+using Agent.Server.Containers;
 using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.TaskJobs;
 
@@ -12,9 +14,11 @@ namespace Infrastructure.TaskJobs;
 /// Background service that trigger the monitors of gRPC services and synchronizes platform and container information.
 /// </summary>
 internal class SyncTriggerService(
-    IGrpcHealthMonitorJob grpcHealthMonitorJob, 
-    IGrpcClientFactory clientFactory, 
-    IServiceScopeFactory scopeFactory) : BackgroundService
+    IGrpcClientFactory clientFactory,
+    IServiceScopeFactory scopeFactory,
+    IGrpcHealthMonitorJob grpcHealthMonitorJob,
+    ChannelReader<GrpcServiceHealth> channelReader,
+    ILogger<SyncTriggerService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -22,7 +26,7 @@ internal class SyncTriggerService(
         // Create a scope and dbContext only for the initial fetch
         await using (var scope = scopeFactory.CreateAsyncScope())
         {
-            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             addresses = await dbContext.Platforms.AsNoTracking().Select(s => s.Address).ToArrayAsync(cancellationToken);
         }
 
@@ -31,99 +35,106 @@ internal class SyncTriggerService(
             grpcHealthMonitorJob.TrackAddress(addresses);
         }
 
-        await foreach (var evt in grpcHealthMonitorJob.StatusUpdates.ReadAllAsync(cancellationToken))
+        await foreach (var evt in channelReader.ReadAllAsync(cancellationToken))
         {
             await SyncPlatform(evt, cancellationToken);
         }
     }
 
-    private async Task SyncPlatform(GrpcServiceHealthChangedEventArgs evt, CancellationToken cancellationToken)
+    private async Task SyncPlatform(GrpcServiceHealth evt, CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var platform = await dbContext.Platforms.FirstOrDefaultAsync(s => s.Address == evt.Address, cancellationToken);
-        if (platform == null)
+        try
         {
-            return;
-        }
-        ContainerInfo[]? containers;
-        var platformHub = scope.ServiceProvider.GetRequiredService<IPlatformHubDispatcher>();
-        var containerHub = scope.ServiceProvider.GetRequiredService<IContainerHubDispatcher>();
-
-        if (evt.IsOnline)
-        {
-            var platformClient = clientFactory.GetPlatformClient(evt.Address);
-            var containersClient = clientFactory.GetContainerClient(evt.Address);
-
-            var platformInfoTsk = platformClient.GetPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
-            var containersTsk = containersClient.ListContainersAsync(new ContainersListMessage { All = true }, cancellationToken: cancellationToken);
-
-            var platformInfo = await platformInfoTsk;
-            var containersReply = await containersTsk;
-            containers = [.. containersReply.Containers.Select(s => s.Value.Map(platform.Id, DateTimeOffset.UtcNow.ToUnixTimeSeconds()))];
-
-            // Update or add containers
-            var existingContainers = await dbContext.ContainersInfo
-                .Where(c => c.PlatformId == platform.Id)
-                .ToDictionaryAsync(c => c.ContainerId, cancellationToken);
-
-            foreach (var container in containers)
+            await using var scope = scopeFactory.CreateAsyncScope();
+            using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var platform = await dbContext.Platforms.FirstOrDefaultAsync(s => s.Address == evt.Address, cancellationToken);
+            if (platform == null)
             {
-                if (existingContainers.TryGetValue(container.ContainerId, out var existing))
+                return;
+            }
+            ContainerInfo[]? containers;
+            var platformHub = scope.ServiceProvider.GetRequiredService<IPlatformHubDispatcher>();
+            var containerHub = scope.ServiceProvider.GetRequiredService<IContainerHubDispatcher>();
+
+            if (evt.IsOnLine)
+            {
+                var platformClient = clientFactory.GetPlatformClient(evt.Address);
+                var containersClient = clientFactory.GetContainerClient(evt.Address);
+
+                var platformInfoTsk = platformClient.GetPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
+                var containersTsk = containersClient.ListContainersAsync(new ContainersListMessage { All = true }, cancellationToken: cancellationToken);
+
+                var platformInfo = await platformInfoTsk;
+                var containersReply = await containersTsk;
+                containers = [.. containersReply.Containers.Select(s => s.Value.Map(platform.Id, DateTimeOffset.UtcNow.ToUnixTimeSeconds()))];
+
+                // Update or add containers
+                var existingContainers = await dbContext.ContainersInfo
+                    .Where(c => c.PlatformId == platform.Id)
+                    .ToDictionaryAsync(c => c.ContainerId, cancellationToken);
+
+                foreach (var container in containers)
                 {
-                    existing.PartialUpdate(
-                        name: container.Name,
-                        image: container.Image,
-                        state: container.State,
-                        stack: container.Stack,
-                        created: container.Created,
-                        ports: container.Ports
-                    );
+                    if (existingContainers.TryGetValue(container.ContainerId, out var existing))
+                    {
+                        existing.PartialUpdate(
+                            name: container.Name,
+                            image: container.Image,
+                            state: container.State,
+                            stack: container.Stack,
+                            created: container.Created,
+                            ports: container.Ports
+                        );
+                    }
+                    else
+                    {
+                        dbContext.ContainersInfo.Add(container);
+                    }
                 }
-                else
+
+                // Remove stale containers
+                var stale = existingContainers.Where(c => !containers.Any(s => s.ContainerId == c.Key)).Select(s => s.Value).ToArray();
+                dbContext.ContainersInfo.RemoveRange(stale);
+
+                // Update platform 
+                platform.PartialUpdate(
+                    platformStatus: PlatformStatus.Online,
+                    daemonId: platformInfo.Id,
+                    networksCount: platformInfo.NetworksCount,
+                    volumesCount: platformInfo.VolumesCount,
+                    containers: platformInfo.Containers,
+                    containersRunning: platformInfo.ContainersRunning,
+                    containersPaused: platformInfo.ContainersPaused,
+                    containersStopped: platformInfo.ContainersStopped,
+                    images: platformInfo.Images,
+                    driver: platformInfo.Driver,
+                    operatingSystem: platformInfo.OperatingSystem,
+                    osVersion: platformInfo.OsVersion,
+                    osType: platformInfo.OsType,
+                    architecture: platformInfo.Architecture,
+                    ncpu: platformInfo.Ncpu,
+                    memTotal: platformInfo.MemTotal,
+                    serverVersion: platformInfo.ServerVersion,
+                    agentVersion: platformInfo.AgentVersion);
+
+            }
+            else
+            {
+                platform.PartialUpdate(platformStatus: PlatformStatus.Offline);
+                containers = await dbContext.ContainersInfo.Where(c => c.PlatformId == platform.Id).ToArrayAsync(cancellationToken);
+                foreach (var container in containers)
                 {
-                    dbContext.ContainersInfo.Add(container);
+                    container.PartialUpdate(state: ContainerStateStatus.Offline);
                 }
             }
 
-            // Remove stale containers
-            var stale = existingContainers.Where(c => !containers.Any(s => s.ContainerId == c.Key)).Select(s => s.Value).ToArray();
-            dbContext.ContainersInfo.RemoveRange(stale);
-
-            // Update platform 
-            platform.PartialUpdate(
-                platformStatus: PlatformStatus.Online,
-                daemonId: platformInfo.Id,
-                networksCount: platformInfo.NetworksCount,
-                volumesCount: platformInfo.VolumesCount,
-                containers: platformInfo.Containers,
-                containersRunning: platformInfo.ContainersRunning,
-                containersPaused: platformInfo.ContainersPaused,
-                containersStopped: platformInfo.ContainersStopped,
-                images: platformInfo.Images,
-                driver: platformInfo.Driver,
-                operatingSystem: platformInfo.OperatingSystem,
-                osVersion: platformInfo.OsVersion,
-                osType: platformInfo.OsType,
-                architecture: platformInfo.Architecture,
-                ncpu: platformInfo.Ncpu,
-                memTotal: platformInfo.MemTotal,
-                serverVersion: platformInfo.ServerVersion,
-                agentVersion: platformInfo.AgentVersion);
-
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await platformHub.PushPlatformUpdate(platform);
+            if (containers != null) await containerHub.SendContainersInfo(containers);
         }
-        else
+        catch (Exception ex)
         {
-            platform.PartialUpdate(platformStatus: PlatformStatus.Offline);
-            containers = await dbContext.ContainersInfo.Where(c => c.PlatformId == platform.Id).ToArrayAsync(cancellationToken);
-            foreach (var container in containers)
-            {
-                container.PartialUpdate(state: ContainerStateStatus.Offline);
-            }
+            logger.LogError(ex, "Error while synchronizing platform {Address}", evt.Address);
         }
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-        await platformHub.PushPlatformUpdate(platform);
-        if(containers != null) await containerHub.SendContainersInfo(containers);
     }
 }

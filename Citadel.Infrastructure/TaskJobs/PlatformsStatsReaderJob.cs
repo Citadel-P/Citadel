@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
-using Agent.Server.Containers;
+using System.Threading.Channels;
 using Agent.Server.GPlatform;
 using Citadel.Common;
 using Grpc.Core;
@@ -15,17 +15,21 @@ using Microsoft.Extensions.Options;
 
 namespace Infrastructure.TaskJobs;
 
-public interface IPlatformInfoJob : IHostedService
+/// <summary>
+/// Collects platforms stats from remote agents and pushes into the shared Channel <see cref="PlatformsStatsWriterJob"/>.
+/// </summary>
+public interface IPlatformsStatsReaderJob : IHostedService
 {
     void StartStreamStatsForPlatform(PlatformData platform, CancellationToken cancellationToken);
     void StopStreamStatsForPlatform(string address);
 }
 
-internal class PlatformInfoJob(
+internal class PlatformsStatsReaderJob(
     IGrpcClientFactory clientFactory,
     IServiceScopeFactory scopeFactory,
     IOptions<JobConfiguration> options,
-    ILogger<PlatformInfoJob> logger) : BackgroundService, IPlatformInfoJob
+    ChannelWriter<PlatformStatsBatch> channel,
+    ILogger<PlatformsStatsReaderJob> logger) : BackgroundService, IPlatformsStatsReaderJob
 {
     private readonly JobConfiguration jobConfiguration = options.Value;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
@@ -33,7 +37,7 @@ internal class PlatformInfoJob(
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         var platforms = await dbContext.Platforms.AsNoTracking()
                  .Select(s => new PlatformData(s.Id, s.Address, s.Status))
@@ -78,32 +82,19 @@ internal class PlatformInfoJob(
                 using var stream = client.StreamPlatformStats(new PlatformStatsRequest { FetchIntervalMs = jobConfiguration.SystemInfoInterval * 1000 }, cancellationToken: cancellationToken);
                 await foreach (var reply in stream.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
                 {
-                    using var scope = scopeFactory.CreateAsyncScope();
-                    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                    var platformHub = scope.ServiceProvider.GetRequiredService<IPlatformHubDispatcher>();
-
-                    var existing = await dbContext.Platforms.FirstOrDefaultAsync(p => p.Address == platform.Address, cancellationToken);
-                    if (existing == null)
-                    {
-                        logger.LogWarning("Platform with address {Address} not found in the database.", platform.Address);
-                        return;
-                    }
-
-                    existing.PartialUpdate(
-                        platformStatus: PlatformStatus.Online,
-                        networksCount: reply.NetworksCount,
-                        volumesCount: reply.VolumesCount,
-                        containers: reply.Containers,
-                        containersRunning: reply.ContainersRunning,
-                        containersPaused: reply.ContainersPaused,
-                        containersStopped: reply.ContainersStopped,
-                        images: reply.Images,
-                        memTotal: reply.MemTotal);
-
-                    dbContext.PlatformStats.Add(CreatePlatformStat(existing.Id, reply.Stat));
-
-                    await dbContext.SaveChangesAsync(cancellationToken);
-                    await platformHub.PushPlatformUpdate(existing);
+                    await channel.WriteAsync(
+                        new PlatformStatsBatch(
+                            PlatformId: platform.Id,
+                            NetworksCount: reply.NetworksCount,
+                            VolumesCount: reply.VolumesCount,
+                            Containers: reply.Containers,
+                            ContainersRunning: reply.ContainersRunning,
+                            ContainersPaused: reply.ContainersPaused,
+                            ContainersStopped: reply.ContainersStopped,
+                            Images: reply.Images,
+                            MemTotal: reply.MemTotal,
+                            CreatePlatformStat(platform.Id, reply.Stat)), 
+                        cancellationToken);
                 }
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)
@@ -129,3 +120,15 @@ internal class PlatformInfoJob(
             platformId: platformId,
             created: DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 }
+
+public sealed record PlatformStatsBatch(
+    Guid PlatformId,
+    int NetworksCount,
+    int VolumesCount,
+    long Containers,
+    long ContainersRunning,
+    long ContainersPaused,
+    long ContainersStopped,
+    long Images,
+    long MemTotal,
+    PlatformStat Stat);

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { configureHub, IHubConfig, startConnectionWithRetry } from '@/lib/signalr.helpers';
 import { ContainerInfoView, ContainersInfoView, ContainerStatView } from '@/api/_generated';
@@ -11,6 +11,7 @@ const useContainersHub = (platformId: string) => {
   const accessToken = useContextSelector(AuthContext, (v) => v?.accessToken);
   const groupName = `ContainersInfo/${platformId}`;
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
+  const isCanceledRef = useRef(false);
 
   const handleContainersInfoUpdated = useCallback((containers: ContainersInfoView) => {
     setContainersInfo(containers);
@@ -109,7 +110,6 @@ const useContainersHub = (platformId: string) => {
     if (!accessToken) return;
 
     let hubConnection: HubConnection;
-    let isCanceled = false;
 
     const initHub = () => {
       const config: IHubConfig = {
@@ -128,12 +128,13 @@ const useContainersHub = (platformId: string) => {
 
     const connect = async () => {
       setupEventListeners(hubConnection);
-      await startConnectionWithRetry(hubConnection, onConnected, isCanceled);
+      await startConnectionWithRetry(hubConnection, onConnected, isCanceledRef);
     };
 
     const cleanup = () => {
-      isCanceled = true;
+      isCanceledRef.current = true;
       if (hubConnection) {
+        hubConnection.send('LeaveGroup', groupName);
         removeEventListeners(hubConnection);
         hubConnection.stop();
       }

@@ -6,19 +6,19 @@ using Microsoft.Extensions.Hosting;
 namespace Infrastructure.TaskJobs;
 
 /// <summary>
-/// Monitor gRPC service (Docker Agents) health status.
+/// Monitor gRPC services (Docker Agents) health status.
 /// </summary>
 public interface IGrpcHealthMonitorJob : IHostedService
 {
-    bool IsServiceOnline(string address);
+    bool IsServiceOnLine(string address);
     void TrackAddress(string address);
-    void TrackAddress(string[] addressess);
+    void TrackAddress(string[] addresses);
     void UntrackAddress(string address);
-    event EventHandler<GrpcServiceHealthChangedEventArgs> StatusChanged;
-    ChannelReader<GrpcServiceHealthChangedEventArgs> StatusUpdates { get; }
 }
 
-internal class GrpcHealthMonitorJob(IGrpcClientFactory clientFactory) : BackgroundService, IGrpcHealthMonitorJob
+internal class GrpcHealthMonitorJob(
+    IGrpcClientFactory clientFactory, 
+    ChannelWriter<GrpcServiceHealth> channelWriter) : BackgroundService, IGrpcHealthMonitorJob
 {
     private readonly Lock @lock = new();
     private readonly List<string> trackedAddresses = [];
@@ -29,19 +29,10 @@ internal class GrpcHealthMonitorJob(IGrpcClientFactory clientFactory) : Backgrou
     private const int FailThreshold = 3;
     private const int SuccessThreshold = 2;
 
-    private readonly Dictionary<string, int> _failureCounts = [];
-    private readonly Dictionary<string, int> _successCounts = [];
+    private readonly Dictionary<string, int> failureCounts = [];
+    private readonly Dictionary<string, int> successCounts = [];
 
-    private readonly Channel<GrpcServiceHealthChangedEventArgs> _channel =
-        Channel.CreateUnbounded<GrpcServiceHealthChangedEventArgs>(new UnboundedChannelOptions
-        {
-            SingleWriter = true,
-            AllowSynchronousContinuations = false
-        });
-
-    public event EventHandler<GrpcServiceHealthChangedEventArgs>? StatusChanged;
-    public ChannelReader<GrpcServiceHealthChangedEventArgs> StatusUpdates => _channel.Reader;
-
+    
     public void TrackAddress(string address)
     {
         lock (@lock)
@@ -75,8 +66,7 @@ internal class GrpcHealthMonitorJob(IGrpcClientFactory clientFactory) : Backgrou
         }
     }
 
-    public bool IsServiceOnline(string address) =>
-        status.TryGetValue(address, out var online) && online;
+    public bool IsServiceOnLine(string address) => status.TryGetValue(address, out var online) && online;
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -95,20 +85,20 @@ internal class GrpcHealthMonitorJob(IGrpcClientFactory clientFactory) : Backgrou
 
                 if (isOnline)
                 {
-                    _failureCounts[address] = 0;
+                    failureCounts[address] = 0;
 
-                    _successCounts[address] = _successCounts.GetValueOrDefault(address) + 1;
-                    if (!wasOnline && _successCounts[address] >= SuccessThreshold)
+                    successCounts[address] = successCounts.GetValueOrDefault(address) + 1;
+                    if (!wasOnline && successCounts[address] >= SuccessThreshold)
                     {
                         UpdateStatus(address, isOnline, cancellationToken);
                     }
                 }
                 else
                 {
-                    _successCounts[address] = 0;
+                    successCounts[address] = 0;
 
-                    _failureCounts[address] = _failureCounts.GetValueOrDefault(address) + 1;
-                    if (wasOnline && _failureCounts[address] >= FailThreshold)
+                    failureCounts[address] = failureCounts.GetValueOrDefault(address) + 1;
+                    if (wasOnline && failureCounts[address] >= FailThreshold)
                     {
                         UpdateStatus(address, isOnline, cancellationToken);
                     }
@@ -118,16 +108,15 @@ internal class GrpcHealthMonitorJob(IGrpcClientFactory clientFactory) : Backgrou
             await Task.Delay(checkInterval, cancellationToken);
         }
 
-        _channel.Writer.TryComplete();
+        channelWriter.TryComplete();
     }
 
     private async void UpdateStatus(string address, bool isOnline, CancellationToken cancellationToken)
     {
         status[address] = isOnline;
-        var evt = new GrpcServiceHealthChangedEventArgs(address, isOnline);
+        var evt = new GrpcServiceHealth(address, isOnline);
 
-        StatusChanged?.Invoke(this, evt);
-        await _channel.Writer.WriteAsync(evt, cancellationToken);
+        await channelWriter.WriteAsync(evt, cancellationToken);
     }
 
     private async Task<bool> ProbeAsync(string address)
@@ -135,8 +124,7 @@ internal class GrpcHealthMonitorJob(IGrpcClientFactory clientFactory) : Backgrou
         try
         {
             var client = clientFactory.GetPlatformClient(address);
-            var response = await client.HealthCheckAsync(new Google.Protobuf.WellKnownTypes.Empty(),
-                                   deadline: DateTime.UtcNow.AddSeconds(2));
+            var response = await client.HealthCheckAsync(new Google.Protobuf.WellKnownTypes.Empty(), deadline: DateTime.UtcNow.AddSeconds(2));
             return response.Healthy;
         }
         catch
@@ -146,8 +134,4 @@ internal class GrpcHealthMonitorJob(IGrpcClientFactory clientFactory) : Backgrou
     }
 }
 
-public sealed class GrpcServiceHealthChangedEventArgs(string address, bool isOnline) : EventArgs
-{
-    public string Address { get; } = address;
-    public bool IsOnline { get; } = isOnline;
-}
+internal sealed record GrpcServiceHealth(string Address, bool IsOnLine);

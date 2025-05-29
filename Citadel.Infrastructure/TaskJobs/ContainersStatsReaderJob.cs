@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using Agent.Server.Containers;
 using Citadel.Common;
 using Google.Protobuf.Collections;
@@ -15,17 +16,22 @@ using Microsoft.Extensions.Options;
 
 namespace Infrastructure.TaskJobs;
 
-public interface IContainersStatsJob : IHostedService
+/// <summary>
+/// Collects containers stats from remote agents and pushes into the shared Channel <see cref="ContainersStatsWriterJob"/>.
+/// </summary>
+public interface IContainersStatsReaderJob : IHostedService
 {
     void StartStreamStatsForPlatform(PlatformData platform, CancellationToken cancellationToken);
     void StopStreamStatsForPlatform(string address);
 }
 
-internal class ContainersStatsJob(
+/// <inheritdoc />
+internal class ContainersStatsReaderJob(
     IGrpcClientFactory clientFactory,
     IServiceScopeFactory scopeFactory,
-    ILogger<ContainersStatsJob> logger,
-    IOptions<JobConfiguration> options) : BackgroundService, IContainersStatsJob
+    ILogger<ContainersStatsReaderJob> logger,
+    ChannelWriter<ContainersStatBatch> channel,
+    IOptions<JobConfiguration> options) : BackgroundService, IContainersStatsReaderJob
 {
     private readonly JobConfiguration jobConfiguration = options.Value;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
@@ -33,7 +39,7 @@ internal class ContainersStatsJob(
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         var platforms = await dbContext.Platforms.AsNoTracking()
                  .Select(s => new PlatformData(s.Id, s.Address, s.Status))
@@ -81,8 +87,7 @@ internal class ContainersStatsJob(
                     if (reply .Containers.Count > 0)
                     {
                         using var scope = scopeFactory.CreateAsyncScope();
-                        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                        var containerHub = scope.ServiceProvider.GetRequiredService<IContainerHubDispatcher>();
+                        using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
                         var ids = await dbContext.ContainersInfo
                                     .AsNoTracking()
@@ -90,10 +95,7 @@ internal class ContainersStatsJob(
                                     .ToDictionaryAsync(s => s.ContainerId, s => s.Id, cancellationToken);
 
                         var stats = ContainerInfoMapper.Map(reply.Containers, ids, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-                        dbContext.ContainerStats.AddRange(stats);
-
-                        await dbContext.SaveChangesAsync(cancellationToken);
-                        await containerHub.SendContainersStats(stats, platform.Id);
+                        await channel.WriteAsync(new ContainersStatBatch(platform.Id, stats), cancellationToken);
                     }
                 }
             }
@@ -109,31 +111,6 @@ internal class ContainersStatsJob(
             }
         }
     }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ContainerStat CreateContainerStat(Guid containerId, ContainerStatMessage statMsg, long timestamp)
-    {
-        return ContainerStat.Create(
-            containerInfoId: containerId,
-            memoryUsage: statMsg.MemoryUsage,
-            memoryLimit: statMsg.MemoryLimit,
-            cpuUsage: statMsg.CpuUsage,
-            rxBytes: statMsg.RxBytes,
-            txBytes: statMsg.TxBytes,
-            created: timestamp);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void UpdateExistingContainer(ContainerInfo existing, ContainerMessage msg)
-    {
-        existing.PartialUpdate(
-            name: msg.Name,
-            image: msg.Image,
-            created: msg.Created,
-            state: msg.State.Map(),
-            stack: msg.Stack,
-            ports: msg.Ports.Map());
-    }
 }
 
 public readonly struct PlatformData(Guid Id, string Address, PlatformStatus Status)
@@ -142,6 +119,8 @@ public readonly struct PlatformData(Guid Id, string Address, PlatformStatus Stat
     public string Address { get; } = Address;
     public PlatformStatus Status { get; } = Status;
 }
+
+internal sealed record ContainersStatBatch(Guid PlatformId, ContainerStat[] Stats);
 
 public static class ContainerInfoMapper
 {

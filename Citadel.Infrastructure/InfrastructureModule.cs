@@ -1,8 +1,11 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Threading.Channels;
+using Agent.Server.GPlatform;
 using DbUp;
 using Hosting.Common;
 using Infrastructure.DockerHub;
+using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
 using Infrastructure.GithubCr;
 using Infrastructure.HttpClients.Serializer;
@@ -50,16 +53,42 @@ public static class InfrastructureModule
         services
             .AddHostedService<SyncTriggerService>()
             .AddHostedService(s => s.GetRequiredService<IGrpcHealthMonitorJob>())
-            .AddHostedService(s => s.GetRequiredService<IContainersStatsJob>())
-            .AddHostedService(s => s.GetRequiredService<IPlatformInfoJob>())
+            .AddHostedService(s => s.GetRequiredService<IContainersStatsReaderJob>())
+            .AddHostedService(s => s.GetRequiredService<IPlatformsStatsReaderJob>())
             .AddHostedService(s => s.GetRequiredService<IDaemonEventJob>())
+            .AddHostedService<ContainersStatsWriterJob>()
+            .AddHostedService<PlatformsStatsWriterJob>()
             .AddHostedService<CleanupStatsJob>()
             .AddHostedService<LogCleanupJob>();
         services
             .AddSingleton<IDaemonEventJob, DaemonEventJob>()
-            .AddSingleton<IPlatformInfoJob, PlatformInfoJob>()
-            .AddSingleton<IContainersStatsJob, ContainersStatsJob>()
-            .AddSingleton<IGrpcHealthMonitorJob, GrpcHealthMonitorJob>();
+            .AddSingleton<IPlatformsStatsReaderJob, PlatformsStatsReaderJob>()
+            .AddSingleton<IContainersStatsReaderJob, ContainersStatsReaderJob>()
+            .AddSingleton<IGrpcHealthMonitorJob, GrpcHealthMonitorJob>()
+            .AddSingleton(Channel.CreateUnbounded<ContainersStatBatch>(
+                new UnboundedChannelOptions
+                {
+                    SingleWriter = true,
+                    AllowSynchronousContinuations = false
+                }))
+            .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer)
+            .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader)
+            .AddSingleton(Channel.CreateUnbounded<PlatformStatsBatch>(
+                new UnboundedChannelOptions
+                {
+                    SingleWriter = true,
+                    AllowSynchronousContinuations = false
+                }))
+            .AddSingleton(s => s.GetRequiredService<Channel<PlatformStatsBatch>>().Writer)
+            .AddSingleton(s => s.GetRequiredService<Channel<PlatformStatsBatch>>().Reader)
+            .AddSingleton(Channel.CreateUnbounded<GrpcServiceHealth>(
+                new UnboundedChannelOptions
+                {
+                    SingleWriter = true,
+                    AllowSynchronousContinuations = false
+                }))
+            .AddSingleton(s => s.GetRequiredService<Channel<GrpcServiceHealth>>().Writer)
+            .AddSingleton(s => s.GetRequiredService<Channel<GrpcServiceHealth>>().Reader);
         return services;
     }
 

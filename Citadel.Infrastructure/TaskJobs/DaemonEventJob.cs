@@ -15,7 +15,7 @@ public interface IDaemonEventJob : IHostedService
     void StopMonitoringPlatform(string address);
 }
 
-public sealed class DaemonEventJob(
+internal sealed class DaemonEventJob(
     IServiceScopeFactory scopeFactory,
     IGrpcClientFactory clientFactory,
     ILogger<DaemonEventJob> logger) : BackgroundService, IDaemonEventJob
@@ -25,7 +25,7 @@ public sealed class DaemonEventJob(
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         var platforms = await dbContext.Platforms.AsNoTracking()
                  .Select(s => new PlatformData(s.Id, s.Address, s.Status))
@@ -67,7 +67,7 @@ public sealed class DaemonEventJob(
             try
             {
                 using var scope = scopeFactory.CreateAsyncScope();
-                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                 var containerHub = scope.ServiceProvider.GetRequiredService<IContainerHubDispatcher>();
 
                 var client = clientFactory.GetContainerClient(platform.Address);

@@ -33,8 +33,8 @@ public sealed record UpsertPlatform(Guid? Id, string Name, string Address) : ICo
 internal class UpsertPlatformHandler(
     IGrpcClientFactory clientFactory,
     IDaemonEventJob daemonEventJob,
-    IPlatformInfoJob platformInfoJob,
-    IContainersStatsJob containersStatsJob,
+    IPlatformsStatsReaderJob platformInfoJob,
+    IContainersStatsReaderJob containersStatsJob,
     ApplicationDbContext dbContext,
     IGrpcHealthMonitorJob grpcHealthMonitorJob,
     ILogger<UpsertPlatformHandler> logger)
