@@ -2,9 +2,9 @@
 
 namespace WebApi.Routes.Endpoints.Resources.Containers;
 
-public sealed record ContainerLogView(string ContainerId, string Log);
+public sealed record ContainerLogView(string Log);
 
 internal static class MapperExtensions
 {
-    public static ContainerLogView Map(this ContainerLogReply log) => new(log.ContainerId, log.Log);
+    public static ContainerLogView Map(this ContainerLogReply log) => new(log.Log);
 }

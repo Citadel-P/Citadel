@@ -37,6 +37,7 @@ export const usePOSTContainerLogs = (onChunkReceived: (chunk: string) => void) =
 
     const decoder = new TextDecoder('utf-8');
     let done = false;
+    let buffer = '';
 
     try {
       while (!done) {
@@ -44,12 +45,36 @@ export const usePOSTContainerLogs = (onChunkReceived: (chunk: string) => void) =
         done = readerDone;
 
         if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          onChunkReceived(chunk);
+          buffer += decoder.decode(value, { stream: true });
+
+          let newlineIndex;
+          while ((newlineIndex = buffer.indexOf('\n')) >= 0) {
+            const line = buffer.slice(0, newlineIndex).trim();
+            buffer = buffer.slice(newlineIndex + 1); // remove the processed line
+
+            if (line) {
+              try {
+                const parsed = JSON.parse(line);
+                onChunkReceived(parsed.Log);
+              } catch {
+                console.warn('Failed to parse JSON line:', line);
+              }
+            }
+          }
+        }
+      }
+
+      // Final flush (in case last line has no newline)
+      if (buffer.trim()) {
+        try {
+          const parsed = JSON.parse(buffer.trim());
+          onChunkReceived(parsed.log);
+        } catch {
+          console.warn('Failed to parse final JSON chunk:', buffer);
         }
       }
     } catch (error) {
-      console.error('Error while reading stream:', error);
+      console.error('Stream error:', error);
       throw error;
     } finally {
       reader.releaseLock();

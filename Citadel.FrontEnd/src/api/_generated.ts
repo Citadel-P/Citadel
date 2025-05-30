@@ -149,7 +149,6 @@ export interface ContainerInspectView {
 }
 
 export interface ContainerLogReply {
-  containerId?: string | null;
   log?: string | null;
 }
 

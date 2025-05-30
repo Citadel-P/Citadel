@@ -505,17 +505,7 @@
             }
           },
           "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ContainerLogReply"
-                  }
-                }
-              }
-            }
+            "description": "OK"
           },
           "400": {
             "description": "Bad Request",
@@ -4020,19 +4010,6 @@
           },
           "networkSettings": {
             "$ref": "#/components/schemas/NetworkSettingsView"
-          }
-        }
-      },
-      "ContainerLogReply": {
-        "type": "object",
-        "properties": {
-          "containerId": {
-            "type": "string",
-            "nullable": true
-          },
-          "log": {
-            "type": "string",
-            "nullable": true
           }
         }
       },

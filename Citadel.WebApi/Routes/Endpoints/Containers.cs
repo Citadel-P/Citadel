@@ -1,8 +1,8 @@
 ﻿using System.ComponentModel;
-using System.Runtime.CompilerServices;
-using Agent.Server.Containers;
+using System.Text.Json;
 using Application.Features.Containers.Commands;
 using Application.Features.Containers.Queries;
+using Application.Models;
 using Application.Permissions;
 using Hosting.Extensions;
 using Mediator;
@@ -56,11 +56,14 @@ public static class Containers
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
-    public static async IAsyncEnumerable<ContainerLogReply> StreamLogs(IMediator mediator, [FromBody] StreamLogsRequest request, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public static async Task StreamLogs(IMediator mediator, HttpResponse response, [FromBody] StreamLogsRequest request, CancellationToken cancellationToken)
     {
-        await foreach (var reply in mediator.CreateStream(request.ToCommand(), cancellationToken).ConfigureAwait(false))
+        await foreach (var reply in mediator.CreateStream(request.ToCommand(), cancellationToken))
         {
-            yield return reply;
+            // yield return reply;
+            var json = JsonSerializer.Serialize(reply, ApplicationJsonContext.Default.ContainerLogReply);
+            await response.WriteAsync(json + "\n", cancellationToken);
+            await response.Body.FlushAsync(cancellationToken);
         }
     }
 

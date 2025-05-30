@@ -4026,10 +4026,6 @@
       "ContainerLogReply": {
         "type": "object",
         "properties": {
-          "containerId": {
-            "type": "string",
-            "nullable": true
-          },
           "log": {
             "type": "string",
             "nullable": true
