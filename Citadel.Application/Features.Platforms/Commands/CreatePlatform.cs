@@ -27,12 +27,12 @@ public sealed record CreatePlatform(string Name, string Address, PlatformType Ty
 }
 
 internal sealed class CreatePlatformHandler(
-    IGrpcClientFactory clientFactory,
+    ApplicationDbContext dbContext,
     IDaemonEventJob daemonEventJob,
+    IGrpcClientFactory clientFactory,
     IPlatformsStatsReaderJob platformInfoJob,
     IContainersStatsReaderJob containersStatsJob,
-    ApplicationDbContext dbContext,
-    IGrpcHealthMonitorJob grpcHealthMonitorJob,
+    IPlatformHealthMonitorJob platformHealthMonitorJob,
     ILogger<UpsertPlatformHandler> logger) : ICommandHandler<CreatePlatform, Result<Platform>>
 {
     public async ValueTask<Result<Platform>> Handle(CreatePlatform command, CancellationToken cancellationToken)
@@ -111,13 +111,13 @@ internal sealed class CreatePlatformHandler(
     {
         if (!string.IsNullOrEmpty(oldAddress))
         {
-            grpcHealthMonitorJob.UntrackAddress(oldAddress);
+            platformHealthMonitorJob.UntrackPlatform(oldAddress);
             daemonEventJob.StopMonitoringPlatform(oldAddress);
             platformInfoJob.StopStreamStatsForPlatform(oldAddress);
             containersStatsJob.StopStreamStatsForPlatform(oldAddress);
         }
 
-        grpcHealthMonitorJob.TrackAddress(platformData.Address);
+        platformHealthMonitorJob.TrackPlatform(platformData.Address);
         daemonEventJob.StartMonitoringPlatform(platformData, cancellationToken);
         platformInfoJob.StartStreamStatsForPlatform(platformData, cancellationToken);
         containersStatsJob.StartStreamStatsForPlatform(platformData, cancellationToken);

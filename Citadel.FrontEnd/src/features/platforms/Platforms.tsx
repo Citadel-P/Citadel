@@ -1,6 +1,4 @@
 import Loader from '@/components/ui/loader';
-import { AddPlatformDropdown } from './AddPlatformDropdown';
-import Platform from './Platform';
 import { useContextSelector } from 'use-context-selector';
 import { useNavigate } from 'react-router';
 import { AlertMessage } from '@/components/ui/alert-message';
@@ -8,6 +6,8 @@ import { PlatformsContext } from './PlatformsProvider';
 import { DeletePlatformDialog } from './dialogs/DeletePlatformDialog';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
+import { PlatformType } from '@/api/_generated';
+import DockerPlatform from './DockerPlatform';
 
 const Platforms = () => {
   const platforms = useContextSelector(PlatformsContext, (v) => v?.platforms);
@@ -39,9 +39,11 @@ const Platforms = () => {
             .
           </AlertMessage>
         )}
-        {(platforms ?? []).map((platform) => (
-          <Platform key={`${platform.id}`} platform={platform} />
-        ))}
+        {(platforms ?? []).map((platform) => {
+          if (platform.type === PlatformType.Docker) {
+            return <DockerPlatform key={`${platform.id}`} platform={platform} />;
+          }
+        })}
       </div>
       <DeletePlatformDialog />
     </div>

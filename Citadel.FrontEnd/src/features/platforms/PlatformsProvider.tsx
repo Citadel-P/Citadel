@@ -4,7 +4,6 @@ import { PlatformView } from '@/api/_generated';
 import usePlatformHub from './hooks/usePlatformHub';
 import { useDELETEPlatform } from './hooks/useDELETEPlatform';
 import { toast } from 'sonner';
-import { useQueryClient } from '@tanstack/react-query';
 
 interface IContext {
   isLoading: boolean;

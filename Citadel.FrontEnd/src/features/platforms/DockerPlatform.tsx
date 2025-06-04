@@ -1,4 +1,4 @@
-import { PlatformStatus, PlatformView } from '@/api/_generated';
+import { PlatformDescriptorDockerPlatformDescriptor, PlatformStatus, PlatformView } from '@/api/_generated';
 import DockerIcon from '@/assets/docker.svg';
 import { Link } from 'react-router';
 import { Power, PowerOff, CirclePause, Pencil, Trash2 } from 'lucide-react';
@@ -9,7 +9,7 @@ import { fromNow } from '@/lib/dayjs.helper';
 import { useContextSelector } from 'use-context-selector';
 import { PlatformsContext } from './PlatformsProvider';
 
-const Platform = ({ platform }: { platform: PlatformView }) => {
+const DockerPlatform = ({ platform }: { platform: PlatformView }) => {
   const setDialogData = useContextSelector(PlatformsContext, (v) => v?.setDialogData)!;
 
   const isPlatfomOnline = platform.status === PlatformStatus.Online;
@@ -43,7 +43,9 @@ const Platform = ({ platform }: { platform: PlatformView }) => {
             <TooltipContent>Paused</TooltipContent>
           </Tooltip>
         </TooltipProvider>
-        <div className="ml-1">{platform?.containersPaused}</div>
+        <div className="ml-1">
+          {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containersPaused}
+        </div>
       </div>
     );
   };
@@ -61,7 +63,9 @@ const Platform = ({ platform }: { platform: PlatformView }) => {
             </Tooltip>
           </TooltipProvider>
         </div>
-        <div className="ml-1">{platform?.containersRunning}</div>
+        <div className="ml-1">
+          {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containersRunning}
+        </div>
       </div>
     );
   };
@@ -79,7 +83,9 @@ const Platform = ({ platform }: { platform: PlatformView }) => {
             </Tooltip>
           </TooltipProvider>
         </div>
-        <div className="ml-1">{platform?.containersStopped}</div>
+        <div className="ml-1">
+          {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containersStopped}
+        </div>
       </div>
     );
   };
@@ -106,24 +112,28 @@ const Platform = ({ platform }: { platform: PlatformView }) => {
                   <Link to={'/platforms/' + platform.id}>{platform.name}</Link>
                 </div>
                 <div className="truncate text-xs text-foreground">
-                  ({platform?.operatingSystem} v{platform?.serverVersion})
+                  ({(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).operatingSystem} v
+                  {platform?.serverVersion})
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-x-3">
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  <Link to={'/platforms/' + platform.id + '/containers'}>{platform?.containers} containers</Link>
+                  <Link to={'/platforms/' + platform.id + '/containers'}>
+                    {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containerCount}{' '}
+                    containers
+                  </Link>
                 </div>
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  <Link to={'/platforms/' + platform.id + '/images'}>{platform?.images} images</Link>
+                  <Link to={'/platforms/' + platform.id + '/images'}>{platform?.imageCount} images</Link>
                 </div>
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  <Link to={'/platforms/' + platform.id + '/volumes'}>{platform?.volumesCount} volumes</Link>
+                  <Link to={'/platforms/' + platform.id + '/volumes'}>{platform?.volumeCount} volumes</Link>
                 </div>
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  <Link to={'/platforms/' + platform.id + '/networks'}>{platform?.networksCount} networks</Link>
+                  <Link to={'/platforms/' + platform.id + '/networks'}>{platform?.networkCount} networks</Link>
                 </div>
-                <div className="truncate text-xs text-muted-foreground">{platform?.ncpu} CPU</div>
+                <div className="truncate text-xs text-muted-foreground">{platform?.cpuCount} CPU</div>
                 <div className="truncate text-xs text-muted-foreground">{byteTransform(platform?.memTotal)} RAM</div>
               </div>
             </div>
@@ -182,4 +192,4 @@ const Platform = ({ platform }: { platform: PlatformView }) => {
   );
 };
 
-export default Platform;
+export default DockerPlatform;

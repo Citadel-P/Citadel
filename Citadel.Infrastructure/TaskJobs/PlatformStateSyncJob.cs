@@ -11,30 +11,16 @@ using Microsoft.Extensions.Logging;
 namespace Infrastructure.TaskJobs;
 
 /// <summary>
-/// Background service that trigger the monitors of gRPC services and synchronizes platform and container information.
+/// Syncing full platform state (containers + platform info).
 /// </summary>
-internal class SyncTriggerService(
+internal class PlatformStateSyncJob(
     IGrpcClientFactory clientFactory,
     IServiceScopeFactory scopeFactory,
-    IGrpcHealthMonitorJob grpcHealthMonitorJob,
     ChannelReader<GrpcServiceHealth> channelReader,
-    ILogger<SyncTriggerService> logger) : BackgroundService
+    ILogger<PlatformStateSyncJob> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        string[]? addresses;
-        // Create a scope and dbContext only for the initial fetch
-        await using (var scope = scopeFactory.CreateAsyncScope())
-        {
-            using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            addresses = await dbContext.Platforms.AsNoTracking().Select(s => s.Address).ToArrayAsync(cancellationToken);
-        }
-
-        if (addresses != null && addresses.Length > 0)
-        {
-            grpcHealthMonitorJob.TrackAddress(addresses);
-        }
-
         await foreach (var evt in channelReader.ReadAllAsync(cancellationToken))
         {
             await SyncPlatform(evt, cancellationToken);

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { PlatformsView, PlatformView } from '@/api/_generated';
+import { PlatformDescriptorDockerPlatformDescriptor, PlatformsView, PlatformView } from '@/api/_generated';
 import { HubConnection } from '@microsoft/signalr';
 import { useContextSelector } from 'use-context-selector';
 import { AuthContext } from '@/features/auth/AuthProvider';
@@ -60,14 +60,18 @@ const usePlatformHub = () => {
 
       if (existingIndex !== -1) {
         updatedPlatforms[existingIndex].stats = [platform.stat];
-        updatedPlatforms[existingIndex].networksCount = platform.networksCount;
-        updatedPlatforms[existingIndex].volumesCount = platform.volumesCount;
-        updatedPlatforms[existingIndex].containers = platform.containers;
-        updatedPlatforms[existingIndex].containersRunning = platform.containersRunning;
-        updatedPlatforms[existingIndex].containersPaused = platform.containersPaused;
-        updatedPlatforms[existingIndex].containersStopped = platform.containersStopped;
-        updatedPlatforms[existingIndex].images = platform.images;
+        updatedPlatforms[existingIndex].networkCount = platform.networksCount;
+        updatedPlatforms[existingIndex].volumeCount = platform.volumesCount;
+       
+        updatedPlatforms[existingIndex].imageCount = platform.images;
         updatedPlatforms[existingIndex].memTotal = platform.memTotal;
+        if (updatedPlatforms[existingIndex].platformDescriptor.$type === "Docker") {
+          const descriptor = updatedPlatforms[existingIndex].platformDescriptor as PlatformDescriptorDockerPlatformDescriptor;
+          descriptor.containerCount = platform.containers;
+          descriptor.containersRunning = platform.containersRunning;
+          descriptor.containersPaused = platform.containersPaused;
+          descriptor.containersStopped = platform.containersStopped;
+        }
       }
       return updatedPlatforms;
     });

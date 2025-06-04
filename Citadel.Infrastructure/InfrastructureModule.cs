@@ -51,8 +51,8 @@ public static class InfrastructureModule
     {
         
         services
-            .AddHostedService<SyncTriggerService>()
-            .AddHostedService(s => s.GetRequiredService<IGrpcHealthMonitorJob>())
+            .AddHostedService<PlatformStateSyncJob>()
+            .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>())
             .AddHostedService(s => s.GetRequiredService<IContainersStatsReaderJob>())
             .AddHostedService(s => s.GetRequiredService<IPlatformsStatsReaderJob>())
             .AddHostedService(s => s.GetRequiredService<IDaemonEventJob>())
@@ -64,7 +64,7 @@ public static class InfrastructureModule
             .AddSingleton<IDaemonEventJob, DaemonEventJob>()
             .AddSingleton<IPlatformsStatsReaderJob, PlatformsStatsReaderJob>()
             .AddSingleton<IContainersStatsReaderJob, ContainersStatsReaderJob>()
-            .AddSingleton<IGrpcHealthMonitorJob, GrpcHealthMonitorJob>()
+            .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()
             .AddSingleton(Channel.CreateUnbounded<ContainersStatBatch>(
                 new UnboundedChannelOptions
                 {

@@ -22,8 +22,8 @@ public sealed record DeletePlatform(Guid Id) : ICommand<Result>
 internal class DeletePlatformHandler(
     ApplicationDbContext dbContext,
     IDaemonEventJob daemonEventJob,
-    IGrpcHealthMonitorJob grpcHealthMonitorJob,
     IPlatformHubDispatcher platformHubDispatcher,
+    IPlatformHealthMonitorJob platformHealthMonitorJob,
     ILogger<DeletePlatformHandler> logger) : ICommandHandler<DeletePlatform, Result>
 {
     public async ValueTask<Result> Handle(DeletePlatform command, CancellationToken cancellationToken)
@@ -41,7 +41,7 @@ internal class DeletePlatformHandler(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         daemonEventJob.StopMonitoringPlatform(platform.Address);
-        grpcHealthMonitorJob.UntrackAddress(platform.Address);
+        platformHealthMonitorJob.UntrackPlatform(platform.Address);
 
         // Notify subscribers about the platform deletion
         await platformHubDispatcher.PlatformDeleted(command.Id);
