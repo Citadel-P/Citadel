@@ -4,6 +4,7 @@ using Hosting.OpenApi;
 using Infrastructure;
 using WebApi.Routes.Endpoints;
 using WebApi.Routes.Endpoints.Resources;
+using WebApi.Routes.Endpoints.Resources.Registries;
 
 namespace WebApi.Routes;
 
@@ -205,6 +206,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(PlatformsName + "_" + nameof(Platforms.Put));
 
+        platforms.MapPost("/", Platforms.Create)
+            .WithSummary("Create a platform")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName(PlatformsName + "_" + nameof(Platforms.Create));
+
         platforms.MapDelete("/", Platforms.Delete)
             .WithSummary("Delete a platform")
             .ProducesValidationProblem()
@@ -233,26 +242,27 @@ public static class PublicEndpoints
 
         registries.MapPost("/", Registries.Create)
             .WithSummary("Create a registry")
-            .WithDescription($"A discriminator should be provided in the request, this discriminator is based on {nameof(RegistryDiscriminator)} enum ")
-            .WithExample(RegistryDiscriminator.Azure.ToString(), Examples.Registries.Create.CreateAzureRegistryExample())
-            .WithExample(RegistryDiscriminator.AWS.ToString(), Examples.Registries.Create.CreateAwsRegistryExample())
-            .WithExample(RegistryDiscriminator.Gitlab.ToString(), Examples.Registries.Create.CreateGitlabRegistryExample())
-            .WithExample(RegistryDiscriminator.DockerHub.ToString(), Examples.Registries.Create.CreateDockerHubRegistryExample())
-            .WithExample(RegistryDiscriminator.GitHub.ToString(), Examples.Registries.Create.CreateGitHubRegistryExample())
+            .WithDescription($"A discriminator should be provided in the request, this discriminator is based on {nameof(RegistryType)} enum ")
+            .WithExample(RegistryType.Azure.ToString(), Examples.Registries.Create.CreateAzureRegistryExample())
+            .WithExample(RegistryType.AWS.ToString(), Examples.Registries.Create.CreateAwsRegistryExample())
+            .WithExample(RegistryType.Gitlab.ToString(), Examples.Registries.Create.CreateGitlabRegistryExample())
+            .WithExample(RegistryType.DockerHub.ToString(), Examples.Registries.Create.CreateDockerHubRegistryExample())
+            .WithExample(RegistryType.GitHub.ToString(), Examples.Registries.Create.CreateGitHubRegistryExample())
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(RegistriesName + "_" + nameof(Registries.Create));
 
-        registries.MapPatch("/", Registries.Patch)
+        registries.MapPatch("/{id}", Registries.Patch)
             .WithSummary("Patch a registry")
-            .WithDescription($"A discriminator should be provided in the request, this discriminator is based on {nameof(RegistryDiscriminator)} enum")
-            .WithExample(RegistryDiscriminator.Azure.ToString(), Examples.Registries.Update.UpdateAzureRegistryExample())
-            .WithExample(RegistryDiscriminator.AWS.ToString(), Examples.Registries.Update.UpdateAwsRegistryExample())
-            .WithExample(RegistryDiscriminator.Gitlab.ToString(), Examples.Registries.Update.UpdateGitlabRegistryExample())
-            .WithExample(RegistryDiscriminator.DockerHub.ToString(), Examples.Registries.Update.UpdateDockerHubRegistryExample())
-            .WithExample(RegistryDiscriminator.GitHub.ToString(), Examples.Registries.Update.UpdateGitHubRegistryExample())
+            .WithDescription($"A discriminator should be provided in the request, this discriminator is based on {nameof(RegistryType)} enum")
+            .Accepts<RegistryInput>("application/merge-patch+json", "application/json")
+            .WithExample(RegistryType.Azure.ToString(), Examples.Registries.Update.UpdateAzureRegistryExample())
+            .WithExample(RegistryType.AWS.ToString(), Examples.Registries.Update.UpdateAwsRegistryExample())
+            .WithExample(RegistryType.Gitlab.ToString(), Examples.Registries.Update.UpdateGitlabRegistryExample())
+            .WithExample(RegistryType.DockerHub.ToString(), Examples.Registries.Update.UpdateDockerHubRegistryExample())
+            .WithExample(RegistryType.GitHub.ToString(), Examples.Registries.Update.UpdateGitHubRegistryExample())
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)

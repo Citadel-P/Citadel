@@ -13,8 +13,6 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<PlatformStat> PlatformStats { get; private set; }
     public DbSet<ContainerInfo> ContainersInfo { get; private set; }
     public DbSet<ContainerStat> ContainerStats { get; private set; }
-    public DbSet<SwarmInfo> SwarmsInfo { get; private set; }
-    public DbSet<SwarmPeer> SwarmsPeer { get; private set; }
     public DbSet<User> Users { get; private set; }
     public DbSet<Team> Teams { get; private set; }
     public DbSet<Role> Roles { get; private set; }
@@ -46,8 +44,6 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
         modelBuilder.ApplyConfiguration(new PlatformStatConfiguration());
         modelBuilder.ApplyConfiguration(new RegistryConfiguration());
         modelBuilder.ApplyConfiguration(new RoleConfiguration());
-        modelBuilder.ApplyConfiguration(new SwarmInfoConfiguration());
-        modelBuilder.ApplyConfiguration(new SwarmPeerConfiguration());
         modelBuilder.ApplyConfiguration(new TeamConfiguration());
         modelBuilder.ApplyConfiguration(new UserConfiguration());
         modelBuilder.ApplyConfiguration(new UserTeamConfiguration());

@@ -8,24 +8,16 @@ CREATE TABLE "Platforms" (
     "Id" BLOB NOT NULL CONSTRAINT "PK_Platforms" PRIMARY KEY,
     "Name" TEXT NOT NULL,
     "Address" TEXT NOT NULL,
-    "DaemonId" TEXT NOT NULL,
+    "Type" TEXT NOT NULL,
     "Status" TEXT NOT NULL,
-    "NetworksCount" INTEGER NOT NULL,
-    "VolumesCount" INTEGER NOT NULL,
-    "Containers" INTEGER NOT NULL,
-    "ContainersRunning" INTEGER NOT NULL,
-    "ContainersPaused" INTEGER NOT NULL,
-    "ContainersStopped" INTEGER NOT NULL,
-    "Images" INTEGER NOT NULL,
-    "Driver" TEXT NULL,
-    "OperatingSystem" TEXT NULL,
-    "OsVersion" TEXT NULL,
-    "OsType" TEXT NULL,
-    "Architecture" TEXT NULL,
-    "Ncpu" INTEGER NOT NULL,
+    "NetworkCount" INTEGER NOT NULL,
+    "VolumeCount" INTEGER NOT NULL,
+    "ImageCount" INTEGER NOT NULL,
+    "CpuCount" INTEGER NOT NULL,
     "MemTotal" INTEGER NOT NULL,
+    "AgentVersion" TEXT NULL,
     "ServerVersion" TEXT NULL,
-    "AgentVersion" TEXT NULL
+    "PlatformDescriptor" TEXT NOT NULL
 );
 
 CREATE TABLE "Registries" (
@@ -33,7 +25,7 @@ CREATE TABLE "Registries" (
     "Name" TEXT NOT NULL,
     "Url" TEXT NOT NULL,
     "Created" TEXT NOT NULL,
-    "Discriminator" TEXT NOT NULL,
+    "Type" TEXT NOT NULL,
     "Configuration" TEXT NOT NULL
 );
 
@@ -78,19 +70,6 @@ CREATE TABLE "PlatformStats" (
     CONSTRAINT "FK_PlatformStats_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
 );
 
-CREATE TABLE "SwarmsInfo" (
-    "Id" BLOB NOT NULL CONSTRAINT "PK_SwarmsInfo" PRIMARY KEY,
-    "PlatformId" BLOB NOT NULL,
-    "NodeID" TEXT NULL,
-    "NodeAddr" TEXT NULL,
-    "LocalNodeState" TEXT NULL,
-    "ControlAvailable" INTEGER NOT NULL,
-    "Error" TEXT NULL,
-    "Nodes" INTEGER NOT NULL,
-    "Managers" INTEGER NOT NULL,
-    CONSTRAINT "FK_SwarmsInfo_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
-);
-
 CREATE TABLE "Permissions" (
     "Id" BLOB NOT NULL CONSTRAINT "PK_Permissions" PRIMARY KEY,
     "RoleId" BLOB NOT NULL,
@@ -124,14 +103,6 @@ CREATE TABLE "ContainerStats" (
     CONSTRAINT "FK_ContainerStats_ContainersInfo_ContainerInfoId" FOREIGN KEY ("ContainerInfoId") REFERENCES "ContainersInfo" ("Id") ON DELETE CASCADE
 );
 
-CREATE TABLE "SwarmsPeer" (
-    "Id" BLOB NOT NULL CONSTRAINT "PK_SwarmsPeer" PRIMARY KEY,
-    "SwarmInfoId" BLOB NOT NULL,
-    "NodeID" TEXT NULL,
-    "Addr" TEXT NULL,
-    CONSTRAINT "FK_SwarmsPeer_SwarmsInfo_SwarmInfoId" FOREIGN KEY ("SwarmInfoId") REFERENCES "SwarmsInfo" ("Id") ON DELETE CASCADE
-);
-
 CREATE TABLE "UsersTeams" (
     "UserId" BLOB NOT NULL,
     "TeamId" BLOB NOT NULL,
@@ -154,15 +125,15 @@ SELECT changes();
 
 
 INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
-VALUES (X'D1DE9601F113CE77884E3CB636EC09A8', '2025-01-01 00:00:00', 'admin@admin.com', 'admin', 'pkRzKY2S/if3x2xhJEABZ2LPbIoub0oE4YPTwuHP13oHyh3Q');
+VALUES (X'D1DE9601F113CE77884E3CB636EC09A8', '2025-01-01 00:00:00', 'admin@admin.com', 'admin', 'WV/F/nmHBA85V3bz35Vk2odzbfaKz/WVL6FOYHZq01w5e2vg');
 SELECT changes();
 
 INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
-VALUES (X'D1DE9601F113FB73ACF0188115C01C0E', '2025-01-01 00:00:00', 'dev@dev.com', 'dev', '2R4ZVpcIE5Tx/RlvnOYFWsdzVxvC68KDmLgr1sAvtgmSB0qh');
+VALUES (X'D1DE9601F113FB73ACF0188115C01C0E', '2025-01-01 00:00:00', 'dev@dev.com', 'dev', 'hQJrv8yx/Rxu+Q6z7RuW5JvbWBgK155lAr/vPTYFRKhHKmKv');
 SELECT changes();
 
 INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
-VALUES (X'D1DE9601F1133A748A1B5E243048C77E', '2025-01-01 00:00:00', 'qa@qa.com', 'qa', 'IuAHlhLO/S+ro2exbcSJvR02oxlCx6OLpc2IpKxfnL77ue1H');
+VALUES (X'D1DE9601F1133A748A1B5E243048C77E', '2025-01-01 00:00:00', 'qa@qa.com', 'qa', 'Z74g22pM7mC8LASea/79XZ0uVhs1fYmMMr2NzU1u6JA9F3IW');
 SELECT changes();
 
 
@@ -311,10 +282,6 @@ CREATE INDEX "IX_RefreshTokens_UserId" ON "RefreshTokens" ("UserId");
 
 CREATE UNIQUE INDEX "IX_Registries_Name" ON "Registries" ("Name");
 
-CREATE UNIQUE INDEX "IX_SwarmsInfo_PlatformId" ON "SwarmsInfo" ("PlatformId");
-
-CREATE INDEX "IX_SwarmsPeer_SwarmInfoId" ON "SwarmsPeer" ("SwarmInfoId");
-
 CREATE INDEX "IX_Teams_RoleId" ON "Teams" ("RoleId");
 
 CREATE UNIQUE INDEX "EmailIndex" ON "Users" ("Email");
@@ -322,7 +289,25 @@ CREATE UNIQUE INDEX "EmailIndex" ON "Users" ("Email");
 CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20250524132955_migration0001', '9.0.4');
+VALUES ('20250531210411_migration0001', '9.0.4');
+
+UPDATE "Users" SET "Password" = 'S4buHR9wq9tSuwh1SjsexfxBwUm2rWBHLEbT1aMVKVIxV2Ay'
+WHERE "Id" = X'D1DE9601F113CE77884E3CB636EC09A8';
+SELECT changes();
+
+
+UPDATE "Users" SET "Password" = '6HpzHnYaGNOH4EYpbXzdUytceFF3KOedbhWOYxUCoSWJdUQC'
+WHERE "Id" = X'D1DE9601F113FB73ACF0188115C01C0E';
+SELECT changes();
+
+
+UPDATE "Users" SET "Password" = 'H2YmIHnpinUJ3R7m+Km+2cr+7yt1SaFjuSmaSPgyz3V+9/4X'
+WHERE "Id" = X'D1DE9601F1133A748A1B5E243048C77E';
+SELECT changes();
+
+
+INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+VALUES ('20250602162711_migration0002', '9.0.4');
 
 COMMIT;
 

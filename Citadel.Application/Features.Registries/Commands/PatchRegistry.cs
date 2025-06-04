@@ -1,9 +1,7 @@
-﻿using System.Reflection.Metadata.Ecma335;
-using System.Text.Json.Serialization;
-using FluentValidation;
+﻿using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.Merge;
+using Hosting.Common.MergePatch;
 using Infrastructure;
 using Infrastructure.DockerHub;
 using Infrastructure.Entities;
@@ -16,17 +14,27 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Registries.Commands;
 
-public sealed record PatchRegistry(Guid Id, RegistryDiscriminator Discriminator, string Name, string Url, RegistryConfigurationBase Configuration) : ICommand<Result<Registry>>
+public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Patch) : ICommand<Result<Registry>>
 {
-    internal sealed class PatchRegistryRequestValidator : AbstractValidator<PatchRegistry>
+    internal sealed class PatchRegistryValidator : PatchCommandValidator<PatchRegistry, Registry>
     {
-        public PatchRegistryRequestValidator()
+        public PatchRegistryValidator()
+            : base(
+                  patchSelector: x => x.Patch,
+                  jsonTypeInfo: RegistryJsonContext.Default.Registry,
+                  modelValidator: new RegistryPatchValidator()
+                  ) {}
+    }
+
+    internal sealed class RegistryPatchValidator : AbstractValidator<Registry>
+    {
+        public RegistryPatchValidator()
         {
             RuleFor(x => x.Id).NotEmpty().NotNull();
             When(s => s.Name != null, () => RuleFor(x => x.Name).NotEmpty().MinimumLength(3));
-            RuleFor(x => x.Discriminator)
+            RuleFor(x => x.Type)
                 .Must(d => Enum.IsDefined(d))
-                .WithMessage("'{PropertyName}' must be a valid discriminator");
+                .WithMessage("'{PropertyName}' must be a valid type");
 
             When(x => x.Configuration is not DockerHubRegistry && x.Configuration is not GitHubRegistry, () =>
             {
@@ -38,7 +46,7 @@ public sealed record PatchRegistry(Guid Id, RegistryDiscriminator Discriminator,
             });
             When(x => x.Configuration is AzureRegistry, () =>
             {
-               RuleFor(x => x.Configuration as AzureRegistry).SetValidator(new AzureRegistryValidator()!);
+                RuleFor(x => x.Configuration as AzureRegistry).SetValidator(new AzureRegistryValidator()!);
             });
             When(x => x.Configuration is AWSRegistry, () =>
             {
@@ -102,6 +110,7 @@ public sealed record PatchRegistry(Guid Id, RegistryDiscriminator Discriminator,
         }
     }
 }
+public sealed record PatchRegistryDto(string? Name, string? Url, RegistryType? Type, DockerHubRegistry? Configuration);
 
 internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubApi dockerHub, IGithubCrApi githubCrApi) : ICommandHandler<PatchRegistry, Result<Registry>>
 {
@@ -113,22 +122,18 @@ internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubAp
             return Result.Failure<Registry>(new ConflictError("The provided Id does not exist"));
         }
 
-        if (command.Name != null) 
+        var patchedRegistry = command.Patch.ApplyTo(registry, RegistryJsonContext.Default.Registry);
+
+        if (patchedRegistry.Name != null) 
         {
-            var conflict = await dbContext.Registries.AsNoTracking().FirstOrDefaultAsync(s => s.Name == command.Name && s.Id != command.Id, cancellationToken);
+            var conflict = await dbContext.Registries.AsNoTracking().FirstOrDefaultAsync(s => s.Name == patchedRegistry.Name && s.Id != command.Id, cancellationToken);
             if (conflict != null) 
             {
                 return Result.Failure<Registry>(new ConflictError("A registry with the same name already exist"));
             }
         }
 
-        var patchRegistry = MergeExtensions.Merge(registry, command, RegistryJsonContext.Default.Registry, PatchRegistryJsonContext.Default.PatchRegistry);
-        if (patchRegistry == null)
-        {
-            return Result.Failure<Registry>(new BadRequestError("Failed to apply the patch"));
-        }
-
-        if (patchRegistry.Configuration is DockerHubRegistry cfg)
+        if (patchedRegistry?.Type == RegistryType.DockerHub && patchedRegistry?.Configuration is DockerHubRegistry cfg)
         {
             var (canConnect, errorMessage) = await cfg.CanConnect(dockerHub, cancellationToken);
             if (!canConnect)
@@ -136,7 +141,7 @@ internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubAp
                 return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
             }
         }
-        else if (patchRegistry.Configuration is GitHubRegistry githubRegistry)
+        else if (patchedRegistry?.Type == RegistryType.GitHub && patchedRegistry?.Configuration is GitHubRegistry githubRegistry)
         {
             var (canConnect, errorMessage) = await githubRegistry.CanConnect(githubCrApi, cancellationToken);
             if (!canConnect)
@@ -144,15 +149,14 @@ internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubAp
                 return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
             }
         }
+        else
+        {
+            return Result.Failure<Registry>(new BadRequestError("Unsupported registry type or configuration."));
+        }
 
-        registry.PartialUpdate(name: patchRegistry.Name, url: patchRegistry.Url, configuration: patchRegistry.Configuration);
+        registry.PartialUpdate(name: patchedRegistry.Name, url: patchedRegistry.Url, configuration: patchedRegistry.Configuration);
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return registry;
     }
-}
-
-[JsonSerializable(typeof(PatchRegistry))]
-internal partial class PatchRegistryJsonContext : JsonSerializerContext
-{
 }

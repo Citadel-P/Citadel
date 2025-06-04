@@ -1,4 +1,4 @@
-import { RegistryConfigurationBaseGitHubRegistry, RegistryDiscriminator } from '@/api/_generated';
+import { RegistryConfigurationBaseGitHubRegistry, RegistryType } from '@/api/_generated';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { useContextSelector } from 'use-context-selector';
@@ -19,7 +19,7 @@ export const useGhcrForm = () => {
       .min(5, {
         message: 'Name must be at least 5 characters.',
       }),
-    discriminator: z.string(),
+    type: z.string(),
     url: z.string(),
     configuration: z.object({
       $type: z.string(),
@@ -34,9 +34,9 @@ export const useGhcrForm = () => {
     values: {
       name: registry?.name ?? '',
       url: 'https://ghcr.io',
-      discriminator: RegistryDiscriminator.GitHub,
+      type: RegistryType.GitHub,
       configuration: {
-        $type: RegistryDiscriminator.GitHub,
+        $type: RegistryType.GitHub,
         name: configuration?.name ?? '',
         pat: configuration?.pat ?? '',
         type: configuration?.type ?? 'Organization',

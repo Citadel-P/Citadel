@@ -7,7 +7,7 @@ import { LoaderCircle } from 'lucide-react';
 import { useContextSelector } from 'use-context-selector';
 import { RegistryFormContext } from './RegistryFormProvider';
 import { FieldChange } from '@/components/ui/field-change';
-import { CreateRegistryInput } from '@/api/_generated';
+import { RegistryInput } from '@/api/_generated';
 import { getEditedFields } from '@/lib/utils';
 
 const DockerHubConfiguration = () => {
@@ -18,7 +18,7 @@ const DockerHubConfiguration = () => {
   const validationErrors = useContextSelector(RegistryFormContext, (v) => v?.validationErrors);
   const mode = useContextSelector(RegistryFormContext, (v) => v?.mode);
 
-  function onSubmit(values: CreateRegistryInput | Partial<CreateRegistryInput>) {
+  function onSubmit(values: RegistryInput | Partial<RegistryInput>) {
     if (mode === 'edit') {
       const dirtyFields = form.formState.dirtyFields;
       values = getEditedFields(dirtyFields, values);

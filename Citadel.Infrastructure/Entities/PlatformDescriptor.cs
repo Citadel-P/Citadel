@@ -1,0 +1,14 @@
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
+
+namespace Infrastructure.Entities;
+
+[JsonPolymorphic]
+[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+[JsonDerivedType(typeof(DockerPlatformDescriptor), nameof(PlatformType.Docker))]
+[JsonDerivedType(typeof(DockerSwarmPlatformDescriptor), nameof(PlatformType.DockerSwarm))]
+[JsonDerivedType(typeof(KubernetesPlatformDescriptor), nameof(PlatformType.Kubernetes))]
+public abstract class PlatformDescriptor
+{
+
+}

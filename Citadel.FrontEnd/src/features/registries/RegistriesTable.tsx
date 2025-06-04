@@ -85,9 +85,9 @@ const columns: ColumnDef<RegistryView>[] = [
   {
     accessorKey: 'provider',
     header: ({ column }) => <SortableCell cellName="Provider" column={column} />,
-    cell: ({ row }) => <div>{row.original.discriminator}</div>,
+    cell: ({ row }) => <div>{row.original.type}</div>,
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
-      return rowA.original.discriminator.localeCompare(rowB.original.discriminator);
+      return rowA.original.type.localeCompare(rowB.original.type);
     },
   },
   {

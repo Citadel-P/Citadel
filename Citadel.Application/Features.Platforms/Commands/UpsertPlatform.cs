@@ -79,27 +79,29 @@ internal class UpsertPlatformHandler(
             return Result.Failure<Platform>(new ConflictError("A platform with the same [Name] or [Address] already exists!"));
         }
 
-        var platform = Platform.Create(
-            name: command.Name, 
-            address: command.Address,
+        DockerPlatformDescriptor configuration = new (
             daemonId: platformInfo.Id,
-            networksCount: platformInfo.NetworksCount ,
-            volumesCount: platformInfo.VolumesCount,
-            containers: platformInfo.Containers,
+            containerCount: platformInfo.ContainerCount,
             containersRunning: platformInfo.ContainersRunning,
             containersPaused: platformInfo.ContainersPaused,
             containersStopped: platformInfo.ContainersStopped,
-            images: platformInfo.Images,
             driver: platformInfo.Driver,
             operatingSystem: platformInfo.OperatingSystem,
             osVersion: platformInfo.OsVersion,
             osType: platformInfo.OsType,
-            architecture: platformInfo.Architecture,
-            ncpu: platformInfo.Ncpu,
+            architecture: platformInfo.Architecture);
+
+        var platform = Platform.Create(
+            name: command.Name, 
+            address: command.Address,
+            networkCount: platformInfo.NetworkCount,
+            volumeCount: platformInfo.VolumeCount,
+            imageCount: platformInfo.ImageCount,
+            cpuCount: platformInfo.CpuCount,
             memTotal: platformInfo.MemTotal,
             serverVersion: platformInfo.ServerVersion,
             agentVersion: platformInfo.AgentVersion,
-            swarmInfo: platformInfo.SwarmInfo.Map(),
+            descriptor: configuration,
             stats: [platformInfo.MapStat()]
             );
         dbContext.Platforms.Add(platform);
@@ -112,7 +114,7 @@ internal class UpsertPlatformHandler(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // Enqueue job
-        EnqueueTaskJob(new PlatformData (platform.Id, platform.Address, platform.Status), cancellationToken: cancellationToken);
+        SyncTaskJobs(new PlatformData (platform.Id, platform.Address, platform.Status), cancellationToken: cancellationToken);
 
         logger.LogInformation("A new platform has been added, id = {PlatformId}", platform.Id);
         return Result.Success(platform);
@@ -130,35 +132,47 @@ internal class UpsertPlatformHandler(
         platform.PartialUpdate(
             name: command.Name,
             address: command.Address,
-            daemonId: platformInfo.Id,
-            networksCount: platformInfo.NetworksCount,
-            volumesCount: platformInfo.VolumesCount,
-            containers: platformInfo.Containers,
+            
+            networkCount: platformInfo.NetworkCount,
+            volumeCount: platformInfo.VolumeCount,
             containersRunning: platformInfo.ContainersRunning,
             containersPaused: platformInfo.ContainersPaused,
             containersStopped: platformInfo.ContainersStopped,
-            images: platformInfo.Images,
-            driver: platformInfo.Driver,
-            operatingSystem: platformInfo.OperatingSystem,
-            osVersion: platformInfo.OsVersion,
-            osType: platformInfo.OsType,
-            architecture: platformInfo.Architecture,
-            ncpu: platformInfo.Ncpu,
+            imageCount: platformInfo.ImageCount,
+            cpuCount: platformInfo.CpuCount,
             memTotal: platformInfo.MemTotal,
             serverVersion: platformInfo.ServerVersion,
             agentVersion: platformInfo.AgentVersion);
+
+        if (platform.PlatformDescriptor is DockerPlatformDescriptor dockerConfig)
+        {
+            dockerConfig.PartialUpdate(
+                daemonId: platformInfo.Id,
+                containerCount: platformInfo.ContainerCount,
+                containersRunning: platformInfo.ContainersRunning,
+                containersPaused: platformInfo.ContainersPaused,
+                containersStopped: platformInfo.ContainersStopped,
+                driver: platformInfo.Driver,
+                operatingSystem: platformInfo.OperatingSystem,
+                osVersion: platformInfo.OsVersion,
+                osType: platformInfo.OsType,
+                architecture: platformInfo.Architecture);
+        }
+        else if (platform.PlatformDescriptor is DockerSwarmPlatformDescriptor dockerSwarmConfig)
+        {
+        }
 
         // Save to db
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // Re-queue job
-        EnqueueTaskJob(new PlatformData(platform.Id, platform.Address, platform.Status), oldPlatformAddress, cancellationToken);
+        SyncTaskJobs(new PlatformData(platform.Id, platform.Address, platform.Status), oldPlatformAddress, cancellationToken);
 
         logger.LogInformation("The platform with id = {PlatformId} has been updated", platform.Id);
         return platform;
     }
 
-    private void EnqueueTaskJob(PlatformData platformData, string? oldAddress = null, CancellationToken cancellationToken = default)
+    private void SyncTaskJobs(PlatformData platformData, string? oldAddress = null, CancellationToken cancellationToken = default)
     {
         if (!string.IsNullOrEmpty(oldAddress))
         {
@@ -177,18 +191,6 @@ internal class UpsertPlatformHandler(
 
 internal static class Mapper 
 {
-    internal static SwarmInfo Map(this SwarmInfoMessage swarmInfo)
-        => SwarmInfo.Create(
-                nodeID: swarmInfo?.NodeID,
-                nodeAddr: swarmInfo?.NodeAddr,
-                localNodeState: swarmInfo?.LocalNodeState,
-                controlAvailable: swarmInfo?.ControlAvailable ?? false,
-                error: swarmInfo?.Error,
-                nodes: swarmInfo?.Nodes ?? 0,
-                managers: swarmInfo?.Managers ?? 0,
-                remoteManagers: swarmInfo?.RemoteManagers?.Select(s => SwarmPeer.Create(nodeID: s.NodeID, addr: s.Addr))
-                );
-
     internal static PlatformStat MapStat(this PlatformInfoMessage systemInfo)
         => PlatformStat.Create(
             created: systemInfo.Created,

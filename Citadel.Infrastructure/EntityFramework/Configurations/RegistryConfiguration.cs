@@ -22,9 +22,9 @@ internal sealed class RegistryConfiguration : IEntityTypeConfiguration<Registry>
         builder.Property(p => p.Url).HasMaxLength(256).IsRequired();
 
         // Converters
-        builder.Property(p => p.Discriminator).HasConversion(
+        builder.Property(p => p.Type).HasConversion(
                                                 v => v.ToString(),
-                                                v => Enum.Parse<RegistryDiscriminator>(v));
+                                                v => Enum.Parse<RegistryType>(v));
 
         builder.Property(p => p.Configuration).HasColumnType("TEXT")
             .HasConversion(

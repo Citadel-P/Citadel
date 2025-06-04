@@ -85,13 +85,13 @@ internal class PlatformsStatsReaderJob(
                     await channel.WriteAsync(
                         new PlatformStatsBatch(
                             PlatformId: platform.Id,
-                            NetworksCount: reply.NetworksCount,
-                            VolumesCount: reply.VolumesCount,
-                            Containers: reply.Containers,
+                            NetworksCount: reply.NetworkCount,
+                            VolumesCount: reply.VolumeCount,
+                            Containers: reply.ContainerCount,
                             ContainersRunning: reply.ContainersRunning,
                             ContainersPaused: reply.ContainersPaused,
                             ContainersStopped: reply.ContainersStopped,
-                            Images: reply.Images,
+                            Images: reply.ImageCount,
                             MemTotal: reply.MemTotal,
                             CreatePlatformStat(platform.Id, reply.Stat)), 
                         cancellationToken);

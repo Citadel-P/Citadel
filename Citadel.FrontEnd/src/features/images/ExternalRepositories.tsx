@@ -3,7 +3,7 @@ import GhcrImagesTable from './GhcrImagesTable';
 import SelectRegistryInput from './SelectRegistryInput';
 import { ImagesContext } from './ImagesProvider';
 import Loader from '@/components/ui/loader';
-import { RegistryDiscriminator } from '@/api/_generated';
+import { RegistryType } from '@/api/_generated';
 import PrivateDockerHubImagesTable from './DockerHubImagesTable';
 import { PublicDockerHubImages } from './PublicDockerHubImages';
 
@@ -31,10 +31,10 @@ function renderRegistryContent(selectedRegistry: any) {
     );
   }
 
-  switch (selectedRegistry.discriminator) {
-    case RegistryDiscriminator.GitHub:
+  switch (selectedRegistry.type) {
+    case RegistryType.GitHub:
       return <GhcrImagesTable registryName={selectedRegistry.name!} />;
-    case RegistryDiscriminator.DockerHub:
+    case RegistryType.DockerHub:
       return selectedRegistry.isDefault ? (
         <PublicDockerHubImages />
       ) : (

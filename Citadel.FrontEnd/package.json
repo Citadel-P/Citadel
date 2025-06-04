@@ -15,7 +15,7 @@
     "prettier": "prettier --config ./.prettierrc --write \"src/**/*{.ts,.tsx,.html,.scss,.json}\"",
     "prettier:verify": "prettier --config ./.prettierrc --check \"src/**/*{.ts,.tsx,.html,.scss,.json}\"",
     "preview": "vite preview",
-    "api:generate": "npx swagger-typescript-api -p src/api/swagger.json -o ./src/api/ --name _generated.ts --responses"
+    "api:generate": "npx swagger-typescript-api generate --path ./src/api/swagger.json -o ./src/api/ -n _generated.ts --responses"
   },
   "dependencies": {
     "@formkit/auto-animate": "^0.8.2",
@@ -80,7 +80,7 @@
     "postcss-cli": "^11.0.0",
     "prettier": "^3.5.2",
     "prettier-plugin-tailwindcss": "^0.6.11",
-    "swagger-typescript-api": "^13.0.23",
+    "swagger-typescript-api": "^13.1.3",
     "tailwind-scrollbar": "4.0.2",
     "tailwindcss": "^4.0.8",
     "typescript": "^5.7.3",

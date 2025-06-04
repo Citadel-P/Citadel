@@ -4,8 +4,8 @@ using Infrastructure;
 namespace Application.Features.Images.Queries;
 
 [JsonPolymorphic]
-[JsonDerivedType(typeof(GitHubPackageResponse), nameof(RegistryDiscriminator.GitHub))]
-[JsonDerivedType(typeof(DockerHubRepositoryResponse), nameof(RegistryDiscriminator.DockerHub))]
+[JsonDerivedType(typeof(GitHubPackageResponse), nameof(RegistryType.GitHub))]
+[JsonDerivedType(typeof(DockerHubRepositoryResponse), nameof(RegistryType.DockerHub))]
 public interface IImageRepository
 {
     string Name { get; }

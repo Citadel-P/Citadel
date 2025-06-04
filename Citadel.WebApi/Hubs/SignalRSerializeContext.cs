@@ -1,4 +1,5 @@
 ﻿using System.Text.Json.Serialization;
+using Infrastructure.Entities;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 
@@ -16,6 +17,10 @@ namespace WebApi.Hubs;
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(IEnumerable<PlatformView>))]
 [JsonSerializable(typeof(PlatformView))]
+[JsonSerializable(typeof(PlatformDescriptor))]
+[JsonSerializable(typeof(DockerPlatformDescriptor))]
+[JsonSerializable(typeof(DockerSwarmPlatformDescriptor))]
+[JsonSerializable(typeof(KubernetesPlatformDescriptor))]
 [JsonSerializable(typeof(List<PlatformStatView>))]
 [JsonSerializable(typeof(SwarmInfoView))]
 [JsonSerializable(typeof(List<SwarmPeerView>))]

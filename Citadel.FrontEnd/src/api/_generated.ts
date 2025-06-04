@@ -1,5 +1,6 @@
 /* eslint-disable */
 /* tslint:disable */
+// @ts-nocheck
 /*
  * ---------------------------------------------------------------
  * ## THIS FILE WAS GENERATED VIA SWAGGER-TYPESCRIPT-API        ##
@@ -8,6 +9,78 @@
  * ## SOURCE: https://github.com/acacode/swagger-typescript-api ##
  * ---------------------------------------------------------------
  */
+
+export enum VolumeSharingType {
+  None = "None",
+  Readonly = "Readonly",
+  Onewriter = "Onewriter",
+  All = "All",
+}
+
+export enum VolumeScopeType {
+  Single = "Single",
+  Multi = "Multi",
+}
+
+export enum TagStatus {
+  Active = "Active",
+  Inactive = "Inactive",
+}
+
+export enum RegistryType {
+  DockerHub = "DockerHub",
+  Azure = "Azure",
+  AWS = "AWS",
+  Gitlab = "Gitlab",
+  GitHub = "GitHub",
+}
+
+export enum PlatformType {
+  Docker = "Docker",
+  DockerSwarm = "DockerSwarm",
+  Kubernetes = "Kubernetes",
+}
+
+export enum PlatformStatus {
+  Offline = "Offline",
+  Online = "Online",
+}
+
+export enum NullableOfRegistryType {
+  DockerHub = "DockerHub",
+  Azure = "Azure",
+  AWS = "AWS",
+  Gitlab = "Gitlab",
+  GitHub = "GitHub",
+}
+
+export enum ImageStatus {
+  Active = "Active",
+  Inactive = "Inactive",
+}
+
+export enum ContainerStateType {
+  Unknown = "Unknown",
+  Created = "Created",
+  Running = "Running",
+  Paused = "Paused",
+  Restarting = "Restarting",
+  Exited = "Exited",
+  Removing = "Removing",
+  Dead = "Dead",
+}
+
+export enum ContainerStateStatus {
+  Unknown = "Unknown",
+  Created = "Created",
+  Running = "Running",
+  Paused = "Paused",
+  Restarting = "Restarting",
+  Exited = "Exited",
+  Removing = "Removing",
+  Dead = "Dead",
+  Offline = "Offline",
+}
 
 export interface Address {
   addr?: string | null;
@@ -148,10 +221,6 @@ export interface ContainerInspectView {
   networkSettings: NetworkSettingsView;
 }
 
-export interface ContainerLogReply {
-  log?: string | null;
-}
-
 export interface ContainerStatView {
   /** @format uuid */
   containerId?: string;
@@ -186,29 +255,6 @@ export interface ContainerState {
   health?: Health;
 }
 
-export enum ContainerStateStatus {
-  Unknown = 'Unknown',
-  Created = 'Created',
-  Running = 'Running',
-  Paused = 'Paused',
-  Restarting = 'Restarting',
-  Exited = 'Exited',
-  Removing = 'Removing',
-  Dead = 'Dead',
-  Offline = 'Offline',
-}
-
-export enum ContainerStateType {
-  Unknown = 'Unknown',
-  Created = 'Created',
-  Running = 'Running',
-  Paused = 'Paused',
-  Restarting = 'Restarting',
-  Exited = 'Exited',
-  Removing = 'Removing',
-  Dead = 'Dead',
-}
-
 export interface ContainerStatsView {
   stats: ContainerStatView[];
 }
@@ -241,11 +287,10 @@ export interface CreateNetworkView {
   id: string;
 }
 
-export interface CreateRegistryInput {
+export interface CreatePlatformInput {
   name: string;
-  url: string;
-  discriminator: RegistryDiscriminator;
-  configuration: RegistryConfigurationBase;
+  address: string;
+  type: PlatformType;
 }
 
 export interface CreateVolumeInput {
@@ -541,12 +586,18 @@ export interface HttpValidationProblemDetails {
 
 export type IImageRepository = BaseIImageRepository &
   (
-    | BaseIImageRepositoryTypeMapping<'GitHub', IImageRepositoryGitHubPackageResponse>
-    | BaseIImageRepositoryTypeMapping<'DockerHub', IImageRepositoryDockerHubRepositoryResponse>
+    | BaseIImageRepositoryTypeMapping<
+        "GitHub",
+        IImageRepositoryGitHubPackageResponse
+      >
+    | BaseIImageRepositoryTypeMapping<
+        "DockerHub",
+        IImageRepositoryDockerHubRepositoryResponse
+      >
   );
 
 export interface IImageRepositoryDockerHubRepositoryResponse {
-  $type?: 'DockerHub';
+  $type?: "DockerHub";
   name?: string | null;
   namespace?: string | null;
   /** @format date-time */
@@ -557,7 +608,7 @@ export interface IImageRepositoryDockerHubRepositoryResponse {
 }
 
 export interface IImageRepositoryGitHubPackageResponse {
-  $type?: 'GitHub';
+  $type?: "GitHub";
   id?: string;
   name?: string;
   createdAt?: string | null;
@@ -602,11 +653,6 @@ export type ImageDataView = {
   containers: string[] | null;
   size: SizeView;
 };
-
-export enum ImageStatus {
-  Active = 'Active',
-  Inactive = 'Inactive',
-}
 
 export interface ImageView {
   id: string;
@@ -853,18 +899,93 @@ export type PackageVersionMetadata = {
   container?: PackageVersionContainerMetadata;
 } | null;
 
-export interface PatchRegistryInput {
-  /** @format uuid */
-  id: string;
-  name: string;
-  url: string;
-  discriminator: RegistryDiscriminator;
-  configuration: RegistryConfigurationBase;
-}
-
 export interface PeerInfoView {
   name: string;
   ip: string;
+}
+
+export type PlatformDescriptor = BasePlatformDescriptor &
+  (
+    | BasePlatformDescriptorTypeMapping<
+        "Docker",
+        PlatformDescriptorDockerPlatformDescriptor
+      >
+    | BasePlatformDescriptorTypeMapping<
+        "DockerSwarm",
+        PlatformDescriptorDockerSwarmPlatformDescriptor
+      >
+    | BasePlatformDescriptorTypeMapping<
+        "Kubernetes",
+        PlatformDescriptorKubernetesPlatformDescriptor
+      >
+  );
+
+export interface PlatformDescriptorDockerPlatformDescriptor {
+  $type?: "Docker";
+  daemonId: string;
+  /** @format int64 */
+  containerCount: number;
+  /** @format int64 */
+  containersRunning: number;
+  /** @format int64 */
+  containersPaused: number;
+  /** @format int64 */
+  containersStopped: number;
+  /** @default null */
+  driver?: string | null;
+  /** @default null */
+  operatingSystem?: string | null;
+  /** @default null */
+  osVersion?: string | null;
+  /** @default null */
+  osType?: string | null;
+  /** @default null */
+  architecture?: string | null;
+}
+
+export interface PlatformDescriptorDockerSwarmPlatformDescriptor {
+  $type?: "DockerSwarm";
+  nodeID: string | null;
+  nodeAddr: string | null;
+  localNodeState: string | null;
+  controlAvailable: boolean;
+  /** @default null */
+  error?: string | null;
+  /** @format int64 */
+  nodes: number;
+  /** @format int64 */
+  managers: number;
+  remoteManagers?: {
+    nodeID: string | null;
+    addr: string | null;
+  }[];
+  daemonId: string;
+  /** @format int64 */
+  containerCount: number;
+  /** @format int64 */
+  containersRunning: number;
+  /** @format int64 */
+  containersPaused: number;
+  /** @format int64 */
+  containersStopped: number;
+  /** @default null */
+  driver?: string | null;
+  /** @default null */
+  operatingSystem?: string | null;
+  /** @default null */
+  osVersion?: string | null;
+  /** @default null */
+  osType?: string | null;
+  /** @default null */
+  architecture?: string | null;
+}
+
+export interface PlatformDescriptorKubernetesPlatformDescriptor {
+  $type?: "Kubernetes";
+  clusterName?: string | null;
+  clusterVersion?: string | null;
+  apiServerUrl?: string | null;
+  namespace?: string | null;
 }
 
 export type PlatformDescriptorView = {
@@ -888,46 +1009,28 @@ export interface PlatformStatView {
   txBytes?: number;
 }
 
-export enum PlatformStatus {
-  Offline = 'Offline',
-  Online = 'Online',
-}
-
 /** @default null */
 export type PlatformView = {
   /** @format uuid */
   id: string;
   name: string;
   address: string;
+  type: PlatformType;
   status: PlatformStatus;
-  daemonId: string;
   /** @format int32 */
-  networksCount: number;
+  networkCount: number;
   /** @format int32 */
-  volumesCount: number;
+  volumeCount: number;
   /** @format int64 */
-  containers: number;
+  imageCount: number;
   /** @format int64 */
-  containersRunning: number;
-  /** @format int64 */
-  containersPaused: number;
-  /** @format int64 */
-  containersStopped: number;
-  /** @format int64 */
-  images: number;
-  driver: string | null;
-  operatingSystem: string | null;
-  osVersion: string | null;
-  osType: string | null;
-  architecture: string | null;
-  /** @format int64 */
-  ncpu: number;
+  cpuCount: number;
   /** @format int64 */
   memTotal: number;
   serverVersion: string | null;
   agentVersion: string | null;
-  swarmInfo: SwarmInfoView;
   stats: PlatformStatView[] | null;
+  platformDescriptor: PlatformDescriptor;
 };
 
 export interface PlatformView2 {
@@ -935,35 +1038,22 @@ export interface PlatformView2 {
   id: string;
   name: string;
   address: string;
+  type: PlatformType;
   status: PlatformStatus;
-  daemonId: string;
   /** @format int32 */
-  networksCount: number;
+  networkCount: number;
   /** @format int32 */
-  volumesCount: number;
+  volumeCount: number;
   /** @format int64 */
-  containers: number;
+  imageCount: number;
   /** @format int64 */
-  containersRunning: number;
-  /** @format int64 */
-  containersPaused: number;
-  /** @format int64 */
-  containersStopped: number;
-  /** @format int64 */
-  images: number;
-  driver: string | null;
-  operatingSystem: string | null;
-  osVersion: string | null;
-  osType: string | null;
-  architecture: string | null;
-  /** @format int64 */
-  ncpu: number;
+  cpuCount: number;
   /** @format int64 */
   memTotal: number;
   serverVersion: string | null;
   agentVersion: string | null;
-  swarmInfo: SwarmInfoView;
   stats: PlatformStatView[] | null;
+  platformDescriptor: PlatformDescriptor;
 }
 
 export interface PlatformsView {
@@ -1039,15 +1129,30 @@ export interface RegistriesView {
 
 export type RegistryConfigurationBase = BaseRegistryConfigurationBase &
   (
-    | BaseRegistryConfigurationBaseTypeMapping<'AWS', RegistryConfigurationBaseAWSRegistry>
-    | BaseRegistryConfigurationBaseTypeMapping<'Azure', RegistryConfigurationBaseAzureRegistry>
-    | BaseRegistryConfigurationBaseTypeMapping<'Gitlab', RegistryConfigurationBaseGitlabRegistry>
-    | BaseRegistryConfigurationBaseTypeMapping<'DockerHub', RegistryConfigurationBaseDockerHubRegistry>
-    | BaseRegistryConfigurationBaseTypeMapping<'GitHub', RegistryConfigurationBaseGitHubRegistry>
+    | BaseRegistryConfigurationBaseTypeMapping<
+        "AWS",
+        RegistryConfigurationBaseAWSRegistry
+      >
+    | BaseRegistryConfigurationBaseTypeMapping<
+        "Azure",
+        RegistryConfigurationBaseAzureRegistry
+      >
+    | BaseRegistryConfigurationBaseTypeMapping<
+        "Gitlab",
+        RegistryConfigurationBaseGitlabRegistry
+      >
+    | BaseRegistryConfigurationBaseTypeMapping<
+        "DockerHub",
+        RegistryConfigurationBaseDockerHubRegistry
+      >
+    | BaseRegistryConfigurationBaseTypeMapping<
+        "GitHub",
+        RegistryConfigurationBaseGitHubRegistry
+      >
   );
 
 export interface RegistryConfigurationBaseAWSRegistry {
-  $type?: 'AWS';
+  $type?: "AWS";
   registryUrl?: string | null;
   authenticationRequired: boolean;
   accessKey: string;
@@ -1056,14 +1161,14 @@ export interface RegistryConfigurationBaseAWSRegistry {
 }
 
 export interface RegistryConfigurationBaseAzureRegistry {
-  $type?: 'Azure';
+  $type?: "Azure";
   registryUrl?: string | null;
   userName: string;
   password: string;
 }
 
 export interface RegistryConfigurationBaseDockerHubRegistry {
-  $type?: 'DockerHub';
+  $type?: "DockerHub";
   registryUrl?: string | null;
   /** @default null */
   userName?: string | null;
@@ -1072,27 +1177,26 @@ export interface RegistryConfigurationBaseDockerHubRegistry {
 }
 
 export interface RegistryConfigurationBaseGitHubRegistry {
-  $type?: 'GitHub';
+  $type?: "GitHub";
   registryUrl?: string | null;
   name: string;
-  type: 'Organization' | 'User' | null;
+  type: "Organization" | "User" | null;
   pat: string;
 }
 
 export interface RegistryConfigurationBaseGitlabRegistry {
-  $type?: 'Gitlab';
+  $type?: "Gitlab";
   registryUrl?: string | null;
   userName: string;
   pat: string;
   instanceUrl: string;
 }
 
-export enum RegistryDiscriminator {
-  DockerHub = 'DockerHub',
-  Azure = 'Azure',
-  AWS = 'AWS',
-  Gitlab = 'Gitlab',
-  GitHub = 'GitHub',
+export interface RegistryInput {
+  name: string | null;
+  url: string | null;
+  type: NullableOfRegistryType;
+  configuration: RegistryConfigurationBase;
 }
 
 export interface RegistryView {
@@ -1100,7 +1204,7 @@ export interface RegistryView {
   id: string;
   name: string;
   url: string;
-  discriminator: RegistryDiscriminator;
+  type: RegistryType;
   /** @format date-time */
   created: string;
   configuration: RegistryConfigurationBase;
@@ -1129,31 +1233,6 @@ export type SizeView = {
 
 export interface StreamLogsRequest {
   containerId: string;
-}
-
-export type SwarmInfoView = {
-  /** @format uuid */
-  id: string;
-  nodeID: string | null;
-  nodeAddr: string | null;
-  localNodeState: string | null;
-  controlAvailable: boolean;
-  error: string | null;
-  /** @format int64 */
-  nodes: number;
-  /** @format int64 */
-  managers: number;
-  remoteManagers: SwarmPeerView[] | null;
-};
-
-export interface SwarmPeerView {
-  nodeID?: string | null;
-  addr?: string | null;
-}
-
-export enum TagStatus {
-  Active = 'Active',
-  Inactive = 'Inactive',
 }
 
 export interface TopologyEntryView {
@@ -1197,21 +1276,9 @@ export type VolumeOptions = {
   subpath?: string | null;
 };
 
-export enum VolumeScopeType {
-  Single = 'Single',
-  Multi = 'Multi',
-}
-
 export interface VolumeSecretView {
   key: string;
   secret: string;
-}
-
-export enum VolumeSharingType {
-  None = 'None',
-  Readonly = 'Readonly',
-  Onewriter = 'Onewriter',
-  All = 'All',
 }
 
 export type VolumeSpecView = {
@@ -1247,16 +1314,22 @@ type BaseIImageRepositoryTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
-type BaseRegistryConfigurationBase = object;
+type BasePlatformDescriptor = object | null;
+
+type BasePlatformDescriptorTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseRegistryConfigurationBase = object | null;
 
 type BaseRegistryConfigurationBaseTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
 export type QueryParamsType = Record<string | number, any>;
-export type ResponseFormat = keyof Omit<Body, 'body' | 'bodyUsed'>;
+export type ResponseFormat = keyof Omit<Body, "body" | "bodyUsed">;
 
-export interface FullRequestParams extends Omit<RequestInit, 'body'> {
+export interface FullRequestParams extends Omit<RequestInit, "body"> {
   /** set parameter to `true` for call `securityWorker` for this request */
   secure?: boolean;
   /** request path */
@@ -1275,16 +1348,22 @@ export interface FullRequestParams extends Omit<RequestInit, 'body'> {
   cancelToken?: CancelToken;
 }
 
-export type RequestParams = Omit<FullRequestParams, 'body' | 'method' | 'query' | 'path'>;
+export type RequestParams = Omit<
+  FullRequestParams,
+  "body" | "method" | "query" | "path"
+>;
 
 export interface ApiConfig<SecurityDataType = unknown> {
   baseUrl?: string;
-  baseApiParams?: Omit<RequestParams, 'baseUrl' | 'cancelToken' | 'signal'>;
-  securityWorker?: (securityData: SecurityDataType | null) => Promise<RequestParams | void> | RequestParams | void;
+  baseApiParams?: Omit<RequestParams, "baseUrl" | "cancelToken" | "signal">;
+  securityWorker?: (
+    securityData: SecurityDataType | null,
+  ) => Promise<RequestParams | void> | RequestParams | void;
   customFetch?: typeof fetch;
 }
 
-export interface HttpResponse<D extends unknown, E extends unknown = unknown> extends Response {
+export interface HttpResponse<D extends unknown, E extends unknown = unknown>
+  extends Response {
   data: D;
   error: E;
 }
@@ -1292,24 +1371,25 @@ export interface HttpResponse<D extends unknown, E extends unknown = unknown> ex
 type CancelToken = Symbol | string | number;
 
 export enum ContentType {
-  Json = 'application/json',
-  FormData = 'multipart/form-data',
-  UrlEncoded = 'application/x-www-form-urlencoded',
-  Text = 'text/plain',
+  Json = "application/json",
+  FormData = "multipart/form-data",
+  UrlEncoded = "application/x-www-form-urlencoded",
+  Text = "text/plain",
 }
 
 export class HttpClient<SecurityDataType = unknown> {
-  public baseUrl: string = '';
+  public baseUrl: string = "";
   private securityData: SecurityDataType | null = null;
-  private securityWorker?: ApiConfig<SecurityDataType>['securityWorker'];
+  private securityWorker?: ApiConfig<SecurityDataType>["securityWorker"];
   private abortControllers = new Map<CancelToken, AbortController>();
-  private customFetch = (...fetchParams: Parameters<typeof fetch>) => fetch(...fetchParams);
+  private customFetch = (...fetchParams: Parameters<typeof fetch>) =>
+    fetch(...fetchParams);
 
   private baseApiParams: RequestParams = {
-    credentials: 'same-origin',
+    credentials: "same-origin",
     headers: {},
-    redirect: 'follow',
-    referrerPolicy: 'no-referrer',
+    redirect: "follow",
+    referrerPolicy: "no-referrer",
   };
 
   constructor(apiConfig: ApiConfig<SecurityDataType> = {}) {
@@ -1322,7 +1402,7 @@ export class HttpClient<SecurityDataType = unknown> {
 
   protected encodeQueryParam(key: string, value: any) {
     const encodedKey = encodeURIComponent(key);
-    return `${encodedKey}=${encodeURIComponent(typeof value === 'number' ? value : `${value}`)}`;
+    return `${encodedKey}=${encodeURIComponent(typeof value === "number" ? value : `${value}`)}`;
   }
 
   protected addQueryParam(query: QueryParamsType, key: string) {
@@ -1331,26 +1411,37 @@ export class HttpClient<SecurityDataType = unknown> {
 
   protected addArrayQueryParam(query: QueryParamsType, key: string) {
     const value = query[key];
-    return value.map((v: any) => this.encodeQueryParam(key, v)).join('&');
+    return value.map((v: any) => this.encodeQueryParam(key, v)).join("&");
   }
 
   protected toQueryString(rawQuery?: QueryParamsType): string {
     const query = rawQuery || {};
-    const keys = Object.keys(query).filter((key) => 'undefined' !== typeof query[key]);
+    const keys = Object.keys(query).filter(
+      (key) => "undefined" !== typeof query[key],
+    );
     return keys
-      .map((key) => (Array.isArray(query[key]) ? this.addArrayQueryParam(query, key) : this.addQueryParam(query, key)))
-      .join('&');
+      .map((key) =>
+        Array.isArray(query[key])
+          ? this.addArrayQueryParam(query, key)
+          : this.addQueryParam(query, key),
+      )
+      .join("&");
   }
 
   protected addQueryParams(rawQuery?: QueryParamsType): string {
     const queryString = this.toQueryString(rawQuery);
-    return queryString ? `?${queryString}` : '';
+    return queryString ? `?${queryString}` : "";
   }
 
   private contentFormatters: Record<ContentType, (input: any) => any> = {
     [ContentType.Json]: (input: any) =>
-      input !== null && (typeof input === 'object' || typeof input === 'string') ? JSON.stringify(input) : input,
-    [ContentType.Text]: (input: any) => (input !== null && typeof input !== 'string' ? JSON.stringify(input) : input),
+      input !== null && (typeof input === "object" || typeof input === "string")
+        ? JSON.stringify(input)
+        : input,
+    [ContentType.Text]: (input: any) =>
+      input !== null && typeof input !== "string"
+        ? JSON.stringify(input)
+        : input,
     [ContentType.FormData]: (input: any) =>
       Object.keys(input || {}).reduce((formData, key) => {
         const property = input[key];
@@ -1358,7 +1449,7 @@ export class HttpClient<SecurityDataType = unknown> {
           key,
           property instanceof Blob
             ? property
-            : typeof property === 'object' && property !== null
+            : typeof property === "object" && property !== null
               ? JSON.stringify(property)
               : `${property}`,
         );
@@ -1367,7 +1458,10 @@ export class HttpClient<SecurityDataType = unknown> {
     [ContentType.UrlEncoded]: (input: any) => this.toQueryString(input),
   };
 
-  protected mergeRequestParams(params1: RequestParams, params2?: RequestParams): RequestParams {
+  protected mergeRequestParams(
+    params1: RequestParams,
+    params2?: RequestParams,
+  ): RequestParams {
     return {
       ...this.baseApiParams,
       ...params1,
@@ -1380,7 +1474,9 @@ export class HttpClient<SecurityDataType = unknown> {
     };
   }
 
-  protected createAbortSignal = (cancelToken: CancelToken): AbortSignal | undefined => {
+  protected createAbortSignal = (
+    cancelToken: CancelToken,
+  ): AbortSignal | undefined => {
     if (this.abortControllers.has(cancelToken)) {
       const abortController = this.abortControllers.get(cancelToken);
       if (abortController) {
@@ -1415,7 +1511,7 @@ export class HttpClient<SecurityDataType = unknown> {
     ...params
   }: FullRequestParams): Promise<HttpResponse<T, E>> => {
     const secureParams =
-      ((typeof secure === 'boolean' ? secure : this.baseApiParams.secure) &&
+      ((typeof secure === "boolean" ? secure : this.baseApiParams.secure) &&
         this.securityWorker &&
         (await this.securityWorker(this.securityData))) ||
       {};
@@ -1424,15 +1520,26 @@ export class HttpClient<SecurityDataType = unknown> {
     const payloadFormatter = this.contentFormatters[type || ContentType.Json];
     const responseFormat = format || requestParams.format;
 
-    return this.customFetch(`${baseUrl || this.baseUrl || ''}${path}${queryString ? `?${queryString}` : ''}`, {
-      ...requestParams,
-      headers: {
-        ...(requestParams.headers || {}),
-        ...(type && type !== ContentType.FormData ? { 'Content-Type': type } : {}),
+    return this.customFetch(
+      `${baseUrl || this.baseUrl || ""}${path}${queryString ? `?${queryString}` : ""}`,
+      {
+        ...requestParams,
+        headers: {
+          ...(requestParams.headers || {}),
+          ...(type && type !== ContentType.FormData
+            ? { "Content-Type": type }
+            : {}),
+        },
+        signal:
+          (cancelToken
+            ? this.createAbortSignal(cancelToken)
+            : requestParams.signal) || null,
+        body:
+          typeof body === "undefined" || body === null
+            ? null
+            : payloadFormatter(body),
       },
-      signal: (cancelToken ? this.createAbortSignal(cancelToken) : requestParams.signal) || null,
-      body: typeof body === 'undefined' || body === null ? null : payloadFormatter(body),
-    }).then(async (response) => {
+    ).then(async (response) => {
       const r = response.clone() as HttpResponse<T, E>;
       r.data = null as unknown as T;
       r.error = null as unknown as E;
@@ -1467,7 +1574,9 @@ export class HttpClient<SecurityDataType = unknown> {
  * @title Citadel.WebApi | v1
  * @version 1.0.0
  */
-export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDataType> {
+export class Api<
+  SecurityDataType extends unknown,
+> extends HttpClient<SecurityDataType> {
   api = {
     /**
      * No description
@@ -1482,10 +1591,13 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     authenticationRefreshToken: (params: RequestParams = {}) =>
-      this.request<RefreshTokenResponse, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        RefreshTokenResponse,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/authentication/refresh`,
-        method: 'GET',
-        format: 'json',
+        method: "GET",
+        format: "json",
         ...params,
       }),
 
@@ -1502,12 +1614,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     authenticationLogin: (data: LoginRequest, params: RequestParams = {}) =>
-      this.request<LoginResponse, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        LoginResponse,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/authentication/login`,
-        method: 'POST',
+        method: "POST",
         body: data,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -1529,7 +1644,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     authenticationLogout: (params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/authentication/logout`,
-        method: 'POST',
+        method: "POST",
         secure: true,
         ...params,
       }),
@@ -1550,11 +1665,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     containersGetById: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerInfoView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ContainerInfoView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/containers/${id}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -1574,11 +1692,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     containersGetStats: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerStatsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ContainerStatsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/containers/${id}/stats`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -1598,11 +1719,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     containersInspect: (id: string, params: RequestParams = {}) =>
-      this.request<ContainerInspectView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ContainerInspectView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/containers/${id}/inspect`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -1614,21 +1738,23 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @summary Stream container logs
      * @request POST:/api/v1/containers/stream-logs
      * @secure
-     * @response `200` `(ContainerLogReply)[]` OK
+     * @response `200` `void` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    containersStreamLogs: (data: StreamLogsRequest, params: RequestParams = {}) =>
-      this.request<ContainerLogReply[], HttpValidationProblemDetails | ProblemDetails>({
+    containersStreamLogs: (
+      data: StreamLogsRequest,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/stream-logs`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
         ...params,
       }),
 
@@ -1650,7 +1776,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     containersStartContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/start`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -1675,7 +1801,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     containersStopContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/stop`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -1700,7 +1826,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     containersPauseContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/pause`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -1725,7 +1851,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     containersRestartContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/restart`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -1750,7 +1876,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     containersUnpauseContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/unpause`,
-        method: 'PATCH',
+        method: "PATCH",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -1772,10 +1898,13 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    containersDeleteContainers: (data: DeleteContainersRequest, params: RequestParams = {}) =>
+    containersDeleteContainers: (
+      data: DeleteContainersRequest,
+      params: RequestParams = {},
+    ) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/delete`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -1798,11 +1927,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     platformsList: (params: RequestParams = {}) =>
-      this.request<PlatformsView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        PlatformsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/platforms`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -1822,13 +1954,45 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     platformsPut: (data: PutPlatformRequest, params: RequestParams = {}) =>
-      this.request<PlatformView2, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        PlatformView2,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/platforms`,
-        method: 'PUT',
+        method: "PUT",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name PlatformsCreate
+     * @summary Create a platform
+     * @request POST:/api/v1/platforms
+     * @secure
+     * @response `200` `PlatformView2` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    platformsCreate: (data: CreatePlatformInput, params: RequestParams = {}) =>
+      this.request<
+        PlatformView2,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/platforms`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
         ...params,
       }),
 
@@ -1859,7 +2023,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     ) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/platforms`,
-        method: 'DELETE',
+        method: "DELETE",
         query: query,
         secure: true,
         ...params,
@@ -1881,11 +2045,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     platformsGetById: (id: string, params: RequestParams = {}) =>
-      this.request<PlatformView2, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        PlatformView2,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/platforms/${id}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -1905,11 +2072,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     platformsGetInfo: (id: string, params: RequestParams = {}) =>
-      this.request<PlatformView2, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        PlatformView2,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/platforms/${id}/info`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -1929,11 +2099,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     platformsListContainers: (id: string, params: RequestParams = {}) =>
-      this.request<ContainersInfoView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        ContainersInfoView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/platforms/${id}/containers`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -1952,11 +2125,14 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     registriesGetAll: (params: RequestParams = {}) =>
-      this.request<RegistriesView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        RegistriesView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/registries/all`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -1975,16 +2151,49 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     registriesGetById: (id: string, params: RequestParams = {}) =>
-      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/registries/${id}`,
-        method: 'GET',
-        secure: true,
-        format: 'json',
-        ...params,
-      }),
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/registries/${id}`,
+          method: "GET",
+          secure: true,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
-     * @description A discriminator should be provided in the request, this discriminator is based on RegistryDiscriminator enum
+     * @description A discriminator should be provided in the request, this discriminator is based on RegistryType enum
+     *
+     * @tags Registries
+     * @name RegistriesPatch
+     * @summary Patch a registry
+     * @request PATCH:/api/v1/registries/{id}
+     * @secure
+     * @response `200` `RegistryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    registriesPatch: (
+      id: string,
+      data: RegistryInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/registries/${id}`,
+          method: "PATCH",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
+
+    /**
+     * @description A discriminator should be provided in the request, this discriminator is based on RegistryType enum
      *
      * @tags Registries
      * @name RegistriesCreate
@@ -1998,41 +2207,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    registriesCreate: (data: CreateRegistryInput, params: RequestParams = {}) =>
-      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/registries`,
-        method: 'POST',
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
-
-    /**
-     * @description A discriminator should be provided in the request, this discriminator is based on RegistryDiscriminator enum
-     *
-     * @tags Registries
-     * @name RegistriesPatch
-     * @summary Patch a registry
-     * @request PATCH:/api/v1/registries
-     * @secure
-     * @response `200` `RegistryView` OK
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    registriesPatch: (data: PatchRegistryInput, params: RequestParams = {}) =>
-      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/registries`,
-        method: 'PATCH',
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
+    registriesCreate: (data: RegistryInput, params: RequestParams = {}) =>
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/registries`,
+          method: "POST",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -2048,14 +2234,20 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    registriesDelete: (data: DeleteRegistriesInput, params: RequestParams = {}) =>
-      this.request<RegistriesView, HttpValidationProblemDetails | ProblemDetails>({
+    registriesDelete: (
+      data: DeleteRegistriesInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        RegistriesView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/registries`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -2076,9 +2268,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     imagesGetAllLocalImages: (platformId: string, params: RequestParams = {}) =>
       this.request<ImagesView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/images/${platformId}/local-images`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -2096,12 +2288,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesGetExternalRepositories: (registryName: string, params: RequestParams = {}) =>
-      this.request<IImageRepository[], HttpValidationProblemDetails | ProblemDetails>({
+    imagesGetExternalRepositories: (
+      registryName: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        IImageRepository[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images/${registryName}/repositories`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -2119,12 +2317,19 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesGetGhcrPackageVersions: (registryName: string, packageName: string, params: RequestParams = {}) =>
-      this.request<GhcrPackageVersion[], HttpValidationProblemDetails | ProblemDetails>({
+    imagesGetGhcrPackageVersions: (
+      registryName: string,
+      packageName: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        GhcrPackageVersion[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images/ghcr/${registryName}/${packageName}/versions`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -2142,12 +2347,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesGetDockerHubRepositories: (registryName: string, params: RequestParams = {}) =>
-      this.request<DockerHubRepository[], HttpValidationProblemDetails | ProblemDetails>({
+    imagesGetDockerHubRepositories: (
+      registryName: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        DockerHubRepository[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images/dockerhub/${registryName}/repositories`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -2165,12 +2376,19 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesGetDockerHubRepositoryTags: (registryName: string, repositoryName: string, params: RequestParams = {}) =>
-      this.request<DockerHubTagView[], HttpValidationProblemDetails | ProblemDetails>({
+    imagesGetDockerHubRepositoryTags: (
+      registryName: string,
+      repositoryName: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        DockerHubTagView[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images/dockerhub/${registryName}/${repositoryName}/tags`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -2195,12 +2413,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<DockerHubImageModel[], HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        DockerHubImageModel[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images/dockerhub`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -2219,12 +2440,19 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesInspect: (platformId: string, imageId: string, params: RequestParams = {}) =>
-      this.request<InspectImageView, HttpValidationProblemDetails | ProblemDetails>({
+    imagesInspect: (
+      platformId: string,
+      imageId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        InspectImageView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images/${platformId}/${imageId}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -2243,13 +2471,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     imagesPullImage: (data: PullImageRequest, params: RequestParams = {}) =>
-      this.request<PullImageReply[], HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        PullImageReply[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images/pull`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -2269,13 +2500,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     imagesDelete: (data: DeleteImagesRequest, params: RequestParams = {}) =>
-      this.request<DeleteImagesReply, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        DeleteImagesReply,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/images`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -2308,14 +2542,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       },
       params: RequestParams = {},
     ) =>
-      this.request<NetworksView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/networks/${id}`,
-        method: 'GET',
-        query: query,
-        secure: true,
-        format: 'json',
-        ...params,
-      }),
+      this.request<NetworksView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/networks/${id}`,
+          method: "GET",
+          query: query,
+          secure: true,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -2332,12 +2568,19 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `409` `ProblemDetails` Conflict
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    networksInspect: (platformId: string, networkId: string, params: RequestParams = {}) =>
-      this.request<InspectNetworkView, HttpValidationProblemDetails | ProblemDetails>({
+    networksInspect: (
+      platformId: string,
+      networkId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        InspectNetworkView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/networks/${platformId}/${networkId}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -2357,13 +2600,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `500` `ProblemDetails` Internal Server Error
      */
     networksCreate: (data: CreateNetworkInput, params: RequestParams = {}) =>
-      this.request<CreateNetworkView, HttpValidationProblemDetails | ProblemDetails>({
+      this.request<
+        CreateNetworkView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/networks`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -2385,7 +2631,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     networksDelete: (data: DeleteNetworksInput, params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/networks`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -2421,10 +2667,10 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     ) =>
       this.request<VolumesView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/volumes/${id}`,
-        method: 'GET',
+        method: "GET",
         query: query,
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -2443,12 +2689,19 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @response `409` `ProblemDetails` Conflict
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    volumesInspect: (platformId: string, name: string, params: RequestParams = {}) =>
-      this.request<InspectVolumeView, HttpValidationProblemDetails | ProblemDetails>({
+    volumesInspect: (
+      platformId: string,
+      name: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        InspectVolumeView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
         path: `/api/v1/volumes/${platformId}/${name}`,
-        method: 'GET',
+        method: "GET",
         secure: true,
-        format: 'json',
+        format: "json",
         ...params,
       }),
 
@@ -2470,7 +2723,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     volumesDelete: (data: DeleteVolumesInput, params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/volumes`,
-        method: 'DELETE',
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -2495,11 +2748,11 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     volumesCreate: (data: CreateVolumeInput, params: RequestParams = {}) =>
       this.request<VolumeView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/volumes`,
-        method: 'POST',
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: 'json',
+        format: "json",
         ...params,
       }),
   };

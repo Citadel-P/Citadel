@@ -1,4 +1,4 @@
-import { CreateRegistryInput, PatchRegistryInput, RegistryDiscriminator, RegistryView } from '@/api/_generated';
+import { RegistryInput, RegistryType, RegistryView } from '@/api/_generated';
 import { createContext } from 'use-context-selector';
 import { JSX, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -28,7 +28,7 @@ interface IContext {
   providers: IRegistryProvider[];
   currentProvider: string;
   setCurrentProvider: (value: string) => void;
-  onPostForm: (values: CreateRegistryInput | Partial<CreateRegistryInput>) => void;
+  onPostForm: (values: RegistryInput | Partial<RegistryInput>) => void;
 }
 interface IProps {
   children?: React.ReactNode;
@@ -39,28 +39,28 @@ const RegistryFormContext = createContext<IContext | undefined>(undefined);
 const RegistryFormProvider: React.FC<IProps> = ({ children }) => {
   const defaultProviders: IRegistryProvider[] = [
     {
-      id: RegistryDiscriminator.DockerHub,
+      id: RegistryType.DockerHub,
       name: 'DockerHub',
       description: 'Docker hub authenticated account',
       configuration: <DockerHubConfiguration />,
       disabled: false,
     },
     {
-      id: RegistryDiscriminator.GitHub,
+      id: RegistryType.GitHub,
       name: 'GitHub',
       description: 'GitHub container registry Ghcr',
       configuration: <GhcrConfiguration />,
       disabled: false,
     },
     {
-      id: RegistryDiscriminator.AWS,
+      id: RegistryType.AWS,
       name: 'AWS ECR',
       description: 'Amazon elastic container registry',
       configuration: <>Amazon Cfg</>,
       disabled: true,
     },
     {
-      id: RegistryDiscriminator.Gitlab,
+      id: RegistryType.Gitlab,
       name: 'Gitlab',
       description: 'GitLab container registry',
       configuration: <>Gitlab Cfg</>,
@@ -86,7 +86,7 @@ const RegistryFormProvider: React.FC<IProps> = ({ children }) => {
     isPending: patchIsPending,
     data: patchData,
   } = usePATCHRegistry();
-  const [currentProvider, setCurrentProvider] = useState<string>(RegistryDiscriminator.DockerHub);
+  const [currentProvider, setCurrentProvider] = useState<string>(RegistryType.DockerHub);
   const [registry, setRegistry] = useState<RegistryView | undefined>(undefined);
   let providers = [...defaultProviders];
   let formTitle = 'Create registry';
@@ -102,7 +102,7 @@ const RegistryFormProvider: React.FC<IProps> = ({ children }) => {
   }
   useEffect(() => {
     if (mode === 'edit' && data?.data) {
-      setCurrentProvider(data?.data.discriminator);
+      setCurrentProvider(data?.data.type);
       setRegistry(data?.data);
     }
   }, [data, mode]);
@@ -123,18 +123,17 @@ const RegistryFormProvider: React.FC<IProps> = ({ children }) => {
     }
   }, [patchIsSuccess, patchData, navigate]);
 
-  function onPostForm(data: CreateRegistryInput | Partial<PatchRegistryInput>) {
+  function onPostForm(data: RegistryInput | Partial<RegistryInput>) {
     if (mode === 'add') {
-      requestCreate(data as CreateRegistryInput);
+      requestCreate(data as RegistryInput);
     } else {
       // for serialization
       const payload = {
         ...data,
-        id: registry?.id,
-        discriminator: registry?.discriminator,
+        type: registry?.type,
         configuration: { $type: registry?.configuration.$type, ...data.configuration },
       };
-      requestPatch(payload as PatchRegistryInput);
+      requestPatch({ id: registry?.id, data: payload as RegistryInput });
     }
   }
 

@@ -77,13 +77,12 @@ internal class PlatformsStatsWriterJob(
 
             existing.PartialUpdate(
                 platformStatus: PlatformStatus.Online,
-                networksCount: batch.NetworksCount,
-                volumesCount: batch.VolumesCount,
-                containers: batch.Containers,
+                networkCount: batch.NetworksCount,
+                volumeCount: batch.VolumesCount,
                 containersRunning: batch.ContainersRunning,
                 containersPaused: batch.ContainersPaused,
                 containersStopped: batch.ContainersStopped,
-                images: batch.Images,
+                imageCount: batch.Images,
                 memTotal: batch.MemTotal);
         }
 

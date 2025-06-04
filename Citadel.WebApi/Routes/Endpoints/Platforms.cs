@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Platforms;
+using WebApi.Routes.Endpoints.Resources.Registries;
 
 namespace WebApi.Routes.Endpoints;
 
@@ -28,6 +29,12 @@ public static class Platforms
     public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> GetInfo(IMediator mediator, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetPlatformInfo(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, PlatformView.Map);
+    }
+
+    public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreatePlatformInput request, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResult(result, PlatformView.Map);
     }
 

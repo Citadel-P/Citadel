@@ -12,16 +12,16 @@ using Hosting.Common;
 
 namespace Application.Features.Registries.Commands;
 
-public sealed record CreateRegistry(string Name, string Url, RegistryDiscriminator Discriminator, RegistryConfigurationBase Configuration) : ICommand<Result<Registry>>
+public sealed record CreateRegistry(string Name, string Url, RegistryType Type, RegistryConfigurationBase Configuration) : ICommand<Result<Registry>>
 {
     internal sealed class CreateRegistryRequestValidator : AbstractValidator<CreateRegistry>
     {
         public CreateRegistryRequestValidator()
         {
             RuleFor(x => x.Name).NotEmpty().MinimumLength(3);
-            RuleFor(x => x.Discriminator)
+            RuleFor(x => x.Type)
                 .Must(d => Enum.IsDefined(d))
-                .WithMessage("'{PropertyName}' must be a valid discriminator");
+                .WithMessage("'{PropertyName}' must be a valid type");
 
             When(x => x.Configuration is not DockerHubRegistry && x.Configuration is not GitHubRegistry, () =>
             {
@@ -108,7 +108,7 @@ internal class CreateRegistryHandler(ApplicationDbContext dbContext, IDockerHubA
             return Result.Failure<Registry>(new ConflictError("The provided name already exist"));
         }
 
-        if (command.Configuration is DockerHubRegistry cfg)
+        if (command.Type == RegistryType.DockerHub &&  command.Configuration is DockerHubRegistry cfg)
         {
             var (canConnect, errorMessage) = await cfg.CanConnect(dockerHub, cancellationToken);
             if (!canConnect)
@@ -116,7 +116,7 @@ internal class CreateRegistryHandler(ApplicationDbContext dbContext, IDockerHubA
                 return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
             }
         }
-        else if (command.Configuration is GitHubRegistry githubRegistry) 
+        else if (command.Type == RegistryType.GitHub && command.Configuration is GitHubRegistry githubRegistry) 
         {
             var (canConnect, errorMessage) = await githubRegistry.CanConnect(githubCrApi, cancellationToken);
             if (!canConnect)
@@ -124,9 +124,13 @@ internal class CreateRegistryHandler(ApplicationDbContext dbContext, IDockerHubA
                 return Result.Failure<Registry>(new BadRequestError(errorMessage));
             }
         }
+        else
+        {
+            return Result.Failure<Registry>(new BadRequestError("Invalid registry configuration provided."));
+        }
 
-        
-        registry = Registry.Create(name: command.Name, url: command.Url, discriminator: command.Discriminator, configuration: command.Configuration);
+
+        registry = new Registry(name: command.Name, url: command.Url, type: command.Type, configuration: command.Configuration);
         dbContext.Registries.Add(registry);
         await dbContext.SaveChangesAsync(cancellationToken);
 

@@ -1,6 +1,9 @@
 ﻿using System.ComponentModel;
+using Application.Features.Registries.Commands;
 using Application.Features.Registries.Queries;
+using Hosting.Common.MergePatch;
 using Hosting.Extensions;
+using Infrastructure.Entities;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -10,9 +13,9 @@ namespace WebApi.Routes.Endpoints;
 
 public static class Registries
 {
-    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreateRegistryInput request, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] RegistryInput request, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(request.ToCommand(), cancellationToken);
+        var result = await mediator.Send(request.ToCreateRegistryCommand(), cancellationToken);
         return EndpointHandlers.HandleResult(result, RegistryView.Map);
     }
 
@@ -34,9 +37,14 @@ public static class Registries
         return EndpointHandlers.HandleResult(result, RegistriesView.Map);
     }
 
-    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Patch(IMediator mediator, [FromBody] PatchRegistryInput request, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Patch(
+        IMediator mediator, 
+        [FromRoute][Description("Registry id")] Guid id,
+        RegistryInputPatchDocument patchInput, 
+        CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(request.ToCommand(), cancellationToken);
+        var mapped = patchInput.Map<RegistryInput, Registry>();
+        var result = await mediator.Send(new PatchRegistry(id, mapped), cancellationToken);
         return EndpointHandlers.HandleResult(result, RegistryView.Map);
     }
 }

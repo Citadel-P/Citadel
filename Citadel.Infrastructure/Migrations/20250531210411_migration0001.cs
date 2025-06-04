@@ -20,24 +20,16 @@ namespace Infrastructure.Migrations
                     Id = table.Column<byte[]>(type: "BLOB", nullable: false),
                     Name = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     Address = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
-                    DaemonId = table.Column<string>(type: "TEXT", nullable: false),
+                    Type = table.Column<string>(type: "TEXT", nullable: false),
                     Status = table.Column<string>(type: "TEXT", nullable: false),
-                    NetworksCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    VolumesCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    Containers = table.Column<long>(type: "INTEGER", nullable: false),
-                    ContainersRunning = table.Column<long>(type: "INTEGER", nullable: false),
-                    ContainersPaused = table.Column<long>(type: "INTEGER", nullable: false),
-                    ContainersStopped = table.Column<long>(type: "INTEGER", nullable: false),
-                    Images = table.Column<long>(type: "INTEGER", nullable: false),
-                    Driver = table.Column<string>(type: "TEXT", nullable: true),
-                    OperatingSystem = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
-                    OsVersion = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
-                    OsType = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
-                    Architecture = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
-                    Ncpu = table.Column<long>(type: "INTEGER", nullable: false),
+                    NetworkCount = table.Column<int>(type: "INTEGER", nullable: false),
+                    VolumeCount = table.Column<int>(type: "INTEGER", nullable: false),
+                    ImageCount = table.Column<long>(type: "INTEGER", nullable: false),
+                    CpuCount = table.Column<long>(type: "INTEGER", nullable: false),
                     MemTotal = table.Column<long>(type: "INTEGER", nullable: false),
+                    AgentVersion = table.Column<string>(type: "TEXT", nullable: true),
                     ServerVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: true),
-                    AgentVersion = table.Column<string>(type: "TEXT", nullable: true)
+                    PlatformDescriptor = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -52,7 +44,7 @@ namespace Infrastructure.Migrations
                     Name = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     Url = table.Column<string>(type: "TEXT", maxLength: 256, nullable: false),
                     Created = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    Discriminator = table.Column<string>(type: "TEXT", nullable: false),
+                    Type = table.Column<string>(type: "TEXT", nullable: false),
                     Configuration = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
@@ -133,31 +125,6 @@ namespace Infrastructure.Migrations
                     table.PrimaryKey("PK_PlatformStats", x => x.Id);
                     table.ForeignKey(
                         name: "FK_PlatformStats_Platforms_PlatformId",
-                        column: x => x.PlatformId,
-                        principalTable: "Platforms",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "SwarmsInfo",
-                columns: table => new
-                {
-                    Id = table.Column<byte[]>(type: "BLOB", nullable: false),
-                    PlatformId = table.Column<byte[]>(type: "BLOB", nullable: false),
-                    NodeID = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
-                    NodeAddr = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
-                    LocalNodeState = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
-                    ControlAvailable = table.Column<bool>(type: "INTEGER", nullable: false),
-                    Error = table.Column<string>(type: "TEXT", nullable: true),
-                    Nodes = table.Column<long>(type: "INTEGER", nullable: false),
-                    Managers = table.Column<long>(type: "INTEGER", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_SwarmsInfo", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_SwarmsInfo_Platforms_PlatformId",
                         column: x => x.PlatformId,
                         principalTable: "Platforms",
                         principalColumn: "Id",
@@ -246,26 +213,6 @@ namespace Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "SwarmsPeer",
-                columns: table => new
-                {
-                    Id = table.Column<byte[]>(type: "BLOB", nullable: false),
-                    SwarmInfoId = table.Column<byte[]>(type: "BLOB", nullable: false),
-                    NodeID = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    Addr = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_SwarmsPeer", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_SwarmsPeer_SwarmsInfo_SwarmInfoId",
-                        column: x => x.SwarmInfoId,
-                        principalTable: "SwarmsInfo",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "UsersTeams",
                 columns: table => new
                 {
@@ -304,9 +251,9 @@ namespace Infrastructure.Migrations
                 columns: new[] { "Id", "CreatedAt", "Email", "Name", "Password" },
                 values: new object[,]
                 {
-                    { new byte[] { 209, 222, 150, 1, 241, 19, 206, 119, 136, 78, 60, 182, 54, 236, 9, 168 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "admin@admin.com", "admin", "pkRzKY2S/if3x2xhJEABZ2LPbIoub0oE4YPTwuHP13oHyh3Q" },
-                    { new byte[] { 209, 222, 150, 1, 241, 19, 251, 115, 172, 240, 24, 129, 21, 192, 28, 14 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "dev@dev.com", "dev", "2R4ZVpcIE5Tx/RlvnOYFWsdzVxvC68KDmLgr1sAvtgmSB0qh" },
-                    { new byte[] { 209, 222, 150, 1, 241, 19, 58, 116, 138, 27, 94, 36, 48, 72, 199, 126 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "qa@qa.com", "qa", "IuAHlhLO/S+ro2exbcSJvR02oxlCx6OLpc2IpKxfnL77ue1H" }
+                    { new byte[] { 209, 222, 150, 1, 241, 19, 206, 119, 136, 78, 60, 182, 54, 236, 9, 168 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "admin@admin.com", "admin", "WV/F/nmHBA85V3bz35Vk2odzbfaKz/WVL6FOYHZq01w5e2vg" },
+                    { new byte[] { 209, 222, 150, 1, 241, 19, 251, 115, 172, 240, 24, 129, 21, 192, 28, 14 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "dev@dev.com", "dev", "hQJrv8yx/Rxu+Q6z7RuW5JvbWBgK155lAr/vPTYFRKhHKmKv" },
+                    { new byte[] { 209, 222, 150, 1, 241, 19, 58, 116, 138, 27, 94, 36, 48, 72, 199, 126 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "qa@qa.com", "qa", "Z74g22pM7mC8LASea/79XZ0uVhs1fYmMMr2NzU1u6JA9F3IW" }
                 });
 
             migrationBuilder.InsertData(
@@ -411,17 +358,6 @@ namespace Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_SwarmsInfo_PlatformId",
-                table: "SwarmsInfo",
-                column: "PlatformId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SwarmsPeer_SwarmInfoId",
-                table: "SwarmsPeer",
-                column: "SwarmInfoId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Teams_RoleId",
                 table: "Teams",
                 column: "RoleId");
@@ -457,16 +393,10 @@ namespace Infrastructure.Migrations
                 name: "Registries");
 
             migrationBuilder.DropTable(
-                name: "SwarmsPeer");
-
-            migrationBuilder.DropTable(
                 name: "UsersTeams");
 
             migrationBuilder.DropTable(
                 name: "ContainersInfo");
-
-            migrationBuilder.DropTable(
-                name: "SwarmsInfo");
 
             migrationBuilder.DropTable(
                 name: "Teams");

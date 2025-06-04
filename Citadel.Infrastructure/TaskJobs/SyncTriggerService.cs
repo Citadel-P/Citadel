@@ -96,27 +96,37 @@ internal class SyncTriggerService(
                 var stale = existingContainers.Where(c => !containers.Any(s => s.ContainerId == c.Key)).Select(s => s.Value).ToArray();
                 dbContext.ContainersInfo.RemoveRange(stale);
 
-                // Update platform 
+                // Update platform
+                if (platform.PlatformDescriptor is DockerPlatformDescriptor dockerPlatform)
+                {
+                    dockerPlatform.PartialUpdate(
+                        daemonId: platformInfo.Id,
+                        containerCount: platformInfo.ContainerCount,
+                        containersRunning: platformInfo.ContainersRunning,
+                        containersPaused: platformInfo.ContainersPaused,
+                        containersStopped: platformInfo.ContainersStopped,
+                        driver: platformInfo.Driver,
+                        operatingSystem: platformInfo.OperatingSystem,
+                        osVersion: platformInfo.OsVersion,
+                        osType: platformInfo.OsType,
+                        architecture: platformInfo.Architecture);
+                }
+                else if (platform.PlatformDescriptor is DockerSwarmPlatformDescriptor dockerSwarmPlatform)
+                {
+                    // Todo: implement DockerSwarmPlatform configuration update
+                }
+
                 platform.PartialUpdate(
                     platformStatus: PlatformStatus.Online,
-                    daemonId: platformInfo.Id,
-                    networksCount: platformInfo.NetworksCount,
-                    volumesCount: platformInfo.VolumesCount,
-                    containers: platformInfo.Containers,
+                    networkCount: platformInfo.NetworkCount,
+                    volumeCount: platformInfo.VolumeCount,
                     containersRunning: platformInfo.ContainersRunning,
                     containersPaused: platformInfo.ContainersPaused,
                     containersStopped: platformInfo.ContainersStopped,
-                    images: platformInfo.Images,
-                    driver: platformInfo.Driver,
-                    operatingSystem: platformInfo.OperatingSystem,
-                    osVersion: platformInfo.OsVersion,
-                    osType: platformInfo.OsType,
-                    architecture: platformInfo.Architecture,
-                    ncpu: platformInfo.Ncpu,
+                    imageCount: platformInfo.ImageCount,
                     memTotal: platformInfo.MemTotal,
                     serverVersion: platformInfo.ServerVersion,
                     agentVersion: platformInfo.AgentVersion);
-
             }
             else
             {

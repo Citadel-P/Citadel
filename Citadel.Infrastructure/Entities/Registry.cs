@@ -11,33 +11,24 @@ namespace Infrastructure.Entities;
 /// <summary>
 /// Represent a container registry
 /// </summary>
-public class Registry
+[method: JsonConstructor]
+public class Registry(string name, string url, RegistryType type, RegistryConfigurationBase configuration)
 {
-    public Guid Id { get; private set; }
-    public string Name { get; private set; } = null!;
-    public string Url { get; private set; } = null!;
-    public DateTime Created { get; private set; }
+    public static readonly string DefaultRegistryName = "Docker Hub";
+    public Guid Id { get; private set; } = Guid.CreateVersion7();
+    public string Name { get; private set; } = name;
+    public string Url { get; private set; } = url;
+    public DateTime Created { get; private set; } = DateTime.UtcNow;
 
     /// <summary>
     /// The name of the type that will be serialized/deserialized
     /// </summary>
-    public RegistryDiscriminator Discriminator { get; private set; }
+    public RegistryType Type { get; private set; } = type;
 
     /// <summary>
     /// The registry configuration
     /// </summary>
-    public RegistryConfigurationBase Configuration { get; set; } = null!;
-
-    public static Registry Create(string name, string url, RegistryDiscriminator discriminator, RegistryConfigurationBase configuration) 
-        => new ()
-        {
-            Id = Guid.CreateVersion7(),
-            Created = DateTime.UtcNow,
-            Name = name,
-            Url = url,
-            Discriminator = discriminator,
-            Configuration = configuration 
-        };
+    public RegistryConfigurationBase Configuration { get; private set; } = configuration;
 
     public void PartialUpdate(string? name = null, string? url = null, RegistryConfigurationBase? configuration = null)
     {
@@ -46,28 +37,29 @@ public class Registry
         if (configuration != null) Configuration = configuration;
     }
 
-    public static readonly string DefaultRegistryName = "Docker Hub";
     public static Registry DefaultRegistry()
     {
-        return new Registry
+        var registry = new Registry(
+            name: DefaultRegistryName,
+            url: "https://hub.docker.com/",
+            type: RegistryType.DockerHub,
+            configuration: new DockerHubRegistry())
         {
             Id = Guid.Empty,
-            Name = DefaultRegistryName,
-            Url = "https://hub.docker.com/",
-            Created = DateTime.MinValue,
-            Discriminator = RegistryDiscriminator.DockerHub,
-            Configuration = new DockerHubRegistry()
+            Created = DateTime.MinValue // Set to a default value for the default registry
         };
+
+        return registry;
     }
 }
 
 [JsonPolymorphic]
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-[JsonDerivedType(typeof(AWSRegistry), nameof(RegistryDiscriminator.AWS))]
-[JsonDerivedType(typeof(AzureRegistry), nameof(RegistryDiscriminator.Azure))]
-[JsonDerivedType(typeof(GitlabRegistry), nameof(RegistryDiscriminator.Gitlab))]
-[JsonDerivedType(typeof(DockerHubRegistry), nameof(RegistryDiscriminator.DockerHub))]
-[JsonDerivedType(typeof(GitHubRegistry), nameof(RegistryDiscriminator.GitHub))]
+[JsonDerivedType(typeof(AWSRegistry), nameof(RegistryType.AWS))]
+[JsonDerivedType(typeof(AzureRegistry), nameof(RegistryType.Azure))]
+[JsonDerivedType(typeof(GitlabRegistry), nameof(RegistryType.Gitlab))]
+[JsonDerivedType(typeof(DockerHubRegistry), nameof(RegistryType.DockerHub))]
+[JsonDerivedType(typeof(GitHubRegistry), nameof(RegistryType.GitHub))]
 public abstract class RegistryConfigurationBase
 {
     public virtual string RegistryUrl { get; private set;  } = null!;

@@ -1203,6 +1203,90 @@
           }
         ]
       },
+      "post": {
+        "tags": [
+          "Platforms"
+        ],
+        "summary": "Create a platform",
+        "operationId": "Platforms_Create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePlatformInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformView2"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
       "delete": {
         "tags": [
           "Platforms"
@@ -1689,6 +1773,132 @@
             "Bearer": [ ]
           }
         ]
+      },
+      "patch": {
+        "tags": [
+          "Registries"
+        ],
+        "summary": "Patch a registry",
+        "description": "A discriminator should be provided in the request, this discriminator is based on RegistryType enum",
+        "operationId": "Registries_Patch",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Registry id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistryInput"
+              },
+              "examples": {
+                "Azure": {
+                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Type\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"RegistryUrl\":\"\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\"}}"
+                },
+                "AWS": {
+                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Type\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"RegistryUrl\":\"\",\"AuthenticationRequired\":true,\"AccessKey\":\"\",\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\"}}"
+                },
+                "Gitlab": {
+                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Type\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"RegistryUrl\":\"\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\"}}"
+                },
+                "DockerHub": {
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"RegistryUrl\":\"https://docker.io\",\"UserName\":\"\",\"PAT\":\"\"}}"
+                },
+                "GitHub": {
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"RegistryUrl\":\"https://ghcr.io\",\"Name\":\"organization or user name\",\"Type\":\"Organization\",\"PAT\":\"\"}}"
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistryInput"
+              },
+              "examples": {
+                "Azure": {
+                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Type\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"RegistryUrl\":\"\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\"}}"
+                },
+                "AWS": {
+                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Type\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"RegistryUrl\":\"\",\"AuthenticationRequired\":true,\"AccessKey\":\"\",\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\"}}"
+                },
+                "Gitlab": {
+                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Type\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"RegistryUrl\":\"\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\"}}"
+                },
+                "DockerHub": {
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"RegistryUrl\":\"https://docker.io\",\"UserName\":\"\",\"PAT\":\"\"}}"
+                },
+                "GitHub": {
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"RegistryUrl\":\"https://ghcr.io\",\"Name\":\"organization or user name\",\"Type\":\"Organization\",\"PAT\":\"\"}}"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/registries": {
@@ -1697,29 +1907,29 @@
           "Registries"
         ],
         "summary": "Create a registry",
-        "description": "A discriminator should be provided in the request, this discriminator is based on RegistryDiscriminator enum ",
+        "description": "A discriminator should be provided in the request, this discriminator is based on RegistryType enum ",
         "operationId": "Registries_Create",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateRegistryInput"
+                "$ref": "#/components/schemas/RegistryInput"
               },
               "examples": {
                 "Azure": {
-                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Discriminator\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"RegistryUrl\":\"\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\"}}"
+                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Type\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"RegistryUrl\":\"\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\"}}"
                 },
                 "AWS": {
-                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Discriminator\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"RegistryUrl\":\"\",\"AuthenticationRequired\":true,\"AccessKey\":\"\",\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\"}}"
+                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Type\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"RegistryUrl\":\"\",\"AuthenticationRequired\":true,\"AccessKey\":\"\",\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\"}}"
                 },
                 "Gitlab": {
-                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Discriminator\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"RegistryUrl\":\"\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\"}}"
+                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Type\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"RegistryUrl\":\"\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\"}}"
                 },
                 "DockerHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"RegistryUrl\":\"https://docker.io\",\"UserName\":\"\",\"PAT\":\"\"}}"
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"RegistryUrl\":\"https://docker.io\",\"UserName\":\"\",\"PAT\":\"\"}}"
                 },
                 "GitHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"RegistryUrl\":\"https://ghcr.io\",\"Name\":\"organization or user name\",\"Type\":\"Organization\",\"PAT\":\"\"}}"
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"RegistryUrl\":\"https://ghcr.io\",\"Name\":\"organization or user name\",\"Type\":\"Organization\",\"PAT\":\"\"}}"
                 }
               }
             }
@@ -1763,98 +1973,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      },
-      "patch": {
-        "tags": [
-          "Registries"
-        ],
-        "summary": "Patch a registry",
-        "description": "A discriminator should be provided in the request, this discriminator is based on RegistryDiscriminator enum",
-        "operationId": "Registries_Patch",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PatchRegistryInput"
-              },
-              "examples": {
-                "Azure": {
-                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Discriminator\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"RegistryUrl\":\"\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\"}}"
-                },
-                "AWS": {
-                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Discriminator\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"RegistryUrl\":\"\",\"AuthenticationRequired\":true,\"AccessKey\":\"\",\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\"}}"
-                },
-                "Gitlab": {
-                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Discriminator\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"RegistryUrl\":\"\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\"}}"
-                },
-                "DockerHub": {
-                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"RegistryUrl\":\"https://docker.io\",\"UserName\":\"\",\"PAT\":\"\"}}"
-                },
-                "GitHub": {
-                  "value": "{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Discriminator\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"RegistryUrl\":\"https://ghcr.io\",\"Name\":\"organization or user name\",\"Type\":\"Organization\",\"PAT\":\"\"}}"
-                }
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegistryView"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
                 }
               }
             }
@@ -4241,26 +4359,22 @@
           }
         }
       },
-      "CreateRegistryInput": {
+      "CreatePlatformInput": {
         "required": [
           "name",
-          "url",
-          "discriminator",
-          "configuration"
+          "address",
+          "type"
         ],
         "type": "object",
         "properties": {
           "name": {
             "type": "string"
           },
-          "url": {
+          "address": {
             "type": "string"
           },
-          "discriminator": {
-            "$ref": "#/components/schemas/RegistryDiscriminator"
-          },
-          "configuration": {
-            "$ref": "#/components/schemas/RegistryConfigurationBase"
+          "type": {
+            "$ref": "#/components/schemas/PlatformType"
           }
         }
       },
@@ -6304,6 +6418,17 @@
         },
         "nullable": true
       },
+      "NullableOfRegistryType": {
+        "enum": [
+          "DockerHub",
+          "Azure",
+          "AWS",
+          "Gitlab",
+          "GitHub",
+          null
+        ],
+        "nullable": true
+      },
       "PackageVersionContainerMetadata": {
         "type": "object",
         "properties": {
@@ -6326,34 +6451,6 @@
         },
         "nullable": true
       },
-      "PatchRegistryInput": {
-        "required": [
-          "id",
-          "name",
-          "url",
-          "discriminator",
-          "configuration"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string"
-          },
-          "discriminator": {
-            "$ref": "#/components/schemas/RegistryDiscriminator"
-          },
-          "configuration": {
-            "$ref": "#/components/schemas/RegistryConfigurationBase"
-          }
-        }
-      },
       "PeerInfoView": {
         "required": [
           "name",
@@ -6366,6 +6463,235 @@
           },
           "ip": {
             "type": "string"
+          }
+        }
+      },
+      "PlatformDescriptor": {
+        "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/PlatformDescriptorDockerPlatformDescriptor"
+          },
+          {
+            "$ref": "#/components/schemas/PlatformDescriptorDockerSwarmPlatformDescriptor"
+          },
+          {
+            "$ref": "#/components/schemas/PlatformDescriptorKubernetesPlatformDescriptor"
+          }
+        ],
+        "nullable": true,
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "Docker": "#/components/schemas/PlatformDescriptorDockerPlatformDescriptor",
+            "DockerSwarm": "#/components/schemas/PlatformDescriptorDockerSwarmPlatformDescriptor",
+            "Kubernetes": "#/components/schemas/PlatformDescriptorKubernetesPlatformDescriptor"
+          }
+        }
+      },
+      "PlatformDescriptorDockerPlatformDescriptor": {
+        "required": [
+          "daemonId",
+          "containerCount",
+          "containersRunning",
+          "containersPaused",
+          "containersStopped"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Docker"
+            ],
+            "type": "string"
+          },
+          "daemonId": {
+            "type": "string"
+          },
+          "containerCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersRunning": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersPaused": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersStopped": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "driver": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          },
+          "operatingSystem": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          },
+          "osVersion": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          },
+          "osType": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          },
+          "architecture": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          }
+        }
+      },
+      "PlatformDescriptorDockerSwarmPlatformDescriptor": {
+        "required": [
+          "nodeID",
+          "nodeAddr",
+          "localNodeState",
+          "controlAvailable",
+          "nodes",
+          "managers",
+          "daemonId",
+          "containerCount",
+          "containersRunning",
+          "containersPaused",
+          "containersStopped"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DockerSwarm"
+            ],
+            "type": "string"
+          },
+          "nodeID": {
+            "type": "string",
+            "nullable": true
+          },
+          "nodeAddr": {
+            "type": "string",
+            "nullable": true
+          },
+          "localNodeState": {
+            "type": "string",
+            "nullable": true
+          },
+          "controlAvailable": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          },
+          "nodes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "managers": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "remoteManagers": {
+            "type": "array",
+            "items": {
+              "required": [
+                "nodeID",
+                "addr"
+              ],
+              "type": "object",
+              "properties": {
+                "nodeID": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "addr": {
+                  "type": "string",
+                  "nullable": true
+                }
+              }
+            },
+            "nullable": true
+          },
+          "daemonId": {
+            "type": "string"
+          },
+          "containerCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersRunning": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersPaused": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "containersStopped": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "driver": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          },
+          "operatingSystem": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          },
+          "osVersion": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          },
+          "osType": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          },
+          "architecture": {
+            "type": "string",
+            "default": null,
+            "nullable": true
+          }
+        }
+      },
+      "PlatformDescriptorKubernetesPlatformDescriptor": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "Kubernetes"
+            ],
+            "type": "string"
+          },
+          "clusterName": {
+            "type": "string",
+            "nullable": true
+          },
+          "clusterVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "apiServerUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "namespace": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -6432,31 +6758,30 @@
         ],
         "type": "string"
       },
+      "PlatformType": {
+        "enum": [
+          "Docker",
+          "DockerSwarm",
+          "Kubernetes"
+        ],
+        "type": "string"
+      },
       "PlatformView": {
         "required": [
           "id",
           "name",
           "address",
+          "type",
           "status",
-          "daemonId",
-          "networksCount",
-          "volumesCount",
-          "containers",
-          "containersRunning",
-          "containersPaused",
-          "containersStopped",
-          "images",
-          "driver",
-          "operatingSystem",
-          "osVersion",
-          "osType",
-          "architecture",
-          "ncpu",
+          "networkCount",
+          "volumeCount",
+          "imageCount",
+          "cpuCount",
           "memTotal",
           "serverVersion",
           "agentVersion",
-          "swarmInfo",
-          "stats"
+          "stats",
+          "platformDescriptor"
         ],
         "type": "object",
         "properties": {
@@ -6470,61 +6795,25 @@
           "address": {
             "type": "string"
           },
+          "type": {
+            "$ref": "#/components/schemas/PlatformType"
+          },
           "status": {
             "$ref": "#/components/schemas/PlatformStatus"
           },
-          "daemonId": {
-            "type": "string"
-          },
-          "networksCount": {
+          "networkCount": {
             "type": "integer",
             "format": "int32"
           },
-          "volumesCount": {
+          "volumeCount": {
             "type": "integer",
             "format": "int32"
           },
-          "containers": {
+          "imageCount": {
             "type": "integer",
             "format": "int64"
           },
-          "containersRunning": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "containersPaused": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "containersStopped": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "images": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "driver": {
-            "type": "string",
-            "nullable": true
-          },
-          "operatingSystem": {
-            "type": "string",
-            "nullable": true
-          },
-          "osVersion": {
-            "type": "string",
-            "nullable": true
-          },
-          "osType": {
-            "type": "string",
-            "nullable": true
-          },
-          "architecture": {
-            "type": "string",
-            "nullable": true
-          },
-          "ncpu": {
+          "cpuCount": {
             "type": "integer",
             "format": "int64"
           },
@@ -6540,15 +6829,15 @@
             "type": "string",
             "nullable": true
           },
-          "swarmInfo": {
-            "$ref": "#/components/schemas/SwarmInfoView"
-          },
           "stats": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PlatformStatView"
             },
             "nullable": true
+          },
+          "platformDescriptor": {
+            "$ref": "#/components/schemas/PlatformDescriptor"
           }
         },
         "default": null,
@@ -6559,26 +6848,17 @@
           "id",
           "name",
           "address",
+          "type",
           "status",
-          "daemonId",
-          "networksCount",
-          "volumesCount",
-          "containers",
-          "containersRunning",
-          "containersPaused",
-          "containersStopped",
-          "images",
-          "driver",
-          "operatingSystem",
-          "osVersion",
-          "osType",
-          "architecture",
-          "ncpu",
+          "networkCount",
+          "volumeCount",
+          "imageCount",
+          "cpuCount",
           "memTotal",
           "serverVersion",
           "agentVersion",
-          "swarmInfo",
-          "stats"
+          "stats",
+          "platformDescriptor"
         ],
         "type": "object",
         "properties": {
@@ -6592,61 +6872,25 @@
           "address": {
             "type": "string"
           },
+          "type": {
+            "$ref": "#/components/schemas/PlatformType"
+          },
           "status": {
             "$ref": "#/components/schemas/PlatformStatus"
           },
-          "daemonId": {
-            "type": "string"
-          },
-          "networksCount": {
+          "networkCount": {
             "type": "integer",
             "format": "int32"
           },
-          "volumesCount": {
+          "volumeCount": {
             "type": "integer",
             "format": "int32"
           },
-          "containers": {
+          "imageCount": {
             "type": "integer",
             "format": "int64"
           },
-          "containersRunning": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "containersPaused": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "containersStopped": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "images": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "driver": {
-            "type": "string",
-            "nullable": true
-          },
-          "operatingSystem": {
-            "type": "string",
-            "nullable": true
-          },
-          "osVersion": {
-            "type": "string",
-            "nullable": true
-          },
-          "osType": {
-            "type": "string",
-            "nullable": true
-          },
-          "architecture": {
-            "type": "string",
-            "nullable": true
-          },
-          "ncpu": {
+          "cpuCount": {
             "type": "integer",
             "format": "int64"
           },
@@ -6662,15 +6906,15 @@
             "type": "string",
             "nullable": true
           },
-          "swarmInfo": {
-            "$ref": "#/components/schemas/SwarmInfoView"
-          },
           "stats": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PlatformStatView"
             },
             "nullable": true
+          },
+          "platformDescriptor": {
+            "$ref": "#/components/schemas/PlatformDescriptor"
           }
         }
       },
@@ -6907,6 +7151,7 @@
             "$ref": "#/components/schemas/RegistryConfigurationBaseGitHubRegistry"
           }
         ],
+        "nullable": true,
         "discriminator": {
           "propertyName": "$type",
           "mapping": {
@@ -7059,7 +7304,32 @@
           }
         }
       },
-      "RegistryDiscriminator": {
+      "RegistryInput": {
+        "required": [
+          "name",
+          "url",
+          "type",
+          "configuration"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "$ref": "#/components/schemas/NullableOfRegistryType"
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/RegistryConfigurationBase"
+          }
+        }
+      },
+      "RegistryType": {
         "enum": [
           "DockerHub",
           "Azure",
@@ -7074,7 +7344,7 @@
           "id",
           "name",
           "url",
-          "discriminator",
+          "type",
           "created",
           "configuration"
         ],
@@ -7090,8 +7360,8 @@
           "url": {
             "type": "string"
           },
-          "discriminator": {
-            "$ref": "#/components/schemas/RegistryDiscriminator"
+          "type": {
+            "$ref": "#/components/schemas/RegistryType"
           },
           "created": {
             "type": "string",
@@ -7172,74 +7442,6 @@
         "properties": {
           "containerId": {
             "type": "string"
-          }
-        }
-      },
-      "SwarmInfoView": {
-        "required": [
-          "id",
-          "nodeID",
-          "nodeAddr",
-          "localNodeState",
-          "controlAvailable",
-          "error",
-          "nodes",
-          "managers",
-          "remoteManagers"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "nodeID": {
-            "type": "string",
-            "nullable": true
-          },
-          "nodeAddr": {
-            "type": "string",
-            "nullable": true
-          },
-          "localNodeState": {
-            "type": "string",
-            "nullable": true
-          },
-          "controlAvailable": {
-            "type": "boolean"
-          },
-          "error": {
-            "type": "string",
-            "nullable": true
-          },
-          "nodes": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "managers": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "remoteManagers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SwarmPeerView"
-            },
-            "nullable": true
-          }
-        },
-        "nullable": true
-      },
-      "SwarmPeerView": {
-        "type": "object",
-        "properties": {
-          "nodeID": {
-            "type": "string",
-            "nullable": true
-          },
-          "addr": {
-            "type": "string",
-            "nullable": true
           }
         }
       },

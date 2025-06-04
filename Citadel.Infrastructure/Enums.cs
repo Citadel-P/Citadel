@@ -2,39 +2,15 @@
 
 namespace Infrastructure;
 
-public enum AppPermission
+[JsonConverter(typeof(JsonStringEnumConverter<PlatformType>))]
+public enum PlatformType
 {
-    None = 0,
-    ListUsers,
-    AddUsers,
-    EditUsers,
-    DeleteUsers,
-    ListRoles,
-    AddRoles,
-    EditRoles,
-    DeleteRoles,
-    ListTeams,
-    AddTeams,
-    EditTeams,
-    DeleteTeams,
-    ListPlatforms,
-    AddPlatforms,
-    EditPlatforms,
-    DeletePlatforms,
-    ListContainers,
-    AddContainers,
-    EditContainers,
-    DeleteContainers,
-    ListNetworks,
-    AddNetworks,
-    EditNetworks,
-    DeleteNetworks,
-    ListVolumes,
-    AddVolumes,
-    DeleteVolumes,
-    ListImages,
-    AddImages,
-    DeleteImages,
+    [JsonStringEnumMemberName("Docker")]
+    Docker,
+    [JsonStringEnumMemberName("DockerSwarm")]
+    DockerSwarm,
+    [JsonStringEnumMemberName("Kubernetes")]
+    Kubernetes
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<PlatformStatus>))]
@@ -46,8 +22,8 @@ public enum PlatformStatus
     Online
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<RegistryDiscriminator>))]
-public enum RegistryDiscriminator
+[JsonConverter(typeof(JsonStringEnumConverter<RegistryType>))]
+public enum RegistryType
 {
     [JsonStringEnumMemberName("DockerHub")] 
     DockerHub,
@@ -91,5 +67,39 @@ public enum ContainerStateStatus
     Dead,
     [JsonStringEnumMemberName("Offline")]
     Offline,
-    
+}
+
+public enum AppPermission
+{
+    None = 0,
+    ListUsers,
+    AddUsers,
+    EditUsers,
+    DeleteUsers,
+    ListRoles,
+    AddRoles,
+    EditRoles,
+    DeleteRoles,
+    ListTeams,
+    AddTeams,
+    EditTeams,
+    DeleteTeams,
+    ListPlatforms,
+    AddPlatforms,
+    EditPlatforms,
+    DeletePlatforms,
+    ListContainers,
+    AddContainers,
+    EditContainers,
+    DeleteContainers,
+    ListNetworks,
+    AddNetworks,
+    EditNetworks,
+    DeleteNetworks,
+    ListVolumes,
+    AddVolumes,
+    DeleteVolumes,
+    ListImages,
+    AddImages,
+    DeleteImages,
 }

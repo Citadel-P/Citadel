@@ -1,10 +1,4 @@
-import {
-  CreateRegistryInput,
-  PatchRegistryInput,
-  PlatformView,
-  RegistryDiscriminator,
-  RegistryView,
-} from '@/api/_generated';
+import { RegistryInput, PlatformView, RegistryType, RegistryView } from '@/api/_generated';
 import { createContext } from 'use-context-selector';
 import { JSX, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -85,7 +79,7 @@ const PlatformFormProvider: React.FC<IProps> = ({ children }) => {
     isPending: patchIsPending,
     data: patchData,
   } = usePATCHRegistry();
-  const [currentProvider, setCurrentProvider] = useState<string>(RegistryDiscriminator.DockerHub);
+  const [currentProvider, setCurrentProvider] = useState<string>(RegistryType.DockerHub);
   const [registry, setRegistry] = useState<RegistryView | undefined>(undefined);
   let providers = [...defaultProviders];
   let formTitle = 'Create registry';
@@ -101,7 +95,7 @@ const PlatformFormProvider: React.FC<IProps> = ({ children }) => {
   }
   useEffect(() => {
     if (mode === 'edit' && data?.data) {
-      setCurrentProvider(data?.data.discriminator);
+      setCurrentProvider(data?.data.type);
       setRegistry(data?.data);
     }
   }, [data, mode]);
@@ -122,18 +116,18 @@ const PlatformFormProvider: React.FC<IProps> = ({ children }) => {
     }
   }, [patchIsSuccess, patchData, navigate]);
 
-  function onPostForm(data: CreateRegistryInput | Partial<PatchRegistryInput>) {
+  function onPostForm(data: RegistryInput | Partial<RegistryInput>) {
     if (mode === 'add') {
-      requestCreate(data as CreateRegistryInput);
+      requestCreate(data as RegistryInput);
     } else {
       // for serialization
       const payload = {
         ...data,
         id: registry?.id,
-        discriminator: registry?.discriminator,
+        discriminator: registry?.type,
         configuration: { $type: registry?.configuration.$type, ...data.configuration },
       };
-      requestPatch(payload as PatchRegistryInput);
+      requestPatch(payload as RegistryInput);
     }
   }
 

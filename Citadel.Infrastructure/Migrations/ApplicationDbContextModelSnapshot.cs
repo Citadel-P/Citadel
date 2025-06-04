@@ -441,7 +441,7 @@ namespace Infrastructure.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "admin@admin.com",
                             Name = "admin",
-                            Password = "pkRzKY2S/if3x2xhJEABZ2LPbIoub0oE4YPTwuHP13oHyh3Q",
+                            Password = "S4buHR9wq9tSuwh1SjsexfxBwUm2rWBHLEbT1aMVKVIxV2Ay",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
@@ -450,7 +450,7 @@ namespace Infrastructure.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "dev@dev.com",
                             Name = "dev",
-                            Password = "2R4ZVpcIE5Tx/RlvnOYFWsdzVxvC68KDmLgr1sAvtgmSB0qh",
+                            Password = "6HpzHnYaGNOH4EYpbXzdUytceFF3KOedbhWOYxUCoSWJdUQC",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
@@ -459,7 +459,7 @@ namespace Infrastructure.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "qa@qa.com",
                             Name = "qa",
-                            Password = "IuAHlhLO/S+ro2exbcSJvR02oxlCx6OLpc2IpKxfnL77ue1H",
+                            Password = "H2YmIHnpinUJ3R7m+Km+2cr+7yt1SaFjuSmaSPgyz3V+9/4X",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         });
                 });
@@ -510,30 +510,10 @@ namespace Infrastructure.Migrations
                     b.Property<string>("AgentVersion")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Architecture")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("Containers")
+                    b.Property<long>("CpuCount")
                         .HasColumnType("INTEGER");
 
-                    b.Property<long>("ContainersPaused")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("ContainersRunning")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("ContainersStopped")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("DaemonId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Driver")
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("Images")
+                    b.Property<long>("ImageCount")
                         .HasColumnType("INTEGER");
 
                     b.Property<long>("MemTotal")
@@ -544,22 +524,11 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
-                    b.Property<long>("Ncpu")
+                    b.Property<int>("NetworkCount")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("NetworksCount")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("OperatingSystem")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("OsType")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("OsVersion")
-                        .HasMaxLength(128)
+                    b.Property<string>("PlatformDescriptor")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ServerVersion")
@@ -570,7 +539,11 @@ namespace Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("VolumesCount")
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("VolumeCount")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
@@ -630,13 +603,13 @@ namespace Infrastructure.Migrations
                     b.Property<DateTime>("Created")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Discriminator")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Url")
@@ -652,77 +625,10 @@ namespace Infrastructure.Migrations
                     b.ToTable("Registries", (string)null);
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.SwarmInfo", b =>
-                {
-                    b.Property<byte[]>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("BLOB");
-
-                    b.Property<bool>("ControlAvailable")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Error")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("LocalNodeState")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("Managers")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("NodeAddr")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("NodeID")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("Nodes")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<byte[]>("PlatformId")
-                        .IsRequired()
-                        .HasColumnType("BLOB");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PlatformId")
-                        .IsUnique();
-
-                    b.ToTable("SwarmsInfo", (string)null);
-                });
-
-            modelBuilder.Entity("Infrastructure.Entities.SwarmPeer", b =>
-                {
-                    b.Property<byte[]>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("BLOB");
-
-                    b.Property<string>("Addr")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("NodeID")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<byte[]>("SwarmInfoId")
-                        .IsRequired()
-                        .HasColumnType("BLOB");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SwarmInfoId");
-
-                    b.ToTable("SwarmsPeer", (string)null);
-                });
-
             modelBuilder.Entity("Infrastructure.Entities.ContainerInfo", b =>
                 {
                     b.HasOne("Infrastructure.Entities.Platform", "Platform")
-                        .WithMany("ContainersInfo")
+                        .WithMany()
                         .HasForeignKey("PlatformId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -794,28 +700,6 @@ namespace Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.SwarmInfo", b =>
-                {
-                    b.HasOne("Infrastructure.Entities.Platform", "Platform")
-                        .WithOne("SwarmInfo")
-                        .HasForeignKey("Infrastructure.Entities.SwarmInfo", "PlatformId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Platform");
-                });
-
-            modelBuilder.Entity("Infrastructure.Entities.SwarmPeer", b =>
-                {
-                    b.HasOne("Infrastructure.Entities.SwarmInfo", "SwarmInfo")
-                        .WithMany("RemoteManagers")
-                        .HasForeignKey("SwarmInfoId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("SwarmInfo");
-                });
-
             modelBuilder.Entity("Infrastructure.Entities.ContainerInfo", b =>
                 {
                     b.Navigation("Stats");
@@ -833,17 +717,7 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Entities.Platform", b =>
                 {
-                    b.Navigation("ContainersInfo");
-
                     b.Navigation("Stats");
-
-                    b.Navigation("SwarmInfo")
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Infrastructure.Entities.SwarmInfo", b =>
-                {
-                    b.Navigation("RemoteManagers");
                 });
 #pragma warning restore 612, 618
         }

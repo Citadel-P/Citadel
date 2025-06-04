@@ -6,6 +6,7 @@ using Application.Features.Containers.Models;
 using Application.Features.Images.Queries;
 using Application.Features.Registries.Commands;
 using Citadel.Common;
+using Hosting.Common.MergePatch;
 using Infrastructure.DockerHub;
 using Infrastructure.Entities;
 using Infrastructure.GithubCr;
@@ -38,7 +39,12 @@ namespace Application.Models;
 [JsonSerializable(typeof(LoginRequest))]
 [JsonSerializable(typeof(LoginResponse))]
 [JsonSerializable(typeof(RefreshTokenResponse))]
+[JsonSerializable(typeof(CreatePlatformInput))]
 [JsonSerializable(typeof(PlatformsView))]
+[JsonSerializable(typeof(PlatformDescriptor))]
+[JsonSerializable(typeof(DockerPlatformDescriptor))]
+[JsonSerializable(typeof(DockerSwarmPlatformDescriptor))]
+[JsonSerializable(typeof(KubernetesPlatformDescriptor))]
 [JsonSerializable(typeof(ContainersInfoView))]
 [JsonSerializable(typeof(ContainerInfoView))]
 [JsonSerializable(typeof(ContainersInfoRequest))]
@@ -61,8 +67,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(MapFieldPortBindingView))]
 [JsonSerializable(typeof(Address))]
 [JsonSerializable(typeof(DeleteContainersRequest))]
-[JsonSerializable(typeof(CreateRegistryInput))]
-[JsonSerializable(typeof(PatchRegistryInput))]
+[JsonSerializable(typeof(RegistryInput))]
+[JsonSerializable(typeof(RegistryInputPatchDocument))]
 [JsonSerializable(typeof(DeleteRegistriesInput))]
 [JsonSerializable(typeof(RegistriesView))]
 [JsonSerializable(typeof(RegistryView))]
