@@ -39,10 +39,12 @@ internal class DeletePlatformHandler(
         dbContext.Platforms.Remove(platform);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        platformHealthMonitorJob.UntrackPlatform(platform.Address);
+        await platformHealthMonitorJob.UntrackPlatform(platform.Address, cancellationToken);
 
         // Notify subscribers about the platform deletion
         await platformHubDispatcher.PlatformDeleted(command.Id);
+
+        logger.LogInformation("Platform {Id} deleted successfully", command.Id);
 
         return Result.Success();
     }

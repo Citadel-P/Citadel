@@ -54,6 +54,13 @@ export enum NullableOfRegistryType {
   GitHub = "GitHub",
 }
 
+/** @default "Docker" */
+export enum NullableOfPlatformType {
+  Docker = "Docker",
+  DockerSwarm = "DockerSwarm",
+  Kubernetes = "Kubernetes",
+}
+
 export enum ImageStatus {
   Active = "Active",
   Inactive = "Inactive",
@@ -285,12 +292,6 @@ export interface CreateNetworkInput {
 
 export interface CreateNetworkView {
   id: string;
-}
-
-export interface CreatePlatformInput {
-  name: string;
-  address: string;
-  type: PlatformType;
 }
 
 export interface CreateVolumeInput {
@@ -996,6 +997,12 @@ export type PlatformDescriptorView = {
   variant: string;
 } | null;
 
+export interface PlatformInput {
+  name: string;
+  address: string;
+  type?: NullableOfPlatformType;
+}
+
 export interface PlatformStatView {
   /** @format double */
   memoryUsage?: number;
@@ -1110,13 +1117,6 @@ export interface PullImageRequest {
   registryName: string;
   repositoryName: string;
   imageTag: string;
-}
-
-export interface PutPlatformRequest {
-  /** @format uuid */
-  id: string | null;
-  name: string;
-  address: string;
 }
 
 export interface RefreshTokenResponse {
@@ -1942,35 +1942,6 @@ export class Api<
      * No description
      *
      * @tags Platforms
-     * @name PlatformsPut
-     * @summary Create or update a platform
-     * @request PUT:/api/v1/platforms
-     * @secure
-     * @response `200` `PlatformView2` OK
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    platformsPut: (data: PutPlatformRequest, params: RequestParams = {}) =>
-      this.request<
-        PlatformView2,
-        HttpValidationProblemDetails | ProblemDetails
-      >({
-        path: `/api/v1/platforms`,
-        method: "PUT",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Platforms
      * @name PlatformsCreate
      * @summary Create a platform
      * @request POST:/api/v1/platforms
@@ -1982,7 +1953,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    platformsCreate: (data: CreatePlatformInput, params: RequestParams = {}) =>
+    platformsCreate: (data: PlatformInput, params: RequestParams = {}) =>
       this.request<
         PlatformView2,
         HttpValidationProblemDetails | ProblemDetails
@@ -2052,6 +2023,40 @@ export class Api<
         path: `/api/v1/platforms/${id}`,
         method: "GET",
         secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Platforms
+     * @name PlatformsPatch
+     * @summary Patch a platform
+     * @request PATCH:/api/v1/platforms/{id}
+     * @secure
+     * @response `200` `PlatformView2` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    platformsPatch: (
+      id: string,
+      data: PlatformInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        PlatformView2,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/platforms/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),
@@ -2148,6 +2153,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
     registriesGetById: (id: string, params: RequestParams = {}) =>
@@ -2173,6 +2179,8 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
      * @response `500` `ProblemDetails` Internal Server Error
      */
     registriesPatch: (
@@ -2232,6 +2240,7 @@ export class Api<
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
     registriesDelete: (

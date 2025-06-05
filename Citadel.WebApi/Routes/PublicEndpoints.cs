@@ -1,9 +1,9 @@
 ﻿using Hosting.Common;
-using Hosting.Common.Attributes;
 using Hosting.OpenApi;
 using Infrastructure;
 using WebApi.Routes.Endpoints;
 using WebApi.Routes.Endpoints.Resources;
+using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 
 namespace WebApi.Routes;
@@ -198,13 +198,15 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(PlatformsName + "_" + nameof(Platforms.ListContainers));
 
-        platforms.MapPut("/", Platforms.Put)
-            .WithSummary("Create or update a platform")
+        platforms.MapPatch("/{id}", Platforms.Patch)
+            .WithSummary("Patch a platform")
+            .Accepts<PlatformInput>("application/merge-patch+json", "application/json")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .WithName(PlatformsName + "_" + nameof(Platforms.Put));
+            .WithName(PlatformsName + "_" + nameof(Platforms.Patch));
 
         platforms.MapPost("/", Platforms.Create)
             .WithSummary("Create a platform")
@@ -236,6 +238,7 @@ public static class PublicEndpoints
         registries.MapGet("/{id}", Registries.GetById)
             .WithSummary("Get all registries")
             .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(RegistriesName + "_" + nameof(Registries.GetById));
@@ -264,13 +267,17 @@ public static class PublicEndpoints
             .WithExample(RegistryType.DockerHub.ToString(), Examples.Registries.Update.UpdateDockerHubRegistryExample())
             .WithExample(RegistryType.GitHub.ToString(), Examples.Registries.Update.UpdateGitHubRegistryExample())
             .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+
             .WithName(RegistriesName + "_" + nameof(Registries.Patch));
 
         registries.MapDelete("/", Registries.Delete)
             .WithSummary("Delete registries")
             .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(RegistriesName + "_" + nameof(Registries.Delete));

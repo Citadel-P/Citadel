@@ -1,11 +1,9 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Threading.Channels;
-using Agent.Server.GPlatform;
 using DbUp;
 using Hosting.Common;
 using Infrastructure.DockerHub;
-using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
 using Infrastructure.GithubCr;
 using Infrastructure.HttpClients.Serializer;
@@ -62,22 +60,10 @@ public static class InfrastructureModule
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services
             .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()
-            .AddSingleton(Channel.CreateUnbounded<ContainersStatBatch>(
-                new UnboundedChannelOptions
-                {
-                    SingleWriter = true,
-                    SingleReader = true,
-                    AllowSynchronousContinuations = false
-                }))
+            .AddSingleton(Channel.CreateBounded<ContainersStatBatch>(ChannelDefaultOptions()))
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader)
-            .AddSingleton(Channel.CreateUnbounded<PlatformStatsBatch>(
-                new UnboundedChannelOptions
-                {
-                    SingleWriter = true,
-                    SingleReader = true,
-                    AllowSynchronousContinuations = false
-                }))
+            .AddSingleton(Channel.CreateBounded<PlatformStatsBatch>(ChannelDefaultOptions()))
             .AddSingleton(s => s.GetRequiredService<Channel<PlatformStatsBatch>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<PlatformStatsBatch>>().Reader)
             .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>();
@@ -141,6 +127,14 @@ public static class InfrastructureModule
             throw new Exception(result.Error.Message, result.Error);
         }
     }
+
+    internal static BoundedChannelOptions ChannelDefaultOptions() => new (1_000)
+    {
+        SingleWriter = true,
+        SingleReader = true,
+        AllowSynchronousContinuations = false,
+        FullMode = BoundedChannelFullMode.DropOldest
+    };
 }
 
 public static class EFTrimmingPreserver

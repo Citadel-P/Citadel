@@ -22,13 +22,13 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
             : base(
                   patchSelector: x => x.Patch,
                   jsonTypeInfo: RegistryJsonContext.Default.Registry,
-                  modelValidator: new RegistryPatchValidator()
+                  modelValidator: new RegistryValidator()
                   ) {}
     }
 
-    internal sealed class RegistryPatchValidator : AbstractValidator<Registry>
+    internal sealed class RegistryValidator : AbstractValidator<Registry>
     {
-        public RegistryPatchValidator()
+        public RegistryValidator()
         {
             RuleFor(x => x.Id).NotEmpty().NotNull();
             When(s => s.Name != null, () => RuleFor(x => x.Name).NotEmpty().MinimumLength(3));
@@ -110,7 +110,6 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
         }
     }
 }
-public sealed record PatchRegistryDto(string? Name, string? Url, RegistryType? Type, DockerHubRegistry? Configuration);
 
 internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubApi dockerHub, IGithubCrApi githubCrApi) : ICommandHandler<PatchRegistry, Result<Registry>>
 {
@@ -119,7 +118,7 @@ internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubAp
         var registry = await dbContext.Registries.FirstOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
         if (registry == null)
         {
-            return Result.Failure<Registry>(new ConflictError("The provided Id does not exist"));
+            return Result.Failure<Registry>(new NotFoundError("The provided Id does not exist"));
         }
 
         var patchedRegistry = command.Patch.ApplyTo(registry, RegistryJsonContext.Default.Registry);

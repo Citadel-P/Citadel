@@ -35,8 +35,8 @@ internal sealed class PlatformConfiguration : IEntityTypeConfiguration<Platform>
 
         builder.Property(p => p.PlatformDescriptor).HasColumnType("TEXT")
            .HasConversion(
-               v => JsonSerializer.Serialize(v, PlatformTypeJsonContext.Default.PlatformDescriptor),
-               v => JsonSerializer.Deserialize(v, PlatformTypeJsonContext.Default.PlatformDescriptor)!);
+               v => JsonSerializer.Serialize(v, PlatformJsonContext.Default.PlatformDescriptor),
+               v => JsonSerializer.Deserialize(v, PlatformJsonContext.Default.PlatformDescriptor)!);
     }
 }
 
@@ -47,6 +47,6 @@ internal sealed class PlatformConfiguration : IEntityTypeConfiguration<Platform>
 [JsonSerializable(typeof(KubernetesPlatformDescriptor))]
 [JsonSerializable(typeof(ICollection<SwarmPeer>))]
 [JsonSerializable(typeof(PlatformDescriptor))]
-public partial class PlatformTypeJsonContext : JsonSerializerContext
+public partial class PlatformJsonContext : JsonSerializerContext
 {
 }

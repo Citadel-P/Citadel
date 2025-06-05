@@ -1,14 +1,12 @@
-import { RegistryInput, PlatformView, RegistryType, RegistryView } from '@/api/_generated';
+import { PlatformView, PlatformType, PlatformInput } from '@/api/_generated';
 import { createContext } from 'use-context-selector';
 import { JSX, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import DockerHubConfiguration from './DockerHubConfiguration';
-import GhcrConfiguration from './GhcrConfiguration';
 import { useNavigate, useParams } from 'react-router';
-import { useGetRegistry } from './hooks/useGetRegistry';
-import { usePOSTRegistry } from './hooks/usePOSTRegistry';
-import { usePATCHRegistry } from './hooks/usePATCHRegistry';
-import { useGETPlatform } from '../hooks/useGETPlatform';
+import { useGETPlatform } from './../hooks/useGETPlatform';
+import { usePOSTPlatform } from './hooks/usePOSTPlatform';
+import { usePATCHPlatform } from './hooks/usePATCHPlatform';
 
 interface IPlatformProvider {
   id: 'docker' | 'swarm' | 'k8s';
@@ -49,7 +47,7 @@ const PlatformFormProvider: React.FC<IProps> = ({ children }) => {
       id: 'swarm',
       name: 'Docker Swarm',
       description: 'Manage a cluster of Docker daemons',
-      configuration: <GhcrConfiguration />,
+      configuration: <></>,
       disabled: true,
     },
     {
@@ -78,15 +76,15 @@ const PlatformFormProvider: React.FC<IProps> = ({ children }) => {
     isSuccess: patchIsSuccess,
     isPending: patchIsPending,
     data: patchData,
-  } = usePATCHRegistry();
-  const [currentProvider, setCurrentProvider] = useState<string>(RegistryType.DockerHub);
-  const [registry, setRegistry] = useState<RegistryView | undefined>(undefined);
+  } = usePATCHPlatform();
+  const [currentProvider, setCurrentProvider] = useState<string>(PlatformType.Docker);
+  const [platform, setPlatform] = useState<PlatformView | undefined>(undefined);
   let providers = [...defaultProviders];
-  let formTitle = 'Create registry';
-  let saveButtonTitle = 'Add registry';
+  let formTitle = 'Create platform';
+  let saveButtonTitle = 'Add platform';
 
   if (mode === 'edit' && data?.data) {
-    formTitle = 'Update registry';
+    formTitle = 'Update platform';
     saveButtonTitle = 'Save';
     providers = providers.map((s) => {
       s.disabled = s.id !== currentProvider;
@@ -96,38 +94,31 @@ const PlatformFormProvider: React.FC<IProps> = ({ children }) => {
   useEffect(() => {
     if (mode === 'edit' && data?.data) {
       setCurrentProvider(data?.data.type);
-      setRegistry(data?.data);
+      setPlatform(data?.data);
     }
   }, [data, mode]);
 
   useEffect(() => {
     if (createIsSuccess && createData?.data) {
-      toast.success(`The ${createData?.data.name} registry has been added`);
-      setRegistry(createData?.data);
-      navigate('/registries');
+      toast.success(`The ${createData?.data.name} platform has been added`);
+      setPlatform(createData?.data);
+      navigate('/platforms');
     }
   }, [createIsSuccess, createData, navigate]);
 
   useEffect(() => {
     if (patchIsSuccess && patchData?.data) {
-      toast.success(`The ${patchData?.data.name} registry has been updated successfully`);
-      setRegistry(patchData?.data);
-      navigate('/registries');
+      toast.success(`The ${patchData?.data.name} platform has been updated successfully`);
+      setPlatform(patchData?.data);
+      navigate('/platforms');
     }
   }, [patchIsSuccess, patchData, navigate]);
 
-  function onPostForm(data: RegistryInput | Partial<RegistryInput>) {
+  function onPostForm(data: PlatformInput | Partial<PlatformInput>) {
     if (mode === 'add') {
-      requestCreate(data as RegistryInput);
+      requestCreate(data as PlatformInput);
     } else {
-      // for serialization
-      const payload = {
-        ...data,
-        id: registry?.id,
-        discriminator: registry?.type,
-        configuration: { $type: registry?.configuration.$type, ...data.configuration },
-      };
-      requestPatch(payload as RegistryInput);
+      requestPatch(payload as PlatformInput);
     }
   }
 
@@ -139,7 +130,7 @@ const PlatformFormProvider: React.FC<IProps> = ({ children }) => {
         isLoadingForm: createIsPending || patchIsPending,
         formTitle,
         saveButtonTitle,
-        registry,
+        platform,
         validationErrors: createErrors || patchErrors,
         providers,
         currentProvider,

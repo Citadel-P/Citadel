@@ -80,7 +80,7 @@ internal class ContainersStatsCollectorJob(
                 using var stream = client.StreamContainersStats(new ContainersStatsRequest { FetchIntervalMs = jobConfiguration.ContainersInfoInterval * 1000 }, cancellationToken: cancellationToken);
                 await foreach (var reply in stream.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
                 {
-                    if (reply .Containers.Count > 0)
+                    if (reply.Containers.Count > 0)
                     {
                         using var scope = scopeFactory.CreateAsyncScope();
                         using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -107,13 +107,6 @@ internal class ContainersStatsCollectorJob(
             }
         }
     }
-}
-
-public readonly struct PlatformData(Guid Id, string Address, PlatformStatus Status)
-{
-    public Guid Id { get; } = Id;
-    public string Address { get; } = Address;
-    public PlatformStatus Status { get; } = Status;
 }
 
 internal sealed record ContainersStatBatch(Guid PlatformId, ContainerStat[] Stats);

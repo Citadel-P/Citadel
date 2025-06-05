@@ -1,4 +1,5 @@
 ﻿using Agent.Server.Containers;
+using Citadel.Common;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
@@ -89,28 +90,28 @@ internal sealed class CreatePlatformHandler(
             );
         dbContext.Platforms.Add(platform);
 
+        // Start tracking the platform health
+        platformHealthMonitorJob.TrackPlatform(platform.Address, platform.Id);
+
         // Add containers
         dbContext.ContainersInfo.AddRange(containers.Containers.Select(s => s.Value.Map(platform.Id, DateTimeOffset.UtcNow.ToUnixTimeSeconds())));
-
 
         // Save to db
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        // Sync jobs
-        SyncTaskJobs(new PlatformData(platform.Id, platform.Address, platform.Status), cancellationToken: cancellationToken);
-
         logger.LogInformation("A new platform has been added, id = {PlatformId}", platform.Id);
         return Result.Success(platform);
-
     }
+}
 
-    private void SyncTaskJobs(PlatformData platformData, string? oldAddress = null, CancellationToken cancellationToken = default)
-    {
-        if (!string.IsNullOrEmpty(oldAddress))
-        {
-            platformHealthMonitorJob.UntrackPlatform(oldAddress);
-        }
-
-        platformHealthMonitorJob.TrackPlatform(platformData.Address, platformData.Id);
-    }
+internal static class Mapper
+{
+    internal static PlatformStat MapStat(this PlatformInfoMessage systemInfo)
+        => PlatformStat.Create(
+            created: systemInfo.Created,
+            memoryUsage: systemInfo.PlatformStat.MemoryUsage,
+            cpuUsage: systemInfo.PlatformStat.CpuUsage,
+            rxBytes: systemInfo.PlatformStat.RxBytes,
+            txBytes: systemInfo.PlatformStat.TxBytes
+            );
 }

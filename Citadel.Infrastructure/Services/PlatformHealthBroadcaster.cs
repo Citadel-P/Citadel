@@ -9,7 +9,7 @@ namespace Infrastructure.Services;
 internal interface IPlatformHealthBroadCaster
 {
     ChannelReader<PlatformHealth> Register();
-    Task BroadcastAsync(PlatformHealth evt, CancellationToken token);
+    Task BroadcastAsync(PlatformHealth evt, CancellationToken cancellationToken);
     void Complete();
 }
 
@@ -19,16 +19,16 @@ internal class PlatformHealthBroadCaster : IPlatformHealthBroadCaster
 
     public ChannelReader<PlatformHealth> Register()
     {
-        var channel = Channel.CreateUnbounded<PlatformHealth>();
+        var channel = Channel.CreateBounded<PlatformHealth>(InfrastructureModule.ChannelDefaultOptions());
         _channels.Add(channel);
         return channel.Reader;
     }
 
-    public async Task BroadcastAsync(PlatformHealth evt, CancellationToken token)
+    public async Task BroadcastAsync(PlatformHealth evt, CancellationToken cancellationToken)
     {
         foreach (var ch in _channels)
         {
-            await ch.Writer.WriteAsync(evt, token);
+            await ch.Writer.WriteAsync(evt, cancellationToken);
         }
     }
 

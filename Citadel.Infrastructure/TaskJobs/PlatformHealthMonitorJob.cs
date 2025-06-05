@@ -15,7 +15,7 @@ namespace Infrastructure.TaskJobs;
 public interface IPlatformHealthMonitorJob : IHostedService
 {
     bool TrackPlatform(string address, Guid id);
-    bool UntrackPlatform(string address);
+    Task<bool> UntrackPlatform(string address, CancellationToken cancellationToken);
 }
 
 internal class PlatformHealthMonitorJob(
@@ -85,11 +85,21 @@ internal class PlatformHealthMonitorJob(
 
     public bool TrackPlatform(string address, Guid id) => trackedAddresses.TryAdd(address, id);
 
-    public bool UntrackPlatform(string address) 
-        => trackedAddresses.TryRemove(address, out _) &&
+    public async Task<bool> UntrackPlatform(string address, CancellationToken cancellationToken)
+    {
+        var removed = trackedAddresses.TryRemove(address, out var id) &&
            status.TryRemove(address, out _) &&
            successCounts.TryRemove(address, out _) &&
            failureCounts.TryRemove(address, out _);
+
+        if (removed)
+        {
+            await broadcaster.BroadcastAsync(new PlatformHealth(id, address, false), cancellationToken);
+        }
+
+        return removed;
+    }
+         
 
     private async Task UpdateStatus(string address, bool isOnline, CancellationToken cancellationToken)
     {
