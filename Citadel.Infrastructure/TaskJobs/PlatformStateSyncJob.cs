@@ -2,6 +2,7 @@
 using Agent.Server.Containers;
 using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
+using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,18 +17,20 @@ namespace Infrastructure.TaskJobs;
 internal class PlatformStateSyncJob(
     IGrpcClientFactory clientFactory,
     IServiceScopeFactory scopeFactory,
-    ChannelReader<GrpcServiceHealth> channelReader,
+    IPlatformHealthBroadCaster platformHealthBroadCaster,
     ILogger<PlatformStateSyncJob> logger) : BackgroundService
 {
+    private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.Register();
+
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        await foreach (var evt in channelReader.ReadAllAsync(cancellationToken))
+        await foreach (var evt in platformHealthReader.ReadAllAsync(cancellationToken))
         {
             await SyncPlatform(evt, cancellationToken);
         }
     }
 
-    private async Task SyncPlatform(GrpcServiceHealth evt, CancellationToken cancellationToken)
+    private async Task SyncPlatform(PlatformHealth evt, CancellationToken cancellationToken)
     {
         try
         {

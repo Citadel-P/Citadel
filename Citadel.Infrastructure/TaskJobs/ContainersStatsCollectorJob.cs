@@ -7,6 +7,7 @@ using Google.Protobuf.Collections;
 using Grpc.Core;
 using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
+using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,41 +18,36 @@ using Microsoft.Extensions.Options;
 namespace Infrastructure.TaskJobs;
 
 /// <summary>
-/// Collects containers stats from remote agents and pushes into the shared Channel <see cref="ContainersStatsWriterJob"/>.
+/// Collects containers stats from remote agents and pushes into the shared Channel <see cref="ContainersStatsPersistenceJob"/>.
 /// </summary>
-public interface IContainersStatsReaderJob : IHostedService
-{
-    void StartStreamStatsForPlatform(PlatformData platform, CancellationToken cancellationToken);
-    void StopStreamStatsForPlatform(string address);
-}
-
-/// <inheritdoc />
-internal class ContainersStatsReaderJob(
+internal class ContainersStatsCollectorJob(
     IGrpcClientFactory clientFactory,
     IServiceScopeFactory scopeFactory,
-    ILogger<ContainersStatsReaderJob> logger,
     ChannelWriter<ContainersStatBatch> channel,
-    IOptions<JobConfiguration> options) : BackgroundService, IContainersStatsReaderJob
+    ILogger<ContainersStatsCollectorJob> logger,
+    IPlatformHealthBroadCaster platformHealthBroadCaster,
+    IOptions<JobConfiguration> options) : BackgroundService
 {
     private readonly JobConfiguration jobConfiguration = options.Value;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
+    private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.Register();
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-        var platforms = await dbContext.Platforms.AsNoTracking()
-                 .Select(s => new PlatformData(s.Id, s.Address, s.Status))
-                 .ToArrayAsync(cancellationToken);
-
-        foreach (var platform in platforms)
+        await foreach (var platform in platformHealthReader.ReadAllAsync(cancellationToken))
         {
-            StartStreamStatsForPlatform(platform, cancellationToken);
+            if (platform.IsOnLine)
+            {
+                StartStreamStatsForPlatform(platform, cancellationToken);
+            }
+            else
+            {
+                StopStreamStatsForPlatform(platform.Address);
+            }
         }
     }
 
-    public void StartStreamStatsForPlatform(PlatformData platform, CancellationToken cancellationToken)
+    public void StartStreamStatsForPlatform(PlatformHealth platform, CancellationToken cancellationToken)
     {
         if (runningStreams.ContainsKey(platform.Address))
         {
@@ -74,7 +70,7 @@ internal class ContainersStatsReaderJob(
         }
     }
 
-    private async Task StreamContainersStats(PlatformData platform, CancellationToken cancellationToken)
+    private async Task StreamContainersStats(PlatformHealth platform, CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {

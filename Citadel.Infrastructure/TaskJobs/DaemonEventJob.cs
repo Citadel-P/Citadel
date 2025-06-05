@@ -1,6 +1,8 @@
 ﻿using System.Collections.Concurrent;
+using System.Threading.Channels;
 using Grpc.Core;
 using Infrastructure.EntityFramework;
+using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,35 +11,31 @@ using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.TaskJobs;
 
-public interface IDaemonEventJob : IHostedService
-{
-    void StartMonitoringPlatform(PlatformData platform, CancellationToken cancelationToken);
-    void StopMonitoringPlatform(string address);
-}
-
 internal sealed class DaemonEventJob(
-    IServiceScopeFactory scopeFactory,
+    ILogger<DaemonEventJob> logger,
     IGrpcClientFactory clientFactory,
-    ILogger<DaemonEventJob> logger) : BackgroundService, IDaemonEventJob
+    IServiceScopeFactory scopeFactory,
+    IPlatformHealthBroadCaster platformHealthBroadCaster) : BackgroundService
 {
     private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
+    private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.Register();
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-        var platforms = await dbContext.Platforms.AsNoTracking()
-                 .Select(s => new PlatformData(s.Id, s.Address, s.Status))
-                 .ToListAsync(cancellationToken);
-
-        foreach (var platform in platforms)
+        await foreach (var platform in platformHealthReader.ReadAllAsync(cancellationToken))
         {
-            StartMonitoringPlatform(platform, cancellationToken);
+            if (platform.IsOnLine)
+            {
+                StartMonitoringPlatform(platform, cancellationToken);
+            }
+            else
+            {
+                StopMonitoringPlatform(platform.Address);
+            }
         }
     }
 
-    public void StartMonitoringPlatform(PlatformData platform, CancellationToken cancellationToken)
+    public void StartMonitoringPlatform(PlatformHealth platform, CancellationToken cancellationToken)
     {
         if (runningStreams.ContainsKey(platform.Address))
         {
@@ -60,7 +58,7 @@ internal sealed class DaemonEventJob(
         }
     }
 
-    private async Task MonitorStream(PlatformData platform, CancellationToken cancellationToken)
+    private async Task MonitorStream(PlatformHealth platform, CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {

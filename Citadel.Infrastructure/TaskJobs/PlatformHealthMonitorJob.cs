@@ -1,31 +1,30 @@
 ﻿using System.Collections.Concurrent;
-using System.Threading.Channels;
 using Infrastructure.EntityFramework;
+using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.TaskJobs;
 
 /// <summary>
-/// Monitors the health of gRPC services (Platforms) by periodically checking their availability and reporting their status.
+/// Monitors the external Platforms (gRPC services) by periodically checking their availability and reporting their status.
 /// </summary>
 public interface IPlatformHealthMonitorJob : IHostedService
 {
-    bool IsPlatformOnLine(string address);
-    void TrackPlatform(string address);
-    void TrackPlatforms(string[] addresses);
-    void UntrackPlatform(string address);
+    bool TrackPlatform(string address, Guid id);
+    bool UntrackPlatform(string address);
 }
 
 internal class PlatformHealthMonitorJob(
     IGrpcClientFactory clientFactory,
     IServiceScopeFactory scopeFactory,
-    ChannelWriter<GrpcServiceHealth> channelWriter) : BackgroundService, IPlatformHealthMonitorJob
+    IPlatformHealthBroadCaster broadcaster,
+    ILogger<PlatformHealthMonitorJob> logger) : BackgroundService, IPlatformHealthMonitorJob
 {
-    private readonly Lock @lock = new();
-    private readonly List<string> trackedAddresses = [];
+    private readonly ConcurrentDictionary<string, Guid> trackedAddresses = [];
     private readonly ConcurrentDictionary<string, bool> status = new();
     private readonly TimeSpan checkInterval = TimeSpan.FromSeconds(5);
 
@@ -33,8 +32,8 @@ internal class PlatformHealthMonitorJob(
     private const int FailThreshold = 3;
     private const int SuccessThreshold = 2;
 
-    private readonly Dictionary<string, int> failureCounts = [];
-    private readonly Dictionary<string, int> successCounts = [];
+    private readonly ConcurrentDictionary<string, int> failureCounts = [];
+    private readonly ConcurrentDictionary<string, int> successCounts = [];
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -42,22 +41,24 @@ internal class PlatformHealthMonitorJob(
         await using (var scope = scopeFactory.CreateAsyncScope())
         {
             using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var addresses = await dbContext.Platforms.AsNoTracking().Select(s => s.Address).ToArrayAsync(cancellationToken);
-            if (addresses != null && addresses.Length > 0)
+            var platforms = await dbContext.Platforms
+                .AsNoTracking()
+                .Select(s => new { s.Id, s.Address })
+                .ToArrayAsync(cancellationToken);
+
+            if (platforms != null && platforms.Length > 0)
             {
-                TrackPlatforms(addresses);
+                foreach (var platform in platforms)
+                {
+                    TrackPlatform(platform.Address, platform.Id);
+                }
             }
         }
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            string[] addresses;
-            lock (@lock)
-            {
-                addresses = [.. trackedAddresses];
-            }
-
-            foreach (var address in addresses)
+            
+            foreach (var address in trackedAddresses.Keys)
             {
                 var isOnline = await ProbeAsync(address);
                 var hasPreviousStatus = status.TryGetValue(address, out var wasOnline);
@@ -65,79 +66,53 @@ internal class PlatformHealthMonitorJob(
                 // If we've never seen this address before, initialize and emit
                 if (!hasPreviousStatus)
                 {
-                    UpdateStatus(address, isOnline, cancellationToken);
+                    await UpdateStatus(address, isOnline, cancellationToken);
                     continue;
                 }
 
-                if (isOnline)
+                if (ShouldEmitUpdate(address, isOnline, wasOnline))
                 {
-                    failureCounts[address] = 0;
-                    successCounts[address] = successCounts.GetValueOrDefault(address) + 1;
-
-                    if (!wasOnline && successCounts[address] >= SuccessThreshold)
-                    {
-                        UpdateStatus(address, isOnline, cancellationToken);
-                    }
-                }
-                else
-                {
-                    successCounts[address] = 0;
-                    failureCounts[address] = failureCounts.GetValueOrDefault(address) + 1;
-
-                    if (wasOnline && failureCounts[address] >= FailThreshold)
-                    {
-                        UpdateStatus(address, isOnline, cancellationToken);
-                    }
+                    logger.LogInformation("Platform {Address} status changed to {Status}", address, isOnline ? "Online" : "Offline");
+                    await UpdateStatus(address, isOnline, cancellationToken);
                 }
             }
 
             await Task.Delay(checkInterval, cancellationToken);
         }
 
-        channelWriter.TryComplete();
+        broadcaster.Complete();
     }
 
-    public void TrackPlatform(string address)
-    {
-        lock (@lock)
-        {
-            if (!trackedAddresses.Contains(address))
-                trackedAddresses.Add(address);
-        }
-    }
+    public bool TrackPlatform(string address, Guid id) => trackedAddresses.TryAdd(address, id);
 
-    public void TrackPlatforms(string[] addresses)
-    {
-        lock (@lock)
-        {
-            foreach (var address in addresses)
-            {
-                if (!trackedAddresses.Contains(address))
-                    trackedAddresses.AddRange(address);
-            }
-        }
-    }
+    public bool UntrackPlatform(string address) 
+        => trackedAddresses.TryRemove(address, out _) &&
+           status.TryRemove(address, out _) &&
+           successCounts.TryRemove(address, out _) &&
+           failureCounts.TryRemove(address, out _);
 
-    public void UntrackPlatform(string address)
+    private async Task UpdateStatus(string address, bool isOnline, CancellationToken cancellationToken)
     {
-        lock (@lock)
-        {
-            if (trackedAddresses.Any(s => s == address))
-            {
-                trackedAddresses.Remove(address);
-                status.TryRemove(address, out _);
-            }
-        }
-    }
+        if (!trackedAddresses.TryGetValue(address, out var platformId)) return;
 
-    public bool IsPlatformOnLine(string address) => status.TryGetValue(address, out var online) && online;
-
-    private async void UpdateStatus(string address, bool isOnline, CancellationToken cancellationToken)
-    {
         status[address] = isOnline;
-        var evt = new GrpcServiceHealth(address, isOnline);
+        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, address, isOnline), cancellationToken);
+    }
 
-        await channelWriter.WriteAsync(evt, cancellationToken);
+    private bool ShouldEmitUpdate(string address, bool isOnline, bool wasOnline)
+    {
+        if (isOnline)
+        {
+            failureCounts[address] = 0;
+            successCounts[address] = successCounts.GetOrAdd(address, 0) + 1;
+            return !wasOnline && successCounts[address] >= SuccessThreshold;
+        }
+        else
+        {
+            successCounts[address] = 0;
+            failureCounts[address] = failureCounts.GetOrAdd(address, 0) + 1;
+            return wasOnline && failureCounts[address] >= FailThreshold;
+        }
     }
 
     private async Task<bool> ProbeAsync(string address)
@@ -155,4 +130,4 @@ internal class PlatformHealthMonitorJob(
     }
 }
 
-internal sealed record GrpcServiceHealth(string Address, bool IsOnLine);
+public sealed record PlatformHealth(Guid Id, string Address, bool IsOnLine);

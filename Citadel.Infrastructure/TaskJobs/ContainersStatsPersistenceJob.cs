@@ -9,13 +9,13 @@ using Microsoft.Extensions.Logging;
 namespace Infrastructure.TaskJobs;
 
 /// <summary>
-/// Background service that writes batches of container stats to the database and notifies clients via SignalR.
+/// Background service that persists batches of container stats to the database and notifies clients via SignalR.
 /// </summary>
-internal class ContainersStatsWriterJob(
+internal class ContainersStatsPersistenceJob(
     IServiceScopeFactory scopeFactory,
     ChannelReader<ContainersStatBatch> reader,
     ISignalRConnectionTracker connectionTracker,
-    ILogger<ContainersStatsWriterJob> logger) : BackgroundService
+    ILogger<ContainersStatsPersistenceJob> logger) : BackgroundService
 {
     private const int BatchSize = 200;
     // Updates to db will be flushed every 60 seconds or when batch size is reached.
@@ -57,7 +57,7 @@ internal class ContainersStatsWriterJob(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Error in {nameof(ContainersStatsWriterJob)}");
+            logger.LogError(ex, $"Error in {nameof(ContainersStatsPersistenceJob)}");
         }
 
         // Final flush

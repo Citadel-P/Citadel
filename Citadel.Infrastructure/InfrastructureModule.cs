@@ -49,26 +49,24 @@ public static class InfrastructureModule
 
     private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)
     {
-        
+
         services
-            .AddHostedService<PlatformStateSyncJob>()
-            .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>())
-            .AddHostedService(s => s.GetRequiredService<IContainersStatsReaderJob>())
-            .AddHostedService(s => s.GetRequiredService<IPlatformsStatsReaderJob>())
-            .AddHostedService(s => s.GetRequiredService<IDaemonEventJob>())
-            .AddHostedService<ContainersStatsWriterJob>()
-            .AddHostedService<PlatformsStatsWriterJob>()
+            .AddHostedService<LogCleanupJob>()
+            .AddHostedService<DaemonEventJob>()
             .AddHostedService<CleanupStatsJob>()
-            .AddHostedService<LogCleanupJob>();
+            .AddHostedService<PlatformStateSyncJob>()
+            .AddHostedService<PlatformsStatsCollectorJob>()
+            .AddHostedService<ContainersStatsCollectorJob>()
+            .AddHostedService<PlatformsStatsPersistenceJob>()
+            .AddHostedService<ContainersStatsPersistenceJob>()
+            .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services
-            .AddSingleton<IDaemonEventJob, DaemonEventJob>()
-            .AddSingleton<IPlatformsStatsReaderJob, PlatformsStatsReaderJob>()
-            .AddSingleton<IContainersStatsReaderJob, ContainersStatsReaderJob>()
             .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()
             .AddSingleton(Channel.CreateUnbounded<ContainersStatBatch>(
                 new UnboundedChannelOptions
                 {
                     SingleWriter = true,
+                    SingleReader = true,
                     AllowSynchronousContinuations = false
                 }))
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer)
@@ -77,18 +75,12 @@ public static class InfrastructureModule
                 new UnboundedChannelOptions
                 {
                     SingleWriter = true,
+                    SingleReader = true,
                     AllowSynchronousContinuations = false
                 }))
             .AddSingleton(s => s.GetRequiredService<Channel<PlatformStatsBatch>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<PlatformStatsBatch>>().Reader)
-            .AddSingleton(Channel.CreateUnbounded<GrpcServiceHealth>(
-                new UnboundedChannelOptions
-                {
-                    SingleWriter = true,
-                    AllowSynchronousContinuations = false
-                }))
-            .AddSingleton(s => s.GetRequiredService<Channel<GrpcServiceHealth>>().Writer)
-            .AddSingleton(s => s.GetRequiredService<Channel<GrpcServiceHealth>>().Reader);
+            .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>();
         return services;
     }
 

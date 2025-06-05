@@ -5,10 +5,8 @@ using Agent.Server.GPlatform;
 using Citadel.Common;
 using Grpc.Core;
 using Infrastructure.Entities;
-using Infrastructure.EntityFramework;
+using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -16,40 +14,35 @@ using Microsoft.Extensions.Options;
 namespace Infrastructure.TaskJobs;
 
 /// <summary>
-/// Collects platforms stats from remote agents and pushes into the shared Channel <see cref="PlatformsStatsWriterJob"/>.
+/// Collects platforms stats from remote agents and pushes into the shared Channel <see cref="PlatformsStatsPersistenceJob"/>.
 /// </summary>
-public interface IPlatformsStatsReaderJob : IHostedService
-{
-    void StartStreamStatsForPlatform(PlatformData platform, CancellationToken cancellationToken);
-    void StopStreamStatsForPlatform(string address);
-}
-
-internal class PlatformsStatsReaderJob(
+internal class PlatformsStatsCollectorJob(
     IGrpcClientFactory clientFactory,
-    IServiceScopeFactory scopeFactory,
     IOptions<JobConfiguration> options,
-    ChannelWriter<PlatformStatsBatch> channel,
-    ILogger<PlatformsStatsReaderJob> logger) : BackgroundService, IPlatformsStatsReaderJob
+    IPlatformHealthBroadCaster platformHealthBroadCaster,
+    ChannelWriter<PlatformStatsBatch> platformStatsWriter,
+    ILogger<PlatformsStatsCollectorJob> logger) : BackgroundService
 {
     private readonly JobConfiguration jobConfiguration = options.Value;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
+    private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.Register();
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-        var platforms = await dbContext.Platforms.AsNoTracking()
-                 .Select(s => new PlatformData(s.Id, s.Address, s.Status))
-                 .ToArrayAsync(cancellationToken);
-
-        foreach (var platform in platforms)
+        await foreach (var platform in platformHealthReader.ReadAllAsync(cancellationToken))
         {
-            StartStreamStatsForPlatform(platform, cancellationToken);
+            if (platform.IsOnLine)
+            {
+                StartStreamStatsForPlatform(platform, cancellationToken);
+            }
+            else
+            {
+                StopStreamStatsForPlatform(platform.Address);
+            }
         }
     }
 
-    public void StartStreamStatsForPlatform(PlatformData platform, CancellationToken cancellationToken)
+    public void StartStreamStatsForPlatform(PlatformHealth platform, CancellationToken cancellationToken)
     {
         if (runningStreams.ContainsKey(platform.Address))
         {
@@ -72,7 +65,7 @@ internal class PlatformsStatsReaderJob(
         }
     }
 
-    private async Task StreamPlatformStats(PlatformData platform, CancellationToken cancellationToken)
+    private async Task StreamPlatformStats(PlatformHealth platform, CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -82,7 +75,7 @@ internal class PlatformsStatsReaderJob(
                 using var stream = client.StreamPlatformStats(new PlatformStatsRequest { FetchIntervalMs = jobConfiguration.SystemInfoInterval * 1000 }, cancellationToken: cancellationToken);
                 await foreach (var reply in stream.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
                 {
-                    await channel.WriteAsync(
+                    await platformStatsWriter.WriteAsync(
                         new PlatformStatsBatch(
                             PlatformId: platform.Id,
                             NetworksCount: reply.NetworkCount,

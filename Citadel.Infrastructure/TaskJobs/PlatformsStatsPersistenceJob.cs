@@ -10,13 +10,13 @@ using Microsoft.Extensions.Logging;
 namespace Infrastructure.TaskJobs;
 
 /// <summary>
-/// Background service that writes batches of platforms stats to the database and notifies clients via SignalR.
+/// Background service that persists batches of platforms stats to the database and notifies clients via SignalR.
 /// </summary>
-internal class PlatformsStatsWriterJob(
+internal class PlatformsStatsPersistenceJob(
     IServiceScopeFactory scopeFactory,
     ChannelReader<PlatformStatsBatch> reader,
     ISignalRConnectionTracker connectionTracker,
-    ILogger<PlatformsStatsWriterJob> logger) : BackgroundService
+    ILogger<PlatformsStatsPersistenceJob> logger) : BackgroundService
 {
     private const int BatchSize = 200;
     // Updates to db will be flushed every 60 seconds or when batch size is reached.
@@ -58,7 +58,7 @@ internal class PlatformsStatsWriterJob(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Error in {nameof(PlatformsStatsWriterJob)}");
+            logger.LogError(ex, $"Error in {nameof(PlatformsStatsPersistenceJob)}");
         }
     }
 
