@@ -1,19 +1,20 @@
 ﻿using System.Text;
 using Infrastructure;
 using Infrastructure.Entities;
+using Infrastructure.Entities.Registries;
 using Infrastructure.EntityFramework;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Tests.Integration.Features.Registries;
+namespace Tests.Integration.Application.Features.Registries;
 
 public class RegistryPatchTests : IntegrationTestBase<WebApi.Program>
 {
-    private Guid _registryId;
-
-    public override async ValueTask SeedDb()
+    private Guid registryId;
+    protected override async ValueTask SeedDbAsync()
     {
-        // Seed db
-        var db = Services.GetRequiredService<ApplicationDbContext>();
+        using var scope = Services.CreateScope();
+        using var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
         var registry = new Registry(
             name: "OriginalName",
             url: "https://original.url",
@@ -24,12 +25,13 @@ public class RegistryPatchTests : IntegrationTestBase<WebApi.Program>
 
         await db.SaveChangesAsync();
 
-        _registryId = registry.Id;
+        registryId = registry.Id;
     }
 
     [Fact]
     public async Task Patch_Registry_Should_Apply_MergePatch()
     {
+        // Arrange
         var patchJson = """
         {
           "name": "UpdatedName",
@@ -40,13 +42,14 @@ public class RegistryPatchTests : IntegrationTestBase<WebApi.Program>
           }
         }
         """;
-
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
 
-        var response = await Client.PatchAsync($"/api/v1/registries/{_registryId}", content);
+        // Act
+        var response = await Client.PatchAsync($"/api/v1/registries/{registryId}", content, cancellationToken: TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 
-        var responseBody = await response.Content.ReadAsStringAsync();
+        // Assert
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         await VerifyJson(responseBody);
     }
 }

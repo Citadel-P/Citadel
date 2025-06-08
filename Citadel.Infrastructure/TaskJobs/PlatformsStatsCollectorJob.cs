@@ -105,7 +105,7 @@ internal class PlatformsStatsCollectorJob(
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static PlatformStat CreatePlatformStat(Guid platformId, PlatformStatMessage reply)
-        => PlatformStat.Create(
+        => new PlatformStat(
             memoryUsage: reply.MemoryUsage,
             cpuUsage: reply.CpuUsage,
             rxBytes: reply.RxBytes,

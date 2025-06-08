@@ -9,6 +9,7 @@ using Infrastructure.EntityFramework;
 using Infrastructure.DockerHub;
 using Infrastructure.GithubCr;
 using Hosting.Common;
+using Infrastructure.Entities.Registries;
 
 namespace Application.Features.Registries.Commands;
 

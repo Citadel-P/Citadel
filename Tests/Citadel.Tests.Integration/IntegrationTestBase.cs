@@ -12,18 +12,17 @@ namespace Tests.Integration;
 public abstract class IntegrationTestBase<TEntryPoint> : IAsyncLifetime
     where TEntryPoint : class
 {
-    private SqliteConnection _connection = default!;
-    private WebApplicationFactory<TEntryPoint> _factory = default!;
+    private SqliteConnection connection = default!;
+    private WebApplicationFactory<TEntryPoint> factory = default!;
     protected HttpClient Client = default!;
     protected IServiceProvider Services = default!;
 
     public async ValueTask InitializeAsync()
     {
-        var jwtToken = string.Empty;
-        _connection = new SqliteConnection("DataSource=:memory:");
-        await _connection.OpenAsync();
+        connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync();
 
-        _factory = new WebApplicationFactory<TEntryPoint>()
+        factory = new WebApplicationFactory<TEntryPoint>()
             .WithWebHostBuilder(builder =>
             {
                 builder.ConfigureServices(services =>
@@ -35,8 +34,10 @@ public abstract class IntegrationTestBase<TEntryPoint> : IAsyncLifetime
 
                     services.AddDbContextPool<ApplicationDbContext>(options =>
                     {
-                        options.UseSqlite(_connection);
+                        options.UseSqlite(connection);
                     });
+
+                    ConfigureTestServices(services);
 
                     // Build the provider and seed database
                     var sp = services.BuildServiceProvider();
@@ -44,26 +45,30 @@ public abstract class IntegrationTestBase<TEntryPoint> : IAsyncLifetime
                     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                     db.Database.EnsureCreated();
 
-                    Services = scope.ServiceProvider;
-                    // Allow test classes to seed data if needed
-                    SeedDb().GetAwaiter().GetResult();
-                    jwtToken = CreateJwtToken().GetAwaiter().GetResult();
+                    Services = sp;
+                    SeedDbAsync().GetAwaiter().GetResult();
                 });
             });
 
-        Client = _factory.CreateClient();
-        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwtToken);
+        
+        Client = factory.CreateClient();
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", await CreateJwtTokenAsync());
     }
+
+    /// <summary>
+    /// Override this method to configure additional services for testing
+    /// </summary>
+    protected virtual void ConfigureTestServices(IServiceCollection services) { }
 
     /// <summary>
     /// Override to seed the database with initial data
     /// </summary>
-    public virtual ValueTask SeedDb() => ValueTask.CompletedTask;
+    protected virtual ValueTask SeedDbAsync() => ValueTask.CompletedTask;
 
     /// <summary>
     /// Override to create new roles, users, etc
     /// </summary>
-    public virtual ValueTask<string> CreateJwtToken()
+    protected virtual ValueTask<string> CreateJwtTokenAsync()
     {
         // Create a jwt token
         var jwt = Services.GetRequiredService<IJwtService>();
@@ -77,7 +82,7 @@ public abstract class IntegrationTestBase<TEntryPoint> : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        await _connection.DisposeAsync();
-        _factory.Dispose();
+        await connection.DisposeAsync();
+        factory.Dispose();
     }
 }

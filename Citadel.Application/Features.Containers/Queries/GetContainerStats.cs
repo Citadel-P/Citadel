@@ -23,14 +23,14 @@ internal sealed class GetContainerStatsHandler(ApplicationDbContext dbContext)
 {
     public async ValueTask<Result<IEnumerable<ContainerStat>>> Handle(GetContainerStats query, CancellationToken cancellationToken)
     {
-        var containerId = await dbContext.ContainersInfo.AsNoTracking()
+        var containerId = await dbContext.Containers.AsNoTracking()
                         .SingleOrDefaultAsync(s => s.ContainerId.StartsWith(query.ContainerId), cancellationToken);
 
         var last24h = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeSeconds();
         return containerId == null
-            ? Result.Failure<IEnumerable<ContainerStat>>(new NotFoundError($"Container with id {query.ContainerId} does not exists"))
+            ? Result.Failure<IEnumerable<ContainerStat>>(new NotFoundError($"Container with id {query.ContainerId} does not exist"))
             : await dbContext.ContainerStats.AsNoTracking()
-                    .Where(s => s.ContainerInfoId == containerId.Id && s.Created > last24h)
-                    .ToListAsync(cancellationToken);
+                    .Where(s => s.ContainerId == containerId.Id && s.Created > last24h)
+                    .ToArrayAsync(cancellationToken);
     }
 }

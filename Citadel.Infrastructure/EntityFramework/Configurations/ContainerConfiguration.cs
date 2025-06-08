@@ -6,11 +6,11 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Infrastructure.EntityFramework.Configurations;
 
-internal class ContainerInfoConfiguration : IEntityTypeConfiguration<ContainerInfo>
+internal class ContainerConfiguration : IEntityTypeConfiguration<Container>
 {
-    public void Configure(EntityTypeBuilder<ContainerInfo> builder)
+    public void Configure(EntityTypeBuilder<Container> builder)
     {
-        builder.ToTable("ContainersInfo");
+        builder.ToTable("Containers");
 
         // Pk & Indexes
         builder.HasKey(p => p.Id);
@@ -20,21 +20,24 @@ internal class ContainerInfoConfiguration : IEntityTypeConfiguration<ContainerIn
         builder.Property(p => p.ContainerId).HasMaxLength(64);
         builder.Property(p => p.Ports).HasColumnType("TEXT")
             .HasConversion(
-                v => JsonSerializer.Serialize(v, ContainerPortsContext.Default.ICollectionContainerPort),
-                v => JsonSerializer.Deserialize(v, ContainerPortsContext.Default.ICollectionContainerPort) ?? Array.Empty<ContainerPort>());
+                v => JsonSerializer.Serialize(v, ContainerPortsContext.Default.IReadOnlyCollectionContainerPort),
+                v => JsonSerializer.Deserialize(v, ContainerPortsContext.Default.IReadOnlyCollectionContainerPort) ?? Array.Empty<ContainerPort>());
 
         // Converters
         builder.Property(p => p.State).HasConversion(
                                                 v => v.ToString(),
                                                 v => Enum.Parse<ContainerStateStatus>(v));
 
-        builder.HasMany(p => p.Stats).WithOne().HasForeignKey(p => p.ContainerInfoId).OnDelete(DeleteBehavior.Cascade);
+        // Backing field
+        builder.Metadata.FindNavigation(nameof(Container.Stats))?.SetPropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.HasMany(p => p.Stats).WithOne().HasForeignKey(p => p.ContainerId).OnDelete(DeleteBehavior.Cascade);
     }
 }
 
 
 [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
-[JsonSerializable(typeof(ICollection<ContainerPort>))]
+[JsonSerializable(typeof(IReadOnlyCollection<ContainerPort>))]
 public partial class ContainerPortsContext : JsonSerializerContext
 {
 }

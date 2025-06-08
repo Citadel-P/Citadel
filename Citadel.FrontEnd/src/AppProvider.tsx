@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { createContext } from 'use-context-selector';
 import { matchRoutes, useLocation, useParams } from 'react-router';
 import { AppPaths } from '@/AppRoutes';
-import { ContainerInfoView, PlatformView } from './api/_generated';
+import { ContainerView, PlatformView } from './api/_generated';
 import { useGETPlatform } from './features/platforms/hooks/useGETPlatform';
 import { useGETContainer } from './features/containers/hooks/useGETContainer';
 
@@ -12,7 +12,7 @@ interface IContext {
   isBreadcrumbHidden: boolean;
   setIsBreadcrumbHidden: (s: boolean) => void;
   currentPlatform: PlatformView | undefined;
-  currentContainer: ContainerInfoView | undefined;
+  currentContainer: ContainerView | undefined;
 }
 
 export const AppContext = createContext<IContext | undefined>(undefined);
@@ -31,7 +31,7 @@ const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => 
 
   // State variables
   const [currentPlatform, setCurrentPlatform] = useState<PlatformView | undefined>(undefined);
-  const [currentContainer, setCurrentContainer] = useState<ContainerInfoView | undefined>(undefined);
+  const [currentContainer, setCurrentContainer] = useState<ContainerView | undefined>(undefined);
   const [isBreadcrumbHidden, setIsBreadcrumbHidden] = useState(false);
 
   // Memoized route

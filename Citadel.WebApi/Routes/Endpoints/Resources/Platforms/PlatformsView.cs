@@ -1,5 +1,6 @@
 ﻿using Infrastructure;
 using Infrastructure.Entities;
+using Infrastructure.Entities.Platforms;
 
 namespace WebApi.Routes.Endpoints.Resources.Platforms;
 

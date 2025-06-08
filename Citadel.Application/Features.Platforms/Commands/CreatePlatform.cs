@@ -1,10 +1,12 @@
 ﻿using Agent.Server.Containers;
 using Citadel.Common;
+using EFCore.BulkExtensions;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Infrastructure;
 using Infrastructure.Entities;
+using Infrastructure.Entities.Platforms;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
 using Infrastructure.TaskJobs;
@@ -31,7 +33,7 @@ internal sealed class CreatePlatformHandler(
     ApplicationDbContext dbContext,
     IGrpcClientFactory clientFactory,
     IPlatformHealthMonitorJob platformHealthMonitorJob,
-    ILogger<UpsertPlatformHandler> logger) : ICommandHandler<CreatePlatform, Result<Platform>>
+    ILogger<PatchPlatformHandler> logger) : ICommandHandler<CreatePlatform, Result<Platform>>
 {
     public async ValueTask<Result<Platform>> Handle(CreatePlatform command, CancellationToken cancellationToken)
     {
@@ -64,20 +66,22 @@ internal sealed class CreatePlatformHandler(
         }
 
         DockerPlatformDescriptor descriptor = new (
-            daemonId: platformInfo.Id,
-            containerCount: platformInfo.ContainerCount,
-            containersRunning: platformInfo.ContainersRunning,
-            containersPaused: platformInfo.ContainersPaused,
-            containersStopped: platformInfo.ContainersStopped,
-            driver: platformInfo.Driver,
-            operatingSystem: platformInfo.OperatingSystem,
-            osVersion: platformInfo.OsVersion,
-            osType: platformInfo.OsType,
-            architecture: platformInfo.Architecture);
+            DaemonId: platformInfo.Id,
+            ContainerCount: platformInfo.ContainerCount,
+            ContainersRunning: platformInfo.ContainersRunning,
+            ContainersPaused: platformInfo.ContainersPaused,
+            ContainersStopped: platformInfo.ContainersStopped,
+            Driver: platformInfo.Driver,
+            OperatingSystem: platformInfo.OperatingSystem,
+            OsVersion: platformInfo.OsVersion,
+            OsType: platformInfo.OsType,
+            Architecture: platformInfo.Architecture);
 
-        var platform = Platform.Create(
+        var platform = new Platform (
             name: command.Name,
+            type: command.Type,
             address: command.Address,
+            status: PlatformStatus.Online,
             networkCount: platformInfo.NetworkCount,
             volumeCount: platformInfo.VolumeCount,
             imageCount: platformInfo.ImageCount,
@@ -85,19 +89,21 @@ internal sealed class CreatePlatformHandler(
             memTotal: platformInfo.MemTotal,
             serverVersion: platformInfo.ServerVersion,
             agentVersion: platformInfo.AgentVersion,
-            descriptor: descriptor,
-            stats: [platformInfo.MapStat()]
-            );
-        dbContext.Platforms.Add(platform);
+            platformDescriptor: descriptor
+            )
+            .AppendStat(platformInfo.MapStat());
 
-        // Start tracking the platform health
-        platformHealthMonitorJob.TrackPlatform(platform.Address, platform.Id);
+        // Add platform
+        dbContext.Platforms.Add(platform);
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         // Add containers
-        dbContext.ContainersInfo.AddRange(containers.Containers.Select(s => s.Value.Map(platform.Id, DateTimeOffset.UtcNow.ToUnixTimeSeconds())));
+        var at = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var mappedContainers = containers.Containers.Select(s => s.Value.Map(platform.Id, at)).ToArray();
+        await dbContext.BulkInsertAsync(mappedContainers, cancellationToken: cancellationToken);
 
-        // Save to db
-        await dbContext.SaveChangesAsync(cancellationToken);
+        // Start tracking the platform
+        platformHealthMonitorJob.TrackPlatform(platform.Address, platform.Id);
 
         logger.LogInformation("A new platform has been added, id = {PlatformId}", platform.Id);
         return Result.Success(platform);
@@ -107,7 +113,7 @@ internal sealed class CreatePlatformHandler(
 internal static class Mapper
 {
     internal static PlatformStat MapStat(this PlatformInfoMessage systemInfo)
-        => PlatformStat.Create(
+        => new (
             created: systemInfo.Created,
             memoryUsage: systemInfo.PlatformStat.MemoryUsage,
             cpuUsage: systemInfo.PlatformStat.CpuUsage,

@@ -28,7 +28,7 @@ internal sealed class InspectContainerHandler(
     
     public async ValueTask<Result<ContainerInspectReply>> Handle(InspectContainer query, CancellationToken cancellationToken)
     {
-        var platformAddress = await dbContext.ContainersInfo.GetPlatformAddress(query.ContainerId, cancellationToken);
+        var platformAddress = await dbContext.Containers.GetPlatformAddress(query.ContainerId, cancellationToken);
         if (platformAddress == null)
         {
             return Result.Failure<ContainerInspectReply>(new NotFoundError($"Platform doesn't exist for container {query.ContainerId}"));

@@ -9,9 +9,9 @@ internal class DeleteContainerRequirement : IAuthorizationRequirement
 {
 }
 
-internal class DeleteContainerHandler : AuthorizationHandler<DeleteContainerRequirement, ContainerInfo>
+internal class DeleteContainerHandler : AuthorizationHandler<DeleteContainerRequirement, Container>
 {
-    protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, DeleteContainerRequirement requirement, ContainerInfo resource)
+    protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, DeleteContainerRequirement requirement, Container resource)
     {
         if (context.User.IsAdmin())
         {

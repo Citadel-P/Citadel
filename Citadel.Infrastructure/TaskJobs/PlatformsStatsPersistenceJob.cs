@@ -1,5 +1,7 @@
 ﻿using System.Threading.Channels;
+using EFCore.BulkExtensions;
 using Infrastructure.Entities;
+using Infrastructure.Entities.Platforms;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
@@ -9,9 +11,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.TaskJobs;
 
-/// <summary>
-/// Background service that persists batches of platforms stats to the database and notifies clients via SignalR.
-/// </summary>
 internal class PlatformsStatsPersistenceJob(
     IServiceScopeFactory scopeFactory,
     ChannelReader<PlatformStatsBatch> reader,
@@ -19,8 +18,8 @@ internal class PlatformsStatsPersistenceJob(
     ILogger<PlatformsStatsPersistenceJob> logger) : BackgroundService
 {
     private const int BatchSize = 200;
-    // Updates to db will be flushed every 60 seconds or when batch size is reached.
-    private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(60); 
+    // Updates to db will be flushed every x seconds or when batch size is reached.
+    private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(60*2); 
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -75,27 +74,43 @@ internal class PlatformsStatsPersistenceJob(
                 continue;
             }
 
+            PlatformDescriptor? descriptor = null;
+            if (existing.Type == PlatformType.Docker && existing.PlatformDescriptor is DockerPlatformDescriptor dockerPlatform)
+            {
+                descriptor = dockerPlatform.Create(
+                    containersRunning: batch.ContainersRunning,
+                    containersPaused: batch.ContainersPaused,
+                    containersStopped: batch.ContainersStopped);
+            }
+            else if (existing.Type == PlatformType.DockerSwarm && existing.PlatformDescriptor is DockerSwarmPlatformDescriptor swarmDescriptor)
+            {
+                // Todo
+            }
+            else if (existing.Type == PlatformType.Kubernetes && existing.PlatformDescriptor is KubernetesPlatformDescriptor kubernetesDescriptor)
+            {
+                // Todo
+            }
+
             existing.PartialUpdate(
                 platformStatus: PlatformStatus.Online,
                 networkCount: batch.NetworksCount,
                 volumeCount: batch.VolumesCount,
-                containersRunning: batch.ContainersRunning,
-                containersPaused: batch.ContainersPaused,
-                containersStopped: batch.ContainersStopped,
                 imageCount: batch.Images,
-                memTotal: batch.MemTotal);
+                memTotal: batch.MemTotal,
+                descriptor: descriptor);
         }
 
         try
         {
-            db.PlatformStats.AddRange(statsByPlatform.Values.SelectMany(s => s));
-            await db.SaveChangesAsync(cancellationToken);
+            var stats = statsByPlatform.Values.SelectMany(s => s).ToArray();
+            await db.BulkInsertAsync(stats, cancellationToken: cancellationToken);
         }
-        catch (DbUpdateException ex)
+        catch (Exception ex)
         {
             logger.LogError(ex, "Failed to save platform stats batch to the database. Batch size: {BatchSize}", statsByPlatform.Sum(s => s.Value.Count));
         }
     }
+
     private async ValueTask NotifyClients(PlatformStatsBatch batch)
     {
         if (connectionTracker.HasUsersInGroup("Platforms"))

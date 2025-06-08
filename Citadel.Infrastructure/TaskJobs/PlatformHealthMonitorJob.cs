@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Threading;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
@@ -60,7 +61,7 @@ internal class PlatformHealthMonitorJob(
             
             foreach (var address in trackedAddresses.Keys)
             {
-                var isOnline = await ProbeAsync(address);
+                var isOnline = await ProbeAsync(address, cancellationToken);
                 var hasPreviousStatus = status.TryGetValue(address, out var wasOnline);
 
                 // If we've never seen this address before, initialize and emit
@@ -125,12 +126,12 @@ internal class PlatformHealthMonitorJob(
         }
     }
 
-    private async Task<bool> ProbeAsync(string address)
+    private async Task<bool> ProbeAsync(string address, CancellationToken cancellationToken)
     {
         try
         {
             var client = clientFactory.GetPlatformClient(address);
-            var response = await client.HealthCheckAsync(new Google.Protobuf.WellKnownTypes.Empty(), deadline: DateTime.UtcNow.AddSeconds(2));
+            var response = await client.HealthCheckAsync(new Google.Protobuf.WellKnownTypes.Empty(), deadline: DateTime.UtcNow.AddSeconds(2), cancellationToken: cancellationToken);
             return response.Healthy;
         }
         catch

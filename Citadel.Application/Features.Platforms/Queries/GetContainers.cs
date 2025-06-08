@@ -13,7 +13,7 @@ namespace Application.Features.Platforms.Queries;
 /// Get all containers from remote agent
 /// </summary>
 public sealed record class GetContainers(GetContainersQuery ContainersQuery, Guid PlatformId)
-    : IQuery<Result<IEnumerable<ContainerInfo>>>
+    : IQuery<Result<IEnumerable<Container>>>
 {
     internal class Validator : AbstractValidator<GetContainers>
     {
@@ -25,14 +25,14 @@ public sealed record class GetContainers(GetContainersQuery ContainersQuery, Gui
 }
 
 internal class GetContainersHandler(ApplicationDbContext dbContext)
-    : IQueryHandler<GetContainers, Result<IEnumerable<ContainerInfo>>>
+    : IQueryHandler<GetContainers, Result<IEnumerable<Container>>>
 {
-    public async ValueTask<Result<IEnumerable<ContainerInfo>>> Handle(GetContainers query, CancellationToken cancellationToken)
+    public async ValueTask<Result<IEnumerable<Container>>> Handle(GetContainers query, CancellationToken cancellationToken)
     {
-        var containers = await dbContext.ContainersInfo
+        var containers = await dbContext.Containers
                 .WithLastStat(query.PlatformId)
                 .ToListAsync(cancellationToken);
         
-        return Result.Success<IEnumerable<ContainerInfo>>(containers);
+        return Result.Success<IEnumerable<Container>>(containers);
     }
 }

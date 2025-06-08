@@ -5,7 +5,7 @@ using WebApi.Routes.Endpoints.Resources.Platforms;
 
 namespace WebApi.Routes.Endpoints.Resources.Containers;
 
-public sealed record ContainerInfoView(
+public sealed record ContainerView(
     Guid Id,
     string ContainerId,
     string Name,
@@ -19,10 +19,10 @@ public sealed record ContainerInfoView(
     PlatformView? Platform = null,
     EndpointMetadata? Metadata = null)
 {
-    internal static IEnumerable<ContainerInfoView> Map(IEnumerable<ContainerInfo> containersInfo)
+    internal static IEnumerable<ContainerView> Map(IEnumerable<Container> containersInfo)
         => containersInfo?.Select(Map) ?? [];
 
-    internal static ContainerInfoView Map(ContainerInfo container)
+    internal static ContainerView Map(Container container)
     {
         return new (
             Id: container.Id,
@@ -38,7 +38,7 @@ public sealed record ContainerInfoView(
             Platform: container.Platform == null ? null : PlatformView.Map(container.Platform));
     }
 
-    internal static async Task<ContainerInfoView> Map(ContainerInfo container, IContainerPermissionService permissionService)
+    internal static async Task<ContainerView> Map(Container container, IContainerPermissionService permissionService)
     {
         var permissions = await permissionService.GetContainerPermissions(container);
         return Map(container) with

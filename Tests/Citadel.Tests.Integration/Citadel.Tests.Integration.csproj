@@ -25,12 +25,12 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Folder Include="Verify\" />
+		<ProjectReference Include="..\Citadel.Tests.Common\Citadel.Tests.Common.csproj" />
+		<ProjectReference Include="..\..\Citadel.WebApi\Citadel.WebApi.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\Citadel.Tests.Common\Citadel.Tests.Common.csproj" />
-		<ProjectReference Include="..\..\Citadel.WebApi\Citadel.WebApi.csproj" />
+	  <Folder Include="Snapshots\" />
 	</ItemGroup>
 
 </Project>

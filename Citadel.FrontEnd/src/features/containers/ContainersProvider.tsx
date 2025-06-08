@@ -1,4 +1,4 @@
-import { ContainerInfoView, DeleteContainersRequest } from '@/api/_generated';
+import { ContainerView, DeleteContainersRequest } from '@/api/_generated';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { createContext } from 'use-context-selector';
 import useContainersHub from './hooks/useContainersHub';
@@ -10,11 +10,11 @@ import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
 interface IContext {
   isLoading: boolean;
   platformId: string | undefined;
-  containers: ContainerInfoView[];
-  dialogData: IDeleteDialogData<ContainerInfoView>;
-  setDialogData: (data: IDeleteDialogData<ContainerInfoView>) => void;
-  selectedRows: ContainerInfoView[];
-  setSelectedRows: (containers: ContainerInfoView[]) => void;
+  containers: ContainerView[];
+  dialogData: IDeleteDialogData<ContainerView>;
+  setDialogData: (data: IDeleteDialogData<ContainerView>) => void;
+  selectedRows: ContainerView[];
+  setSelectedRows: (containers: ContainerView[]) => void;
   requestDelete: (data: DeleteContainersRequest) => void;
   deleteIsPending: boolean;
   onSearch: (searchTerm: string) => void;
@@ -32,13 +32,13 @@ const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children
   const { mutate, isSuccess: deleteIsSuccess, isPending: deleteIsPending } = useDELETEContainers();
 
   // State for selected rows and containers
-  const [selectedRows, setSelectedRows] = useState<ContainerInfoView[]>([]);
-  const [containers, setContainers] = useState<ContainerInfoView[]>([]);
-  const [originalContainers, setOriginalContainers] = useState<ContainerInfoView[]>([]);
+  const [selectedRows, setSelectedRows] = useState<ContainerView[]>([]);
+  const [containers, setContainers] = useState<ContainerView[]>([]);
+  const [originalContainers, setOriginalContainers] = useState<ContainerView[]>([]);
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
   // Dialog state
-  const { dialogData, setDialogData } = useDialogState<ContainerInfoView>();
+  const { dialogData, setDialogData } = useDialogState<ContainerView>();
 
   // Update containers when hub info changes
   useEffect(() => {

@@ -6,11 +6,8 @@ using Citadel.Common;
 using Google.Protobuf.Collections;
 using Grpc.Core;
 using Infrastructure.Entities;
-using Infrastructure.EntityFramework;
 using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -22,11 +19,11 @@ namespace Infrastructure.TaskJobs;
 /// </summary>
 internal class ContainersStatsCollectorJob(
     IGrpcClientFactory clientFactory,
-    IServiceScopeFactory scopeFactory,
+    IOptions<JobConfiguration> options, 
     ChannelWriter<ContainersStatBatch> channel,
-    ILogger<ContainersStatsCollectorJob> logger,
+    IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
-    IOptions<JobConfiguration> options) : BackgroundService
+    ILogger<ContainersStatsCollectorJob> logger) : BackgroundService
 {
     private readonly JobConfiguration jobConfiguration = options.Value;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
@@ -82,16 +79,12 @@ internal class ContainersStatsCollectorJob(
                 {
                     if (reply.Containers.Count > 0)
                     {
-                        using var scope = scopeFactory.CreateAsyncScope();
-                        using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-                        var ids = await dbContext.ContainersInfo
-                                    .AsNoTracking()
-                                    .Where(s => s.PlatformId == platform.Id && reply.Containers.Keys.Contains(s.ContainerId))
-                                    .ToDictionaryAsync(s => s.ContainerId, s => s.Id, cancellationToken);
-
-                        var stats = ContainerInfoMapper.Map(reply.Containers, ids, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-                        await channel.WriteAsync(new ContainersStatBatch(platform.Id, stats), cancellationToken);
+                        
+                        if (platformContainerCache.TryGetContainers(platform.Id, out var ids))
+                        {
+                            var stats = ContainerMapper.Map(reply.Containers, ids, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                            await channel.WriteAsync(new ContainersStatBatch(platform.Id, stats), cancellationToken);
+                        }
                     }
                 }
             }
@@ -111,33 +104,33 @@ internal class ContainersStatsCollectorJob(
 
 internal sealed record ContainersStatBatch(Guid PlatformId, ContainerStat[] Stats);
 
-public static class ContainerInfoMapper
+public static class ContainerMapper
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ContainerInfo Map(this ContainerMessage container, Guid platformId, long timestamp)
+    public static Container Map(this ContainerMessage message, Guid platformId, long timestamp)
     {
-        var containerInfo = ContainerInfo.Create(
+        var container = new Container(
                     platformId: platformId,
-                    containerId: container.Id,
-                    name: container.Name,
-                    image: container.Image,
-                    created: container.Created,
-                    state: container.State.Map(),
-                    ports: container.Ports?.Map(),
-                    stack: container.Stack);
+                    containerId: message.Id,
+                    name: message.Name,
+                    image: message.Image,
+                    created: message.Created,
+                    state: message.State.Map(),
+                    ports: message.Ports?.Map(),
+                    stack: message.Stack);
 
-        if (container.ContainerStatMessage is not null)
+        if (message.ContainerStatMessage is not null)
         {
-            containerInfo.Stats.Add(container.ContainerStatMessage.Map(containerInfo.Id, timestamp));
+            container.AppendStat(message.ContainerStatMessage.Map(container.Id, timestamp));
         }
 
-        return containerInfo;
+        return container;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ContainerStat Map(this ContainerStatMessage stat, Guid containerInfoId, long timestamp)
-        => ContainerStat.Create(
-            containerInfoId: containerInfoId,
+    public static ContainerStat Map(this ContainerStatMessage stat, Guid containerId, long timestamp)
+        => new (
+            containerId: containerId,
             memoryUsage: stat.MemoryUsage,
             memoryLimit: stat.MemoryLimit,
             cpuUsage: stat.CpuUsage,
@@ -146,7 +139,7 @@ public static class ContainerInfoMapper
             created: timestamp);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ContainerStat[] Map(this MapField<string, ContainerStatMessage> stats, Dictionary<string, Guid> ids, long timestamp)
+    public static ContainerStat[] Map(this MapField<string, ContainerStatMessage> stats, IReadOnlyDictionary<string, Guid> ids, long timestamp)
     {
         var temp = new ContainerStat[stats.Count];
         var index = 0;
@@ -155,8 +148,8 @@ public static class ContainerInfoMapper
         {
             if (ids.TryGetValue(kvp.Key, out var containerId))
             {
-                temp[index++] = ContainerStat.Create(
-                    containerInfoId: containerId,
+                temp[index++] = new (
+                    containerId: containerId,
                     memoryUsage: kvp.Value.MemoryUsage,
                     memoryLimit: kvp.Value.MemoryLimit,
                     cpuUsage: kvp.Value.CpuUsage,

@@ -1,6 +1,8 @@
-﻿using Hosting.Common;
+﻿using System.Data.Common;
+using Hosting.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Infrastructure.EntityFramework;
 
@@ -9,7 +11,7 @@ namespace Infrastructure.EntityFramework;
 /// </summary>
 internal sealed class ApplicationContextFactory : IDesignTimeDbContextFactory<ApplicationDbContext>
 {
-    internal const string ConnectionString = $"Data Source={Constants.DbFilePath}";
+    internal const string ConnectionString = $"Data Source={Constants.DbFilePath};Cache=Shared;";
 
     public ApplicationDbContext CreateDbContext(string[] args)
     {
@@ -23,5 +25,20 @@ internal sealed class ApplicationContextFactory : IDesignTimeDbContextFactory<Ap
         optionsBuilder.UseSqlite(ConnectionString);
 
         return new(optionsBuilder.Options);
+    }
+}
+
+internal class SqlitePragmaInterceptor : DbConnectionInterceptor
+{
+    public override void ConnectionOpened(DbConnection connection, ConnectionEndEventData eventData)
+    {
+        using var command = connection.CreateCommand();
+        // Set PRAGMA settings for SQLite to improve concurrency
+        command.CommandText = @"
+            PRAGMA journal_mode=WAL;
+            PRAGMA synchronous=NORMAL;
+            PRAGMA busy_timeout=3000;
+        ";
+        command.ExecuteNonQuery();
     }
 }

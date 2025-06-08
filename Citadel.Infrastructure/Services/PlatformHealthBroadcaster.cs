@@ -6,7 +6,7 @@ namespace Infrastructure.Services;
 /// <summary>
 /// Broadcaster for platform health events.  
 /// </summary>
-internal interface IPlatformHealthBroadCaster
+public interface IPlatformHealthBroadCaster
 {
     ChannelReader<PlatformHealth> Register();
     Task BroadcastAsync(PlatformHealth evt, CancellationToken cancellationToken);

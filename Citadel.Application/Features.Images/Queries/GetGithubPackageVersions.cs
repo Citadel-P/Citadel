@@ -1,7 +1,7 @@
 ﻿using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.Entities;
+using Infrastructure.Entities.Registries;
 using Infrastructure.EntityFramework;
 using Infrastructure.GithubCr;
 using LightResults;

@@ -4,8 +4,8 @@ namespace Infrastructure.Services.Abstractions;
 
 public interface IContainerHubDispatcher
 {
-    Task SendContainerEvent(ContainerInfo container, string @event);
-    Task SendContainersInfo(IEnumerable<ContainerInfo> containers);
+    Task SendContainerEvent(Container container, string @event);
+    Task SendContainersInfo(Guid platformId, IEnumerable<Container> containers);
     Task SendContainersStats(Guid platformId, IEnumerable<ContainerStat> containers);
 }
 

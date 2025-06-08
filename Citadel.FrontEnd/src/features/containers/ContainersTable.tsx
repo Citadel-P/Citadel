@@ -3,7 +3,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useContextSelector } from 'use-context-selector';
 import { ContainersContext } from './ContainersProvider';
-import { ContainerInfoView, ContainerStateStatus, ContainerStatView, PortView } from '@/api/_generated';
+import { ContainerView, ContainerStateStatus, ContainerStatView, PortView } from '@/api/_generated';
 import { truncate } from '@/lib/truncate';
 import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
@@ -14,7 +14,7 @@ import DropdownTableMenu from './DropdownTableMenu';
 import { memo } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
 
-const columns: ColumnDef<ContainerInfoView>[] = [
+const columns: ColumnDef<ContainerView>[] = [
   {
     id: 'select',
     header: ({ table }) => (
@@ -67,8 +67,8 @@ const columns: ColumnDef<ContainerInfoView>[] = [
     cell: ({ row }) => (
       <div className="text-xs">
         {row.original.state === ContainerStateStatus.Running &&
-          (row.original as ContainerInfoView).lastStats &&
-          toFixedNumber((row.original as ContainerInfoView).lastStats?.cpuUsage, 'percent')}
+          (row.original as ContainerView).lastStats &&
+          toFixedNumber((row.original as ContainerView).lastStats?.cpuUsage, 'percent')}
       </div>
     ),
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {

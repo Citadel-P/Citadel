@@ -16,7 +16,7 @@ public record struct ContainerStatView(
 
     internal static ContainerStatView Map(ContainerStat stats)
         => new (
-            ContainerId: stats.ContainerInfoId,
+            ContainerId: stats.ContainerId,
             MemoryUsage: stats?.MemoryUsage ?? 0,
             CpuUsage: stats?.CpuUsage ?? 0,
             MemoryLimit: stats?.MemoryLimit ?? 0,

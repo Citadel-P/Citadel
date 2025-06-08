@@ -11,16 +11,16 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20250602162711_migration0002")]
-    partial class migration0002
+    [Migration("20250608210442_migration0001")]
+    partial class migration0001
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "9.0.4");
+            modelBuilder.HasAnnotation("ProductVersion", "9.0.5");
 
-            modelBuilder.Entity("Infrastructure.Entities.ContainerInfo", b =>
+            modelBuilder.Entity("Infrastructure.Entities.Container", b =>
                 {
                     b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
@@ -67,7 +67,7 @@ namespace Infrastructure.Migrations
 
                     b.HasIndex("PlatformId");
 
-                    b.ToTable("ContainersInfo", (string)null);
+                    b.ToTable("Containers", (string)null);
                 });
 
             modelBuilder.Entity("Infrastructure.Entities.ContainerStat", b =>
@@ -76,7 +76,7 @@ namespace Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("BLOB");
 
-                    b.Property<byte[]>("ContainerInfoId")
+                    b.Property<byte[]>("ContainerId")
                         .IsRequired()
                         .HasColumnType("BLOB");
 
@@ -100,7 +100,7 @@ namespace Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ContainerInfoId");
+                    b.HasIndex("ContainerId");
 
                     b.ToTable("ContainerStats", (string)null);
                 });
@@ -444,7 +444,7 @@ namespace Infrastructure.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "admin@admin.com",
                             Name = "admin",
-                            Password = "S4buHR9wq9tSuwh1SjsexfxBwUm2rWBHLEbT1aMVKVIxV2Ay",
+                            Password = "1poqgaRzypna/qgl6xmb41scBJhec0dqoBvvwPz+t+zE4bHi",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
@@ -453,7 +453,7 @@ namespace Infrastructure.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "dev@dev.com",
                             Name = "dev",
-                            Password = "6HpzHnYaGNOH4EYpbXzdUytceFF3KOedbhWOYxUCoSWJdUQC",
+                            Password = "z12WS3Iv2W5kRMxTc1cRY1IOQrMM/EKDCyG9pI3KJrWHCau0",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
@@ -462,7 +462,7 @@ namespace Infrastructure.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "qa@qa.com",
                             Name = "qa",
-                            Password = "H2YmIHnpinUJ3R7m+Km+2cr+7yt1SaFjuSmaSPgyz3V+9/4X",
+                            Password = "hgkpnDH5d6CHPfFxnpkLVSo1pmP/jgM/ACYGAmUsF0CJJZx8",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         });
                 });
@@ -628,7 +628,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("Registries", (string)null);
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.ContainerInfo", b =>
+            modelBuilder.Entity("Infrastructure.Entities.Container", b =>
                 {
                     b.HasOne("Infrastructure.Entities.Platform", "Platform")
                         .WithMany()
@@ -641,9 +641,9 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Entities.ContainerStat", b =>
                 {
-                    b.HasOne("Infrastructure.Entities.ContainerInfo", null)
+                    b.HasOne("Infrastructure.Entities.Container", null)
                         .WithMany("Stats")
-                        .HasForeignKey("ContainerInfoId")
+                        .HasForeignKey("ContainerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -703,7 +703,7 @@ namespace Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.ContainerInfo", b =>
+            modelBuilder.Entity("Infrastructure.Entities.Container", b =>
                 {
                     b.Navigation("Stats");
                 });

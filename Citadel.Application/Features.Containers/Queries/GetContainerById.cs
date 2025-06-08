@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Application.Features.Containers.Queries;
 
 [RequirePermission(nameof(AppPermission.ListContainers))]
-public sealed record GetContainerById(string ContainerId) : IQuery<Result<ContainerInfo>>
+public sealed record GetContainerById(string ContainerId) : IQuery<Result<Container>>
 {
     internal class Validator : AbstractValidator<GetContainerById>
     {
@@ -22,14 +22,14 @@ public sealed record GetContainerById(string ContainerId) : IQuery<Result<Contai
 }
 
 internal class GetContainerByIdHandler(ApplicationDbContext dbContext)
-    : IQueryHandler<GetContainerById, Result<ContainerInfo>>
+    : IQueryHandler<GetContainerById, Result<Container>>
 {
-    public async ValueTask<Result<ContainerInfo>> Handle(GetContainerById query, CancellationToken cancellationToken)
+    public async ValueTask<Result<Container>> Handle(GetContainerById query, CancellationToken cancellationToken)
     {
-        var container = await dbContext.ContainersInfo.AsNoTracking()
+        var container = await dbContext.Containers.AsNoTracking()
                                 .Include(s => s.Platform)
                                 .FirstOrDefaultAsync(s => s.ContainerId.StartsWith(query.ContainerId), cancellationToken: cancellationToken);
 
-        return container ?? Result.Failure<ContainerInfo>(new NotFoundError("Platform does not exist"));
+        return container ?? Result.Failure<Container>(new NotFoundError("Platform does not exist"));
     }
 }

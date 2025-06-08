@@ -1,14 +1,14 @@
 ﻿using System.Text.Json.Serialization;
-using Infrastructure.Entities;
+using Infrastructure.Entities.Platforms;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 
 namespace WebApi.Hubs;
 
 [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
-[JsonSerializable(typeof(ContainersInfoView))]
-[JsonSerializable(typeof(ContainerInfoView))]
-[JsonSerializable(typeof(List<ContainerInfoView>))]
+[JsonSerializable(typeof(ContainersView))]
+[JsonSerializable(typeof(ContainerView))]
+[JsonSerializable(typeof(List<ContainerView>))]
 [JsonSerializable(typeof(List<ContainerStatView>))]
 [JsonSerializable(typeof(IEnumerable<ContainerStatView>))]
 [JsonSerializable(typeof(ContainerStatView))]

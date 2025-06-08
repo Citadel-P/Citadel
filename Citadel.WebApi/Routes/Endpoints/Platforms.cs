@@ -56,10 +56,10 @@ public static class Platforms
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
-    public static async Task<Results<Ok<ContainersInfoView>, ProblemHttpResult>> ListContainers(IMediator mediator, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<ContainersView>, ProblemHttpResult>> ListContainers(IMediator mediator, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetContainers(new GetContainersQuery(All: true), id), cancellationToken);
-        return EndpointHandlers.HandleResult(result, ContainersInfoView.Map);
+        return EndpointHandlers.HandleResult(result, ContainersView.Map);
     }
 
 }

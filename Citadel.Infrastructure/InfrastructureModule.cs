@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.DependencyInjection;
 using Refit;
+using SQLitePCL;
 
 namespace Infrastructure;
 
@@ -23,40 +24,40 @@ namespace Infrastructure;
 public static class InfrastructureModule
 {
     private static readonly RefitSettings refitSettings = new() { ContentSerializer = new STJSourceGeneratorSerializer() };
+
     /// <summary>
     /// Registers the infrastructure module services and configurations.
     /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <returns>The updated service collection.</returns>
     public static IServiceCollection RegisterInfrastructureModule(this IServiceCollection services)
         => services
+            .AddServices()
             .InitializeDb()
             .AddGrpcClients()
             .AddHttpClients()
             .AddBackgroundTasks();
 
-    /// <summary>
-    /// Adds gRPC clients to the service collection.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <returns>The updated service collection.</returns>
     private static IServiceCollection AddGrpcClients(this IServiceCollection services)
         => services
             .AddSingleton<IGrpcClientFactory, GrpcClientFactory>()
             .AddGrpc().Services;
+
+    private static IServiceCollection AddServices(this IServiceCollection services)
+        => services
+            .AddSingleton<IPlatformContainerCache, PlatformContainerCache>();
 
     private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)
     {
 
         services
             .AddHostedService<LogCleanupJob>()
-            .AddHostedService<DaemonEventJob>()
+            .AddHostedService<DockerDaemonEventJob>()
             .AddHostedService<CleanupStatsJob>()
-            .AddHostedService<PlatformStateSyncJob>()
+            .AddHostedService<PlatformSyncJob>()
             .AddHostedService<PlatformsStatsCollectorJob>()
             .AddHostedService<ContainersStatsCollectorJob>()
             .AddHostedService<PlatformsStatsPersistenceJob>()
             .AddHostedService<ContainersStatsPersistenceJob>()
+            .AddHostedService<ContainerSyncJob>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services
             .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()
@@ -87,21 +88,21 @@ public static class InfrastructureModule
     /// <summary>
     /// Initializes the database.
     /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <returns>The updated service collection.</returns>
     private static IServiceCollection InitializeDb(this IServiceCollection services)
     {
+        Batteries_V2.Init();
         EnsureDatabaseFileExists();
         PerformDatabaseUpgrade();
         EFTrimmingPreserver.PreserveEFCoreTypes();
 
-        return services.AddDbContextPool<ApplicationDbContext>(c =>
+        return services.AddDbContextPool<ApplicationDbContext>(options =>
         {
-            c.UseSqlite(ApplicationContextFactory.ConnectionString, config =>
+            options.UseSqlite(ApplicationContextFactory.ConnectionString, config =>
             {
                 config.CommandTimeout(60);
                 config.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
             });
+            options.AddInterceptors(new SqlitePragmaInterceptor());
         });
     }
 

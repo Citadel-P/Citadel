@@ -4,6 +4,7 @@ using FluentValidation;
 using Grpc.Core;
 using Hosting.Common;
 using Infrastructure.Entities;
+using Infrastructure.Entities.Registries;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
 using Mediator;

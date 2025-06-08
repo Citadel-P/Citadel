@@ -1,19 +1,19 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { configureHub, IHubConfig, startConnectionWithRetry } from '@/lib/signalr.helpers';
-import { ContainerInfoView, ContainersInfoView, ContainerStatView } from '@/api/_generated';
+import { ContainerView, ContainersView, ContainerStatView } from '@/api/_generated';
 import { useContextSelector } from 'use-context-selector';
 import { AuthContext } from '@/features/auth/AuthProvider';
 
 const useContainersHub = (platformId: string) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [containersInfo, setContainersInfo] = useState<ContainersInfoView | undefined>();
+  const [containersInfo, setContainersInfo] = useState<ContainersView | undefined>();
   const accessToken = useContextSelector(AuthContext, (v) => v?.accessToken);
   const groupName = `ContainersInfo/${platformId}`;
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
   const isCanceledRef = useRef(false);
 
-  const handleContainersInfoUpdated = useCallback((containers: ContainersInfoView) => {
+  const handleContainersInfoUpdated = useCallback((containers: ContainersView) => {
     setContainersInfo(containers);
   }, []);
 
@@ -31,7 +31,7 @@ const useContainersHub = (platformId: string) => {
     });
   }, []);
 
-  const handleContainerEventReceived = useCallback((containerInfo: ContainerInfoView, eventType: string) => {
+  const handleContainerEventReceived = useCallback((containerInfo: ContainerView, eventType: string) => {
     setContainersInfo((currentInfo) => {
       // If we don't have any current info, initialize with empty containers array
       if (!currentInfo) {
@@ -76,7 +76,7 @@ const useContainersHub = (platformId: string) => {
   const getContainersList = useCallback(
     async (hubConnection: HubConnection) => {
       setIsLoading(true);
-      const containers = await hubConnection.invoke<ContainersInfoView>('GetContainers', platformId);
+      const containers = await hubConnection.invoke<ContainersView>('GetContainers', platformId);
       if (containers) {
         setContainersInfo(containers);
       }

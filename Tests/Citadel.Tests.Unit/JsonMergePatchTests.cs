@@ -1,6 +1,7 @@
 ﻿using Hosting.Common.MergePatch;
 using Infrastructure;
 using Infrastructure.Entities;
+using Infrastructure.Entities.Registries;
 using Infrastructure.EntityFramework.Configurations;
 
 namespace Tests.Unit;
@@ -11,7 +12,7 @@ public class JsonMergePatchTests
     public async Task ApplyMergePatch_ShouldMergeSimpleObjects()
     {
         // Arrange
-        var original = new DockerHubRegistry(userName: "username-1", pat: "fake-pat-1");
+        var original = new DockerHubRegistry(UserName: "username-1", PAT: "fake-pat-1");
         var patch = JsonMergePatchDocument<DockerHubRegistry>.FromJson("""
             {
                 "PAT": "patched-pat"
@@ -29,8 +30,7 @@ public class JsonMergePatchTests
     public async Task ApplyMergePatch_ShouldRemovePropertyWithNullPatchValue()
     {
         // Arrange
-        var original = new DockerHubRegistry(userName: "username-1", pat: "fake-pat-1");
-        // userName is set to null, so it should be removed
+        var original = new DockerHubRegistry(UserName: "username-1", PAT: "fake-pat-1");
         var patch = JsonMergePatchDocument<DockerHubRegistry>.FromJson("""
             {
                 "UserName": null
@@ -53,8 +53,8 @@ public class JsonMergePatchTests
             url: "http://localhost:1234/registry",
             type: RegistryType.DockerHub,
             configuration: new DockerHubRegistry(
-                userName: "username-1",
-                pat: "fake-pat-1")
+                UserName: "username-1",
+                PAT: "fake-pat-1")
             );
 
         var patch = JsonMergePatchDocument<Registry>.FromJson("""

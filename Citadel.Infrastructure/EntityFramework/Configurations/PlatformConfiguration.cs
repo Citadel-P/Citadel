@@ -1,6 +1,7 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 using Infrastructure.Entities;
+using Infrastructure.Entities.Platforms;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -37,11 +38,16 @@ internal sealed class PlatformConfiguration : IEntityTypeConfiguration<Platform>
            .HasConversion(
                v => JsonSerializer.Serialize(v, PlatformJsonContext.Default.PlatformDescriptor),
                v => JsonSerializer.Deserialize(v, PlatformJsonContext.Default.PlatformDescriptor)!);
+
+        // Backing field
+        builder.Metadata.FindNavigation(nameof(Platform.Stats))?.SetPropertyAccessMode(PropertyAccessMode.Field);
     }
 }
 
 [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
 [JsonSerializable(typeof(Platform))]
+[JsonSerializable(typeof(PlatformStat))]
+[JsonSerializable(typeof(ICollection<PlatformStat>))]
 [JsonSerializable(typeof(DockerPlatformDescriptor))]
 [JsonSerializable(typeof(DockerSwarmPlatformDescriptor))]
 [JsonSerializable(typeof(KubernetesPlatformDescriptor))]

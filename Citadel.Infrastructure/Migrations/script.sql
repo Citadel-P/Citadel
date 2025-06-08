@@ -45,8 +45,8 @@ CREATE TABLE "Users" (
     "UpdatedAt" TEXT NOT NULL DEFAULT '2000-01-01 00:00:00'
 );
 
-CREATE TABLE "ContainersInfo" (
-    "Id" BLOB NOT NULL CONSTRAINT "PK_ContainersInfo" PRIMARY KEY,
+CREATE TABLE "Containers" (
+    "Id" BLOB NOT NULL CONSTRAINT "PK_Containers" PRIMARY KEY,
     "PlatformId" BLOB NOT NULL,
     "ContainerId" TEXT NOT NULL,
     "Name" TEXT NOT NULL,
@@ -56,7 +56,7 @@ CREATE TABLE "ContainersInfo" (
     "State" TEXT NOT NULL,
     "Stack" TEXT NULL,
     "Ports" TEXT NOT NULL,
-    CONSTRAINT "FK_ContainersInfo_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
+    CONSTRAINT "FK_Containers_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
 );
 
 CREATE TABLE "PlatformStats" (
@@ -93,14 +93,14 @@ CREATE TABLE "RefreshTokens" (
 
 CREATE TABLE "ContainerStats" (
     "Id" BLOB NOT NULL CONSTRAINT "PK_ContainerStats" PRIMARY KEY,
-    "ContainerInfoId" BLOB NOT NULL,
+    "ContainerId" BLOB NOT NULL,
     "Created" INTEGER NOT NULL,
     "MemoryUsage" REAL NULL,
     "CpuUsage" REAL NULL,
     "MemoryLimit" REAL NULL,
     "RxBytes" REAL NULL,
     "TxBytes" REAL NULL,
-    CONSTRAINT "FK_ContainerStats_ContainersInfo_ContainerInfoId" FOREIGN KEY ("ContainerInfoId") REFERENCES "ContainersInfo" ("Id") ON DELETE CASCADE
+    CONSTRAINT "FK_ContainerStats_Containers_ContainerId" FOREIGN KEY ("ContainerId") REFERENCES "Containers" ("Id") ON DELETE CASCADE
 );
 
 CREATE TABLE "UsersTeams" (
@@ -125,15 +125,15 @@ SELECT changes();
 
 
 INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
-VALUES (X'D1DE9601F113CE77884E3CB636EC09A8', '2025-01-01 00:00:00', 'admin@admin.com', 'admin', 'WV/F/nmHBA85V3bz35Vk2odzbfaKz/WVL6FOYHZq01w5e2vg');
+VALUES (X'D1DE9601F113CE77884E3CB636EC09A8', '2025-01-01 00:00:00', 'admin@admin.com', 'admin', '1poqgaRzypna/qgl6xmb41scBJhec0dqoBvvwPz+t+zE4bHi');
 SELECT changes();
 
 INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
-VALUES (X'D1DE9601F113FB73ACF0188115C01C0E', '2025-01-01 00:00:00', 'dev@dev.com', 'dev', 'hQJrv8yx/Rxu+Q6z7RuW5JvbWBgK155lAr/vPTYFRKhHKmKv');
+VALUES (X'D1DE9601F113FB73ACF0188115C01C0E', '2025-01-01 00:00:00', 'dev@dev.com', 'dev', 'z12WS3Iv2W5kRMxTc1cRY1IOQrMM/EKDCyG9pI3KJrWHCau0');
 SELECT changes();
 
 INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
-VALUES (X'D1DE9601F1133A748A1B5E243048C77E', '2025-01-01 00:00:00', 'qa@qa.com', 'qa', 'Z74g22pM7mC8LASea/79XZ0uVhs1fYmMMr2NzU1u6JA9F3IW');
+VALUES (X'D1DE9601F1133A748A1B5E243048C77E', '2025-01-01 00:00:00', 'qa@qa.com', 'qa', 'hgkpnDH5d6CHPfFxnpkLVSo1pmP/jgM/ACYGAmUsF0CJJZx8');
 SELECT changes();
 
 
@@ -264,11 +264,11 @@ VALUES (X'CEDE960167E95F759C6A5BA5A34577F1', X'D1DE9601F1133A748A1B5E243048C77E'
 SELECT changes();
 
 
-CREATE INDEX "IX_ContainerStats_ContainerInfoId" ON "ContainerStats" ("ContainerInfoId");
+CREATE INDEX "IX_ContainerStats_ContainerId" ON "ContainerStats" ("ContainerId");
 
-CREATE UNIQUE INDEX "IX_ContainersInfo_ContainerId" ON "ContainersInfo" ("ContainerId");
+CREATE UNIQUE INDEX "IX_Containers_ContainerId" ON "Containers" ("ContainerId");
 
-CREATE INDEX "IX_ContainersInfo_PlatformId" ON "ContainersInfo" ("PlatformId");
+CREATE INDEX "IX_Containers_PlatformId" ON "Containers" ("PlatformId");
 
 CREATE INDEX "IX_Permissions_RoleId" ON "Permissions" ("RoleId");
 
@@ -289,25 +289,7 @@ CREATE UNIQUE INDEX "EmailIndex" ON "Users" ("Email");
 CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20250531210411_migration0001', '9.0.4');
-
-UPDATE "Users" SET "Password" = 'S4buHR9wq9tSuwh1SjsexfxBwUm2rWBHLEbT1aMVKVIxV2Ay'
-WHERE "Id" = X'D1DE9601F113CE77884E3CB636EC09A8';
-SELECT changes();
-
-
-UPDATE "Users" SET "Password" = '6HpzHnYaGNOH4EYpbXzdUytceFF3KOedbhWOYxUCoSWJdUQC'
-WHERE "Id" = X'D1DE9601F113FB73ACF0188115C01C0E';
-SELECT changes();
-
-
-UPDATE "Users" SET "Password" = 'H2YmIHnpinUJ3R7m+Km+2cr+7yt1SaFjuSmaSPgyz3V+9/4X'
-WHERE "Id" = X'D1DE9601F1133A748A1B5E243048C77E';
-SELECT changes();
-
-
-INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20250602162711_migration0002', '9.0.4');
+VALUES ('20250608210442_migration0001', '9.0.5');
 
 COMMIT;
 

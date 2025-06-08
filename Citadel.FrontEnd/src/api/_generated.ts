@@ -178,25 +178,6 @@ export interface ContainerConfig {
   labels?: Record<string, string>;
 }
 
-export interface ContainerInfoView {
-  /** @format uuid */
-  id: string;
-  containerId: string;
-  name: string;
-  image: string;
-  /** @format date-time */
-  created: string;
-  state: ContainerStateStatus;
-  /** @format date-time */
-  updated: string;
-  stack: string | null;
-  lastStats: NullableOfContainerStatView;
-  /** @default null */
-  ports?: PortView[] | null;
-  platform?: PlatformView;
-  metadata?: EndpointMetadata;
-}
-
 export interface ContainerInspectView {
   id: string;
   created: string;
@@ -266,8 +247,27 @@ export interface ContainerStatsView {
   stats: ContainerStatView[];
 }
 
-export interface ContainersInfoView {
-  containers: ContainerInfoView[];
+export interface ContainerView {
+  /** @format uuid */
+  id: string;
+  containerId: string;
+  name: string;
+  image: string;
+  /** @format date-time */
+  created: string;
+  state: ContainerStateStatus;
+  /** @format date-time */
+  updated: string;
+  stack: string | null;
+  lastStats: NullableOfContainerStatView;
+  /** @default null */
+  ports?: PortView[] | null;
+  platform?: PlatformView;
+  metadata?: EndpointMetadata;
+}
+
+export interface ContainersView {
+  containers: ContainerView[];
 }
 
 export interface CreateNetworkInput {
@@ -946,16 +946,17 @@ export interface PlatformDescriptorDockerPlatformDescriptor {
 
 export interface PlatformDescriptorDockerSwarmPlatformDescriptor {
   $type?: "DockerSwarm";
-  nodeID: string | null;
-  nodeAddr: string | null;
-  localNodeState: string | null;
+  nodeID: string;
+  nodeAddr: string;
+  localNodeState: string;
   controlAvailable: boolean;
-  /** @default null */
-  error?: string | null;
   /** @format int64 */
   nodes: number;
   /** @format int64 */
   managers: number;
+  /** @default null */
+  error?: string | null;
+  /** @default null */
   remoteManagers?: {
     nodeID: string | null;
     addr: string | null;
@@ -983,10 +984,10 @@ export interface PlatformDescriptorDockerSwarmPlatformDescriptor {
 
 export interface PlatformDescriptorKubernetesPlatformDescriptor {
   $type?: "Kubernetes";
-  clusterName?: string | null;
-  clusterVersion?: string | null;
-  apiServerUrl?: string | null;
-  namespace?: string | null;
+  clusterName: string | null;
+  clusterVersion: string | null;
+  apiServerUrl: string | null;
+  namespace: string | null;
 }
 
 export type PlatformDescriptorView = {
@@ -1153,43 +1154,43 @@ export type RegistryConfigurationBase = BaseRegistryConfigurationBase &
 
 export interface RegistryConfigurationBaseAWSRegistry {
   $type?: "AWS";
-  registryUrl?: string | null;
-  authenticationRequired: boolean;
   accessKey: string;
+  authenticationRequired: boolean;
   secretAccessKey: string;
   region: string;
+  registryUrl?: string | null;
 }
 
 export interface RegistryConfigurationBaseAzureRegistry {
   $type?: "Azure";
-  registryUrl?: string | null;
   userName: string;
   password: string;
+  registryUrl?: string | null;
 }
 
 export interface RegistryConfigurationBaseDockerHubRegistry {
   $type?: "DockerHub";
-  registryUrl?: string | null;
   /** @default null */
   userName?: string | null;
   /** @default null */
   pat?: string | null;
+  registryUrl?: string | null;
 }
 
 export interface RegistryConfigurationBaseGitHubRegistry {
   $type?: "GitHub";
-  registryUrl?: string | null;
   name: string;
-  type: "Organization" | "User" | null;
   pat: string;
+  type: "Organization" | "User" | null;
+  registryUrl?: string | null;
 }
 
 export interface RegistryConfigurationBaseGitlabRegistry {
   $type?: "Gitlab";
-  registryUrl?: string | null;
   userName: string;
   pat: string;
   instanceUrl: string;
+  registryUrl?: string | null;
 }
 
 export interface RegistryInput {
@@ -1657,7 +1658,7 @@ export class Api<
      * @summary Get container by Id
      * @request GET:/api/v1/containers/{id}
      * @secure
-     * @response `200` `ContainerInfoView` OK
+     * @response `200` `ContainerView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -1666,7 +1667,7 @@ export class Api<
      */
     containersGetById: (id: string, params: RequestParams = {}) =>
       this.request<
-        ContainerInfoView,
+        ContainerView,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/containers/${id}`,
@@ -2096,7 +2097,7 @@ export class Api<
      * @summary Returns the list of containers of the given platform
      * @request GET:/api/v1/platforms/{id}/containers
      * @secure
-     * @response `200` `ContainersInfoView` OK
+     * @response `200` `ContainersView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2105,7 +2106,7 @@ export class Api<
      */
     platformsListContainers: (id: string, params: RequestParams = {}) =>
       this.request<
-        ContainersInfoView,
+        ContainersView,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/platforms/${id}/containers`,

@@ -2,7 +2,7 @@
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.DockerHub;
-using Infrastructure.Entities;
+using Infrastructure.Entities.Registries;
 using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;

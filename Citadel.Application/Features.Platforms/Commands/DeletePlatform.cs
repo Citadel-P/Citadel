@@ -33,7 +33,7 @@ internal class DeletePlatformHandler(
 
         if (platform is null)
         {
-            return Result.Failure(new NotFoundError("Platform does not exists"));
+            return Result.Failure(new NotFoundError("Platform does not exist"));
         }
 
         dbContext.Platforms.Remove(platform);

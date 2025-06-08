@@ -5,14 +5,14 @@ namespace Infrastructure;
 
 public static partial class Extensions
 {
-    public static IQueryable<ContainerInfo> WithLastStat(this DbSet<ContainerInfo> containersInfo, Guid platformId)
+    public static IQueryable<Container> WithLastStat(this DbSet<Container> containersInfo, Guid platformId)
         => containersInfo
             .AsNoTracking()
             .OrderByDescending(s => s.Created)
             .Include(s => s.Stats.OrderByDescending(s => s.Created).Take(1))
             .Where(s => s.PlatformId == platformId);
 
-    public static async Task<string?> GetPlatformAddress(this DbSet<ContainerInfo> containersInfo, string containerId, CancellationToken cancellationToken)
+    public static async Task<string?> GetPlatformAddress(this DbSet<Container> containersInfo, string containerId, CancellationToken cancellationToken)
         => await containersInfo
             .AsNoTracking()
             .Include(s => s.Platform)

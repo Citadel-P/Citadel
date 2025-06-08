@@ -10,9 +10,9 @@ internal sealed class ContainerHubDispatcher(IHubContext<ContainerHub, ITypedCon
     public Task SendContainersStats(Guid platformId, IEnumerable<ContainerStat> containers)
     => hubContext.Clients.Group($"ContainersInfo/{platformId}").ContainersStatsUpdated(ContainerStatView.Map(containers));
 
-    public Task SendContainersInfo(IEnumerable<ContainerInfo> containers) 
-        => hubContext.Clients.Group($"ContainersInfo/{containers.First().PlatformId}").ContainersInfoUpdated(ContainersInfoView.Map(containers));
+    public Task SendContainersInfo(Guid platformId, IEnumerable<Container> containers) 
+        => hubContext.Clients.Group($"ContainersInfo/{platformId}").ContainersInfoUpdated(ContainersView.Map(containers));
 
-    public Task SendContainerEvent(ContainerInfo container, string @event)
-        => hubContext.Clients.Group($"ContainersInfo/{container.PlatformId}").ContainerEventReceived(ContainerInfoView.Map(container), @event);
+    public Task SendContainerEvent(Container container, string @event)
+        => hubContext.Clients.Group($"ContainersInfo/{container.PlatformId}").ContainerEventReceived(ContainerView.Map(container), @event);
 }

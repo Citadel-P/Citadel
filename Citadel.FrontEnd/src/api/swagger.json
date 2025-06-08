@@ -249,7 +249,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ContainerInfoView"
+                  "$ref": "#/components/schemas/ContainerView"
                 }
               }
             }
@@ -1605,7 +1605,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ContainersInfoView"
+                  "$ref": "#/components/schemas/ContainersView"
                 }
               }
             }
@@ -1838,19 +1838,19 @@
               },
               "examples": {
                 "Azure": {
-                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Type\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"RegistryUrl\":\"\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\"}}"
+                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Type\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\",\"RegistryUrl\":\"\"}}"
                 },
                 "AWS": {
-                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Type\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"RegistryUrl\":\"\",\"AuthenticationRequired\":true,\"AccessKey\":\"\",\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\"}}"
+                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Type\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"AccessKey\":\"\",\"AuthenticationRequired\":true,\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\",\"RegistryUrl\":\"\"}}"
                 },
                 "Gitlab": {
-                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Type\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"RegistryUrl\":\"\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\"}}"
+                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Type\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\",\"RegistryUrl\":\"\"}}"
                 },
                 "DockerHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"RegistryUrl\":\"https://docker.io\",\"UserName\":\"\",\"PAT\":\"\"}}"
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"UserName\":\"\",\"PAT\":\"\",\"RegistryUrl\":\"https://docker.io\"}}"
                 },
                 "GitHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"RegistryUrl\":\"https://ghcr.io\",\"Name\":\"organization or user name\",\"Type\":\"Organization\",\"PAT\":\"\"}}"
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"Name\":\"organization or user name\",\"PAT\":\"\",\"Type\":\"Organization\",\"RegistryUrl\":\"https://ghcr.io\"}}"
                 }
               }
             },
@@ -1860,19 +1860,19 @@
               },
               "examples": {
                 "Azure": {
-                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Type\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"RegistryUrl\":\"\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\"}}"
+                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Type\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\",\"RegistryUrl\":\"\"}}"
                 },
                 "AWS": {
-                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Type\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"RegistryUrl\":\"\",\"AuthenticationRequired\":true,\"AccessKey\":\"\",\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\"}}"
+                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Type\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"AccessKey\":\"\",\"AuthenticationRequired\":true,\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\",\"RegistryUrl\":\"\"}}"
                 },
                 "Gitlab": {
-                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Type\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"RegistryUrl\":\"\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\"}}"
+                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Type\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\",\"RegistryUrl\":\"\"}}"
                 },
                 "DockerHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"RegistryUrl\":\"https://docker.io\",\"UserName\":\"\",\"PAT\":\"\"}}"
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"UserName\":\"\",\"PAT\":\"\",\"RegistryUrl\":\"https://docker.io\"}}"
                 },
                 "GitHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"RegistryUrl\":\"https://ghcr.io\",\"Name\":\"organization or user name\",\"Type\":\"Organization\",\"PAT\":\"\"}}"
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"Name\":\"organization or user name\",\"PAT\":\"\",\"Type\":\"Organization\",\"RegistryUrl\":\"https://ghcr.io\"}}"
                 }
               }
             }
@@ -1974,19 +1974,19 @@
               },
               "examples": {
                 "Azure": {
-                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Type\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"RegistryUrl\":\"\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\"}}"
+                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Type\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\",\"RegistryUrl\":\"\"}}"
                 },
                 "AWS": {
-                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Type\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"RegistryUrl\":\"\",\"AuthenticationRequired\":true,\"AccessKey\":\"\",\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\"}}"
+                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Type\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"AccessKey\":\"\",\"AuthenticationRequired\":true,\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\",\"RegistryUrl\":\"\"}}"
                 },
                 "Gitlab": {
-                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Type\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"RegistryUrl\":\"\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\"}}"
+                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Type\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\",\"RegistryUrl\":\"\"}}"
                 },
                 "DockerHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"RegistryUrl\":\"https://docker.io\",\"UserName\":\"\",\"PAT\":\"\"}}"
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"UserName\":\"\",\"PAT\":\"\",\"RegistryUrl\":\"https://docker.io\"}}"
                 },
                 "GitHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"RegistryUrl\":\"https://ghcr.io\",\"Name\":\"organization or user name\",\"Type\":\"Organization\",\"PAT\":\"\"}}"
+                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"Name\":\"organization or user name\",\"PAT\":\"\",\"Type\":\"Organization\",\"RegistryUrl\":\"https://ghcr.io\"}}"
                 }
               }
             }
@@ -4015,67 +4015,6 @@
           }
         }
       },
-      "ContainerInfoView": {
-        "required": [
-          "id",
-          "containerId",
-          "name",
-          "image",
-          "created",
-          "state",
-          "updated",
-          "stack",
-          "lastStats"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "containerId": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "image": {
-            "type": "string"
-          },
-          "created": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "state": {
-            "$ref": "#/components/schemas/ContainerStateStatus"
-          },
-          "updated": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "stack": {
-            "type": "string",
-            "nullable": true
-          },
-          "lastStats": {
-            "$ref": "#/components/schemas/NullableOfContainerStatView"
-          },
-          "ports": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PortView"
-            },
-            "default": null,
-            "nullable": true
-          },
-          "platform": {
-            "$ref": "#/components/schemas/PlatformView"
-          },
-          "metadata": {
-            "$ref": "#/components/schemas/EndpointMetadata"
-          }
-        }
-      },
       "ContainerInspectView": {
         "required": [
           "id",
@@ -4325,7 +4264,68 @@
           }
         }
       },
-      "ContainersInfoView": {
+      "ContainerView": {
+        "required": [
+          "id",
+          "containerId",
+          "name",
+          "image",
+          "created",
+          "state",
+          "updated",
+          "stack",
+          "lastStats"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "containerId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "image": {
+            "type": "string"
+          },
+          "created": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ContainerStateStatus"
+          },
+          "updated": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "stack": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastStats": {
+            "$ref": "#/components/schemas/NullableOfContainerStatView"
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortView"
+            },
+            "default": null,
+            "nullable": true
+          },
+          "platform": {
+            "$ref": "#/components/schemas/PlatformView"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/EndpointMetadata"
+          }
+        }
+      },
+      "ContainersView": {
         "required": [
           "containers"
         ],
@@ -4334,7 +4334,7 @@
           "containers": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ContainerInfoView"
+              "$ref": "#/components/schemas/ContainerView"
             }
           }
         }
@@ -6633,24 +6633,16 @@
             "type": "string"
           },
           "nodeID": {
-            "type": "string",
-            "nullable": true
+            "type": "string"
           },
           "nodeAddr": {
-            "type": "string",
-            "nullable": true
+            "type": "string"
           },
           "localNodeState": {
-            "type": "string",
-            "nullable": true
+            "type": "string"
           },
           "controlAvailable": {
             "type": "boolean"
-          },
-          "error": {
-            "type": "string",
-            "default": null,
-            "nullable": true
           },
           "nodes": {
             "type": "integer",
@@ -6659,6 +6651,11 @@
           "managers": {
             "type": "integer",
             "format": "int64"
+          },
+          "error": {
+            "type": "string",
+            "default": null,
+            "nullable": true
           },
           "remoteManagers": {
             "type": "array",
@@ -6679,6 +6676,7 @@
                 }
               }
             },
+            "default": null,
             "nullable": true
           },
           "daemonId": {
@@ -6728,6 +6726,12 @@
         }
       },
       "PlatformDescriptorKubernetesPlatformDescriptor": {
+        "required": [
+          "clusterName",
+          "clusterVersion",
+          "apiServerUrl",
+          "namespace"
+        ],
         "properties": {
           "$type": {
             "enum": [
@@ -7220,8 +7224,8 @@
       },
       "RegistryConfigurationBaseAWSRegistry": {
         "required": [
-          "authenticationRequired",
           "accessKey",
+          "authenticationRequired",
           "secretAccessKey",
           "region"
         ],
@@ -7232,21 +7236,21 @@
             ],
             "type": "string"
           },
-          "registryUrl": {
-            "type": "string",
-            "nullable": true
+          "accessKey": {
+            "type": "string"
           },
           "authenticationRequired": {
             "type": "boolean"
-          },
-          "accessKey": {
-            "type": "string"
           },
           "secretAccessKey": {
             "type": "string"
           },
           "region": {
             "type": "string"
+          },
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -7262,15 +7266,15 @@
             ],
             "type": "string"
           },
-          "registryUrl": {
-            "type": "string",
-            "nullable": true
-          },
           "userName": {
             "type": "string"
           },
           "password": {
             "type": "string"
+          },
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -7282,10 +7286,6 @@
             ],
             "type": "string"
           },
-          "registryUrl": {
-            "type": "string",
-            "nullable": true
-          },
           "userName": {
             "type": "string",
             "default": null,
@@ -7295,14 +7295,18 @@
             "type": "string",
             "default": null,
             "nullable": true
+          },
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
       "RegistryConfigurationBaseGitHubRegistry": {
         "required": [
           "name",
-          "type",
-          "pat"
+          "pat",
+          "type"
         ],
         "properties": {
           "$type": {
@@ -7311,11 +7315,10 @@
             ],
             "type": "string"
           },
-          "registryUrl": {
-            "type": "string",
-            "nullable": true
-          },
           "name": {
+            "type": "string"
+          },
+          "pat": {
             "type": "string"
           },
           "type": {
@@ -7326,8 +7329,9 @@
             ],
             "nullable": true
           },
-          "pat": {
-            "type": "string"
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -7344,10 +7348,6 @@
             ],
             "type": "string"
           },
-          "registryUrl": {
-            "type": "string",
-            "nullable": true
-          },
           "userName": {
             "type": "string"
           },
@@ -7356,6 +7356,10 @@
           },
           "instanceUrl": {
             "type": "string"
+          },
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
           }
         }
       },

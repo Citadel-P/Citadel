@@ -10,8 +10,8 @@ namespace WebApi.Hubs;
 
 public interface ITypedContainerHub
 {
-    Task ContainerEventReceived(ContainerInfoView message, string @event);
-    Task ContainersInfoUpdated(ContainersInfoView message);
+    Task ContainerEventReceived(ContainerView message, string @event);
+    Task ContainersInfoUpdated(ContainersView message);
     Task ContainersStatsUpdated(IEnumerable<ContainerStatView> containers);
     Task ContainerLogsReceived(ContainerLogView message);
 }
@@ -51,13 +51,13 @@ internal sealed class ContainerHub(IMediator mediator, ISignalRConnectionTracker
         return Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
     }
 
-    public async Task<ContainersInfoView> GetContainers(Guid id)
+    public async Task<ContainersView> GetContainers(Guid id)
     {
         var response = await mediator.Send(new GetContainers(new GetContainersQuery(All: true), id));
         if (response.IsSuccess(out var containers))
         {
-            return ContainersInfoView.Map(containers);
+            return ContainersView.Map(containers);
         }
-        else return new ContainersInfoView([]);
+        else return new ContainersView([]);
     }
 }

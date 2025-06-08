@@ -14,10 +14,10 @@ namespace WebApi.Routes.Endpoints;
 
 public static class Containers
 {
-    public static async Task<Results<Ok<ContainerInfoView>, ProblemHttpResult>> GetById(IMediator mediator, IContainerPermissionService permissionService, string id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<ContainerView>, ProblemHttpResult>> GetById(IMediator mediator, IContainerPermissionService permissionService, string id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetContainerById(id), cancellationToken);
-        return await EndpointHandlers.HandleResults(result, permissionService, ContainerInfoView.Map);
+        return await EndpointHandlers.HandleResults(result, permissionService, ContainerView.Map);
     }
 
     public static async Task<Results<NoContent, ProblemHttpResult>> StartContainers(IMediator mediator, [FromBody]string[] containersIds, CancellationToken cancellationToken)

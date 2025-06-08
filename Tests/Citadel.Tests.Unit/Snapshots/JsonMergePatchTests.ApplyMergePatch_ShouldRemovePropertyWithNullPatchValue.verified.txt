@@ -1,0 +1,5 @@
+﻿{
+  UserName: null,
+  PAT: fake-pat-1,
+  RegistryUrl: https://docker.io
+}

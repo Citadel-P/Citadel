@@ -1,13 +1,13 @@
 ﻿using Application.Permissions;
 using Application.Permissions.Requirements;
 using Application.Services;
+using Citadel.SourceGen;
 using Hosting.Common;
 using Hosting.Common.Pipelines;
 using Hosting.Common.Pipelines.Interfaces;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
-using Citadel.SourceGen;
 
 namespace Application;
 

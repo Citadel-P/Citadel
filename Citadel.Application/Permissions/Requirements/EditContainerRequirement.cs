@@ -9,9 +9,9 @@ internal class EditContainerRequirement : IAuthorizationRequirement
 {
 }
 
-internal class EditContainerHandler : AuthorizationHandler<EditContainerRequirement, ContainerInfo>
+internal class EditContainerHandler : AuthorizationHandler<EditContainerRequirement, Container>
 {
-    protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, EditContainerRequirement requirement, ContainerInfo resource)
+    protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, EditContainerRequirement requirement, Container resource)
     {
         if (context.User.IsAdmin())
         {

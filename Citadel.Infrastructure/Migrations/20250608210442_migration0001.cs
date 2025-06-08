@@ -83,7 +83,7 @@ namespace Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "ContainersInfo",
+                name: "Containers",
                 columns: table => new
                 {
                     Id = table.Column<byte[]>(type: "BLOB", nullable: false),
@@ -99,9 +99,9 @@ namespace Infrastructure.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_ContainersInfo", x => x.Id);
+                    table.PrimaryKey("PK_Containers", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_ContainersInfo_Platforms_PlatformId",
+                        name: "FK_Containers_Platforms_PlatformId",
                         column: x => x.PlatformId,
                         principalTable: "Platforms",
                         principalColumn: "Id",
@@ -193,7 +193,7 @@ namespace Infrastructure.Migrations
                 columns: table => new
                 {
                     Id = table.Column<byte[]>(type: "BLOB", nullable: false),
-                    ContainerInfoId = table.Column<byte[]>(type: "BLOB", nullable: false),
+                    ContainerId = table.Column<byte[]>(type: "BLOB", nullable: false),
                     Created = table.Column<long>(type: "INTEGER", nullable: false),
                     MemoryUsage = table.Column<double>(type: "REAL", nullable: true),
                     CpuUsage = table.Column<double>(type: "REAL", nullable: true),
@@ -205,9 +205,9 @@ namespace Infrastructure.Migrations
                 {
                     table.PrimaryKey("PK_ContainerStats", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_ContainerStats_ContainersInfo_ContainerInfoId",
-                        column: x => x.ContainerInfoId,
-                        principalTable: "ContainersInfo",
+                        name: "FK_ContainerStats_Containers_ContainerId",
+                        column: x => x.ContainerId,
+                        principalTable: "Containers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -251,9 +251,9 @@ namespace Infrastructure.Migrations
                 columns: new[] { "Id", "CreatedAt", "Email", "Name", "Password" },
                 values: new object[,]
                 {
-                    { new byte[] { 209, 222, 150, 1, 241, 19, 206, 119, 136, 78, 60, 182, 54, 236, 9, 168 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "admin@admin.com", "admin", "WV/F/nmHBA85V3bz35Vk2odzbfaKz/WVL6FOYHZq01w5e2vg" },
-                    { new byte[] { 209, 222, 150, 1, 241, 19, 251, 115, 172, 240, 24, 129, 21, 192, 28, 14 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "dev@dev.com", "dev", "hQJrv8yx/Rxu+Q6z7RuW5JvbWBgK155lAr/vPTYFRKhHKmKv" },
-                    { new byte[] { 209, 222, 150, 1, 241, 19, 58, 116, 138, 27, 94, 36, 48, 72, 199, 126 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "qa@qa.com", "qa", "Z74g22pM7mC8LASea/79XZ0uVhs1fYmMMr2NzU1u6JA9F3IW" }
+                    { new byte[] { 209, 222, 150, 1, 241, 19, 206, 119, 136, 78, 60, 182, 54, 236, 9, 168 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "admin@admin.com", "admin", "1poqgaRzypna/qgl6xmb41scBJhec0dqoBvvwPz+t+zE4bHi" },
+                    { new byte[] { 209, 222, 150, 1, 241, 19, 251, 115, 172, 240, 24, 129, 21, 192, 28, 14 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "dev@dev.com", "dev", "z12WS3Iv2W5kRMxTc1cRY1IOQrMM/EKDCyG9pI3KJrWHCau0" },
+                    { new byte[] { 209, 222, 150, 1, 241, 19, 58, 116, 138, 27, 94, 36, 48, 72, 199, 126 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "qa@qa.com", "qa", "hgkpnDH5d6CHPfFxnpkLVSo1pmP/jgM/ACYGAmUsF0CJJZx8" }
                 });
 
             migrationBuilder.InsertData(
@@ -309,19 +309,19 @@ namespace Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_ContainerStats_ContainerInfoId",
+                name: "IX_ContainerStats_ContainerId",
                 table: "ContainerStats",
-                column: "ContainerInfoId");
+                column: "ContainerId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ContainersInfo_ContainerId",
-                table: "ContainersInfo",
+                name: "IX_Containers_ContainerId",
+                table: "Containers",
                 column: "ContainerId",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_ContainersInfo_PlatformId",
-                table: "ContainersInfo",
+                name: "IX_Containers_PlatformId",
+                table: "Containers",
                 column: "PlatformId");
 
             migrationBuilder.CreateIndex(
@@ -396,7 +396,7 @@ namespace Infrastructure.Migrations
                 name: "UsersTeams");
 
             migrationBuilder.DropTable(
-                name: "ContainersInfo");
+                name: "Containers");
 
             migrationBuilder.DropTable(
                 name: "Teams");

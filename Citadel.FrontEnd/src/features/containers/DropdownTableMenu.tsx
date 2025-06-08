@@ -7,14 +7,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Ban, MoreHorizontal, Pause, Play, RotateCcw, Trash, Eye } from 'lucide-react';
-import { ContainerInfoView } from '@/api/_generated';
+import { ContainerView } from '@/api/_generated';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { useNavigate } from 'react-router';
 import { useContextSelector } from 'use-context-selector';
 import { ContainersContext } from './ContainersProvider';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
 
-const DropdownTableMenu: React.FC<{ container: ContainerInfoView }> = ({ container }) => {
+const DropdownTableMenu: React.FC<{ container: ContainerView }> = ({ container }) => {
   const navigate = useNavigate();
   const setDialogData = useContextSelector(ContainersContext, (v) => v?.setDialogData)!;
 

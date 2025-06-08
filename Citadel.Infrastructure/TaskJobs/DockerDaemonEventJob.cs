@@ -11,10 +11,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.TaskJobs;
 
-internal sealed class DaemonEventJob(
-    ILogger<DaemonEventJob> logger,
+internal sealed class DockerDaemonEventJob(
+    ILogger<DockerDaemonEventJob> logger,
     IGrpcClientFactory clientFactory,
     IServiceScopeFactory scopeFactory,
+    IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster) : BackgroundService
 {
     private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
@@ -80,22 +81,24 @@ internal sealed class DaemonEventJob(
                     switch (reply.Action)
                     {
                         case "create":
-                            var containerInfo = reply.Container.Map(platform.Id, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-                            dbContext.ContainersInfo.Add(containerInfo);
+                            var container = reply.Container.Map(platform.Id, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                            dbContext.Containers.Add(container);
                             await dbContext.SaveChangesAsync(cancellationToken);
-                            await containerHub.SendContainerEvent(containerInfo, reply.Action);
+                            await containerHub.SendContainerEvent(container, reply.Action);
+                            platformContainerCache.TryAddContainer(platform.Id, container.ContainerId, container.Id);
                             break;
                         case "destroy":
-                            var existingDestroy = await dbContext.ContainersInfo.FirstOrDefaultAsync(c => c.ContainerId == reply.ContainerId, cancellationToken);
+                            var existingDestroy = await dbContext.Containers.FirstOrDefaultAsync(c => c.ContainerId == reply.ContainerId, cancellationToken);
                             if (existingDestroy != null)
                             {
-                                dbContext.ContainersInfo.Remove(existingDestroy);
+                                dbContext.Containers.Remove(existingDestroy);
                                 await dbContext.SaveChangesAsync(cancellationToken);
                                 await containerHub.SendContainerEvent(existingDestroy, reply.Action);
+                                platformContainerCache.TryRemoveContainer(platform.Id, existingDestroy.ContainerId);
                             }
                             break;
                         default:
-                            var existing = await dbContext.ContainersInfo.FirstOrDefaultAsync(c => c.ContainerId == reply.ContainerId, cancellationToken);
+                            var existing = await dbContext.Containers.FirstOrDefaultAsync(c => c.ContainerId == reply.ContainerId, cancellationToken);
                             if (existing != null)
                             {
                                 var state = reply.Action switch
@@ -107,7 +110,7 @@ internal sealed class DaemonEventJob(
                                     _ => throw new NotImplementedException()
                                 };
 
-                                existing.PartialUpdate(state: ContainerInfoMapper.Map(reply.Container.State));
+                                existing.PartialUpdate(state: ContainerMapper.Map(reply.Container.State));
                                 await dbContext.SaveChangesAsync(cancellationToken);
                                 await containerHub.SendContainerEvent(existing, reply.Action);
                             }

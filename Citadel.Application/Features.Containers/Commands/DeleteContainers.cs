@@ -30,7 +30,7 @@ internal sealed class DeleteContainersHandler(
 {
     public async ValueTask<Result> Handle(DeleteContainers request, CancellationToken cancellationToken)
     {
-        var platforms = await dbContext.ContainersInfo.Include(s => s.Platform)
+        var platforms = await dbContext.Containers.Include(s => s.Platform)
                         .Where(s => request.ContainersIds.Contains(s.ContainerId))
                         .GroupBy(s => s.Platform.Address)
                         .Select(s => new

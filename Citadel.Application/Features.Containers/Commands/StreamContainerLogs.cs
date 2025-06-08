@@ -27,7 +27,7 @@ internal class StreamContainerLogsHandler(
 {
     public async IAsyncEnumerable<ContainerLogReply> Handle(StreamContainerLogs query, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var platformAddress = await dbContext.ContainersInfo.GetPlatformAddress(query.ContainerId, cancellationToken)
+        var platformAddress = await dbContext.Containers.GetPlatformAddress(query.ContainerId, cancellationToken)
              ?? throw new Exception($"Platform doesn't exist for container {query.ContainerId}");
         
         var client = clientFactory.GetContainerClient(platformAddress);

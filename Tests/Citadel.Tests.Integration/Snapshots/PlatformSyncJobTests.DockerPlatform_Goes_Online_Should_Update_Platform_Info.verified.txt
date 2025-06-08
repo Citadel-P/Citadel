@@ -1,0 +1,27 @@
+﻿{
+  Id: Guid_1,
+  Name: Docker-P-01,
+  Address: https://original.address,
+  Type: Docker,
+  Status: Online,
+  NetworkCount: 333,
+  VolumeCount: 222,
+  ImageCount: 111,
+  CpuCount: 4,
+  MemTotal: 4096,
+  AgentVersion: 2.0.0,
+  ServerVersion: 1.2.3,
+  Stats: null,
+  PlatformDescriptor: {
+    DaemonId: daemonX,
+    ContainerCount: 10,
+    ContainersRunning: 5,
+    ContainersPaused: 2,
+    ContainersStopped: 3,
+    Driver: overlay2,
+    OperatingSystem: Linux,
+    OsVersion: 5.15,
+    OsType: linux,
+    Architecture: x86_64
+  }
+}

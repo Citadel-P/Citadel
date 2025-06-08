@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using Argon;
 using DiffEngine;
 
 namespace Tests.Common;
@@ -15,10 +16,13 @@ public static class VerifyModuleInitializer
     public static void Initialize()
     {
         // Configure the directory for snapshots
-        UseProjectRelativeDirectory("Verify");
+        UseProjectRelativeDirectory("Snapshots");
 
         // Configure the diff tool to use
         DiffRunner.Disabled = false;
         DiffTools.UseOrder(DiffTool.VisualStudio, DiffTool.VisualStudioCode, DiffTool.Rider);
+
+        // Configure the snapshot serializer settings
+        VerifierSettings.AddExtraSettings(settings => settings.DefaultValueHandling = DefaultValueHandling.Include);
     }
 }

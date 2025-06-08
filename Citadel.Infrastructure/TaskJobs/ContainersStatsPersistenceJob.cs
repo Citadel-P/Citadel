@@ -1,4 +1,5 @@
 ﻿using System.Threading.Channels;
+using EFCore.BulkExtensions;
 using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
@@ -8,18 +9,15 @@ using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.TaskJobs;
 
-/// <summary>
-/// Background service that persists batches of container stats to the database and notifies clients via SignalR.
-/// </summary>
 internal class ContainersStatsPersistenceJob(
     IServiceScopeFactory scopeFactory,
     ChannelReader<ContainersStatBatch> reader,
     ISignalRConnectionTracker connectionTracker,
     ILogger<ContainersStatsPersistenceJob> logger) : BackgroundService
 {
-    private const int BatchSize = 200;
-    // Updates to db will be flushed every 60 seconds or when batch size is reached.
-    private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(60); 
+    private const int BatchSize = 300;
+    // Updates to db will be flushed every x seconds or when batch size is reached.
+    private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(60 * 2); 
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -72,11 +70,10 @@ internal class ContainersStatsPersistenceJob(
         using var scope = scopeFactory.CreateAsyncScope();
         using var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        var stats = statsByPlatform.SelectMany(s => s.Value).ToList();
         try
         {
-            db.ContainerStats.AddRange(stats);
-            await db.SaveChangesAsync(cancellationToken);
+            var stats = statsByPlatform.SelectMany(s => s.Value).ToList();
+            await db.BulkInsertAsync(stats, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {

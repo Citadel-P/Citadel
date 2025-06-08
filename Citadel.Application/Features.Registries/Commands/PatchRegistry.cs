@@ -5,6 +5,7 @@ using Hosting.Common.MergePatch;
 using Infrastructure;
 using Infrastructure.DockerHub;
 using Infrastructure.Entities;
+using Infrastructure.Entities.Registries;
 using Infrastructure.EntityFramework;
 using Infrastructure.EntityFramework.Configurations;
 using Infrastructure.GithubCr;

@@ -1,14 +1,11 @@
-﻿using Agent.Server.Containers;
-using Application.Features.Registries.Commands;
-using Citadel.Common;
-using FluentValidation;
+﻿using FluentValidation;
 using Grpc.Core;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
 using Infrastructure;
-using Infrastructure.DockerHub;
 using Infrastructure.Entities;
+using Infrastructure.Entities.Platforms;
 using Infrastructure.EntityFramework;
 using Infrastructure.EntityFramework.Configurations;
 using Infrastructure.Services.Abstractions;
@@ -17,7 +14,6 @@ using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Win32;
 
 namespace Application.Features.Platforms.Commands;
 
@@ -44,11 +40,11 @@ public sealed record PatchPlatform(Guid? Id, JsonMergePatchDocument<Platform> Pa
     }
 }
 
-internal class UpsertPlatformHandler(
+internal class PatchPlatformHandler(
     ApplicationDbContext dbContext,
     IGrpcClientFactory clientFactory,
     IPlatformHealthMonitorJob platformHealthMonitorJob,
-    ILogger<UpsertPlatformHandler> logger)
+    ILogger<PatchPlatformHandler> logger)
     : ICommandHandler<PatchPlatform, Result<Platform>>
 {
     public async ValueTask<Result<Platform>> Handle(PatchPlatform command, CancellationToken cancellationToken)
@@ -72,30 +68,17 @@ internal class UpsertPlatformHandler(
                 }
             }
 
-            if (patchedPlatform.Type == Infrastructure.PlatformType.Docker)
+            if (patchedPlatform.Type == PlatformType.Docker)
             {
                 var platformClient = clientFactory.GetPlatformClient(patchedPlatform.Address);
                 var platformInfo = await platformClient.GetPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
 
                 var oldPlatformAddress = platform.Address;
-                platform.PartialUpdate(
-                    name: patchedPlatform.Name,
-                    address: patchedPlatform.Address,
 
-                    networkCount: platformInfo.NetworkCount,
-                    volumeCount: platformInfo.VolumeCount,
-                    containersRunning: platformInfo.ContainersRunning,
-                    containersPaused: platformInfo.ContainersPaused,
-                    containersStopped: platformInfo.ContainersStopped,
-                    imageCount: platformInfo.ImageCount,
-                    cpuCount: platformInfo.CpuCount,
-                    memTotal: platformInfo.MemTotal,
-                    serverVersion: platformInfo.ServerVersion,
-                    agentVersion: platformInfo.AgentVersion);
-
-                if (platform.PlatformDescriptor is DockerPlatformDescriptor dockerConfig)
+                PlatformDescriptor? descriptor = null;
+                if (platform.PlatformDescriptor is DockerPlatformDescriptor dockerDescriptor)
                 {
-                    dockerConfig.PartialUpdate(
+                    descriptor = dockerDescriptor.Create(
                         daemonId: platformInfo.Id,
                         containerCount: platformInfo.ContainerCount,
                         containersRunning: platformInfo.ContainersRunning,
@@ -107,9 +90,26 @@ internal class UpsertPlatformHandler(
                         osType: platformInfo.OsType,
                         architecture: platformInfo.Architecture);
                 }
-                else if (platform.PlatformDescriptor is DockerSwarmPlatformDescriptor dockerSwarmConfig)
+                else if (platform.PlatformDescriptor is DockerSwarmPlatformDescriptor swarmDescriptor)
                 {
+                    // Todo
                 }
+                else if (platform.PlatformDescriptor is KubernetesPlatformDescriptor k8sDescriptor)
+                {
+                    // Todo
+                }
+
+                platform.PartialUpdate(
+                    name: patchedPlatform.Name,
+                    address: patchedPlatform.Address,
+                    networkCount: platformInfo.NetworkCount,
+                    volumeCount: platformInfo.VolumeCount,
+                    imageCount: platformInfo.ImageCount,
+                    cpuCount: platformInfo.CpuCount,
+                    memTotal: platformInfo.MemTotal,
+                    serverVersion: platformInfo.ServerVersion,
+                    agentVersion: platformInfo.AgentVersion,
+                    descriptor: descriptor);
 
                 await dbContext.SaveChangesAsync(cancellationToken);
                 await UpdatePlatformTracking(platform.Id, platform.Address, oldPlatformAddress, cancellationToken);

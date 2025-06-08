@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
-import { ContainerInfoView, ContainerStateStatus } from '@/api/_generated';
+import { ContainerView, ContainerStateStatus } from '@/api/_generated';
 import { actionType, usePATCHContainers } from './usePATCHContainers';
 
-export const useAvailableActions = (containers: ContainerInfoView[]) => {
+export const useAvailableActions = (containers: ContainerView[]) => {
   const { mutate, isPending } = usePATCHContainers();
 
   // Calculate available actions using useMemo

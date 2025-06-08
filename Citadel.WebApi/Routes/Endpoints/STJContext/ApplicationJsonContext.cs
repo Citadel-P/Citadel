@@ -2,13 +2,12 @@
 using Agent.Server.Containers;
 using Agent.Server.Images;
 using Application.Features.Auth.Models;
-using Application.Features.Containers.Models;
 using Application.Features.Images.Queries;
-using Application.Features.Registries.Commands;
 using Citadel.Common;
-using Hosting.Common.MergePatch;
 using Infrastructure.DockerHub;
 using Infrastructure.Entities;
+using Infrastructure.Entities.Platforms;
+using Infrastructure.Entities.Registries;
 using Infrastructure.GithubCr;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources;
@@ -32,7 +31,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(List<SwarmPeerView>))]
 [JsonSerializable(typeof(List<PlatformStatView>))]
 [JsonSerializable(typeof(DockerHubRegistry))]
-[JsonSerializable(typeof(List<ContainerInfoView>))]
+[JsonSerializable(typeof(List<ContainerView>))]
 [JsonSerializable(typeof(List<PortView>))]
 [JsonSerializable(typeof(EndpointSettingsView))]
 [JsonSerializable(typeof(StreamLogsRequest))]
@@ -45,13 +44,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(DockerPlatformDescriptor))]
 [JsonSerializable(typeof(DockerSwarmPlatformDescriptor))]
 [JsonSerializable(typeof(KubernetesPlatformDescriptor))]
-[JsonSerializable(typeof(ContainersInfoView))]
-[JsonSerializable(typeof(ContainerInfoView))]
-[JsonSerializable(typeof(ContainersInfoRequest))]
-[JsonSerializable(typeof(List<PortRequest>))]
-[JsonSerializable(typeof(ContainerStatRequest))]
-[JsonSerializable(typeof(ContainerEventRequest))]
-[JsonSerializable(typeof(Features.Containers.Models.ContainerLogRequest))]
+[JsonSerializable(typeof(ContainersView))]
+[JsonSerializable(typeof(ContainerView))]
 [JsonSerializable(typeof(PlatformInputPatchDocument))]
 [JsonSerializable(typeof(ContainerStatsView))]
 [JsonSerializable(typeof(ContainerStatView))]
