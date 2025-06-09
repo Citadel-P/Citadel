@@ -62,7 +62,7 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
     public async Task Patch_Platform_Should_Update_Entity()
     {
         // Arrange
-        var platformInfo = new PlatformInfoMessage
+        var platformInfo = new PlatformInfoResponse
         {
             Id = "daemonX",
             ContainerCount = 10,
@@ -82,7 +82,7 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
             Architecture = "x86_64"
         };
         platformClientMock.Setup(x => x.ListPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
-                           .Returns(new AsyncUnaryCall<PlatformInfoMessage>(
+                           .Returns(new AsyncUnaryCall<PlatformInfoResponse>(
                                 Task.FromResult(platformInfo),
                                 Task.FromResult(new Metadata()),
                                 () => Status.DefaultSuccess,

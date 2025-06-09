@@ -15,7 +15,7 @@ namespace Application.Features.Images.Commands;
 /// <summary>
 /// Command to pull an image from a registry.
 /// </summary>
-public sealed record PullImage(Guid PlatformId, string RegistryName, string RepositoryName, string ImageTag) : IStreamCommand<PullImageReply>
+public sealed record PullImage(Guid PlatformId, string RegistryName, string RepositoryName, string ImageTag) : IStreamCommand<PullImageResponse>
 {
     internal class Validator : AbstractValidator<PullImage>
     {
@@ -29,9 +29,9 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
     }
 }
 
-internal sealed class PullImageHandler(IGrpcClientFactory clientFactory, ApplicationDbContext dbContext) : IStreamCommandHandler<PullImage, PullImageReply>
+internal sealed class PullImageHandler(IGrpcClientFactory clientFactory, ApplicationDbContext dbContext) : IStreamCommandHandler<PullImage, PullImageResponse>
 {
-    public async IAsyncEnumerable<PullImageReply> Handle(PullImage command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<PullImageResponse> Handle(PullImage command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var platformAddress = await dbContext.Platforms
             .Where(s => s.Id == command.PlatformId)
@@ -56,9 +56,9 @@ internal sealed class PullImageHandler(IGrpcClientFactory clientFactory, Applica
         }
     }
 
-    private static PullImageMessage CreatePullImageRequest(PullImage command, RegistryConfigurationBase registryCfg)
+    private static PullImageRequest CreatePullImageRequest(PullImage command, RegistryConfigurationBase registryCfg)
     {
-        var request = new PullImageMessage();
+        var request = new PullImageRequest();
 
         string domainName = registryCfg.RegistryUrl.Replace("https://", "");
         switch (registryCfg)

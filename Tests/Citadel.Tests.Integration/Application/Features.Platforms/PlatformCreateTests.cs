@@ -33,7 +33,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
     public async Task CreatePlatform_Should_Succeed()
     {
         // Arrange
-        var platformInfo = new PlatformInfoMessage
+        var platformInfo = new PlatformInfoResponse
         {
             Id = "daemonX",
             ContainerCount = 10,
@@ -64,7 +64,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
         };
 
         platformClientMock.Setup(x => x.ListPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
-            .Returns(new AsyncUnaryCall<PlatformInfoMessage>(
+            .Returns(new AsyncUnaryCall<PlatformInfoResponse>(
                 Task.FromResult(platformInfo),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
@@ -72,7 +72,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
                 () => { }
             ));
 
-        containersClientMock.Setup(x => x.ListAsync(It.IsAny<ListContainersMessage>(), null, null, It.IsAny<CancellationToken>()))
+        containersClientMock.Setup(x => x.ListAsync(It.IsAny<ListContainersRequest>(), null, null, It.IsAny<CancellationToken>()))
             .Returns(new AsyncUnaryCall<ListContainersResponse>(
                 Task.FromResult(containersReply),
                 Task.FromResult(new Metadata()),

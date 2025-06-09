@@ -12,7 +12,7 @@ using Mediator;
 
 namespace Application.Features.Containers.Queries;
 
-public sealed record InspectContainer(string ContainerId) : IQuery<Result<ContainerInspectReply>>
+public sealed record InspectContainer(string ContainerId) : IQuery<Result<InspectContainerResponse>>
 {
     internal sealed class Validator : AbstractValidator<InspectContainer>
     {
@@ -23,15 +23,15 @@ public sealed record InspectContainer(string ContainerId) : IQuery<Result<Contai
 
 internal sealed class InspectContainerHandler(
     IGrpcClientFactory clientFactory, 
-    ApplicationDbContext dbContext) : IQueryHandler<InspectContainer, Result<ContainerInspectReply>>
+    ApplicationDbContext dbContext) : IQueryHandler<InspectContainer, Result<InspectContainerResponse>>
 {
     
-    public async ValueTask<Result<ContainerInspectReply>> Handle(InspectContainer query, CancellationToken cancellationToken)
+    public async ValueTask<Result<InspectContainerResponse>> Handle(InspectContainer query, CancellationToken cancellationToken)
     {
         var platformAddress = await dbContext.Containers.GetPlatformAddress(query.ContainerId, cancellationToken);
         if (platformAddress == null)
         {
-            return Result.Failure<ContainerInspectReply>(new NotFoundError($"Platform doesn't exist for container {query.ContainerId}"));
+            return Result.Failure<InspectContainerResponse>(new NotFoundError($"Platform doesn't exist for container {query.ContainerId}"));
         }
 
         var client = clientFactory.GetContainerClient(platformAddress);
@@ -42,7 +42,7 @@ internal sealed class InspectContainerHandler(
         }
         catch (RpcException ex) 
         {
-            return Result.Failure<ContainerInspectReply>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<InspectContainerResponse>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 }

@@ -36,7 +36,7 @@ internal class DeleteNetworksCommandHandler(ApplicationDbContext dbContext, IGrp
         try
         {
             var client = clientFactory.GetNetworkClient(address);
-            await client.DeleteAsync(new DeleteNetworkMessage { Ids = { command.Ids } }, cancellationToken: cancellationToken);
+            await client.DeleteAsync(new DeleteNetworkRequest { Ids = { command.Ids } }, cancellationToken: cancellationToken);
             return Result.Success();
         }
         catch (RpcException ex)

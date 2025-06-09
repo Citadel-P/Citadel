@@ -26,7 +26,7 @@ public sealed record CreateNetwork(
     IPAM? IPAM = null,
     ConfigFrom? ConfigFrom = null,
     Dictionary<string, string>? Labels = null,
-    Dictionary<string, string>? Options = null) : ICommand<Result<CreateNetworkReply>>
+    Dictionary<string, string>? Options = null) : ICommand<Result<CreateNetworkResponse>>
 {
 
     internal class Validator : AbstractValidator<CreateNetwork>
@@ -138,20 +138,20 @@ public sealed record ConfigFrom(string Network);
 internal sealed class CreateNetworkHandler(
     IGrpcClientFactory clientFactory, 
     ApplicationDbContext dbContext)
-    : ICommandHandler<CreateNetwork, Result<CreateNetworkReply>>
+    : ICommandHandler<CreateNetwork, Result<CreateNetworkResponse>>
 {
-    public async ValueTask<Result<CreateNetworkReply>> Handle(CreateNetwork command, CancellationToken cancellationToken)
+    public async ValueTask<Result<CreateNetworkResponse>> Handle(CreateNetwork command, CancellationToken cancellationToken)
     {
         try
         {
             var address = await dbContext.Platforms.Where(s => s.Id == command.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
             if (address == null)
             {
-                return Result.Failure<CreateNetworkReply>(new NotFoundError("The provided platform Id doesn't exist"));
+                return Result.Failure<CreateNetworkResponse>(new NotFoundError("The provided platform Id doesn't exist"));
             }
 
             var client = clientFactory.GetNetworkClient(address);
-            var request = new CreateNetworkMessage
+            var request = new CreateNetworkRequest
             {
                 Name = command.Name,
                 Driver = command.Driver ?? "bridge",
@@ -191,7 +191,7 @@ internal sealed class CreateNetworkHandler(
         }
         catch (RpcException ex)
         {
-            return Result.Failure<CreateNetworkReply>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<CreateNetworkResponse>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
         
     }

@@ -16,7 +16,7 @@ public sealed record InspectVolumeView (
     Dictionary<string, string>? Options
     )
 {
-    internal static InspectVolumeView Map(VolumeReply volume)
+    internal static InspectVolumeView Map(VolumeResponse volume)
     {
         return new InspectVolumeView(
             Id: volume.Name,

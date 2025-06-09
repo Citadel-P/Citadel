@@ -2771,7 +2771,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/PullImageReply"
+                    "$ref": "#/components/schemas/PullImageResponse"
                   }
                 }
               }
@@ -2848,7 +2848,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DeleteImagesReply"
+                  "$ref": "#/components/schemas/DeleteImageResponse"
                 }
               }
             }
@@ -4491,19 +4491,19 @@
           }
         }
       },
-      "DeleteImagesReply": {
+      "DeleteImageResponse": {
         "type": "object",
         "properties": {
-          "replies": {
+          "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/DeleteImagesReplyItem"
+              "$ref": "#/components/schemas/DeleteImageResponseItem"
             },
             "nullable": true
           }
         }
       },
-      "DeleteImagesReplyItem": {
+      "DeleteImageResponseItem": {
         "type": "object",
         "properties": {
           "result": {
@@ -7104,7 +7104,31 @@
           }
         }
       },
-      "PullImageReply": {
+      "PullImageRequest": {
+        "required": [
+          "platformId",
+          "registryName",
+          "repositoryName",
+          "imageTag"
+        ],
+        "type": "object",
+        "properties": {
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "registryName": {
+            "type": "string"
+          },
+          "repositoryName": {
+            "type": "string"
+          },
+          "imageTag": {
+            "type": "string"
+          }
+        }
+      },
+      "PullImageResponse": {
         "type": "object",
         "properties": {
           "stream": {
@@ -7136,30 +7160,6 @@
           },
           "error": {
             "$ref": "#/components/schemas/JSONErrorReply"
-          }
-        }
-      },
-      "PullImageRequest": {
-        "required": [
-          "platformId",
-          "registryName",
-          "repositoryName",
-          "imageTag"
-        ],
-        "type": "object",
-        "properties": {
-          "platformId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "registryName": {
-            "type": "string"
-          },
-          "repositoryName": {
-            "type": "string"
-          },
-          "imageTag": {
-            "type": "string"
           }
         }
       },

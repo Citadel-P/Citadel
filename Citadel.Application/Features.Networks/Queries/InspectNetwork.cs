@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Networks.Queries;
 
-public sealed record InspectNetwork(Guid PlatformId, string NetworkId): IQuery<Result<InspectNetworkReply>>
+public sealed record InspectNetwork(Guid PlatformId, string NetworkId): IQuery<Result<InspectNetworkResponse>>
 {
     internal class Validator : AbstractValidator<InspectNetwork>
     {
@@ -23,27 +23,27 @@ public sealed record InspectNetwork(Guid PlatformId, string NetworkId): IQuery<R
     }
 }
 
-internal sealed class InspectNetworkHandler(ApplicationDbContext dbContext, IGrpcClientFactory clientFactory) : IQueryHandler<InspectNetwork, Result<InspectNetworkReply>>
+internal sealed class InspectNetworkHandler(ApplicationDbContext dbContext, IGrpcClientFactory clientFactory) : IQueryHandler<InspectNetwork, Result<InspectNetworkResponse>>
 {
-    public async ValueTask<Result<InspectNetworkReply>> Handle(InspectNetwork query, CancellationToken cancellationToken)
+    public async ValueTask<Result<InspectNetworkResponse>> Handle(InspectNetwork query, CancellationToken cancellationToken)
     {
         var address = await dbContext.Platforms.Where(s => s.Id == query.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
         if (address == null)
         {
-            return Result.Failure<InspectNetworkReply>(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure<InspectNetworkResponse>(new NotFoundError("The provided platform Id doesn't exist"));
         }
         try
         {
-            var args = new InspectNetworkMessage
+            var request = new InspectNetworkRequest
             {
                 Id = query.NetworkId
             };
             var client = clientFactory.GetNetworkClient(address);
-            return await client.InspectAsync(args, cancellationToken: cancellationToken);
+            return await client.InspectAsync(request, cancellationToken: cancellationToken);
         }
         catch (RpcException ex)
         {
-            return Result.Failure<InspectNetworkReply>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<InspectNetworkResponse>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 }

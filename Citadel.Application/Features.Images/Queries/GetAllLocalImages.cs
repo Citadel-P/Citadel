@@ -24,7 +24,7 @@ internal class GetAllLocalImagesHandler(ApplicationDbContext dbContext, IGrpcCli
         try
         {
             var client = clientFactory.GetImageClient(address);
-            var images = await client.ListAsync(new ListImagesMessage(), cancellationToken: cancellationToken);
+            var images = await client.ListAsync(new ListImagesRequest(), cancellationToken: cancellationToken);
             return images.Images;
         }
         catch (RpcException ex)

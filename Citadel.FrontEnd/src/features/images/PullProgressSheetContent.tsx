@@ -1,4 +1,4 @@
-import { PullImageReply, PullImageRequest } from '@/api/_generated';
+import { PullImageRequest, PullImageResponse } from '@/api/_generated';
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Check, CircleX, LoaderCircle } from 'lucide-react';
 import { usePOSTPullImageStream } from './hooks/usePOSTPullImageStream';
@@ -32,7 +32,7 @@ export default function PullProgressSheetContent({ sheetProps }: { sheetProps: P
   // Memoized request object
   const pullRequest = useMemo<PullImageRequest>(
     () => ({
-      registryName: selectedRegistry?.name ?? null,
+      registryName: selectedRegistry?.name ?? '',
       repositoryName: sheetProps.repository,
       platformId: currentPlatform?.id,
       imageTag: sheetProps.imageTag,
@@ -69,7 +69,7 @@ export default function PullProgressSheetContent({ sheetProps }: { sheetProps: P
     if (isSuccess) {
       try {
         const data = streamData.join('\n');
-        const response = JSON.parse(data) as PullImageReply[];
+        const response = JSON.parse(data) as PullImageResponse[];
         const errors = response.filter((s) => s.errorMessage).map((s) => s.errorMessage);
 
         if (errors.length > 0) {

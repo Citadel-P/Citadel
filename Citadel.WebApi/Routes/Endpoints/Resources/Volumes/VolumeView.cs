@@ -16,10 +16,10 @@ public sealed record VolumeView
     Dictionary<string, string>? Options
     )
 {
-    public static VolumesView Map(ListVolumeReply reply)
+    public static VolumesView Map(ListVolumeResponse reply)
         => new([.. reply.Volumes.Select(Map)]);
 
-    public static VolumeView Map(VolumeReply volume)
+    public static VolumeView Map(VolumeResponse volume)
     {
         return new VolumeView(
             Id: volume.Name,

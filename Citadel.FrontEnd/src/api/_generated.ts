@@ -315,11 +315,11 @@ export interface DeleteContainersRequest {
   link?: boolean | null;
 }
 
-export interface DeleteImagesReply {
-  replies?: DeleteImagesReplyItem[] | null;
+export interface DeleteImageResponse {
+  items?: DeleteImageResponseItem[] | null;
 }
 
-export interface DeleteImagesReplyItem {
+export interface DeleteImageResponseItem {
   result?: Record<string, string>;
 }
 
@@ -1101,7 +1101,15 @@ export interface PublishStatusView {
   publishContext: Record<string, string>;
 }
 
-export interface PullImageReply {
+export interface PullImageRequest {
+  /** @format uuid */
+  platformId: string;
+  registryName: string;
+  repositoryName: string;
+  imageTag: string;
+}
+
+export interface PullImageResponse {
   stream?: string | null;
   status?: string | null;
   progressMessage?: string | null;
@@ -1110,14 +1118,6 @@ export interface PullImageReply {
   errorMessage?: string | null;
   progress?: JSONProgressReply;
   error?: JSONErrorReply;
-}
-
-export interface PullImageRequest {
-  /** @format uuid */
-  platformId: string;
-  registryName: string;
-  repositoryName: string;
-  imageTag: string;
 }
 
 export interface RefreshTokenResponse {
@@ -2474,7 +2474,7 @@ export class Api<
      * @summary Pull an image from a registry and returns logs as a stream
      * @request POST:/api/v1/images/pull
      * @secure
-     * @response `200` `(PullImageReply)[]` OK
+     * @response `200` `(PullImageResponse)[]` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2482,7 +2482,7 @@ export class Api<
      */
     imagesPullImage: (data: PullImageRequest, params: RequestParams = {}) =>
       this.request<
-        PullImageReply[],
+        PullImageResponse[],
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/images/pull`,
@@ -2502,7 +2502,7 @@ export class Api<
      * @summary Remove an image(s), along with any untagged parent images that were referenced by that image
      * @request DELETE:/api/v1/images
      * @secure
-     * @response `200` `DeleteImagesReply` OK
+     * @response `200` `DeleteImageResponse` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2511,7 +2511,7 @@ export class Api<
      */
     imagesDelete: (data: DeleteImagesRequest, params: RequestParams = {}) =>
       this.request<
-        DeleteImagesReply,
+        DeleteImageResponse,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/images`,

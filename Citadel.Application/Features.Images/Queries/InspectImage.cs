@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Images.Queries;
 
-public sealed record InspectImage(Guid PlatformId, string ImageId) : IQuery<Result<InspectImageReply>>
+public sealed record InspectImage(Guid PlatformId, string ImageId) : IQuery<Result<InspectImageResponse>>
 {
     internal class Validator : AbstractValidator<InspectImage>
     {
@@ -23,18 +23,18 @@ public sealed record InspectImage(Guid PlatformId, string ImageId) : IQuery<Resu
     }
 }
 
-internal sealed class InspectImageHandler(ApplicationDbContext dbContext, IGrpcClientFactory clientFactory) : IQueryHandler<InspectImage, Result<InspectImageReply>>
+internal sealed class InspectImageHandler(ApplicationDbContext dbContext, IGrpcClientFactory clientFactory) : IQueryHandler<InspectImage, Result<InspectImageResponse>>
 {
-    public async ValueTask<Result<InspectImageReply>> Handle(InspectImage query, CancellationToken cancellationToken)
+    public async ValueTask<Result<InspectImageResponse>> Handle(InspectImage query, CancellationToken cancellationToken)
     {
         var address = await dbContext.Platforms.Where(s => s.Id == query.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
         if (address == null)
         {
-            return Result.Failure<InspectImageReply>(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure<InspectImageResponse>(new NotFoundError("The provided platform Id doesn't exist"));
         }
         try
         {
-            var args = new InspectImageMessage
+            var args = new InspectImageRequest
             {
                 Id = query.ImageId
             };
@@ -43,7 +43,7 @@ internal sealed class InspectImageHandler(ApplicationDbContext dbContext, IGrpcC
         }
         catch (RpcException ex)
         {
-            return Result.Failure<InspectImageReply>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<InspectImageResponse>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 }

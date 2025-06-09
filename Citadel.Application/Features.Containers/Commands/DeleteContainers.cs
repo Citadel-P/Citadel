@@ -57,14 +57,14 @@ internal sealed class DeleteContainersHandler(
             var client = clientFactory.GetContainerClient(platform.Address);
             try
             {
-                var message = new DeleteContainerMessage
+                var rpcRequest = new DeleteContainerRequest
                 {
                     Ids = { platform.ContainersId },
                     V = request.V ?? false,
                     Force = request.Force ?? false,
                     Link = request.Link ?? false,
                 };
-                await client.DeleteAsync(message, cancellationToken: ct);
+                await client.DeleteAsync(rpcRequest, cancellationToken: ct);
             }
             catch (Exception ex)
             {

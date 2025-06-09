@@ -21,10 +21,10 @@ public sealed record NetworkView(
     Dictionary<string, string>? Labels = null
     )
 {
-    public static NetworksView Map(ListNetworksReply reply)
+    public static NetworksView Map(ListNetworksResponse reply)
         => new ([.. reply.Networks.Select(Map)]);
 
-    public static NetworkView Map(NetworkMessage network)
+    public static NetworkView Map(NetworkRequest network)
     {
         return new NetworkView(
             Name: network.Name,

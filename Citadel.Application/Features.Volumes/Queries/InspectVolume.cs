@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Volumes.Queries;
 
-public sealed record InspectVolume (Guid PlatformId, string Name) : IQuery<Result<VolumeReply>>
+public sealed record InspectVolume (Guid PlatformId, string Name) : IQuery<Result<VolumeResponse>>
 {
     internal class Validator : AbstractValidator<InspectVolume>
     {
@@ -22,27 +22,27 @@ public sealed record InspectVolume (Guid PlatformId, string Name) : IQuery<Resul
     }
 }
 
-internal sealed class InspectVolumeHandler(ApplicationDbContext dbContext, IGrpcClientFactory clientFactory) : IQueryHandler<InspectVolume, Result<VolumeReply>>
+internal sealed class InspectVolumeHandler(ApplicationDbContext dbContext, IGrpcClientFactory clientFactory) : IQueryHandler<InspectVolume, Result<VolumeResponse>>
 {
-    public async ValueTask<Result<VolumeReply>> Handle(InspectVolume query, CancellationToken cancellationToken)
+    public async ValueTask<Result<VolumeResponse>> Handle(InspectVolume query, CancellationToken cancellationToken)
     {
         var address = await dbContext.Platforms.Where(s => s.Id == query.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
         if (address == null)
         {
-            return Result.Failure<VolumeReply>(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure<VolumeResponse>(new NotFoundError("The provided platform Id doesn't exist"));
         }
         try
         {
-            var args = new InspectVolumeMessage
+            var request = new InspectVolumeRequest
             {
                 Name = query.Name
             };
             var client = clientFactory.GetVolumeClient(address);
-            return await client.InspectAsync(args, cancellationToken: cancellationToken);
+            return await client.InspectAsync(request, cancellationToken: cancellationToken);
         }
         catch (RpcException ex)
         {
-            return Result.Failure<VolumeReply>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<VolumeResponse>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 }

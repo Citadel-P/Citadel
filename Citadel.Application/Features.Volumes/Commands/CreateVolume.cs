@@ -16,7 +16,7 @@ public sealed record CreateVolume(
     string Name,
     string Driver,
     Dictionary<string, string>? Labels = null,
-    Dictionary<string, string>? Options = null) : ICommand<Result<VolumeReply>>
+    Dictionary<string, string>? Options = null) : ICommand<Result<VolumeResponse>>
 {
     internal class Validator : AbstractValidator<CreateVolume>
     {
@@ -42,21 +42,21 @@ public sealed record CreateVolume(
 }
 
 internal sealed class CreateVolumeHandler(IGrpcClientFactory clientFactory,ApplicationDbContext dbContext) 
-    : ICommandHandler<CreateVolume, Result<VolumeReply>>
+    : ICommandHandler<CreateVolume, Result<VolumeResponse>>
 {
     
-    public async ValueTask<Result<VolumeReply>> Handle(CreateVolume command, CancellationToken cancellationToken)
+    public async ValueTask<Result<VolumeResponse>> Handle(CreateVolume command, CancellationToken cancellationToken)
     {
         try
         {
             var address = await dbContext.Platforms.Where(s => s.Id == command.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
             if (address == null)
             {
-                return Result.Failure<VolumeReply>(new NotFoundError("The provided platform Id doesn't exist"));
+                return Result.Failure<VolumeResponse>(new NotFoundError("The provided platform Id doesn't exist"));
             }
 
             var client = clientFactory.GetVolumeClient(address);
-            var request = new CreateVolumeMessage
+            var request = new CreateVolumeRequest
             {
                 Name = command.Name,
                 Driver = command.Driver,
@@ -68,7 +68,7 @@ internal sealed class CreateVolumeHandler(IGrpcClientFactory clientFactory,Appli
         }
         catch (RpcException ex)
         {
-            return Result.Failure<VolumeReply>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<VolumeResponse>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 }

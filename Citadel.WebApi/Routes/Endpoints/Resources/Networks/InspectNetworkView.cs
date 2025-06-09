@@ -23,7 +23,7 @@ public sealed record InspectNetworkView(
     Dictionary<string, NetworkContainerView>? Containers = null
     )
 {
-    public static InspectNetworkView Map(InspectNetworkReply network) 
+    public static InspectNetworkView Map(InspectNetworkResponse network) 
         => new (
             Name: network.Name,
             Id: network.Id,

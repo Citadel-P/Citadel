@@ -29,7 +29,7 @@ public sealed record ContainerInspectView(
     ContainerConfig Config,
     NetworkSettingsView NetworkSettings)
 {
-    internal static ContainerInspectView Map(ContainerInspectReply containerInspect) => new(
+    internal static ContainerInspectView Map(InspectContainerResponse containerInspect) => new(
             Id: containerInspect.Id,
             Created: containerInspect.Created,
             Path: containerInspect.Path,

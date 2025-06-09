@@ -61,7 +61,7 @@ public static class Containers
         await foreach (var reply in mediator.CreateStream(request.ToCommand(), cancellationToken))
         {
             // yield return reply;
-            var json = JsonSerializer.Serialize(reply, ApplicationJsonContext.Default.ContainerLogReply);
+            var json = JsonSerializer.Serialize(reply, ApplicationJsonContext.Default.ContainerLogResponse);
             await response.WriteAsync(json + "\n", cancellationToken);
             await response.Body.FlushAsync(cancellationToken);
         }

@@ -63,7 +63,7 @@ internal sealed class CreatePlatformHandler(
         var containersClient = clientFactory.GetContainerClient(command.Address);
 
         var platformInfoTsk = platformClient.ListPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
-        var containersTsk = containersClient.ListAsync(new ListContainersMessage { All = true }, cancellationToken: cancellationToken);
+        var containersTsk = containersClient.ListAsync(new ListContainersRequest { All = true }, cancellationToken: cancellationToken);
         var platformInfo = await platformInfoTsk;
         var containers = await containersTsk;
 
@@ -114,7 +114,7 @@ internal sealed class CreatePlatformHandler(
 
 internal static class Mapper
 {
-    internal static PlatformStat MapStat(this PlatformInfoMessage systemInfo)
+    internal static PlatformStat MapStat(this PlatformInfoResponse systemInfo)
         => new (
             created: systemInfo.Created,
             memoryUsage: systemInfo.PlatformStat?.MemoryUsage ?? 0,

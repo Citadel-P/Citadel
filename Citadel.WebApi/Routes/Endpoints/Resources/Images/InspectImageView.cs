@@ -25,7 +25,7 @@ public record InspectImageView(
     MetadataView Metadata
 )
 {
-    internal static InspectImageView Map(InspectImageReply image)
+    internal static InspectImageView Map(InspectImageResponse image)
     {
         return new InspectImageView(
             Id: image.Id,

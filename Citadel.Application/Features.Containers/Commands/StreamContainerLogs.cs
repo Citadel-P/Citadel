@@ -10,7 +10,7 @@ using Mediator;
 
 namespace Application.Features.Containers.Commands;
 
-public sealed record StreamContainerLogs(string ContainerId) : IStreamCommand<ContainerLogReply>
+public sealed record StreamContainerLogs(string ContainerId) : IStreamCommand<ContainerLogResponse>
 {
     internal class Validator : AbstractValidator<StreamContainerLogs>
     {
@@ -23,9 +23,9 @@ public sealed record StreamContainerLogs(string ContainerId) : IStreamCommand<Co
 
 internal class StreamContainerLogsHandler(
     IGrpcClientFactory clientFactory,
-    ApplicationDbContext dbContext): IStreamCommandHandler<StreamContainerLogs, ContainerLogReply>
+    ApplicationDbContext dbContext): IStreamCommandHandler<StreamContainerLogs, ContainerLogResponse>
 {
-    public async IAsyncEnumerable<ContainerLogReply> Handle(StreamContainerLogs query, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<ContainerLogResponse> Handle(StreamContainerLogs query, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var platformAddress = await dbContext.Containers.GetPlatformAddress(query.ContainerId, cancellationToken)
              ?? throw new Exception($"Platform doesn't exist for container {query.ContainerId}");

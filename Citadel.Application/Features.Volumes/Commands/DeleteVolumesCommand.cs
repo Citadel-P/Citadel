@@ -35,7 +35,12 @@ internal class DeleteVolumesCommandHandler(ApplicationDbContext dbContext, IGrpc
         try
         {
             var client = clientFactory.GetVolumeClient(address);
-            await client.RemoveAsync(new RemoveVolumeMessage { Names = { command.Names }, Force = command.Force ?? false}, cancellationToken: cancellationToken);
+            var request = new RemoveVolumeRequest
+            {
+                Names = { command.Names },
+                Force = command.Force ?? false
+            };
+            await client.RemoveAsync(request, cancellationToken: cancellationToken);
             return Result.Success();
         }
         catch (RpcException ex)

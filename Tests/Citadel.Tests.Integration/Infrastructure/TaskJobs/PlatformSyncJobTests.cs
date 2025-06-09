@@ -78,7 +78,7 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
     public async Task DockerPlatform_Goes_Online_Should_Update_Platform_Info()
     {
         // Arrange
-        var platformInfo = new PlatformInfoMessage
+        var platformInfo = new PlatformInfoResponse
         {
             Id = "daemonX",
             ContainerCount = 10,
@@ -99,7 +99,7 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
         };
 
         platformClientMock.Setup(x => x.ListPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
-                           .Returns(new AsyncUnaryCall<PlatformInfoMessage>(
+                           .Returns(new AsyncUnaryCall<PlatformInfoResponse>(
                                 Task.FromResult(platformInfo),
                                 Task.FromResult(new Metadata()),
                                 () => Status.DefaultSuccess,
@@ -132,7 +132,7 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
     public async Task DockerPlatform_Goes_Offline_Should_Update_Platform_Info()
     {
         // Arrange
-        var platformInfo = new PlatformInfoMessage
+        var platformInfo = new PlatformInfoResponse
         {
             Id = "daemonX",
             ContainerCount = 10,
@@ -153,7 +153,7 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
         };
 
         platformClientMock.Setup(x => x.ListPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
-                           .Returns(new AsyncUnaryCall<PlatformInfoMessage>(
+                           .Returns(new AsyncUnaryCall<PlatformInfoResponse>(
                                 Task.FromResult(platformInfo),
                                 Task.FromResult(new Metadata()),
                                 () => Status.DefaultSuccess,
