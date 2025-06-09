@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Agent.Server.Containers;
-using Citadel.Common;
-using Google.Api;
+﻿using System.Text;
+using Citadel.Agent.Common.V1;
+using Citadel.Agent.Containers.V1;
 using Grpc.Core;
 using Infrastructure;
 using Infrastructure.Entities;
@@ -16,16 +11,16 @@ using Infrastructure.TaskJobs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using static Agent.Server.Containers.Containers;
-using static Agent.Server.GPlatform.gPlatform;
+using static Citadel.Agent.Containers.V1.ContainerService;
+using static Citadel.Agent.Platforms.V1.PlatformService;
 
 namespace Tests.Integration.Application.Features.Platforms;
 
 public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
 {
     private readonly Mock<IGrpcClientFactory> grpcFactoryMock = new();
-    private readonly Mock<gPlatformClient> platformClientMock = new();
-    private readonly Mock<ContainersClient> containersClientMock = new();
+    private readonly Mock<PlatformServiceClient> platformClientMock = new();
+    private readonly Mock<ContainerServiceClient> containersClientMock = new();
     private readonly Mock<IPlatformHealthMonitorJob> healthMonitorMock = new();
 
     protected override void ConfigureTestServices(IServiceCollection services)
@@ -58,7 +53,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
             Architecture = "x86_64"
         };
 
-        var containersReply = new ContainersListReply
+        var containersReply = new ListContainersResponse
         {
             Containers =
             {
@@ -68,7 +63,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
             }
         };
 
-        platformClientMock.Setup(x => x.GetPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
+        platformClientMock.Setup(x => x.ListPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
             .Returns(new AsyncUnaryCall<PlatformInfoMessage>(
                 Task.FromResult(platformInfo),
                 Task.FromResult(new Metadata()),
@@ -77,8 +72,8 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
                 () => { }
             ));
 
-        containersClientMock.Setup(x => x.ListContainersAsync(It.IsAny<ContainersListMessage>(), null, null, It.IsAny<CancellationToken>()))
-            .Returns(new AsyncUnaryCall<ContainersListReply>(
+        containersClientMock.Setup(x => x.ListAsync(It.IsAny<ListContainersMessage>(), null, null, It.IsAny<CancellationToken>()))
+            .Returns(new AsyncUnaryCall<ListContainersResponse>(
                 Task.FromResult(containersReply),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,

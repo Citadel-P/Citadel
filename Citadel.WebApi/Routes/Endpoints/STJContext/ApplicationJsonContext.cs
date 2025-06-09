@@ -1,9 +1,9 @@
 ﻿using System.Text.Json.Serialization;
-using Agent.Server.Containers;
-using Agent.Server.Images;
+using Citadel.Agent.Containers.V1;
+using Citadel.Agent.Images.V1;
 using Application.Features.Auth.Models;
 using Application.Features.Images.Queries;
-using Citadel.Common;
+using Citadel.Agent.Common.V1;
 using Infrastructure.DockerHub;
 using Infrastructure.Entities;
 using Infrastructure.Entities.Platforms;

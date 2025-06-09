@@ -1,4 +1,4 @@
-﻿using Agent.Server.Images;
+﻿using Citadel.Agent.Images.V1;
 using FluentValidation;
 using Grpc.Core;
 using Hosting.Common;
@@ -35,7 +35,7 @@ internal sealed class DeleteImagesHandler(IGrpcClientFactory clientFactory, Appl
         }
 
         var client = clientFactory.GetImageClient(platformAddress);
-        var request = new DeleteImagesMessage
+        var request = new DeleteImageMessage
         {
             Ids = { command.Ids },
             Force = command.Force,

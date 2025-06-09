@@ -1,11 +1,11 @@
 ﻿using System.Collections.Concurrent;
 using Grpc.Net.Client;
 using Infrastructure.Services.Abstractions;
-using static Agent.Server.Containers.Containers;
-using static Agent.Server.GPlatform.gPlatform;
-using static Agent.Server.Images.Images;
-using static Agent.Server.Networks.Networks;
-using static Agent.Server.Volumes.Volumes;
+using static Citadel.Agent.Containers.V1.ContainerService;
+using static Citadel.Agent.Platforms.V1.PlatformService;
+using static Citadel.Agent.Images.V1.ImageService;
+using static Citadel.Agent.Networks.V1.NetworkService;
+using static Citadel.Agent.Volumes.V1.VolumeService;
 
 namespace Infrastructure.Services;
 
@@ -14,20 +14,20 @@ internal class GrpcClientFactory : IGrpcClientFactory
     private readonly ConcurrentDictionary<string, GrpcChannel> _channelCache = new();
     private readonly ConcurrentDictionary<(Type, string), object> _clientCache = new();
 
-    public gPlatformClient GetPlatformClient(string address) =>
-        GetOrCreateClient(NormalizeAddress(address), channel => new gPlatformClient(channel));
+    public PlatformServiceClient GetPlatformClient(string address) =>
+        GetOrCreateClient(NormalizeAddress(address), channel => new PlatformServiceClient(channel));
 
-    public ContainersClient GetContainerClient(string address) =>
-        GetOrCreateClient(NormalizeAddress(address), channel => new ContainersClient(channel));
+    public ContainerServiceClient GetContainerClient(string address) =>
+        GetOrCreateClient(NormalizeAddress(address), channel => new ContainerServiceClient(channel));
 
-    public ImagesClient GetImageClient(string address) =>
-        GetOrCreateClient(NormalizeAddress(address), channel => new ImagesClient(channel));
+    public ImageServiceClient GetImageClient(string address) =>
+        GetOrCreateClient(NormalizeAddress(address), channel => new ImageServiceClient(channel));
 
-    public NetworksClient GetNetworkClient(string address) =>
-        GetOrCreateClient(NormalizeAddress(address), channel => new NetworksClient(channel));
+    public NetworkServiceClient GetNetworkClient(string address) =>
+        GetOrCreateClient(NormalizeAddress(address), channel => new NetworkServiceClient(channel));
 
-    public VolumesClient GetVolumeClient(string address) =>
-        GetOrCreateClient(NormalizeAddress(address), channel => new VolumesClient(channel));
+    public VolumeServiceClient GetVolumeClient(string address) =>
+        GetOrCreateClient(NormalizeAddress(address), channel => new VolumeServiceClient(channel));
 
     private TClient GetOrCreateClient<TClient>(string address, Func<GrpcChannel, TClient> factory)
     {

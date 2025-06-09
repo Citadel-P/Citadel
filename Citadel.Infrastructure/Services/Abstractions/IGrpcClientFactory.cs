@@ -1,8 +1,10 @@
-﻿using static Agent.Server.Containers.Containers;
-using static Agent.Server.GPlatform.gPlatform;
-using static Agent.Server.Images.Images;
-using static Agent.Server.Networks.Networks;
-using static Agent.Server.Volumes.Volumes;
+﻿using Citadel.Agent.Platforms.V1;
+using Citadel.Agent.Volumes.V1;
+using static Citadel.Agent.Containers.V1.ContainerService;
+using static Citadel.Agent.Images.V1.ImageService;
+using static Citadel.Agent.Networks.V1.NetworkService;
+using static Citadel.Agent.Platforms.V1.PlatformService;
+using static Citadel.Agent.Volumes.V1.VolumeService;
 
 namespace Infrastructure.Services.Abstractions;
 
@@ -11,9 +13,9 @@ namespace Infrastructure.Services.Abstractions;
 /// </summary>
 public interface IGrpcClientFactory
 {
-    gPlatformClient GetPlatformClient(string address);
-    ContainersClient GetContainerClient(string address);
-    ImagesClient GetImageClient(string address);
-    NetworksClient GetNetworkClient(string address);
-    VolumesClient GetVolumeClient(string address);
+    PlatformServiceClient GetPlatformClient(string address);
+    ContainerServiceClient GetContainerClient(string address);
+    ImageServiceClient GetImageClient(string address);
+    NetworkServiceClient GetNetworkClient(string address);
+    VolumeServiceClient GetVolumeClient(string address);
 }

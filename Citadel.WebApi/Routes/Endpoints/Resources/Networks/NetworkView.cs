@@ -1,4 +1,4 @@
-﻿using Agent.Server.Networks;
+﻿using Citadel.Agent.Networks.V1;
 
 namespace WebApi.Routes.Endpoints.Resources.Networks;
 

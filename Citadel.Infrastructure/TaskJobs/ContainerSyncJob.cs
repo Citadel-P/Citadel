@@ -1,5 +1,5 @@
 ﻿using System.Threading.Channels;
-using Agent.Server.Containers;
+using Citadel.Agent.Containers.V1;
 using Infrastructure.Entities;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services;
@@ -68,7 +68,7 @@ internal class ContainerSyncJob(
     private async Task<Container[]> SyncOnlinePlatformContainers(ApplicationDbContext dbContext, PlatformHealth platformEvent, CancellationToken cancellationToken)
     {
         var containersClient = clientFactory.GetContainerClient(platformEvent.Address);
-        var containersReply = await containersClient.ListContainersAsync(new ContainersListMessage { All = true }, cancellationToken: cancellationToken);
+        var containersReply = await containersClient.ListAsync(new ListContainersMessage { All = true }, cancellationToken: cancellationToken);
 
         long fetchTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 

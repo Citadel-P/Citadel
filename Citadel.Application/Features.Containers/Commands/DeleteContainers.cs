@@ -1,5 +1,4 @@
-﻿using System.Collections.Concurrent;
-using Agent.Server.Containers;
+﻿using Citadel.Agent.Containers.V1;
 using FluentValidation;
 using Google.Api;
 using Grpc.Core;
@@ -58,14 +57,14 @@ internal sealed class DeleteContainersHandler(
             var client = clientFactory.GetContainerClient(platform.Address);
             try
             {
-                var message = new DeleteContainersMessage
+                var message = new DeleteContainerMessage
                 {
                     Ids = { platform.ContainersId },
                     V = request.V ?? false,
                     Force = request.Force ?? false,
                     Link = request.Link ?? false,
                 };
-                await client.DeleteContainersAsync(message, cancellationToken: ct);
+                await client.DeleteAsync(message, cancellationToken: ct);
             }
             catch (Exception ex)
             {

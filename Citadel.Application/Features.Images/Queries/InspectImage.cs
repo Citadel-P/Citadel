@@ -1,4 +1,4 @@
-﻿using Agent.Server.Images;
+﻿using Citadel.Agent.Images.V1;
 using FluentValidation;
 using Grpc.Core;
 using Hosting.Common;

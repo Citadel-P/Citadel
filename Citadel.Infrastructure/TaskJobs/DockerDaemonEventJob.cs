@@ -74,7 +74,7 @@ internal sealed class DockerDaemonEventJob(
 
                 await foreach (var reply in call.ResponseStream.ReadAllAsync(cancellationToken))
                 {
-                    if (reply.EventMessageType != Agent.Server.Containers.EventMessageType.Container)
+                    if (reply.EventMessageType != Citadel.Agent.Containers.V1.EventMessageType.Container)
                         continue;
 
 

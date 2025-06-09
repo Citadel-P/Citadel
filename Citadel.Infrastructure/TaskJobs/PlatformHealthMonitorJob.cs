@@ -131,7 +131,7 @@ internal class PlatformHealthMonitorJob(
         try
         {
             var client = clientFactory.GetPlatformClient(address);
-            var response = await client.HealthCheckAsync(new Google.Protobuf.WellKnownTypes.Empty(), deadline: DateTime.UtcNow.AddSeconds(2), cancellationToken: cancellationToken);
+            var response = await client.CheckHealthAsync(new Google.Protobuf.WellKnownTypes.Empty(), deadline: DateTime.UtcNow.AddSeconds(2), cancellationToken: cancellationToken);
             return response.Healthy;
         }
         catch

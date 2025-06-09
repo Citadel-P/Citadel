@@ -76,7 +76,7 @@ internal class PatchPlatformHandler(
             if (patchedPlatform.Type == PlatformType.Docker)
             {
                 var platformClient = clientFactory.GetPlatformClient(patchedPlatform.Address);
-                var platformInfo = await platformClient.GetPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
+                var platformInfo = await platformClient.ListPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
 
                 var oldPlatformAddress = platform.Address;
 

@@ -1,5 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
-using Agent.Server.Images;
+using Citadel.Agent.Images.V1;
 using FluentValidation;
 using Grpc.Core;
 using Hosting.Common;
@@ -49,7 +49,7 @@ internal sealed class PullImageHandler(IGrpcClientFactory clientFactory, Applica
         var client = clientFactory.GetImageClient(platformAddress);
         var request = CreatePullImageRequest(command, registry.Configuration);
 
-        using var call = client.PullImage(request, cancellationToken: cancellationToken);
+        using var call = client.Pull(request, cancellationToken: cancellationToken);
         await foreach (var reply in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
         {
             yield return reply;

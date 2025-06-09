@@ -1,4 +1,4 @@
-﻿using Agent.Server.Volumes;
+﻿using Citadel.Agent.Volumes.V1;
 
 namespace WebApi.Routes.Endpoints.Resources.Volumes;
 
@@ -16,7 +16,7 @@ public sealed record VolumeView
     Dictionary<string, string>? Options
     )
 {
-    public static VolumesView Map(VolumeListReply reply)
+    public static VolumesView Map(ListVolumeReply reply)
         => new([.. reply.Volumes.Select(Map)]);
 
     public static VolumeView Map(VolumeReply volume)

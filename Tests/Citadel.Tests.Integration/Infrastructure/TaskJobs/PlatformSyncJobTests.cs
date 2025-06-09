@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Serialization;
-using Citadel.Common;
+using Citadel.Agent.Common.V1;
 using Grpc.Core;
 using Infrastructure;
 using Infrastructure.Entities;
@@ -14,8 +14,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Moq;
-using static Agent.Server.Containers.Containers;
-using static Agent.Server.GPlatform.gPlatform;
+using static Citadel.Agent.Containers.V1.ContainerService;
+using static Citadel.Agent.Platforms.V1.PlatformService;
 
 namespace Tests.Integration.Infrastructure.TaskJobs;
 
@@ -26,8 +26,8 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
     private readonly Mock<IPlatformHealthMonitorJob> healthMonitorMock = new();
     private readonly TestPlatformHealthBroadCaster broadcaster = new();
 
-    private readonly Mock<gPlatformClient> platformClientMock = new();
-    private readonly Mock<ContainersClient> containerClientMock = new();
+    private readonly Mock<PlatformServiceClient> platformClientMock = new();
+    private readonly Mock<ContainerServiceClient> containerClientMock = new();
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
@@ -98,7 +98,7 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
             Architecture = "x86_64"
         };
 
-        platformClientMock.Setup(x => x.GetPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
+        platformClientMock.Setup(x => x.ListPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
                            .Returns(new AsyncUnaryCall<PlatformInfoMessage>(
                                 Task.FromResult(platformInfo),
                                 Task.FromResult(new Metadata()),
@@ -152,7 +152,7 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
             Architecture = "x86_64"
         };
 
-        platformClientMock.Setup(x => x.GetPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
+        platformClientMock.Setup(x => x.ListPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
                            .Returns(new AsyncUnaryCall<PlatformInfoMessage>(
                                 Task.FromResult(platformInfo),
                                 Task.FromResult(new Metadata()),

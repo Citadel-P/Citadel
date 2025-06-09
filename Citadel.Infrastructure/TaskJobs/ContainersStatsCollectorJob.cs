@@ -1,8 +1,8 @@
 ﻿using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-using Agent.Server.Containers;
-using Citadel.Common;
+using Citadel.Agent.Common.V1;
+using Citadel.Agent.Containers.V1;
 using Google.Protobuf.Collections;
 using Grpc.Core;
 using Infrastructure.Entities;
@@ -74,7 +74,7 @@ internal class ContainersStatsCollectorJob(
             try
             {
                 var client = clientFactory.GetContainerClient(platform.Address);
-                using var stream = client.StreamContainersStats(new ContainersStatsRequest { FetchIntervalMs = jobConfiguration.ContainersInfoInterval * 1000 }, cancellationToken: cancellationToken);
+                using var stream = client.StreamContainerStats(new ContainerStatsRequest { FetchIntervalMs = jobConfiguration.ContainersInfoInterval * 1000 }, cancellationToken: cancellationToken);
                 await foreach (var reply in stream.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
                 {
                     if (reply.Containers.Count > 0)

@@ -1,5 +1,5 @@
 ﻿using System.Text;
-using Citadel.Common;
+using Citadel.Agent.Common.V1;
 using Grpc.Core;
 using Infrastructure;
 using Infrastructure.Entities;
@@ -10,7 +10,7 @@ using Infrastructure.TaskJobs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using static Agent.Server.GPlatform.gPlatform;
+using static Citadel.Agent.Platforms.V1.PlatformService;
 
 namespace Tests.Integration.Application.Features.Platforms;
 
@@ -18,7 +18,7 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
 {
     private Guid platformId;
     private readonly Mock<IGrpcClientFactory> grpcFactoryMock = new();
-    private readonly Mock<gPlatformClient> platformClientMock = new();
+    private readonly Mock<PlatformServiceClient> platformClientMock = new();
     private readonly Mock<IPlatformHealthMonitorJob> healthMonitorMock = new();
 
     protected override void ConfigureTestServices(IServiceCollection services)
@@ -81,7 +81,7 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
             OsVersion = "5.15",
             Architecture = "x86_64"
         };
-        platformClientMock.Setup(x => x.GetPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
+        platformClientMock.Setup(x => x.ListPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
                            .Returns(new AsyncUnaryCall<PlatformInfoMessage>(
                                 Task.FromResult(platformInfo),
                                 Task.FromResult(new Metadata()),

@@ -1,4 +1,4 @@
-﻿using Agent.Server.Volumes;
+﻿using Citadel.Agent.Volumes.V1;
 using FluentValidation;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;

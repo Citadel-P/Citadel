@@ -1,4 +1,4 @@
-﻿using Agent.Server.Networks;
+﻿using Citadel.Agent.Networks.V1;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
@@ -30,7 +30,7 @@ internal class ListNetworksHandler(ApplicationDbContext dbContext, IGrpcClientFa
                 Dangling = query.Dangling
             };
             var client = clientFactory.GetNetworkClient(address);
-            var response = await client.ListNetworksAsync(args, cancellationToken: cancellationToken);
+            var response = await client.ListAsync(args, cancellationToken: cancellationToken);
             return new ListNetworksReply() { Networks = { response.Networks.OrderByDescending(s => s.Created) } };
         }
         catch (RpcException ex)

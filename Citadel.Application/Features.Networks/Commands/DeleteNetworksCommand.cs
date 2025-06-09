@@ -1,4 +1,4 @@
-﻿using Agent.Server.Networks;
+﻿using Citadel.Agent.Networks.V1;
 using FluentValidation;
 using Grpc.Core;
 using Hosting.Common;

@@ -1,4 +1,4 @@
-﻿using Agent.Server.Images;
+﻿using Citadel.Agent.Images.V1;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
@@ -24,7 +24,7 @@ internal class GetAllLocalImagesHandler(ApplicationDbContext dbContext, IGrpcCli
         try
         {
             var client = clientFactory.GetImageClient(address);
-            var images = await client.GetAllAsync(new ListImagesMessage(), cancellationToken: cancellationToken);
+            var images = await client.ListAsync(new ListImagesMessage(), cancellationToken: cancellationToken);
             return images.Images;
         }
         catch (RpcException ex)

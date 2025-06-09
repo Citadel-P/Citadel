@@ -1,5 +1,5 @@
-﻿using Agent.Server.Containers;
-using Citadel.Common;
+﻿using Citadel.Agent.Containers.V1;
+using Citadel.Agent.Common.V1;
 using EFCore.BulkExtensions;
 using FluentValidation;
 using Hosting.Common;
@@ -62,8 +62,8 @@ internal sealed class CreatePlatformHandler(
         var platformClient = clientFactory.GetPlatformClient(command.Address);
         var containersClient = clientFactory.GetContainerClient(command.Address);
 
-        var platformInfoTsk = platformClient.GetPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
-        var containersTsk = containersClient.ListContainersAsync(new ContainersListMessage { All = true }, cancellationToken: cancellationToken);
+        var platformInfoTsk = platformClient.ListPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
+        var containersTsk = containersClient.ListAsync(new ListContainersMessage { All = true }, cancellationToken: cancellationToken);
         var platformInfo = await platformInfoTsk;
         var containers = await containersTsk;
 

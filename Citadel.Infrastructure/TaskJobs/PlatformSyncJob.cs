@@ -48,7 +48,7 @@ internal class PlatformSyncJob(
                 var platformClient = clientFactory.GetPlatformClient(evt.Address);
                 var containersClient = clientFactory.GetContainerClient(evt.Address);
 
-                var platformInfo = await platformClient.GetPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
+                var platformInfo = await platformClient.ListPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
 
                 // Update platform
                 PlatformDescriptor? descriptor = null;

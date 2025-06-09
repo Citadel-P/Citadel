@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using Agent.Server.Images;
+using Citadel.Agent.Images.V1;
 using Application.Features.Images.Queries;
 using Hosting.Extensions;
 using Infrastructure.DockerHub;

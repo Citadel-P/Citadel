@@ -1,4 +1,4 @@
-﻿using Agent.Server.Images;
+﻿using Citadel.Agent.Images.V1;
 
 namespace WebApi.Routes.Endpoints.Resources.Images;
 

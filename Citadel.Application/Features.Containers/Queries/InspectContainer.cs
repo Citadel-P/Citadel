@@ -1,5 +1,5 @@
-﻿using Agent.Server.Containers;
-using Citadel.Common;
+﻿using Citadel.Agent.Common.V1;
+using Citadel.Agent.Containers.V1;
 using FluentValidation;
 using Grpc.Core;
 using Hosting.Common;
@@ -38,7 +38,7 @@ internal sealed class InspectContainerHandler(
         var request = new InspectContainerRequest() { ContainerId = query.ContainerId };
         try
         {
-            return await client.InspectContainerAsync(request, cancellationToken: cancellationToken);
+            return await client.InspectAsync(request, cancellationToken: cancellationToken);
         }
         catch (RpcException ex) 
         {

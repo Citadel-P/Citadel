@@ -1,4 +1,4 @@
-﻿using Agent.Server.Volumes;
+﻿using Citadel.Agent.Volumes.V1;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
@@ -10,20 +10,20 @@ using Microsoft.EntityFrameworkCore;
 namespace Application.Features.Volumes.Queries;
 
 public sealed record ListVolumes(Guid PlatformId, bool? Dangling = null, string? Driver = null, string? Name = null) 
-    : IQuery<Result<VolumeListReply>>;
+    : IQuery<Result<ListVolumeReply>>;
 
-internal class ListVolumesHandler(ApplicationDbContext dbContext, IGrpcClientFactory clientFactory) : IQueryHandler<ListVolumes, Result<VolumeListReply>>
+internal class ListVolumesHandler(ApplicationDbContext dbContext, IGrpcClientFactory clientFactory) : IQueryHandler<ListVolumes, Result<ListVolumeReply>>
 {
-    public async ValueTask<Result<VolumeListReply>> Handle(ListVolumes query, CancellationToken cancellationToken)
+    public async ValueTask<Result<ListVolumeReply>> Handle(ListVolumes query, CancellationToken cancellationToken)
     {
         var address = await dbContext.Platforms.Where(s => s.Id == query.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
         if (address == null)
         {
-            return Result.Failure<VolumeListReply>(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure<ListVolumeReply>(new NotFoundError("The provided platform Id doesn't exist"));
         }
         try
         {
-            var args = new VolumeListMessage
+            var args = new ListVolumeMessage
             {
                 Driver = query.Driver,
                 Name = query.Name,
@@ -31,11 +31,11 @@ internal class ListVolumesHandler(ApplicationDbContext dbContext, IGrpcClientFac
             };
             var client = clientFactory.GetVolumeClient(address);
             var result = await client.ListAsync(args, cancellationToken: cancellationToken);
-            return new VolumeListReply() { Volumes = { result.Volumes.OrderByDescending(s => s.CreatedAt) } };
+            return new ListVolumeReply() { Volumes = { result.Volumes.OrderByDescending(s => s.CreatedAt) } };
         }
         catch (RpcException ex)
         {
-            return Result.Failure<VolumeListReply>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<ListVolumeReply>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 }

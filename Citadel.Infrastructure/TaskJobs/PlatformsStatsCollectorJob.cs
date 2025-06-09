@@ -1,8 +1,8 @@
 ﻿using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-using Agent.Server.GPlatform;
-using Citadel.Common;
+using Citadel.Agent.Common.V1;
+using Citadel.Agent.Platforms.V1;
 using Grpc.Core;
 using Infrastructure.Entities;
 using Infrastructure.Services;

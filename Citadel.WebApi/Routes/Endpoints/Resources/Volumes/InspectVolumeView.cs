@@ -1,4 +1,4 @@
-﻿using Agent.Server.Volumes;
+﻿using Citadel.Agent.Volumes.V1;
 
 namespace WebApi.Routes.Endpoints.Resources.Volumes;
 
