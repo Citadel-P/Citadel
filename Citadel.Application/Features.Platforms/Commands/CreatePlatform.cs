@@ -3,6 +3,7 @@ using Citadel.Common;
 using EFCore.BulkExtensions;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Infrastructure;
 using Infrastructure.Entities;
@@ -17,6 +18,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Platforms.Commands;
 
+[RequirePermission(nameof(AppPermission.Platform_Create))]
 public sealed record CreatePlatform(string Name, string Address, PlatformType Type) : ICommand<Result<Platform>>
 {
     internal class Validator : AbstractValidator<CreatePlatform>
@@ -37,6 +39,13 @@ internal sealed class CreatePlatformHandler(
 {
     public async ValueTask<Result<Platform>> Handle(CreatePlatform command, CancellationToken cancellationToken)
     {
+        // Check if the platform already exists
+        if (await dbContext.Platforms.AsNoTracking()
+                                    .FirstOrDefaultAsync(s => s.Address == command.Address || s.Name == command.Name, cancellationToken: cancellationToken) != null)
+        {
+            return Result.Failure<Platform>(new ConflictError("A platform with the same [Name] or [Address] already exists!"));
+        }
+
         if (command.Type == PlatformType.Docker)
         {
             return await HandleDockerPlatform(command, cancellationToken);
@@ -57,13 +66,6 @@ internal sealed class CreatePlatformHandler(
         var containersTsk = containersClient.ListContainersAsync(new ContainersListMessage { All = true }, cancellationToken: cancellationToken);
         var platformInfo = await platformInfoTsk;
         var containers = await containersTsk;
-
-        // Check if the platform already exists
-        if (await dbContext.Platforms.AsNoTracking()
-                                    .FirstOrDefaultAsync(s => s.Address == command.Address || s.Name == command.Name, cancellationToken: cancellationToken) != null)
-        {
-            return Result.Failure<Platform>(new ConflictError("A platform with the same [Name] or [Address] already exists!"));
-        }
 
         DockerPlatformDescriptor descriptor = new (
             DaemonId: platformInfo.Id,
@@ -115,9 +117,9 @@ internal static class Mapper
     internal static PlatformStat MapStat(this PlatformInfoMessage systemInfo)
         => new (
             created: systemInfo.Created,
-            memoryUsage: systemInfo.PlatformStat.MemoryUsage,
-            cpuUsage: systemInfo.PlatformStat.CpuUsage,
-            rxBytes: systemInfo.PlatformStat.RxBytes,
-            txBytes: systemInfo.PlatformStat.TxBytes
+            memoryUsage: systemInfo.PlatformStat?.MemoryUsage ?? 0,
+            cpuUsage: systemInfo.PlatformStat?.CpuUsage ?? 0,
+            rxBytes: systemInfo.PlatformStat?.RxBytes ?? 0,
+            txBytes: systemInfo.PlatformStat?.TxBytes ?? 0
             );
 }
