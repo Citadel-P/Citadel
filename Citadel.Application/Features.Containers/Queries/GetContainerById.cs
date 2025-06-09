@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Containers.Queries;
 
-[RequirePermission(nameof(AppPermission.ListContainers))]
+[RequirePermission(nameof(AppPermission.Container_View))]
 public sealed record GetContainerById(string ContainerId) : IQuery<Result<Container>>
 {
     internal class Validator : AbstractValidator<GetContainerById>

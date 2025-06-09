@@ -52,7 +52,7 @@ public abstract class IntegrationTestBase<TEntryPoint> : IAsyncLifetime
 
         
         Client = factory.CreateClient();
-        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", await CreateJwtTokenAsync());
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateJwtTokenAsync());
     }
 
     /// <summary>
@@ -68,16 +68,16 @@ public abstract class IntegrationTestBase<TEntryPoint> : IAsyncLifetime
     /// <summary>
     /// Override to create new roles, users, etc
     /// </summary>
-    protected virtual ValueTask<string> CreateJwtTokenAsync()
+    protected string CreateJwtTokenAsync(IEnumerable<Claim>? claims = null)
     {
         // Create a jwt token
         var jwt = Services.GetRequiredService<IJwtService>();
-        var token = jwt.CreateAccessToken(new List<Claim>() 
-        { 
+        var token = jwt.CreateAccessToken(claims ??
+        [
             new ("role", "admin"),
             new ("name", "Test user"),
-        });
-        return ValueTask.FromResult(token);
+        ]);
+        return token;
     }
 
     public async ValueTask DisposeAsync()

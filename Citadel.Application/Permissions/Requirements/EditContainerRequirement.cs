@@ -19,7 +19,7 @@ internal class EditContainerHandler : AuthorizationHandler<EditContainerRequirem
         }
         else
         {
-            if (context.User.HasPermission(nameof(AppPermission.EditContainers)))
+            if (context.User.HasPermission(nameof(AppPermission.Container_Update)))
             {
                 context.Succeed(requirement);
             }

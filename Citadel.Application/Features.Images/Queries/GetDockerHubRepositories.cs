@@ -16,7 +16,7 @@ public sealed record GetDockerHubRepositories(string RegistryName) : IQuery<Resu
     {
         public Validator()
         {
-            RuleFor(s => s.RegistryName).NotEmpty().ValidNameIdentifier();
+            RuleFor(s => s.RegistryName).ValidNameIdentifier();
         }
     }
 }

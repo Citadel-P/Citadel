@@ -17,7 +17,7 @@ public sealed record GetExternalRepositories(string Name) : IQuery<Result<IEnume
     {
         public Validator()
         {
-            RuleFor(s => s.Name).NotEmpty().ValidNameIdentifier();
+            RuleFor(s => s.Name).ValidNameIdentifier();
         }
     }
 }

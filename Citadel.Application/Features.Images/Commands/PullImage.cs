@@ -24,7 +24,7 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
             RuleFor(s => s.ImageTag).NotEmpty().NotNull();
             RuleFor(s => s.PlatformId).NotEmpty().NotNull();
             RuleFor(s => s.RepositoryName).NotEmpty().NotNull();
-            RuleFor(s => s.RegistryName).NotEmpty().ValidNameIdentifier();
+            RuleFor(s => s.RegistryName).ValidNameIdentifier();
         }
     }
 }

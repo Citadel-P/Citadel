@@ -44,7 +44,7 @@ internal sealed class PlatformConfiguration : IEntityTypeConfiguration<Platform>
     }
 }
 
-[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default, PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(Platform))]
 [JsonSerializable(typeof(PlatformStat))]
 [JsonSerializable(typeof(ICollection<PlatformStat>))]

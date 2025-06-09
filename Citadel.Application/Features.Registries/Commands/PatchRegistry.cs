@@ -17,9 +17,9 @@ namespace Application.Features.Registries.Commands;
 
 public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Patch) : ICommand<Result<Registry>>
 {
-    internal sealed class PatchRegistryValidator : PatchCommandValidator<PatchRegistry, Registry>
+    internal sealed class Validator : PatchCommandValidator<PatchRegistry, Registry>
     {
-        public PatchRegistryValidator()
+        public Validator()
             : base(
                   patchSelector: x => x.Patch,
                   jsonTypeInfo: RegistryJsonContext.Default.Registry,

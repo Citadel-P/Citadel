@@ -66,9 +66,9 @@ internal class PlatformSyncJob(
                         osType: platformInfo.OsType,
                         architecture: platformInfo.Architecture);
                 }
-                else if (platform.PlatformDescriptor is DockerSwarmPlatformDescriptor dockerSwarmPlatform)
+                else if (platform.PlatformDescriptor is DockerSwarmPlatformDescriptor swarmDescriptor)
                 {
-                    // Todo: implement DockerSwarmPlatform configuration update
+                    // Todo
                 }
 
                 platform.PartialUpdate(

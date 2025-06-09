@@ -23,7 +23,7 @@ public sealed record CreatePlatform(string Name, string Address, PlatformType Ty
     {
         public Validator()
         {
-            RuleFor(x => x.Name).NotEmpty().ValidNameIdentifier();
+            RuleFor(x => x.Name).ValidNameIdentifier();
             RuleFor(x => x.Address).ValidHostOrIp();
         }
     }

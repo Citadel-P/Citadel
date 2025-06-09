@@ -1,6 +1,7 @@
 ﻿using FluentValidation;
 using Grpc.Core;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
 using Infrastructure;
@@ -17,11 +18,12 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Platforms.Commands;
 
+[RequirePermission(nameof(AppPermission.Platform_Update))]
 public sealed record PatchPlatform(Guid? Id, JsonMergePatchDocument<Platform> Patch) : ICommand<Result<Platform>>
 {
-    internal sealed class PatchPlatformValidator : PatchCommandValidator<PatchPlatform, Platform>
+    internal sealed class Validator : PatchCommandValidator<PatchPlatform, Platform>
     {
-        public PatchPlatformValidator()
+        public Validator()
             : base(
                   patchSelector: x => x.Patch,
                   jsonTypeInfo: PlatformJsonContext.Default.Platform,
@@ -34,8 +36,11 @@ public sealed record PatchPlatform(Guid? Id, JsonMergePatchDocument<Platform> Pa
     {
         public PlatformValidator()
         {
-            RuleFor(x => x.Name).NotEmpty().ValidNameIdentifier();
-            RuleFor(x => x.Address).ValidHostOrIp();
+            When(x => x.Name is not null, () => RuleFor(x => x.Name).ValidNameIdentifier());
+            When(x => x.Address is not null, () => RuleFor(x => x.Address).ValidHostOrIp());
+            RuleFor(x => x.Type)
+                .Must(x => Enum.IsDefined(x))
+                .WithMessage("'{PropertyName}' must be a valid type");
         }
     }
 }

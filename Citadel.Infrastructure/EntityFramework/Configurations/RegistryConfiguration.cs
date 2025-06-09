@@ -35,7 +35,7 @@ internal sealed class RegistryConfiguration : IEntityTypeConfiguration<Registry>
     }
 }
 
-[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default, PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(Registry))]
 [JsonSerializable(typeof(AWSRegistry))]
 [JsonSerializable(typeof(AzureRegistry))]

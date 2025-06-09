@@ -19,7 +19,7 @@ internal class DeleteContainerHandler : AuthorizationHandler<DeleteContainerRequ
         }
         else
         {
-            if (context.User.HasPermission(nameof(AppPermission.DeleteContainers)))
+            if (context.User.HasPermission(nameof(AppPermission.Container_Delete)))
             {
                 context.Succeed(requirement);
             }

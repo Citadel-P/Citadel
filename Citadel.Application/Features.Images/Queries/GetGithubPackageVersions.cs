@@ -16,7 +16,7 @@ public sealed record GetGithubPackageVersions(string RegistryName, string Packag
     {
         public Validator()
         {
-            RuleFor(s => s.RegistryName).NotEmpty().ValidNameIdentifier();
+            RuleFor(s => s.RegistryName).ValidNameIdentifier();
             RuleFor(s => s.PackageName).NotEmpty().NotNull();
         }
     }

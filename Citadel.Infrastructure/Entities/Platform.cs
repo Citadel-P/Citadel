@@ -36,7 +36,7 @@ public class Platform
         NetworkCount = networkCount;
         ServerVersion = serverVersion;
         AgentVersion = agentVersion;
-        PlatformDescriptor = platformDescriptor ?? throw new ArgumentNullException(nameof(PlatformDescriptor), "PlatformDescriptor cannot be null.");
+        PlatformDescriptor = platformDescriptor;
     }
 
     public Guid Id { get; private set; }

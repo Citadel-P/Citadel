@@ -16,7 +16,7 @@ public sealed record GetDockerHubRepositoryTags(string RegistryName, string Repo
     {
         public Validator()
         {
-            RuleFor(s => s.RegistryName).NotEmpty().ValidNameIdentifier();
+            RuleFor(s => s.RegistryName).ValidNameIdentifier();
             RuleFor(s => s.RepositoryName).NotEmpty().NotNull();
         }
     }
