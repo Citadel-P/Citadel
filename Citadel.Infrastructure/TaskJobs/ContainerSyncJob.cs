@@ -19,7 +19,7 @@ namespace Infrastructure.TaskJobs;
 /// Syncing full containers state when platform status change.
 /// </summary>
 internal class ContainerSyncJob(
-    IContainerService containerService,
+    IContainerConnector containerService,
     IServiceScopeFactory scopeFactory,
     IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster,

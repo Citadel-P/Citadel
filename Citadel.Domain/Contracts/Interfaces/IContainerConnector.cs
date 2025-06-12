@@ -4,7 +4,7 @@ using LightResults;
 
 namespace Domain.Contracts.Interfaces;
 
-public interface IContainerService
+public interface IContainerConnector
 {
     Task<Result<IReadOnlyDictionary<string, Container>>> ListContainersAsync(ContainerFilterCommand containerFilterCommand, CancellationToken cancellationToken);
     Task<Result<ContainerInspectionInfo>> InspectAsync(InspectContainerCommand inspectContainerCommand, CancellationToken cancellationToken);

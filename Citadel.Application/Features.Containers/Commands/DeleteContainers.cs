@@ -19,7 +19,7 @@ public sealed record DeleteContainers(string[] ContainersIds, bool? V = false, b
     }
 }
 
-internal sealed class DeleteContainersHandler(IContainerService containerService, ApplicationDbContext dbContext) : ICommandHandler<DeleteContainers, Result>
+internal sealed class DeleteContainersHandler(IContainerConnector containerConnector, ApplicationDbContext dbContext) : ICommandHandler<DeleteContainers, Result>
 {
     public async ValueTask<Result> Handle(DeleteContainers request, CancellationToken cancellationToken)
     {
@@ -41,6 +41,6 @@ internal sealed class DeleteContainersHandler(IContainerService containerService
             Force: request.Force,
             Link: request.Link
         );
-        return await containerService.DeleteAsync(command, cancellationToken);
+        return await containerConnector.DeleteAsync(command, cancellationToken);
     }
 }

@@ -15,7 +15,7 @@ namespace Infrastructure.TaskJobs;
 
 internal sealed class DockerDaemonEventJob(
     ILogger<DockerDaemonEventJob> logger,
-    IContainerService containerService,
+    IContainerConnector containerService,
     IServiceScopeFactory scopeFactory,
     IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster) : BackgroundService

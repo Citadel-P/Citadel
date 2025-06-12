@@ -20,7 +20,7 @@ public sealed record PatchContainer(string[] ContainersIds, ContainerAction Acti
     }
 }
 
-internal class PatchContainerHandler(IContainerService containerService, ApplicationDbContext dbContext)
+internal class PatchContainerHandler(IContainerConnector containerConnector, ApplicationDbContext dbContext)
     : ICommandHandler<PatchContainer, Result>
 {
     public async ValueTask<Result> Handle(PatchContainer request, CancellationToken cancellationToken)
@@ -41,6 +41,6 @@ internal class PatchContainerHandler(IContainerService containerService, Applica
             Action: request.Action,
             PlatformContainers: platformContainers
         );
-        return await containerService.PatchAsync(command, cancellationToken);
+        return await containerConnector.PatchAsync(command, cancellationToken);
     }
 }

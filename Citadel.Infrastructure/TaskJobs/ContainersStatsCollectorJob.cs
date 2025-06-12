@@ -7,7 +7,7 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Grpc.Core;
 using Infrastructure.Services;
-using Infrastructure.Services.Mappings;
+using Infrastructure.Connectors.Mappings;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -18,8 +18,8 @@ namespace Infrastructure.TaskJobs;
 /// Collects containers stats from remote agents and pushes into the shared Channel <see cref="ContainersStatsPersistenceJob"/>.
 /// </summary>
 internal class ContainersStatsCollectorJob(
-    IContainerService containerService,
     IOptions<JobConfiguration> options, 
+    IContainerConnector containerConnector,
     ChannelWriter<ContainersStatBatch> channel,
     IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
@@ -74,7 +74,7 @@ internal class ContainersStatsCollectorJob(
             try
             {
                 var command = new StreamContainerStatsCommand(PlatformAddress: platform.Address, FetchIntervalMs: jobConfiguration.ContainersInfoInterval * 1000);
-                await foreach (var reply in containerService.StreamContainerStatsAsync(command, cancellationToken: cancellationToken))
+                await foreach (var reply in containerConnector.StreamContainerStatsAsync(command, cancellationToken: cancellationToken))
                 {
                     if (reply.Containers.Count > 0)
                     {

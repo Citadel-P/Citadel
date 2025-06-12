@@ -6,7 +6,7 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Google.Protobuf.Collections;
 
-namespace Infrastructure.Services.Mappings;
+namespace Infrastructure.Connectors.Mappings;
 
 internal static class ContainerMapper
 {

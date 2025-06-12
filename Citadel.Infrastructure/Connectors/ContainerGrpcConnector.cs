@@ -6,15 +6,16 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
+using Infrastructure.Connectors.Mappings;
+using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
-using Infrastructure.Services.Mappings;
 using LightResults;
 using Microsoft.Extensions.Logging;
 using static Citadel.Agent.Containers.V1.ContainerService;
 
-namespace Infrastructure.Services;
+namespace Infrastructure.Connectors;
 
-internal class ContainerService(IGrpcClientFactory grpcClientFactory, ILogger<ContainerService> logger) : IContainerService
+internal class ContainerGrpcConnector(IGrpcClientFactory grpcClientFactory, ILogger<ContainerGrpcConnector> logger) : IContainerConnector
 {
     public async Task<Result<IReadOnlyDictionary<string, Container>>> ListContainersAsync(ContainerFilterCommand command, CancellationToken cancellationToken)
     {

@@ -20,7 +20,7 @@ public sealed record StreamContainerLogs(string ContainerId) : IStreamCommand<Co
     }
 }
 
-internal class StreamContainerLogsHandler(IContainerService containerService, ApplicationDbContext dbContext)
+internal class StreamContainerLogsHandler(IContainerConnector containerConnector, ApplicationDbContext dbContext)
     : IStreamCommandHandler<StreamContainerLogs, ContainerLogInfo>
 {
     public async IAsyncEnumerable<ContainerLogInfo> Handle(StreamContainerLogs query, [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -33,7 +33,7 @@ internal class StreamContainerLogsHandler(IContainerService containerService, Ap
                 ContainerId: query.ContainerId, 
                 PlatformAddress: platformAddress
             );
-        await foreach(var log in containerService.StreamLogsAsync(command, cancellationToken))
+        await foreach(var log in containerConnector.StreamLogsAsync(command, cancellationToken))
         {
             yield return log;
         }

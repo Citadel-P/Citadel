@@ -19,7 +19,7 @@ public sealed record InspectContainer(string ContainerId) : IQuery<Result<Contai
     }
 }
 
-internal sealed class InspectContainerHandler(IContainerService containerService, ApplicationDbContext dbContext) 
+internal sealed class InspectContainerHandler(IContainerConnector containerConnector, ApplicationDbContext dbContext) 
     : IQueryHandler<InspectContainer, Result<ContainerInspectionInfo>>
 {
     
@@ -32,6 +32,6 @@ internal sealed class InspectContainerHandler(IContainerService containerService
         }
 
         var command = new InspectContainerCommand(platformAddress, query.ContainerId);
-        return await containerService.InspectAsync(command, cancellationToken);
+        return await containerConnector.InspectAsync(command, cancellationToken);
     }
 }

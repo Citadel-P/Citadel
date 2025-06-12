@@ -35,7 +35,7 @@ public sealed record CreatePlatform(string Name, string Address, PlatformType Ty
 internal sealed class CreatePlatformHandler(
     ApplicationDbContext dbContext,
     IGrpcClientFactory clientFactory,
-    IContainerService containerService,
+    IContainerConnector containerConnector,
     IPlatformHealthMonitorJob platformHealthMonitorJob,
     ILogger<PatchPlatformHandler> logger) : ICommandHandler<CreatePlatform, Result<Platform>>
 {
@@ -122,7 +122,7 @@ internal sealed class CreatePlatformHandler(
                 All: true
             );
 
-        var containersResult = await containerService.ListContainersAsync(command, cancellationToken: cancellationToken);
+        var containersResult = await containerConnector.ListContainersAsync(command, cancellationToken: cancellationToken);
 
         if (!containersResult.IsSuccess(out var containers))
         {
