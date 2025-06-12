@@ -1,6 +1,6 @@
 ﻿using System.Threading.Channels;
 using EFCore.BulkExtensions;
-using Infrastructure.Entities;
+using Domain.Entities;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
 using Microsoft.Extensions.DependencyInjection;

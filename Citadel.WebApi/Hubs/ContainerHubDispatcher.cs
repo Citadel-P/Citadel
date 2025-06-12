@@ -1,4 +1,4 @@
-﻿using Infrastructure.Entities;
+﻿using Domain.Entities;
 using Infrastructure.Services.Abstractions;
 using Microsoft.AspNetCore.SignalR;
 using WebApi.Routes.Endpoints.Resources.Containers;

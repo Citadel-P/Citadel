@@ -1,4 +1,4 @@
-﻿using Infrastructure.Entities;
+﻿using Domain.Entities;
 using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;

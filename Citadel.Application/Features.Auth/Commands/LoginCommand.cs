@@ -1,7 +1,7 @@
 ﻿using Hosting.Common.ErrorTypes;
 using Application.Features.Auth.Models;
 using Application.Services;
-using Infrastructure.Entities.Identity;
+using Domain.Entities.Identity;
 using FluentValidation;
 using LightResults;
 using Mediator;

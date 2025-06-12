@@ -2,12 +2,14 @@
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.DockerHub;
-using Infrastructure.Entities.Registries;
+using Domain.Entities.Registries;
 using Infrastructure.EntityFramework;
 using Infrastructure.GithubCr;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Registries;
 
 namespace Application.Features.Images.Queries;
 
@@ -24,8 +26,8 @@ public sealed record GetExternalRepositories(string Name) : IQuery<Result<IEnume
 
 internal sealed class GetExternalRepositoriesHander(
     ApplicationDbContext dbContext, 
-    IDockerHubApi dockerHub,
-    IGithubCrApi githubCrApi) : IQueryHandler<GetExternalRepositories, Result<IEnumerable<IImageRepository>>>
+    IDockerHubService dockerHubService,
+    IGitHubCrService gitHubCrService) : IQueryHandler<GetExternalRepositories, Result<IEnumerable<IImageRepository>>>
 {
     public async ValueTask<Result<IEnumerable<IImageRepository>>> Handle(GetExternalRepositories query, CancellationToken cancellationToken)
     {
@@ -37,7 +39,7 @@ internal sealed class GetExternalRepositoriesHander(
 
         if (registry.Configuration is GitHubRegistry ghCfg) 
         {
-            var (packages, errorMessage) = await ghCfg.GetPackages(githubCrApi, cancellationToken);
+            var (packages, errorMessage) = await gitHubCrService.GetPackagesAsync(ghCfg, cancellationToken);
             if (errorMessage != null)
             {
                 return Result.Failure<IEnumerable<IImageRepository>>(new BadRequestError(errorMessage));
@@ -47,7 +49,7 @@ internal sealed class GetExternalRepositoriesHander(
 
         if (registry.Configuration is DockerHubRegistry dhCfg)
         {
-            var (repositories, errorMessage) = await dhCfg.GetRepositories(dockerHub, cancellationToken);
+            var (repositories, errorMessage) = await dockerHubService.GetRepositoriesAsync(dhCfg, cancellationToken);
             if (errorMessage != null)
             {
                 return Result.Failure<IEnumerable<IImageRepository>>(new BadRequestError(errorMessage));
@@ -62,8 +64,8 @@ internal sealed class GetExternalRepositoriesHander(
 
 internal static partial class Mapper
 {
-    internal static IEnumerable<IImageRepository> Map(this IEnumerable<GhcrPackage> packages) => packages.Select(Map);
-    internal static IImageRepository Map(GhcrPackage package) => new GitHubPackageResponse()
+    internal static IEnumerable<IImageRepository> Map(this IEnumerable<GitHubCrPackage> packages) => packages.Select(Map);
+    internal static IImageRepository Map(GitHubCrPackage package) => new GitHubPackageResponse()
     {
         Name = package.Name,
         Id = package.Id.ToString(),
@@ -73,8 +75,8 @@ internal static partial class Mapper
         HtmlUrl = package.HtmlUrl,
     };
 
-    internal static IEnumerable<IImageRepository> Map(this IEnumerable<DockerHubRepository> repositories) => repositories.Select(Map);
-    internal static IImageRepository Map(DockerHubRepository repository) => new DockerHubRepositoryResponse()
+    internal static IEnumerable<IImageRepository> Map(this IEnumerable<DockerHubRepositoryInfo> repositories) => repositories.Select(Map);
+    internal static IImageRepository Map(DockerHubRepositoryInfo repository) => new DockerHubRepositoryResponse()
     {
         Name = repository.Name,
         Namespace = repository.Namespace,

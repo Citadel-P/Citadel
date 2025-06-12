@@ -1,7 +1,7 @@
-import { DockerHubTagView, GhcrPackageVersion } from '@/api/_generated';
+import { DockerHubTagView, GitHubCrPackageVersion } from '@/api/_generated';
 import { useState } from 'react';
 
-type AllowedTypes = GhcrPackageVersion | DockerHubTagView;
+type AllowedTypes = GitHubCrPackageVersion | DockerHubTagView;
 
 // Hook for managing sheet state
 export function useSheetState<T extends AllowedTypes>() {

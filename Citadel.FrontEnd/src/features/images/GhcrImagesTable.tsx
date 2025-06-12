@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn } from '@/lib/utils';
 import { useGETExternalRepositories } from './hooks/useGETExternalRepositories';
 import Loader from '@/components/ui/loader';
-import { GhcrPackageVersion, IImageRepositoryGitHubPackageResponse } from '@/api/_generated';
+import { GitHubCrPackageVersion, IImageRepositoryGitHubPackageResponse } from '@/api/_generated';
 import { useGETPackageVersions } from './hooks/useGETPackageVersions';
 import { useContextSelector } from 'use-context-selector';
 import { ImagesContext } from './ImagesProvider';
@@ -29,13 +29,13 @@ import { PullImageBadge } from '@/components/ui/PullImageBadge';
 
 // Column helpers
 const packageColumnHelper = createColumnHelper<IImageRepositoryGitHubPackageResponse>();
-const versionColumnHelper = createColumnHelper<GhcrPackageVersion>();
+const versionColumnHelper = createColumnHelper<GitHubCrPackageVersion>();
 
 // Nested table component
 function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubPackageResponse }) {
   const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
   const { isLoading, data } = useGETPackageVersions(selectedRegistry?.name, ghPackage?.name);
-  const { sheetState, openSheet, closeSheet } = useSheetState<GhcrPackageVersion>();
+  const { sheetState, openSheet, closeSheet } = useSheetState<GitHubCrPackageVersion>();
 
   const versionColumns = useMemo(
     () => [
@@ -43,38 +43,38 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubP
         header: 'Version',
         cell: (info) => <VersionRow version={info.getValue() ?? ''} />,
       }),
-      versionColumnHelper.accessor('html_url', {
+      versionColumnHelper.accessor('htmlUrl', {
         header: 'Url',
         cell: (info) => (
           <a
             className="hover:underline text-blue-600 text-[13px]"
             target="_blank"
             rel="noreferrer"
-            href={info.row.original.html_url ?? ''}>
+            href={info.row.original.htmlUrl ?? ''}>
             {info.row.original.id}
           </a>
         ),
       }),
       {
         header: 'Tags',
-        cell: ({ row }: { row: Row<GhcrPackageVersion> }) =>
+        cell: ({ row }: { row: Row<GitHubCrPackageVersion> }) =>
           row.original.metadata?.container?.tags?.map((s) => (
             <Badge className="mr-1 text-[13px] font-normal" variant="outline" key={s}>
               {truncate(s, 15, 'left')}
             </Badge>
           )),
       },
-      versionColumnHelper.accessor('created_at', {
+      versionColumnHelper.accessor('createdAt', {
         header: 'Created At',
         cell: (info) => <span className="text-[13px]">{fromNow(new Date(info.getValue() ?? 0 * 1000).getTime())}</span>,
       }),
-      versionColumnHelper.accessor('updated_at', {
+      versionColumnHelper.accessor('updatedAt', {
         header: 'Updated At',
         cell: (info) => <span className="text-[13px]">{fromNow(new Date(info.getValue() ?? 0 * 1000).getTime())}</span>,
       }),
       {
         id: 'select',
-        cell: ({ row }: { row: Row<GhcrPackageVersion> }) => (
+        cell: ({ row }: { row: Row<GitHubCrPackageVersion> }) => (
           <PullImageBadge onClick={() => openSheet(row.original)} className="group-hover/versionrow:visible" />
         ),
       },

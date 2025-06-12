@@ -4,7 +4,7 @@ using System.Threading.Channels;
 using Citadel.Agent.Common.V1;
 using Citadel.Agent.Platforms.V1;
 using Grpc.Core;
-using Infrastructure.Entities;
+using Domain.Entities;
 using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
 using Microsoft.Extensions.Hosting;

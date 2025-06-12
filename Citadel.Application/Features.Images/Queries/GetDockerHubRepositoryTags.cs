@@ -1,16 +1,17 @@
 ﻿using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.DockerHub;
-using Infrastructure.Entities.Registries;
+using Domain.Entities.Registries;
 using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Registries;
 
 namespace Application.Features.Images.Queries;
 
-public sealed record GetDockerHubRepositoryTags(string RegistryName, string RepositoryName) : IQuery<Result<IEnumerable<Tag>>>
+public sealed record GetDockerHubRepositoryTags(string RegistryName, string RepositoryName) : IQuery<Result<IEnumerable<DockerHubTag>>>
 {
     internal class Validator : AbstractValidator<GetDockerHubRepositoryTags>
     {
@@ -24,26 +25,26 @@ public sealed record GetDockerHubRepositoryTags(string RegistryName, string Repo
 
 public sealed class GetDockerHubRepositoryTagsHandler(
     ApplicationDbContext dbContext,
-    IDockerHubApi dockerHub)
-    : IQueryHandler<GetDockerHubRepositoryTags, Result<IEnumerable<Tag>>>
+    IDockerHubService dockerHubService)
+    : IQueryHandler<GetDockerHubRepositoryTags, Result<IEnumerable<DockerHubTag>>>
 {
-    public async ValueTask<Result<IEnumerable<Tag>>> Handle(GetDockerHubRepositoryTags query, CancellationToken cancellationToken)
+    public async ValueTask<Result<IEnumerable<DockerHubTag>>> Handle(GetDockerHubRepositoryTags query, CancellationToken cancellationToken)
     {
         var registry = await dbContext.Registries.AsNoTracking().FirstOrDefaultAsync(s => s.Name == query.RegistryName, cancellationToken);
         if (registry == null)
         {
-            return Result.Failure<IEnumerable<Tag>>(new NotFoundError("The provided registry name does exist"));
+            return Result.Failure<IEnumerable<DockerHubTag>>(new NotFoundError("The provided registry name does exist"));
         }
 
         if (registry.Configuration is not DockerHubRegistry cfg)
         {
-            return Result.Failure<IEnumerable<Tag>>(new NotFoundError("The provided registry is not a DockerHub registry instance"));
+            return Result.Failure<IEnumerable<DockerHubTag>>(new NotFoundError("The provided registry is not a DockerHub registry instance"));
         }
 
-        var (tags, errorMessage) = await cfg.GetRepositoryTags(dockerHub, query.RepositoryName, cancellationToken);
+        var (tags, errorMessage) = await dockerHubService.GetRepositoryTagsAsync(cfg, query.RepositoryName, cancellationToken);
         if (errorMessage != null)
         {
-            return Result.Failure<IEnumerable<Tag>>(new BadRequestError(errorMessage));
+            return Result.Failure<IEnumerable<DockerHubTag>>(new BadRequestError(errorMessage));
         }
 
         return tags?.ToList() ?? [];

@@ -1,13 +1,14 @@
-﻿using Citadel.Agent.Containers.V1;
-using Citadel.Agent.Common.V1;
+﻿using Citadel.Agent.Common.V1;
+using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
+using Domain.Entities;
+using Domain.Entities.Platforms;
 using EFCore.BulkExtensions;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Infrastructure;
-using Infrastructure.Entities;
-using Infrastructure.Entities.Platforms;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
 using Infrastructure.TaskJobs;
@@ -34,6 +35,7 @@ public sealed record CreatePlatform(string Name, string Address, PlatformType Ty
 internal sealed class CreatePlatformHandler(
     ApplicationDbContext dbContext,
     IGrpcClientFactory clientFactory,
+    IContainerService containerService,
     IPlatformHealthMonitorJob platformHealthMonitorJob,
     ILogger<PatchPlatformHandler> logger) : ICommandHandler<CreatePlatform, Result<Platform>>
 {
@@ -62,10 +64,8 @@ internal sealed class CreatePlatformHandler(
         var platformClient = clientFactory.GetPlatformClient(command.Address);
         var containersClient = clientFactory.GetContainerClient(command.Address);
 
-        var platformInfoTsk = platformClient.ListPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
-        var containersTsk = containersClient.ListAsync(new ListContainersRequest { All = true }, cancellationToken: cancellationToken);
-        var platformInfo = await platformInfoTsk;
-        var containers = await containersTsk;
+        var platformInfo = await platformClient.ListPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
+        
 
         DockerPlatformDescriptor descriptor = new (
             DaemonId: platformInfo.Id,
@@ -100,15 +100,38 @@ internal sealed class CreatePlatformHandler(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // Add containers
-        var at = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var mappedContainers = containers.Containers.Select(s => s.Value.Map(platform.Id, at)).ToArray();
-        await dbContext.BulkInsertAsync(mappedContainers, cancellationToken: cancellationToken);
+        var containers = await GetContainers(platform, cancellationToken);
+        if (containers != null && containers.Any()) 
+        {
+            await dbContext.BulkInsertAsync(containers, cancellationToken: cancellationToken);
+        }
 
         // Start tracking the platform
         platformHealthMonitorJob.TrackPlatform(platform.Address, platform.Id);
 
         logger.LogInformation("A new platform has been added, id = {PlatformId}", platform.Id);
         return Result.Success(platform);
+    }
+
+    private async Task<IEnumerable<Container>> GetContainers(Platform platform, CancellationToken cancellationToken)
+    {
+        var command = new ContainerFilterCommand
+            (
+                PlatformId: platform.Id,
+                PlatformAddress: platform.Address, 
+                All: true
+            );
+
+        var containersResult = await containerService.ListContainersAsync(command, cancellationToken: cancellationToken);
+
+        if (!containersResult.IsSuccess(out var containers))
+        {
+            containersResult.IsFailure(out var error);
+            logger.LogError("Failed to list containers for platform {Address}: {Error}", platform.Address, error?.Message);
+            return [];
+        }
+
+        else return containers.Values;
     }
 }
 

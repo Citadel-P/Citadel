@@ -1,13 +1,15 @@
 ﻿using System.Text.Json.Serialization;
-using Citadel.Agent.Containers.V1;
-using Citadel.Agent.Images.V1;
 using Application.Features.Auth.Models;
 using Application.Features.Images.Queries;
 using Citadel.Agent.Common.V1;
+using Citadel.Agent.Containers.V1;
+using Citadel.Agent.Images.V1;
+using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Registries;
+using Domain.Entities;
+using Domain.Entities.Platforms;
+using Domain.Entities.Registries;
 using Infrastructure.DockerHub;
-using Infrastructure.Entities;
-using Infrastructure.Entities.Platforms;
-using Infrastructure.Entities.Registries;
 using Infrastructure.GithubCr;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources;
@@ -57,8 +59,18 @@ namespace Application.Models;
 [JsonSerializable(typeof(GraphDriverData))]
 [JsonSerializable(typeof(MountPoint))]
 [JsonSerializable(typeof(ContainerConfig))]
-[JsonSerializable(typeof(NetworkSettingsView))]
-[JsonSerializable(typeof(MapFieldPortBindingView))]
+[JsonSerializable(typeof(NetworkSettingsInfo))]
+[JsonSerializable(typeof(ContainerInspectionInfo))]
+[JsonSerializable(typeof(ContainerRuntimeState))]
+[JsonSerializable(typeof(HostConfiguration))]
+[JsonSerializable(typeof(GraphDriverDataInfo))]
+[JsonSerializable(typeof(IReadOnlyList<IpAddressInfo>))]
+[JsonSerializable(typeof(IReadOnlyList<MountPointInfo>))]
+[JsonSerializable(typeof(ContainerConfiguration))]
+[JsonSerializable(typeof(Domain.Contracts.Resources.Containers.RestartPolicy))]
+[JsonSerializable(typeof(Ulimit))]
+[JsonSerializable(typeof(Domain.Contracts.Resources.Containers.BindOptions))]
+[JsonSerializable(typeof(Domain.Contracts.Resources.Containers.VolumeOptions))]
 [JsonSerializable(typeof(Address))]
 [JsonSerializable(typeof(DeleteContainersRequest))]
 [JsonSerializable(typeof(RegistryInput))]
@@ -96,6 +108,13 @@ namespace Application.Models;
 [JsonSerializable(typeof(VolumeView))]
 [JsonSerializable(typeof(IAsyncEnumerable<ContainerLogResponse>))]
 [JsonSerializable(typeof(EndpointMetadata))]
+[JsonSerializable(typeof(IEnumerable<DockerHubRepositoryInfo>))]
+[JsonSerializable(typeof(DockerHubTag))]
+[JsonSerializable(typeof(IEnumerable<DockerHubImage>))]
+[JsonSerializable(typeof(GitHubCrPackage))]
+[JsonSerializable(typeof(IEnumerable<GitHubCrPackageVersion>))]
+[JsonSerializable(typeof(GitHubCrPackageVersionMetadata))]
+[JsonSerializable(typeof(GitHubCrPackageVersionContainerMetadata))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

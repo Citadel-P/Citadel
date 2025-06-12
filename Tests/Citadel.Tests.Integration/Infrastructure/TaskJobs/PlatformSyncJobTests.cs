@@ -2,9 +2,9 @@
 using System.Text.Json.Serialization;
 using Citadel.Agent.Common.V1;
 using Grpc.Core;
-using Infrastructure;
-using Infrastructure.Entities;
-using Infrastructure.Entities.Platforms;
+using Domain;
+using Domain.Entities;
+using Domain.Entities.Platforms;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;

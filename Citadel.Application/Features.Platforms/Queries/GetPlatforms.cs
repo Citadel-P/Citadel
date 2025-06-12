@@ -1,4 +1,4 @@
-﻿using Infrastructure.Entities;
+﻿using Domain.Entities;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;

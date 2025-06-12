@@ -2,6 +2,7 @@
 using System.Reflection;
 using System.Threading.Channels;
 using DbUp;
+using Domain.Contracts.Interfaces;
 using Hosting.Common;
 using Infrastructure.DockerHub;
 using Infrastructure.EntityFramework;
@@ -43,6 +44,9 @@ public static class InfrastructureModule
 
     private static IServiceCollection AddServices(this IServiceCollection services)
         => services
+            .AddSingleton<IGitHubCrService, GitHubCrService>()
+            .AddSingleton<IDockerHubService, DockerHubService>()
+            .AddSingleton<IContainerService, ContainerService>()
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>();
 
     private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)

@@ -1,4 +1,5 @@
-﻿using Infrastructure.DockerHub;
+﻿using Domain;
+using Domain.Contracts.Resources.Registries;
 
 namespace WebApi.Routes.Endpoints.Resources.Images;
 
@@ -13,7 +14,7 @@ namespace WebApi.Routes.Endpoints.Resources.Images;
 /// <param name="Status">Whether a tag has been pushed to or pulled in the past month</param>
 /// <param name="LastPulled">Datetime of last pull</param>
 /// <param name=""></param>
-public sealed record DockerHubTagView(int Id, string Name, DockerHubImageView Image, string LastUpdated, int FullSize, TagStatus Status, string LastPulled);
+public sealed record DockerHubTagView(int Id, string Name, DockerHubImageView? Image, string LastUpdated, int FullSize, DockerHubTagStatus Status, string LastPulled);
 
 /// <summary>
 /// 
@@ -24,26 +25,26 @@ public sealed record DockerHubTagView(int Id, string Name, DockerHubImageView Im
 /// <param name="Size">Size of the image</param>
 /// <param name="Status">Status of the image</param>
 /// <param name="LastPulled">Datetime of last pull</param>
-public sealed record DockerHubImageView(string Architecture, string Digest, string Os, int Size, ImageStatus Status, string LastPulled);
+public sealed record DockerHubImageView(string Architecture, string Digest, string Os, int Size, DockerHubImageStatus Status, string LastPulled);
 
 internal static partial class Mapper
 {
-    internal static IEnumerable<DockerHubTagView> Map(IEnumerable<Tag> tags) => tags.Select(Map);
+    internal static IEnumerable<DockerHubTagView> Map(IEnumerable<DockerHubTag> tags) => tags.Select(Map);
 
-    internal static DockerHubTagView Map(this Tag tag) => new(
-        tag.Id,
-        tag.Name,
-        tag.Images.FirstOrDefault()?.Map(),
-        tag.Last_updated,
-        tag.Full_size,
-        tag.Status,
-        tag.Tag_last_pulled);
+    internal static DockerHubTagView Map(this DockerHubTag tag) => new(
+        Id: tag.Id,
+        Name: tag.Name,
+        Status: tag.Status,
+        FullSize: tag.FullSize,
+        LastUpdated: tag.LastUpdated,
+        LastPulled: tag.TagLastPulled,
+        Image: tag.Images.FirstOrDefault()?.Map());
 
-    internal static DockerHubImageView Map(this Image image) => new(
+    internal static DockerHubImageView Map(this DockerHubImage image) => new(
         image.Architecture,
         image.Digest,
         image.Os,
         image.Size,
         image.Status,
-        image.Last_pulled);
+        image.LastPulled);
 }

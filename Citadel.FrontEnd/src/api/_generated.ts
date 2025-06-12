@@ -22,11 +22,6 @@ export enum VolumeScopeType {
   Multi = "Multi",
 }
 
-export enum TagStatus {
-  Active = "Active",
-  Inactive = "Inactive",
-}
-
 export enum RegistryType {
   DockerHub = "DockerHub",
   Azure = "Azure",
@@ -61,7 +56,12 @@ export enum NullableOfPlatformType {
   Kubernetes = "Kubernetes",
 }
 
-export enum ImageStatus {
+export enum DockerHubTagStatus {
+  Active = "Active",
+  Inactive = "Inactive",
+}
+
+export enum DockerHubImageStatus {
   Active = "Active",
   Inactive = "Inactive",
 }
@@ -386,26 +386,26 @@ export interface DockerHubImageModel {
   icon?: string | null;
 }
 
-export interface DockerHubImageView {
+export type DockerHubImageView = {
   architecture: string;
   digest: string;
   os: string;
   /** @format int32 */
   size: number;
-  status: ImageStatus;
+  status: DockerHubImageStatus;
   lastPulled: string;
-}
+} | null;
 
-export interface DockerHubRepository {
-  name?: string | null;
-  namespace?: string | null;
+export interface DockerHubRepositoryInfo {
+  name: string | null;
+  namespace: string | null;
   /** @format date-time */
-  last_updated?: string;
-  is_private?: boolean;
-  is_trusted?: boolean;
-  is_automated?: boolean;
+  lastUpdated: string;
+  isPrivate: boolean;
+  isTrusted: boolean;
+  isAutomated: boolean;
   /** @format int32 */
-  pull_count?: number;
+  pullCount: number;
 }
 
 export interface DockerHubTagView {
@@ -416,7 +416,7 @@ export interface DockerHubTagView {
   lastUpdated: string;
   /** @format int32 */
   fullSize: number;
-  status: TagStatus;
+  status: DockerHubTagStatus;
   lastPulled: string;
 }
 
@@ -460,17 +460,25 @@ export interface EndpointSettingsView {
   dnsNames: string[];
 }
 
-export interface GhcrPackageVersion {
+export interface GitHubCrPackageVersion {
   /** @format int32 */
   id: number;
-  name: string;
   url: string;
-  package_html_url?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-  html_url?: string | null;
-  metadata?: PackageVersionMetadata;
+  name: string;
+  htmlUrl: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  packageHtmlUrl: string | null;
+  metadata: GitHubCrPackageVersionMetadata;
 }
+
+export type GitHubCrPackageVersionContainerMetadata = {
+  tags: string[] | null;
+};
+
+export type GitHubCrPackageVersionMetadata = {
+  container: GitHubCrPackageVersionContainerMetadata;
+} | null;
 
 export interface GraphDriverData {
   name?: string | null;
@@ -890,14 +898,6 @@ export type NullableOfContainerStatView = {
   txBytes?: number;
   /** @format int64 */
   created?: number;
-} | null;
-
-export type PackageVersionContainerMetadata = {
-  tags?: string[] | null;
-};
-
-export type PackageVersionMetadata = {
-  container?: PackageVersionContainerMetadata;
 } | null;
 
 export interface PeerInfoView {
@@ -2321,7 +2321,7 @@ export class Api<
      * @summary List versions of GHCR package
      * @request GET:/api/v1/images/ghcr/{registryName}/{packageName}/versions
      * @secure
-     * @response `200` `(GhcrPackageVersion)[]` OK
+     * @response `200` `(GitHubCrPackageVersion)[]` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2333,7 +2333,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<
-        GhcrPackageVersion[],
+        GitHubCrPackageVersion[],
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/images/ghcr/${registryName}/${packageName}/versions`,
@@ -2351,7 +2351,7 @@ export class Api<
      * @summary List DockerHub repositories
      * @request GET:/api/v1/images/dockerhub/{registryName}/repositories
      * @secure
-     * @response `200` `(DockerHubRepository)[]` OK
+     * @response `200` `(DockerHubRepositoryInfo)[]` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2362,7 +2362,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<
-        DockerHubRepository[],
+        DockerHubRepositoryInfo[],
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/images/dockerhub/${registryName}/repositories`,

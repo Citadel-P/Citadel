@@ -1,15 +1,12 @@
-﻿using Citadel.Agent.Containers.V1;
+﻿using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
 using FluentValidation;
-using Google.Api;
-using Grpc.Core;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Containers.Commands;
 
@@ -22,71 +19,28 @@ public sealed record DeleteContainers(string[] ContainersIds, bool? V = false, b
     }
 }
 
-internal sealed class DeleteContainersHandler(
-    IGrpcClientFactory clientFactory,
-    ApplicationDbContext dbContext,
-    ILogger<DeleteContainersHandler> logger) : ICommandHandler<DeleteContainers, Result>
+internal sealed class DeleteContainersHandler(IContainerService containerService, ApplicationDbContext dbContext) : ICommandHandler<DeleteContainers, Result>
 {
     public async ValueTask<Result> Handle(DeleteContainers request, CancellationToken cancellationToken)
     {
-        var platforms = await dbContext.Containers.Include(s => s.Platform)
+        var platformContainers = await dbContext.Containers.AsNoTracking().Include(s => s.Platform)
                         .Where(s => request.ContainersIds.Contains(s.ContainerId))
                         .GroupBy(s => s.Platform.Address)
-                        .Select(s => new
-                        {
-                            Address = s.Key,
-                            ContainersId = s.Select(x => x.ContainerId)
-                        })
-                        .AsNoTracking()
-                        .ToListAsync(cancellationToken);
+                        .Select(s => new KeyValuePair<string, IEnumerable<string>>(s.Key, s.Select(x => x.ContainerId)))
+                        .ToDictionaryAsync(s => s.Key, s => s.Value, cancellationToken);
 
-        if (platforms.Count == 0)
+        if (platformContainers.Count == 0)
         {
-            return Result.Failure(new NotFoundError("No containers found for the given IDs."));
+            return Result.Failure(new NotFoundError("No platform found for the given IDs."));
         }
 
-        var exceptions = new Exception[platforms.Sum(s => s.ContainersId.Count())];
-        var exceptionIndex = 0;
-        var parallelOptions = new ParallelOptions
-        {
-            MaxDegreeOfParallelism = Environment.ProcessorCount,
-            CancellationToken = cancellationToken
-        };
-        await Parallel.ForEachAsync(platforms, parallelOptions, async (platform, ct) =>
-        {
-            var client = clientFactory.GetContainerClient(platform.Address);
-            try
-            {
-                var rpcRequest = new DeleteContainerRequest
-                {
-                    Ids = { platform.ContainersId },
-                    V = request.V ?? false,
-                    Force = request.Force ?? false,
-                    Link = request.Link ?? false,
-                };
-                await client.DeleteAsync(rpcRequest, cancellationToken: ct);
-            }
-            catch (Exception ex)
-            {
-                var idx = Interlocked.Increment(ref exceptionIndex) - 1;
-                if (idx < exceptions.Length)
-                    exceptions[idx] = ex;
-                logger.LogError(ex, "Error while processing container {ContainerIds} on platform {PlatformAddress}", platform.ContainersId, platform.Address);
-            }
-        });
-
-        exceptions = [.. exceptions.Where(e => e is not null)]; // Filter out null exceptions
-
-        if (exceptions.Length == 0)
-        {
-            return Result.Success();
-        }
-        else
-        {
-            var rpcException = exceptions.OfType<RpcException>().FirstOrDefault();
-            return rpcException is not null
-                ? Result.Failure(new ClientRpcException($"An RPC exception occurred: {rpcException.Message}", rpcException.StatusCode))
-                : Result.Failure(new InternalServerError($"An error occurred while processing the request, {exceptions.First().Message}"));
-        }
+        var command = new DeleteContainerCommand
+        (
+            PlatformContainers: platformContainers,
+            Verbose: request.V,
+            Force: request.Force,
+            Link: request.Link
+        );
+        return await containerService.DeleteAsync(command, cancellationToken);
     }
 }

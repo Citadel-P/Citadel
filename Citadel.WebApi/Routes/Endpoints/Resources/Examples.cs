@@ -1,8 +1,7 @@
 ﻿using System.Text.Json;
-using System.Text.Json.Serialization;
 using Application.Models;
-using Infrastructure;
-using Infrastructure.Entities.Registries;
+using Domain;
+using Domain.Entities.Registries;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using WebApi.Routes.Endpoints.Resources.Registries;

@@ -1,10 +1,10 @@
 ﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using Citadel.Agent.Images.V1;
 using Application.Features.Images.Queries;
+using Citadel.Agent.Images.V1;
+using Domain.Contracts.Resources.Registries;
 using Hosting.Extensions;
 using Infrastructure.DockerHub;
-using Infrastructure.GithubCr;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -27,7 +27,7 @@ public static class Images
         return EndpointHandlers.HandleResult(result, v => v);
     }
 
-    public static async Task<Results<Ok<IEnumerable<GhcrPackageVersion>>, ProblemHttpResult>> GetGhcrPackageVersions(IMediator mediator, [Description("The registry name")] string registryName, [Description("The package name")] string packageName, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<IEnumerable<GitHubCrPackageVersion>>, ProblemHttpResult>> GetGhcrPackageVersions(IMediator mediator, [Description("The registry name")] string registryName, [Description("The package name")] string packageName, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetGithubPackageVersions(registryName, packageName), cancellationToken);
         return EndpointHandlers.HandleResult(result, v => v);
@@ -39,7 +39,7 @@ public static class Images
         return EndpointHandlers.HandleResult(result, Mapper.Map);
     }
 
-    public static async Task<Results<Ok<IEnumerable<DockerHubRepository>>, ProblemHttpResult>> GetDockerHubRepositories(IMediator mediator, [Description("The registry name")] string registryName, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<IEnumerable<DockerHubRepositoryInfo>>, ProblemHttpResult>> GetDockerHubRepositories(IMediator mediator, [Description("The registry name")] string registryName, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetDockerHubRepositories(registryName), cancellationToken);
         return EndpointHandlers.HandleResult(result, v => v);

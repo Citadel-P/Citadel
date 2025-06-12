@@ -2,8 +2,8 @@
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Infrastructure;
-using Infrastructure.Entities;
+using Domain;
+using Domain.Entities;
 using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;

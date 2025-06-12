@@ -1,11 +1,12 @@
-﻿using FluentValidation;
+﻿using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Entities;
+using Domain.Entities.Registries;
+using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
-using Infrastructure;
 using Infrastructure.DockerHub;
-using Infrastructure.Entities;
-using Infrastructure.Entities.Registries;
 using Infrastructure.EntityFramework;
 using Infrastructure.EntityFramework.Configurations;
 using Infrastructure.GithubCr;
@@ -112,7 +113,7 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
     }
 }
 
-internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubApi dockerHub, IGithubCrApi githubCrApi) : ICommandHandler<PatchRegistry, Result<Registry>>
+internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubService dockerHubService, IGitHubCrService gitHubCrService) : ICommandHandler<PatchRegistry, Result<Registry>>
 {
     public async ValueTask<Result<Registry>> Handle(PatchRegistry command, CancellationToken cancellationToken)
     {
@@ -135,7 +136,7 @@ internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubAp
 
         if (patchedRegistry?.Type == RegistryType.DockerHub && patchedRegistry?.Configuration is DockerHubRegistry cfg)
         {
-            var (canConnect, errorMessage) = await cfg.CanConnect(dockerHub, cancellationToken);
+            var (canConnect, errorMessage) = await dockerHubService.CanConnectAsync(cfg, cancellationToken);
             if (!canConnect)
             {
                 return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
@@ -143,7 +144,7 @@ internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubAp
         }
         else if (patchedRegistry?.Type == RegistryType.GitHub && patchedRegistry?.Configuration is GitHubRegistry githubRegistry)
         {
-            var (canConnect, errorMessage) = await githubRegistry.CanConnect(githubCrApi, cancellationToken);
+            var (canConnect, errorMessage) = await gitHubCrService.CanConnectAsync(githubRegistry, cancellationToken);
             if (!canConnect)
             {
                 return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));

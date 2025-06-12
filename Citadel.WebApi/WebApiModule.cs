@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using System.Text.Json.Serialization;
+using Domain;
 using Hosting.Common.Converters;
 using Hosting.OpenApi;
 using Infrastructure;

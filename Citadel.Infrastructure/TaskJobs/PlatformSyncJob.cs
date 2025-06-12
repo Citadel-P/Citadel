@@ -1,5 +1,6 @@
 ﻿using System.Threading.Channels;
-using Infrastructure.Entities.Platforms;
+using Domain;
+using Domain.Entities.Platforms;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
@@ -46,8 +47,6 @@ internal class PlatformSyncJob(
             if (evt.IsOnLine)
             {
                 var platformClient = clientFactory.GetPlatformClient(evt.Address);
-                var containersClient = clientFactory.GetContainerClient(evt.Address);
-
                 var platformInfo = await platformClient.ListPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
 
                 // Update platform

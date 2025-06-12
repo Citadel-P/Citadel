@@ -1,5 +1,5 @@
 ﻿using Application.Features.Platforms.Commands;
-using Infrastructure;
+using Domain;
 
 namespace WebApi.Routes.Endpoints.Resources.Platforms;
 

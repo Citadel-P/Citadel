@@ -1,6 +1,8 @@
 ﻿using System.Collections.Concurrent;
 using System.Threading.Channels;
-using Grpc.Core;
+using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
@@ -13,7 +15,7 @@ namespace Infrastructure.TaskJobs;
 
 internal sealed class DockerDaemonEventJob(
     ILogger<DockerDaemonEventJob> logger,
-    IGrpcClientFactory clientFactory,
+    IContainerService containerService,
     IServiceScopeFactory scopeFactory,
     IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster) : BackgroundService
@@ -69,23 +71,29 @@ internal sealed class DockerDaemonEventJob(
                 using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                 var containerHub = scope.ServiceProvider.GetRequiredService<IContainerHubDispatcher>();
 
-                var client = clientFactory.GetContainerClient(platform.Address);
-                using var call = client.StreamDaemonEvent(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
-
-                await foreach (var reply in call.ResponseStream.ReadAllAsync(cancellationToken))
+                var command = new StreamDaemonEventCommand
+                (
+                    PlatformId: platform.Id,
+                    PlatformAddress: platform.Address
+                );
+                await foreach (var reply in containerService.StreamDaemonEventAsync(command, cancellationToken))
                 {
-                    if (reply.EventMessageType != Citadel.Agent.Containers.V1.EventMessageType.Container)
+                    if (reply.Type != ContainerEventType.Container)
                         continue;
 
 
                     switch (reply.Action)
                     {
                         case "create":
-                            var container = reply.Container.Map(platform.Id, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-                            dbContext.Containers.Add(container);
-                            await dbContext.SaveChangesAsync(cancellationToken);
-                            await containerHub.SendContainerEvent(container, reply.Action);
-                            platformContainerCache.TryAddContainer(platform.Id, container.ContainerId, container.Id);
+                            if (reply.Container != null)
+                            {
+                                var container = reply.Container;
+                                dbContext.Containers.Add(container);
+                                await dbContext.SaveChangesAsync(cancellationToken);
+                                await containerHub.SendContainerEvent(container, reply.Action);
+                                platformContainerCache.TryAddContainer(platform.Id, container.ContainerId, container.Id);
+                            }
+                           
                             break;
                         case "destroy":
                             var existingDestroy = await dbContext.Containers.FirstOrDefaultAsync(c => c.ContainerId == reply.ContainerId, cancellationToken);
@@ -110,18 +118,13 @@ internal sealed class DockerDaemonEventJob(
                                     _ => throw new NotImplementedException()
                                 };
 
-                                existing.PartialUpdate(state: ContainerMapper.Map(reply.Container.State));
+                                existing.PartialUpdate(state: reply.Container?.State);
                                 await dbContext.SaveChangesAsync(cancellationToken);
                                 await containerHub.SendContainerEvent(existing, reply.Action);
                             }
                             break;
                     }
                 }
-            }
-            catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)
-            {
-                logger.LogInformation("Stream for {Address} was canceled.", platform.Address);
-                break;
             }
             catch (Exception ex)
             {

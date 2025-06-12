@@ -1,5 +1,5 @@
 ﻿using System.Text.Json.Serialization;
-using Infrastructure.Entities.Platforms;
+using Domain.Entities.Platforms;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 

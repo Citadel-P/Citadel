@@ -1,7 +1,7 @@
 ﻿using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.Entities;
+using Domain.Entities;
 using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;

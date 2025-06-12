@@ -1,7 +1,8 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Serialization;
-using Infrastructure.Entities;
-using Infrastructure.Entities.Platforms;
+using Domain;
+using Domain.Entities;
+using Domain.Entities.Platforms;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 

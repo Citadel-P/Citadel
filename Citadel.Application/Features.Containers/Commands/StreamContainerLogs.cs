@@ -1,16 +1,15 @@
 ﻿using System.Runtime.CompilerServices;
-using Citadel.Agent.Containers.V1;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
 using FluentValidation;
-using Grpc.Core;
 using Hosting.Common;
 using Infrastructure;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
 using Mediator;
 
 namespace Application.Features.Containers.Commands;
 
-public sealed record StreamContainerLogs(string ContainerId) : IStreamCommand<ContainerLogResponse>
+public sealed record StreamContainerLogs(string ContainerId) : IStreamCommand<ContainerLogInfo>
 {
     internal class Validator : AbstractValidator<StreamContainerLogs>
     {
@@ -21,24 +20,22 @@ public sealed record StreamContainerLogs(string ContainerId) : IStreamCommand<Co
     }
 }
 
-internal class StreamContainerLogsHandler(
-    IGrpcClientFactory clientFactory,
-    ApplicationDbContext dbContext): IStreamCommandHandler<StreamContainerLogs, ContainerLogResponse>
+internal class StreamContainerLogsHandler(IContainerService containerService, ApplicationDbContext dbContext)
+    : IStreamCommandHandler<StreamContainerLogs, ContainerLogInfo>
 {
-    public async IAsyncEnumerable<ContainerLogResponse> Handle(StreamContainerLogs query, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<ContainerLogInfo> Handle(StreamContainerLogs query, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var platformAddress = await dbContext.Containers.GetPlatformAddress(query.ContainerId, cancellationToken)
              ?? throw new Exception($"Platform doesn't exist for container {query.ContainerId}");
-        
-        var client = clientFactory.GetContainerClient(platformAddress);
-        var request = new ContainerLogRequest
+
+        var command = new StreamContainerLogsCommand
+            (
+                ContainerId: query.ContainerId, 
+                PlatformAddress: platformAddress
+            );
+        await foreach(var log in containerService.StreamLogsAsync(command, cancellationToken))
         {
-            ContainerId = query.ContainerId,
-        };
-        using var call = client.StreamContainerLogs(request, cancellationToken: cancellationToken);
-        await foreach (var reply in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
-        {
-            yield return reply;
+            yield return log;
         }
     }
 }

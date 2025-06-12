@@ -1,6 +1,6 @@
 ﻿using Application.Features.Registries.Commands;
-using Infrastructure;
-using Infrastructure.Entities.Registries;
+using Domain;
+using Domain.Entities.Registries;
 
 namespace WebApi.Routes.Endpoints.Resources.Registries;
 

@@ -1,6 +1,10 @@
-﻿using System.Threading.Channels;
+﻿using System;
+using System.Threading.Channels;
 using Citadel.Agent.Containers.V1;
-using Infrastructure.Entities;
+using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
+using Domain.Entities;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
@@ -15,7 +19,7 @@ namespace Infrastructure.TaskJobs;
 /// Syncing full containers state when platform status change.
 /// </summary>
 internal class ContainerSyncJob(
-    IGrpcClientFactory clientFactory,
+    IContainerService containerService,
     IServiceScopeFactory scopeFactory,
     IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
@@ -67,16 +71,20 @@ internal class ContainerSyncJob(
 
     private async Task<Container[]> SyncOnlinePlatformContainers(ApplicationDbContext dbContext, PlatformHealth platformEvent, CancellationToken cancellationToken)
     {
-        var containersClient = clientFactory.GetContainerClient(platformEvent.Address);
-        var containersReply = await containersClient.ListAsync(new ListContainersRequest { All = true }, cancellationToken: cancellationToken);
+        var command = new ContainerFilterCommand
+        (
+            PlatformAddress: platformEvent.Address,
+            PlatformId: platformEvent.Id,
+            All: true
+        );
+        var containersReply = await containerService.ListContainersAsync(command, cancellationToken: cancellationToken);
+        if (!containersReply.IsSuccess(out var freshContainers, out var error))
+        {
+            logger.LogError("Failed to list containers for platform {PlatformId} at {Address}: {Error}", platformEvent.Id, platformEvent.Address, error);
+            return []; // Maybe throw an exception or handle it differently
+        }
 
         long fetchTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
-        var freshContainers = containersReply.Containers.ToDictionary(
-            c => c.Key,
-            c => c.Value.Map(platformEvent.Id, fetchTimestamp)
-        );
-
         var existingContainers = await dbContext.Containers
             .Where(c => c.PlatformId == platformEvent.Id)
             .ToDictionaryAsync(c => c.ContainerId, cancellationToken);

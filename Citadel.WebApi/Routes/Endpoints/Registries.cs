@@ -3,7 +3,7 @@ using Application.Features.Registries.Commands;
 using Application.Features.Registries.Queries;
 using Hosting.Common.MergePatch;
 using Hosting.Extensions;
-using Infrastructure.Entities;
+using Domain.Entities;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;

@@ -1,13 +1,14 @@
 ﻿using System.Threading.Channels;
 using EFCore.BulkExtensions;
-using Infrastructure.Entities;
-using Infrastructure.Entities.Platforms;
+using Domain.Entities;
+using Domain.Entities.Platforms;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Domain;
 
 namespace Infrastructure.TaskJobs;
 

@@ -1,5 +1,5 @@
 ﻿using System.Text.Json.Serialization;
-using Infrastructure;
+using Domain;
 
 namespace Application.Features.Images.Queries;
 

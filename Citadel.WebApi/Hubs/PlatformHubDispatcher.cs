@@ -1,4 +1,4 @@
-﻿using Infrastructure.Entities;
+﻿using Domain.Entities;
 using Infrastructure.Services.Abstractions;
 using Infrastructure.TaskJobs;
 using Microsoft.AspNetCore.SignalR;

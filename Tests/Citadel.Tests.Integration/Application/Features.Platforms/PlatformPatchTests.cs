@@ -1,9 +1,9 @@
 ﻿using System.Text;
 using Citadel.Agent.Common.V1;
 using Grpc.Core;
-using Infrastructure;
-using Infrastructure.Entities;
-using Infrastructure.Entities.Platforms;
+using Domain;
+using Domain.Entities;
+using Domain.Entities.Platforms;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services.Abstractions;
 using Infrastructure.TaskJobs;

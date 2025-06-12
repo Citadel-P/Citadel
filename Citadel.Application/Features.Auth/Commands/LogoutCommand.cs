@@ -1,6 +1,5 @@
 ﻿using Application.Services;
 using Hosting.Common;
-using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;

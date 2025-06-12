@@ -1,5 +1,5 @@
-﻿using Infrastructure.Entities;
-using Infrastructure.Entities.Identity;
+﻿using Domain.Entities;
+using Domain.Entities.Identity;
 using Infrastructure.EntityFramework.Configurations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;

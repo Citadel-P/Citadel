@@ -3,7 +3,7 @@ using Application.Features.Platforms.Commands;
 using Application.Features.Platforms.Queries;
 using Application.Features.Platforms.Queries.Models;
 using Hosting.Extensions;
-using Infrastructure.Entities;
+using Domain.Entities;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;

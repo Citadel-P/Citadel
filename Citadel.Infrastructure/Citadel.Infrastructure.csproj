@@ -23,6 +23,7 @@
 	
   <ItemGroup>
 	  <ProjectReference Include="..\Citadel.Contracts\Citadel.Hosting.Common\Citadel.Hosting.Common.csproj" />
+	  <ProjectReference Include="..\Citadel.Domain\Citadel.Domain.csproj" />
   </ItemGroup>
 
    <ItemGroup>

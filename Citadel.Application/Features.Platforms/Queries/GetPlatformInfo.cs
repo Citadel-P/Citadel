@@ -1,5 +1,5 @@
 ﻿using Hosting.Common.ErrorTypes;
-using Infrastructure.Entities;
+using Domain.Entities;
 using FluentValidation;
 using LightResults;
 using Mediator;

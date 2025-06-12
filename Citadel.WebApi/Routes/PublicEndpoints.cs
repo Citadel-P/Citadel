@@ -1,6 +1,6 @@
 ﻿using Hosting.Common;
 using Hosting.OpenApi;
-using Infrastructure;
+using Domain;
 using WebApi.Routes.Endpoints;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Platforms;

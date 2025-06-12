@@ -1,6 +1,6 @@
 ﻿using Hosting.Common.Extensions;
-using Infrastructure;
-using Infrastructure.Entities;
+using Domain;
+using Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 
 namespace Application.Permissions.Requirements;

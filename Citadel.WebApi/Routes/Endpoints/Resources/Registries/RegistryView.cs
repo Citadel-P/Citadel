@@ -1,6 +1,6 @@
-﻿using Infrastructure;
-using Infrastructure.Entities;
-using Infrastructure.Entities.Registries;
+﻿using Domain;
+using Domain.Entities;
+using Domain.Entities.Registries;
 
 namespace WebApi.Routes.Endpoints.Resources.Registries;
 

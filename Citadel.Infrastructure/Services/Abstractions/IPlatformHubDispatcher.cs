@@ -1,4 +1,4 @@
-﻿using Infrastructure.Entities;
+﻿using Domain.Entities;
 using Infrastructure.TaskJobs;
 
 namespace Infrastructure.Services.Abstractions;

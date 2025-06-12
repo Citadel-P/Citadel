@@ -1,4 +1,5 @@
-﻿using Infrastructure.Entities.Identity;
+﻿using Domain;
+using Domain.Entities.Identity;
 
 namespace Infrastructure.EntityFramework.Seed;
 

@@ -1,6 +1,6 @@
 ﻿using System.Security.Claims;
 using Application.Permissions.Requirements;
-using Infrastructure.Entities;
+using Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 

@@ -1,6 +1,6 @@
 ﻿using Application.Permissions;
-using Infrastructure;
-using Infrastructure.Entities;
+using Domain;
+using Domain.Entities;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 
 namespace WebApi.Routes.Endpoints.Resources.Containers;
@@ -11,7 +11,7 @@ public sealed record ContainerView(
     string Name,
     string Image,
     DateTimeOffset Created,
-     ContainerStateStatus State,
+    ContainerStateStatus State,
     DateTimeOffset Updated,
     string? Stack,
     ContainerStatView? LastStats,

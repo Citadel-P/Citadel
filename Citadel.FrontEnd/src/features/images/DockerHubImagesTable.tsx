@@ -61,7 +61,7 @@ function NestedImagesTable({ dockerhubRepo }: { dockerhubRepo: IImageRepositoryD
       {
         header: 'Os/Arch',
         cell: ({ row }: { row: Row<DockerHubTagView> }) => (
-          <span className="text-[13px]">{row.original.image.os + '/' + row.original.image.architecture}</span>
+          <span className="text-[13px]">{row.original.image?.os + '/' + row.original.image?.architecture}</span>
         ),
       },
       tagColumnHelper.accessor('image.size', {

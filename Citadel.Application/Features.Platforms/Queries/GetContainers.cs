@@ -3,7 +3,7 @@ using Mediator;
 using LightResults;
 using Microsoft.EntityFrameworkCore;
 using Application.Features.Platforms.Queries.Models;
-using Infrastructure.Entities;
+using Domain.Entities;
 using Infrastructure.EntityFramework;
 using Infrastructure;
 

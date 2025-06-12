@@ -4,6 +4,7 @@ using Application.Features.Containers.Commands;
 using Application.Features.Containers.Queries;
 using Application.Models;
 using Application.Permissions;
+using Domain;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -22,31 +23,31 @@ public static class Containers
 
     public static async Task<Results<NoContent, ProblemHttpResult>> StartContainers(IMediator mediator, [FromBody]string[] containersIds, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new PatchContainers(containersIds, ContainerAction.START), cancellationToken);
+        var result = await mediator.Send(new PatchContainer(containersIds, ContainerAction.START), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
     public static async Task<Results<NoContent, ProblemHttpResult>> StopContainers(IMediator mediator, [FromBody] string[] containersIds, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new PatchContainers(containersIds, ContainerAction.STOP), cancellationToken);
+        var result = await mediator.Send(new PatchContainer(containersIds, ContainerAction.STOP), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
     public static async Task<Results<NoContent, ProblemHttpResult>> PauseContainers(IMediator mediator, [FromBody] string[] containersIds, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new PatchContainers(containersIds, ContainerAction.PAUSE), cancellationToken);
+        var result = await mediator.Send(new PatchContainer(containersIds, ContainerAction.PAUSE), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
     public static async Task<Results<NoContent, ProblemHttpResult>> UnpauseContainers(IMediator mediator, [FromBody] string[] containersIds, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new PatchContainers(containersIds, ContainerAction.UNPAUSE), cancellationToken);
+        var result = await mediator.Send(new PatchContainer(containersIds, ContainerAction.UNPAUSE), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
     public static async Task<Results<NoContent, ProblemHttpResult>> RestartContainers(IMediator mediator, [FromBody] string[] containersIds, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new PatchContainers(containersIds, ContainerAction.RESTART), cancellationToken);
+        var result = await mediator.Send(new PatchContainer(containersIds, ContainerAction.RESTART), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 

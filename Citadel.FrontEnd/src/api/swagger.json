@@ -2349,7 +2349,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/GhcrPackageVersion"
+                    "$ref": "#/components/schemas/GitHubCrPackageVersion"
                   }
                 }
               }
@@ -2429,7 +2429,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/DockerHubRepository"
+                    "$ref": "#/components/schemas/DockerHubRepositoryInfo"
                   }
                 }
               }
@@ -4725,6 +4725,13 @@
           }
         }
       },
+      "DockerHubImageStatus": {
+        "enum": [
+          "Active",
+          "Inactive"
+        ],
+        "type": "string"
+      },
       "DockerHubImageView": {
         "required": [
           "architecture",
@@ -4750,14 +4757,24 @@
             "format": "int32"
           },
           "status": {
-            "$ref": "#/components/schemas/ImageStatus"
+            "$ref": "#/components/schemas/DockerHubImageStatus"
           },
           "lastPulled": {
             "type": "string"
           }
-        }
+        },
+        "nullable": true
       },
-      "DockerHubRepository": {
+      "DockerHubRepositoryInfo": {
+        "required": [
+          "name",
+          "namespace",
+          "lastUpdated",
+          "isPrivate",
+          "isTrusted",
+          "isAutomated",
+          "pullCount"
+        ],
         "type": "object",
         "properties": {
           "name": {
@@ -4768,24 +4785,31 @@
             "type": "string",
             "nullable": true
           },
-          "last_updated": {
+          "lastUpdated": {
             "type": "string",
             "format": "date-time"
           },
-          "is_private": {
+          "isPrivate": {
             "type": "boolean"
           },
-          "is_trusted": {
+          "isTrusted": {
             "type": "boolean"
           },
-          "is_automated": {
+          "isAutomated": {
             "type": "boolean"
           },
-          "pull_count": {
+          "pullCount": {
             "type": "integer",
             "format": "int32"
           }
         }
+      },
+      "DockerHubTagStatus": {
+        "enum": [
+          "Active",
+          "Inactive"
+        ],
+        "type": "string"
       },
       "DockerHubTagView": {
         "required": [
@@ -4817,7 +4841,7 @@
             "format": "int32"
           },
           "status": {
-            "$ref": "#/components/schemas/TagStatus"
+            "$ref": "#/components/schemas/DockerHubTagStatus"
           },
           "lastPulled": {
             "type": "string"
@@ -4960,11 +4984,16 @@
           }
         }
       },
-      "GhcrPackageVersion": {
+      "GitHubCrPackageVersion": {
         "required": [
           "id",
+          "url",
           "name",
-          "url"
+          "htmlUrl",
+          "createdAt",
+          "updatedAt",
+          "packageHtmlUrl",
+          "metadata"
         ],
         "type": "object",
         "properties": {
@@ -4972,32 +5001,60 @@
             "type": "integer",
             "format": "int32"
           },
-          "name": {
-            "type": "string"
-          },
           "url": {
             "type": "string"
           },
-          "package_html_url": {
+          "name": {
+            "type": "string"
+          },
+          "htmlUrl": {
             "type": "string",
             "nullable": true
           },
-          "created_at": {
+          "createdAt": {
             "type": "string",
             "nullable": true
           },
-          "updated_at": {
+          "updatedAt": {
             "type": "string",
             "nullable": true
           },
-          "html_url": {
+          "packageHtmlUrl": {
             "type": "string",
             "nullable": true
           },
           "metadata": {
-            "$ref": "#/components/schemas/PackageVersionMetadata"
+            "$ref": "#/components/schemas/GitHubCrPackageVersionMetadata"
           }
         }
+      },
+      "GitHubCrPackageVersionContainerMetadata": {
+        "required": [
+          "tags"
+        ],
+        "type": "object",
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "GitHubCrPackageVersionMetadata": {
+        "required": [
+          "container"
+        ],
+        "type": "object",
+        "properties": {
+          "container": {
+            "$ref": "#/components/schemas/GitHubCrPackageVersionContainerMetadata"
+          }
+        },
+        "nullable": true
       },
       "GraphDriverData": {
         "type": "object",
@@ -5630,13 +5687,6 @@
           }
         },
         "nullable": true
-      },
-      "ImageStatus": {
-        "enum": [
-          "Active",
-          "Inactive"
-        ],
-        "type": "string"
       },
       "ImageView": {
         "required": [
@@ -6485,28 +6535,6 @@
           "GitHub",
           null
         ],
-        "nullable": true
-      },
-      "PackageVersionContainerMetadata": {
-        "type": "object",
-        "properties": {
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "nullable": true
-          }
-        },
-        "nullable": true
-      },
-      "PackageVersionMetadata": {
-        "type": "object",
-        "properties": {
-          "container": {
-            "$ref": "#/components/schemas/PackageVersionContainerMetadata"
-          }
-        },
         "nullable": true
       },
       "PeerInfoView": {
@@ -7503,13 +7531,6 @@
             "type": "string"
           }
         }
-      },
-      "TagStatus": {
-        "enum": [
-          "Active",
-          "Inactive"
-        ],
-        "type": "string"
       },
       "TopologyEntryView": {
         "required": [
