@@ -1,3 +1,5 @@
-﻿namespace WebApi.Routes.Endpoints.Resources.Volumes;
+﻿using Domain.Contracts.Resources.Volumes;
 
-public sealed record VolumesView(List<VolumeView> Volumes);
+namespace WebApi.Routes.Endpoints.Resources.Volumes;
+
+public sealed record VolumesView(IEnumerable<DockerVolume> Volumes);

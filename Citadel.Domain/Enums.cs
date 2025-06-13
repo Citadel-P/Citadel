@@ -152,3 +152,17 @@ public enum ContainerEventType
     Service,
     Volume,
 }
+
+public enum VolumeScope
+{
+    Single = 0,
+    Multi = 1
+}
+
+public enum VolumeSharing
+{
+    None = 0,
+    ReadOnly = 1,
+    OneWriter = 2,
+    All = 3
+}

@@ -47,6 +47,7 @@ public static class InfrastructureModule
     private static IServiceCollection AddServices(this IServiceCollection services)
         => services
             .AddSingleton<IGitHubCrService, GitHubCrService>()
+            .AddSingleton<IVolumeConnector, VolumeConnector>()
             .AddSingleton<IDockerHubService, DockerHubService>()
             .AddSingleton<INetworkConnector, NetworkConnector>()
             .AddSingleton<IPlatformConnector, PlatformGrpcConnector>()

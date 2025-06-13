@@ -1,10 +1,9 @@
 import { DataTable } from '@/components/ui/data-table';
-import { VolumeView } from '@/api/_generated';
+import { DockerVolume } from '@/api/_generated';
 import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useContextSelector } from 'use-context-selector';
-import { truncate } from '@/lib/truncate';
 import { useEffect, useCallback, useMemo, memo } from 'react';
 import { AppContext } from '@/AppProvider';
 import { useGETVolumes } from './hooks/useGETVolumes';
@@ -46,7 +45,7 @@ export default function VolumesTable() {
   // Memoized row count
   const rowCount = useMemo(() => volumes?.length ?? 0, [volumes]);
 
-  const handleShowSheet = (volume: VolumeView) => {
+  const handleShowSheet = (volume: DockerVolume) => {
     setCurrentVolume(volume);
     setSheetOpen(true);
   };
@@ -74,7 +73,7 @@ export default function VolumesTable() {
   );
 }
 
-const columns = (handleShowSheet: (volume: VolumeView) => void): ColumnDef<VolumeView>[] => [
+const columns = (handleShowSheet: (volume: DockerVolume) => void): ColumnDef<DockerVolume>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -124,7 +123,13 @@ const columns = (handleShowSheet: (volume: VolumeView) => void): ColumnDef<Volum
   },
 ];
 
-const VolumeNameRow = ({ volume, onShowSheet }: { volume: VolumeView; onShowSheet: (volume: VolumeView) => void }) => {
+const VolumeNameRow = ({
+  volume,
+  onShowSheet,
+}: {
+  volume: DockerVolume;
+  onShowSheet: (volume: DockerVolume) => void;
+}) => {
   return (
     <div className="flex items-center whitespace-nowrap">
       <div className="flex items-center">

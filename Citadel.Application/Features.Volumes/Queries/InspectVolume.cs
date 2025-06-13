@@ -1,16 +1,15 @@
-﻿using Citadel.Agent.Volumes.V1;
+﻿using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Volumes;
 using FluentValidation;
-using Grpc.Core;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Volumes.Queries;
 
-public sealed record InspectVolume (Guid PlatformId, string Name) : IQuery<Result<VolumeResponse>>
+public sealed record InspectVolume (Guid PlatformId, string Name) : IQuery<Result<DockerVolume>>
 {
     internal class Validator : AbstractValidator<InspectVolume>
     {
@@ -22,27 +21,21 @@ public sealed record InspectVolume (Guid PlatformId, string Name) : IQuery<Resul
     }
 }
 
-internal sealed class InspectVolumeHandler(ApplicationDbContext dbContext, IGrpcClientFactory clientFactory) : IQueryHandler<InspectVolume, Result<VolumeResponse>>
+internal sealed class InspectVolumeHandler(IVolumeConnector volumeConnector, ApplicationDbContext dbContext) : IQueryHandler<InspectVolume, Result<DockerVolume>>
 {
-    public async ValueTask<Result<VolumeResponse>> Handle(InspectVolume query, CancellationToken cancellationToken)
+    public async ValueTask<Result<DockerVolume>> Handle(InspectVolume query, CancellationToken cancellationToken)
     {
         var address = await dbContext.Platforms.Where(s => s.Id == query.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
         if (address == null)
         {
-            return Result.Failure<VolumeResponse>(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure<DockerVolume>(new NotFoundError("The provided platform Id doesn't exist"));
         }
-        try
-        {
-            var request = new InspectVolumeRequest
-            {
-                Name = query.Name
-            };
-            var client = clientFactory.GetVolumeClient(address);
-            return await client.InspectAsync(request, cancellationToken: cancellationToken);
-        }
-        catch (RpcException ex)
-        {
-            return Result.Failure<VolumeResponse>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
-        }
+
+        var command = new InspectVolumeCommand
+        (
+            Name: query.Name,
+            PlatformAddress: address
+        );
+        return await volumeConnector.InspectVolumeAsync(command, cancellationToken);
     }
 }

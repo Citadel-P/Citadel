@@ -1,25 +1,25 @@
 import { createContext } from 'use-context-selector';
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { DeleteVolumesInput, VolumeView } from '@/api/_generated';
+import { DeleteVolumesInput, DockerVolume } from '@/api/_generated';
 import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
 import { useDELETEVolumes } from './hooks/useDELETEVolumes';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 interface IContext {
-  selectedRows: VolumeView[] | undefined;
-  volumes: VolumeView[];
-  setSelectedRows: (Volumes: VolumeView[] | undefined) => void;
-  setVolumes: (Volumes: VolumeView[]) => void;
-  dialogData: IDeleteDialogData<VolumeView>;
-  setDialogData: (data: IDeleteDialogData<VolumeView>) => void;
+  selectedRows: DockerVolume[] | undefined;
+  volumes: DockerVolume[];
+  setSelectedRows: (Volumes: DockerVolume[] | undefined) => void;
+  setVolumes: (Volumes: DockerVolume[]) => void;
+  dialogData: IDeleteDialogData<DockerVolume>;
+  setDialogData: (data: IDeleteDialogData<DockerVolume>) => void;
   onSearch: (searchTerm: string) => void;
   requestDelete: (request: DeleteVolumesInput) => void;
   deleteIsPending: boolean;
   sheetOpen: boolean;
   setSheetOpen: (open: boolean) => void;
-  currentVolume: VolumeView | undefined;
-  setCurrentVolume: (volume: VolumeView | undefined) => void;
+  currentVolume: DockerVolume | undefined;
+  setCurrentVolume: (volume: DockerVolume | undefined) => void;
 }
 
 export const VolumesContext = createContext<IContext | undefined>(undefined);
@@ -27,20 +27,20 @@ export const VolumesContext = createContext<IContext | undefined>(undefined);
 const VolumesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const client = useQueryClient();
   // State variables
-  const [selectedRows, setSelectedRows] = useState<VolumeView[] | undefined>();
-  const [volumes, setVolumes] = useState<VolumeView[]>([]);
-  const [originalVolumes, setOriginalVolumes] = useState<VolumeView[]>([]);
+  const [selectedRows, setSelectedRows] = useState<DockerVolume[] | undefined>();
+  const [volumes, setVolumes] = useState<DockerVolume[]>([]);
+  const [originalVolumes, setOriginalVolumes] = useState<DockerVolume[]>([]);
   // Sheet state
-  const [currentVolume, setCurrentVolume] = useState<VolumeView>();
+  const [currentVolume, setCurrentVolume] = useState<DockerVolume>();
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const { dialogData, setDialogData } = useDialogState<VolumeView>();
+  const { dialogData, setDialogData } = useDialogState<DockerVolume>();
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
   const { mutate: deleteVolumes, isSuccess: deleteIsSuccess, isPending: deleteIsPending } = useDELETEVolumes();
 
   // Wrapper function that handles both original and filtered Volumes
-  const handleVolumesUpdate = useCallback((Volumes: VolumeView[]) => {
+  const handleVolumesUpdate = useCallback((Volumes: DockerVolume[]) => {
     setOriginalVolumes(Volumes);
     setVolumes(Volumes);
   }, []);

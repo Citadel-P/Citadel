@@ -10,14 +10,14 @@
  * ---------------------------------------------------------------
  */
 
-export enum VolumeSharingType {
+export enum VolumeSharing {
   None = "None",
-  Readonly = "Readonly",
-  Onewriter = "Onewriter",
+  ReadOnly = "ReadOnly",
+  OneWriter = "OneWriter",
   All = "All",
 }
 
-export enum VolumeScopeType {
+export enum VolumeScope {
   Single = "Single",
   Multi = "Multi",
 }
@@ -66,17 +66,6 @@ export enum DockerHubImageStatus {
   Inactive = "Inactive",
 }
 
-export enum ContainerStateType {
-  Unknown = "Unknown",
-  Created = "Created",
-  Running = "Running",
-  Paused = "Paused",
-  Restarting = "Restarting",
-  Exited = "Exited",
-  Removing = "Removing",
-  Dead = "Dead",
-}
-
 export enum ContainerStateStatus {
   Unknown = "Unknown",
   Created = "Created",
@@ -89,40 +78,34 @@ export enum ContainerStateStatus {
   Offline = "Offline",
 }
 
-export interface Address {
-  addr?: string | null;
-  /** @format int64 */
-  prefixLen?: number | null;
-}
-
 export type AttestationDataView = {
   for: string;
 } | null;
 
 export type BindOptions = {
-  propagation?: string | null;
-  nonRecursive?: boolean | null;
-  createMountpoint?: boolean | null;
-  readOnlyNonRecursive?: boolean | null;
-  readOnlyForceRecursive?: boolean | null;
+  propagation: string | null;
+  nonRecursive: boolean | null;
+  createMountpoint: boolean | null;
+  readOnlyNonRecursive: boolean | null;
+  readOnlyForceRecursive: boolean | null;
 };
 
-export type ClusterVolumeInfoView = {
+export type ClusterVolume = {
+  id: string;
+  version: VolumeVersionInfo;
+  createdAt: string;
+  updatedAt: string;
+  spec: VolumeSpecification;
+  info: ClusterVolumeInfo;
+  publishStatus: VolumePublishStatus[];
+} | null;
+
+export type ClusterVolumeInfo = {
   /** @format int64 */
   capacityBytes: number | null;
   volumeContext: Record<string, string>;
   volumeID: string;
-  accessibleTopology: TopologyEntryView[] | null;
-};
-
-export type ClusterVolumeView = {
-  id: string;
-  version: VolumeVersionView;
-  createdAt: string;
-  updatedAt: string;
-  spec: VolumeSpecView;
-  info: ClusterVolumeInfoView;
-  publishStatus: PublishStatusView[] | null;
+  accessibleTopology: TopologyEntry[];
 };
 
 /** @default null */
@@ -155,59 +138,82 @@ export type ConfigView = {
   shell: string[];
 } | null;
 
-export interface ContainerConfig {
-  hostname?: string | null;
-  domainname?: string | null;
-  user?: string | null;
-  attachStdin?: boolean | null;
-  attachStdout?: boolean | null;
-  attachStderr?: boolean | null;
-  exposedPorts?: string[] | null;
-  tty?: boolean | null;
-  openStdin?: boolean | null;
-  stdinOnce?: boolean | null;
-  env?: string[] | null;
-  cmd?: string[] | null;
-  image?: string | null;
-  volumes?: string[] | null;
-  workingDir?: string | null;
-  entrypoint?: string[] | null;
-  networkDisabled?: boolean | null;
-  macAddress?: string | null;
-  onBuild?: string[] | null;
-  labels?: Record<string, string>;
-}
+export type ContainerConfiguration = {
+  hostname: string | null;
+  domainname: string | null;
+  user: string | null;
+  attachStdin: boolean | null;
+  attachStdout: boolean | null;
+  attachStderr: boolean | null;
+  exposedPorts: string[] | null;
+  tty: boolean | null;
+  openStdin: boolean | null;
+  stdinOnce: boolean | null;
+  env: string[];
+  cmd: string[];
+  image: string | null;
+  volumes: string[] | null;
+  workingDir: string | null;
+  entrypoint: string[];
+  networkDisabled: boolean | null;
+  macAddress: string | null;
+  onBuild: string[];
+  labels: Record<string, string>;
+};
+
+export type ContainerHealthStatus = {
+  status: string | null;
+  /** @format int32 */
+  failingStreak: number | null;
+};
 
 export interface ContainerInspectView {
   id: string;
   created: string;
-  path: string;
-  args: string[];
-  state: ContainerState;
-  image: string;
-  resolvConfPath: string;
-  hostnamePath: string;
-  hostsPath: string;
-  logPath: string;
-  name: string;
+  path: string | null;
+  state: ContainerRuntimeState;
+  image: string | null;
+  resolvConfPath: string | null;
+  hostnamePath: string | null;
+  hostsPath: string | null;
+  logPath: string | null;
+  name: string | null;
   /** @format int32 */
   restartCount: number | null;
-  driver: string;
-  platform: string;
-  mountLabel: string;
-  processLabel: string;
-  appArmorProfile: string;
-  execIDs: string[];
-  hostConfig: HostConfig;
-  graphDriver: GraphDriverData;
+  driver: string | null;
+  platform: string | null;
+  mountLabel: string | null;
+  processLabel: string | null;
+  appArmorProfile: string | null;
   /** @format int64 */
   sizeRw: number | null;
   /** @format int64 */
   sizeRootFs: number | null;
-  mounts: MountPoint[];
-  config: ContainerConfig;
-  networkSettings: NetworkSettingsView;
+  args: string[] | null;
+  execIDs: string[];
+  mounts: MountPointInfo[] | null;
+  hostConfig: HostConfiguration;
+  graphDriver: GraphDriverDataInfo;
+  config: ContainerConfiguration;
+  networkSettings: NetworkSettingsInfo;
 }
+
+export type ContainerRuntimeState = {
+  status: ContainerStateStatus;
+  running: boolean | null;
+  paused: boolean | null;
+  restarting: boolean | null;
+  oomKilled: boolean | null;
+  dead: boolean | null;
+  /** @format int32 */
+  pid: number | null;
+  /** @format int32 */
+  exitCode: number | null;
+  error: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  health: ContainerHealthStatus;
+};
 
 export interface ContainerStatView {
   /** @format uuid */
@@ -224,23 +230,6 @@ export interface ContainerStatView {
   txBytes?: number;
   /** @format int64 */
   created?: number;
-}
-
-export interface ContainerState {
-  status?: ContainerStateType;
-  running?: boolean | null;
-  paused?: boolean | null;
-  restarting?: boolean | null;
-  oomKilled?: boolean | null;
-  dead?: boolean | null;
-  /** @format int32 */
-  pid?: number | null;
-  /** @format int32 */
-  exitCode?: number | null;
-  error?: string | null;
-  startedAt?: string | null;
-  finishedAt?: string | null;
-  health?: Health;
 }
 
 export interface ContainerStatsView {
@@ -420,18 +409,72 @@ export interface DockerHubTagView {
   lastPulled: string;
 }
 
-export type DriverConfig = {
-  name?: string | null;
-  options?: Record<string, string>;
+export interface DockerNetwork {
+  name: string;
+  id: string;
+  created: string;
+  driver: string;
+  scope: string;
+  enableIPv4: boolean;
+  enableIPv6: boolean;
+  internal: boolean;
+  attachable: boolean;
+  ingress: boolean;
+  configOnly: boolean;
+  inUse: boolean;
+  configFrom: string | null;
+  ipam: IpAddressManagementConfig;
+  options: Record<string, string>;
+  labels: Record<string, string>;
+}
+
+export interface DockerNetworkDetails {
+  name: string;
+  id: string;
+  created: string;
+  driver: string;
+  scope: string;
+  enableIPv4: boolean;
+  enableIPv6: boolean;
+  internal: boolean;
+  attachable: boolean;
+  ingress: boolean;
+  configOnly: boolean;
+  inUse: boolean;
+  configFrom: string | null;
+  ipam: IpAddressManagementConfig;
+  options: Record<string, string>;
+  labels: Record<string, string>;
+  containers: Record<string, NetworkConnectedContainer>;
+  peers: NetworkPeerInfo[];
+}
+
+export interface DockerVolume {
+  id: string;
+  inUse: boolean;
+  scope: string;
+  driver: string;
+  mountpoint: string;
+  createdAt: string;
+  clusterVolume: ClusterVolume;
+  usageData: VolumeUsageData;
+  status: Record<string, string>;
+  labels: Record<string, string>;
+  options: Record<string, string>;
+}
+
+export type DriverConfiguration = {
+  name: string | null;
+  options: Record<string, string>;
 };
 
 export type Empty = object;
 
-export interface EndpointIPAMConfig {
-  ipv4Address?: string | null;
-  ipv6Address?: string | null;
-  linkLocalIPs?: string[] | null;
-}
+export type EndpointIpamConfiguration = {
+  ipv4Address: string | null;
+  ipv6Address: string | null;
+  linkLocalIPs: string[];
+};
 
 /** @default null */
 export type EndpointMetadata = {
@@ -441,19 +484,19 @@ export type EndpointMetadata = {
   canDelete?: boolean | null;
 };
 
-export interface EndpointSettingsView {
-  ipamConfig: EndpointIPAMConfig;
+export interface EndpointSettingsInfo {
+  ipamConfig: EndpointIpamConfiguration;
   links: string[];
-  macAddress: string;
+  macAddress: string | null;
   aliases: string[];
-  networkID: string;
-  endpointID: string;
-  gateway: string;
-  ipAddress: string;
+  networkID: string | null;
+  endpointID: string | null;
+  gateway: string | null;
+  ipAddress: string | null;
   /** @format int64 */
   ipPrefixLen: number | null;
-  iPv6Gateway: string;
-  globalIPv6Address: string;
+  ipv6Gateway: string | null;
+  globalIPv6Address: string | null;
   /** @format int64 */
   globalIPv6PrefixLen: number | null;
   driverOpts: Record<string, string>;
@@ -480,10 +523,10 @@ export type GitHubCrPackageVersionMetadata = {
   container: GitHubCrPackageVersionContainerMetadata;
 } | null;
 
-export interface GraphDriverData {
-  name?: string | null;
-  data?: Record<string, string>;
-}
+export type GraphDriverDataInfo = {
+  name: string | null;
+  data: Record<string, string>;
+};
 
 export type GraphDriverDataView = {
   mergedDir: string;
@@ -495,12 +538,6 @@ export interface GraphDriverView {
   name: string;
   data: GraphDriverDataView;
 }
-
-export type Health = {
-  status?: string | null;
-  /** @format int32 */
-  failingStreak?: number | null;
-};
 
 export type HealthcheckView = {
   test: string[];
@@ -516,71 +553,86 @@ export type HealthcheckView = {
   startInterval: number | null;
 };
 
-export interface HostConfig {
-  binds?: string[] | null;
-  containerIDFile?: string | null;
-  logConfig?: LogConfig;
-  networkMode?: string | null;
-  portBindings?: MapFieldPortBinding[] | null;
-  restartPolicy?: RestartPolicy;
-  autoRemove?: boolean | null;
-  volumeDriver?: string | null;
-  volumesFrom?: string[] | null;
-  mounts?: Mount[] | null;
-  consoleSize?: number[] | null;
-  annotations?: Record<string, string>;
-  capAdd?: string[] | null;
-  capDrop?: string[] | null;
-  cgroupnsMode?: string | null;
-  dns?: string[] | null;
-  dnsOptions?: string[] | null;
-  dnsSearch?: string[] | null;
-  extraHosts?: string[] | null;
-  groupAdd?: string[] | null;
-  ipcMode?: string | null;
-  cgroup?: string | null;
-  links?: string[] | null;
+export type HostConfiguration = {
+  binds: string[];
+  containerIDFile: string | null;
+  logConfig: LogConfiguration;
+  networkMode: string | null;
+  portBindings: Record<string, HostPortBinding[]>[];
+  restartPolicy: RestartPolicy;
+  autoRemove: boolean | null;
+  volumeDriver: string | null;
+  volumesFrom: string[];
+  mounts: HostMount[];
+  consoleSize: number[];
+  annotations: Record<string, string>;
+  capAdd: string[];
+  capDrop: string[];
+  cgroupnsMode: string | null;
+  dns: string[];
+  dnsOptions: string[];
+  dnsSearch: string[];
+  extraHosts: string[];
+  groupAdd: string[];
+  ipcMode: string | null;
+  cgroup: string | null;
+  links: string[];
   /** @format int32 */
-  oomScoreAdj?: number | null;
-  pidMode?: string | null;
-  privileged?: boolean | null;
-  publishAllPorts?: boolean | null;
-  readonlyRootfs?: boolean | null;
-  securityOpt?: string[] | null;
-  storageOpt?: Record<string, string>;
-  tmpfs?: Record<string, string>;
-  utsMode?: string | null;
-  usernsMode?: string | null;
+  oomScoreAdj: number | null;
+  pidMode: string | null;
+  privileged: boolean | null;
+  publishAllPorts: boolean | null;
+  readonlyRootfs: boolean | null;
+  securityOpt: string[];
+  storageOpt: Record<string, string>;
+  tmpfs: Record<string, string>;
+  utsMode: string | null;
+  usernsMode: string | null;
   /** @format int64 */
-  shmSize?: number;
-  sysctls?: Record<string, string>;
-  runtime?: string | null;
-  isolation?: string | null;
-  maskedPaths?: string[] | null;
-  readonlyPaths?: string[] | null;
+  shmSize: number;
+  sysctls: Record<string, string>;
+  runtime: string | null;
+  isolation: string | null;
+  maskedPaths: string[];
+  readonlyPaths: string[];
   /** @format int64 */
-  memorySwap?: number | null;
+  memorySwap: number | null;
   /** @format int64 */
-  memorySwappiness?: number | null;
+  memorySwappiness: number | null;
   /** @format int64 */
-  nanoCpus?: number | null;
+  nanoCpus: number | null;
   /** @format int64 */
-  pidsLimit?: number | null;
+  pidsLimit: number | null;
   /** @format int64 */
-  memory?: number | null;
+  memory: number | null;
   /** @format int64 */
-  memoryReservation?: number | null;
+  memoryReservation: number | null;
   /** @format int64 */
-  ioMaximumBandwidth?: number | null;
+  ioMaximumBandwidth: number | null;
   /** @format int64 */
-  cpuPeriod?: number | null;
+  cpuPeriod: number | null;
   /** @format int64 */
-  cpuPercent?: number | null;
+  cpuPercent: number | null;
   /** @format int64 */
-  cpuCount?: number | null;
-  ulimits?: Ulimits[] | null;
+  cpuCount: number | null;
+  ulimits: Ulimit[];
   /** @format int64 */
-  kernelMemoryTCP?: number | null;
+  kernelMemoryTCP: number | null;
+};
+
+export interface HostMount {
+  target: string | null;
+  source: string | null;
+  type: string | null;
+  readOnly: boolean | null;
+  consistency: string | null;
+  bindOptions: BindOptions;
+  volumeOptions: VolumeOptions;
+}
+
+export interface HostPortBinding {
+  hostIP: string | null;
+  hostPort: string | null;
 }
 
 export interface HttpValidationProblemDetails {
@@ -632,27 +684,11 @@ export interface IPAMConfigInput {
   gateway: string;
 }
 
-export interface IPAMConfigView {
-  subnet: string;
-  gateway: string;
-  /** @default null */
-  ipRange?: string | null;
-}
-
 /** @default null */
 export type IPAMInput = {
   driver: string;
   /** @default null */
   config?: IPAMConfigInput[] | null;
-  /** @default null */
-  options?: Record<string, string>;
-};
-
-/** @default null */
-export type IPAMView = {
-  driver: string;
-  /** @default null */
-  config?: IPAMConfigView[] | null;
   /** @default null */
   options?: Record<string, string>;
 };
@@ -711,44 +747,22 @@ export interface InspectImageView {
   metadata: MetadataView;
 }
 
-export interface InspectNetworkView {
-  name: string;
-  id: string;
-  created: string;
-  driver: string;
-  scope: string;
-  enableIPv4: boolean | null;
-  enableIPv6: boolean | null;
-  internal: boolean | null;
-  attachable: boolean | null;
-  ingress: boolean | null;
-  inUse: boolean | null;
-  configOnly: boolean | null;
-  /** @default null */
-  configFrom?: string | null;
-  ipam?: IPAMView;
-  /** @default null */
-  peers?: PeerInfoView[] | null;
-  /** @default null */
-  options?: Record<string, string>;
-  /** @default null */
-  labels?: Record<string, string>;
-  /** @default null */
-  containers?: Record<string, NetworkContainerView>;
+export interface IpAddressInfo {
+  addr: string | null;
+  /** @format int64 */
+  prefixLen: number | null;
 }
 
-export interface InspectVolumeView {
-  id: string;
-  driver: string;
-  mountpoint: string;
-  createdAt: string;
-  scope: string;
-  inUse: boolean;
-  usageData: UsageDataView;
-  clusterVolume: ClusterVolumeView;
-  labels: Record<string, string>;
-  status: Record<string, string>;
+export type IpAddressManagementConfig = {
+  driver: string | null;
+  config: IpamSubnetConfiguration[];
   options: Record<string, string>;
+};
+
+export interface IpamSubnetConfiguration {
+  subnet: string | null;
+  ipRange: string | null;
+  gateway: string | null;
 }
 
 export type JSONErrorReply = {
@@ -767,9 +781,9 @@ export type JSONProgressReply = {
   units?: string | null;
 };
 
-export type LogConfig = {
-  type?: string | null;
-  config?: Record<string, string>;
+export type LogConfiguration = {
+  type: string | null;
+  config: Record<string, string>;
 };
 
 export interface LoginRequest {
@@ -791,96 +805,60 @@ export interface ManifestView {
   attestationData: AttestationDataView;
 }
 
-export interface MapFieldPortBinding {
-  key?: string | null;
-  value?: PortBinding[] | null;
-}
-
-export interface MapFieldPortBindingView {
-  key: string;
-  value: PortBindingView[];
-}
-
 export interface MetadataView {
   lastTagTime: string;
 }
 
-export interface Mount {
-  target?: string | null;
-  source?: string | null;
-  type?: string | null;
-  readOnly?: boolean | null;
-  consistency?: string | null;
-  bindOptions?: BindOptions;
-  volumeOptions?: VolumeOptions;
+export interface MountPointInfo {
+  type: string | null;
+  name: string | null;
+  source: string | null;
+  destination: string | null;
+  driver: string | null;
+  mode: string | null;
+  rw: boolean | null;
+  propagation: string | null;
 }
 
-export interface MountPoint {
-  type?: string | null;
-  name?: string | null;
-  source?: string | null;
-  destination?: string | null;
-  driver?: string | null;
-  mode?: string | null;
-  rw?: boolean | null;
-  propagation?: string | null;
-}
-
-export interface NetworkContainerView {
+export interface NetworkConnectedContainer {
   name: string;
   endpointId: string;
   macAddress: string;
-  iPv4Address: string;
-  iPv6Address: string;
+  ipV4Address: string;
+  ipv6Address: string;
 }
 
-export interface NetworkSettingsView {
-  bridge: string;
-  sandboxID: string;
+export interface NetworkPeerInfo {
+  name: string;
+  ip: string;
+}
+
+export type NetworkSettingsInfo = {
+  bridge: string | null;
+  sandboxID: string | null;
   hairpinMode: boolean | null;
-  linkLocalIPv6Address: string;
+  linkLocalIPv6Address: string | null;
   /** @format int64 */
   linkLocalIPv6PrefixLen: number | null;
-  ports: MapFieldPortBindingView[];
-  sandboxKey: string;
-  secondaryIPAddresses: Address[];
-  endpointID: string;
-  gateway: string;
-  globalIPv6Address: string;
+  sandboxKey: string | null;
+  secondaryIPAddresses: IpAddressInfo[];
+  secondaryIPv6Addresses: any[];
+  endpointID: string | null;
+  gateway: string | null;
+  globalIPv6Address: string | null;
   /** @format int64 */
   globalIPv6PrefixLen: number | null;
-  ipAddress: string;
+  ipAddress: string | null;
   /** @format int64 */
   ipPrefixLen: number | null;
-  iPv6Gateway: string;
-  macAddress: string;
-  networks: Record<string, EndpointSettingsView>;
-}
-
-export interface NetworkView {
-  name: string;
-  id: string;
-  created: string;
-  driver: string;
-  scope: string;
-  enableIPv4: boolean | null;
-  enableIPv6: boolean | null;
-  internal: boolean | null;
-  attachable: boolean | null;
-  ingress: boolean | null;
-  inUse: boolean | null;
-  configOnly: boolean | null;
-  /** @default null */
-  configFrom?: string | null;
-  ipam?: IPAMView;
-  /** @default null */
-  options?: Record<string, string>;
-  /** @default null */
-  labels?: Record<string, string>;
-}
+  ipv6Gateway: string | null;
+  macAddress: string | null;
+  ports: Record<string, HostPortBinding[]>[];
+  networks: Record<string, EndpointSettingsInfo>;
+};
 
 export interface NetworksView {
-  networks: NetworkView[];
+  networks: DockerNetwork[];
 }
 
 export type NullableOfContainerStatView = {
@@ -899,11 +877,6 @@ export type NullableOfContainerStatView = {
   /** @format int64 */
   created?: number;
 } | null;
-
-export interface PeerInfoView {
-  name: string;
-  ip: string;
-}
 
 export type PlatformDescriptor = BasePlatformDescriptor &
   (
@@ -1005,16 +978,16 @@ export interface PlatformInput {
 }
 
 export interface PlatformStatView {
-  /** @format double */
-  memoryUsage?: number;
-  /** @format double */
-  cpuUsage?: number;
   /** @format int64 */
   created?: number;
   /** @format double */
+  txBytes?: number;
+  /** @format double */
   rxBytes?: number;
   /** @format double */
-  txBytes?: number;
+  cpuUsage?: number;
+  /** @format double */
+  memoryUsage?: number;
 }
 
 /** @default null */
@@ -1068,16 +1041,6 @@ export interface PlatformsView {
   platforms: PlatformView2[];
 }
 
-export interface PortBinding {
-  hostIP?: string | null;
-  hostPort?: string | null;
-}
-
-export interface PortBindingView {
-  hostIP: string;
-  hostPort: string;
-}
-
 export interface PortView {
   ip?: string;
   /** @format int32 */
@@ -1093,12 +1056,6 @@ export interface ProblemDetails {
   status?: number | null;
   detail?: string | null;
   instance?: string | null;
-}
-
-export interface PublishStatusView {
-  nodeID: string;
-  state: string;
-  publishContext: Record<string, string>;
 }
 
 export interface PullImageRequest {
@@ -1213,9 +1170,9 @@ export interface RegistryView {
 }
 
 export type RestartPolicy = {
-  name?: string | null;
+  name: string | null;
   /** @format int32 */
-  maximumRetryCount?: number | null;
+  maximumRetryCount: number | null;
 };
 
 export interface RootFSView {
@@ -1236,32 +1193,25 @@ export interface StreamLogsRequest {
   containerId: string;
 }
 
-export interface TopologyEntryView {
+export interface TopologyEntry {
   labels: Record<string, string>;
 }
 
-export interface Ulimits {
-  name?: string | null;
+export interface Ulimit {
+  name: string | null;
   /** @format int64 */
-  soft?: number | null;
+  soft: number | null;
   /** @format int64 */
-  hard?: number | null;
+  hard: number | null;
 }
 
-export type UsageDataView = {
-  /** @format int64 */
-  size: number | null;
-  /** @format int64 */
-  refCount: number | null;
-};
-
-export type VolumeAccessModeView = {
-  scope: VolumeScopeType;
-  sharing: VolumeSharingType;
-  secrets: VolumeSecretView[] | null;
+export type VolumeAccessMode = {
+  scope: VolumeScope;
+  sharing: VolumeSharing;
+  secrets: VolumeSecret[];
   capacityRange: VolumeCapacityRange;
   availability: string;
-};
+} | null;
 
 export type VolumeCapacityRange = {
   /** @format int64 */
@@ -1271,42 +1221,42 @@ export type VolumeCapacityRange = {
 };
 
 export type VolumeOptions = {
-  noCopy?: boolean | null;
-  labels?: Record<string, string>;
-  driverConfig?: DriverConfig;
-  subpath?: string | null;
+  noCopy: boolean | null;
+  labels: Record<string, string>;
+  driverConfig: DriverConfiguration;
+  subpath: string | null;
 };
 
-export interface VolumeSecretView {
+export interface VolumePublishStatus {
+  nodeID: string;
+  state: string;
+  publishContext: Record<string, string>;
+}
+
+export interface VolumeSecret {
   key: string;
   secret: string;
 }
 
-export type VolumeSpecView = {
+export type VolumeSpecification = {
   group: string;
-  accessMode: VolumeAccessModeView;
+  accessMode: VolumeAccessMode;
 } | null;
 
-export type VolumeVersionView = {
+export type VolumeUsageData = {
+  /** @format int64 */
+  size: number | null;
+  /** @format int64 */
+  refCount: number | null;
+};
+
+export type VolumeVersionInfo = {
   /** @format int64 */
   index: number | null;
 };
 
-export interface VolumeView {
-  id: string;
-  driver: string;
-  mountpoint: string;
-  createdAt: string;
-  scope: string;
-  inUse: boolean;
-  usageData: UsageDataView;
-  labels: Record<string, string>;
-  status: Record<string, string>;
-  options: Record<string, string>;
-}
-
 export interface VolumesView {
-  volumes: VolumeView[];
+  volumes: DockerVolume[];
 }
 
 type BaseIImageRepository = object;
@@ -2571,7 +2521,7 @@ export class Api<
      * @summary Inspect a network
      * @request GET:/api/v1/networks/{platformId}/{networkId}
      * @secure
-     * @response `200` `InspectNetworkView` OK
+     * @response `200` `DockerNetworkDetails` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2584,7 +2534,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<
-        InspectNetworkView,
+        DockerNetworkDetails,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/networks/${platformId}/${networkId}`,
@@ -2692,7 +2642,7 @@ export class Api<
      * @summary Inspect a volume
      * @request GET:/api/v1/volumes/{platformId}/{name}
      * @secure
-     * @response `200` `InspectVolumeView` OK
+     * @response `200` `DockerVolume` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2704,16 +2654,15 @@ export class Api<
       name: string,
       params: RequestParams = {},
     ) =>
-      this.request<
-        InspectVolumeView,
-        HttpValidationProblemDetails | ProblemDetails
-      >({
-        path: `/api/v1/volumes/${platformId}/${name}`,
-        method: "GET",
-        secure: true,
-        format: "json",
-        ...params,
-      }),
+      this.request<DockerVolume, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/volumes/${platformId}/${name}`,
+          method: "GET",
+          secure: true,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -2748,7 +2697,7 @@ export class Api<
      * @summary Create a volume
      * @request POST:/api/v1/volumes
      * @secure
-     * @response `200` `VolumeView` OK
+     * @response `200` `DockerVolume` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2756,14 +2705,16 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     volumesCreate: (data: CreateVolumeInput, params: RequestParams = {}) =>
-      this.request<VolumeView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/volumes`,
-        method: "POST",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
+      this.request<DockerVolume, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/volumes`,
+          method: "POST",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
   };
 }

@@ -1,0 +1,22 @@
+﻿namespace Domain.Contracts.Resources.Volumes;
+
+public record DockerVolume (
+    string Id,
+    bool InUse,
+    string Scope,
+    string Driver,
+    string Mountpoint,
+    string CreatedAt,
+    ClusterVolume? ClusterVolume,
+    VolumeUsageData? UsageData,
+    IReadOnlyDictionary<string, string> Status,
+    IReadOnlyDictionary<string, string> Labels,
+    IReadOnlyDictionary<string, string> Options);
+
+public record TopologyEntry(IReadOnlyDictionary<string, string> Labels);
+
+public record ClusterVolumeInfo(
+    long? CapacityBytes,
+    IReadOnlyDictionary<string, string> VolumeContext,
+    string VolumeID,
+    IReadOnlyList<TopologyEntry> AccessibleTopology);

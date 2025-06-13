@@ -1,9 +1,9 @@
-﻿using Citadel.Agent.Volumes.V1;
+﻿using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Volumes;
 using FluentValidation;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -16,13 +16,13 @@ public sealed record CreateVolume(
     string Name,
     string Driver,
     Dictionary<string, string>? Labels = null,
-    Dictionary<string, string>? Options = null) : ICommand<Result<VolumeResponse>>
+    Dictionary<string, string>? Options = null) : ICommand<Result<DockerVolume>>
 {
     internal class Validator : AbstractValidator<CreateVolume>
     {
         public Validator()
         {
-            RuleFor(s => s.Name).NotNull().NotEmpty();
+            RuleFor(s => s.Name).ValidNameIdentifier();
             When(s => s.Driver is not null, () =>
             {
                 RuleFor(s => s.Driver)
@@ -41,34 +41,34 @@ public sealed record CreateVolume(
     }
 }
 
-internal sealed class CreateVolumeHandler(IGrpcClientFactory clientFactory,ApplicationDbContext dbContext) 
-    : ICommandHandler<CreateVolume, Result<VolumeResponse>>
+internal sealed class CreateVolumeHandler(IVolumeConnector volumeConnector, ApplicationDbContext dbContext) 
+    : ICommandHandler<CreateVolume, Result<DockerVolume>>
 {
     
-    public async ValueTask<Result<VolumeResponse>> Handle(CreateVolume command, CancellationToken cancellationToken)
+    public async ValueTask<Result<DockerVolume>> Handle(CreateVolume command, CancellationToken cancellationToken)
     {
         try
         {
             var address = await dbContext.Platforms.Where(s => s.Id == command.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
             if (address == null)
             {
-                return Result.Failure<VolumeResponse>(new NotFoundError("The provided platform Id doesn't exist"));
+                return Result.Failure<DockerVolume>(new NotFoundError("The provided platform Id doesn't exist"));
             }
 
-            var client = clientFactory.GetVolumeClient(address);
-            var request = new CreateVolumeRequest
-            {
-                Name = command.Name,
-                Driver = command.Driver,
-                Labels = { command.Labels ?? [] },
-                Options = { command.Options ?? [] }
-            };
+            var request = new CreateVolumeCommand
+            (
+                PlatformAddress: address,
+                Name: command.Name,
+                Driver: command.Driver,
+                Labels: command.Labels,
+                Options: command.Options
+            );
 
-            return await client.CreateAsync(request, cancellationToken: cancellationToken);
+            return await volumeConnector.CreateVolumeAsync(request, cancellationToken: cancellationToken);
         }
         catch (RpcException ex)
         {
-            return Result.Failure<VolumeResponse>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<DockerVolume>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 }

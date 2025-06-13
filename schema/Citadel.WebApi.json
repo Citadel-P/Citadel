@@ -3433,7 +3433,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InspectVolumeView"
+                  "$ref": "#/components/schemas/DockerVolume"
                 }
               }
             }
@@ -3596,7 +3596,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VolumeView"
+                  "$ref": "#/components/schemas/DockerVolume"
                 }
               }
             }
@@ -3697,7 +3697,46 @@
         },
         "nullable": true
       },
-      "ClusterVolumeInfoView": {
+      "ClusterVolume": {
+        "required": [
+          "id",
+          "version",
+          "createdAt",
+          "updatedAt",
+          "spec",
+          "info",
+          "publishStatus"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "$ref": "#/components/schemas/VolumeVersionInfo"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/VolumeSpecification"
+          },
+          "info": {
+            "$ref": "#/components/schemas/ClusterVolumeInfo"
+          },
+          "publishStatus": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VolumePublishStatus"
+            }
+          }
+        },
+        "nullable": true
+      },
+      "ClusterVolumeInfo": {
         "required": [
           "capacityBytes",
           "volumeContext",
@@ -3715,8 +3754,7 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "volumeID": {
             "type": "string"
@@ -3724,49 +3762,8 @@
           "accessibleTopology": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/TopologyEntryView"
-            },
-            "nullable": true
-          }
-        },
-        "nullable": true
-      },
-      "ClusterVolumeView": {
-        "required": [
-          "id",
-          "version",
-          "createdAt",
-          "updatedAt",
-          "spec",
-          "info",
-          "publishStatus"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "version": {
-            "$ref": "#/components/schemas/VolumeVersionView"
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "updatedAt": {
-            "type": "string"
-          },
-          "spec": {
-            "$ref": "#/components/schemas/VolumeSpecView"
-          },
-          "info": {
-            "$ref": "#/components/schemas/ClusterVolumeInfoView"
-          },
-          "publishStatus": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PublishStatusView"
-            },
-            "nullable": true
+              "$ref": "#/components/schemas/TopologyEntry"
+            }
           }
         },
         "nullable": true
@@ -5064,6 +5061,66 @@
           }
         }
       },
+      "DockerVolume": {
+        "required": [
+          "id",
+          "inUse",
+          "scope",
+          "driver",
+          "mountpoint",
+          "createdAt",
+          "clusterVolume",
+          "usageData",
+          "status",
+          "labels",
+          "options"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "inUse": {
+            "type": "boolean"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "driver": {
+            "type": "string"
+          },
+          "mountpoint": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "clusterVolume": {
+            "$ref": "#/components/schemas/ClusterVolume"
+          },
+          "usageData": {
+            "$ref": "#/components/schemas/VolumeUsageData"
+          },
+          "status": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "DriverConfiguration": {
         "required": [
           "name",
@@ -6135,69 +6192,6 @@
           }
         }
       },
-      "InspectVolumeView": {
-        "required": [
-          "id",
-          "driver",
-          "mountpoint",
-          "createdAt",
-          "scope",
-          "inUse",
-          "usageData",
-          "clusterVolume",
-          "labels",
-          "status",
-          "options"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "driver": {
-            "type": "string"
-          },
-          "mountpoint": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "scope": {
-            "type": "string"
-          },
-          "inUse": {
-            "type": "boolean"
-          },
-          "usageData": {
-            "$ref": "#/components/schemas/UsageDataView"
-          },
-          "clusterVolume": {
-            "$ref": "#/components/schemas/ClusterVolumeView"
-          },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "nullable": true
-          },
-          "status": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "nullable": true
-          },
-          "options": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "nullable": true
-          }
-        }
-      },
       "IpAddressInfo": {
         "required": [
           "addr",
@@ -7198,28 +7192,6 @@
           }
         }
       },
-      "PublishStatusView": {
-        "required": [
-          "nodeID",
-          "state",
-          "publishContext"
-        ],
-        "type": "object",
-        "properties": {
-          "nodeID": {
-            "type": "string"
-          },
-          "state": {
-            "type": "string"
-          },
-          "publishContext": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          }
-        }
-      },
       "PullImageRequest": {
         "required": [
           "platformId",
@@ -7624,7 +7596,7 @@
           }
         }
       },
-      "TopologyEntryView": {
+      "TopologyEntry": {
         "required": [
           "labels"
         ],
@@ -7662,27 +7634,7 @@
           }
         }
       },
-      "UsageDataView": {
-        "required": [
-          "size",
-          "refCount"
-        ],
-        "type": "object",
-        "properties": {
-          "size": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "refCount": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          }
-        },
-        "nullable": true
-      },
-      "VolumeAccessModeView": {
+      "VolumeAccessMode": {
         "required": [
           "scope",
           "sharing",
@@ -7693,17 +7645,16 @@
         "type": "object",
         "properties": {
           "scope": {
-            "$ref": "#/components/schemas/VolumeScopeType"
+            "$ref": "#/components/schemas/VolumeScope"
           },
           "sharing": {
-            "$ref": "#/components/schemas/VolumeSharingType"
+            "$ref": "#/components/schemas/VolumeSharing"
           },
           "secrets": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/VolumeSecretView"
-            },
-            "nullable": true
+              "$ref": "#/components/schemas/VolumeSecret"
+            }
           },
           "capacityRange": {
             "$ref": "#/components/schemas/VolumeCapacityRange"
@@ -7763,14 +7714,36 @@
         },
         "nullable": true
       },
-      "VolumeScopeType": {
+      "VolumePublishStatus": {
+        "required": [
+          "nodeID",
+          "state",
+          "publishContext"
+        ],
+        "type": "object",
+        "properties": {
+          "nodeID": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "publishContext": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "VolumeScope": {
         "enum": [
           "Single",
           "Multi"
         ],
         "type": "string"
       },
-      "VolumeSecretView": {
+      "VolumeSecret": {
         "required": [
           "key",
           "secret"
@@ -7785,16 +7758,16 @@
           }
         }
       },
-      "VolumeSharingType": {
+      "VolumeSharing": {
         "enum": [
           "None",
-          "Readonly",
-          "Onewriter",
+          "ReadOnly",
+          "OneWriter",
           "All"
         ],
         "type": "string"
       },
-      "VolumeSpecView": {
+      "VolumeSpecification": {
         "required": [
           "group",
           "accessMode"
@@ -7805,12 +7778,32 @@
             "type": "string"
           },
           "accessMode": {
-            "$ref": "#/components/schemas/VolumeAccessModeView"
+            "$ref": "#/components/schemas/VolumeAccessMode"
           }
         },
         "nullable": true
       },
-      "VolumeVersionView": {
+      "VolumeUsageData": {
+        "required": [
+          "size",
+          "refCount"
+        ],
+        "type": "object",
+        "properties": {
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "refCount": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "VolumeVersionInfo": {
         "required": [
           "index"
         ],
@@ -7824,65 +7817,6 @@
         },
         "nullable": true
       },
-      "VolumeView": {
-        "required": [
-          "id",
-          "driver",
-          "mountpoint",
-          "createdAt",
-          "scope",
-          "inUse",
-          "usageData",
-          "labels",
-          "status",
-          "options"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "driver": {
-            "type": "string"
-          },
-          "mountpoint": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "scope": {
-            "type": "string"
-          },
-          "inUse": {
-            "type": "boolean"
-          },
-          "usageData": {
-            "$ref": "#/components/schemas/UsageDataView"
-          },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "nullable": true
-          },
-          "status": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "nullable": true
-          },
-          "options": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "nullable": true
-          }
-        }
-      },
       "VolumesView": {
         "required": [
           "volumes"
@@ -7892,7 +7826,7 @@
           "volumes": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/VolumeView"
+              "$ref": "#/components/schemas/DockerVolume"
             }
           }
         }

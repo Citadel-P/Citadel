@@ -4,5 +4,5 @@ namespace WebApi.Routes.Endpoints.Resources.Networks;
 
 public sealed record DeleteNetworksInput(Guid PlatformId, string[] Ids)
 {
-   internal DeleteNetworksCommand ToCommand() => new (PlatformId, Ids);
+   internal DeleteNetwork ToCommand() => new (PlatformId, Ids);
 };

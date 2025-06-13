@@ -10,9 +10,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Networks.Commands;
 
-public sealed record class DeleteNetworksCommand(Guid PlatformId, string[] Ids) : ICommand<Result>
+public sealed record class DeleteNetwork(Guid PlatformId, string[] Ids) : ICommand<Result>
 {
-    internal class Validator : AbstractValidator<DeleteNetworksCommand>
+    internal class Validator : AbstractValidator<DeleteNetwork>
     {
         public Validator()
         {
@@ -22,9 +22,9 @@ public sealed record class DeleteNetworksCommand(Guid PlatformId, string[] Ids) 
     }
 }
 
-internal class DeleteNetworksCommandHandler(INetworkConnector networkConnector, ApplicationDbContext dbContext) : ICommandHandler<DeleteNetworksCommand, Result>
+internal class DeleteNetworksHandler(INetworkConnector networkConnector, ApplicationDbContext dbContext) : ICommandHandler<DeleteNetwork, Result>
 {
-    public async ValueTask<Result> Handle(DeleteNetworksCommand command, CancellationToken cancellationToken)
+    public async ValueTask<Result> Handle(DeleteNetwork command, CancellationToken cancellationToken)
     {
         var address = await dbContext.Platforms.Where(s => s.Id == command.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
         if (address == null)

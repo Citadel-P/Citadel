@@ -7,6 +7,7 @@ using Citadel.Agent.Images.V1;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Registries;
+using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
@@ -101,10 +102,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(NetworksView))]
 [JsonSerializable(typeof(CreateVolumeInput))]
 [JsonSerializable(typeof(DeleteVolumesInput))]
-[JsonSerializable(typeof(InspectVolumeView))]
 [JsonSerializable(typeof(ListVolumesRequest))]
 [JsonSerializable(typeof(VolumesView))]
-[JsonSerializable(typeof(VolumeView))]
 [JsonSerializable(typeof(IAsyncEnumerable<ContainerLogResponse>))]
 [JsonSerializable(typeof(EndpointMetadata))]
 [JsonSerializable(typeof(IEnumerable<DockerHubRepositoryInfo>))]
@@ -120,6 +119,13 @@ namespace Application.Models;
 [JsonSerializable(typeof(IpAddressManagementConfig))]
 [JsonSerializable(typeof(NetworkConnectedContainer))]
 [JsonSerializable(typeof(NetworkPeerInfo))]
+[JsonSerializable(typeof(DockerVolume))]
+[JsonSerializable(typeof(ClusterVolume))]
+[JsonSerializable(typeof(VolumeUsageData))]
+[JsonSerializable(typeof(ClusterVolumeInfo))]
+[JsonSerializable(typeof(TopologyEntry))]
+[JsonSerializable(typeof(Domain.Contracts.Resources.Volumes.VolumeCapacityRange))]
+
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

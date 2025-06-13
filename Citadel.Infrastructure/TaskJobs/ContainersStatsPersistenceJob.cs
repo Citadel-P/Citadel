@@ -67,11 +67,11 @@ internal class ContainersStatsPersistenceJob(
 
     private async Task SaveBatchToDb(Dictionary<Guid, List<ContainerStat>> statsByPlatform, CancellationToken cancellationToken)
     {
-        using var scope = scopeFactory.CreateAsyncScope();
-        using var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
         try
         {
+            using var scope = scopeFactory.CreateAsyncScope();
+            using var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
             var stats = statsByPlatform.SelectMany(s => s.Value).ToList();
             await db.BulkInsertAsync(stats, cancellationToken: cancellationToken);
         }

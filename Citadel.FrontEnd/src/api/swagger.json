@@ -3063,7 +3063,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InspectNetworkView"
+                  "$ref": "#/components/schemas/DockerNetworkDetails"
                 }
               }
             }
@@ -3433,7 +3433,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InspectVolumeView"
+                  "$ref": "#/components/schemas/DockerVolume"
                 }
               }
             }
@@ -3596,7 +3596,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VolumeView"
+                  "$ref": "#/components/schemas/DockerVolume"
                 }
               }
             }
@@ -3652,20 +3652,6 @@
   },
   "components": {
     "schemas": {
-      "Address": {
-        "type": "object",
-        "properties": {
-          "addr": {
-            "type": "string",
-            "nullable": true
-          },
-          "prefixLen": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          }
-        }
-      },
       "AttestationDataView": {
         "required": [
           "for"
@@ -3679,6 +3665,13 @@
         "nullable": true
       },
       "BindOptions": {
+        "required": [
+          "propagation",
+          "nonRecursive",
+          "createMountpoint",
+          "readOnlyNonRecursive",
+          "readOnlyForceRecursive"
+        ],
         "type": "object",
         "properties": {
           "propagation": {
@@ -3704,7 +3697,46 @@
         },
         "nullable": true
       },
-      "ClusterVolumeInfoView": {
+      "ClusterVolume": {
+        "required": [
+          "id",
+          "version",
+          "createdAt",
+          "updatedAt",
+          "spec",
+          "info",
+          "publishStatus"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "$ref": "#/components/schemas/VolumeVersionInfo"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/VolumeSpecification"
+          },
+          "info": {
+            "$ref": "#/components/schemas/ClusterVolumeInfo"
+          },
+          "publishStatus": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VolumePublishStatus"
+            }
+          }
+        },
+        "nullable": true
+      },
+      "ClusterVolumeInfo": {
         "required": [
           "capacityBytes",
           "volumeContext",
@@ -3722,8 +3754,7 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "volumeID": {
             "type": "string"
@@ -3731,49 +3762,8 @@
           "accessibleTopology": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/TopologyEntryView"
-            },
-            "nullable": true
-          }
-        },
-        "nullable": true
-      },
-      "ClusterVolumeView": {
-        "required": [
-          "id",
-          "version",
-          "createdAt",
-          "updatedAt",
-          "spec",
-          "info",
-          "publishStatus"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "version": {
-            "$ref": "#/components/schemas/VolumeVersionView"
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "updatedAt": {
-            "type": "string"
-          },
-          "spec": {
-            "$ref": "#/components/schemas/VolumeSpecView"
-          },
-          "info": {
-            "$ref": "#/components/schemas/ClusterVolumeInfoView"
-          },
-          "publishStatus": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PublishStatusView"
-            },
-            "nullable": true
+              "$ref": "#/components/schemas/TopologyEntry"
+            }
           }
         },
         "nullable": true
@@ -3909,7 +3899,29 @@
         },
         "nullable": true
       },
-      "ContainerConfig": {
+      "ContainerConfiguration": {
+        "required": [
+          "hostname",
+          "domainname",
+          "user",
+          "attachStdin",
+          "attachStdout",
+          "attachStderr",
+          "exposedPorts",
+          "tty",
+          "openStdin",
+          "stdinOnce",
+          "env",
+          "cmd",
+          "image",
+          "volumes",
+          "workingDir",
+          "entrypoint",
+          "networkDisabled",
+          "macAddress",
+          "onBuild",
+          "labels"
+        ],
         "type": "object",
         "properties": {
           "hostname": {
@@ -3959,15 +3971,13 @@
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "cmd": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "image": {
             "type": "string",
@@ -3988,8 +3998,7 @@
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "networkDisabled": {
             "type": "boolean",
@@ -4003,24 +4012,41 @@
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "labels": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            },
+            }
+          }
+        },
+        "nullable": true
+      },
+      "ContainerHealthStatus": {
+        "required": [
+          "status",
+          "failingStreak"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "failingStreak": {
+            "type": "integer",
+            "format": "int32",
             "nullable": true
           }
-        }
+        },
+        "nullable": true
       },
       "ContainerInspectView": {
         "required": [
           "id",
           "created",
           "path",
-          "args",
           "state",
           "image",
           "resolvConfPath",
@@ -4034,12 +4060,13 @@
           "mountLabel",
           "processLabel",
           "appArmorProfile",
-          "execIDs",
-          "hostConfig",
-          "graphDriver",
           "sizeRw",
           "sizeRootFs",
+          "args",
+          "execIDs",
           "mounts",
+          "hostConfig",
+          "graphDriver",
           "config",
           "networkSettings"
         ],
@@ -4052,34 +4079,35 @@
             "type": "string"
           },
           "path": {
-            "type": "string"
-          },
-          "args": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "type": "string",
+            "nullable": true
           },
           "state": {
-            "$ref": "#/components/schemas/ContainerState"
+            "$ref": "#/components/schemas/ContainerRuntimeState"
           },
           "image": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "resolvConfPath": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "hostnamePath": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "hostsPath": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "logPath": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "restartCount": {
             "type": "integer",
@@ -4087,31 +4115,24 @@
             "nullable": true
           },
           "driver": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "platform": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "mountLabel": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "processLabel": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "appArmorProfile": {
-            "type": "string"
-          },
-          "execIDs": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "hostConfig": {
-            "$ref": "#/components/schemas/HostConfig"
-          },
-          "graphDriver": {
-            "$ref": "#/components/schemas/GraphDriverData"
+            "type": "string",
+            "nullable": true
           },
           "sizeRw": {
             "type": "integer",
@@ -4123,58 +4144,59 @@
             "format": "int64",
             "nullable": true
           },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "execIDs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "mounts": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/MountPoint"
-            }
+              "$ref": "#/components/schemas/MountPointInfo"
+            },
+            "nullable": true
+          },
+          "hostConfig": {
+            "$ref": "#/components/schemas/HostConfiguration"
+          },
+          "graphDriver": {
+            "$ref": "#/components/schemas/GraphDriverDataInfo"
           },
           "config": {
-            "$ref": "#/components/schemas/ContainerConfig"
+            "$ref": "#/components/schemas/ContainerConfiguration"
           },
           "networkSettings": {
-            "$ref": "#/components/schemas/NetworkSettingsView"
+            "$ref": "#/components/schemas/NetworkSettingsInfo"
           }
         }
       },
-      "ContainerStatView": {
-        "type": "object",
-        "properties": {
-          "containerId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "memoryUsage": {
-            "type": "number",
-            "format": "double"
-          },
-          "cpuUsage": {
-            "type": "number",
-            "format": "double"
-          },
-          "memoryLimit": {
-            "type": "number",
-            "format": "double"
-          },
-          "rxBytes": {
-            "type": "number",
-            "format": "double"
-          },
-          "txBytes": {
-            "type": "number",
-            "format": "double"
-          },
-          "created": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "ContainerState": {
+      "ContainerRuntimeState": {
+        "required": [
+          "status",
+          "running",
+          "paused",
+          "restarting",
+          "oomKilled",
+          "dead",
+          "pid",
+          "exitCode",
+          "error",
+          "startedAt",
+          "finishedAt",
+          "health"
+        ],
         "type": "object",
         "properties": {
           "status": {
-            "$ref": "#/components/schemas/ContainerStateType"
+            "$ref": "#/components/schemas/ContainerStateStatus"
           },
           "running": {
             "type": "boolean",
@@ -4219,7 +4241,41 @@
             "nullable": true
           },
           "health": {
-            "$ref": "#/components/schemas/Health"
+            "$ref": "#/components/schemas/ContainerHealthStatus"
+          }
+        },
+        "nullable": true
+      },
+      "ContainerStatView": {
+        "type": "object",
+        "properties": {
+          "containerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "memoryUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "cpuUsage": {
+            "type": "number",
+            "format": "double"
+          },
+          "memoryLimit": {
+            "type": "number",
+            "format": "double"
+          },
+          "rxBytes": {
+            "type": "number",
+            "format": "double"
+          },
+          "txBytes": {
+            "type": "number",
+            "format": "double"
+          },
+          "created": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -4234,19 +4290,6 @@
           "Removing",
           "Dead",
           "Offline"
-        ],
-        "type": "string"
-      },
-      "ContainerStateType": {
-        "enum": [
-          "Unknown",
-          "Created",
-          "Running",
-          "Paused",
-          "Restarting",
-          "Exited",
-          "Removing",
-          "Dead"
         ],
         "type": "string"
       },
@@ -4848,7 +4891,241 @@
           }
         }
       },
-      "DriverConfig": {
+      "DockerNetwork": {
+        "required": [
+          "name",
+          "id",
+          "created",
+          "driver",
+          "scope",
+          "enableIPv4",
+          "enableIPv6",
+          "internal",
+          "attachable",
+          "ingress",
+          "configOnly",
+          "inUse",
+          "configFrom",
+          "ipam",
+          "options",
+          "labels"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "created": {
+            "type": "string"
+          },
+          "driver": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "enableIPv4": {
+            "type": "boolean"
+          },
+          "enableIPv6": {
+            "type": "boolean"
+          },
+          "internal": {
+            "type": "boolean"
+          },
+          "attachable": {
+            "type": "boolean"
+          },
+          "ingress": {
+            "type": "boolean"
+          },
+          "configOnly": {
+            "type": "boolean"
+          },
+          "inUse": {
+            "type": "boolean"
+          },
+          "configFrom": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipam": {
+            "$ref": "#/components/schemas/IpAddressManagementConfig"
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "DockerNetworkDetails": {
+        "required": [
+          "name",
+          "id",
+          "created",
+          "driver",
+          "scope",
+          "enableIPv4",
+          "enableIPv6",
+          "internal",
+          "attachable",
+          "ingress",
+          "configOnly",
+          "inUse",
+          "configFrom",
+          "ipam",
+          "options",
+          "labels",
+          "containers",
+          "peers"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "created": {
+            "type": "string"
+          },
+          "driver": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "enableIPv4": {
+            "type": "boolean"
+          },
+          "enableIPv6": {
+            "type": "boolean"
+          },
+          "internal": {
+            "type": "boolean"
+          },
+          "attachable": {
+            "type": "boolean"
+          },
+          "ingress": {
+            "type": "boolean"
+          },
+          "configOnly": {
+            "type": "boolean"
+          },
+          "inUse": {
+            "type": "boolean"
+          },
+          "configFrom": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipam": {
+            "$ref": "#/components/schemas/IpAddressManagementConfig"
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "containers": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NetworkConnectedContainer"
+            }
+          },
+          "peers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NetworkPeerInfo"
+            }
+          }
+        }
+      },
+      "DockerVolume": {
+        "required": [
+          "id",
+          "inUse",
+          "scope",
+          "driver",
+          "mountpoint",
+          "createdAt",
+          "clusterVolume",
+          "usageData",
+          "status",
+          "labels",
+          "options"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "inUse": {
+            "type": "boolean"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "driver": {
+            "type": "string"
+          },
+          "mountpoint": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "clusterVolume": {
+            "$ref": "#/components/schemas/ClusterVolume"
+          },
+          "usageData": {
+            "$ref": "#/components/schemas/VolumeUsageData"
+          },
+          "status": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "DriverConfiguration": {
+        "required": [
+          "name",
+          "options"
+        ],
         "type": "object",
         "properties": {
           "name": {
@@ -4859,8 +5136,7 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            },
-            "nullable": true
+            }
           }
         },
         "nullable": true
@@ -4868,7 +5144,12 @@
       "Empty": {
         "type": "object"
       },
-      "EndpointIPAMConfig": {
+      "EndpointIpamConfiguration": {
+        "required": [
+          "ipv4Address",
+          "ipv6Address",
+          "linkLocalIPs"
+        ],
         "type": "object",
         "properties": {
           "ipv4Address": {
@@ -4883,10 +5164,10 @@
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           }
-        }
+        },
+        "nullable": true
       },
       "EndpointMetadata": {
         "type": "object",
@@ -4905,7 +5186,7 @@
         "default": null,
         "nullable": true
       },
-      "EndpointSettingsView": {
+      "EndpointSettingsInfo": {
         "required": [
           "ipamConfig",
           "links",
@@ -4916,7 +5197,7 @@
           "gateway",
           "ipAddress",
           "ipPrefixLen",
-          "iPv6Gateway",
+          "ipv6Gateway",
           "globalIPv6Address",
           "globalIPv6PrefixLen",
           "driverOpts",
@@ -4925,7 +5206,7 @@
         "type": "object",
         "properties": {
           "ipamConfig": {
-            "$ref": "#/components/schemas/EndpointIPAMConfig"
+            "$ref": "#/components/schemas/EndpointIpamConfiguration"
           },
           "links": {
             "type": "array",
@@ -4934,7 +5215,8 @@
             }
           },
           "macAddress": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "aliases": {
             "type": "array",
@@ -4943,27 +5225,33 @@
             }
           },
           "networkID": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "endpointID": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "gateway": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "ipAddress": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "ipPrefixLen": {
             "type": "integer",
             "format": "int64",
             "nullable": true
           },
-          "iPv6Gateway": {
-            "type": "string"
+          "ipv6Gateway": {
+            "type": "string",
+            "nullable": true
           },
           "globalIPv6Address": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "globalIPv6PrefixLen": {
             "type": "integer",
@@ -5056,7 +5344,11 @@
         },
         "nullable": true
       },
-      "GraphDriverData": {
+      "GraphDriverDataInfo": {
+        "required": [
+          "name",
+          "data"
+        ],
         "type": "object",
         "properties": {
           "name": {
@@ -5067,10 +5359,10 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            },
-            "nullable": true
+            }
           }
-        }
+        },
+        "nullable": true
       },
       "GraphDriverDataView": {
         "required": [
@@ -5106,21 +5398,6 @@
             "$ref": "#/components/schemas/GraphDriverDataView"
           }
         }
-      },
-      "Health": {
-        "type": "object",
-        "properties": {
-          "status": {
-            "type": "string",
-            "nullable": true
-          },
-          "failingStreak": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          }
-        },
-        "nullable": true
       },
       "HealthcheckView": {
         "required": [
@@ -5167,22 +5444,74 @@
         },
         "nullable": true
       },
-      "HostConfig": {
+      "HostConfiguration": {
+        "required": [
+          "binds",
+          "containerIDFile",
+          "logConfig",
+          "networkMode",
+          "portBindings",
+          "restartPolicy",
+          "autoRemove",
+          "volumeDriver",
+          "volumesFrom",
+          "mounts",
+          "consoleSize",
+          "annotations",
+          "capAdd",
+          "capDrop",
+          "cgroupnsMode",
+          "dns",
+          "dnsOptions",
+          "dnsSearch",
+          "extraHosts",
+          "groupAdd",
+          "ipcMode",
+          "cgroup",
+          "links",
+          "oomScoreAdj",
+          "pidMode",
+          "privileged",
+          "publishAllPorts",
+          "readonlyRootfs",
+          "securityOpt",
+          "storageOpt",
+          "tmpfs",
+          "utsMode",
+          "usernsMode",
+          "shmSize",
+          "sysctls",
+          "runtime",
+          "isolation",
+          "maskedPaths",
+          "readonlyPaths",
+          "memorySwap",
+          "memorySwappiness",
+          "nanoCpus",
+          "pidsLimit",
+          "memory",
+          "memoryReservation",
+          "ioMaximumBandwidth",
+          "cpuPeriod",
+          "cpuPercent",
+          "cpuCount",
+          "ulimits",
+          "kernelMemoryTCP"
+        ],
         "type": "object",
         "properties": {
           "binds": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "containerIDFile": {
             "type": "string",
             "nullable": true
           },
           "logConfig": {
-            "$ref": "#/components/schemas/LogConfig"
+            "$ref": "#/components/schemas/LogConfiguration"
           },
           "networkMode": {
             "type": "string",
@@ -5191,9 +5520,14 @@
           "portBindings": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/MapFieldPortBinding"
-            },
-            "nullable": true
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/HostPortBinding"
+                }
+              }
+            }
           },
           "restartPolicy": {
             "$ref": "#/components/schemas/RestartPolicy"
@@ -5210,44 +5544,38 @@
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "mounts": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Mount"
-            },
-            "nullable": true
+              "$ref": "#/components/schemas/HostMount"
+            }
           },
           "consoleSize": {
             "type": "array",
             "items": {
               "type": "integer",
               "format": "int32"
-            },
-            "nullable": true
+            }
           },
           "annotations": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "capAdd": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "capDrop": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "cgroupnsMode": {
             "type": "string",
@@ -5257,36 +5585,31 @@
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "dnsOptions": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "dnsSearch": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "extraHosts": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "groupAdd": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "ipcMode": {
             "type": "string",
@@ -5300,8 +5623,7 @@
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "oomScoreAdj": {
             "type": "integer",
@@ -5328,22 +5650,19 @@
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "storageOpt": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "tmpfs": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "utsMode": {
             "type": "string",
@@ -5361,8 +5680,7 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "runtime": {
             "type": "string",
@@ -5376,15 +5694,13 @@
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "readonlyPaths": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "memorySwap": {
             "type": "integer",
@@ -5439,13 +5755,70 @@
           "ulimits": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Ulimits"
-            },
-            "nullable": true
+              "$ref": "#/components/schemas/Ulimit"
+            }
           },
           "kernelMemoryTCP": {
             "type": "integer",
             "format": "int64",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "HostMount": {
+        "required": [
+          "target",
+          "source",
+          "type",
+          "readOnly",
+          "consistency",
+          "bindOptions",
+          "volumeOptions"
+        ],
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "readOnly": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "consistency": {
+            "type": "string",
+            "nullable": true
+          },
+          "bindOptions": {
+            "$ref": "#/components/schemas/BindOptions"
+          },
+          "volumeOptions": {
+            "$ref": "#/components/schemas/VolumeOptions"
+          }
+        }
+      },
+      "HostPortBinding": {
+        "required": [
+          "hostIP",
+          "hostPort"
+        ],
+        "type": "object",
+        "properties": {
+          "hostIP": {
+            "type": "string",
+            "nullable": true
+          },
+          "hostPort": {
+            "type": "string",
             "nullable": true
           }
         }
@@ -5586,26 +5959,6 @@
           }
         }
       },
-      "IPAMConfigView": {
-        "required": [
-          "subnet",
-          "gateway"
-        ],
-        "type": "object",
-        "properties": {
-          "subnet": {
-            "type": "string"
-          },
-          "gateway": {
-            "type": "string"
-          },
-          "ipRange": {
-            "type": "string",
-            "default": null,
-            "nullable": true
-          }
-        }
-      },
       "IPAMInput": {
         "required": [
           "driver"
@@ -5619,35 +5972,6 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/IPAMConfigInput"
-            },
-            "default": null,
-            "nullable": true
-          },
-          "options": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "default": null,
-            "nullable": true
-          }
-        },
-        "default": null,
-        "nullable": true
-      },
-      "IPAMView": {
-        "required": [
-          "driver"
-        ],
-        "type": "object",
-        "properties": {
-          "driver": {
-            "type": "string"
-          },
-          "config": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/IPAMConfigView"
             },
             "default": null,
             "nullable": true
@@ -5868,167 +6192,69 @@
           }
         }
       },
-      "InspectNetworkView": {
+      "IpAddressInfo": {
         "required": [
-          "name",
-          "id",
-          "created",
-          "driver",
-          "scope",
-          "enableIPv4",
-          "enableIPv6",
-          "internal",
-          "attachable",
-          "ingress",
-          "inUse",
-          "configOnly"
+          "addr",
+          "prefixLen"
         ],
         "type": "object",
         "properties": {
-          "name": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "created": {
-            "type": "string"
-          },
-          "driver": {
-            "type": "string"
-          },
-          "scope": {
-            "type": "string"
-          },
-          "enableIPv4": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "enableIPv6": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "internal": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "attachable": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "ingress": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "inUse": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "configOnly": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "configFrom": {
+          "addr": {
             "type": "string",
-            "default": null,
             "nullable": true
           },
-          "ipam": {
-            "$ref": "#/components/schemas/IPAMView"
-          },
-          "peers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PeerInfoView"
-            },
-            "default": null,
-            "nullable": true
-          },
-          "options": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "default": null,
-            "nullable": true
-          },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "default": null,
-            "nullable": true
-          },
-          "containers": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/NetworkContainerView"
-            },
-            "default": null,
+          "prefixLen": {
+            "type": "integer",
+            "format": "int64",
             "nullable": true
           }
         }
       },
-      "InspectVolumeView": {
+      "IpAddressManagementConfig": {
         "required": [
-          "id",
           "driver",
-          "mountpoint",
-          "createdAt",
-          "scope",
-          "inUse",
-          "usageData",
-          "clusterVolume",
-          "labels",
-          "status",
+          "config",
           "options"
         ],
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string"
-          },
           "driver": {
-            "type": "string"
-          },
-          "mountpoint": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "scope": {
-            "type": "string"
-          },
-          "inUse": {
-            "type": "boolean"
-          },
-          "usageData": {
-            "$ref": "#/components/schemas/UsageDataView"
-          },
-          "clusterVolume": {
-            "$ref": "#/components/schemas/ClusterVolumeView"
-          },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
+            "type": "string",
             "nullable": true
           },
-          "status": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "nullable": true
+          "config": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IpamSubnetConfiguration"
+            }
           },
           "options": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            },
+            }
+          }
+        },
+        "nullable": true
+      },
+      "IpamSubnetConfiguration": {
+        "required": [
+          "subnet",
+          "ipRange",
+          "gateway"
+        ],
+        "type": "object",
+        "properties": {
+          "subnet": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipRange": {
+            "type": "string",
+            "nullable": true
+          },
+          "gateway": {
+            "type": "string",
             "nullable": true
           }
         }
@@ -6073,7 +6299,11 @@
         },
         "nullable": true
       },
-      "LogConfig": {
+      "LogConfiguration": {
+        "required": [
+          "type",
+          "config"
+        ],
         "type": "object",
         "properties": {
           "type": {
@@ -6084,8 +6314,7 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            },
-            "nullable": true
+            }
           }
         },
         "nullable": true
@@ -6151,40 +6380,6 @@
           }
         }
       },
-      "MapFieldPortBinding": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string",
-            "nullable": true
-          },
-          "value": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PortBinding"
-            },
-            "nullable": true
-          }
-        }
-      },
-      "MapFieldPortBindingView": {
-        "required": [
-          "key",
-          "value"
-        ],
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "value": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PortBindingView"
-            }
-          }
-        }
-      },
       "MetadataView": {
         "required": [
           "lastTagTime"
@@ -6196,38 +6391,17 @@
           }
         }
       },
-      "Mount": {
-        "type": "object",
-        "properties": {
-          "target": {
-            "type": "string",
-            "nullable": true
-          },
-          "source": {
-            "type": "string",
-            "nullable": true
-          },
-          "type": {
-            "type": "string",
-            "nullable": true
-          },
-          "readOnly": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "consistency": {
-            "type": "string",
-            "nullable": true
-          },
-          "bindOptions": {
-            "$ref": "#/components/schemas/BindOptions"
-          },
-          "volumeOptions": {
-            "$ref": "#/components/schemas/VolumeOptions"
-          }
-        }
-      },
-      "MountPoint": {
+      "MountPointInfo": {
+        "required": [
+          "type",
+          "name",
+          "source",
+          "destination",
+          "driver",
+          "mode",
+          "rw",
+          "propagation"
+        ],
         "type": "object",
         "properties": {
           "type": {
@@ -6264,13 +6438,13 @@
           }
         }
       },
-      "NetworkContainerView": {
+      "NetworkConnectedContainer": {
         "required": [
           "name",
           "endpointId",
           "macAddress",
-          "iPv4Address",
-          "iPv6Address"
+          "ipV4Address",
+          "ipv6Address"
         ],
         "type": "object",
         "properties": {
@@ -6283,77 +6457,98 @@
           "macAddress": {
             "type": "string"
           },
-          "iPv4Address": {
+          "ipV4Address": {
             "type": "string"
           },
-          "iPv6Address": {
+          "ipv6Address": {
             "type": "string"
           }
         }
       },
-      "NetworkSettingsView": {
+      "NetworkPeerInfo": {
+        "required": [
+          "name",
+          "ip"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string"
+          }
+        }
+      },
+      "NetworkSettingsInfo": {
         "required": [
           "bridge",
           "sandboxID",
           "hairpinMode",
           "linkLocalIPv6Address",
           "linkLocalIPv6PrefixLen",
-          "ports",
           "sandboxKey",
           "secondaryIPAddresses",
+          "secondaryIPv6Addresses",
           "endpointID",
           "gateway",
           "globalIPv6Address",
           "globalIPv6PrefixLen",
           "ipAddress",
           "ipPrefixLen",
-          "iPv6Gateway",
+          "ipv6Gateway",
           "macAddress",
+          "ports",
           "networks"
         ],
         "type": "object",
         "properties": {
           "bridge": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "sandboxID": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "hairpinMode": {
             "type": "boolean",
             "nullable": true
           },
           "linkLocalIPv6Address": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "linkLocalIPv6PrefixLen": {
             "type": "integer",
             "format": "int64",
             "nullable": true
           },
-          "ports": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MapFieldPortBindingView"
-            }
-          },
           "sandboxKey": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "secondaryIPAddresses": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Address"
+              "$ref": "#/components/schemas/IpAddressInfo"
             }
           },
+          "secondaryIPv6Addresses": {
+            "type": "array",
+            "items": { }
+          },
           "endpointID": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "gateway": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "globalIPv6Address": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "globalIPv6PrefixLen": {
             "type": "integer",
@@ -6361,112 +6556,42 @@
             "nullable": true
           },
           "ipAddress": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "ipPrefixLen": {
             "type": "integer",
             "format": "int64",
             "nullable": true
           },
-          "iPv6Gateway": {
-            "type": "string"
+          "ipv6Gateway": {
+            "type": "string",
+            "nullable": true
           },
           "macAddress": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/HostPortBinding"
+                }
+              }
+            }
           },
           "networks": {
             "type": "object",
             "additionalProperties": {
-              "$ref": "#/components/schemas/EndpointSettingsView"
+              "$ref": "#/components/schemas/EndpointSettingsInfo"
             }
           }
-        }
-      },
-      "NetworkView": {
-        "required": [
-          "name",
-          "id",
-          "created",
-          "driver",
-          "scope",
-          "enableIPv4",
-          "enableIPv6",
-          "internal",
-          "attachable",
-          "ingress",
-          "inUse",
-          "configOnly"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "created": {
-            "type": "string"
-          },
-          "driver": {
-            "type": "string"
-          },
-          "scope": {
-            "type": "string"
-          },
-          "enableIPv4": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "enableIPv6": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "internal": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "attachable": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "ingress": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "inUse": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "configOnly": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "configFrom": {
-            "type": "string",
-            "default": null,
-            "nullable": true
-          },
-          "ipam": {
-            "$ref": "#/components/schemas/IPAMView"
-          },
-          "options": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "default": null,
-            "nullable": true
-          },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "default": null,
-            "nullable": true
-          }
-        }
+        },
+        "nullable": true
       },
       "NetworksView": {
         "required": [
@@ -6477,7 +6602,7 @@
           "networks": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/NetworkView"
+              "$ref": "#/components/schemas/DockerNetwork"
             }
           }
         }
@@ -6536,21 +6661,6 @@
           null
         ],
         "nullable": true
-      },
-      "PeerInfoView": {
-        "required": [
-          "name",
-          "ip"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "ip": {
-            "type": "string"
-          }
-        }
       },
       "PlatformDescriptor": {
         "required": [
@@ -6837,7 +6947,15 @@
       "PlatformStatView": {
         "type": "object",
         "properties": {
-          "memoryUsage": {
+          "created": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "txBytes": {
+            "type": "number",
+            "format": "double"
+          },
+          "rxBytes": {
             "type": "number",
             "format": "double"
           },
@@ -6845,15 +6963,7 @@
             "type": "number",
             "format": "double"
           },
-          "created": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "rxBytes": {
-            "type": "number",
-            "format": "double"
-          },
-          "txBytes": {
+          "memoryUsage": {
             "type": "number",
             "format": "double"
           }
@@ -7040,34 +7150,6 @@
           }
         }
       },
-      "PortBinding": {
-        "type": "object",
-        "properties": {
-          "hostIP": {
-            "type": "string",
-            "nullable": true
-          },
-          "hostPort": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "PortBindingView": {
-        "required": [
-          "hostIP",
-          "hostPort"
-        ],
-        "type": "object",
-        "properties": {
-          "hostIP": {
-            "type": "string"
-          },
-          "hostPort": {
-            "type": "string"
-          }
-        }
-      },
       "PortView": {
         "type": "object",
         "properties": {
@@ -7107,28 +7189,6 @@
           "instance": {
             "type": "string",
             "nullable": true
-          }
-        }
-      },
-      "PublishStatusView": {
-        "required": [
-          "nodeID",
-          "state",
-          "publishContext"
-        ],
-        "type": "object",
-        "properties": {
-          "nodeID": {
-            "type": "string"
-          },
-          "state": {
-            "type": "string"
-          },
-          "publishContext": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
           }
         }
       },
@@ -7463,6 +7523,10 @@
         }
       },
       "RestartPolicy": {
+        "required": [
+          "name",
+          "maximumRetryCount"
+        ],
         "type": "object",
         "properties": {
           "name": {
@@ -7532,7 +7596,7 @@
           }
         }
       },
-      "TopologyEntryView": {
+      "TopologyEntry": {
         "required": [
           "labels"
         ],
@@ -7546,7 +7610,12 @@
           }
         }
       },
-      "Ulimits": {
+      "Ulimit": {
+        "required": [
+          "name",
+          "soft",
+          "hard"
+        ],
         "type": "object",
         "properties": {
           "name": {
@@ -7565,27 +7634,7 @@
           }
         }
       },
-      "UsageDataView": {
-        "required": [
-          "size",
-          "refCount"
-        ],
-        "type": "object",
-        "properties": {
-          "size": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "refCount": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          }
-        },
-        "nullable": true
-      },
-      "VolumeAccessModeView": {
+      "VolumeAccessMode": {
         "required": [
           "scope",
           "sharing",
@@ -7596,17 +7645,16 @@
         "type": "object",
         "properties": {
           "scope": {
-            "$ref": "#/components/schemas/VolumeScopeType"
+            "$ref": "#/components/schemas/VolumeScope"
           },
           "sharing": {
-            "$ref": "#/components/schemas/VolumeSharingType"
+            "$ref": "#/components/schemas/VolumeSharing"
           },
           "secrets": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/VolumeSecretView"
-            },
-            "nullable": true
+              "$ref": "#/components/schemas/VolumeSecret"
+            }
           },
           "capacityRange": {
             "$ref": "#/components/schemas/VolumeCapacityRange"
@@ -7638,6 +7686,12 @@
         "nullable": true
       },
       "VolumeOptions": {
+        "required": [
+          "noCopy",
+          "labels",
+          "driverConfig",
+          "subpath"
+        ],
         "type": "object",
         "properties": {
           "noCopy": {
@@ -7648,11 +7702,10 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "driverConfig": {
-            "$ref": "#/components/schemas/DriverConfig"
+            "$ref": "#/components/schemas/DriverConfiguration"
           },
           "subpath": {
             "type": "string",
@@ -7661,14 +7714,36 @@
         },
         "nullable": true
       },
-      "VolumeScopeType": {
+      "VolumePublishStatus": {
+        "required": [
+          "nodeID",
+          "state",
+          "publishContext"
+        ],
+        "type": "object",
+        "properties": {
+          "nodeID": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "publishContext": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "VolumeScope": {
         "enum": [
           "Single",
           "Multi"
         ],
         "type": "string"
       },
-      "VolumeSecretView": {
+      "VolumeSecret": {
         "required": [
           "key",
           "secret"
@@ -7683,16 +7758,16 @@
           }
         }
       },
-      "VolumeSharingType": {
+      "VolumeSharing": {
         "enum": [
           "None",
-          "Readonly",
-          "Onewriter",
+          "ReadOnly",
+          "OneWriter",
           "All"
         ],
         "type": "string"
       },
-      "VolumeSpecView": {
+      "VolumeSpecification": {
         "required": [
           "group",
           "accessMode"
@@ -7703,12 +7778,32 @@
             "type": "string"
           },
           "accessMode": {
-            "$ref": "#/components/schemas/VolumeAccessModeView"
+            "$ref": "#/components/schemas/VolumeAccessMode"
           }
         },
         "nullable": true
       },
-      "VolumeVersionView": {
+      "VolumeUsageData": {
+        "required": [
+          "size",
+          "refCount"
+        ],
+        "type": "object",
+        "properties": {
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "refCount": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "VolumeVersionInfo": {
         "required": [
           "index"
         ],
@@ -7722,65 +7817,6 @@
         },
         "nullable": true
       },
-      "VolumeView": {
-        "required": [
-          "id",
-          "driver",
-          "mountpoint",
-          "createdAt",
-          "scope",
-          "inUse",
-          "usageData",
-          "labels",
-          "status",
-          "options"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "driver": {
-            "type": "string"
-          },
-          "mountpoint": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "scope": {
-            "type": "string"
-          },
-          "inUse": {
-            "type": "boolean"
-          },
-          "usageData": {
-            "$ref": "#/components/schemas/UsageDataView"
-          },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "nullable": true
-          },
-          "status": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "nullable": true
-          },
-          "options": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "nullable": true
-          }
-        }
-      },
       "VolumesView": {
         "required": [
           "volumes"
@@ -7790,7 +7826,7 @@
           "volumes": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/VolumeView"
+              "$ref": "#/components/schemas/DockerVolume"
             }
           }
         }
