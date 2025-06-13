@@ -1,12 +1,10 @@
 ﻿using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-using Citadel.Agent.Common.V1;
-using Citadel.Agent.Platforms.V1;
-using Grpc.Core;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
+using Grpc.Core;
 using Infrastructure.Services;
-using Infrastructure.Services.Abstractions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -17,8 +15,8 @@ namespace Infrastructure.TaskJobs;
 /// Collects platforms stats from remote agents and pushes into the shared Channel <see cref="PlatformsStatsPersistenceJob"/>.
 /// </summary>
 internal class PlatformsStatsCollectorJob(
-    IGrpcClientFactory clientFactory,
     IOptions<JobConfiguration> options,
+    IPlatformConnector platformConnector,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     ChannelWriter<PlatformStatsBatch> platformStatsWriter,
     ILogger<PlatformsStatsCollectorJob> logger) : BackgroundService
@@ -71,23 +69,14 @@ internal class PlatformsStatsCollectorJob(
         {
             try
             {
-                var client = clientFactory.GetPlatformClient(platform.Address);
-                using var stream = client.StreamPlatformStats(new PlatformStatsRequest { FetchIntervalMs = jobConfiguration.SystemInfoInterval * 1000 }, cancellationToken: cancellationToken);
-                await foreach (var reply in stream.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
+                var command = new StreamPlatformStatsCommand(
+                    PlatformId: platform.Id,
+                    PlatformAddress: platform.Address,
+                    FetchIntervalMs: jobConfiguration.SystemInfoInterval * 1000);
+                
+                await foreach (var batch in platformConnector.StreamStatsAsync(command, cancellationToken))
                 {
-                    await platformStatsWriter.WriteAsync(
-                        new PlatformStatsBatch(
-                            PlatformId: platform.Id,
-                            NetworksCount: reply.NetworkCount,
-                            VolumesCount: reply.VolumeCount,
-                            Containers: reply.ContainerCount,
-                            ContainersRunning: reply.ContainersRunning,
-                            ContainersPaused: reply.ContainersPaused,
-                            ContainersStopped: reply.ContainersStopped,
-                            Images: reply.ImageCount,
-                            MemTotal: reply.MemTotal,
-                            CreatePlatformStat(platform.Id, reply.Stat)), 
-                        cancellationToken);
+                    await platformStatsWriter.WriteAsync(batch, cancellationToken);
                 }
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)
@@ -102,26 +91,4 @@ internal class PlatformsStatsCollectorJob(
             }
         }
     }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static PlatformStat CreatePlatformStat(Guid platformId, PlatformStatMessage reply)
-        => new PlatformStat(
-            memoryUsage: reply.MemoryUsage,
-            cpuUsage: reply.CpuUsage,
-            rxBytes: reply.RxBytes,
-            txBytes: reply.TxBytes,
-            platformId: platformId,
-            created: DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 }
-
-public sealed record PlatformStatsBatch(
-    Guid PlatformId,
-    int NetworksCount,
-    int VolumesCount,
-    long Containers,
-    long ContainersRunning,
-    long ContainersPaused,
-    long ContainersStopped,
-    long Images,
-    long MemTotal,
-    PlatformStat Stat);

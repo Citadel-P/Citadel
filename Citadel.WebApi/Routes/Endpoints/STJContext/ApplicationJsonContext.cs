@@ -115,6 +115,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(IEnumerable<GitHubCrPackageVersion>))]
 [JsonSerializable(typeof(GitHubCrPackageVersionMetadata))]
 [JsonSerializable(typeof(GitHubCrPackageVersionContainerMetadata))]
+[JsonSerializable(typeof(ContainerLogInfo))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

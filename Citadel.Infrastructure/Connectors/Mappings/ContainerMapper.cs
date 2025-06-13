@@ -1,5 +1,4 @@
-﻿using System.Runtime.CompilerServices;
-using Citadel.Agent.Common.V1;
+﻿using Citadel.Agent.Common.V1;
 using Citadel.Agent.Containers.V1;
 using Domain;
 using Domain.Contracts.Resources.Containers;
@@ -10,7 +9,6 @@ namespace Infrastructure.Connectors.Mappings;
 
 internal static class ContainerMapper
 {
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ContainerInspectionInfo Map(this InspectContainerResponse response) 
         => new 
         (
@@ -41,7 +39,6 @@ internal static class ContainerMapper
             NetworkSettings: response.NetworkSettings?.Map()
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ContainerRuntimeState Map(this ContainerState state)
         => new 
         (
@@ -59,7 +56,6 @@ internal static class ContainerMapper
             Health: state.Health is not null ? new ContainerHealthStatus(state.Health.Status, state.Health.FailingStreak) : null
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static HostConfiguration Map(this HostConfig config)
         => new
         (
@@ -113,14 +109,12 @@ internal static class ContainerMapper
             CpuPeriod: config.CpuPeriod,
             CpuCount: config.CpuCount,
             CpuPercent: config.CpuPercent,
-            Ulimits: config.Ulimits?.Map()
+            Ulimits: config.Ulimits?.Map() ?? []
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static IReadOnlyList<Ulimit> Map(this RepeatedField<Ulimits> ulimits)
         => [.. ulimits.Select(Map)];
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Ulimit Map(this Ulimits ulimits)
         => new 
         (
@@ -129,11 +123,9 @@ internal static class ContainerMapper
             Hard: ulimits.Hard
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static IReadOnlyList<HostMount> Map(this RepeatedField<Mount> mounts)
         => [.. mounts.Select(Map)];
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static HostMount Map(this Mount mount)
         => new 
         (
@@ -146,7 +138,6 @@ internal static class ContainerMapper
             VolumeOptions: mount.VolumeOptions?.Map()
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Domain.Contracts.Resources.Containers.BindOptions Map(this Citadel.Agent.Common.V1.BindOptions bindOptions)
         => new 
         (
@@ -157,7 +148,6 @@ internal static class ContainerMapper
              ReadOnlyForceRecursive: bindOptions.ReadOnlyForceRecursive
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Domain.Contracts.Resources.Containers.VolumeOptions Map(this Citadel.Agent.Common.V1.VolumeOptions volumeOptions)
         => new
         (
@@ -167,7 +157,6 @@ internal static class ContainerMapper
             Subpath: volumeOptions.Subpath
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static DriverConfiguration Map(this DriverConfig driverConfig)
         => new
         (
@@ -175,7 +164,6 @@ internal static class ContainerMapper
             Options: driverConfig.Options
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static GraphDriverDataInfo Map(this GraphDriverData graphDriver)
         => new
         (
@@ -183,7 +171,6 @@ internal static class ContainerMapper
             Data: graphDriver.Data?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? []
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static MountPointInfo Map(this MountPoint mount)
         => new
         (
@@ -197,7 +184,6 @@ internal static class ContainerMapper
             Propagation: mount.Propagation
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ContainerConfiguration Map(this ContainerConfig config)
         => new
         (
@@ -223,7 +209,6 @@ internal static class ContainerMapper
             Labels: config.Labels?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? []
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static NetworkSettingsInfo Map(this NetworkSettings settings)
         => new(
             Bridge: settings.Bridge,
@@ -246,7 +231,6 @@ internal static class ContainerMapper
             SecondaryIPv6Addresses: settings.SecondaryIPv6Addresses?.Select(ip => ip.Map()).ToList() ?? []
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static IpAddressInfo Map(this Address address)
         => new
         (
@@ -254,7 +238,6 @@ internal static class ContainerMapper
                 PrefixLen: address.PrefixLen
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static IReadOnlyList<IDictionary<string, IReadOnlyList<HostPortBinding>>> Map(this RepeatedField<MapFieldPortBinding> binding)
     {
         if (binding is null || binding.Count == 0)
@@ -273,14 +256,12 @@ internal static class ContainerMapper
         return result;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static HostPortBinding Map(this PortBinding binding)
         => new(
             HostIP: binding.HostIP,
             HostPort: binding.HostPort
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static EndpointSettingsInfo Map(this EndpointSettings endpoint)
         => new(
             IpamConfig: endpoint.IPAMConfig?.Map(),
@@ -299,7 +280,6 @@ internal static class ContainerMapper
             DriverOpts: endpoint.DriverOpts?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? []
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static EndpointIpamConfiguration Map(this EndpointIPAMConfig endpointIPAMConfig)
         => new
         (
@@ -309,13 +289,11 @@ internal static class ContainerMapper
         );
 
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Dictionary<string, Container> Map(this ListContainersResponse response, Guid platformId)
         => response.Containers.ToDictionary(
             pair => pair.Key,
             pair => pair.Value.Map(platformId));
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Container Map(this ContainerMessage container, Guid platformId)
     {
         var result = new Container
@@ -338,7 +316,6 @@ internal static class ContainerMapper
         return result;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ContainerStat Map(this ContainerStatMessage statMessage)
         => new (
             memoryUsage: statMessage.MemoryUsage,
@@ -353,9 +330,6 @@ internal static class ContainerMapper
     public static IEnumerable<ContainerPort> Map(this IEnumerable<PortMessage> ports)
         => ports.Select(Map);
 
-   
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ContainerPort Map(this PortMessage port) 
         => new (
             IP: port.IP,
@@ -364,7 +338,6 @@ internal static class ContainerMapper
             Type: port.Type
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static MapField<string, OptionChain> Map(this IDictionary<string, IDictionary<string, bool>> filters)
     {
         var map = new MapField<string, OptionChain>();
@@ -375,7 +348,6 @@ internal static class ContainerMapper
         return map;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static OptionChain Map(this IDictionary<string, bool>? options)
     {
         var optionChain = new OptionChain();
@@ -389,15 +361,12 @@ internal static class ContainerMapper
         return optionChain;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ContainerLogInfo Map(this ContainerLogResponse logInfo)
         => new(Log: logInfo.Log);
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ContainerStats Map(this ContainerStatsResponse statsResponse)
         => new (Containers: statsResponse.Containers.ToDictionary(c => c.Key, c => c.Value.Map()));
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static DaemonEventInfo Map(this DaemonEventResponse response, Guid platformId)
         => new
         (
@@ -408,7 +377,6 @@ internal static class ContainerMapper
             Container: response.Container?.Map(platformId)
         );
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ContainerEventType Map(this EventMessageType type)
         => type switch
         {
@@ -426,7 +394,6 @@ internal static class ContainerMapper
             _ => ContainerEventType.Unknown
         };
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ContainerStateStatus Map(this ContainerStateType state)
         => state switch
         {

@@ -6971,7 +6971,15 @@
       "PlatformStatView": {
         "type": "object",
         "properties": {
-          "memoryUsage": {
+          "created": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "txBytes": {
+            "type": "number",
+            "format": "double"
+          },
+          "rxBytes": {
             "type": "number",
             "format": "double"
           },
@@ -6979,15 +6987,7 @@
             "type": "number",
             "format": "double"
           },
-          "created": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "rxBytes": {
-            "type": "number",
-            "format": "double"
-          },
-          "txBytes": {
+          "memoryUsage": {
             "type": "number",
             "format": "double"
           }

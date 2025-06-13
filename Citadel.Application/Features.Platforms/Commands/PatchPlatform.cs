@@ -1,15 +1,15 @@
-﻿using FluentValidation;
+﻿using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Platforms;
+using Domain.Entities;
+using FluentValidation;
 using Grpc.Core;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
-using Domain;
-using Domain.Entities;
-using Domain.Entities.Platforms;
 using Infrastructure.EntityFramework;
 using Infrastructure.EntityFramework.Configurations;
-using Infrastructure.Services.Abstractions;
 using Infrastructure.TaskJobs;
 using LightResults;
 using Mediator;
@@ -47,7 +47,7 @@ public sealed record PatchPlatform(Guid? Id, JsonMergePatchDocument<Platform> Pa
 
 internal class PatchPlatformHandler(
     ApplicationDbContext dbContext,
-    IGrpcClientFactory clientFactory,
+    IPlatformConnector platformConnector,
     IPlatformHealthMonitorJob platformHealthMonitorJob,
     ILogger<PatchPlatformHandler> logger)
     : ICommandHandler<PatchPlatform, Result<Platform>>
@@ -75,35 +75,19 @@ internal class PatchPlatformHandler(
 
             if (patchedPlatform.Type == PlatformType.Docker)
             {
-                var platformClient = clientFactory.GetPlatformClient(patchedPlatform.Address);
-                var platformInfo = await platformClient.ListPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
-
                 var oldPlatformAddress = platform.Address;
-
-                PlatformDescriptor? descriptor = null;
-                if (platform.PlatformDescriptor is DockerPlatformDescriptor dockerDescriptor)
+                var param = new GetPlatformCommand
+                (
+                    PlatformAddress: patchedPlatform.Address,
+                    PlatformName: patchedPlatform.Name ?? platform.Name
+                );
+                var platformResult = await platformConnector.GetPlatformAsync(param, cancellationToken);
+                if (!platformResult.IsSuccess(out var platformInfo, out var error))
                 {
-                    descriptor = dockerDescriptor.Create(
-                        daemonId: platformInfo.Id,
-                        containerCount: platformInfo.ContainerCount,
-                        containersRunning: platformInfo.ContainersRunning,
-                        containersPaused: platformInfo.ContainersPaused,
-                        containersStopped: platformInfo.ContainersStopped,
-                        driver: platformInfo.Driver,
-                        operatingSystem: platformInfo.OperatingSystem,
-                        osVersion: platformInfo.OsVersion,
-                        osType: platformInfo.OsType,
-                        architecture: platformInfo.Architecture);
+                    logger.LogError("Failed to get platform info for {Address}: {Error}", patchedPlatform.Address, error?.Message);
+                    return platformResult;
                 }
-                else if (platform.PlatformDescriptor is DockerSwarmPlatformDescriptor swarmDescriptor)
-                {
-                    // Todo
-                }
-                else if (platform.PlatformDescriptor is KubernetesPlatformDescriptor k8sDescriptor)
-                {
-                    // Todo
-                }
-
+                
                 platform.PartialUpdate(
                     name: patchedPlatform.Name,
                     address: patchedPlatform.Address,
@@ -114,7 +98,7 @@ internal class PatchPlatformHandler(
                     memTotal: platformInfo.MemTotal,
                     serverVersion: platformInfo.ServerVersion,
                     agentVersion: platformInfo.AgentVersion,
-                    descriptor: descriptor);
+                    descriptor: platformInfo.PlatformDescriptor);
 
                 await dbContext.SaveChangesAsync(cancellationToken);
                 await UpdatePlatformTracking(platform.Id, platform.Address, oldPlatformAddress, cancellationToken);

@@ -1,5 +1,5 @@
-﻿using Domain.Entities;
-using Infrastructure.TaskJobs;
+﻿using Domain.Contracts.Resources.Platforms;
+using Domain.Entities;
 
 namespace Infrastructure.Services.Abstractions;
 

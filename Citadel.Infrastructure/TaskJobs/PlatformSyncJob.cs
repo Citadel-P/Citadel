@@ -1,6 +1,7 @@
 ﻿using System.Threading.Channels;
 using Domain;
-using Domain.Entities.Platforms;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Platforms;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
@@ -15,8 +16,8 @@ namespace Infrastructure.TaskJobs;
 /// Syncing platforms state.
 /// </summary>
 internal class PlatformSyncJob(
-    IGrpcClientFactory clientFactory,
     IServiceScopeFactory scopeFactory,
+    IPlatformConnector platformConnector,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     ILogger<PlatformSyncJob> logger) : BackgroundService
 {
@@ -39,6 +40,7 @@ internal class PlatformSyncJob(
             var platform = await db.Platforms.FirstOrDefaultAsync(s => s.Address == evt.Address, cancellationToken);
             if (platform == null)
             {
+                logger.LogError("Platform with address {Address} not found for synchronization.", evt.Address);
                 return;
             }
 
@@ -46,30 +48,19 @@ internal class PlatformSyncJob(
 
             if (evt.IsOnLine)
             {
-                var platformClient = clientFactory.GetPlatformClient(evt.Address);
-                var platformInfo = await platformClient.ListPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
-
+                var param = new GetPlatformCommand
+                (
+                    PlatformName: platform.Name,
+                    PlatformAddress: platform.Address
+                );
+                var platformResult = await platformConnector.GetPlatformAsync(param, cancellationToken);
+                if (!platformResult.IsSuccess(out var platformInfo, out var error))
+                {
+                    logger.LogError("Failed to get platform info for {Address}: {Error}", platform.Address, error?.Message);
+                    return;
+                }
                 // Update platform
-                PlatformDescriptor? descriptor = null;
-                if (platform.PlatformDescriptor is DockerPlatformDescriptor dockerDescriptor)
-                {
-                    descriptor = dockerDescriptor.Create(
-                        daemonId: platformInfo.Id,
-                        containerCount: platformInfo.ContainerCount,
-                        containersRunning: platformInfo.ContainersRunning,
-                        containersPaused: platformInfo.ContainersPaused,
-                        containersStopped: platformInfo.ContainersStopped,
-                        driver: platformInfo.Driver,
-                        operatingSystem: platformInfo.OperatingSystem,
-                        osVersion: platformInfo.OsVersion,
-                        osType: platformInfo.OsType,
-                        architecture: platformInfo.Architecture);
-                }
-                else if (platform.PlatformDescriptor is DockerSwarmPlatformDescriptor swarmDescriptor)
-                {
-                    // Todo
-                }
-
+               
                 platform.PartialUpdate(
                     platformStatus: PlatformStatus.Online,
                     networkCount: platformInfo.NetworkCount,
@@ -78,7 +69,7 @@ internal class PlatformSyncJob(
                     memTotal: platformInfo.MemTotal,
                     serverVersion: platformInfo.ServerVersion,
                     agentVersion: platformInfo.AgentVersion,
-                    descriptor: descriptor);
+                    descriptor: platformInfo.PlatformDescriptor);
             }
             else
             {

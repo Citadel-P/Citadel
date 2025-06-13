@@ -1,8 +1,7 @@
 ﻿using System.Collections.Concurrent;
-using System.Threading;
+using Domain.Contracts.Interfaces;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services;
-using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -20,8 +19,8 @@ public interface IPlatformHealthMonitorJob : IHostedService
 }
 
 internal class PlatformHealthMonitorJob(
-    IGrpcClientFactory clientFactory,
     IServiceScopeFactory scopeFactory,
+    IPlatformConnector platformConnector,
     IPlatformHealthBroadCaster broadcaster,
     ILogger<PlatformHealthMonitorJob> logger) : BackgroundService, IPlatformHealthMonitorJob
 {
@@ -61,7 +60,7 @@ internal class PlatformHealthMonitorJob(
             
             foreach (var address in trackedAddresses.Keys)
             {
-                var isOnline = await ProbeAsync(address, cancellationToken);
+                var isOnline = (await platformConnector.CheckHealthAsync(address, cancellationToken)).Healthy;
                 var hasPreviousStatus = status.TryGetValue(address, out var wasOnline);
 
                 // If we've never seen this address before, initialize and emit
@@ -123,20 +122,6 @@ internal class PlatformHealthMonitorJob(
             successCounts[address] = 0;
             failureCounts[address] = failureCounts.GetOrAdd(address, 0) + 1;
             return wasOnline && failureCounts[address] >= FailThreshold;
-        }
-    }
-
-    private async Task<bool> ProbeAsync(string address, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var client = clientFactory.GetPlatformClient(address);
-            var response = await client.CheckHealthAsync(new Google.Protobuf.WellKnownTypes.Empty(), deadline: DateTime.UtcNow.AddSeconds(2), cancellationToken: cancellationToken);
-            return response.Healthy;
-        }
-        catch
-        {
-            return false;
         }
     }
 }

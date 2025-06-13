@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Threading.Channels;
 using DbUp;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Platforms;
 using Hosting.Common;
 using Infrastructure.Connectors;
 using Infrastructure.DockerHub;
@@ -47,6 +48,7 @@ public static class InfrastructureModule
         => services
             .AddSingleton<IGitHubCrService, GitHubCrService>()
             .AddSingleton<IDockerHubService, DockerHubService>()
+            .AddSingleton<IPlatformConnector, PlatformGrpcConnector>()
             .AddSingleton<IContainerConnector, ContainerGrpcConnector>()
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>();
 

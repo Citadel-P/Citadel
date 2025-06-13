@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Domain;
+using Domain.Contracts.Resources.Platforms;
 
 namespace Infrastructure.TaskJobs;
 
@@ -37,7 +38,7 @@ internal class PlatformsStatsPersistenceJob(
                     list = [];
                     buffer[batch.PlatformId] = list;
                 }
-                list.Add(batch.Stat);
+                list.Add(batch.PlatformStat);
 
                 // Flush if batch size exceeded or interval exceeded
                 int totalCount = buffer.Sum(x => x.Value.Count);
@@ -94,9 +95,9 @@ internal class PlatformsStatsPersistenceJob(
 
             existing.PartialUpdate(
                 platformStatus: PlatformStatus.Online,
-                networkCount: batch.NetworksCount,
-                volumeCount: batch.VolumesCount,
-                imageCount: batch.Images,
+                networkCount: batch.NetworkCount,
+                volumeCount: batch.VolumeCount,
+                imageCount: batch.ImageCount,
                 memTotal: batch.MemTotal,
                 descriptor: descriptor);
         }

@@ -1,8 +1,8 @@
 ﻿namespace WebApi.Routes.Endpoints.Resources.Platforms;
 
 public record struct PlatformStatView(
-    double MemoryUsage,
-    double CpuUsage, 
     long Created,
+    double TxBytes,
     double RxBytes,
-    double TxBytes);
+    double CpuUsage,
+    double MemoryUsage);

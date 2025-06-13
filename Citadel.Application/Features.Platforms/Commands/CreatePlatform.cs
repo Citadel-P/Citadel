@@ -1,16 +1,14 @@
-﻿using Citadel.Agent.Common.V1;
-using Domain;
+﻿using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
-using Domain.Entities.Platforms;
 using EFCore.BulkExtensions;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
 using Infrastructure.TaskJobs;
 using LightResults;
 using Mediator;
@@ -34,7 +32,7 @@ public sealed record CreatePlatform(string Name, string Address, PlatformType Ty
 
 internal sealed class CreatePlatformHandler(
     ApplicationDbContext dbContext,
-    IGrpcClientFactory clientFactory,
+    IPlatformConnector platformConnector,
     IContainerConnector containerConnector,
     IPlatformHealthMonitorJob platformHealthMonitorJob,
     ILogger<PatchPlatformHandler> logger) : ICommandHandler<CreatePlatform, Result<Platform>>
@@ -60,40 +58,17 @@ internal sealed class CreatePlatformHandler(
 
     private async Task<Result<Platform>> HandleDockerPlatform(CreatePlatform command, CancellationToken cancellationToken)
     {
-        // Get platform and containers info
-        var platformClient = clientFactory.GetPlatformClient(command.Address);
-        var containersClient = clientFactory.GetContainerClient(command.Address);
-
-        var platformInfo = await platformClient.ListPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
-        
-
-        DockerPlatformDescriptor descriptor = new (
-            DaemonId: platformInfo.Id,
-            ContainerCount: platformInfo.ContainerCount,
-            ContainersRunning: platformInfo.ContainersRunning,
-            ContainersPaused: platformInfo.ContainersPaused,
-            ContainersStopped: platformInfo.ContainersStopped,
-            Driver: platformInfo.Driver,
-            OperatingSystem: platformInfo.OperatingSystem,
-            OsVersion: platformInfo.OsVersion,
-            OsType: platformInfo.OsType,
-            Architecture: platformInfo.Architecture);
-
-        var platform = new Platform (
-            name: command.Name,
-            type: command.Type,
-            address: command.Address,
-            status: PlatformStatus.Online,
-            networkCount: platformInfo.NetworkCount,
-            volumeCount: platformInfo.VolumeCount,
-            imageCount: platformInfo.ImageCount,
-            cpuCount: platformInfo.CpuCount,
-            memTotal: platformInfo.MemTotal,
-            serverVersion: platformInfo.ServerVersion,
-            agentVersion: platformInfo.AgentVersion,
-            platformDescriptor: descriptor
-            )
-            .AppendStat(platformInfo.MapStat());
+        var param = new GetPlatformCommand
+        (
+            PlatformAddress: command.Address,
+            PlatformName: command.Name
+        );
+        var platformResult = await platformConnector.GetPlatformAsync(param, cancellationToken);
+        if (!platformResult.IsSuccess(out var platform, out var error))
+        {
+            logger.LogError("Failed to get platform info for {Address}: {Error}", command.Address, error?.Message);
+            return platformResult;
+        }
 
         // Add platform
         dbContext.Platforms.Add(platform);
@@ -133,16 +108,4 @@ internal sealed class CreatePlatformHandler(
 
         else return containers.Values;
     }
-}
-
-internal static class Mapper
-{
-    internal static PlatformStat MapStat(this PlatformInfoResponse systemInfo)
-        => new (
-            created: systemInfo.Created,
-            memoryUsage: systemInfo.PlatformStat?.MemoryUsage ?? 0,
-            cpuUsage: systemInfo.PlatformStat?.CpuUsage ?? 0,
-            rxBytes: systemInfo.PlatformStat?.RxBytes ?? 0,
-            txBytes: systemInfo.PlatformStat?.TxBytes ?? 0
-            );
 }

@@ -15,13 +15,13 @@ using static Citadel.Agent.Containers.V1.ContainerService;
 
 namespace Infrastructure.Connectors;
 
-internal class ContainerGrpcConnector(IGrpcClientFactory grpcClientFactory, ILogger<ContainerGrpcConnector> logger) : IContainerConnector
+internal class ContainerGrpcConnector(IGrpcClientFactory clientFactory, ILogger<ContainerGrpcConnector> logger) : IContainerConnector
 {
     public async Task<Result<IReadOnlyDictionary<string, Container>>> ListContainersAsync(ContainerFilterCommand command, CancellationToken cancellationToken)
     {
         try
         {
-            var containerClient = grpcClientFactory.GetContainerClient(command.PlatformAddress);
+            var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
             var request = new ListContainersRequest
             {
                 All = command?.All,
@@ -43,7 +43,7 @@ internal class ContainerGrpcConnector(IGrpcClientFactory grpcClientFactory, ILog
     {
         try
         {
-            var containerClient = grpcClientFactory.GetContainerClient(inspectContainerCommand.PlatformAddress);
+            var containerClient = clientFactory.GetContainerClient(inspectContainerCommand.PlatformAddress);
             var request = new InspectContainerRequest() { ContainerId = inspectContainerCommand.ContainerId };
             var result = await containerClient.InspectAsync(request, cancellationToken: cancellationToken);
             return result.Map();
@@ -65,7 +65,7 @@ internal class ContainerGrpcConnector(IGrpcClientFactory grpcClientFactory, ILog
         };
         await Parallel.ForEachAsync(patchContainerCommand.PlatformContainers, parallelOptions, async(platform, token) =>
         {
-            var client = grpcClientFactory.GetContainerClient(platform.Key);
+            var client = clientFactory.GetContainerClient(platform.Key);
             try
             {
                 await ToOperation(client, platform.Value, patchContainerCommand.Action, token);
@@ -115,7 +115,7 @@ internal class ContainerGrpcConnector(IGrpcClientFactory grpcClientFactory, ILog
         };
         await Parallel.ForEachAsync(deleteContainerCommand.PlatformContainers, parallelOptions, async (platform, ct) =>
         {
-            var client = grpcClientFactory.GetContainerClient(platform.Key);
+            var client = clientFactory.GetContainerClient(platform.Key);
             try
             {
                 var rpcRequest = new DeleteContainerRequest
@@ -153,7 +153,7 @@ internal class ContainerGrpcConnector(IGrpcClientFactory grpcClientFactory, ILog
 
     public async IAsyncEnumerable<ContainerLogInfo> StreamLogsAsync(StreamContainerLogsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var containerClient = grpcClientFactory.GetContainerClient(command.PlatformAddress);
+        var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
         using var streamCall = containerClient.StreamContainerLogs(new ContainerLogRequest() { ContainerId = command .ContainerId}, cancellationToken: cancellationToken);
         await foreach (var response in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
         {
@@ -163,8 +163,8 @@ internal class ContainerGrpcConnector(IGrpcClientFactory grpcClientFactory, ILog
 
     public async IAsyncEnumerable<ContainerStats> StreamContainerStatsAsync(StreamContainerStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var containerClient = grpcClientFactory.GetContainerClient(command.PlatformAddress);
-        using var streamCall = containerClient.StreamContainerStats(new ContainerStatsRequest() { FetchIntervalMs = command .FetchIntervalMs}, cancellationToken: cancellationToken);
+        var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
+        using var streamCall = containerClient.StreamContainerStats(new ContainerStatsRequest() { FetchIntervalMs = command.FetchIntervalMs }, cancellationToken: cancellationToken);
         await foreach (var response in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
         {
             yield return response.Map();
@@ -173,7 +173,7 @@ internal class ContainerGrpcConnector(IGrpcClientFactory grpcClientFactory, ILog
 
     public async IAsyncEnumerable<DaemonEventInfo> StreamDaemonEventAsync(StreamDaemonEventCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var containerClient = grpcClientFactory.GetContainerClient(command.PlatformAddress);
+        var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
         using var streamCall = containerClient.StreamDaemonEvent(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
         await foreach (var response in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
         {

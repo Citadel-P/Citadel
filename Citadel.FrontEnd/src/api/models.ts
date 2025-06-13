@@ -6,13 +6,13 @@ export interface Cancellable {
 
 export interface PlatformStatsBatchView {
   platformId: string;
-  networksCount: number;
-  volumesCount: number;
-  containers: number;
+  networkCount: number;
+  volumeCount: number;
+  containerCount: number;
   containersRunning: number;
   containersPaused: number;
   containersStopped: number;
-  images: number;
+  imageCount: number;
   memTotal: number;
   stat: PlatformStatView;
 }

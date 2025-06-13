@@ -60,15 +60,15 @@ const usePlatformHub = () => {
 
       if (existingIndex !== -1) {
         updatedPlatforms[existingIndex].stats = [platform.stat];
-        updatedPlatforms[existingIndex].networkCount = platform.networksCount;
-        updatedPlatforms[existingIndex].volumeCount = platform.volumesCount;
+        updatedPlatforms[existingIndex].networkCount = platform.networkCount;
+        updatedPlatforms[existingIndex].volumeCount = platform.volumeCount;
 
-        updatedPlatforms[existingIndex].imageCount = platform.images;
+        updatedPlatforms[existingIndex].imageCount = platform.imageCount;
         updatedPlatforms[existingIndex].memTotal = platform.memTotal;
         if (updatedPlatforms[existingIndex].platformDescriptor.$type === 'Docker') {
           const descriptor = updatedPlatforms[existingIndex]
             .platformDescriptor as PlatformDescriptorDockerPlatformDescriptor;
-          descriptor.containerCount = platform.containers;
+          descriptor.containerCount = platform.containerCount;
           descriptor.containersRunning = platform.containersRunning;
           descriptor.containersPaused = platform.containersPaused;
           descriptor.containersStopped = platform.containersStopped;
