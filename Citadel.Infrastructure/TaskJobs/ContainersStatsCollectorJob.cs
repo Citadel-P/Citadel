@@ -1,13 +1,10 @@
 ﻿using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-using Citadel.Agent.Common.V1;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Grpc.Core;
 using Infrastructure.Services;
-using Infrastructure.Connectors.Mappings;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -74,14 +71,14 @@ internal class ContainersStatsCollectorJob(
             try
             {
                 var command = new StreamContainerStatsCommand(PlatformAddress: platform.Address, FetchIntervalMs: jobConfiguration.ContainersInfoInterval * 1000);
-                await foreach (var reply in containerConnector.StreamContainerStatsAsync(command, cancellationToken: cancellationToken))
+                await foreach (var stream in containerConnector.StreamContainerStatsAsync(command, cancellationToken: cancellationToken))
                 {
-                    if (reply.Containers.Count > 0)
+                    if (stream.Containers.Count > 0)
                     {
                         if (platformContainerCache.TryGetContainers(platform.Id, out var ids))
                         {
                             var snapshotTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                            foreach (var kvp in reply.Containers)
+                            foreach (var kvp in stream.Containers)
                             {
                                 if (ids.TryGetValue(kvp.Key, out var containerId))
                                 {
@@ -91,7 +88,7 @@ internal class ContainersStatsCollectorJob(
                                 }
                             }
 
-                            await channel.WriteAsync(new ContainersStatBatch(platform.Id, reply.Containers.Values), cancellationToken);
+                            await channel.WriteAsync(new ContainersStatBatch(platform.Id, stream.Containers.Values), cancellationToken);
                         }
                     }
                 }

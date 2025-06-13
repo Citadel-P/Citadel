@@ -1,6 +1,4 @@
-﻿using System;
-using System.Threading.Channels;
-using Citadel.Agent.Containers.V1;
+﻿using System.Threading.Channels;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
@@ -19,17 +17,17 @@ namespace Infrastructure.TaskJobs;
 /// Syncing full containers state when platform status change.
 /// </summary>
 internal class ContainerSyncJob(
-    IContainerConnector containerService,
     IServiceScopeFactory scopeFactory,
+    IContainerConnector containerService,
     IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     ILogger<ContainerSyncJob> logger) : BackgroundService
 {
-    private readonly ChannelReader<PlatformHealth> _platformHealthReader = platformHealthBroadCaster.Register();
+    private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.Register();
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        await foreach (var platformEvent in _platformHealthReader.ReadAllAsync(cancellationToken))
+        await foreach (var platformEvent in platformHealthReader.ReadAllAsync(cancellationToken))
         {
             try
             {
@@ -77,25 +75,28 @@ internal class ContainerSyncJob(
             PlatformId: platformEvent.Id,
             All: true
         );
-        var containersReply = await containerService.ListContainersAsync(command, cancellationToken: cancellationToken);
-        if (!containersReply.IsSuccess(out var freshContainers, out var error))
+
+        var result = await containerService.ListContainersAsync(command, cancellationToken: cancellationToken);
+        if (!result.IsSuccess(out var freshContainers, out var error))
         {
             logger.LogError("Failed to list containers for platform {PlatformId} at {Address}: {Error}", platformEvent.Id, platformEvent.Address, error);
-            return []; // Maybe throw an exception or handle it differently
+            return [];
         }
 
-        long fetchTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var existingContainers = await dbContext.Containers
-            .Where(c => c.PlatformId == platformEvent.Id)
-            .ToDictionaryAsync(c => c.ContainerId, cancellationToken);
 
-        // Add or Update containers
-        foreach (var freshContainer in freshContainers.Values)
+        var existingContainersInDb = await dbContext.Containers
+            .Where(c => c.PlatformId == platformEvent.Id)
+            .ToDictionaryAsync(c => c.ContainerId, c => c, cancellationToken);
+
+        // This list will hold the containers that are currently active and should be cached
+        var currentActiveContainers = new List<Container>();
+
+        foreach (var freshContainer in freshContainers.Values.ToList())
         {
-            if (existingContainers.TryGetValue(freshContainer.ContainerId, out var existing))
+            if (existingContainersInDb.TryGetValue(freshContainer.ContainerId, out var existingDbContainer))
             {
-                // Update existing container
-                existing.PartialUpdate(
+                // Update existing container in DB context
+                existingDbContainer.PartialUpdate(
                     name: freshContainer.Name,
                     image: freshContainer.Image,
                     state: freshContainer.State,
@@ -103,16 +104,18 @@ internal class ContainerSyncJob(
                     created: freshContainer.Created,
                     ports: freshContainer.Ports
                 );
+                currentActiveContainers.Add(existingDbContainer); 
             }
             else
             {
-                // Add new container
+                // Add new container to DB
                 dbContext.Containers.Add(freshContainer);
+                currentActiveContainers.Add(freshContainer);
             }
         }
 
-        //  Remove stale containers
-        var staleContainers = existingContainers.Values
+        // Remove stale containers (those in DB but not in freshContainers)
+        var staleContainers = existingContainersInDb.Values
             .Where(c => !freshContainers.ContainsKey(c.ContainerId))
             .ToArray();
 
@@ -123,9 +126,9 @@ internal class ContainerSyncJob(
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
-        return [.. existingContainers.Values];
-    }
 
+        return [.. currentActiveContainers];
+    }
     private static async Task<Container[]> SyncOfflinePlatformContainers(ApplicationDbContext dbContext, Guid platformId, CancellationToken cancellationToken)
     {
         var offlineContainers = await dbContext.Containers
