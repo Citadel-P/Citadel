@@ -63,7 +63,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
             }
         };
 
-        platformClientMock.Setup(x => x.ListPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
+        platformClientMock.Setup(x => x.GetPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
             .Returns(new AsyncUnaryCall<PlatformInfoResponse>(
                 Task.FromResult(platformInfo),
                 Task.FromResult(new Metadata()),

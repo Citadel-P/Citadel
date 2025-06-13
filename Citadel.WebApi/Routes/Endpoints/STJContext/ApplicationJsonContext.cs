@@ -5,6 +5,7 @@ using Citadel.Agent.Common.V1;
 using Citadel.Agent.Containers.V1;
 using Citadel.Agent.Images.V1;
 using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Registries;
 using Domain.Entities;
 using Domain.Entities.Platforms;
@@ -96,10 +97,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(CreateNetworkResponse))]
 [JsonSerializable(typeof(CreateNetworkView))]
 [JsonSerializable(typeof(DeleteNetworksInput))]
-[JsonSerializable(typeof(InspectNetworkView))]
 [JsonSerializable(typeof(ListNetworksRequest))]
 [JsonSerializable(typeof(NetworksView))]
-[JsonSerializable(typeof(NetworkView))]
 [JsonSerializable(typeof(CreateVolumeInput))]
 [JsonSerializable(typeof(DeleteVolumesInput))]
 [JsonSerializable(typeof(InspectVolumeView))]
@@ -116,6 +115,11 @@ namespace Application.Models;
 [JsonSerializable(typeof(GitHubCrPackageVersionMetadata))]
 [JsonSerializable(typeof(GitHubCrPackageVersionContainerMetadata))]
 [JsonSerializable(typeof(ContainerLogInfo))]
+[JsonSerializable(typeof(DockerNetwork))]
+[JsonSerializable(typeof(DockerNetworkDetails))]
+[JsonSerializable(typeof(IpAddressManagementConfig))]
+[JsonSerializable(typeof(NetworkConnectedContainer))]
+[JsonSerializable(typeof(NetworkPeerInfo))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

@@ -1,10 +1,10 @@
-﻿using Citadel.Agent.Networks.V1;
+﻿using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Networks;
 using FluentValidation;
 using Grpc.Core;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -26,7 +26,7 @@ public sealed record CreateNetwork(
     IPAM? IPAM = null,
     ConfigFrom? ConfigFrom = null,
     Dictionary<string, string>? Labels = null,
-    Dictionary<string, string>? Options = null) : ICommand<Result<CreateNetworkResponse>>
+    Dictionary<string, string>? Options = null) : ICommand<Result<CreateNetworkResult>>
 {
 
     internal class Validator : AbstractValidator<CreateNetwork>
@@ -125,6 +125,39 @@ public sealed record CreateNetwork(
         }
 
     }
+
+    internal CreateNetworkCommand ToCommand(string platformAddress)
+        => new
+        (
+            PlatformAddress: platformAddress,
+            Name: Name,
+            Driver: Driver ?? "bridge",
+            Scope: Scope ?? "local",
+            Internal: Internal,
+            Attachable: Attachable,
+            Ingress: Ingress,
+            EnableIPv6: EnableIPv6,
+            EnableIPv4: EnableIPv4,
+            ConfigOnly: ConfigOnly ?? false,
+            Ipam: new IpAddressManagementConfig
+            (
+                Driver: IPAM?.Driver ?? "default",
+                Config:
+                    IPAM?.Config?.Select(c => new IpamSubnetConfiguration
+                    (
+                        Subnet: c.Subnet ?? "",
+                        IpRange: c.IpRange ?? "",
+                        Gateway: c.Gateway ?? ""
+                    ))?.ToList() ?? [],
+                Options: IPAM?.Options ?? []
+            ),
+            ConfigFrom: new NetworkConfigFrom
+            (
+                Network: ConfigFrom?.Network ?? ""
+            ),
+            Labels: Labels ?? [],
+            Options: Options ?? []
+        );
 }
 
 public sealed record IPAM(
@@ -136,62 +169,25 @@ public sealed record IPAMConfig(string Subnet, string IpRange, string Gateway);
 public sealed record ConfigFrom(string Network);
 
 internal sealed class CreateNetworkHandler(
-    IGrpcClientFactory clientFactory, 
+    INetworkConnector networkConnector, 
     ApplicationDbContext dbContext)
-    : ICommandHandler<CreateNetwork, Result<CreateNetworkResponse>>
+    : ICommandHandler<CreateNetwork, Result<CreateNetworkResult>>
 {
-    public async ValueTask<Result<CreateNetworkResponse>> Handle(CreateNetwork command, CancellationToken cancellationToken)
+    public async ValueTask<Result<CreateNetworkResult>> Handle(CreateNetwork request, CancellationToken cancellationToken)
     {
         try
         {
-            var address = await dbContext.Platforms.Where(s => s.Id == command.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
+            var address = await dbContext.Platforms.Where(s => s.Id == request.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
             if (address == null)
             {
-                return Result.Failure<CreateNetworkResponse>(new NotFoundError("The provided platform Id doesn't exist"));
+                return Result.Failure<CreateNetworkResult>(new NotFoundError("The provided platform Id doesn't exist"));
             }
 
-            var client = clientFactory.GetNetworkClient(address);
-            var request = new CreateNetworkRequest
-            {
-                Name = command.Name,
-                Driver = command.Driver ?? "bridge",
-                Scope = command.Scope ?? "local",
-                Internal = command.Internal,
-                Attachable = command.Attachable,
-                Ingress = command.Ingress,
-                EnableIPv6 = command.EnableIPv6,
-                EnableIPv4 = command.EnableIPv4,
-                ConfigOnly = command.ConfigOnly ?? false,
-                Ipam = new IPAMMessage
-                {
-                    Driver = command.IPAM?.Driver ?? "default",
-                    Config =
-                    {
-                        command.IPAM?.Config?.Select(c => new IPAMConfigMessage
-                        {
-                            Subnet = c.Subnet ?? "",
-                            IpRange = c.IpRange ?? "",
-                            Gateway = c.Gateway ?? ""
-                        }) ?? []
-                    },
-                        Options =
-                    {
-                        command.IPAM?.Options ?? []
-                    }
-                },
-                ConfigFrom = new ConfigFromMessage
-                {
-                    Network = command.ConfigFrom?.Network ?? ""
-                },
-                Labels = { command.Labels ?? [] },
-                Options = { command.Options ?? [] }
-            };
-            var response = await client.CreateAsync(request, cancellationToken: cancellationToken);
-            return response;
+            return await networkConnector.CreateNetworkAsync(request.ToCommand(address), cancellationToken);
         }
         catch (RpcException ex)
         {
-            return Result.Failure<CreateNetworkResponse>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<CreateNetworkResult>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
         
     }

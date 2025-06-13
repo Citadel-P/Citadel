@@ -3063,7 +3063,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InspectNetworkView"
+                  "$ref": "#/components/schemas/DockerNetworkDetails"
                 }
               }
             }
@@ -4894,6 +4894,176 @@
           }
         }
       },
+      "DockerNetwork": {
+        "required": [
+          "name",
+          "id",
+          "created",
+          "driver",
+          "scope",
+          "enableIPv4",
+          "enableIPv6",
+          "internal",
+          "attachable",
+          "ingress",
+          "configOnly",
+          "inUse",
+          "configFrom",
+          "ipam",
+          "options",
+          "labels"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "created": {
+            "type": "string"
+          },
+          "driver": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "enableIPv4": {
+            "type": "boolean"
+          },
+          "enableIPv6": {
+            "type": "boolean"
+          },
+          "internal": {
+            "type": "boolean"
+          },
+          "attachable": {
+            "type": "boolean"
+          },
+          "ingress": {
+            "type": "boolean"
+          },
+          "configOnly": {
+            "type": "boolean"
+          },
+          "inUse": {
+            "type": "boolean"
+          },
+          "configFrom": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipam": {
+            "$ref": "#/components/schemas/IpAddressManagementConfig"
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "DockerNetworkDetails": {
+        "required": [
+          "name",
+          "id",
+          "created",
+          "driver",
+          "scope",
+          "enableIPv4",
+          "enableIPv6",
+          "internal",
+          "attachable",
+          "ingress",
+          "configOnly",
+          "inUse",
+          "configFrom",
+          "ipam",
+          "options",
+          "labels",
+          "containers",
+          "peers"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "created": {
+            "type": "string"
+          },
+          "driver": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "enableIPv4": {
+            "type": "boolean"
+          },
+          "enableIPv6": {
+            "type": "boolean"
+          },
+          "internal": {
+            "type": "boolean"
+          },
+          "attachable": {
+            "type": "boolean"
+          },
+          "ingress": {
+            "type": "boolean"
+          },
+          "configOnly": {
+            "type": "boolean"
+          },
+          "inUse": {
+            "type": "boolean"
+          },
+          "configFrom": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipam": {
+            "$ref": "#/components/schemas/IpAddressManagementConfig"
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "containers": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NetworkConnectedContainer"
+            }
+          },
+          "peers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NetworkPeerInfo"
+            }
+          }
+        }
+      },
       "DriverConfiguration": {
         "required": [
           "name",
@@ -5732,26 +5902,6 @@
           }
         }
       },
-      "IPAMConfigView": {
-        "required": [
-          "subnet",
-          "gateway"
-        ],
-        "type": "object",
-        "properties": {
-          "subnet": {
-            "type": "string"
-          },
-          "gateway": {
-            "type": "string"
-          },
-          "ipRange": {
-            "type": "string",
-            "default": null,
-            "nullable": true
-          }
-        }
-      },
       "IPAMInput": {
         "required": [
           "driver"
@@ -5765,35 +5915,6 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/IPAMConfigInput"
-            },
-            "default": null,
-            "nullable": true
-          },
-          "options": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "default": null,
-            "nullable": true
-          }
-        },
-        "default": null,
-        "nullable": true
-      },
-      "IPAMView": {
-        "required": [
-          "driver"
-        ],
-        "type": "object",
-        "properties": {
-          "driver": {
-            "type": "string"
-          },
-          "config": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/IPAMConfigView"
             },
             "default": null,
             "nullable": true
@@ -6014,108 +6135,6 @@
           }
         }
       },
-      "InspectNetworkView": {
-        "required": [
-          "name",
-          "id",
-          "created",
-          "driver",
-          "scope",
-          "enableIPv4",
-          "enableIPv6",
-          "internal",
-          "attachable",
-          "ingress",
-          "inUse",
-          "configOnly"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "created": {
-            "type": "string"
-          },
-          "driver": {
-            "type": "string"
-          },
-          "scope": {
-            "type": "string"
-          },
-          "enableIPv4": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "enableIPv6": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "internal": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "attachable": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "ingress": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "inUse": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "configOnly": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "configFrom": {
-            "type": "string",
-            "default": null,
-            "nullable": true
-          },
-          "ipam": {
-            "$ref": "#/components/schemas/IPAMView"
-          },
-          "peers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PeerInfoView"
-            },
-            "default": null,
-            "nullable": true
-          },
-          "options": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "default": null,
-            "nullable": true
-          },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "default": null,
-            "nullable": true
-          },
-          "containers": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/NetworkContainerView"
-            },
-            "default": null,
-            "nullable": true
-          }
-        }
-      },
       "InspectVolumeView": {
         "required": [
           "id",
@@ -6193,6 +6212,55 @@
           "prefixLen": {
             "type": "integer",
             "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "IpAddressManagementConfig": {
+        "required": [
+          "driver",
+          "config",
+          "options"
+        ],
+        "type": "object",
+        "properties": {
+          "driver": {
+            "type": "string",
+            "nullable": true
+          },
+          "config": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IpamSubnetConfiguration"
+            }
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "nullable": true
+      },
+      "IpamSubnetConfiguration": {
+        "required": [
+          "subnet",
+          "ipRange",
+          "gateway"
+        ],
+        "type": "object",
+        "properties": {
+          "subnet": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipRange": {
+            "type": "string",
+            "nullable": true
+          },
+          "gateway": {
+            "type": "string",
             "nullable": true
           }
         }
@@ -6376,13 +6444,13 @@
           }
         }
       },
-      "NetworkContainerView": {
+      "NetworkConnectedContainer": {
         "required": [
           "name",
           "endpointId",
           "macAddress",
-          "iPv4Address",
-          "iPv6Address"
+          "ipV4Address",
+          "ipv6Address"
         ],
         "type": "object",
         "properties": {
@@ -6395,10 +6463,25 @@
           "macAddress": {
             "type": "string"
           },
-          "iPv4Address": {
+          "ipV4Address": {
             "type": "string"
           },
-          "iPv6Address": {
+          "ipv6Address": {
+            "type": "string"
+          }
+        }
+      },
+      "NetworkPeerInfo": {
+        "required": [
+          "name",
+          "ip"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "ip": {
             "type": "string"
           }
         }
@@ -6516,92 +6599,6 @@
         },
         "nullable": true
       },
-      "NetworkView": {
-        "required": [
-          "name",
-          "id",
-          "created",
-          "driver",
-          "scope",
-          "enableIPv4",
-          "enableIPv6",
-          "internal",
-          "attachable",
-          "ingress",
-          "inUse",
-          "configOnly"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "created": {
-            "type": "string"
-          },
-          "driver": {
-            "type": "string"
-          },
-          "scope": {
-            "type": "string"
-          },
-          "enableIPv4": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "enableIPv6": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "internal": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "attachable": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "ingress": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "inUse": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "configOnly": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "configFrom": {
-            "type": "string",
-            "default": null,
-            "nullable": true
-          },
-          "ipam": {
-            "$ref": "#/components/schemas/IPAMView"
-          },
-          "options": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "default": null,
-            "nullable": true
-          },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "default": null,
-            "nullable": true
-          }
-        }
-      },
       "NetworksView": {
         "required": [
           "networks"
@@ -6611,7 +6608,7 @@
           "networks": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/NetworkView"
+              "$ref": "#/components/schemas/DockerNetwork"
             }
           }
         }
@@ -6670,21 +6667,6 @@
           null
         ],
         "nullable": true
-      },
-      "PeerInfoView": {
-        "required": [
-          "name",
-          "ip"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "ip": {
-            "type": "string"
-          }
-        }
       },
       "PlatformDescriptor": {
         "required": [

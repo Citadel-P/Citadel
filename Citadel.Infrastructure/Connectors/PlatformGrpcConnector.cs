@@ -33,7 +33,7 @@ internal class PlatformGrpcConnector(IGrpcClientFactory clientFactory) : IPlatfo
         {
             var platformClient = clientFactory.GetPlatformClient(command.PlatformAddress);
             
-            var platform = await platformClient.ListPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
+            var platform = await platformClient.GetPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
             return platform.Map(platformAddress: command.PlatformAddress, platformName: command.PlatformName);
         }
         catch (RpcException ex)

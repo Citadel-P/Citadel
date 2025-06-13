@@ -81,7 +81,7 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
             OsVersion = "5.15",
             Architecture = "x86_64"
         };
-        platformClientMock.Setup(x => x.ListPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
+        platformClientMock.Setup(x => x.GetPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
                            .Returns(new AsyncUnaryCall<PlatformInfoResponse>(
                                 Task.FromResult(platformInfo),
                                 Task.FromResult(new Metadata()),

@@ -1,10 +1,9 @@
-﻿using Citadel.Agent.Networks.V1;
+﻿using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Networks;
 using FluentValidation;
-using Grpc.Core;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -23,7 +22,7 @@ public sealed record class DeleteNetworksCommand(Guid PlatformId, string[] Ids) 
     }
 }
 
-internal class DeleteNetworksCommandHandler(ApplicationDbContext dbContext, IGrpcClientFactory clientFactory) : ICommandHandler<DeleteNetworksCommand, Result>
+internal class DeleteNetworksCommandHandler(INetworkConnector networkConnector, ApplicationDbContext dbContext) : ICommandHandler<DeleteNetworksCommand, Result>
 {
     public async ValueTask<Result> Handle(DeleteNetworksCommand command, CancellationToken cancellationToken)
     {
@@ -33,15 +32,11 @@ internal class DeleteNetworksCommandHandler(ApplicationDbContext dbContext, IGrp
             return Result.Failure(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
-        try
-        {
-            var client = clientFactory.GetNetworkClient(address);
-            await client.DeleteAsync(new DeleteNetworkRequest { Ids = { command.Ids } }, cancellationToken: cancellationToken);
-            return Result.Success();
-        }
-        catch (RpcException ex)
-        {
-            return Result.Failure(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
-        }
+        var args = new DeleteNetworkCommand
+        (
+            PlatformAddress: address,
+            Ids: command.Ids
+        );
+        return await networkConnector.DeleteNetworkAsync(args, cancellationToken);
     }
 }

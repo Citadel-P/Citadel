@@ -48,6 +48,7 @@ public static class InfrastructureModule
         => services
             .AddSingleton<IGitHubCrService, GitHubCrService>()
             .AddSingleton<IDockerHubService, DockerHubService>()
+            .AddSingleton<INetworkConnector, NetworkConnector>()
             .AddSingleton<IPlatformConnector, PlatformGrpcConnector>()
             .AddSingleton<IContainerConnector, ContainerGrpcConnector>()
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>();
