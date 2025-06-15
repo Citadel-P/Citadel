@@ -87,7 +87,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
         grpcFactoryMock.Setup(x => x.GetContainerClient(It.IsAny<string>()))
             .Returns(containersClientMock.Object);
 
-        healthMonitorMock.Setup(x => x.TrackPlatform(It.IsAny<string>(), It.IsAny<Guid>())).Returns(true);
+        healthMonitorMock.Setup(x => x.TrackPlatform(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<PlatformConnectorType>())).Returns(true);
 
         var createJson = """
         {
@@ -113,7 +113,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
         
         Assert.NotNull(platform);
         Assert.Equal(3, containers.Count);
-        healthMonitorMock.Verify(x => x.TrackPlatform("https://localhost:9000", platform.Id), Times.Once);
+        healthMonitorMock.Verify(x => x.TrackPlatform("https://localhost:9000", platform.Id, PlatformConnectorType.Agent), Times.Once);
         await Verify(platform);
     }
 
@@ -134,8 +134,8 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
                 memTotal: 500,
                 serverVersion: "1.0.0",
                 agentVersion: "1.0.0",
-                type: PlatformType.Docker,
                 status: PlatformStatus.Online,
+                connectorType: PlatformConnectorType.Agent,
                 platformDescriptor: new DockerPlatformDescriptor(
                     DaemonId: "654321",
                     ContainerCount: 5,

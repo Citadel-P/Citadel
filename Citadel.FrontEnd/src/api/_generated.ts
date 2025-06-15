@@ -30,6 +30,13 @@ export enum RegistryType {
   GitHub = "GitHub",
 }
 
+/** @default "Docker" */
+export enum PlatformType2 {
+  Docker = "Docker",
+  DockerSwarm = "DockerSwarm",
+  Kubernetes = "Kubernetes",
+}
+
 export enum PlatformType {
   Docker = "Docker",
   DockerSwarm = "DockerSwarm",
@@ -41,19 +48,23 @@ export enum PlatformStatus {
   Online = "Online",
 }
 
+/** @default "local" */
+export enum PlatformConnectorType2 {
+  Local = "Local",
+  Agent = "Agent",
+}
+
+export enum PlatformConnectorType {
+  Local = "Local",
+  Agent = "Agent",
+}
+
 export enum NullableOfRegistryType {
   DockerHub = "DockerHub",
   Azure = "Azure",
   AWS = "AWS",
   Gitlab = "Gitlab",
   GitHub = "GitHub",
-}
-
-/** @default "Docker" */
-export enum NullableOfPlatformType {
-  Docker = "Docker",
-  DockerSwarm = "DockerSwarm",
-  Kubernetes = "Kubernetes",
 }
 
 export enum DockerHubTagStatus {
@@ -974,7 +985,8 @@ export type PlatformDescriptorView = {
 export interface PlatformInput {
   name: string;
   address: string;
-  type?: NullableOfPlatformType;
+  type?: PlatformType2;
+  connectorType?: PlatformConnectorType2;
 }
 
 export interface PlatformStatView {
@@ -996,8 +1008,6 @@ export type PlatformView = {
   id: string;
   name: string;
   address: string;
-  type: PlatformType;
-  status: PlatformStatus;
   /** @format int32 */
   networkCount: number;
   /** @format int32 */
@@ -1008,8 +1018,11 @@ export type PlatformView = {
   cpuCount: number;
   /** @format int64 */
   memTotal: number;
-  serverVersion: string | null;
   agentVersion: string | null;
+  serverVersion: string | null;
+  type: PlatformType;
+  status: PlatformStatus;
+  connectorType: PlatformConnectorType;
   stats: PlatformStatView[] | null;
   platformDescriptor: PlatformDescriptor;
 };
@@ -1019,8 +1032,6 @@ export interface PlatformView2 {
   id: string;
   name: string;
   address: string;
-  type: PlatformType;
-  status: PlatformStatus;
   /** @format int32 */
   networkCount: number;
   /** @format int32 */
@@ -1031,8 +1042,11 @@ export interface PlatformView2 {
   cpuCount: number;
   /** @format int64 */
   memTotal: number;
-  serverVersion: string | null;
   agentVersion: string | null;
+  serverVersion: string | null;
+  type: PlatformType;
+  status: PlatformStatus;
+  connectorType: PlatformConnectorType;
   stats: PlatformStatView[] | null;
   platformDescriptor: PlatformDescriptor;
 }

@@ -9,13 +9,11 @@ namespace Infrastructure.Connectors.Mappings;
 
 internal static class PlatformMapper
 {
-    public static Platform Map(this PlatformInfoResponse platformInfo, string platformName, string platformAddress)
+    public static Platform Map(this PlatformInfoResponse platformInfo, string platformName, string platformAddress, PlatformConnectorType type)
     {
-        PlatformType? platformType = null;
         PlatformDescriptor? descriptor = null;
         if (string.IsNullOrEmpty(platformInfo.SwarmInfo.NodeID))
         {
-            platformType = PlatformType.Docker;
             descriptor = new DockerPlatformDescriptor
             (
                 DaemonId: platformInfo.Id,
@@ -32,12 +30,11 @@ internal static class PlatformMapper
         }
         else
         {
-            platformType = PlatformType.DockerSwarm;
         }
         return new Platform
             (
                 name: platformName,
-                type: platformType.Value,
+                connectorType: type,
                 address: platformAddress,
                 status: PlatformStatus.Online,
                 networkCount: platformInfo.NetworkCount,

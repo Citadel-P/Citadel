@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System;
+using System.Runtime.CompilerServices;
 using Citadel.Agent.Containers.V1;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -11,11 +12,12 @@ using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
 using LightResults;
 using Microsoft.Extensions.Logging;
+using RTools_NTS.Util;
 using static Citadel.Agent.Containers.V1.ContainerService;
 
 namespace Infrastructure.Connectors;
 
-internal class ContainerGrpcConnector(IGrpcClientFactory clientFactory, ILogger<ContainerGrpcConnector> logger) : IContainerConnector
+internal class AgentContainerConnector(IGrpcClientFactory clientFactory, ILogger<AgentContainerConnector> logger) : IContainerConnector
 {
     public async Task<Result<IReadOnlyDictionary<string, Container>>> ListContainersAsync(ContainerFilterCommand command, CancellationToken cancellationToken)
     {
@@ -56,28 +58,15 @@ internal class ContainerGrpcConnector(IGrpcClientFactory clientFactory, ILogger<
 
     public async Task<Result> PatchAsync(PatchContainerCommand patchContainerCommand, CancellationToken cancellationToken)
     {
-        var exceptions = new Exception[patchContainerCommand.PlatformContainers.Sum(s => s.Value.Count())];
-        var exceptionIndex = 0;
-        var parallelOptions = new ParallelOptions
+        try
         {
-            MaxDegreeOfParallelism = Environment.ProcessorCount,
-            CancellationToken = cancellationToken
-        };
-        await Parallel.ForEachAsync(patchContainerCommand.PlatformContainers, parallelOptions, async(platform, token) =>
+            var client = clientFactory.GetContainerClient(patchContainerCommand.PlatformAddress);
+            await ToOperation(client, patchContainerCommand.ContainerIds, patchContainerCommand.Action, cancellationToken);
+        }
+        catch (RpcException ex)
         {
-            var client = clientFactory.GetContainerClient(platform.Key);
-            try
-            {
-                await ToOperation(client, platform.Value, patchContainerCommand.Action, token);
-            }
-            catch (Exception ex)
-            {
-                var idx = Interlocked.Increment(ref exceptionIndex) - 1;
-                if (idx < exceptions.Length)
-                    exceptions[idx] = ex;
-                logger.LogError(ex, "Error while processing container {ContainerIds} on platform {PlatformAddress}", platform.Value, platform.Key);
-            }
-        });
+            return Result.Failure(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+        }
 
         static async Task<Google.Protobuf.WellKnownTypes.Empty> ToOperation(ContainerServiceClient client, IEnumerable<string> containerIds, ContainerAction action, CancellationToken cancellationToken) => action switch
         {
@@ -89,65 +78,27 @@ internal class ContainerGrpcConnector(IGrpcClientFactory clientFactory, ILogger<
             _ => throw new NotImplementedException()
         };
 
-        exceptions = [.. exceptions.Where(e => e is not null)]; // Filter out null exceptions
-
-        if (exceptions.Length == 0)
-        {
-            return Result.Success();
-        }
-        else
-        {
-            var rpcException = exceptions.OfType<RpcException>().FirstOrDefault();
-            return rpcException is not null
-                ? Result.Failure(new ClientRpcException($"An RPC exception occurred: {rpcException.Message}", rpcException.StatusCode))
-                : Result.Failure(new InternalServerError($"An error occurred while processing the request,  {exceptions.First().Message}"));
-        }
+        return Result.Success();
     }
 
     public async Task<Result> DeleteAsync(DeleteContainerCommand deleteContainerCommand, CancellationToken cancellationToken)
     {
-        var exceptions = new Exception[deleteContainerCommand.PlatformContainers.Sum(s => s.Value.Count())];
-        var exceptionIndex = 0;
-        var parallelOptions = new ParallelOptions
+        var client = clientFactory.GetContainerClient(deleteContainerCommand.PlatformAddress);
+        try
         {
-            MaxDegreeOfParallelism = Environment.ProcessorCount,
-            CancellationToken = cancellationToken
-        };
-        await Parallel.ForEachAsync(deleteContainerCommand.PlatformContainers, parallelOptions, async (platform, ct) =>
-        {
-            var client = clientFactory.GetContainerClient(platform.Key);
-            try
+            var rpcRequest = new DeleteContainerRequest
             {
-                var rpcRequest = new DeleteContainerRequest
-                {
-                    Ids = { platform.Value },
-                    V = deleteContainerCommand.Verbose ?? false,
-                    Force = deleteContainerCommand.Force ?? false,
-                    Link = deleteContainerCommand.Link ?? false,
-                };
-                await client.DeleteAsync(rpcRequest, cancellationToken: ct);
-            }
-            catch (Exception ex)
-            {
-                var idx = Interlocked.Increment(ref exceptionIndex) - 1;
-                if (idx < exceptions.Length)
-                    exceptions[idx] = ex;
-                logger.LogError(ex, "Error while processing container {ContainerIds} on platform {PlatformAddress}", platform.Value, platform.Key);
-            }
-        });
-
-        exceptions = [.. exceptions.Where(e => e is not null)]; // Filter out null exceptions
-
-        if (exceptions.Length == 0)
-        {
+                Ids = { deleteContainerCommand.ContainerIds },
+                V = deleteContainerCommand.Verbose ?? false,
+                Force = deleteContainerCommand.Force ?? false,
+                Link = deleteContainerCommand.Link ?? false,
+            };
+            await client.DeleteAsync(rpcRequest, cancellationToken: cancellationToken);
             return Result.Success();
         }
-        else
+        catch (RpcException ex)
         {
-            var rpcException = exceptions.OfType<RpcException>().FirstOrDefault();
-            return rpcException is not null
-                ? Result.Failure(new ClientRpcException($"An RPC exception occurred: {rpcException.Message}", rpcException.StatusCode))
-                : Result.Failure(new InternalServerError($"An error occurred while processing the request, {exceptions.First().Message}"));
+            return Result.Failure(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 

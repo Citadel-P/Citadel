@@ -41,7 +41,7 @@ public sealed record CreateVolume(
     }
 }
 
-internal sealed class CreateVolumeHandler(IVolumeConnector volumeConnector, ApplicationDbContext dbContext) 
+internal sealed class CreateVolumeHandler(IConnectorFactory<IVolumeConnector> connectorFactory, ApplicationDbContext dbContext) 
     : ICommandHandler<CreateVolume, Result<DockerVolume>>
 {
     
@@ -49,21 +49,23 @@ internal sealed class CreateVolumeHandler(IVolumeConnector volumeConnector, Appl
     {
         try
         {
-            var address = await dbContext.Platforms.Where(s => s.Id == command.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
-            if (address == null)
+            var platform = await dbContext.Platforms.Where(s => s.Id == command.PlatformId)
+                .Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
+            if (platform == null)
             {
                 return Result.Failure<DockerVolume>(new NotFoundError("The provided platform Id doesn't exist"));
             }
 
             var request = new CreateVolumeCommand
             (
-                PlatformAddress: address,
+                PlatformAddress: platform.Address,
                 Name: command.Name,
                 Driver: command.Driver,
                 Labels: command.Labels,
                 Options: command.Options
             );
 
+            var volumeConnector = connectorFactory.GetConnector(platform.ConnectorType);
             return await volumeConnector.CreateVolumeAsync(request, cancellationToken: cancellationToken);
         }
         catch (RpcException ex)

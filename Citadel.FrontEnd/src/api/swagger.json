@@ -6641,16 +6641,6 @@
         },
         "nullable": true
       },
-      "NullableOfPlatformType": {
-        "enum": [
-          "Docker",
-          "DockerSwarm",
-          "Kubernetes",
-          null
-        ],
-        "default": "Docker",
-        "nullable": true
-      },
       "NullableOfRegistryType": {
         "enum": [
           "DockerHub",
@@ -6661,6 +6651,21 @@
           null
         ],
         "nullable": true
+      },
+      "PlatformConnectorType": {
+        "enum": [
+          "Local",
+          "Agent"
+        ],
+        "type": "string"
+      },
+      "PlatformConnectorType2": {
+        "enum": [
+          "Local",
+          "Agent"
+        ],
+        "type": "string",
+        "default": "local"
       },
       "PlatformDescriptor": {
         "required": [
@@ -6940,7 +6945,10 @@
             "type": "string"
           },
           "type": {
-            "$ref": "#/components/schemas/NullableOfPlatformType"
+            "$ref": "#/components/schemas/PlatformType2"
+          },
+          "connectorType": {
+            "$ref": "#/components/schemas/PlatformConnectorType2"
           }
         }
       },
@@ -6984,20 +6992,30 @@
         ],
         "type": "string"
       },
+      "PlatformType2": {
+        "enum": [
+          "Docker",
+          "DockerSwarm",
+          "Kubernetes"
+        ],
+        "type": "string",
+        "default": "Docker"
+      },
       "PlatformView": {
         "required": [
           "id",
           "name",
           "address",
-          "type",
-          "status",
           "networkCount",
           "volumeCount",
           "imageCount",
           "cpuCount",
           "memTotal",
-          "serverVersion",
           "agentVersion",
+          "serverVersion",
+          "type",
+          "status",
+          "connectorType",
           "stats",
           "platformDescriptor"
         ],
@@ -7012,12 +7030,6 @@
           },
           "address": {
             "type": "string"
-          },
-          "type": {
-            "$ref": "#/components/schemas/PlatformType"
-          },
-          "status": {
-            "$ref": "#/components/schemas/PlatformStatus"
           },
           "networkCount": {
             "type": "integer",
@@ -7039,13 +7051,22 @@
             "type": "integer",
             "format": "int64"
           },
+          "agentVersion": {
+            "type": "string",
+            "nullable": true
+          },
           "serverVersion": {
             "type": "string",
             "nullable": true
           },
-          "agentVersion": {
-            "type": "string",
-            "nullable": true
+          "type": {
+            "$ref": "#/components/schemas/PlatformType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlatformStatus"
+          },
+          "connectorType": {
+            "$ref": "#/components/schemas/PlatformConnectorType"
           },
           "stats": {
             "type": "array",
@@ -7066,15 +7087,16 @@
           "id",
           "name",
           "address",
-          "type",
-          "status",
           "networkCount",
           "volumeCount",
           "imageCount",
           "cpuCount",
           "memTotal",
-          "serverVersion",
           "agentVersion",
+          "serverVersion",
+          "type",
+          "status",
+          "connectorType",
           "stats",
           "platformDescriptor"
         ],
@@ -7089,12 +7111,6 @@
           },
           "address": {
             "type": "string"
-          },
-          "type": {
-            "$ref": "#/components/schemas/PlatformType"
-          },
-          "status": {
-            "$ref": "#/components/schemas/PlatformStatus"
           },
           "networkCount": {
             "type": "integer",
@@ -7116,13 +7132,22 @@
             "type": "integer",
             "format": "int64"
           },
+          "agentVersion": {
+            "type": "string",
+            "nullable": true
+          },
           "serverVersion": {
             "type": "string",
             "nullable": true
           },
-          "agentVersion": {
-            "type": "string",
-            "nullable": true
+          "type": {
+            "$ref": "#/components/schemas/PlatformType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlatformStatus"
+          },
+          "connectorType": {
+            "$ref": "#/components/schemas/PlatformConnectorType"
           },
           "stats": {
             "type": "array",

@@ -3,9 +3,9 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using FluentValidation;
 using Hosting.Common;
-using Infrastructure;
 using Infrastructure.EntityFramework;
 using Mediator;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Containers.Commands;
 
@@ -20,20 +20,24 @@ public sealed record StreamContainerLogs(string ContainerId) : IStreamCommand<Co
     }
 }
 
-internal class StreamContainerLogsHandler(IContainerConnector containerConnector, ApplicationDbContext dbContext)
-    : IStreamCommandHandler<StreamContainerLogs, ContainerLogInfo>
+internal class StreamContainerLogsHandler(IConnectorFactory<IContainerConnector> connectorFactory, ApplicationDbContext dbContext, 
+    ILogger<StreamContainerLogsHandler> logger): IStreamCommandHandler<StreamContainerLogs, ContainerLogInfo>
 {
     public async IAsyncEnumerable<ContainerLogInfo> Handle(StreamContainerLogs query, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var platformAddress = await dbContext.Containers.GetPlatformAddress(query.ContainerId, cancellationToken)
-             ?? throw new Exception($"Platform doesn't exist for container {query.ContainerId}");
+        var (address, id, connectorType) = await dbContext.Containers.GetPlatformIdAsync(query.ContainerId, cancellationToken);
+        if (string.IsNullOrEmpty(address) || id is null || connectorType is null)
+        {
+            logger.LogError("No platform found for container ID {ContainerId}", query.ContainerId);
+            yield break; // No platform found for the given container ID
+        }
 
         var command = new StreamContainerLogsCommand
-            (
-                ContainerId: query.ContainerId, 
-                PlatformAddress: platformAddress
-            );
-        await foreach(var log in containerConnector.StreamLogsAsync(command, cancellationToken))
+        (
+            ContainerId: query.ContainerId,
+            PlatformAddress: address
+        );
+        await foreach(var log in connectorFactory.GetConnector(connectorType.Value).StreamLogsAsync(command, cancellationToken))
         {
             yield return log;
         }

@@ -1,5 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 using Citadel.Agent.Platforms.V1;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
@@ -11,7 +12,7 @@ using LightResults;
 
 namespace Infrastructure.Connectors;
 
-internal class PlatformGrpcConnector(IGrpcClientFactory clientFactory) : IPlatformConnector
+internal class AgentPlatformConnector(IGrpcClientFactory clientFactory) : IPlatformConnector
 {
     public async Task<PlatformHealth> CheckHealthAsync(string platformAddress, CancellationToken cancellationToken)
     {
@@ -34,7 +35,7 @@ internal class PlatformGrpcConnector(IGrpcClientFactory clientFactory) : IPlatfo
             var platformClient = clientFactory.GetPlatformClient(command.PlatformAddress);
             
             var platform = await platformClient.GetPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
-            return platform.Map(platformAddress: command.PlatformAddress, platformName: command.PlatformName);
+            return platform.Map(platformAddress: command.PlatformAddress, platformName: command.PlatformName, type : PlatformConnectorType.Agent);
         }
         catch (RpcException ex)
         {

@@ -8,15 +8,16 @@ public sealed record PlatformView(
     Guid Id,
     string Name,
     string Address,
-    PlatformType Type,
-    PlatformStatus Status,
     int NetworkCount,
     int VolumeCount,
     long ImageCount,
     long CpuCount,
     long MemTotal,
-    string? ServerVersion,
     string? AgentVersion,
+    string? ServerVersion,
+    PlatformType Type,
+    PlatformStatus Status,
+    PlatformConnectorType ConnectorType,
     IEnumerable<PlatformStatView>? Stats,
     PlatformDescriptor? PlatformDescriptor
     )
@@ -41,7 +42,8 @@ internal static class PlatformMapperExtension
         Name: platform.Name,
         Address: platform.Address,
         Status: platform.Status,
-        Type: platform.Type,
+        Type: GetPlatformType(platform.PlatformDescriptor),
+        ConnectorType: platform.ConnectorType,
         NetworkCount: platform.NetworkCount,
         VolumeCount: platform.VolumeCount,
         ImageCount: platform.ImageCount,
@@ -51,6 +53,15 @@ internal static class PlatformMapperExtension
         AgentVersion: platform.AgentVersion,
         PlatformDescriptor: platform.PlatformDescriptor,
         Stats: platform.Stats?.Select(Map));
+
+    private static PlatformType GetPlatformType(PlatformDescriptor platformDescriptor) =>
+        platformDescriptor switch
+        {
+            DockerSwarmPlatformDescriptor => PlatformType.DockerSwarm,
+            KubernetesPlatformDescriptor => PlatformType.Kubernetes,
+            DockerPlatformDescriptor => PlatformType.Docker,
+            _ => PlatformType.Docker
+        };
 
     internal static PlatformStatView Map(this PlatformStat stat) => new (
             MemoryUsage: stat.MemoryUsage,

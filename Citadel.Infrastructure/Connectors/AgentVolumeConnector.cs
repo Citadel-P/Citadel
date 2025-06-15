@@ -9,7 +9,7 @@ using LightResults;
 
 namespace Infrastructure.Connectors;
 
-internal class VolumeConnector(IGrpcClientFactory clientFactory) : IVolumeConnector
+internal class AgentVolumeConnector(IGrpcClientFactory clientFactory) : IVolumeConnector
 {
     public async Task<Result<DockerVolume>> CreateVolumeAsync(CreateVolumeCommand command, CancellationToken cancellationToken)
     {

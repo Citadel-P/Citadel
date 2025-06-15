@@ -21,12 +21,13 @@ public sealed record InspectVolume (Guid PlatformId, string Name) : IQuery<Resul
     }
 }
 
-internal sealed class InspectVolumeHandler(IVolumeConnector volumeConnector, ApplicationDbContext dbContext) : IQueryHandler<InspectVolume, Result<DockerVolume>>
+internal sealed class InspectVolumeHandler(IConnectorFactory<IVolumeConnector> connectorFactory, ApplicationDbContext dbContext) : IQueryHandler<InspectVolume, Result<DockerVolume>>
 {
     public async ValueTask<Result<DockerVolume>> Handle(InspectVolume query, CancellationToken cancellationToken)
     {
-        var address = await dbContext.Platforms.Where(s => s.Id == query.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
-        if (address == null)
+        var platform = await dbContext.Platforms.Where(s => s.Id == query.PlatformId)
+            .Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
+        if (platform == null)
         {
             return Result.Failure<DockerVolume>(new NotFoundError("The provided platform Id doesn't exist"));
         }
@@ -34,8 +35,10 @@ internal sealed class InspectVolumeHandler(IVolumeConnector volumeConnector, App
         var command = new InspectVolumeCommand
         (
             Name: query.Name,
-            PlatformAddress: address
+            PlatformAddress: platform.Address
         );
+
+        var volumeConnector = connectorFactory.GetConnector(platform.ConnectorType);
         return await volumeConnector.InspectVolumeAsync(command, cancellationToken);
     }
 }

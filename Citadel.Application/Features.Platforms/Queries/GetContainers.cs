@@ -2,17 +2,15 @@
 using Mediator;
 using LightResults;
 using Microsoft.EntityFrameworkCore;
-using Application.Features.Platforms.Queries.Models;
 using Domain.Entities;
 using Infrastructure.EntityFramework;
-using Infrastructure;
 
 namespace Application.Features.Platforms.Queries;
 
 /// <summary>
 /// Get all containers from remote agent
 /// </summary>
-public sealed record class GetContainers(GetContainersQuery ContainersQuery, Guid PlatformId)
+public sealed record class GetContainers(Guid PlatformId)
     : IQuery<Result<IEnumerable<Container>>>
 {
     internal class Validator : AbstractValidator<GetContainers>

@@ -2,4 +2,5 @@
 
 public sealed record PatchContainerCommand(
     ContainerAction Action,
-    IReadOnlyDictionary<string, IEnumerable<string>> PlatformContainers);
+    string PlatformAddress,
+    IEnumerable<string> ContainerIds);

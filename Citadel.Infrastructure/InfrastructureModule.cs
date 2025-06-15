@@ -2,6 +2,7 @@
 using System.Reflection;
 using System.Threading.Channels;
 using DbUp;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Hosting.Common;
@@ -47,11 +48,23 @@ public static class InfrastructureModule
     private static IServiceCollection AddServices(this IServiceCollection services)
         => services
             .AddSingleton<IGitHubCrService, GitHubCrService>()
-            .AddSingleton<IVolumeConnector, VolumeConnector>()
             .AddSingleton<IDockerHubService, DockerHubService>()
-            .AddSingleton<INetworkConnector, NetworkConnector>()
-            .AddSingleton<IPlatformConnector, PlatformGrpcConnector>()
-            .AddSingleton<IContainerConnector, ContainerGrpcConnector>()
+            .AddScoped<AgentImageConnector>()
+            .AddScoped<LocalImageConnector>()
+            .AddSingleton<AgentVolumeConnector>()
+            .AddSingleton<LocalVolumeConnector>()
+            .AddSingleton<AgentNetworkConnector>()
+            .AddSingleton<LocalNetworkConnector>()
+            .AddSingleton<AgentPlatformConnector>()
+            .AddSingleton<LocalPlatformConnector>()
+            .AddSingleton<AgentContainerConnector>()
+            .AddSingleton<LocalContainerConnector>()
+            .AddSingleton(typeof(IConnectorFactory<>), typeof(ConnectorFactory<>))
+            .AddConnectorFactory<IImageConnector, AgentImageConnector, LocalImageConnector>()
+            .AddConnectorFactory<IVolumeConnector, AgentVolumeConnector, LocalVolumeConnector>()
+            .AddConnectorFactory<INetworkConnector, AgentNetworkConnector, LocalNetworkConnector>()
+            .AddConnectorFactory<IPlatformConnector, AgentPlatformConnector, LocalPlatformConnector>()
+            .AddConnectorFactory<IContainerConnector, AgentContainerConnector, LocalContainerConnector>()
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>();
 
     private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)

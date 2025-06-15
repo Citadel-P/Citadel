@@ -2,7 +2,6 @@
 using System.Threading.Channels;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
-using Domain.Entities;
 using Grpc.Core;
 using Infrastructure.Services;
 using Microsoft.Extensions.Hosting;
@@ -16,9 +15,9 @@ namespace Infrastructure.TaskJobs;
 /// </summary>
 internal class PlatformsStatsCollectorJob(
     IOptions<JobConfiguration> options,
-    IPlatformConnector platformConnector,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     ChannelWriter<PlatformStatsBatch> platformStatsWriter,
+    IConnectorFactory<IPlatformConnector> connectorFactory,
     ILogger<PlatformsStatsCollectorJob> logger) : BackgroundService
 {
     private readonly JobConfiguration jobConfiguration = options.Value;
@@ -74,7 +73,7 @@ internal class PlatformsStatsCollectorJob(
                     PlatformAddress: platform.Address,
                     FetchIntervalMs: jobConfiguration.SystemInfoInterval * 1000);
                 
-                await foreach (var batch in platformConnector.StreamStatsAsync(command, cancellationToken))
+                await foreach (var batch in connectorFactory.GetConnector(platform.Type).StreamStatsAsync(command, cancellationToken))
                 {
                     await platformStatsWriter.WriteAsync(batch, cancellationToken);
                 }

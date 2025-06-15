@@ -1,6 +1,7 @@
 ﻿using System.Threading.Channels;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Infrastructure.EntityFramework;
@@ -18,9 +19,9 @@ namespace Infrastructure.TaskJobs;
 /// </summary>
 internal class ContainerSyncJob(
     IServiceScopeFactory scopeFactory,
-    IContainerConnector containerService,
     IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
+    IConnectorFactory<IContainerConnector> connectorFactory,
     ILogger<ContainerSyncJob> logger) : BackgroundService
 {
     private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.Register();
@@ -52,7 +53,13 @@ internal class ContainerSyncJob(
         {
             logger.LogInformation("Platform {PlatformId} is online. Syncing containers from {Address}...", platformEvent.Id, platformEvent.Address);
             syncedContainers = await SyncOnlinePlatformContainers(dbContext, platformEvent, cancellationToken);
-            UpdateContainerCache(platformEvent.Id, syncedContainers);
+            var cacheEntry = new PlatformCacheEntry
+            (
+                Type: platformEvent.Type,
+                PlatformAddress: platformEvent.Address,
+                Containers: syncedContainers.ToDictionary(c => c.ContainerId, c => c.Id)
+            );
+            platformContainerCache.ReplacePlatformContainers(platformEvent.Id, cacheEntry);
         }
         else
         {
@@ -76,7 +83,7 @@ internal class ContainerSyncJob(
             All: true
         );
 
-        var result = await containerService.ListContainersAsync(command, cancellationToken: cancellationToken);
+        var result = await connectorFactory.GetConnector(platformEvent.Type).ListContainersAsync(command, cancellationToken: cancellationToken);
         if (!result.IsSuccess(out var freshContainers, out var error))
         {
             logger.LogError("Failed to list containers for platform {PlatformId} at {Address}: {Error}", platformEvent.Id, platformEvent.Address, error);
@@ -142,11 +149,5 @@ internal class ContainerSyncJob(
 
         await dbContext.SaveChangesAsync(cancellationToken);
         return offlineContainers;
-    }
-
-    private void UpdateContainerCache(Guid platformId, Container[] containers)
-    {
-        var dictionary = containers.ToDictionary(c => c.ContainerId, c => c.Id);
-        platformContainerCache.ReplacePlatformContainers(platformId, dictionary);
     }
 }

@@ -42,8 +42,8 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
             memTotal: 500,
             serverVersion: "1.0.0",
             agentVersion: "1.0.0",
-            type: PlatformType.Docker,
             status: PlatformStatus.Online,
+            connectorType: PlatformConnectorType.Agent,
             platformDescriptor: new DockerPlatformDescriptor(
                 DaemonId: "123456",
                 ContainerCount: 5,
@@ -118,7 +118,7 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
         using var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var platform = await db.Platforms.AsNoTracking().SingleAsync(x => x.Id == platformId, TestContext.Current.CancellationToken);
 
-        healthMonitorMock.Verify(x => x.TrackPlatform("https://localhost:9000", platformId), Times.Once);
+        healthMonitorMock.Verify(x => x.TrackPlatform("https://localhost:9000", platformId, PlatformConnectorType.Agent), Times.Once);
         await Verify(platform);
     }
 
@@ -186,8 +186,8 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
                 memTotal: 500,
                 serverVersion: "1.0.0",
                 agentVersion: "1.0.0",
-                type: PlatformType.Docker,
                 status: PlatformStatus.Online,
+                connectorType: PlatformConnectorType.Agent,
                 platformDescriptor: new DockerPlatformDescriptor(
                     DaemonId: "654321",
                     ContainerCount: 5,

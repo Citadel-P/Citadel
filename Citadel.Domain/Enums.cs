@@ -156,13 +156,22 @@ public enum ContainerEventType
 public enum VolumeScope
 {
     Single = 0,
-    Multi = 1
+    Multi
 }
 
 public enum VolumeSharing
 {
     None = 0,
-    ReadOnly = 1,
-    OneWriter = 2,
-    All = 3
+    ReadOnly,
+    OneWriter,
+    All
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter<PlatformConnectorType>))]
+public enum PlatformConnectorType
+{
+    [JsonStringEnumMemberName("local")]
+    Local,
+    [JsonStringEnumMemberName("agent")]
+    Agent
 }

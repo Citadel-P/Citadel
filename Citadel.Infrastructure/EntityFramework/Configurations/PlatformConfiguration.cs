@@ -31,9 +31,9 @@ internal sealed class PlatformConfiguration : IEntityTypeConfiguration<Platform>
         builder.Property(p => p.Status).HasConversion(
             v => v.ToString(),
             v => Enum.Parse<PlatformStatus>(v));
-        builder.Property(p => p.Type).HasConversion(
+        builder.Property(p => p.ConnectorType).HasConversion(
             v => v.ToString(),
-            v => Enum.Parse<PlatformType>(v));
+            v => Enum.Parse<PlatformConnectorType>(v));
 
         builder.Property(p => p.PlatformDescriptor).HasColumnType("TEXT")
            .HasConversion(

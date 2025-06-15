@@ -22,19 +22,24 @@ public sealed record InspectNetwork(Guid PlatformId, string NetworkId): IQuery<R
     }
 }
 
-internal sealed class InspectNetworkHandler(INetworkConnector networkConnector, ApplicationDbContext dbContext) : IQueryHandler<InspectNetwork, Result<DockerNetworkDetails>>
+internal sealed class InspectNetworkHandler(IConnectorFactory<INetworkConnector> connectorFactory, ApplicationDbContext dbContext) : IQueryHandler<InspectNetwork, Result<DockerNetworkDetails>>
 {
     public async ValueTask<Result<DockerNetworkDetails>> Handle(InspectNetwork query, CancellationToken cancellationToken)
     {
-        var address = await dbContext.Platforms.Where(s => s.Id == query.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
-        if (address == null)
+        var platform = await dbContext.Platforms.Where(s => s.Id == query.PlatformId)
+            .Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
+        if (platform == null)
         {
             return Result.Failure<DockerNetworkDetails>(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
-        var args = new InspectNetworkCommand(
+        var args = new InspectNetworkCommand
+        (
             NetworkId: query.NetworkId, 
-            PlatformAddress: address);
+            PlatformAddress: platform.Address
+        );
+
+        var networkConnector = connectorFactory.GetConnector(platform.ConnectorType);
         return await networkConnector.InspectNetworkAsync(args, cancellationToken);
     }
 }

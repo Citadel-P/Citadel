@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Infrastructure.EntityFramework;
 using Infrastructure.Services;
@@ -14,17 +15,17 @@ namespace Infrastructure.TaskJobs;
 /// </summary>
 public interface IPlatformHealthMonitorJob : IHostedService
 {
-    bool TrackPlatform(string address, Guid id);
+    bool TrackPlatform(string address, Guid id, PlatformConnectorType type);
     Task<bool> UntrackPlatform(string address, CancellationToken cancellationToken);
 }
 
 internal class PlatformHealthMonitorJob(
     IServiceScopeFactory scopeFactory,
-    IPlatformConnector platformConnector,
     IPlatformHealthBroadCaster broadcaster,
+    IConnectorFactory<IPlatformConnector> connectorFactory,
     ILogger<PlatformHealthMonitorJob> logger) : BackgroundService, IPlatformHealthMonitorJob
 {
-    private readonly ConcurrentDictionary<string, Guid> trackedAddresses = [];
+    private readonly ConcurrentDictionary<string, TrackedPlatformData> trackedPlatforms = [];
     private readonly ConcurrentDictionary<string, bool> status = new();
     private readonly TimeSpan checkInterval = TimeSpan.FromSeconds(5);
 
@@ -43,14 +44,14 @@ internal class PlatformHealthMonitorJob(
             using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             var platforms = await dbContext.Platforms
                 .AsNoTracking()
-                .Select(s => new { s.Id, s.Address })
+                .Select(s => new { s.Id, s.Address, s.ConnectorType })
                 .ToArrayAsync(cancellationToken);
 
             if (platforms != null && platforms.Length > 0)
             {
                 foreach (var platform in platforms)
                 {
-                    TrackPlatform(platform.Address, platform.Id);
+                    TrackPlatform(platform.Address, platform.Id, platform.ConnectorType);
                 }
             }
         }
@@ -58,9 +59,9 @@ internal class PlatformHealthMonitorJob(
         while (!cancellationToken.IsCancellationRequested)
         {
             
-            foreach (var address in trackedAddresses.Keys)
+            foreach (var (address, val) in trackedPlatforms)
             {
-                var isOnline = (await platformConnector.CheckHealthAsync(address, cancellationToken)).Healthy;
+                var isOnline = (await connectorFactory.GetConnector(val.Type).CheckHealthAsync(address, cancellationToken)).Healthy;
                 var hasPreviousStatus = status.TryGetValue(address, out var wasOnline);
 
                 // If we've never seen this address before, initialize and emit
@@ -83,18 +84,19 @@ internal class PlatformHealthMonitorJob(
         broadcaster.Complete();
     }
 
-    public bool TrackPlatform(string address, Guid id) => trackedAddresses.TryAdd(address, id);
+    public bool TrackPlatform(string address, Guid id, PlatformConnectorType type)
+        => trackedPlatforms.TryAdd(address, new TrackedPlatformData(Id: id, Type: type));
 
     public async Task<bool> UntrackPlatform(string address, CancellationToken cancellationToken)
     {
-        var removed = trackedAddresses.TryRemove(address, out var id) &&
+        var removed = trackedPlatforms.TryRemove(address, out var platform) &&
            status.TryRemove(address, out _) &&
            successCounts.TryRemove(address, out _) &&
            failureCounts.TryRemove(address, out _);
 
-        if (removed)
+        if (removed && platform is not null)
         {
-            await broadcaster.BroadcastAsync(new PlatformHealth(id, address, false), cancellationToken);
+            await broadcaster.BroadcastAsync(new PlatformHealth(platform.Id, address, platform.Type, false), cancellationToken);
         }
 
         return removed;
@@ -103,10 +105,10 @@ internal class PlatformHealthMonitorJob(
 
     private async Task UpdateStatus(string address, bool isOnline, CancellationToken cancellationToken)
     {
-        if (!trackedAddresses.TryGetValue(address, out var platformId)) return;
+        if (!trackedPlatforms.TryGetValue(address, out var platform)) return;
 
         status[address] = isOnline;
-        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, address, isOnline), cancellationToken);
+        await broadcaster.BroadcastAsync(new PlatformHealth(platform.Id, address, platform.Type, isOnline), cancellationToken);
     }
 
     private bool ShouldEmitUpdate(string address, bool isOnline, bool wasOnline)
@@ -126,4 +128,5 @@ internal class PlatformHealthMonitorJob(
     }
 }
 
-public sealed record PlatformHealth(Guid Id, string Address, bool IsOnLine);
+public sealed record PlatformHealth(Guid Id, string Address, PlatformConnectorType Type, bool IsOnLine);
+public sealed record TrackedPlatformData(Guid Id, PlatformConnectorType Type);

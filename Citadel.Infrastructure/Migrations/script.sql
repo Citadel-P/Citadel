@@ -8,7 +8,7 @@ CREATE TABLE "Platforms" (
     "Id" BLOB NOT NULL CONSTRAINT "PK_Platforms" PRIMARY KEY,
     "Name" TEXT NOT NULL,
     "Address" TEXT NOT NULL,
-    "Type" TEXT NOT NULL,
+    "ConnectorType" TEXT NOT NULL,
     "Status" TEXT NOT NULL,
     "NetworkCount" INTEGER NOT NULL,
     "VolumeCount" INTEGER NOT NULL,
@@ -125,15 +125,15 @@ SELECT changes();
 
 
 INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
-VALUES (X'D1DE9601F113CE77884E3CB636EC09A8', '2025-01-01 00:00:00', 'admin@admin.com', 'admin', '1poqgaRzypna/qgl6xmb41scBJhec0dqoBvvwPz+t+zE4bHi');
+VALUES (X'D1DE9601F113CE77884E3CB636EC09A8', '2025-01-01 00:00:00', 'admin@admin.com', 'admin', 'kn/ZlacZFe561xtnrbxi0x4yqCJreWYy2jUqamhm1O0gnkfb');
 SELECT changes();
 
 INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
-VALUES (X'D1DE9601F113FB73ACF0188115C01C0E', '2025-01-01 00:00:00', 'dev@dev.com', 'dev', 'z12WS3Iv2W5kRMxTc1cRY1IOQrMM/EKDCyG9pI3KJrWHCau0');
+VALUES (X'D1DE9601F113FB73ACF0188115C01C0E', '2025-01-01 00:00:00', 'dev@dev.com', 'dev', 'y74xqCo12t/c6V+0/CnE0wv1l71VSVqTgyS9vRkrPqGTquqc');
 SELECT changes();
 
 INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password")
-VALUES (X'D1DE9601F1133A748A1B5E243048C77E', '2025-01-01 00:00:00', 'qa@qa.com', 'qa', 'hgkpnDH5d6CHPfFxnpkLVSo1pmP/jgM/ACYGAmUsF0CJJZx8');
+VALUES (X'D1DE9601F1133A748A1B5E243048C77E', '2025-01-01 00:00:00', 'qa@qa.com', 'qa', 'GPxzULFsJ9RUDCa9h6dP65/Ozmmuafe9WHjH+1npuWbKmJZ0');
 SELECT changes();
 
 
@@ -289,7 +289,7 @@ CREATE UNIQUE INDEX "EmailIndex" ON "Users" ("Email");
 CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20250608210442_migration0001', '9.0.5');
+VALUES ('20250615212336_migration0001', '9.0.5');
 
 COMMIT;
 

@@ -1,7 +1,6 @@
 ﻿using System.ComponentModel;
 using Application.Features.Platforms.Commands;
 using Application.Features.Platforms.Queries;
-using Application.Features.Platforms.Queries.Models;
 using Hosting.Extensions;
 using Domain.Entities;
 using Mediator;
@@ -58,7 +57,7 @@ public static class Platforms
 
     public static async Task<Results<Ok<ContainersView>, ProblemHttpResult>> ListContainers(IMediator mediator, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetContainers(new GetContainersQuery(All: true), id), cancellationToken);
+        var result = await mediator.Send(new GetContainers(id), cancellationToken);
         return EndpointHandlers.HandleResult(result, ContainersView.Map);
     }
 

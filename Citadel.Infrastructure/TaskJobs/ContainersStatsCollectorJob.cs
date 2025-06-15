@@ -15,11 +15,11 @@ namespace Infrastructure.TaskJobs;
 /// Collects containers stats from remote agents and pushes into the shared Channel <see cref="ContainersStatsPersistenceJob"/>.
 /// </summary>
 internal class ContainersStatsCollectorJob(
-    IOptions<JobConfiguration> options, 
-    IContainerConnector containerConnector,
+    IOptions<JobConfiguration> options,
     ChannelWriter<ContainersStatBatch> channel,
     IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
+    IConnectorFactory<IContainerConnector> connectorFactory,
     ILogger<ContainersStatsCollectorJob> logger) : BackgroundService
 {
     private readonly JobConfiguration jobConfiguration = options.Value;
@@ -71,7 +71,7 @@ internal class ContainersStatsCollectorJob(
             try
             {
                 var command = new StreamContainerStatsCommand(PlatformAddress: platform.Address, FetchIntervalMs: jobConfiguration.ContainersInfoInterval * 1000);
-                await foreach (var stream in containerConnector.StreamContainerStatsAsync(command, cancellationToken: cancellationToken))
+                await foreach (var stream in connectorFactory.GetConnector(platform.Type).StreamContainerStatsAsync(command, cancellationToken: cancellationToken))
                 {
                     if (stream.Containers.Count > 0)
                     {

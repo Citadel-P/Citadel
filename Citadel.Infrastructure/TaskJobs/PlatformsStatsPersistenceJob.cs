@@ -77,18 +77,18 @@ internal class PlatformsStatsPersistenceJob(
             }
 
             PlatformDescriptor? descriptor = null;
-            if (existing.Type == PlatformType.Docker && existing.PlatformDescriptor is DockerPlatformDescriptor dockerPlatform)
+            if (existing.PlatformDescriptor is DockerPlatformDescriptor dockerPlatform)
             {
                 descriptor = dockerPlatform.Create(
                     containersRunning: batch.ContainersRunning,
                     containersPaused: batch.ContainersPaused,
                     containersStopped: batch.ContainersStopped);
             }
-            else if (existing.Type == PlatformType.DockerSwarm && existing.PlatformDescriptor is DockerSwarmPlatformDescriptor swarmDescriptor)
+            else if (existing.PlatformDescriptor is DockerSwarmPlatformDescriptor swarmDescriptor)
             {
                 // Todo
             }
-            else if (existing.Type == PlatformType.Kubernetes && existing.PlatformDescriptor is KubernetesPlatformDescriptor kubernetesDescriptor)
+            else if (existing.PlatformDescriptor is KubernetesPlatformDescriptor kubernetesDescriptor)
             {
                 // Todo
             }

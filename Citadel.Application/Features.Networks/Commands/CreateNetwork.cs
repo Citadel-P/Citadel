@@ -1,4 +1,5 @@
-﻿using Domain.Contracts.Interfaces;
+﻿using Citadel.Agent.Common.V1;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Networks;
 using FluentValidation;
 using Grpc.Core;
@@ -168,27 +169,19 @@ public sealed record IPAM(
 public sealed record IPAMConfig(string Subnet, string IpRange, string Gateway);
 public sealed record ConfigFrom(string Network);
 
-internal sealed class CreateNetworkHandler(
-    INetworkConnector networkConnector, 
-    ApplicationDbContext dbContext)
-    : ICommandHandler<CreateNetwork, Result<CreateNetworkResult>>
+internal sealed class CreateNetworkHandler(ApplicationDbContext dbContext,
+    IConnectorFactory<INetworkConnector> connectorFactory): ICommandHandler<CreateNetwork, Result<CreateNetworkResult>>
 {
     public async ValueTask<Result<CreateNetworkResult>> Handle(CreateNetwork request, CancellationToken cancellationToken)
     {
-        try
+        var platform = await dbContext.Platforms.Where(s => s.Id == request.PlatformId)
+            .Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
+        if (platform == null)
         {
-            var address = await dbContext.Platforms.Where(s => s.Id == request.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
-            if (address == null)
-            {
-                return Result.Failure<CreateNetworkResult>(new NotFoundError("The provided platform Id doesn't exist"));
-            }
+            return Result.Failure<CreateNetworkResult>(new NotFoundError("The provided platform Id doesn't exist"));
+        }
 
-            return await networkConnector.CreateNetworkAsync(request.ToCommand(address), cancellationToken);
-        }
-        catch (RpcException ex)
-        {
-            return Result.Failure<CreateNetworkResult>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
-        }
-        
+        var networkConnector = connectorFactory.GetConnector(platform.ConnectorType);
+        return await networkConnector.CreateNetworkAsync(request.ToCommand(platform.Address), cancellationToken);
     }
 }

@@ -15,9 +15,9 @@ namespace Infrastructure.TaskJobs;
 
 internal sealed class DockerDaemonEventJob(
     ILogger<DockerDaemonEventJob> logger,
-    IContainerConnector containerService,
     IServiceScopeFactory scopeFactory,
     IPlatformContainerCache platformContainerCache,
+    IConnectorFactory<IContainerConnector> connectorFactory,
     IPlatformHealthBroadCaster platformHealthBroadCaster) : BackgroundService
 {
     private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
@@ -76,7 +76,7 @@ internal sealed class DockerDaemonEventJob(
                     PlatformId: platform.Id,
                     PlatformAddress: platform.Address
                 );
-                await foreach (var reply in containerService.StreamDaemonEventAsync(command, cancellationToken))
+                await foreach (var reply in connectorFactory.GetConnector(platform.Type).StreamDaemonEventAsync(command, cancellationToken))
                 {
                     if (reply.Type != ContainerEventType.Container)
                         continue;

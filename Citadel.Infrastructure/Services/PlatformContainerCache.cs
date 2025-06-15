@@ -1,18 +1,18 @@
 ﻿using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using Domain.Contracts.Resources;
 
 namespace Infrastructure.Services;
 
 /// <summary>
 /// A centralized, thread-safe cache for managing the mapping of platform containers.
-/// Maps Platform ID -> (Container Runtime ID -> Container Database ID).
 /// </summary>
 public interface IPlatformContainerCache
 {
     /// <summary>
-    /// Replaces all container data for a specific platform. Used for full sync operations.
+    /// Replaces cache entry for a specific platform.
     /// </summary>
-    void ReplacePlatformContainers(Guid platformId, IReadOnlyDictionary<string, Guid> containers);
+    void ReplacePlatformContainers(Guid platformId, PlatformCacheEntry cacheEntry);
 
     /// <summary>
     /// Adds a single container mapping to the cache for a specific platform.
@@ -33,23 +33,28 @@ public interface IPlatformContainerCache
     /// Tries to get the container list for a specific platform.
     /// </summary>
     bool TryGetContainers(Guid platformId, [MaybeNullWhen(false)] out IReadOnlyDictionary<string, Guid> containers);
+
+    /// <summary>
+    /// Tries to get the cache entry for a specific platform.
+    /// </summary>
+    bool TryGetCacheEntry(Guid platformId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry);
 }
 internal class PlatformContainerCache : IPlatformContainerCache
 {
-    private readonly ConcurrentDictionary<Guid, Dictionary<string, Guid>> cache = [];
+    private readonly ConcurrentDictionary<Guid, PlatformCacheEntry> cache = [];
 
     /// <inheritdoc />
-    public void ReplacePlatformContainers(Guid platformId, IReadOnlyDictionary<string, Guid> containers)
+    public void ReplacePlatformContainers(Guid platformId, PlatformCacheEntry cacheEntry)
     {
-        cache[platformId] = new Dictionary<string, Guid>(containers);
+        cache[platformId] = cacheEntry;
     }
 
     /// <inheritdoc />
     public bool TryAddContainer(Guid platformId, string containerId, Guid dbId)
     {
-        if (cache.TryGetValue(platformId, out var platformContainers))
+        if (cache.TryGetValue(platformId, out var entry))
         {
-            platformContainers[containerId] = dbId;
+            entry.Containers[containerId] = dbId;
             return true;
         }
         return false; // Platform not yet in cache, full sync will add it.
@@ -60,7 +65,7 @@ internal class PlatformContainerCache : IPlatformContainerCache
     {
         if (cache.TryGetValue(platformId, out var platformContainers))
         {
-            return platformContainers.Remove(containerId, out _);
+            return platformContainers.Containers.Remove(containerId, out _);
         }
         return false;
     }
@@ -74,7 +79,19 @@ internal class PlatformContainerCache : IPlatformContainerCache
         containers = null;
         if (cache.TryGetValue(platformId, out var inner))
         {
-            containers = inner;
+            containers = inner.Containers;
+            return true;
+        }
+        return false;
+    }
+
+    /// <inheritdoc />
+    public bool TryGetCacheEntry(Guid platformId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry)
+    {
+        cacheEntry = null;
+        if (cache.TryGetValue(platformId, out var inner))
+        {
+            cacheEntry = inner;
             return true;
         }
         return false;

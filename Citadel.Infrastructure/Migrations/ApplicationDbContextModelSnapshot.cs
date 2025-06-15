@@ -17,7 +17,7 @@ namespace Infrastructure.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.5");
 
-            modelBuilder.Entity("Infrastructure.Entities.Container", b =>
+            modelBuilder.Entity("Domain.Entities.Container", b =>
                 {
                     b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
@@ -67,7 +67,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("Containers", (string)null);
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.ContainerStat", b =>
+            modelBuilder.Entity("Domain.Entities.ContainerStat", b =>
                 {
                     b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
@@ -102,7 +102,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("ContainerStats", (string)null);
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Identity.Permission", b =>
+            modelBuilder.Entity("Domain.Entities.Identity.Permission", b =>
                 {
                     b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
@@ -275,7 +275,7 @@ namespace Infrastructure.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Identity.RefreshToken", b =>
+            modelBuilder.Entity("Domain.Entities.Identity.RefreshToken", b =>
                 {
                     b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
@@ -295,7 +295,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("RefreshTokens");
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Identity.Role", b =>
+            modelBuilder.Entity("Domain.Entities.Identity.Role", b =>
                 {
                     b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
@@ -347,7 +347,7 @@ namespace Infrastructure.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Identity.Team", b =>
+            modelBuilder.Entity("Domain.Entities.Identity.Team", b =>
                 {
                     b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
@@ -389,7 +389,7 @@ namespace Infrastructure.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Identity.User", b =>
+            modelBuilder.Entity("Domain.Entities.Identity.User", b =>
                 {
                     b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
@@ -441,7 +441,7 @@ namespace Infrastructure.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "admin@admin.com",
                             Name = "admin",
-                            Password = "1poqgaRzypna/qgl6xmb41scBJhec0dqoBvvwPz+t+zE4bHi",
+                            Password = "kn/ZlacZFe561xtnrbxi0x4yqCJreWYy2jUqamhm1O0gnkfb",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
@@ -450,7 +450,7 @@ namespace Infrastructure.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "dev@dev.com",
                             Name = "dev",
-                            Password = "z12WS3Iv2W5kRMxTc1cRY1IOQrMM/EKDCyG9pI3KJrWHCau0",
+                            Password = "y74xqCo12t/c6V+0/CnE0wv1l71VSVqTgyS9vRkrPqGTquqc",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
@@ -459,12 +459,12 @@ namespace Infrastructure.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "qa@qa.com",
                             Name = "qa",
-                            Password = "hgkpnDH5d6CHPfFxnpkLVSo1pmP/jgM/ACYGAmUsF0CJJZx8",
+                            Password = "GPxzULFsJ9RUDCa9h6dP65/Ozmmuafe9WHjH+1npuWbKmJZ0",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         });
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Identity.UserTeam", b =>
+            modelBuilder.Entity("Domain.Entities.Identity.UserTeam", b =>
                 {
                     b.Property<byte[]>("UserId")
                         .HasColumnType("BLOB");
@@ -496,7 +496,7 @@ namespace Infrastructure.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Platform", b =>
+            modelBuilder.Entity("Domain.Entities.Platform", b =>
                 {
                     b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
@@ -508,6 +508,10 @@ namespace Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("AgentVersion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ConnectorType")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<long>("CpuCount")
@@ -539,10 +543,6 @@ namespace Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<int>("VolumeCount")
                         .HasColumnType("INTEGER");
 
@@ -555,7 +555,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("Platforms", (string)null);
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.PlatformStat", b =>
+            modelBuilder.Entity("Domain.Entities.PlatformStat", b =>
                 {
                     b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
@@ -590,7 +590,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("PlatformStats", (string)null);
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Registry", b =>
+            modelBuilder.Entity("Domain.Entities.Registry", b =>
                 {
                     b.Property<byte[]>("Id")
                         .ValueGeneratedOnAdd()
@@ -625,9 +625,9 @@ namespace Infrastructure.Migrations
                     b.ToTable("Registries", (string)null);
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Container", b =>
+            modelBuilder.Entity("Domain.Entities.Container", b =>
                 {
-                    b.HasOne("Infrastructure.Entities.Platform", "Platform")
+                    b.HasOne("Domain.Entities.Platform", "Platform")
                         .WithMany()
                         .HasForeignKey("PlatformId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -636,27 +636,27 @@ namespace Infrastructure.Migrations
                     b.Navigation("Platform");
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.ContainerStat", b =>
+            modelBuilder.Entity("Domain.Entities.ContainerStat", b =>
                 {
-                    b.HasOne("Infrastructure.Entities.Container", null)
+                    b.HasOne("Domain.Entities.Container", null)
                         .WithMany("Stats")
                         .HasForeignKey("ContainerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Identity.Permission", b =>
+            modelBuilder.Entity("Domain.Entities.Identity.Permission", b =>
                 {
-                    b.HasOne("Infrastructure.Entities.Identity.Role", null)
+                    b.HasOne("Domain.Entities.Identity.Role", null)
                         .WithMany("Permissions")
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Identity.RefreshToken", b =>
+            modelBuilder.Entity("Domain.Entities.Identity.RefreshToken", b =>
                 {
-                    b.HasOne("Infrastructure.Entities.Identity.User", "User")
+                    b.HasOne("Domain.Entities.Identity.User", "User")
                         .WithMany("RefreshTokens")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -665,9 +665,9 @@ namespace Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Identity.Team", b =>
+            modelBuilder.Entity("Domain.Entities.Identity.Team", b =>
                 {
-                    b.HasOne("Infrastructure.Entities.Identity.Role", "Role")
+                    b.HasOne("Domain.Entities.Identity.Role", "Role")
                         .WithMany()
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -676,46 +676,46 @@ namespace Infrastructure.Migrations
                     b.Navigation("Role");
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Identity.UserTeam", b =>
+            modelBuilder.Entity("Domain.Entities.Identity.UserTeam", b =>
                 {
-                    b.HasOne("Infrastructure.Entities.Identity.Team", null)
+                    b.HasOne("Domain.Entities.Identity.Team", null)
                         .WithMany()
                         .HasForeignKey("TeamId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Infrastructure.Entities.Identity.User", null)
+                    b.HasOne("Domain.Entities.Identity.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.PlatformStat", b =>
+            modelBuilder.Entity("Domain.Entities.PlatformStat", b =>
                 {
-                    b.HasOne("Infrastructure.Entities.Platform", null)
+                    b.HasOne("Domain.Entities.Platform", null)
                         .WithMany("Stats")
                         .HasForeignKey("PlatformId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Container", b =>
+            modelBuilder.Entity("Domain.Entities.Container", b =>
                 {
                     b.Navigation("Stats");
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Identity.Role", b =>
+            modelBuilder.Entity("Domain.Entities.Identity.Role", b =>
                 {
                     b.Navigation("Permissions");
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Identity.User", b =>
+            modelBuilder.Entity("Domain.Entities.Identity.User", b =>
                 {
                     b.Navigation("RefreshTokens");
                 });
 
-            modelBuilder.Entity("Infrastructure.Entities.Platform", b =>
+            modelBuilder.Entity("Domain.Entities.Platform", b =>
                 {
                     b.Navigation("Stats");
                 });

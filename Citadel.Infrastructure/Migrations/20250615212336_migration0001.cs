@@ -20,7 +20,7 @@ namespace Infrastructure.Migrations
                     Id = table.Column<byte[]>(type: "BLOB", nullable: false),
                     Name = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     Address = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
-                    Type = table.Column<string>(type: "TEXT", nullable: false),
+                    ConnectorType = table.Column<string>(type: "TEXT", nullable: false),
                     Status = table.Column<string>(type: "TEXT", nullable: false),
                     NetworkCount = table.Column<int>(type: "INTEGER", nullable: false),
                     VolumeCount = table.Column<int>(type: "INTEGER", nullable: false),
@@ -251,9 +251,9 @@ namespace Infrastructure.Migrations
                 columns: new[] { "Id", "CreatedAt", "Email", "Name", "Password" },
                 values: new object[,]
                 {
-                    { new byte[] { 209, 222, 150, 1, 241, 19, 206, 119, 136, 78, 60, 182, 54, 236, 9, 168 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "admin@admin.com", "admin", "1poqgaRzypna/qgl6xmb41scBJhec0dqoBvvwPz+t+zE4bHi" },
-                    { new byte[] { 209, 222, 150, 1, 241, 19, 251, 115, 172, 240, 24, 129, 21, 192, 28, 14 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "dev@dev.com", "dev", "z12WS3Iv2W5kRMxTc1cRY1IOQrMM/EKDCyG9pI3KJrWHCau0" },
-                    { new byte[] { 209, 222, 150, 1, 241, 19, 58, 116, 138, 27, 94, 36, 48, 72, 199, 126 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "qa@qa.com", "qa", "hgkpnDH5d6CHPfFxnpkLVSo1pmP/jgM/ACYGAmUsF0CJJZx8" }
+                    { new byte[] { 209, 222, 150, 1, 241, 19, 206, 119, 136, 78, 60, 182, 54, 236, 9, 168 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "admin@admin.com", "admin", "kn/ZlacZFe561xtnrbxi0x4yqCJreWYy2jUqamhm1O0gnkfb" },
+                    { new byte[] { 209, 222, 150, 1, 241, 19, 251, 115, 172, 240, 24, 129, 21, 192, 28, 14 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "dev@dev.com", "dev", "y74xqCo12t/c6V+0/CnE0wv1l71VSVqTgyS9vRkrPqGTquqc" },
+                    { new byte[] { 209, 222, 150, 1, 241, 19, 58, 116, 138, 27, 94, 36, 48, 72, 199, 126 }, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "qa@qa.com", "qa", "GPxzULFsJ9RUDCa9h6dP65/Ozmmuafe9WHjH+1npuWbKmJZ0" }
                 });
 
             migrationBuilder.InsertData(

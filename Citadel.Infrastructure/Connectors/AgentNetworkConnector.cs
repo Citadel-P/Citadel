@@ -9,7 +9,7 @@ using LightResults;
 
 namespace Infrastructure.Connectors;
 
-internal class NetworkConnector(IGrpcClientFactory clientFactory) : INetworkConnector
+internal class AgentNetworkConnector(IGrpcClientFactory clientFactory) : INetworkConnector
 {
     public async Task<Result<IEnumerable<DockerNetwork>>> ListNetworksAsync(ListNetworksCommand command, CancellationToken cancellationToken = default)
     {

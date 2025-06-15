@@ -2,6 +2,7 @@
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
+using Domain.Entities.Platforms;
 using FluentValidation;
 using Grpc.Core;
 using Hosting.Common;
@@ -38,7 +39,7 @@ public sealed record PatchPlatform(Guid? Id, JsonMergePatchDocument<Platform> Pa
         {
             When(x => x.Name is not null, () => RuleFor(x => x.Name).ValidNameIdentifier());
             When(x => x.Address is not null, () => RuleFor(x => x.Address).ValidHostOrIp());
-            RuleFor(x => x.Type)
+            RuleFor(x => x.ConnectorType)
                 .Must(x => Enum.IsDefined(x))
                 .WithMessage("'{PropertyName}' must be a valid type");
         }
@@ -47,10 +48,9 @@ public sealed record PatchPlatform(Guid? Id, JsonMergePatchDocument<Platform> Pa
 
 internal class PatchPlatformHandler(
     ApplicationDbContext dbContext,
-    IPlatformConnector platformConnector,
     IPlatformHealthMonitorJob platformHealthMonitorJob,
-    ILogger<PatchPlatformHandler> logger)
-    : ICommandHandler<PatchPlatform, Result<Platform>>
+    IConnectorFactory<IPlatformConnector> platformConnectorFactory,
+    ILogger<PatchPlatformHandler> logger): ICommandHandler<PatchPlatform, Result<Platform>>
 {
     public async ValueTask<Result<Platform>> Handle(PatchPlatform command, CancellationToken cancellationToken)
     {
@@ -73,7 +73,7 @@ internal class PatchPlatformHandler(
                 }
             }
 
-            if (patchedPlatform.Type == PlatformType.Docker)
+            if (patchedPlatform.PlatformDescriptor is DockerPlatformDescriptor)
             {
                 var oldPlatformAddress = platform.Address;
                 var param = new GetPlatformCommand
@@ -81,6 +81,8 @@ internal class PatchPlatformHandler(
                     PlatformAddress: patchedPlatform.Address,
                     PlatformName: patchedPlatform.Name ?? platform.Name
                 );
+
+                var platformConnector = platformConnectorFactory.GetConnector(patchedPlatform.ConnectorType);
                 var platformResult = await platformConnector.GetPlatformAsync(param, cancellationToken);
                 if (!platformResult.IsSuccess(out var platformInfo, out var error))
                 {
@@ -101,7 +103,7 @@ internal class PatchPlatformHandler(
                     descriptor: platformInfo.PlatformDescriptor);
 
                 await dbContext.SaveChangesAsync(cancellationToken);
-                await UpdatePlatformTracking(platform.Id, platform.Address, oldPlatformAddress, cancellationToken);
+                await UpdatePlatformTracking(platform.Id, platform.Address, platform.ConnectorType, oldPlatformAddress, cancellationToken);
                 logger.LogInformation("The platform with id = {PlatformId} has been updated", platform.Id);
             }
 
@@ -118,16 +120,12 @@ internal class PatchPlatformHandler(
         }
     }
 
-    private async Task UpdatePlatformTracking(
-        Guid id,
-        string address,
-        string oldAddress,
-        CancellationToken cancellationToken = default)
+    private async Task UpdatePlatformTracking(Guid id, string address, PlatformConnectorType type, string oldAddress, CancellationToken cancellationToken = default)
     {
         var removed = await platformHealthMonitorJob.UntrackPlatform(oldAddress, cancellationToken);
         if (removed)
         {
-            platformHealthMonitorJob.TrackPlatform(address, id);
+            platformHealthMonitorJob.TrackPlatform(address, id, type);
         }
     }
 }

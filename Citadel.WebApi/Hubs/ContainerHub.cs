@@ -1,5 +1,4 @@
 ﻿using Application.Features.Platforms.Queries;
-using Application.Features.Platforms.Queries.Models;
 using Infrastructure.Services.Abstractions;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
@@ -53,7 +52,7 @@ internal sealed class ContainerHub(IMediator mediator, ISignalRConnectionTracker
 
     public async Task<ContainersView> GetContainers(Guid id)
     {
-        var response = await mediator.Send(new GetContainers(new GetContainersQuery(All: true), id));
+        var response = await mediator.Send(new GetContainers(id));
         if (response.IsSuccess(out var containers))
         {
             return ContainersView.Map(containers);

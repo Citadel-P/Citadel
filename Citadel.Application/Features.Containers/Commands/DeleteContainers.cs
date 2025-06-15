@@ -19,28 +19,42 @@ public sealed record DeleteContainers(string[] ContainersIds, bool? V = false, b
     }
 }
 
-internal sealed class DeleteContainersHandler(IContainerConnector containerConnector, ApplicationDbContext dbContext) : ICommandHandler<DeleteContainers, Result>
+internal sealed class DeleteContainersHandler(IConnectorFactory<IContainerConnector> connectorFactory, ApplicationDbContext dbContext) : ICommandHandler<DeleteContainers, Result>
 {
     public async ValueTask<Result> Handle(DeleteContainers request, CancellationToken cancellationToken)
     {
         var platformContainers = await dbContext.Containers.AsNoTracking().Include(s => s.Platform)
                         .Where(s => request.ContainersIds.Contains(s.ContainerId))
-                        .GroupBy(s => s.Platform.Address)
-                        .Select(s => new KeyValuePair<string, IEnumerable<string>>(s.Key, s.Select(x => x.ContainerId)))
-                        .ToDictionaryAsync(s => s.Key, s => s.Value, cancellationToken);
+                        .GroupBy(s => new { s.Platform.Address, s.Platform.Id})
+                        .Select(s => new { s.Key, Containers = s.Select(x => x.ContainerId) })
+                        .ToDictionaryAsync(s => s.Key, s => s.Containers, cancellationToken);
 
         if (platformContainers.Count == 0)
         {
             return Result.Failure(new NotFoundError("No platform found for the given IDs."));
         }
 
-        var command = new DeleteContainerCommand
-        (
-            PlatformContainers: platformContainers,
-            Verbose: request.V,
-            Force: request.Force,
-            Link: request.Link
-        );
-        return await containerConnector.DeleteAsync(command, cancellationToken);
+        foreach (var platform in platformContainers)
+        {
+            var command = new DeleteContainerCommand
+            (
+                PlatformAddress: platform.Key.Address,
+                ContainerIds: platform.Value,
+                Verbose: request.V,
+                Force: request.Force,
+                Link: request.Link
+            );
+            var connector = connectorFactory.GetConnector(platform.Key.Id);
+            if (connector is not null)
+            {
+                await connector.DeleteAsync(command, cancellationToken);
+            }
+            else
+            {
+                return Result.Failure(new NotFoundError($"No connector found for platform {platform.Key.Address}."));
+            }
+        }
+
+        return Result.Success();
     }
 }

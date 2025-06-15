@@ -20,30 +20,30 @@ public class Platform
         long memTotal,
         string? serverVersion,
         string? agentVersion,
-        PlatformType type,
         PlatformStatus status,
+        PlatformConnectorType connectorType,
         PlatformDescriptor platformDescriptor)
     {
         Id = Guid.CreateVersion7();
         Name = name;
-        Type = type;
         Status = status;
         Address = address;
         MemTotal = memTotal;
         CpuCount = cpuCount;
         ImageCount = imageCount;
         VolumeCount = volumeCount;
+        AgentVersion = agentVersion;
         NetworkCount = networkCount;
         ServerVersion = serverVersion;
-        AgentVersion = agentVersion;
+        ConnectorType = connectorType;
         PlatformDescriptor = platformDescriptor;
     }
 
     public Guid Id { get; private set; }
     public string Name { get; internal set; }
     public string Address { get; internal set; }
-    public PlatformType Type { get; private set; }
     public PlatformStatus Status { get; private set; }
+    public PlatformConnectorType ConnectorType { get; private set; }
     public int NetworkCount { get; private set; }
     public int VolumeCount { get; private set; }
     public long ImageCount { get; private set; }

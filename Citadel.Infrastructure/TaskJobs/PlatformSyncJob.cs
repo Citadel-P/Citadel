@@ -17,8 +17,8 @@ namespace Infrastructure.TaskJobs;
 /// </summary>
 internal class PlatformSyncJob(
     IServiceScopeFactory scopeFactory,
-    IPlatformConnector platformConnector,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
+    IConnectorFactory<IPlatformConnector> connectorFactory,
     ILogger<PlatformSyncJob> logger) : BackgroundService
 {
     private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.Register();
@@ -53,7 +53,7 @@ internal class PlatformSyncJob(
                     PlatformName: platform.Name,
                     PlatformAddress: platform.Address
                 );
-                var platformResult = await platformConnector.GetPlatformAsync(param, cancellationToken);
+                var platformResult = await connectorFactory.GetConnector(evt.Type).GetPlatformAsync(param, cancellationToken);
                 if (!platformResult.IsSuccess(out var platformInfo, out var error))
                 {
                     logger.LogError("Failed to get platform info for {Address}: {Error}", platform.Address, error?.Message);

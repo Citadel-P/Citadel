@@ -62,8 +62,8 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
             memTotal: 500,
             serverVersion: "1.0.0",
             agentVersion: "1.0.0",
-            type: PlatformType.Docker,
             status: PlatformStatus.Online,
+            connectorType: PlatformConnectorType.Agent,
             platformDescriptor: platformDescriptor
         );
         db.Platforms.Add(platform);
@@ -114,7 +114,7 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
                         .Returns(containerClientMock.Object);
 
         // Act
-        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", IsOnLine: true), 
+        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true), 
             cancellationToken: TestContext.Current.CancellationToken);
 
         await Task.Delay(1000, TestContext.Current.CancellationToken); // wait for job to process
@@ -168,7 +168,7 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
                         .Returns(containerClientMock.Object);
 
         // Act
-        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", IsOnLine: false),
+        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: false),
             cancellationToken: TestContext.Current.CancellationToken);
 
         await Task.Delay(1000, TestContext.Current.CancellationToken); // wait for job to process

@@ -18,7 +18,7 @@ using Microsoft.Extensions.Logging;
 namespace Application.Features.Platforms.Commands;
 
 [RequirePermission(nameof(AppPermission.Platform_Create))]
-public sealed record CreatePlatform(string Name, string Address, PlatformType Type) : ICommand<Result<Platform>>
+public sealed record CreatePlatform(string Name, string Address, PlatformType Type, PlatformConnectorType ConnectorType) : ICommand<Result<Platform>>
 {
     internal class Validator : AbstractValidator<CreatePlatform>
     {
@@ -32,9 +32,9 @@ public sealed record CreatePlatform(string Name, string Address, PlatformType Ty
 
 internal sealed class CreatePlatformHandler(
     ApplicationDbContext dbContext,
-    IPlatformConnector platformConnector,
-    IContainerConnector containerConnector,
     IPlatformHealthMonitorJob platformHealthMonitorJob,
+    IConnectorFactory<IPlatformConnector> platformConnectorFactory,
+    IConnectorFactory<IContainerConnector> containerConnectorFactory,
     ILogger<PatchPlatformHandler> logger) : ICommandHandler<CreatePlatform, Result<Platform>>
 {
     public async ValueTask<Result<Platform>> Handle(CreatePlatform command, CancellationToken cancellationToken)
@@ -63,6 +63,7 @@ internal sealed class CreatePlatformHandler(
             PlatformAddress: command.Address,
             PlatformName: command.Name
         );
+        var platformConnector = platformConnectorFactory.GetConnector(command.ConnectorType);
         var platformResult = await platformConnector.GetPlatformAsync(param, cancellationToken);
         if (!platformResult.IsSuccess(out var platform, out var error))
         {
@@ -82,7 +83,7 @@ internal sealed class CreatePlatformHandler(
         }
 
         // Start tracking the platform
-        platformHealthMonitorJob.TrackPlatform(platform.Address, platform.Id);
+        platformHealthMonitorJob.TrackPlatform(platform.Address, platform.Id, platform.ConnectorType);
 
         logger.LogInformation("A new platform has been added, id = {PlatformId}", platform.Id);
         return Result.Success(platform);
@@ -97,6 +98,7 @@ internal sealed class CreatePlatformHandler(
                 All: true
             );
 
+        var containerConnector = containerConnectorFactory.GetConnector(platform.ConnectorType);
         var containersResult = await containerConnector.ListContainersAsync(command, cancellationToken: cancellationToken);
 
         if (!containersResult.IsSuccess(out var containers))
