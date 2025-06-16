@@ -7,16 +7,16 @@ public record PullImageResult(
     string? Status,
     string? ErrorMessage,
     string? ProgressMessage,
-    PullImageJsonProgress? Progress,
-    PullImageJsonError? Error
+    ImagePullProgress? Progress,
+    ImagePullError? Error
 );
 
-public record PullImageJsonProgress(
+public record ImagePullProgress(
     string? Units,
     long? Current,
     long? Total,
     long? Start
 );
 
-public record PullImageJsonError(long? Code, string? Message);
+public record ImagePullError(long? Code, string? Message);
 

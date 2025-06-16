@@ -25,11 +25,16 @@ internal class PatchContainerHandler(IConnectorFactory<IContainerConnector> conn
 {
     public async ValueTask<Result> Handle(PatchContainer request, CancellationToken cancellationToken)
     {
-        var platformContainers = await dbContext.Containers.AsNoTracking().Include(s => s.Platform)
-                        .Where(s => request.ContainersIds.Contains(s.ContainerId))
-                        .GroupBy(s => new { s.Platform.Address, s.Platform.Id })
-                        .Select(s => new { s.Key, Containers = s.Select(x => x.ContainerId) })
-                        .ToDictionaryAsync(s => s.Key, s => s.Containers, cancellationToken);
+        var platformContainers = await dbContext.Containers.AsNoTracking()
+                    .Include(s => s.Platform)
+                    .Where(s => request.ContainersIds.Contains(s.ContainerId))
+                    .GroupBy(s => new { s.Platform.Address, s.Platform.ConnectorType })
+                    .Select(g => new
+                    {
+                        g.Key.Address,
+                        g.Key.ConnectorType,
+                        ContainersId = g.Select(x => x.ContainerId).ToArray()
+                    }).ToListAsync(cancellationToken);
 
         if (platformContainers.Count == 0)
         {
@@ -40,19 +45,11 @@ internal class PatchContainerHandler(IConnectorFactory<IContainerConnector> conn
         {
             var command = new PatchContainerCommand
             (
-                PlatformAddress: platform.Key.Address,
-                ContainerIds: platform.Value,
+                PlatformAddress: platform.Address,
+                ContainerIds: platform.ContainersId,
                 Action: request.Action
             );
-            var connector = connectorFactory.GetConnector(platform.Key.Id);
-            if (connector is not null)
-            {
-                await connector.PatchAsync(command, cancellationToken);
-            }
-            else
-            {
-                return Result.Failure(new NotFoundError($"No connector found for platform {platform.Key.Address}."));
-            }
+            await connectorFactory.GetConnector(platform.ConnectorType).PatchAsync(command, cancellationToken);
         }
 
         return Result.Success();

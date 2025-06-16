@@ -10,7 +10,7 @@ using Infrastructure.Connectors.Mappings;
 using Infrastructure.Services.Abstractions;
 using LightResults;
 
-namespace Infrastructure.Connectors;
+namespace Infrastructure.Connectors.AgentConnectors;
 
 internal class AgentPlatformConnector(IGrpcClientFactory clientFactory) : IPlatformConnector
 {

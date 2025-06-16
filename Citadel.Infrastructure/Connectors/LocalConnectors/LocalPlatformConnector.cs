@@ -8,7 +8,7 @@ using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using LightResults;
 
-namespace Infrastructure.Connectors;
+namespace Infrastructure.Connectors.LocalConnectors;
 
 internal class LocalPlatformConnector : IPlatformConnector
 {

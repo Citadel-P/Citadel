@@ -1,35 +1,27 @@
-﻿using Citadel.Agent.Images.V1;
-using Grpc.Core;
+﻿using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Images;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Images.Queries;
 
-public sealed record GetAllLocalImages(Guid PlatformId): IQuery<Result<IEnumerable<ImageReply>>>;
+public sealed record GetAllLocalImages(Guid PlatformId): IQuery<Result<IReadOnlyList<DockerImage>>>;
 
-internal class GetAllLocalImagesHandler(ApplicationDbContext dbContext, IGrpcClientFactory clientFactory) : IQueryHandler<GetAllLocalImages, Result<IEnumerable<ImageReply>>>
+internal class GetAllLocalImagesHandler(IConnectorFactory<IImageConnector> connectorFactory, ApplicationDbContext dbContext) : IQueryHandler<GetAllLocalImages, Result<IReadOnlyList<DockerImage>>>
 {
-    public async ValueTask<Result<IEnumerable<ImageReply>>> Handle(GetAllLocalImages query, CancellationToken cancellationToken)
+    public async ValueTask<Result<IReadOnlyList<DockerImage>>> Handle(GetAllLocalImages query, CancellationToken cancellationToken)
     {
-        var address = await dbContext.Platforms.Where(s => s.Id == query.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
-        if (address == null) 
+        var platform = await dbContext.Platforms.Where(s => s.Id == query.PlatformId).Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
+        if (platform == null) 
         {
-            return Result.Failure<IEnumerable<ImageReply>>(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure<IReadOnlyList<DockerImage>>(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
-        try
-        {
-            var client = clientFactory.GetImageClient(address);
-            var images = await client.ListAsync(new ListImagesRequest(), cancellationToken: cancellationToken);
-            return images.Images;
-        }
-        catch (RpcException ex)
-        {
-            return Result.Failure<IEnumerable<ImageReply>>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
-        }
+        return await connectorFactory
+            .GetConnector(platform.ConnectorType)
+            .ListImagesAsync(platform.Address, cancellationToken: cancellationToken);
     }
 }

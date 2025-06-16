@@ -13,16 +13,15 @@ public record InspectImageResult(
     string Variant,
     string OS,
     long Size,
-    RootFs RootFS,
-    Metadata Metadata,
-    ImagaConfig Config,
-    ImageDescriptor Descriptor,
-    ImageGraphicDriver GraphDriver,
-    IReadOnlyList<Manifest> Manifests,
+    ImageRootFs? RootFS,
+    ImageMetadata? Metadata,
+    ImageConfig? Config,
+    ImageDescriptor? Descriptor,
+    ImageGraphicDriver? GraphDriver,
+    IReadOnlyList<ImageManifest> Manifests,
     IReadOnlyList<string> RepoTags,
     IReadOnlyList<string> RepoDigests
 );
-
 
 public record ImageDescriptor(
     long Size,
@@ -30,14 +29,14 @@ public record ImageDescriptor(
     string Digest,
     string MediaType,
     string ArtifactType,
-    PlatformDescriptor? Platform,
+    ImagePlatformDescriptor? Platform,
     IReadOnlyList<string> Urls,
     IReadOnlyDictionary<string, string> Annotations
 );
 
 public record SizeInfo(long? Total, long? Content, long? Unpacked);
 
-public record PlatformDescriptor(
+public record ImagePlatformDescriptor(
     string OS,
     string Variant,
     string OSVersion,
@@ -45,21 +44,21 @@ public record PlatformDescriptor(
     IReadOnlyList<string> OSFeatures
 );
 
-public record ImageData(PlatformDescriptor? Platform, IReadOnlyList<string> Containers, SizeInfo? Size);
+public record ImageData(ImagePlatformDescriptor? Platform, IReadOnlyList<string> Containers, SizeInfo? Size);
 
 public record AttestationData(string? For);
 
-public record Manifest(
+public record ImageManifest(
     string Id,
     string Kind,
     bool Available,
     SizeInfo? Size,
     ImageData? ImageData,
-    ImageDescriptor Descriptor,
+    ImageDescriptor? Descriptor,
     AttestationData? AttestationData
 );
 
-public record ImagaConfig(
+public record ImageConfig(
     bool Tty,
     string User,
     string Image,
@@ -93,15 +92,15 @@ public record ImageHealthCheck(
     long? StartInterval
 );
 
-public record GraphDriverData(
+public record ImageGraphDriverData(
     string MergedDir,
     string UpperDir,
     string WorkDir
 );
 
-public record ImageGraphicDriver(string Name, GraphDriverData Data);
+public record ImageGraphicDriver(string Name, ImageGraphDriverData? Data);
 
-public record RootFs(string Type, IReadOnlyList<string> Layers);
+public record ImageRootFs(string Type, IReadOnlyList<string> Layers);
 
-public record Metadata(string LastTagTime);
+public record ImageMetadata(string LastTagTime);
 public record Empty();

@@ -3,7 +3,7 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using LightResults;
 
-namespace Infrastructure.Connectors;
+namespace Infrastructure.Connectors.LocalConnectors;
 
 internal class LocalContainerConnector : IContainerConnector
 {

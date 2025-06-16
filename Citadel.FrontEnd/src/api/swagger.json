@@ -2683,7 +2683,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InspectImageView"
+                  "$ref": "#/components/schemas/InspectImageResult"
                 }
               }
             }
@@ -2771,7 +2771,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/PullImageResponse"
+                    "$ref": "#/components/schemas/PullImageResult"
                   }
                 }
               }
@@ -2848,7 +2848,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DeleteImageResponse"
+                  "$ref": "#/components/schemas/DeleteImageResult"
                 }
               }
             }
@@ -3652,14 +3652,15 @@
   },
   "components": {
     "schemas": {
-      "AttestationDataView": {
+      "AttestationData": {
         "required": [
           "for"
         ],
         "type": "object",
         "properties": {
           "for": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           }
         },
         "nullable": true
@@ -3779,124 +3780,6 @@
           }
         },
         "default": null,
-        "nullable": true
-      },
-      "ConfigView": {
-        "required": [
-          "hostname",
-          "domainname",
-          "user",
-          "attachStdin",
-          "attachStdout",
-          "attachStderr",
-          "exposedPorts",
-          "tty",
-          "openStdin",
-          "stdinOnce",
-          "env",
-          "cmd",
-          "healthcheck",
-          "argsEscaped",
-          "image",
-          "volumes",
-          "workingDir",
-          "entrypoint",
-          "onBuild",
-          "labels",
-          "stopSignal",
-          "shell"
-        ],
-        "type": "object",
-        "properties": {
-          "hostname": {
-            "type": "string"
-          },
-          "domainname": {
-            "type": "string"
-          },
-          "user": {
-            "type": "string"
-          },
-          "attachStdin": {
-            "type": "boolean"
-          },
-          "attachStdout": {
-            "type": "boolean"
-          },
-          "attachStderr": {
-            "type": "boolean"
-          },
-          "exposedPorts": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/Empty"
-            }
-          },
-          "tty": {
-            "type": "boolean"
-          },
-          "openStdin": {
-            "type": "boolean"
-          },
-          "stdinOnce": {
-            "type": "boolean"
-          },
-          "env": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "cmd": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "healthcheck": {
-            "$ref": "#/components/schemas/HealthcheckView"
-          },
-          "argsEscaped": {
-            "type": "boolean"
-          },
-          "image": {
-            "type": "string"
-          },
-          "volumes": {
-            "type": "object",
-            "additionalProperties": { }
-          },
-          "workingDir": {
-            "type": "string"
-          },
-          "entrypoint": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "onBuild": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "stopSignal": {
-            "type": "string"
-          },
-          "shell": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
         "nullable": true
       },
       "ContainerConfiguration": {
@@ -4534,27 +4417,31 @@
           }
         }
       },
-      "DeleteImageResponse": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DeleteImageResponseItem"
-            },
-            "nullable": true
-          }
-        }
-      },
       "DeleteImageResponseItem": {
+        "required": [
+          "result"
+        ],
         "type": "object",
         "properties": {
           "result": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            },
-            "nullable": true
+            }
+          }
+        }
+      },
+      "DeleteImageResult": {
+        "required": [
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeleteImageResponseItem"
+            }
           }
         }
       },
@@ -4642,99 +4529,6 @@
             "nullable": true
           }
         }
-      },
-      "DescriptorView": {
-        "required": [
-          "mediaType",
-          "digest",
-          "size",
-          "urls",
-          "annotations",
-          "data",
-          "platform",
-          "artifactType"
-        ],
-        "type": "object",
-        "properties": {
-          "mediaType": {
-            "type": "string"
-          },
-          "digest": {
-            "type": "string"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "urls": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "annotations": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "data": {
-            "type": "string"
-          },
-          "platform": {
-            "$ref": "#/components/schemas/PlatformDescriptorView"
-          },
-          "artifactType": {
-            "type": "string"
-          }
-        }
-      },
-      "DescriptorView2": {
-        "required": [
-          "mediaType",
-          "digest",
-          "size",
-          "urls",
-          "annotations",
-          "data",
-          "platform",
-          "artifactType"
-        ],
-        "type": "object",
-        "properties": {
-          "mediaType": {
-            "type": "string"
-          },
-          "digest": {
-            "type": "string"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "urls": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "annotations": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "data": {
-            "type": "string"
-          },
-          "platform": {
-            "nullable": true
-          },
-          "artifactType": {
-            "type": "string"
-          }
-        },
-        "nullable": true
       },
       "DockerHubImageModel": {
         "type": "object",
@@ -5364,86 +5158,6 @@
         },
         "nullable": true
       },
-      "GraphDriverDataView": {
-        "required": [
-          "mergedDir",
-          "upperDir",
-          "workDir"
-        ],
-        "type": "object",
-        "properties": {
-          "mergedDir": {
-            "type": "string"
-          },
-          "upperDir": {
-            "type": "string"
-          },
-          "workDir": {
-            "type": "string"
-          }
-        },
-        "nullable": true
-      },
-      "GraphDriverView": {
-        "required": [
-          "name",
-          "data"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "data": {
-            "$ref": "#/components/schemas/GraphDriverDataView"
-          }
-        }
-      },
-      "HealthcheckView": {
-        "required": [
-          "test",
-          "interval",
-          "timeout",
-          "retries",
-          "startPeriod",
-          "startInterval"
-        ],
-        "type": "object",
-        "properties": {
-          "test": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "interval": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "timeout": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "retries": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "startPeriod": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "startInterval": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          }
-        },
-        "nullable": true
-      },
       "HostConfiguration": {
         "required": [
           "binds",
@@ -5988,7 +5702,125 @@
         "default": null,
         "nullable": true
       },
-      "ImageDataView": {
+      "ImageConfig": {
+        "required": [
+          "tty",
+          "user",
+          "image",
+          "hostname",
+          "domainname",
+          "attachStdin",
+          "attachStdout",
+          "attachStderr",
+          "stopSignal",
+          "openStdin",
+          "stdinOnce",
+          "argsEscaped",
+          "workingDir",
+          "healthCheck",
+          "shell",
+          "env",
+          "cmd",
+          "onBuild",
+          "entryPoint",
+          "volumes",
+          "labels",
+          "exposedPorts"
+        ],
+        "type": "object",
+        "properties": {
+          "tty": {
+            "type": "boolean"
+          },
+          "user": {
+            "type": "string"
+          },
+          "image": {
+            "type": "string"
+          },
+          "hostname": {
+            "type": "string"
+          },
+          "domainname": {
+            "type": "string"
+          },
+          "attachStdin": {
+            "type": "boolean"
+          },
+          "attachStdout": {
+            "type": "boolean"
+          },
+          "attachStderr": {
+            "type": "boolean"
+          },
+          "stopSignal": {
+            "type": "string"
+          },
+          "openStdin": {
+            "type": "boolean"
+          },
+          "stdinOnce": {
+            "type": "boolean"
+          },
+          "argsEscaped": {
+            "type": "boolean"
+          },
+          "workingDir": {
+            "type": "string"
+          },
+          "healthCheck": {
+            "$ref": "#/components/schemas/ImageHealthCheck"
+          },
+          "shell": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "env": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cmd": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "onBuild": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "entryPoint": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "volumes": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Empty"
+            }
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "exposedPorts": {
+            "type": "object",
+            "additionalProperties": { }
+          }
+        },
+        "nullable": true
+      },
+      "ImageData": {
         "required": [
           "platform",
           "containers",
@@ -5997,17 +5829,292 @@
         "type": "object",
         "properties": {
           "platform": {
-            "$ref": "#/components/schemas/PlatformDescriptorView"
+            "$ref": "#/components/schemas/ImagePlatformDescriptor"
           },
           "containers": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "size": {
-            "$ref": "#/components/schemas/SizeView"
+            "$ref": "#/components/schemas/SizeInfo"
+          }
+        },
+        "nullable": true
+      },
+      "ImageDescriptor": {
+        "required": [
+          "size",
+          "data",
+          "digest",
+          "mediaType",
+          "artifactType",
+          "platform",
+          "urls",
+          "annotations"
+        ],
+        "type": "object",
+        "properties": {
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "data": {
+            "type": "string",
+            "nullable": true
+          },
+          "digest": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "artifactType": {
+            "type": "string"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/ImagePlatformDescriptor"
+          },
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "annotations": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "nullable": true
+      },
+      "ImageGraphDriverData": {
+        "required": [
+          "mergedDir",
+          "upperDir",
+          "workDir"
+        ],
+        "type": "object",
+        "properties": {
+          "mergedDir": {
+            "type": "string"
+          },
+          "upperDir": {
+            "type": "string"
+          },
+          "workDir": {
+            "type": "string"
+          }
+        },
+        "nullable": true
+      },
+      "ImageGraphicDriver": {
+        "required": [
+          "name",
+          "data"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ImageGraphDriverData"
+          }
+        },
+        "nullable": true
+      },
+      "ImageHealthCheck": {
+        "required": [
+          "test",
+          "interval",
+          "timeout",
+          "retries",
+          "startPeriod",
+          "startInterval"
+        ],
+        "type": "object",
+        "properties": {
+          "test": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "interval": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "timeout": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "retries": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "startPeriod": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "startInterval": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "ImageManifest": {
+        "required": [
+          "id",
+          "kind",
+          "available",
+          "size",
+          "imageData",
+          "descriptor",
+          "attestationData"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "size": {
+            "$ref": "#/components/schemas/SizeInfo"
+          },
+          "imageData": {
+            "$ref": "#/components/schemas/ImageData"
+          },
+          "descriptor": {
+            "$ref": "#/components/schemas/ImageDescriptor"
+          },
+          "attestationData": {
+            "$ref": "#/components/schemas/AttestationData"
+          }
+        }
+      },
+      "ImageMetadata": {
+        "required": [
+          "lastTagTime"
+        ],
+        "type": "object",
+        "properties": {
+          "lastTagTime": {
+            "type": "string"
+          }
+        },
+        "nullable": true
+      },
+      "ImagePlatformDescriptor": {
+        "required": [
+          "os",
+          "variant",
+          "osVersion",
+          "architecture",
+          "osFeatures"
+        ],
+        "type": "object",
+        "properties": {
+          "os": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string"
+          },
+          "osVersion": {
+            "type": "string"
+          },
+          "architecture": {
+            "type": "string"
+          },
+          "osFeatures": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "nullable": true
+      },
+      "ImagePullError": {
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "ImagePullProgress": {
+        "required": [
+          "units",
+          "current",
+          "total",
+          "start"
+        ],
+        "type": "object",
+        "properties": {
+          "units": {
+            "type": "string",
+            "nullable": true
+          },
+          "current": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "start": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        },
+        "nullable": true
+      },
+      "ImageRootFs": {
+        "required": [
+          "type",
+          "layers"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "layers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "nullable": true
@@ -6094,54 +6201,36 @@
           }
         }
       },
-      "InspectImageView": {
+      "InspectImageResult": {
         "required": [
           "id",
-          "descriptor",
-          "manifests",
-          "repoTags",
-          "repoDigests",
+          "author",
           "parent",
           "comment",
           "created",
           "dockerVersion",
-          "author",
-          "config",
           "architecture",
+          "osVersion",
+          "virtualSize",
           "variant",
           "os",
-          "osVersion",
           "size",
-          "virtualSize",
-          "graphDriver",
           "rootFS",
-          "metadata"
+          "metadata",
+          "config",
+          "descriptor",
+          "graphDriver",
+          "manifests",
+          "repoTags",
+          "repoDigests"
         ],
         "type": "object",
         "properties": {
           "id": {
             "type": "string"
           },
-          "descriptor": {
-            "$ref": "#/components/schemas/DescriptorView"
-          },
-          "manifests": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ManifestView"
-            }
-          },
-          "repoTags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "repoDigests": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+          "author": {
+            "type": "string"
           },
           "parent": {
             "type": "string"
@@ -6155,14 +6244,15 @@
           "dockerVersion": {
             "type": "string"
           },
-          "author": {
-            "type": "string"
-          },
-          "config": {
-            "$ref": "#/components/schemas/ConfigView"
-          },
           "architecture": {
             "type": "string"
+          },
+          "osVersion": {
+            "type": "string"
+          },
+          "virtualSize": {
+            "type": "integer",
+            "format": "int64"
           },
           "variant": {
             "type": "string"
@@ -6170,25 +6260,42 @@
           "os": {
             "type": "string"
           },
-          "osVersion": {
-            "type": "string"
-          },
           "size": {
             "type": "integer",
             "format": "int64"
           },
-          "virtualSize": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "graphDriver": {
-            "$ref": "#/components/schemas/GraphDriverView"
-          },
           "rootFS": {
-            "$ref": "#/components/schemas/RootFSView"
+            "$ref": "#/components/schemas/ImageRootFs"
           },
           "metadata": {
-            "$ref": "#/components/schemas/MetadataView"
+            "$ref": "#/components/schemas/ImageMetadata"
+          },
+          "config": {
+            "$ref": "#/components/schemas/ImageConfig"
+          },
+          "descriptor": {
+            "$ref": "#/components/schemas/ImageDescriptor"
+          },
+          "graphDriver": {
+            "$ref": "#/components/schemas/ImageGraphicDriver"
+          },
+          "manifests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageManifest"
+            }
+          },
+          "repoTags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "repoDigests": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -6259,46 +6366,6 @@
           }
         }
       },
-      "JSONErrorReply": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "message": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "nullable": true
-      },
-      "JSONProgressReply": {
-        "type": "object",
-        "properties": {
-          "current": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "total": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "start": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "units": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "nullable": true
-      },
       "LogConfiguration": {
         "required": [
           "type",
@@ -6341,52 +6408,6 @@
         "type": "object",
         "properties": {
           "accessToken": {
-            "type": "string"
-          }
-        }
-      },
-      "ManifestView": {
-        "required": [
-          "id",
-          "descriptor",
-          "available",
-          "size",
-          "kind",
-          "imageData",
-          "attestationData"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "descriptor": {
-            "$ref": "#/components/schemas/DescriptorView2"
-          },
-          "available": {
-            "type": "boolean"
-          },
-          "size": {
-            "$ref": "#/components/schemas/SizeView"
-          },
-          "kind": {
-            "type": "string"
-          },
-          "imageData": {
-            "$ref": "#/components/schemas/ImageDataView"
-          },
-          "attestationData": {
-            "$ref": "#/components/schemas/AttestationDataView"
-          }
-        }
-      },
-      "MetadataView": {
-        "required": [
-          "lastTagTime"
-        ],
-        "type": "object",
-        "properties": {
-          "lastTagTime": {
             "type": "string"
           }
         }
@@ -6900,37 +6921,6 @@
           }
         }
       },
-      "PlatformDescriptorView": {
-        "required": [
-          "architecture",
-          "os",
-          "osVersion",
-          "osFeatures",
-          "variant"
-        ],
-        "type": "object",
-        "properties": {
-          "architecture": {
-            "type": "string"
-          },
-          "os": {
-            "type": "string"
-          },
-          "osVersion": {
-            "type": "string"
-          },
-          "osFeatures": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "variant": {
-            "type": "string"
-          }
-        },
-        "nullable": true
-      },
       "PlatformInput": {
         "required": [
           "name",
@@ -7241,21 +7231,19 @@
           }
         }
       },
-      "PullImageResponse": {
+      "PullImageResult": {
+        "required": [
+          "id",
+          "from",
+          "stream",
+          "status",
+          "errorMessage",
+          "progressMessage",
+          "progress",
+          "error"
+        ],
         "type": "object",
         "properties": {
-          "stream": {
-            "type": "string",
-            "nullable": true
-          },
-          "status": {
-            "type": "string",
-            "nullable": true
-          },
-          "progressMessage": {
-            "type": "string",
-            "nullable": true
-          },
           "id": {
             "type": "string",
             "nullable": true
@@ -7264,15 +7252,27 @@
             "type": "string",
             "nullable": true
           },
+          "stream": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
           "errorMessage": {
             "type": "string",
             "nullable": true
           },
+          "progressMessage": {
+            "type": "string",
+            "nullable": true
+          },
           "progress": {
-            "$ref": "#/components/schemas/JSONProgressReply"
+            "$ref": "#/components/schemas/ImagePullProgress"
           },
           "error": {
-            "$ref": "#/components/schemas/JSONErrorReply"
+            "$ref": "#/components/schemas/ImagePullError"
           }
         }
       },
@@ -7566,25 +7566,7 @@
         },
         "nullable": true
       },
-      "RootFSView": {
-        "required": [
-          "type",
-          "layers"
-        ],
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string"
-          },
-          "layers": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "SizeView": {
+      "SizeInfo": {
         "required": [
           "total",
           "content",

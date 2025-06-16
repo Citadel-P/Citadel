@@ -81,7 +81,6 @@ const usePlatformHub = () => {
   const getPlatformsList = useCallback(async (hubConnection: HubConnection) => {
     setIsLoading(true);
     const response = await hubConnection.invoke<PlatformsView>('GetPlatforms');
-    console.log(response)
     if (response) {
       setPlatformsMessage(response.platforms);
     }

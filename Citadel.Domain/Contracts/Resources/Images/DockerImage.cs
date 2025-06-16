@@ -6,11 +6,11 @@ public record DockerImage(
         int Containers,
         string ParentId,
         long SharedSize,
-        DateTime Created,
+        long Created,
         double VirtualSize,
-        IReadOnlyList<string> RepoTags,
-        IReadOnlyList<string> RepoDigests,
-        IReadOnlyDictionary<string, string> Labels
+        IReadOnlyList<string>? RepoTags,
+        IReadOnlyList<string>? RepoDigests,
+        IReadOnlyDictionary<string, string>? Labels
     );
 
 

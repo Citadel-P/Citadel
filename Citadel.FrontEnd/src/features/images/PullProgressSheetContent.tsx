@@ -1,4 +1,4 @@
-import { PullImageRequest, PullImageResponse } from '@/api/_generated';
+import { PullImageRequest, PullImageResult } from '@/api/_generated';
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Check, CircleX, LoaderCircle } from 'lucide-react';
 import { usePOSTPullImageStream } from './hooks/usePOSTPullImageStream';
@@ -69,7 +69,7 @@ export default function PullProgressSheetContent({ sheetProps }: { sheetProps: P
     if (isSuccess) {
       try {
         const data = streamData.join('\n');
-        const response = JSON.parse(data) as PullImageResponse[];
+        const response = JSON.parse(data) as PullImageResult[];
         const errors = response.filter((s) => s.errorMessage).map((s) => s.errorMessage);
 
         if (errors.length > 0) {

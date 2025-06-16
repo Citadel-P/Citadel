@@ -89,9 +89,9 @@ export enum ContainerStateStatus {
   Offline = "Offline",
 }
 
-export type AttestationDataView = {
-  for: string;
-} | null;
+export type AttestationData = {
+  for: string | null;
+};
 
 export type BindOptions = {
   propagation: string | null;
@@ -122,31 +122,6 @@ export type ClusterVolumeInfo = {
 /** @default null */
 export type ConfigFromInput = {
   network: string;
-} | null;
-
-export type ConfigView = {
-  hostname: string;
-  domainname: string;
-  user: string;
-  attachStdin: boolean;
-  attachStdout: boolean;
-  attachStderr: boolean;
-  exposedPorts: Record<string, Empty>;
-  tty: boolean;
-  openStdin: boolean;
-  stdinOnce: boolean;
-  env: string[];
-  cmd: string[];
-  healthcheck: HealthcheckView;
-  argsEscaped: boolean;
-  image: string;
-  volumes: Record<string, any>;
-  workingDir: string;
-  entrypoint: string[];
-  onBuild: string[];
-  labels: Record<string, string>;
-  stopSignal: string;
-  shell: string[];
 } | null;
 
 export type ContainerConfiguration = {
@@ -315,12 +290,12 @@ export interface DeleteContainersRequest {
   link?: boolean | null;
 }
 
-export interface DeleteImageResponse {
-  items?: DeleteImageResponseItem[] | null;
+export interface DeleteImageResponseItem {
+  result: Record<string, string>;
 }
 
-export interface DeleteImageResponseItem {
-  result?: Record<string, string>;
+export interface DeleteImageResult {
+  items: DeleteImageResponseItem[];
 }
 
 export interface DeleteImagesRequest {
@@ -349,30 +324,6 @@ export interface DeleteVolumesInput {
   names: string[];
   force: boolean | null;
 }
-
-export interface DescriptorView {
-  mediaType: string;
-  digest: string;
-  /** @format int64 */
-  size: number;
-  urls: string[];
-  annotations: Record<string, string>;
-  data: string;
-  platform: PlatformDescriptorView;
-  artifactType: string;
-}
-
-export type DescriptorView2 = {
-  mediaType: string;
-  digest: string;
-  /** @format int64 */
-  size: number;
-  urls: string[];
-  annotations: Record<string, string>;
-  data: string;
-  platform: any;
-  artifactType: string;
-} | null;
 
 export interface DockerHubImageModel {
   repo_name?: string | null;
@@ -539,31 +490,6 @@ export type GraphDriverDataInfo = {
   data: Record<string, string>;
 };
 
-export type GraphDriverDataView = {
-  mergedDir: string;
-  upperDir: string;
-  workDir: string;
-} | null;
-
-export interface GraphDriverView {
-  name: string;
-  data: GraphDriverDataView;
-}
-
-export type HealthcheckView = {
-  test: string[];
-  /** @format int64 */
-  interval: number | null;
-  /** @format int64 */
-  timeout: number | null;
-  /** @format int64 */
-  retries: number | null;
-  /** @format int64 */
-  startPeriod: number | null;
-  /** @format int64 */
-  startInterval: number | null;
-};
-
 export type HostConfiguration = {
   binds: string[];
   containerIDFile: string | null;
@@ -704,11 +630,116 @@ export type IPAMInput = {
   options?: Record<string, string>;
 };
 
-export type ImageDataView = {
-  platform: PlatformDescriptorView;
-  containers: string[] | null;
-  size: SizeView;
+export type ImageConfig = {
+  tty: boolean;
+  user: string;
+  image: string;
+  hostname: string;
+  domainname: string;
+  attachStdin: boolean;
+  attachStdout: boolean;
+  attachStderr: boolean;
+  stopSignal: string;
+  openStdin: boolean;
+  stdinOnce: boolean;
+  argsEscaped: boolean;
+  workingDir: string;
+  healthCheck: ImageHealthCheck;
+  shell: string[];
+  env: string[];
+  cmd: string[];
+  onBuild: string[];
+  entryPoint: string[];
+  volumes: Record<string, Empty>;
+  labels: Record<string, string>;
+  exposedPorts: Record<string, any>;
+} | null;
+
+export type ImageData = {
+  platform: ImagePlatformDescriptor;
+  containers: string[];
+  size: SizeInfo;
+} | null;
+
+export type ImageDescriptor = {
+  /** @format int64 */
+  size: number;
+  data: string | null;
+  digest: string;
+  mediaType: string;
+  artifactType: string;
+  platform: ImagePlatformDescriptor;
+  urls: string[];
+  annotations: Record<string, string>;
 };
+
+export type ImageGraphDriverData = {
+  mergedDir: string;
+  upperDir: string;
+  workDir: string;
+} | null;
+
+export type ImageGraphicDriver = {
+  name: string;
+  data: ImageGraphDriverData;
+} | null;
+
+export type ImageHealthCheck = {
+  test: string[];
+  /** @format int64 */
+  interval: number | null;
+  /** @format int64 */
+  timeout: number | null;
+  /** @format int64 */
+  retries: number | null;
+  /** @format int64 */
+  startPeriod: number | null;
+  /** @format int64 */
+  startInterval: number | null;
+};
+
+export interface ImageManifest {
+  id: string;
+  kind: string;
+  available: boolean;
+  size: SizeInfo;
+  imageData: ImageData;
+  descriptor: ImageDescriptor;
+  attestationData: AttestationData;
+}
+
+export type ImageMetadata = {
+  lastTagTime: string;
+} | null;
+
+export type ImagePlatformDescriptor = {
+  os: string;
+  variant: string;
+  osVersion: string;
+  architecture: string;
+  osFeatures: string[];
+} | null;
+
+export type ImagePullError = {
+  /** @format int64 */
+  code: number | null;
+  message: string | null;
+};
+
+export type ImagePullProgress = {
+  units: string | null;
+  /** @format int64 */
+  current: number | null;
+  /** @format int64 */
+  total: number | null;
+  /** @format int64 */
+  start: number | null;
+};
+
+export type ImageRootFs = {
+  type: string;
+  layers: string[];
+} | null;
 
 export interface ImageView {
   id: string;
@@ -733,29 +764,29 @@ export interface ImagesView {
   images: ImageView[];
 }
 
-export interface InspectImageView {
+export interface InspectImageResult {
   id: string;
-  descriptor: DescriptorView;
-  manifests: ManifestView[];
-  repoTags: string[];
-  repoDigests: string[];
+  author: string;
   parent: string;
   comment: string;
   created: string;
   dockerVersion: string;
-  author: string;
-  config: ConfigView;
   architecture: string;
-  variant: string;
-  os: string;
   osVersion: string;
   /** @format int64 */
-  size: number;
-  /** @format int64 */
   virtualSize: number;
-  graphDriver: GraphDriverView;
-  rootFS: RootFSView;
-  metadata: MetadataView;
+  variant: string;
+  os: string;
+  /** @format int64 */
+  size: number;
+  rootFS: ImageRootFs;
+  metadata: ImageMetadata;
+  config: ImageConfig;
+  descriptor: ImageDescriptor;
+  graphDriver: ImageGraphicDriver;
+  manifests: ImageManifest[];
+  repoTags: string[];
+  repoDigests: string[];
 }
 
 export interface IpAddressInfo {
@@ -776,22 +807,6 @@ export interface IpamSubnetConfiguration {
   gateway: string | null;
 }
 
-export type JSONErrorReply = {
-  /** @format int64 */
-  code?: number | null;
-  message?: string | null;
-};
-
-export type JSONProgressReply = {
-  /** @format int64 */
-  current?: number | null;
-  /** @format int64 */
-  total?: number | null;
-  /** @format int64 */
-  start?: number | null;
-  units?: string | null;
-};
-
 export type LogConfiguration = {
   type: string | null;
   config: Record<string, string>;
@@ -804,20 +819,6 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   accessToken: string;
-}
-
-export interface ManifestView {
-  id: string;
-  descriptor: DescriptorView2;
-  available: boolean;
-  size: SizeView;
-  kind: string;
-  imageData: ImageDataView;
-  attestationData: AttestationDataView;
-}
-
-export interface MetadataView {
-  lastTagTime: string;
 }
 
 export interface MountPointInfo {
@@ -974,14 +975,6 @@ export interface PlatformDescriptorKubernetesPlatformDescriptor {
   namespace: string | null;
 }
 
-export type PlatformDescriptorView = {
-  architecture: string;
-  os: string;
-  osVersion: string;
-  osFeatures: string[];
-  variant: string;
-} | null;
-
 export interface PlatformInput {
   name: string;
   address: string;
@@ -1080,15 +1073,15 @@ export interface PullImageRequest {
   imageTag: string;
 }
 
-export interface PullImageResponse {
-  stream?: string | null;
-  status?: string | null;
-  progressMessage?: string | null;
-  id?: string | null;
-  from?: string | null;
-  errorMessage?: string | null;
-  progress?: JSONProgressReply;
-  error?: JSONErrorReply;
+export interface PullImageResult {
+  id: string | null;
+  from: string | null;
+  stream: string | null;
+  status: string | null;
+  errorMessage: string | null;
+  progressMessage: string | null;
+  progress: ImagePullProgress;
+  error: ImagePullError;
 }
 
 export interface RefreshTokenResponse {
@@ -1189,12 +1182,7 @@ export type RestartPolicy = {
   maximumRetryCount: number | null;
 };
 
-export interface RootFSView {
-  type: string;
-  layers: string[];
-}
-
-export type SizeView = {
+export type SizeInfo = {
   /** @format int64 */
   total: number | null;
   /** @format int64 */
@@ -2407,7 +2395,7 @@ export class Api<
      * @summary Inspect an image
      * @request GET:/api/v1/images/{platformId}/{imageId}
      * @secure
-     * @response `200` `InspectImageView` OK
+     * @response `200` `InspectImageResult` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2420,7 +2408,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<
-        InspectImageView,
+        InspectImageResult,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/images/${platformId}/${imageId}`,
@@ -2438,7 +2426,7 @@ export class Api<
      * @summary Pull an image from a registry and returns logs as a stream
      * @request POST:/api/v1/images/pull
      * @secure
-     * @response `200` `(PullImageResponse)[]` OK
+     * @response `200` `(PullImageResult)[]` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2446,7 +2434,7 @@ export class Api<
      */
     imagesPullImage: (data: PullImageRequest, params: RequestParams = {}) =>
       this.request<
-        PullImageResponse[],
+        PullImageResult[],
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/images/pull`,
@@ -2466,7 +2454,7 @@ export class Api<
      * @summary Remove an image(s), along with any untagged parent images that were referenced by that image
      * @request DELETE:/api/v1/images
      * @secure
-     * @response `200` `DeleteImageResponse` OK
+     * @response `200` `DeleteImageResult` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2475,7 +2463,7 @@ export class Api<
      */
     imagesDelete: (data: DeleteImagesRequest, params: RequestParams = {}) =>
       this.request<
-        DeleteImageResponse,
+        DeleteImageResult,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/images`,

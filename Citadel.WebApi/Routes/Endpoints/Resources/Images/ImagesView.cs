@@ -1,4 +1,4 @@
-﻿using Citadel.Agent.Images.V1;
+﻿using Domain.Contracts.Resources.Images;
 
 namespace WebApi.Routes.Endpoints.Resources.Images;
 
@@ -31,18 +31,18 @@ public sealed record ImageView(
 
 public sealed record ImagesView(IEnumerable<ImageView> Images)
 {
-    internal static ImagesView Map(IEnumerable<ImageReply> replies) => new (replies.Select(Map));
-    internal static ImageView Map(ImageReply reply) 
+    internal static ImagesView Map(IEnumerable<DockerImage> images) => new (images.Select(Map));
+    internal static ImageView Map(DockerImage image) 
         => new (
-            reply.Id,
-            reply.Created,
-            reply.ParentId,
-            reply.RepoDigests,
-            reply.RepoTags,
-            reply.SharedSize,
-            reply.Size,
-            reply.VirtualSize,
-            reply.Containers > 0,
-            reply.Labels
+            Id: image.Id,
+            Size: image.Size,
+            Created: image.Created,
+            ParentId: image.ParentId,
+            SharedSize: image.SharedSize,
+            VirtualSize: image.VirtualSize,
+            IsInUse: image.Containers > 0,
+            RepoTags: image.RepoTags ?? [],
+            RepoDigests: image.RepoDigests ?? [],
+            Labels: image.Labels?.ToDictionary() ?? []
         );
 }

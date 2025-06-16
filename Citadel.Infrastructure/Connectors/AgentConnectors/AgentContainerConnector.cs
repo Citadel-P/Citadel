@@ -1,5 +1,4 @@
-﻿using System;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using Citadel.Agent.Containers.V1;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -11,13 +10,11 @@ using Infrastructure.Connectors.Mappings;
 using Infrastructure.Services;
 using Infrastructure.Services.Abstractions;
 using LightResults;
-using Microsoft.Extensions.Logging;
-using RTools_NTS.Util;
 using static Citadel.Agent.Containers.V1.ContainerService;
 
-namespace Infrastructure.Connectors;
+namespace Infrastructure.Connectors.AgentConnectors;
 
-internal class AgentContainerConnector(IGrpcClientFactory clientFactory, ILogger<AgentContainerConnector> logger) : IContainerConnector
+internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : IContainerConnector
 {
     public async Task<Result<IReadOnlyDictionary<string, Container>>> ListContainersAsync(ContainerFilterCommand command, CancellationToken cancellationToken)
     {

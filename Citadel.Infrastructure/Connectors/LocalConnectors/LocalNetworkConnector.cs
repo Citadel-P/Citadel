@@ -7,7 +7,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Networks;
 using LightResults;
 
-namespace Infrastructure.Connectors;
+namespace Infrastructure.Connectors.LocalConnectors;
 
 internal class LocalNetworkConnector : INetworkConnector
 {

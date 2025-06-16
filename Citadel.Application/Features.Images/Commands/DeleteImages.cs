@@ -1,17 +1,16 @@
-﻿using Citadel.Agent.Images.V1;
+﻿using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Images;
 using FluentValidation;
-using Grpc.Core;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Images.Commands;
 
-public sealed record DeleteImages(Guid PlatformId, string[] Ids, bool Force = false, bool NoPrune = false) : ICommand<Result<DeleteImageResponse>>
+public sealed record DeleteImages(Guid PlatformId, string[] Ids, bool Force = false, bool NoPrune = false) : ICommand<Result<DeleteImageResult>>
 {
     internal class Validator : AbstractValidator<DeleteImages>
     {
@@ -23,32 +22,26 @@ public sealed record DeleteImages(Guid PlatformId, string[] Ids, bool Force = fa
     }
 }
 
-internal sealed class DeleteImagesHandler(IGrpcClientFactory clientFactory, ApplicationDbContext dbContext) : ICommandHandler<DeleteImages, Result<DeleteImageResponse>>
+internal sealed class DeleteImagesHandler(IConnectorFactory<IImageConnector> connectorFactory, ApplicationDbContext dbContext) : ICommandHandler<DeleteImages, Result<DeleteImageResult>>
 {
-    public async ValueTask<Result<DeleteImageResponse>> Handle(DeleteImages command, CancellationToken cancellationToken)
+    public async ValueTask<Result<DeleteImageResult>> Handle(DeleteImages command, CancellationToken cancellationToken)
     {
 
-        var platformAddress = await dbContext.Platforms.Where(s => s.Id == command.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
-        if (platformAddress == null)
+        var platform = await dbContext.Platforms.Where(s => s.Id == command.PlatformId).Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
+        if (platform == null)
         {
-            return Result.Failure<DeleteImageResponse>(new NotFoundError("The provided platform Id does not exist"));
+            return Result.Failure<DeleteImageResult>(new NotFoundError("The provided platform Id does not exist"));
         }
 
-        var client = clientFactory.GetImageClient(platformAddress);
-        var request = new DeleteImageRequest
-        {
-            Ids = { command.Ids },
-            Force = command.Force,
-            Noprune = command.NoPrune
-        };
-
-        try
-        {
-           return await client.DeleteAsync(request, cancellationToken: cancellationToken);
-        }
-        catch (RpcException ex)
-        {
-            return Result.Failure<DeleteImageResponse>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
-        }
+        var args = new DeleteImageCommand
+        (
+            Ids: command.Ids,
+            Force: command.Force,
+            NoPrune: command.NoPrune,
+            PlatformAddress: platform.Address
+        );
+        return await connectorFactory
+            .GetConnector(platform.ConnectorType)
+            .DeleteImageAsync(args, cancellationToken: cancellationToken);
     }
 }

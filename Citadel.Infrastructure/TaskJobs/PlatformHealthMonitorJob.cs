@@ -25,7 +25,7 @@ internal class PlatformHealthMonitorJob(
     IConnectorFactory<IPlatformConnector> connectorFactory,
     ILogger<PlatformHealthMonitorJob> logger) : BackgroundService, IPlatformHealthMonitorJob
 {
-    private readonly ConcurrentDictionary<string, TrackedPlatformData> trackedPlatforms = [];
+    private readonly ConcurrentDictionary<string, PlatformTrackingInfo> trackedPlatforms = [];
     private readonly ConcurrentDictionary<string, bool> status = new();
     private readonly TimeSpan checkInterval = TimeSpan.FromSeconds(5);
 
@@ -85,7 +85,7 @@ internal class PlatformHealthMonitorJob(
     }
 
     public bool TrackPlatform(string address, Guid id, PlatformConnectorType type)
-        => trackedPlatforms.TryAdd(address, new TrackedPlatformData(Id: id, Type: type));
+        => trackedPlatforms.TryAdd(address, new PlatformTrackingInfo(Id: id, Type: type));
 
     public async Task<bool> UntrackPlatform(string address, CancellationToken cancellationToken)
     {
@@ -128,5 +128,5 @@ internal class PlatformHealthMonitorJob(
     }
 }
 
+public sealed record PlatformTrackingInfo(Guid Id, PlatformConnectorType Type);
 public sealed record PlatformHealth(Guid Id, string Address, PlatformConnectorType Type, bool IsOnLine);
-public sealed record TrackedPlatformData(Guid Id, PlatformConnectorType Type);

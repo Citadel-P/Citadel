@@ -1,17 +1,16 @@
-﻿using Citadel.Agent.Images.V1;
+﻿using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Images;
 using FluentValidation;
-using Grpc.Core;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Images.Queries;
 
-public sealed record InspectImage(Guid PlatformId, string ImageId) : IQuery<Result<InspectImageResponse>>
+public sealed record InspectImage(Guid PlatformId, string ImageId) : IQuery<Result<InspectImageResult>>
 {
     internal class Validator : AbstractValidator<InspectImage>
     {
@@ -23,27 +22,24 @@ public sealed record InspectImage(Guid PlatformId, string ImageId) : IQuery<Resu
     }
 }
 
-internal sealed class InspectImageHandler(ApplicationDbContext dbContext, IGrpcClientFactory clientFactory) : IQueryHandler<InspectImage, Result<InspectImageResponse>>
+internal sealed class InspectImageHandler(IConnectorFactory<IImageConnector> connectorFactory, ApplicationDbContext dbContext) : IQueryHandler<InspectImage, Result<InspectImageResult>>
 {
-    public async ValueTask<Result<InspectImageResponse>> Handle(InspectImage query, CancellationToken cancellationToken)
+    public async ValueTask<Result<InspectImageResult>> Handle(InspectImage query, CancellationToken cancellationToken)
     {
-        var address = await dbContext.Platforms.Where(s => s.Id == query.PlatformId).Select(s => s.Address).FirstOrDefaultAsync(cancellationToken);
-        if (address == null)
+        var platform = await dbContext.Platforms.Where(s => s.Id == query.PlatformId)
+            .Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
+        if (platform == null)
         {
-            return Result.Failure<InspectImageResponse>(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure<InspectImageResult>(new NotFoundError("The provided platform Id doesn't exist"));
         }
-        try
-        {
-            var args = new InspectImageRequest
-            {
-                Id = query.ImageId
-            };
-            var client = clientFactory.GetImageClient(address);
-            return await client.InspectAsync(args, cancellationToken: cancellationToken);
-        }
-        catch (RpcException ex)
-        {
-            return Result.Failure<InspectImageResponse>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
-        }
+
+        var args = new InspectImageCommand
+        (
+            PlatformAddress: platform.Address,
+            ImageId: query.ImageId
+        );
+        return await connectorFactory
+            .GetConnector(platform.ConnectorType)
+            .InspectImageAsync(args, cancellationToken: cancellationToken);
     }
 }

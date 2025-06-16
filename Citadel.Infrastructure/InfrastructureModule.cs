@@ -2,11 +2,12 @@
 using System.Reflection;
 using System.Threading.Channels;
 using DbUp;
-using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Hosting.Common;
 using Infrastructure.Connectors;
+using Infrastructure.Connectors.AgentConnectors;
+using Infrastructure.Connectors.LocalConnectors;
 using Infrastructure.DockerHub;
 using Infrastructure.EntityFramework;
 using Infrastructure.GithubCr;
@@ -49,8 +50,8 @@ public static class InfrastructureModule
         => services
             .AddSingleton<IGitHubCrService, GitHubCrService>()
             .AddSingleton<IDockerHubService, DockerHubService>()
-            .AddScoped<AgentImageConnector>()
-            .AddScoped<LocalImageConnector>()
+            .AddSingleton<AgentImageConnector>()
+            .AddSingleton<LocalImageConnector>()
             .AddSingleton<AgentVolumeConnector>()
             .AddSingleton<LocalVolumeConnector>()
             .AddSingleton<AgentNetworkConnector>()

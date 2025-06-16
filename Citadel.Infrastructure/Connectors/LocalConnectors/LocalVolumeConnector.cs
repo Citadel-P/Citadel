@@ -7,7 +7,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Volumes;
 using LightResults;
 
-namespace Infrastructure.Connectors;
+namespace Infrastructure.Connectors.LocalConnectors;
 
 internal class LocalVolumeConnector : IVolumeConnector
 {

@@ -100,7 +100,7 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
       setDialogData({ open: false });
 
       const message =
-        deleteData?.data?.replies && deleteData?.data?.replies.length > 1
+        deleteData?.data?.items && deleteData?.data?.items.length > 1
           ? 'The selected images have been successfully deleted'
           : 'The selected image has been successfully deleted';
 

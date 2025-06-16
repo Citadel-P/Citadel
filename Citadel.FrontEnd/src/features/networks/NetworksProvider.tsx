@@ -1,25 +1,25 @@
 import { createContext } from 'use-context-selector';
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { DeleteNetworksInput, NetworkView } from '@/api/_generated';
+import { DeleteNetworksInput, DockerNetwork } from '@/api/_generated';
 import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
 import { useDELETENetworks } from './hooks/useDELETENetworks';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 interface IContext {
-  selectedRows: NetworkView[] | undefined;
-  networks: NetworkView[];
-  setSelectedRows: (networks: NetworkView[] | undefined) => void;
-  setNetworks: (networks: NetworkView[]) => void;
-  dialogData: IDeleteDialogData<NetworkView>;
-  setDialogData: (data: IDeleteDialogData<NetworkView>) => void;
+  selectedRows: DockerNetwork[] | undefined;
+  networks: DockerNetwork[];
+  setSelectedRows: (networks: DockerNetwork[] | undefined) => void;
+  setNetworks: (networks: DockerNetwork[]) => void;
+  dialogData: IDeleteDialogData<DockerNetwork>;
+  setDialogData: (data: IDeleteDialogData<DockerNetwork>) => void;
   onSearch: (searchTerm: string) => void;
   requestDelete: (request: DeleteNetworksInput) => void;
   deleteIsPending: boolean;
   sheetOpen: boolean;
   setSheetOpen: (open: boolean) => void;
-  currentNetwork: NetworkView | undefined;
-  setCurrentNetwork: (network: NetworkView | undefined) => void;
+  currentNetwork: DockerNetwork | undefined;
+  setCurrentNetwork: (network: DockerNetwork | undefined) => void;
 }
 
 export const NetworksContext = createContext<IContext | undefined>(undefined);
@@ -27,20 +27,20 @@ export const NetworksContext = createContext<IContext | undefined>(undefined);
 const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const client = useQueryClient();
   // State variables
-  const [selectedRows, setSelectedRows] = useState<NetworkView[] | undefined>();
-  const [networks, setNetworks] = useState<NetworkView[]>([]);
-  const [originalNetworks, setOriginalNetworks] = useState<NetworkView[]>([]);
+  const [selectedRows, setSelectedRows] = useState<DockerNetwork[] | undefined>();
+  const [networks, setNetworks] = useState<DockerNetwork[]>([]);
+  const [originalNetworks, setOriginalNetworks] = useState<DockerNetwork[]>([]);
   // Sheet state
-  const [currentNetwork, setCurrentNetwork] = useState<NetworkView>();
+  const [currentNetwork, setCurrentNetwork] = useState<DockerNetwork>();
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const { dialogData, setDialogData } = useDialogState<NetworkView>();
+  const { dialogData, setDialogData } = useDialogState<DockerNetwork>();
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
   const { mutate: deleteNetworks, isSuccess: deleteIsSuccess, isPending: deleteIsPending } = useDELETENetworks();
 
   // Wrapper function that handles both original and filtered networks
-  const handleNetworksUpdate = useCallback((networks: NetworkView[]) => {
+  const handleNetworksUpdate = useCallback((networks: DockerNetwork[]) => {
     setOriginalNetworks(networks);
     setNetworks(networks);
   }, []);

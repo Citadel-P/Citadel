@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Application.Features.Images.Queries;
-using Citadel.Agent.Images.V1;
+using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Registries;
 using Hosting.Extensions;
 using Infrastructure.DockerHub;
@@ -51,24 +51,24 @@ public static class Images
         return EndpointHandlers.HandleResult(result, v => v);
     }
 
-    public static async IAsyncEnumerable<PullImageResponse> PullImage(IMediator mediator, PullImageRequest pullImageRequest, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public static async IAsyncEnumerable<PullImageResult> PullImage(IMediator mediator, PullImageRequest pullImageRequest, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await foreach (var reply in mediator.CreateStream(pullImageRequest.ToCommand(), cancellationToken).ConfigureAwait(false))
+        await foreach (var reply in mediator.CreateStream(pullImageRequest.ToCommand(), cancellationToken))
         {
             yield return reply;
         }
     }
 
-    public static async Task<Results<Ok<DeleteImageResponse>, ProblemHttpResult>> Delete(IMediator mediator, [FromBody] DeleteImagesRequest deleteImagesRequest, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<DeleteImageResult>, ProblemHttpResult>> Delete(IMediator mediator, [FromBody] DeleteImagesRequest deleteImagesRequest, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(deleteImagesRequest.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResult(result, v => v);
     }
 
-    public static async Task<Results<Ok<InspectImageView>, ProblemHttpResult>> Inspect(IMediator mediator, Guid platformId, string imageId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<InspectImageResult>, ProblemHttpResult>> Inspect(IMediator mediator, Guid platformId, string imageId, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new InspectImage(platformId, imageId), cancellationToken);
-        return EndpointHandlers.HandleResult(result, InspectImageView.Map);
+        return EndpointHandlers.HandleResult(result, v => v);
     }
 
 }

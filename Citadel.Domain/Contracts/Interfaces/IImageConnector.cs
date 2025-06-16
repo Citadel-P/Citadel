@@ -1,11 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Domain.Contracts.Resources.Images;
+using LightResults;
 
 namespace Domain.Contracts.Interfaces;
 
 public interface IImageConnector
 {
+    Task<Result<IReadOnlyList<DockerImage>>> ListImagesAsync(string platformAddress, CancellationToken cancellationToken);
+    Task<Result<InspectImageResult>> InspectImageAsync(InspectImageCommand inspectImageCommand, CancellationToken cancellationToken);
+    Task<Result<DeleteImageResult>> DeleteImageAsync(DeleteImageCommand deleteImageCommand, CancellationToken cancellationToken);
+    IAsyncEnumerable<PullImageResult> PullImageProgressStreamAsync(PullImageCommand pullImageCommand, CancellationToken cancellationToken);
 }

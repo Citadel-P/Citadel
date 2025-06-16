@@ -5,6 +5,7 @@ using Citadel.Agent.Common.V1;
 using Citadel.Agent.Containers.V1;
 using Citadel.Agent.Images.V1;
 using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Registries;
 using Domain.Contracts.Resources.Volumes;
@@ -22,6 +23,7 @@ using WebApi.Routes.Endpoints.Resources.Networks;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.Volumes;
+using DeleteImageResponseItem = Domain.Contracts.Resources.Images.DeleteImageResponseItem;
 
 namespace Application.Models;
 
@@ -58,7 +60,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(ContainerInspectView))]
 [JsonSerializable(typeof(ContainerState))]
 [JsonSerializable(typeof(HostConfig))]
-[JsonSerializable(typeof(GraphDriverData))]
+[JsonSerializable(typeof(Citadel.Agent.Common.V1.GraphDriverData))]
 [JsonSerializable(typeof(MountPoint))]
 [JsonSerializable(typeof(ContainerConfig))]
 [JsonSerializable(typeof(NetworkSettingsInfo))]
@@ -86,7 +88,6 @@ namespace Application.Models;
 [JsonSerializable(typeof(DockerHubImageView))]
 [JsonSerializable(typeof(ImageView))]
 [JsonSerializable(typeof(ImagesView))]
-[JsonSerializable(typeof(InspectImageView))]
 [JsonSerializable(typeof(WebApi.Routes.Endpoints.Resources.Images.PullImageRequest))]
 [JsonSerializable(typeof(IEnumerable<IImageRepository>))]
 [JsonSerializable(typeof(IEnumerable<GhcrPackageVersion>))]
@@ -125,6 +126,17 @@ namespace Application.Models;
 [JsonSerializable(typeof(ClusterVolumeInfo))]
 [JsonSerializable(typeof(TopologyEntry))]
 [JsonSerializable(typeof(Domain.Contracts.Resources.Volumes.VolumeCapacityRange))]
+[JsonSerializable(typeof(DeleteImageResult))]
+[JsonSerializable(typeof(IReadOnlyList<DeleteImageResponseItem>))]
+[JsonSerializable(typeof(InspectImageResult))]
+[JsonSerializable(typeof(ImageRootFs))]
+[JsonSerializable(typeof(ImageMetadata))]
+[JsonSerializable(typeof(ImageConfig))]
+[JsonSerializable(typeof(ImageDescriptor))]
+[JsonSerializable(typeof(ImageGraphicDriver))]
+[JsonSerializable(typeof(ImageHealthCheck))]
+[JsonSerializable(typeof(ImageGraphDriverData))]
+[JsonSerializable(typeof(IAsyncEnumerable<PullImageResult>))] 
 
 public partial class ApplicationJsonContext : JsonSerializerContext
 {

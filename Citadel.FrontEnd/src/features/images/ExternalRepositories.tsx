@@ -26,7 +26,7 @@ function renderRegistryContent(selectedRegistry: any) {
   if (!selectedRegistry) {
     return (
       <div className="text-center text-slate-600 dark:text-slate-400 mt-4">
-        <p>Please select a registry to view its repositories.</p>
+        <p>Please choose a registry to display its repositories.</p>
       </div>
     );
   }
@@ -43,7 +43,7 @@ function renderRegistryContent(selectedRegistry: any) {
     default:
       return (
         <div className="text-center text-red-500 mt-4">
-          <p>Unsupported registry type.</p>
+          <p>Registry type not supported.</p>
         </div>
       );
   }

@@ -1,12 +1,11 @@
 ﻿using System.Runtime.CompilerServices;
-using Citadel.Agent.Images.V1;
-using FluentValidation;
-using Grpc.Core;
-using Hosting.Common;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Images;
 using Domain.Entities;
 using Domain.Entities.Registries;
+using FluentValidation;
+using Hosting.Common;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,7 +14,7 @@ namespace Application.Features.Images.Commands;
 /// <summary>
 /// Command to pull an image from a registry.
 /// </summary>
-public sealed record PullImage(Guid PlatformId, string RegistryName, string RepositoryName, string ImageTag) : IStreamCommand<PullImageResponse>
+public sealed record PullImage(Guid PlatformId, string RegistryName, string RepositoryName, string ImageTag) : IStreamCommand<PullImageResult>
 {
     internal class Validator : AbstractValidator<PullImage>
     {
@@ -27,69 +26,81 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
             RuleFor(s => s.RegistryName).ValidNameIdentifier();
         }
     }
-}
 
-internal sealed class PullImageHandler(IGrpcClientFactory clientFactory, ApplicationDbContext dbContext) : IStreamCommandHandler<PullImage, PullImageResponse>
-{
-    public async IAsyncEnumerable<PullImageResponse> Handle(PullImage command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    internal PullImageCommand ToConnectorCommand(string platformAddress, RegistryConfigurationBase registryCfg)
     {
-        var platformAddress = await dbContext.Platforms
-            .Where(s => s.Id == command.PlatformId)
-            .Select(s => s.Address)
-            .FirstOrDefaultAsync(cancellationToken)
-            ?? throw new KeyNotFoundException("The provided platform Id does not exist");
-
-        var registry = command.RegistryName == Registry.DefaultRegistryName
-            ? Registry.DefaultRegistry() // Public Docker registry
-            : await dbContext.Registries
-                .AsNoTracking()
-                .FirstOrDefaultAsync(s => s.Name == command.RegistryName, cancellationToken)
-                ?? throw new KeyNotFoundException("The provided registry name does not exist");
-
-        var client = clientFactory.GetImageClient(platformAddress);
-        var request = CreatePullImageRequest(command, registry.Configuration);
-
-        using var call = client.Pull(request, cancellationToken: cancellationToken);
-        await foreach (var reply in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
-        {
-            yield return reply;
-        }
-    }
-
-    private static PullImageRequest CreatePullImageRequest(PullImage command, RegistryConfigurationBase registryCfg)
-    {
-        var request = new PullImageRequest();
-
         string domainName = registryCfg.RegistryUrl.Replace("https://", "");
         switch (registryCfg)
         {
             case GitHubRegistry ghCfg:
-                request.FromImage = $"{domainName}/{ghCfg.Name}/{command.RepositoryName}@{command.ImageTag}".ToLower();
-                request.Repo = $"{domainName}/{ghCfg.Name}/{command.RepositoryName}".ToLower();
-                request.FromSrc = ghCfg.RegistryUrl;
-                request.Auth = ghCfg.GetRegistryAuth();
-                break;
+                return new PullImageCommand
+                    (
+                        PlatformAddress: platformAddress,
+                        RegistryName: RegistryName,
+                        FromImage: $"{domainName}/{ghCfg.Name}/{RepositoryName}@{ImageTag}".ToLower(),
+                        Repo: $"{domainName}/{ghCfg.Name}/{RepositoryName}@{ImageTag}".ToLower(),
+                        FromSrc: ghCfg.RegistryUrl,
+                        Tag: ImageTag,
+                        Auth: ghCfg.GetRegistryAuth()
+                    );
 
             case DockerHubRegistry dockerCfg:
-                if (command.RegistryName == Registry.DefaultRegistryName)
+                if (RegistryName == Registry.DefaultRegistryName)
                 {
-                    request.FromImage = $"{domainName}/{command.ImageTag}:latest".ToLower();
-                    request.Repo = domainName;
-                    request.FromSrc = dockerCfg.RegistryUrl;
+                    return new PullImageCommand
+                        (
+                            PlatformAddress: platformAddress,
+                            FromImage: $"{domainName}/{ImageTag}:latest".ToLower(),
+                            FromSrc: dockerCfg.RegistryUrl,
+                            Repo: domainName,
+                            Auth: string.Empty
+                        );
                 }
                 else
                 {
-                    request.FromImage = $"{domainName}/{dockerCfg.UserName}/{command.RepositoryName}:{command.ImageTag}".ToLower();
-                    request.Repo = $"{domainName}/{dockerCfg.UserName}/{command.RepositoryName}".ToLower();
-                    request.FromSrc = dockerCfg.RegistryUrl;
-                    request.Auth = dockerCfg.GetRegistryAuth();
+                    return new PullImageCommand
+                        (
+                            PlatformAddress: platformAddress,
+                            FromImage: $"{domainName}/{dockerCfg.UserName}/{RepositoryName}:{ImageTag}".ToLower(),
+                            Repo: $"{domainName}/{dockerCfg.UserName}/{RepositoryName}".ToLower(),
+                            FromSrc: dockerCfg.RegistryUrl,
+                            Auth: dockerCfg.GetRegistryAuth()
+                        );
                 }
-                break;
 
             default:
                 throw new NotSupportedException("Unsupported registry configuration");
         }
+    }
+}
 
-        return request;
+internal sealed class PullImageHandler(IConnectorFactory<IImageConnector> connectorFactory, ApplicationDbContext dbContext) : IStreamCommandHandler<PullImage, PullImageResult>
+{
+    public async IAsyncEnumerable<PullImageResult> Handle(PullImage command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var platform = await dbContext.Platforms.Where(s => s.Id == command.PlatformId)
+            .Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
+
+        if (platform == null)
+        {
+            yield break;
+        }
+
+        var registryConfiguration = command.RegistryName == Registry.DefaultRegistryName
+            ? Registry.DefaultRegistry().Configuration // Public Docker registry
+            : await dbContext.Registries.AsNoTracking()
+                .Where(s => s.Name == command.RegistryName)
+                .Select(s => s.Configuration).FirstOrDefaultAsync(cancellationToken);
+
+        if (registryConfiguration == null)
+        {
+            yield break;
+        }
+
+        var connector = connectorFactory.GetConnector(platform.ConnectorType);
+        await foreach (var reply in connector.PullImageProgressStreamAsync(command.ToConnectorCommand(platform.Address, registryConfiguration), cancellationToken))
+        {
+            yield return reply;
+        }
     }
 }
