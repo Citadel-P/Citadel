@@ -1,6 +1,6 @@
 ﻿using Domain.Entities;
 
-namespace Infrastructure.Services.Abstractions;
+namespace Application.Services.Abstractions;
 
 public interface IContainerHubDispatcher
 {

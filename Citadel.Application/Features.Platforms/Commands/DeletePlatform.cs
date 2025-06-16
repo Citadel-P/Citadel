@@ -1,8 +1,8 @@
 ﻿using FluentValidation;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
-using Infrastructure.TaskJobs;
+using Application.Services.Abstractions;
+using Application.TaskJobs;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;

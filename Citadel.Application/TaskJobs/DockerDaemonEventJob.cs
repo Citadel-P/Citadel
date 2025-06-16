@@ -1,17 +1,17 @@
 ﻿using System.Collections.Concurrent;
 using System.Threading.Channels;
+using Application.Services;
+using Application.Services.Abstractions;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services;
-using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Infrastructure.TaskJobs;
+namespace Application.TaskJobs;
 
 internal sealed class DockerDaemonEventJob(
     ILogger<DockerDaemonEventJob> logger,

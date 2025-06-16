@@ -6,7 +6,7 @@ using Hosting.Common;
 using Hosting.OpenApi;
 using Infrastructure;
 using Infrastructure.EntityFramework.Configurations;
-using Infrastructure.TaskJobs;
+using Application.TaskJobs;
 using Microsoft.AspNetCore.Http.Json;
 using WebApi;
 

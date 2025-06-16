@@ -1,9 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
-using System.Threading.Channels;
 using DbUp;
 using Domain.Contracts.Interfaces;
-using Domain.Contracts.Resources.Platforms;
 using Hosting.Common;
 using Infrastructure.Connectors;
 using Infrastructure.Connectors.AgentConnectors;
@@ -13,8 +11,6 @@ using Infrastructure.EntityFramework;
 using Infrastructure.GithubCr;
 using Infrastructure.HttpClients.Serializer;
 using Infrastructure.Services;
-using Infrastructure.Services.Abstractions;
-using Infrastructure.TaskJobs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,8 +34,7 @@ public static class InfrastructureModule
             .AddServices()
             .InitializeDb()
             .AddGrpcClients()
-            .AddHttpClients()
-            .AddBackgroundTasks();
+            .AddHttpClients();
 
     private static IServiceCollection AddGrpcClients(this IServiceCollection services)
         => services
@@ -65,34 +60,7 @@ public static class InfrastructureModule
             .AddConnectorFactory<IVolumeConnector, AgentVolumeConnector, LocalVolumeConnector>()
             .AddConnectorFactory<INetworkConnector, AgentNetworkConnector, LocalNetworkConnector>()
             .AddConnectorFactory<IPlatformConnector, AgentPlatformConnector, LocalPlatformConnector>()
-            .AddConnectorFactory<IContainerConnector, AgentContainerConnector, LocalContainerConnector>()
-            .AddSingleton<IPlatformContainerCache, PlatformContainerCache>();
-
-    private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)
-    {
-
-        services
-            .AddHostedService<LogCleanupJob>()
-            .AddHostedService<DockerDaemonEventJob>()
-            .AddHostedService<CleanupStatsJob>()
-            .AddHostedService<PlatformSyncJob>()
-            .AddHostedService<PlatformsStatsCollectorJob>()
-            .AddHostedService<ContainersStatsCollectorJob>()
-            .AddHostedService<PlatformsStatsPersistenceJob>()
-            .AddHostedService<ContainersStatsPersistenceJob>()
-            .AddHostedService<ContainerSyncJob>()
-            .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
-        services
-            .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()
-            .AddSingleton(Channel.CreateBounded<ContainersStatBatch>(ChannelDefaultOptions()))
-            .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer)
-            .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader)
-            .AddSingleton(Channel.CreateBounded<PlatformStatsBatch>(ChannelDefaultOptions()))
-            .AddSingleton(s => s.GetRequiredService<Channel<PlatformStatsBatch>>().Writer)
-            .AddSingleton(s => s.GetRequiredService<Channel<PlatformStatsBatch>>().Reader)
-            .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>();
-        return services;
-    }
+            .AddConnectorFactory<IContainerConnector, AgentContainerConnector, LocalContainerConnector>();
 
     /// <summary>
     /// Adds HTTP clients to the service collection.
@@ -151,14 +119,6 @@ public static class InfrastructureModule
             throw new Exception(result.Error.Message, result.Error);
         }
     }
-
-    internal static BoundedChannelOptions ChannelDefaultOptions() => new (1_000)
-    {
-        SingleWriter = true,
-        SingleReader = true,
-        AllowSynchronousContinuations = false,
-        FullMode = BoundedChannelFullMode.DropOldest
-    };
 }
 
 public static class EFTrimmingPreserver

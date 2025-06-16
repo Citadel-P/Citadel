@@ -2,12 +2,12 @@
 using EFCore.BulkExtensions;
 using Domain.Entities;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Application.Services.Abstractions;
 
-namespace Infrastructure.TaskJobs;
+namespace Application.TaskJobs;
 
 internal class ContainersStatsPersistenceJob(
     IServiceScopeFactory scopeFactory,

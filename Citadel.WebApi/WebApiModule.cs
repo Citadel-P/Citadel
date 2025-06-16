@@ -1,10 +1,9 @@
 ﻿using System.Text;
 using System.Text.Json.Serialization;
+using Application.Services.Abstractions;
 using Domain;
 using Hosting.Common.Converters;
 using Hosting.OpenApi;
-using Infrastructure;
-using Infrastructure.Services.Abstractions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Connections;

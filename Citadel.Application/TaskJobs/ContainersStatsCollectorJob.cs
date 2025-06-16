@@ -1,15 +1,15 @@
 ﻿using System.Collections.Concurrent;
 using System.Threading.Channels;
+using Application.Services;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Grpc.Core;
-using Infrastructure.Services;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Infrastructure.TaskJobs;
+namespace Application.TaskJobs;
 
 /// <summary>
 /// Collects containers stats from remote agents and pushes into the shared Channel <see cref="ContainersStatsPersistenceJob"/>.

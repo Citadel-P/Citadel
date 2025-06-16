@@ -11,7 +11,7 @@ using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
 using Infrastructure.EntityFramework;
 using Infrastructure.EntityFramework.Configurations;
-using Infrastructure.TaskJobs;
+using Application.TaskJobs;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;

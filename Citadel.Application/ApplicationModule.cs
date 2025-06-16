@@ -1,7 +1,10 @@
-﻿using Application.Permissions;
+﻿using System.Threading.Channels;
+using Application.Permissions;
 using Application.Permissions.Requirements;
 using Application.Services;
+using Application.TaskJobs;
 using Citadel.SourceGen;
+using Domain.Contracts.Resources.Platforms;
 using Hosting.Common;
 using Hosting.Common.Pipelines;
 using Hosting.Common.Pipelines.Interfaces;
@@ -20,7 +23,8 @@ public static class ApplicationModule
     {
         services
             .AddMemoryCache()
-            .AddSingleton<IJwtService, JwtService>()
+            .AddServices()
+            .AddBackgroundTasks()
             .AddMediator(options =>
             {
                 options.ServiceLifetime = ServiceLifetime.Scoped;
@@ -33,6 +37,37 @@ public static class ApplicationModule
             .AddSingleton(typeof(IPipelineBehavior<,>), typeof(ValidatorBehavior<,>));
 
         EnsureDefaultImagesDefinitionsExists();
+        return services;
+    }
+
+    private static IServiceCollection AddServices(this IServiceCollection services)
+        => services
+            .AddSingleton<IJwtService, JwtService>()
+            .AddSingleton<IPlatformContainerCache, PlatformContainerCache>()
+            .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>();
+
+    private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)
+    {
+        services
+            .AddHostedService<LogCleanupJob>()
+            .AddHostedService<DockerDaemonEventJob>()
+            .AddHostedService<CleanupStatsJob>()
+            .AddHostedService<PlatformSyncJob>()
+            .AddHostedService<PlatformsStatsCollectorJob>()
+            .AddHostedService<ContainersStatsCollectorJob>()
+            .AddHostedService<PlatformsStatsPersistenceJob>()
+            .AddHostedService<ContainersStatsPersistenceJob>()
+            .AddHostedService<ContainerSyncJob>()
+            .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
+        services
+            .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()
+            .AddSingleton(Channel.CreateBounded<ContainersStatBatch>(ChannelDefaultOptions()))
+            .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer)
+            .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader)
+            .AddSingleton(Channel.CreateBounded<PlatformStatsBatch>(ChannelDefaultOptions()))
+            .AddSingleton(s => s.GetRequiredService<Channel<PlatformStatsBatch>>().Writer)
+            .AddSingleton(s => s.GetRequiredService<Channel<PlatformStatsBatch>>().Reader);
+
         return services;
     }
 
@@ -60,4 +95,12 @@ public static class ApplicationModule
             .AddScoped<IAuthorizationHandler, EditContainerHandler>()
             .AddScoped<IAuthorizationHandler, DeleteContainerHandler>();
     }
+
+    internal static BoundedChannelOptions ChannelDefaultOptions() => new(1_000)
+    {
+        SingleWriter = true,
+        SingleReader = true,
+        AllowSynchronousContinuations = false,
+        FullMode = BoundedChannelFullMode.DropOldest
+    };
 }

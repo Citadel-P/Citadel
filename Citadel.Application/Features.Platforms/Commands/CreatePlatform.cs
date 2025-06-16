@@ -1,4 +1,5 @@
-﻿using Domain;
+﻿using Application.TaskJobs;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
@@ -9,7 +10,6 @@ using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.EntityFramework;
-using Infrastructure.TaskJobs;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;

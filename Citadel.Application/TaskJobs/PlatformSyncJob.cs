@@ -1,16 +1,16 @@
 ﻿using System.Threading.Channels;
+using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services;
-using Infrastructure.Services.Abstractions;
+using Application.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Infrastructure.TaskJobs;
+namespace Application.TaskJobs;
 
 /// <summary>
 /// Syncing platforms state.

@@ -1,5 +1,5 @@
 ﻿using System.Collections.Concurrent;
-using Infrastructure.Services.Abstractions;
+using Application.Services.Abstractions;
 
 namespace WebApi.Hubs;
 

@@ -1,18 +1,18 @@
 ﻿using System.Threading.Channels;
+using Application.Services;
+using Application.Services.Abstractions;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services;
-using Infrastructure.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Infrastructure.TaskJobs;
+namespace Application.TaskJobs;
 
 /// <summary>
 /// Syncing full containers state when platform status change.

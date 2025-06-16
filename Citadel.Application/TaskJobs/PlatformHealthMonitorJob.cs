@@ -1,14 +1,14 @@
 ﻿using System.Collections.Concurrent;
+using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Infrastructure.TaskJobs;
+namespace Application.TaskJobs;
 
 /// <summary>
 /// Monitors the external Platforms (gRPC services) by periodically checking their availability and reporting their status.

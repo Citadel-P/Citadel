@@ -1,6 +1,6 @@
 ﻿using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
-using Infrastructure.Services.Abstractions;
+using Application.Services.Abstractions;
 using Microsoft.AspNetCore.SignalR;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 

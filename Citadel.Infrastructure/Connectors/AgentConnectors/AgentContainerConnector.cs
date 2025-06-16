@@ -8,7 +8,6 @@ using Grpc.Core;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.Connectors.Mappings;
 using Infrastructure.Services;
-using Infrastructure.Services.Abstractions;
 using LightResults;
 using static Citadel.Agent.Containers.V1.ContainerService;
 

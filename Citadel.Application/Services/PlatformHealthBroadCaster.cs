@@ -1,16 +1,16 @@
 ﻿using System.Threading.Channels;
-using Infrastructure.TaskJobs;
+using Application.TaskJobs;
 
-namespace Infrastructure.Services;
+namespace Application.Services;
 
 /// <summary>
 /// Broadcaster for platform health events.  
 /// </summary>
-public interface IPlatformHealthBroadCaster
+internal interface IPlatformHealthBroadCaster
 {
-    ChannelReader<PlatformHealth> Register();
-    Task BroadcastAsync(PlatformHealth evt, CancellationToken cancellationToken);
     void Complete();
+    ChannelReader<PlatformHealth> Register();
+    Task BroadcastAsync(PlatformHealth platformHealth, CancellationToken cancellationToken);
 }
 
 internal class PlatformHealthBroadCaster : IPlatformHealthBroadCaster
@@ -19,16 +19,16 @@ internal class PlatformHealthBroadCaster : IPlatformHealthBroadCaster
 
     public ChannelReader<PlatformHealth> Register()
     {
-        var channel = Channel.CreateBounded<PlatformHealth>(InfrastructureModule.ChannelDefaultOptions());
+        var channel = Channel.CreateBounded<PlatformHealth>(ApplicationModule.ChannelDefaultOptions());
         _channels.Add(channel);
         return channel.Reader;
     }
 
-    public async Task BroadcastAsync(PlatformHealth evt, CancellationToken cancellationToken)
+    public async Task BroadcastAsync(PlatformHealth platformHealth, CancellationToken cancellationToken)
     {
         foreach (var ch in _channels)
         {
-            await ch.Writer.WriteAsync(evt, cancellationToken);
+            await ch.Writer.WriteAsync(platformHealth, cancellationToken);
         }
     }
 

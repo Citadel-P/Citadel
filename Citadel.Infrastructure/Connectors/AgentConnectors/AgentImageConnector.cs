@@ -7,9 +7,8 @@ using Domain.Entities.Registries;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.Connectors.Mappings;
-using Infrastructure.Services.Abstractions;
+using Infrastructure.Services;
 using LightResults;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 
 namespace Infrastructure.Connectors.AgentConnectors;
 

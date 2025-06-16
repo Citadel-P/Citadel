@@ -1,6 +1,5 @@
 ﻿using System.Collections.Concurrent;
 using Grpc.Net.Client;
-using Infrastructure.Services.Abstractions;
 using static Citadel.Agent.Containers.V1.ContainerService;
 using static Citadel.Agent.Platforms.V1.PlatformService;
 using static Citadel.Agent.Images.V1.ImageService;
@@ -8,6 +7,18 @@ using static Citadel.Agent.Networks.V1.NetworkService;
 using static Citadel.Agent.Volumes.V1.VolumeService;
 
 namespace Infrastructure.Services;
+
+/// <summary>
+/// Factory to create gRPC clients (native gRPC factory does not support address change at runtime; see https://github.com/grpc/grpc-dotnet/issues/1641)
+/// </summary>
+internal interface IGrpcClientFactory
+{
+    PlatformServiceClient GetPlatformClient(string address);
+    ContainerServiceClient GetContainerClient(string address);
+    ImageServiceClient GetImageClient(string address);
+    NetworkServiceClient GetNetworkClient(string address);
+    VolumeServiceClient GetVolumeClient(string address);
+}
 
 internal class GrpcClientFactory : IGrpcClientFactory
 {

@@ -1,5 +1,5 @@
 ﻿using Application.Features.Platforms.Queries;
-using Infrastructure.Services.Abstractions;
+using Application.Services.Abstractions;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;

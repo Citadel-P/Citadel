@@ -3,7 +3,7 @@ using EFCore.BulkExtensions;
 using Domain.Entities;
 using Domain.Entities.Platforms;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
+using Application.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 using Domain;
 using Domain.Contracts.Resources.Platforms;
 
-namespace Infrastructure.TaskJobs;
+namespace Application.TaskJobs;
 
 internal class PlatformsStatsPersistenceJob(
     IServiceScopeFactory scopeFactory,

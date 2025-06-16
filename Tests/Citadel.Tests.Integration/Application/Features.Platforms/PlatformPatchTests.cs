@@ -5,12 +5,13 @@ using Domain;
 using Domain.Entities;
 using Domain.Entities.Platforms;
 using Infrastructure.EntityFramework;
-using Infrastructure.Services.Abstractions;
-using Infrastructure.TaskJobs;
+using Application.Services.Abstractions;
+using Application.TaskJobs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using static Citadel.Agent.Platforms.V1.PlatformService;
+using Infrastructure.Services;
 
 namespace Tests.Integration.Application.Features.Platforms;
 

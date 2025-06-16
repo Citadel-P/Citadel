@@ -1,6 +1,6 @@
 ﻿using System.Threading.Channels;
-using Infrastructure.Services;
-using Infrastructure.TaskJobs;
+using Application.Services;
+using Application.TaskJobs;
 
 namespace Tests.Integration.Infrastructure.TaskJobs;
 
@@ -15,8 +15,8 @@ internal sealed class TestPlatformHealthBroadCaster : IPlatformHealthBroadCaster
 
     public ChannelReader<PlatformHealth> Register() => _channel.Reader;
 
-    public Task BroadcastAsync(PlatformHealth evt, CancellationToken cancellationToken)
-        => _channel.Writer.WriteAsync(evt, cancellationToken).AsTask();
+    public Task BroadcastAsync(PlatformHealth platformHealth, CancellationToken cancellationToken)
+        => _channel.Writer.WriteAsync(platformHealth, cancellationToken).AsTask();
 
     public void Complete() => _channel.Writer.TryComplete();
 }

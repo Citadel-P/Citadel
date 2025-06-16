@@ -1,4 +1,4 @@
-﻿namespace Infrastructure.Services.Abstractions;
+﻿namespace Application.Services.Abstractions;
 
 /// <summary>
 /// In-memory signalR connection tracker
@@ -11,6 +11,6 @@ public interface ISignalRConnectionTracker
     void JoinGroup(string group, string connectionId, string userId);
     void LeaveGroup(string group, string connectionId, string userId);
 
-    bool HasAnyUsers();
     bool HasUsersInGroup(string group);
+    bool HasAnyUsers();
 }

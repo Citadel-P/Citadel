@@ -1,4 +1,4 @@
-﻿namespace Infrastructure.TaskJobs;
+﻿namespace Application.TaskJobs;
 
 public class JobConfiguration
 {

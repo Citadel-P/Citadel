@@ -2,7 +2,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Domain.Contracts.Resources;
 
-namespace Infrastructure.Services;
+namespace Application.Services;
 
 /// <summary>
 /// A centralized, thread-safe cache for managing the mapping of platform containers.
