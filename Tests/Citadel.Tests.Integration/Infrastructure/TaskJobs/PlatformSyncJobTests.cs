@@ -17,6 +17,7 @@ using static Citadel.Agent.Containers.V1.ContainerService;
 using static Citadel.Agent.Platforms.V1.PlatformService;
 using Application.Services;
 using Infrastructure.Services;
+using Domain.Contracts.Interfaces;
 
 namespace Tests.Integration.Infrastructure.TaskJobs;
 
@@ -44,7 +45,7 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
     protected override async ValueTask SeedDbAsync()
     {
         using var scope = Services.CreateScope();
-        using var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
         var platformDescriptor = new DockerPlatformDescriptor(
             DaemonId: "123456",
@@ -67,8 +68,8 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
             connectorType: PlatformConnectorType.Agent,
             platformDescriptor: platformDescriptor
         );
-        db.Platforms.Add(platform);
-        await db.SaveChangesAsync();
+        uow.Platforms.Add(platform);
+        await uow.SaveChangesAsync();
 
         platformId = platform.Id;
     }
@@ -122,8 +123,8 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
 
         // Assert
         using var scope = Services.CreateScope();
-        using var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var platform = await db.Platforms.AsNoTracking().SingleAsync(x => x.Id == platformId, TestContext.Current.CancellationToken);
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = await uow.Platforms.Query().AsNoTracking().SingleAsync(x => x.Id == platformId, TestContext.Current.CancellationToken);
 
         hubMock.Verify(x => x.PushPlatformUpdate(It.IsAny<Platform>()), Times.Once);
         await Verify(platform);
@@ -176,8 +177,8 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
 
         // Assert
         using var scope = Services.CreateScope();
-        using var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var platform = await db.Platforms.AsNoTracking().SingleAsync(x => x.Id == platformId, TestContext.Current.CancellationToken);
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = await uow.Platforms.Query().AsNoTracking().SingleAsync(x => x.Id == platformId, TestContext.Current.CancellationToken);
 
         var options = new JsonSerializerOptions
         {

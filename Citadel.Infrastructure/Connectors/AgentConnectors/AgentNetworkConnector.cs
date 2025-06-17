@@ -3,7 +3,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Networks;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.Connectors.Mappings;
+using Infrastructure.Connectors.Mappers;
 using Infrastructure.Services;
 using LightResults;
 

@@ -3,10 +3,8 @@ using Domain.Contracts.Resources.Networks;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Networks.Commands;
 
@@ -22,24 +20,23 @@ public sealed record class DeleteNetwork(Guid PlatformId, string[] Ids) : IComma
     }
 }
 
-internal class DeleteNetworksHandler(IConnectorFactory<INetworkConnector> connectorFactory, ApplicationDbContext dbContext) : ICommandHandler<DeleteNetwork, Result>
+internal class DeleteNetworksHandler(IUnitOfWork unitOfWork, IConnectorFactory<INetworkConnector> connectorFactory) : ICommandHandler<DeleteNetwork, Result>
 {
     public async ValueTask<Result> Handle(DeleteNetwork command, CancellationToken cancellationToken)
     {
-        var platform = await dbContext.Platforms.Where(s => s.Id == command.PlatformId)
-            .Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
-        if (platform == null)
+        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
+        if (string.IsNullOrEmpty(address))
         {
             return Result.Failure(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
         var args = new DeleteNetworkCommand
         (
-            PlatformAddress: platform.Address,
+            PlatformAddress: address,
             Ids: command.Ids
         );
 
-        var networkConnector = connectorFactory.GetConnector(platform.ConnectorType);
+        var networkConnector = connectorFactory.GetConnector(connectorType);
         return await networkConnector.DeleteNetworkAsync(args, cancellationToken);
     }
 }

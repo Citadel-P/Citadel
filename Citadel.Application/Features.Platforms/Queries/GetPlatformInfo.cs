@@ -1,10 +1,10 @@
-﻿using Hosting.Common.ErrorTypes;
+﻿using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using FluentValidation;
+using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
-using Infrastructure.EntityFramework;
 
 namespace Application.Features.Platforms.Queries;
 
@@ -19,12 +19,12 @@ public sealed record GetPlatformInfo(Guid Id) : IQuery<Result<Platform>>
     }
 }
 
-internal class GetPlatformInfoHandler(ApplicationDbContext dbContext) : IQueryHandler<GetPlatformInfo, Result<Platform>>
+internal class GetPlatformInfoHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetPlatformInfo, Result<Platform>>
 {
     public async ValueTask<Result<Platform>> Handle(GetPlatformInfo query, CancellationToken cancellationToken)
     {
-        var platform = await dbContext.Platforms
-            .AsNoTracking()
+        var platform = await unitOfWork.Platforms
+            .Query().AsNoTracking()
             .Include(s => s.Stats.Where(x => x.Created > DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeSeconds())) // Get platform stats for the last hour
             .SingleOrDefaultAsync(s => s.Id == query.Id, cancellationToken);
 

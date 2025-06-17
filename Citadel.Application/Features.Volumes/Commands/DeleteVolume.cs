@@ -3,10 +3,8 @@ using Domain.Contracts.Resources.Volumes;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Volumes.Commands;
 
@@ -22,25 +20,24 @@ public sealed record DeleteVolume(Guid PlatformId, string[] Names, bool? Force =
     }
 }
 
-internal class DeleteVolumeHandler(IConnectorFactory<IVolumeConnector> connectorFactory, ApplicationDbContext dbContext) : ICommandHandler<DeleteVolume, Result>
+internal class DeleteVolumeHandler(IUnitOfWork unitOfWork, IConnectorFactory<IVolumeConnector> connectorFactory) : ICommandHandler<DeleteVolume, Result>
 {
     public async ValueTask<Result> Handle(DeleteVolume command, CancellationToken cancellationToken)
     {
-        var platform = await dbContext.Platforms.Where(s => s.Id == command.PlatformId)
-            .Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
-        if (platform == null)
+        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
+        if (string.IsNullOrEmpty(address))
         {
             return Result.Failure(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
         var args = new DeleteVolumeCommand
         (
-            PlatformAddress: platform.Address,
+            PlatformAddress: address,
             Names: command.Names,
             Force: command.Force ?? false
         );
 
-        var volumeConnector = connectorFactory.GetConnector(platform.ConnectorType);
+        var volumeConnector = connectorFactory.GetConnector(connectorType);
         return await volumeConnector.DeleteVolumeAsync(args, cancellationToken);
     }
 }

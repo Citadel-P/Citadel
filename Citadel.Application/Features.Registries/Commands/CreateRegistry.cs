@@ -5,9 +5,6 @@ using Domain.Entities.Registries;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.DockerHub;
-using Infrastructure.EntityFramework;
-using Infrastructure.GithubCr;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -100,11 +97,12 @@ public sealed record CreateRegistry(string Name, string Url, RegistryType Type, 
     }
 }
 
-internal class CreateRegistryHandler(ApplicationDbContext dbContext, IDockerHubService dockerHubService, IGitHubCrService gitHubCrService) : ICommandHandler<CreateRegistry, Result<Registry>>
+internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IDockerHubRegistryRepository dockerHubService, IGitHubCrRepository gitHubCrService) : ICommandHandler<CreateRegistry, Result<Registry>>
 {
     public async ValueTask<Result<Registry>> Handle(CreateRegistry command, CancellationToken cancellationToken)
     {
-        var registry = await dbContext.Registries.FirstOrDefaultAsync(s => s.Name == command.Name, cancellationToken);
+        var repo = unitOfWork.Registries;
+        var registry = await repo.Query().FirstOrDefaultAsync(s => s.Name == command.Name, cancellationToken);
         if (registry != null)
         {
             return Result.Failure<Registry>(new ConflictError("The provided name already exist"));
@@ -133,8 +131,8 @@ internal class CreateRegistryHandler(ApplicationDbContext dbContext, IDockerHubS
 
 
         registry = new Registry(name: command.Name, url: command.Url, type: command.Type, configuration: command.Configuration);
-        dbContext.Registries.Add(registry);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        repo.Add(registry);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return registry;
     }

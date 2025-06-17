@@ -1,10 +1,7 @@
 ﻿using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.DockerHub;
 using Domain.Entities.Registries;
-using Infrastructure.EntityFramework;
-using Infrastructure.GithubCr;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -24,14 +21,12 @@ public sealed record GetExternalRepositories(string Name) : IQuery<Result<IEnume
     }
 }
 
-internal sealed class GetExternalRepositoriesHander(
-    ApplicationDbContext dbContext, 
-    IDockerHubService dockerHubService,
-    IGitHubCrService gitHubCrService) : IQueryHandler<GetExternalRepositories, Result<IEnumerable<IImageRepository>>>
+internal sealed class GetExternalRepositoriesHander(IUnitOfWork unitOfWork, IDockerHubRegistryRepository dockerHubService, IGitHubCrRepository gitHubCrService) 
+    : IQueryHandler<GetExternalRepositories, Result<IEnumerable<IImageRepository>>>
 {
     public async ValueTask<Result<IEnumerable<IImageRepository>>> Handle(GetExternalRepositories query, CancellationToken cancellationToken)
     {
-        var registry = await dbContext.Registries.AsNoTracking().FirstOrDefaultAsync(s => s.Name == query.Name, cancellationToken);
+        var registry = await unitOfWork.Registries.Query().AsNoTracking().FirstOrDefaultAsync(s => s.Name == query.Name, cancellationToken);
         if (registry == null) 
         {
             return Result.Failure<IEnumerable<IImageRepository>>(new NotFoundError("The provided registry name does exist"));

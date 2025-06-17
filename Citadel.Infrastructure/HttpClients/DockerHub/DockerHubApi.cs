@@ -18,7 +18,7 @@ namespace Infrastructure.DockerHub
     /// Replace 'Image Images' with 'List<Images>' <see cref="Tag"/>
     /// Replace 'string V2' by 'Bool V2'
     /// Add Authorization header to 'TagsGET' method
-    public partial interface IDockerHubApi
+    internal partial interface IDockerHubApi
     {
         /// <summary>Create an authentication token</summary>
         /// <remarks>
@@ -204,7 +204,7 @@ namespace Infrastructure.DockerHub
         [Get("/v2/access-tokens/{uuid}")]
         Task<Response> AccessTokensGET2(string uuid, CancellationToken cancellationToken = default);
 
-        /// <summary>Delete a personal access token</summary>
+        /// <summary>Remove a personal access token</summary>
         /// <remarks>Deletes a personal access token permanently. This cannot be undone.</remarks>
         /// <returns>A <see cref="Task"/> that completes when the request is finished.</returns>
         /// <exception cref="ApiException">
@@ -782,7 +782,7 @@ namespace Infrastructure.DockerHub
         [Patch("/v2/orgs/{org_name}/groups/{group_name}")]
         Task<Org_group> GroupsPATCH(string org_name, string group_name, [Body] Body6 body, CancellationToken cancellationToken = default);
 
-        /// <summary>Delete an organization group</summary>
+        /// <summary>Remove an organization group</summary>
         /// <remarks><span class="oat"></span></remarks>
         /// <param name="org_name">Name of the organization (namespace).</param>
         /// <param name="group_name">Name of the group (team) in the organization.</param>
@@ -1319,7 +1319,7 @@ namespace Infrastructure.DockerHub
 #pragma warning disable 649 // Disable "CS0649 Field is never assigned to, and will always have its default value null"
 #pragma warning disable 1573 // Disable "CS1573 Parameter '...' has no matching param tag in the XML comment for ...
 #pragma warning disable 1591 // Disable "CS1591 Missing XML comment for publicly visible type or member ..."
-#pragma warning disable 8073 // Disable "CS8073 The result of the expression is always 'false' since a value of type 'T' is never equal to 'null' of type 'T?'"
+#pragma warning disable 8073 // Disable "CS8073 The result of the expression is always 'false' since a value of type 'TEntity' is never equal to 'null' of type 'TEntity?'"
 #pragma warning disable 3016 // Disable "CS3016 Arrays as attribute arguments is not CLS-compliant"
 #pragma warning disable 8603 // Disable "CS8603 Possible null reference return"
 #pragma warning disable 8604 // Disable "CS8604 Possible null reference argument for parameter"
@@ -1336,7 +1336,7 @@ namespace Infrastructure.DockerHub
     /// User login details
     /// </summary>
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class UsersLoginRequest
+    internal partial class UsersLoginRequest
     {
         /// <summary>
         /// The username of the Docker Hub account to authenticate with.
@@ -1370,7 +1370,7 @@ namespace Infrastructure.DockerHub
     /// successful access token response
     /// </summary>
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class AuthCreateTokenResponse
+    internal partial class AuthCreateTokenResponse
     {
         /// <summary>
         /// The created access token. This expires in 10 minutes.
@@ -1394,7 +1394,7 @@ namespace Infrastructure.DockerHub
     /// successful user login response
     /// </summary>
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class PostUsersLoginSuccessResponse
+    internal partial class PostUsersLoginSuccessResponse
     {
         /// <summary>
         /// Created authentication token.
@@ -1420,7 +1420,7 @@ namespace Infrastructure.DockerHub
     /// failed user login response or second factor required
     /// </summary>
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class PostUsersLoginErrorResponse
+    internal partial class PostUsersLoginErrorResponse
     {
         /// <summary>
         /// Description of the error.
@@ -1453,7 +1453,7 @@ namespace Infrastructure.DockerHub
     /// Second factor user login details
     /// </summary>
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Users2FALoginRequest
+    internal partial class Users2FALoginRequest
     {
         /// <summary>
         /// The intermediate 2FA token returned from `/v2/users/login` API.
@@ -1487,7 +1487,7 @@ namespace Infrastructure.DockerHub
     /// failed second factor login response.
     /// </summary>
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class PostUsers2FALoginErrorResponse
+    internal partial class PostUsers2FALoginErrorResponse
     {
         /// <summary>
         /// Description of the error.
@@ -1508,7 +1508,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class ProtobufAny
+    internal partial class ProtobufAny
     {
 
         [JsonPropertyName("type_url")]
@@ -1529,7 +1529,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class RpcStatus
+    internal partial class RpcStatus
     {
 
         [JsonPropertyName("code")]
@@ -1556,7 +1556,7 @@ namespace Infrastructure.DockerHub
     /// Audit Log action
     /// </summary>
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class AuditLogAction
+    internal partial class AuditLogAction
     {
         /// <summary>
         /// Name of audit log action.
@@ -1591,7 +1591,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class AuditLogActions
+    internal partial class AuditLogActions
     {
         /// <summary>
         /// List of audit log actions.
@@ -1601,7 +1601,7 @@ namespace Infrastructure.DockerHub
         public ICollection<AuditLogAction> Actions { get; set; }
 
         /// <summary>
-        /// Grouping label for a particular set of audit log actions.
+        /// Grouping label for a particular dbSet of audit log actions.
         /// </summary>
 
         [JsonPropertyName("label")]
@@ -1622,7 +1622,7 @@ namespace Infrastructure.DockerHub
     /// GetAuditActions response.
     /// </summary>
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class GetAuditActionsResponse
+    internal partial class GetAuditActionsResponse
     {
         /// <summary>
         /// Map of audit log actions.
@@ -1646,7 +1646,7 @@ namespace Infrastructure.DockerHub
     /// GetAuditLogs response.
     /// </summary>
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class GetAuditLogsResponse
+    internal partial class GetAuditLogsResponse
     {
         /// <summary>
         /// List of audit log events.
@@ -1670,7 +1670,7 @@ namespace Infrastructure.DockerHub
     /// Audit log event.
     /// </summary>
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class AuditLog
+    internal partial class AuditLog
     {
 
         [JsonPropertyName("account")]
@@ -1709,7 +1709,7 @@ namespace Infrastructure.DockerHub
     /// Used to error if input validation fails.
     /// </summary>
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class ValueError
+    internal partial class ValueError
     {
 
         [JsonPropertyName("fields")]
@@ -1730,7 +1730,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Error
+    internal partial class Error
     {
 
         [JsonPropertyName("detail")]
@@ -1751,7 +1751,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class AccessToken
+    internal partial class AccessToken
     {
 
         [JsonPropertyName("uuid")]
@@ -1799,7 +1799,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class CreateAccessTokenRequest
+    internal partial class CreateAccessTokenRequest
     {
         /// <summary>
         /// Friendly name for you to identify the token.
@@ -1840,7 +1840,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class GetAccessTokensResponse
+    internal partial class GetAccessTokensResponse
     {
 
         [JsonPropertyName("count")]
@@ -1870,7 +1870,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class PatchAccessTokenRequest
+    internal partial class PatchAccessTokenRequest
     {
 
         [JsonPropertyName("token_label")]
@@ -1892,7 +1892,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class OrgSettings
+    internal partial class OrgSettings
     {
 
         [JsonPropertyName("restricted_images")]
@@ -1910,7 +1910,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Restricted_images
+    internal partial class Restricted_images
     {
         /// <summary>
         /// Whether or not to restrict image usage for users in the organization.
@@ -1945,7 +1945,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Layer
+    internal partial class Layer
     {
         /// <summary>
         /// image layer digest
@@ -1980,7 +1980,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Image
+    internal partial class Image
     {
         /// <summary>
         /// CPU architecture
@@ -2075,7 +2075,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Tag
+    internal partial class Tag
     {
         /// <summary>
         /// tag ID
@@ -2177,7 +2177,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Paginated_tags : Page
+    internal partial class Paginated_tags : Page
     {
 
         [JsonPropertyName("results")]
@@ -2186,7 +2186,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Page
+    internal partial class Page
     {
         /// <summary>
         /// total number of results available across all pages
@@ -2221,7 +2221,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Scim_schema_attribute
+    internal partial class Scim_schema_attribute
     {
 
         [JsonPropertyName("name")]
@@ -2264,7 +2264,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Scim_schema_parent_attribute : Scim_schema_attribute
+    internal partial class Scim_schema_parent_attribute : Scim_schema_attribute
     {
 
         [JsonPropertyName("subAttributes")]
@@ -2273,7 +2273,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Invite
+    internal partial class Invite
     {
         /// <summary>
         /// uuid representing the invite id
@@ -2321,7 +2321,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Bulk_invite
+    internal partial class Bulk_invite
     {
         /// <summary>
         /// A list of invitees
@@ -2342,7 +2342,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class error
+    internal partial class error
     {
 
         [JsonPropertyName("errinfo")]
@@ -2366,7 +2366,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Scim_error
+    internal partial class Scim_error
     {
         /// <summary>
         /// The status code for the response in string format.
@@ -2397,7 +2397,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class User
+    internal partial class User
     {
         /// <summary>
         /// The UUID trimmed
@@ -2446,7 +2446,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Org_member : User
+    internal partial class Org_member : User
     {
         /// <summary>
         /// User's email address
@@ -2488,7 +2488,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Org_member_paginated
+    internal partial class Org_member_paginated
     {
         /// <summary>
         /// The total number of items that match with the search.
@@ -2530,7 +2530,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Org_group
+    internal partial class Org_group
     {
         /// <summary>
         /// Group ID
@@ -2579,7 +2579,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Group_member
+    internal partial class Group_member
     {
         /// <summary>
         /// The UUID trimmed
@@ -2631,7 +2631,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Email_address
+    internal partial class Email_address
     {
 
         [JsonPropertyName("id")]
@@ -2661,7 +2661,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Legacy_email_address : Email_address
+    internal partial class Legacy_email_address : Email_address
     {
 
         [JsonPropertyName("user")]
@@ -2670,7 +2670,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Email_with_username : Email_address
+    internal partial class Email_with_username : Email_address
     {
 
         [JsonPropertyName("username")]
@@ -2679,7 +2679,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Scim_service_provider_config
+    internal partial class Scim_service_provider_config
     {
 
         [JsonPropertyName("schemas")]
@@ -2721,7 +2721,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Scim_resource_type
+    internal partial class Scim_resource_type
     {
 
         [JsonPropertyName("schemas")]
@@ -2754,7 +2754,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Scim_schema
+    internal partial class Scim_schema
     {
 
         [JsonPropertyName("schemas")]
@@ -2784,7 +2784,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Scim_email
+    internal partial class Scim_email
     {
 
         [JsonPropertyName("value")]
@@ -2808,7 +2808,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Scim_group
+    internal partial class Scim_group
     {
 
         [JsonPropertyName("value")]
@@ -2829,7 +2829,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Scim_user_name
+    internal partial class Scim_user_name
     {
 
         [JsonPropertyName("givenName")]
@@ -2850,13 +2850,13 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Scim_user_schemas : System.Collections.ObjectModel.Collection<string>
+    internal partial class Scim_user_schemas : System.Collections.ObjectModel.Collection<string>
     {
 
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Scim_user
+    internal partial class Scim_user
     {
 
         [JsonPropertyName("schemas")]
@@ -2901,7 +2901,7 @@ namespace Infrastructure.DockerHub
     /// Request to create access token
     /// </summary>
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Body
+    internal partial class Body
     {
         /// <summary>
         /// The identifier of the account to create an access token for. If using a password or personal access token,
@@ -2935,7 +2935,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Body2
+    internal partial class Body2
     {
 
         [JsonPropertyName("restricted_images")]
@@ -2984,7 +2984,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Body3
+    internal partial class Body3
     {
         /// <summary>
         /// Role of the member
@@ -3007,7 +3007,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Body4
+    internal partial class Body4
     {
 
         [JsonPropertyName("name")]
@@ -3029,7 +3029,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Body5
+    internal partial class Body5
     {
 
         [JsonPropertyName("name")]
@@ -3051,7 +3051,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Body6
+    internal partial class Body6
     {
 
         [JsonPropertyName("name")]
@@ -3084,7 +3084,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response : AccessToken
+    internal partial class Response : AccessToken
     {
 
         [JsonPropertyName("token")]
@@ -3093,7 +3093,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Anonymous
+    internal partial class Anonymous
     {
         /// <summary>
         /// First and last name of the member
@@ -3163,7 +3163,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response2
+    internal partial class Response2
     {
 
         [JsonPropertyName("data")]
@@ -3181,7 +3181,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response3
+    internal partial class Response3
     {
 
         [JsonPropertyName("count")]
@@ -3208,7 +3208,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response4
+    internal partial class Response4
     {
 
         [JsonPropertyName("count")]
@@ -3235,7 +3235,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response5
+    internal partial class Response5
     {
 
         [JsonPropertyName("invitees")]
@@ -3253,7 +3253,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response6 : Scim_error
+    internal partial class Response6 : Scim_error
     {
 
         [JsonPropertyName("status")]
@@ -3262,7 +3262,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response7 : Scim_error
+    internal partial class Response7 : Scim_error
     {
 
         [JsonPropertyName("status")]
@@ -3271,7 +3271,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response8
+    internal partial class Response8
     {
 
         [JsonPropertyName("schemas")]
@@ -3295,7 +3295,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response9 : Scim_error
+    internal partial class Response9 : Scim_error
     {
 
         [JsonPropertyName("status")]
@@ -3304,7 +3304,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response10
+    internal partial class Response10
     {
 
         [JsonPropertyName("schemas")]
@@ -3328,7 +3328,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response11
+    internal partial class Response11
     {
 
         [JsonPropertyName("schemas")]
@@ -3358,7 +3358,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response12 : Scim_error
+    internal partial class Response12 : Scim_error
     {
 
         [JsonPropertyName("status")]
@@ -3374,7 +3374,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response13 : Scim_error
+    internal partial class Response13 : Scim_error
     {
 
         [JsonPropertyName("status")]
@@ -3383,7 +3383,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response14 : Scim_error
+    internal partial class Response14 : Scim_error
     {
 
         [JsonPropertyName("status")]
@@ -3392,7 +3392,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Results : AccessToken
+    internal partial class Results : AccessToken
     {
 
         [JsonPropertyName("token")]
@@ -3440,7 +3440,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Invitees
+    internal partial class Invitees
     {
         /// <summary>
         /// invitee email or Docker ID
@@ -3514,7 +3514,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Patch
+    internal partial class Patch
     {
 
         [JsonPropertyName("supported")]
@@ -3532,7 +3532,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Bulk
+    internal partial class Bulk
     {
 
         [JsonPropertyName("supported")]
@@ -3556,7 +3556,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Filter
+    internal partial class Filter
     {
 
         [JsonPropertyName("supported")]
@@ -3577,7 +3577,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class ChangePassword
+    internal partial class ChangePassword
     {
 
         [JsonPropertyName("supported")]
@@ -3595,7 +3595,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Sort
+    internal partial class Sort
     {
 
         [JsonPropertyName("supported")]
@@ -3613,7 +3613,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Etag
+    internal partial class Etag
     {
 
         [JsonPropertyName("supported")]
@@ -3631,7 +3631,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class AuthenticationSchemes
+    internal partial class AuthenticationSchemes
     {
 
         [JsonPropertyName("name")]
@@ -3658,7 +3658,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Meta
+    internal partial class Meta
     {
 
         [JsonPropertyName("resourceType")]
@@ -3693,7 +3693,7 @@ namespace Infrastructure.DockerHub
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Restricted_images2 : Restricted_images
+    internal partial class Restricted_images2 : Restricted_images
     {
 
     }

@@ -2,9 +2,9 @@
 using Domain.Contracts.Resources.Networks;
 using Google.Protobuf.Collections;
 
-namespace Infrastructure.Connectors.Mappings;
+namespace Infrastructure.Connectors.Mappers;
 
-public static class NetworkMapper
+internal static class NetworkMapper
 {
     public static IEnumerable<DockerNetwork> Map(this ListNetworksResponse response)
         => response.Networks.Select(Map);

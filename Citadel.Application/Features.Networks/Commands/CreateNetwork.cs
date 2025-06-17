@@ -1,11 +1,8 @@
-﻿using Citadel.Agent.Common.V1;
-using Domain.Contracts.Interfaces;
+﻿using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Networks;
 using FluentValidation;
-using Grpc.Core;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -169,19 +166,18 @@ public sealed record IPAM(
 public sealed record IPAMConfig(string Subnet, string IpRange, string Gateway);
 public sealed record ConfigFrom(string Network);
 
-internal sealed class CreateNetworkHandler(ApplicationDbContext dbContext,
-    IConnectorFactory<INetworkConnector> connectorFactory): ICommandHandler<CreateNetwork, Result<CreateNetworkResult>>
+internal sealed class CreateNetworkHandler(IUnitOfWork unitOfWork, IConnectorFactory<INetworkConnector> connectorFactory)
+    : ICommandHandler<CreateNetwork, Result<CreateNetworkResult>>
 {
     public async ValueTask<Result<CreateNetworkResult>> Handle(CreateNetwork request, CancellationToken cancellationToken)
     {
-        var platform = await dbContext.Platforms.Where(s => s.Id == request.PlatformId)
-            .Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
-        if (platform == null)
+        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(request.PlatformId, cancellationToken);
+        if (string.IsNullOrEmpty(address))
         {
             return Result.Failure<CreateNetworkResult>(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
-        var networkConnector = connectorFactory.GetConnector(platform.ConnectorType);
-        return await networkConnector.CreateNetworkAsync(request.ToCommand(platform.Address), cancellationToken);
+        var networkConnector = connectorFactory.GetConnector(connectorType);
+        return await networkConnector.CreateNetworkAsync(request.ToCommand(address), cancellationToken);
     }
 }

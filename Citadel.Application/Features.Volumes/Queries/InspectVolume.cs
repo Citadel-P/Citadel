@@ -2,10 +2,8 @@
 using Domain.Contracts.Resources.Volumes;
 using FluentValidation;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Volumes.Queries;
 
@@ -21,13 +19,12 @@ public sealed record InspectVolume (Guid PlatformId, string Name) : IQuery<Resul
     }
 }
 
-internal sealed class InspectVolumeHandler(IConnectorFactory<IVolumeConnector> connectorFactory, ApplicationDbContext dbContext) : IQueryHandler<InspectVolume, Result<DockerVolume>>
+internal sealed class InspectVolumeHandler(IUnitOfWork unitOfWork, IConnectorFactory<IVolumeConnector> connectorFactory) : IQueryHandler<InspectVolume, Result<DockerVolume>>
 {
     public async ValueTask<Result<DockerVolume>> Handle(InspectVolume query, CancellationToken cancellationToken)
     {
-        var platform = await dbContext.Platforms.Where(s => s.Id == query.PlatformId)
-            .Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
-        if (platform == null)
+        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
+        if (string.IsNullOrEmpty(address))
         {
             return Result.Failure<DockerVolume>(new NotFoundError("The provided platform Id doesn't exist"));
         }
@@ -35,10 +32,10 @@ internal sealed class InspectVolumeHandler(IConnectorFactory<IVolumeConnector> c
         var command = new InspectVolumeCommand
         (
             Name: query.Name,
-            PlatformAddress: platform.Address
+            PlatformAddress: address
         );
 
-        var volumeConnector = connectorFactory.GetConnector(platform.ConnectorType);
+        var volumeConnector = connectorFactory.GetConnector(connectorType);
         return await volumeConnector.InspectVolumeAsync(command, cancellationToken);
     }
 }

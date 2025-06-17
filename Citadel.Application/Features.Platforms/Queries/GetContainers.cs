@@ -1,17 +1,16 @@
-﻿using FluentValidation;
-using Mediator;
-using LightResults;
-using Microsoft.EntityFrameworkCore;
+﻿using Domain.Contracts.Interfaces;
 using Domain.Entities;
-using Infrastructure.EntityFramework;
+using FluentValidation;
+using LightResults;
+using Mediator;
+using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Platforms.Queries;
 
 /// <summary>
 /// Get all containers from remote agent
 /// </summary>
-public sealed record class GetContainers(Guid PlatformId)
-    : IQuery<Result<IEnumerable<Container>>>
+public sealed record class GetContainers(Guid PlatformId) : IQuery<Result<IEnumerable<Container>>>
 {
     internal class Validator : AbstractValidator<GetContainers>
     {
@@ -22,12 +21,11 @@ public sealed record class GetContainers(Guid PlatformId)
     }
 }
 
-internal class GetContainersHandler(ApplicationDbContext dbContext)
-    : IQueryHandler<GetContainers, Result<IEnumerable<Container>>>
+internal class GetContainersHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetContainers, Result<IEnumerable<Container>>>
 {
     public async ValueTask<Result<IEnumerable<Container>>> Handle(GetContainers query, CancellationToken cancellationToken)
     {
-        var containers = await dbContext.Containers
+        var containers = await unitOfWork.Containers
                 .WithLastStat(query.PlatformId)
                 .ToListAsync(cancellationToken);
         

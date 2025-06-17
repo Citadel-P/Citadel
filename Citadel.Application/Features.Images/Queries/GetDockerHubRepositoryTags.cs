@@ -2,7 +2,6 @@
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Domain.Entities.Registries;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -23,14 +22,12 @@ public sealed record GetDockerHubRepositoryTags(string RegistryName, string Repo
     }
 }
 
-public sealed class GetDockerHubRepositoryTagsHandler(
-    ApplicationDbContext dbContext,
-    IDockerHubService dockerHubService)
+public sealed class GetDockerHubRepositoryTagsHandler(IUnitOfWork unitOfWork, IDockerHubRegistryRepository dockerHubService)
     : IQueryHandler<GetDockerHubRepositoryTags, Result<IEnumerable<DockerHubTag>>>
 {
     public async ValueTask<Result<IEnumerable<DockerHubTag>>> Handle(GetDockerHubRepositoryTags query, CancellationToken cancellationToken)
     {
-        var registry = await dbContext.Registries.AsNoTracking().FirstOrDefaultAsync(s => s.Name == query.RegistryName, cancellationToken);
+        var registry = await unitOfWork.Registries.Query().AsNoTracking().FirstOrDefaultAsync(s => s.Name == query.RegistryName, cancellationToken);
         if (registry == null)
         {
             return Result.Failure<IEnumerable<DockerHubTag>>(new NotFoundError("The provided registry name does exist"));

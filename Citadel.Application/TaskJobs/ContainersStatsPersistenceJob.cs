@@ -1,11 +1,10 @@
 ﻿using System.Threading.Channels;
-using EFCore.BulkExtensions;
 using Domain.Entities;
-using Infrastructure.EntityFramework;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Application.Services.Abstractions;
+using Domain.Contracts.Interfaces;
 
 namespace Application.TaskJobs;
 
@@ -16,7 +15,7 @@ internal class ContainersStatsPersistenceJob(
     ILogger<ContainersStatsPersistenceJob> logger) : BackgroundService
 {
     private const int BatchSize = 300;
-    // Updates to db will be flushed every x seconds or when batch size is reached.
+    // Updates to uow will be flushed every x seconds or when batch size is reached.
     private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(60 * 2); 
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
@@ -70,10 +69,10 @@ internal class ContainersStatsPersistenceJob(
         try
         {
             using var scope = scopeFactory.CreateAsyncScope();
-            using var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
             var stats = statsByPlatform.SelectMany(s => s.Value).ToList();
-            await db.BulkInsertAsync(stats, cancellationToken: cancellationToken);
+            await uow.BulkInsertAsync(stats, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {

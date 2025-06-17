@@ -6,10 +6,6 @@ using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
-using Infrastructure.DockerHub;
-using Infrastructure.EntityFramework;
-using Infrastructure.EntityFramework.Configurations;
-using Infrastructure.GithubCr;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -113,11 +109,11 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
     }
 }
 
-internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubService dockerHubService, IGitHubCrService gitHubCrService) : ICommandHandler<PatchRegistry, Result<Registry>>
+internal class PatchRegistryHandler(IUnitOfWork unitOfWork, IDockerHubRegistryRepository dockerHubService, IGitHubCrRepository gitHubCrService) : ICommandHandler<PatchRegistry, Result<Registry>>
 {
     public async ValueTask<Result<Registry>> Handle(PatchRegistry command, CancellationToken cancellationToken)
     {
-        var registry = await dbContext.Registries.FirstOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
+        var registry = await unitOfWork.Registries.Query().FirstOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
         if (registry == null)
         {
             return Result.Failure<Registry>(new NotFoundError("The provided Id does not exist"));
@@ -127,7 +123,8 @@ internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubSe
 
         if (patchedRegistry.Name != null) 
         {
-            var conflict = await dbContext.Registries.AsNoTracking().FirstOrDefaultAsync(s => s.Name == patchedRegistry.Name && s.Id != command.Id, cancellationToken);
+            var conflict = await unitOfWork.Registries
+                .Query().AsNoTracking().FirstOrDefaultAsync(s => s.Name == patchedRegistry.Name && s.Id != command.Id, cancellationToken);
             if (conflict != null) 
             {
                 return Result.Failure<Registry>(new ConflictError("A registry with the same name already exist"));
@@ -156,7 +153,7 @@ internal class PatchRegistryHandler(ApplicationDbContext dbContext, IDockerHubSe
         }
 
         registry.PartialUpdate(name: patchedRegistry.Name, url: patchedRegistry.Url, configuration: patchedRegistry.Configuration);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return registry;
     }

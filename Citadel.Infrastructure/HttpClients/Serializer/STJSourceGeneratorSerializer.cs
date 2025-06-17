@@ -7,7 +7,7 @@ using Refit;
 
 namespace Infrastructure.HttpClients.Serializer;
 
-public sealed class STJSourceGeneratorSerializer(JsonSerializerOptions jsonSerializerOptions) : IHttpContentSerializer
+internal sealed class STJSourceGeneratorSerializer(JsonSerializerOptions jsonSerializerOptions) : IHttpContentSerializer
 {
     public STJSourceGeneratorSerializer() : this(HttpClientsContext.JsonSerializerOptions) { }
 

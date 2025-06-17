@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using Domain;
+using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Domain.Entities.Registries;
 using Infrastructure.EntityFramework;
@@ -13,7 +14,7 @@ public class RegistryPatchTests : IntegrationTestBase<WebApi.Program>
     protected override async ValueTask SeedDbAsync()
     {
         using var scope = Services.CreateScope();
-        using var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
         var registry = new Registry(
             name: "OriginalName",
@@ -21,9 +22,9 @@ public class RegistryPatchTests : IntegrationTestBase<WebApi.Program>
             type: RegistryType.DockerHub,
             configuration: new DockerHubRegistry("original-user", "pat123")
         );
-        db.Registries.Add(registry);
+        uow.Registries.Add(registry);
 
-        await db.SaveChangesAsync();
+        await uow.SaveChangesAsync();
 
         registryId = registry.Id;
     }

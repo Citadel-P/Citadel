@@ -4,12 +4,10 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
-using EFCore.BulkExtensions;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -31,7 +29,7 @@ public sealed record CreatePlatform(string Name, string Address, PlatformType Ty
 }
 
 internal sealed class CreatePlatformHandler(
-    ApplicationDbContext dbContext,
+    IUnitOfWork unitOfWork,
     IPlatformHealthMonitorJob platformHealthMonitorJob,
     IConnectorFactory<IPlatformConnector> platformConnectorFactory,
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
@@ -40,7 +38,7 @@ internal sealed class CreatePlatformHandler(
     public async ValueTask<Result<Platform>> Handle(CreatePlatform command, CancellationToken cancellationToken)
     {
         // Check if the platform already exists
-        if (await dbContext.Platforms.AsNoTracking()
+        if (await unitOfWork.Platforms.Query().AsNoTracking()
                                     .FirstOrDefaultAsync(s => s.Address == command.Address || s.Name == command.Name, cancellationToken: cancellationToken) != null)
         {
             return Result.Failure<Platform>(new ConflictError("A platform with the same [Name] or [Address] already exists!"));
@@ -72,14 +70,14 @@ internal sealed class CreatePlatformHandler(
         }
 
         // Add platform
-        dbContext.Platforms.Add(platform);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        unitOfWork.Platforms.Add(platform);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Add containers
         var containers = await GetContainers(platform, cancellationToken);
         if (containers != null && containers.Any()) 
         {
-            await dbContext.BulkInsertAsync(containers, cancellationToken: cancellationToken);
+            await unitOfWork.BulkInsertAsync(containers, cancellationToken: cancellationToken);
         }
 
         // Start tracking the platform

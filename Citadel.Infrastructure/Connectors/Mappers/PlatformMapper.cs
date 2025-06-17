@@ -5,7 +5,7 @@ using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Platforms;
 
-namespace Infrastructure.Connectors.Mappings;
+namespace Infrastructure.Connectors.Mappers;
 
 internal static class PlatformMapper
 {

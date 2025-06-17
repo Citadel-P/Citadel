@@ -170,6 +170,8 @@ public enum VolumeSharing
 [JsonConverter(typeof(JsonStringEnumConverter<PlatformConnectorType>))]
 public enum PlatformConnectorType
 {
+    [JsonStringEnumMemberName("unknown")]
+    Unknown,
     [JsonStringEnumMemberName("local")]
     Local,
     [JsonStringEnumMemberName("agent")]

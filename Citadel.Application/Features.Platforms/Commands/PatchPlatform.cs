@@ -9,8 +9,6 @@ using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
-using Infrastructure.EntityFramework;
-using Infrastructure.EntityFramework.Configurations;
 using Application.TaskJobs;
 using LightResults;
 using Mediator;
@@ -47,7 +45,7 @@ public sealed record PatchPlatform(Guid? Id, JsonMergePatchDocument<Platform> Pa
 }
 
 internal class PatchPlatformHandler(
-    ApplicationDbContext dbContext,
+    IUnitOfWork unitOfWork,
     IPlatformHealthMonitorJob platformHealthMonitorJob,
     IConnectorFactory<IPlatformConnector> platformConnectorFactory,
     ILogger<PatchPlatformHandler> logger): ICommandHandler<PatchPlatform, Result<Platform>>
@@ -56,7 +54,7 @@ internal class PatchPlatformHandler(
     {
         try
         {
-            var platform = await dbContext.Platforms.FirstOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
+            var platform = await unitOfWork.Platforms.Query().FirstOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
             if (platform == null)
             {
                 return Result.Failure<Platform>(new NotFoundError("The provided Id does not exist"));
@@ -66,7 +64,7 @@ internal class PatchPlatformHandler(
 
             if (patchedPlatform.Name != null)
             {
-                var conflict = await dbContext.Platforms.AsNoTracking().FirstOrDefaultAsync(s => s.Name == patchedPlatform.Name && s.Id != command.Id, cancellationToken);
+                var conflict = await unitOfWork.Platforms.Query().AsNoTracking().FirstOrDefaultAsync(s => s.Name == patchedPlatform.Name && s.Id != command.Id, cancellationToken);
                 if (conflict != null)
                 {
                     return Result.Failure<Platform>(new ConflictError("A platform with the same name already exist"));
@@ -102,7 +100,7 @@ internal class PatchPlatformHandler(
                     agentVersion: platformInfo.AgentVersion,
                     descriptor: platformInfo.PlatformDescriptor);
 
-                await dbContext.SaveChangesAsync(cancellationToken);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
                 await UpdatePlatformTracking(platform.Id, platform.Address, platform.ConnectorType, oldPlatformAddress, cancellationToken);
                 logger.LogInformation("The platform with id = {PlatformId} has been updated", platform.Id);
             }

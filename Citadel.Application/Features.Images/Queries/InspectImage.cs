@@ -3,10 +3,8 @@ using Domain.Contracts.Resources.Images;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Images.Queries;
 
@@ -22,24 +20,23 @@ public sealed record InspectImage(Guid PlatformId, string ImageId) : IQuery<Resu
     }
 }
 
-internal sealed class InspectImageHandler(IConnectorFactory<IImageConnector> connectorFactory, ApplicationDbContext dbContext) : IQueryHandler<InspectImage, Result<InspectImageResult>>
+internal sealed class InspectImageHandler(IUnitOfWork unitOfWork, IConnectorFactory<IImageConnector> connectorFactory) : IQueryHandler<InspectImage, Result<InspectImageResult>>
 {
     public async ValueTask<Result<InspectImageResult>> Handle(InspectImage query, CancellationToken cancellationToken)
     {
-        var platform = await dbContext.Platforms.Where(s => s.Id == query.PlatformId)
-            .Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
-        if (platform == null)
+        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
+        if (string.IsNullOrEmpty(address))
         {
             return Result.Failure<InspectImageResult>(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
         var args = new InspectImageCommand
         (
-            PlatformAddress: platform.Address,
+            PlatformAddress: address,
             ImageId: query.ImageId
         );
         return await connectorFactory
-            .GetConnector(platform.ConnectorType)
+            .GetConnector(connectorType)
             .InspectImageAsync(args, cancellationToken: cancellationToken);
     }
 }

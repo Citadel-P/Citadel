@@ -4,7 +4,7 @@ using Citadel.Agent.Images.V1;
 using Domain.Contracts.Resources.Images;
 using static Citadel.Agent.Images.V1.ConfigMessage.Types;
 
-namespace Infrastructure.Connectors.Mappings;
+namespace Infrastructure.Connectors.Mappers;
 
 internal static class ImageMapper
 {

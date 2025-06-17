@@ -1,12 +1,12 @@
-﻿using Hosting.Common.ErrorTypes;
-using Application.Features.Auth.Models;
+﻿using Application.Features.Auth.Models;
 using Application.Services;
+using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
 using FluentValidation;
+using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
-using Infrastructure.EntityFramework;
 
 namespace Application.Features.Auth.Commands;
 
@@ -22,13 +22,12 @@ public sealed record LoginCommand(string Email, string Password) : ICommand<Resu
     }
 }
 
-internal sealed class LoginCommandHandler(
-    IJwtService jwtService,
-    ApplicationDbContext dbContext) : ICommandHandler<LoginCommand, Result<LoginResponse>>
+internal sealed class LoginCommandHandler(IUnitOfWork unitOfWork, IJwtService jwtService) : ICommandHandler<LoginCommand, Result<LoginResponse>>
 {
     public async ValueTask<Result<LoginResponse>> Handle(LoginCommand query, CancellationToken cancellationToken)
     {
-        var user = await dbContext.Users.AsNoTracking()
+        var user = await unitOfWork.Users.Query()
+            .AsNoTracking()
             .Include(s => s.Teams)
             .ThenInclude(s => s.Role)
             .ThenInclude(s => s.Permissions)
@@ -54,22 +53,22 @@ internal sealed class LoginCommandHandler(
         var accessToken = jwtService.CreateAccessToken(user.GetJwtClaims());
         var (refreshTokenId, refreshToken) = jwtService.CreateRefreshToken();
 
-        dbContext.RefreshTokens.Add(RefreshToken.Create(refreshTokenId, user.Id));
+        unitOfWork.RefreshTokens.Add(RefreshToken.Create(refreshTokenId, user.Id));
 
         // Limit the number of refresh tokens per user
-        var tokensCount = await dbContext.RefreshTokens.CountAsync(s => s.UserId == user.Id, cancellationToken);
+        var tokensCount = await unitOfWork.RefreshTokens.Query().CountAsync(s => s.UserId == user.Id, cancellationToken);
         var maxTokensPerUser = 10;
         if (tokensCount > maxTokensPerUser)
         {
-            var stallTokens = await dbContext.RefreshTokens.AsNoTracking()
+            var stallTokens = await unitOfWork.RefreshTokens.Query().AsNoTracking()
                 .Where(s => s.UserId == user.Id)
                 .OrderBy(s => s.CreatedAt).Take(tokensCount - maxTokensPerUser)
                 .ToListAsync(cancellationToken);
 
-            dbContext.RefreshTokens.RemoveRange(stallTokens);
+            unitOfWork.RefreshTokens.RemoveRange(stallTokens);
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
         return (accessToken, refreshToken);
     }
 

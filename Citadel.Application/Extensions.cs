@@ -1,4 +1,5 @@
 ﻿using Domain;
+using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,17 +7,17 @@ namespace Application;
 
 internal static class Extensions
 {
-    public static IQueryable<Container> WithLastStat(this DbSet<Container> containersInfo, Guid platformId)
-        => containersInfo
-            .AsNoTracking()
+    public static IQueryable<Container> WithLastStat(this IRepository<Container> containerRepository, Guid platformId)
+        => containerRepository
+            .Query().AsNoTracking()
             .OrderByDescending(s => s.Created)
             .Include(s => s.Stats.OrderByDescending(s => s.Created).Take(1))
             .Where(s => s.PlatformId == platformId);
 
-    public static async Task<(string?, Guid?, PlatformConnectorType?)> GetPlatformIdAsync(this DbSet<Container> containersInfo, string containerId, CancellationToken cancellationToken)
+    internal static async Task<(string?, Guid?, PlatformConnectorType?)> GetPlatformIdAsync(this IRepository<Container> containerRepository, string containerId, CancellationToken cancellationToken)
     {
-        var platform = await containersInfo
-            .AsNoTracking()
+        var platform = await containerRepository
+            .Query().AsNoTracking()
             .Include(s => s.Platform)
             .Where(s => s.ContainerId.StartsWith(containerId))
             .Select(s => new { s.Platform.Address, s.PlatformId, s.Platform.ConnectorType })

@@ -1,7 +1,7 @@
 ﻿using Application.Services;
+using Domain.Contracts.Interfaces;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
 using Microsoft.AspNetCore.Http;
@@ -11,10 +11,8 @@ namespace Application.Features.Auth.Commands;
 
 public sealed record RefreshTokenCommand() : ICommand<Result<string>>;
 
-internal sealed class RefreshTokenCommandHandler(
-    IJwtService jwtService,
-    IHttpContextAccessor context,
-    ApplicationDbContext dbContext) : ICommandHandler<RefreshTokenCommand, Result<string>>
+internal sealed class RefreshTokenCommandHandler(IUnitOfWork unitOfWork, IJwtService jwtService, IHttpContextAccessor context) 
+    : ICommandHandler<RefreshTokenCommand, Result<string>>
 {
     public async ValueTask<Result<string>> Handle(RefreshTokenCommand query, CancellationToken cancellationToken)
     {
@@ -26,7 +24,7 @@ internal sealed class RefreshTokenCommandHandler(
         if (!jwtService.TryValidate(refreshToken, out var tokenId))
             return Result.Failure<string>(new UnauthorizedError("Invalid refresh token."));
 
-        var existing = await dbContext.RefreshTokens.AsNoTracking().Include(s => s.User).ThenInclude(s => s.Teams).ThenInclude(s => s.Role)
+        var existing = await unitOfWork.RefreshTokens.Query().AsNoTracking().Include(s => s.User).ThenInclude(s => s.Teams).ThenInclude(s => s.Role)
            
             .FirstOrDefaultAsync(s => s.Id == tokenId, cancellationToken);
         

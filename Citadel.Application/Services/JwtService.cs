@@ -16,9 +16,9 @@ public interface IJwtService
     bool TryValidate(string refreshToken, out Guid tokenId);
 }
 
-internal sealed class JwtService(IHttpContextAccessor context, IOptions<JwtConfig> jwtConfig) : IJwtService
+internal sealed class JwtService(IHttpContextAccessor context, IOptions<JwtConfiguration> jwtConfig) : IJwtService
 {
-    private readonly JwtConfig jwtConfig = jwtConfig.Value;
+    private readonly JwtConfiguration jwtConfig = jwtConfig.Value;
 
     /// <inheritdoc />
     public string CreateAccessToken(IEnumerable<Claim> claims)

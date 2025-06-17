@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using static Citadel.Agent.Platforms.V1.PlatformService;
 using Infrastructure.Services;
+using Domain.Contracts.Interfaces;
 
 namespace Tests.Integration.Application.Features.Platforms;
 
@@ -31,7 +32,7 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
     protected override async ValueTask SeedDbAsync()
     {
         using var scope = Services.CreateScope();
-        using var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
         var platform = new Platform(
             name: "P-01",
@@ -52,9 +53,9 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
                 ContainersPaused: 2,
                 ContainersStopped: 1)
         );
-        db.Platforms.Add(platform);
+        uow.Platforms.Add(platform);
 
-        await db.SaveChangesAsync();
+        await uow.SaveChangesAsync();
 
         platformId = platform.Id;
     }
@@ -116,8 +117,8 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
 
         // Assert
         using var scope = Services.CreateScope();
-        using var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var platform = await db.Platforms.AsNoTracking().SingleAsync(x => x.Id == platformId, TestContext.Current.CancellationToken);
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = await uow.Platforms.Query().AsNoTracking().SingleAsync(x => x.Id == platformId, TestContext.Current.CancellationToken);
 
         healthMonitorMock.Verify(x => x.TrackPlatform("https://localhost:9000", platformId, PlatformConnectorType.Agent), Times.Once);
         await Verify(platform);
@@ -176,8 +177,8 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
         // Add another platform with a conflicting name
         using (var scope = Services.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            db.Platforms.Add(new Platform(
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            uow.Platforms.Add(new Platform(
                 name: "P-02",
                 address: "https://another.address",
                 networkCount: 1,
@@ -196,7 +197,7 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
                     ContainersPaused: 2,
                     ContainersStopped: 1)
             ));
-            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            await uow.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         var patchJson = """

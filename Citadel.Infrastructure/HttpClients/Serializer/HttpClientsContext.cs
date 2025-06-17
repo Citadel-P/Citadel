@@ -1,6 +1,5 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
 using Infrastructure.DockerHub;
 using Infrastructure.GithubCr;
 
@@ -19,7 +18,7 @@ namespace Infrastructure.HttpClients.Serializer;
 [JsonSerializable(typeof(ICollection<Layer>))]
 [JsonSerializable(typeof(PaginateImageSearch))]
 [JsonSerializable(typeof(ICollection<DockerHubImageModel>))]
-public partial class DockerHubContext : JsonSerializerContext
+internal partial class DockerHubContext : JsonSerializerContext
 {
 
 }
@@ -32,7 +31,7 @@ public partial class DockerHubContext : JsonSerializerContext
 [JsonSerializable(typeof(PackageVersionContainerMetadata))]
 [JsonSerializable(typeof(IEnumerable<GhcrPackageVersion>))]
 
-public partial class GitHubCrContext : JsonSerializerContext
+internal partial class GitHubCrContext : JsonSerializerContext
 { 
 }
 

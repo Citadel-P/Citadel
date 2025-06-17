@@ -2,7 +2,6 @@
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Domain.Entities.Registries;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -22,13 +21,12 @@ public sealed record GetDockerHubRepositories(string RegistryName) : IQuery<Resu
     }
 }
 
-internal sealed class GetDockerHubRepositoriesHandler(
-    ApplicationDbContext dbContext, 
-    IDockerHubService dockerHubService) : IQueryHandler<GetDockerHubRepositories, Result<IEnumerable<DockerHubRepositoryInfo>>>
+internal sealed class GetDockerHubRepositoriesHandler(IUnitOfWork unitOfWork, IDockerHubRegistryRepository dockerHubService) 
+    : IQueryHandler<GetDockerHubRepositories, Result<IEnumerable<DockerHubRepositoryInfo>>>
 {
     public async ValueTask<Result<IEnumerable<DockerHubRepositoryInfo>>> Handle(GetDockerHubRepositories query, CancellationToken cancellationToken)
     {
-        var registry = await dbContext.Registries.AsNoTracking().FirstOrDefaultAsync(s => s.Name == query.RegistryName, cancellationToken);
+        var registry = await unitOfWork.Registries.Query().AsNoTracking().FirstOrDefaultAsync(s => s.Name == query.RegistryName, cancellationToken);
         if (registry == null)
         {
             return Result.Failure<IEnumerable<DockerHubRepositoryInfo>>(new NotFoundError("The provided registry name does exist"));

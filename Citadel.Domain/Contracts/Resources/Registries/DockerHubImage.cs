@@ -7,3 +7,12 @@ public sealed record DockerHubImage(
     int Size, 
     DockerHubImageStatus Status, 
     string LastPulled);
+
+public sealed record DockerHubImageResult(
+    string? Name,
+    string? Description,
+    bool IsOfficial,
+    long StarCount,
+    long PullCount,
+    string? Url = null,
+    string? Icon = null);

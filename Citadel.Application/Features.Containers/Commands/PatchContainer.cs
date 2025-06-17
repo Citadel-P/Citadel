@@ -1,10 +1,10 @@
 ﻿using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Domain.Entities;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -20,12 +20,13 @@ public sealed record PatchContainer(string[] ContainersIds, ContainerAction Acti
     }
 }
 
-internal class PatchContainerHandler(IConnectorFactory<IContainerConnector> connectorFactory, ApplicationDbContext dbContext)
+internal class PatchContainerHandler(IUnitOfWork unitOfWork, IConnectorFactory<IContainerConnector> connectorFactory)
     : ICommandHandler<PatchContainer, Result>
 {
     public async ValueTask<Result> Handle(PatchContainer request, CancellationToken cancellationToken)
     {
-        var platformContainers = await dbContext.Containers.AsNoTracking()
+        var platformContainers = await unitOfWork.Containers
+                    .Query().AsNoTracking()
                     .Include(s => s.Platform)
                     .Where(s => request.ContainersIds.Contains(s.ContainerId))
                     .GroupBy(s => new { s.Platform.Address, s.Platform.ConnectorType })

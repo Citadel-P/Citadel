@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Infrastructure.EntityFramework;
 
-public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> dbContextOptions)
+internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> dbContextOptions)
     : DbContext(dbContextOptions)
 {
     public DbSet<Platform> Platforms { get; private set; }

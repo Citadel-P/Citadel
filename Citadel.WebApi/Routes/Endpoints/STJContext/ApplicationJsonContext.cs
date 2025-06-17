@@ -1,9 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 using Application.Features.Auth.Models;
 using Application.Features.Images.Queries;
-using Citadel.Agent.Common.V1;
-using Citadel.Agent.Containers.V1;
-using Citadel.Agent.Images.V1;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Networks;
@@ -12,8 +9,6 @@ using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
-using Infrastructure.DockerHub;
-using Infrastructure.GithubCr;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Auth;
@@ -58,11 +53,6 @@ namespace Application.Models;
 [JsonSerializable(typeof(HttpValidationProblemDetails))]
 [JsonSerializable(typeof(Dictionary<string, string[]>))]
 [JsonSerializable(typeof(ContainerInspectView))]
-[JsonSerializable(typeof(ContainerState))]
-[JsonSerializable(typeof(HostConfig))]
-[JsonSerializable(typeof(Citadel.Agent.Common.V1.GraphDriverData))]
-[JsonSerializable(typeof(MountPoint))]
-[JsonSerializable(typeof(ContainerConfig))]
 [JsonSerializable(typeof(NetworkSettingsInfo))]
 [JsonSerializable(typeof(ContainerInspectionInfo))]
 [JsonSerializable(typeof(ContainerRuntimeState))]
@@ -71,11 +61,10 @@ namespace Application.Models;
 [JsonSerializable(typeof(IReadOnlyList<IpAddressInfo>))]
 [JsonSerializable(typeof(IReadOnlyList<MountPointInfo>))]
 [JsonSerializable(typeof(ContainerConfiguration))]
-[JsonSerializable(typeof(Domain.Contracts.Resources.Containers.RestartPolicy))]
+[JsonSerializable(typeof(RestartPolicy))]
 [JsonSerializable(typeof(Ulimit))]
-[JsonSerializable(typeof(Domain.Contracts.Resources.Containers.BindOptions))]
-[JsonSerializable(typeof(Domain.Contracts.Resources.Containers.VolumeOptions))]
-[JsonSerializable(typeof(Address))]
+[JsonSerializable(typeof(BindOptions))]
+[JsonSerializable(typeof(VolumeOptions))]
 [JsonSerializable(typeof(DeleteContainersRequest))]
 [JsonSerializable(typeof(RegistryInput))]
 [JsonSerializable(typeof(RegistryInputPatchDocument))]
@@ -83,18 +72,13 @@ namespace Application.Models;
 [JsonSerializable(typeof(RegistriesView))]
 [JsonSerializable(typeof(RegistryView))]
 [JsonSerializable(typeof(RegistryConfigurationBase))]
-[JsonSerializable(typeof(IAsyncEnumerable<PullImageResponse>))]
 [JsonSerializable(typeof(DeleteImagesRequest))]
 [JsonSerializable(typeof(DockerHubImageView))]
 [JsonSerializable(typeof(ImageView))]
 [JsonSerializable(typeof(ImagesView))]
-[JsonSerializable(typeof(WebApi.Routes.Endpoints.Resources.Images.PullImageRequest))]
+[JsonSerializable(typeof(PullImageRequest))]
 [JsonSerializable(typeof(IEnumerable<IImageRepository>))]
-[JsonSerializable(typeof(IEnumerable<GhcrPackageVersion>))]
-[JsonSerializable(typeof(IEnumerable<DockerHubRepository>))]
 [JsonSerializable(typeof(IEnumerable<DockerHubTagView>))]
-[JsonSerializable(typeof(IEnumerable<DockerHubImageModel>))]
-[JsonSerializable(typeof(DeleteImageResponse))]
 [JsonSerializable(typeof(CreateNetworkInput))]
 [JsonSerializable(typeof(CreateNetworkResponse))]
 [JsonSerializable(typeof(CreateNetworkView))]
@@ -105,7 +89,6 @@ namespace Application.Models;
 [JsonSerializable(typeof(DeleteVolumesInput))]
 [JsonSerializable(typeof(ListVolumesRequest))]
 [JsonSerializable(typeof(VolumesView))]
-[JsonSerializable(typeof(IAsyncEnumerable<ContainerLogResponse>))]
 [JsonSerializable(typeof(EndpointMetadata))]
 [JsonSerializable(typeof(IEnumerable<DockerHubRepositoryInfo>))]
 [JsonSerializable(typeof(DockerHubTag))]
@@ -125,7 +108,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(VolumeUsageData))]
 [JsonSerializable(typeof(ClusterVolumeInfo))]
 [JsonSerializable(typeof(TopologyEntry))]
-[JsonSerializable(typeof(Domain.Contracts.Resources.Volumes.VolumeCapacityRange))]
+[JsonSerializable(typeof(VolumeCapacityRange))]
 [JsonSerializable(typeof(DeleteImageResult))]
 [JsonSerializable(typeof(IReadOnlyList<DeleteImageResponseItem>))]
 [JsonSerializable(typeof(InspectImageResult))]
@@ -136,8 +119,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(ImageGraphicDriver))]
 [JsonSerializable(typeof(ImageHealthCheck))]
 [JsonSerializable(typeof(ImageGraphDriverData))]
-[JsonSerializable(typeof(IAsyncEnumerable<PullImageResult>))] 
-
+[JsonSerializable(typeof(IAsyncEnumerable<PullImageResult>))]
+[JsonSerializable(typeof(IEnumerable<DockerHubImageResult>))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

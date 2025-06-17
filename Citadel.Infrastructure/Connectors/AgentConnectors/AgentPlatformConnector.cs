@@ -6,7 +6,7 @@ using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.Connectors.Mappings;
+using Infrastructure.Connectors.Mappers;
 using Infrastructure.Services;
 using LightResults;
 

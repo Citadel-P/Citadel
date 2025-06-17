@@ -1,9 +1,9 @@
 ﻿using System.Runtime.CompilerServices;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Domain.Entities;
 using FluentValidation;
 using Hosting.Common;
-using Infrastructure.EntityFramework;
 using Mediator;
 using Microsoft.Extensions.Logging;
 
@@ -20,12 +20,12 @@ public sealed record StreamContainerLogs(string ContainerId) : IStreamCommand<Co
     }
 }
 
-internal class StreamContainerLogsHandler(IConnectorFactory<IContainerConnector> connectorFactory, ApplicationDbContext dbContext, 
-    ILogger<StreamContainerLogsHandler> logger): IStreamCommandHandler<StreamContainerLogs, ContainerLogInfo>
+internal class StreamContainerLogsHandler(IUnitOfWork unitOfWork, IConnectorFactory<IContainerConnector> connectorFactory, ILogger<StreamContainerLogsHandler> logger)
+    : IStreamCommandHandler<StreamContainerLogs, ContainerLogInfo>
 {
     public async IAsyncEnumerable<ContainerLogInfo> Handle(StreamContainerLogs query, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var (address, id, connectorType) = await dbContext.Containers.GetPlatformIdAsync(query.ContainerId, cancellationToken);
+        var (address, id, connectorType) = await unitOfWork.Containers.GetPlatformIdAsync(query.ContainerId, cancellationToken);
         if (string.IsNullOrEmpty(address) || id is null || connectorType is null)
         {
             logger.LogError("No platform found for container ID {ContainerId}", query.ContainerId);

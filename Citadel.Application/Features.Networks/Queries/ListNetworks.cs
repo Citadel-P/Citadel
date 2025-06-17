@@ -1,36 +1,33 @@
 ﻿using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Networks;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Networks.Queries;
 
 public sealed record ListNetworks (Guid PlatformId, bool? Dangling = null, string? Driver = null, string? Id = null, string? Name = null) : IQuery<Result<IEnumerable<DockerNetwork>>>;
 
-internal class ListNetworksHandler(IConnectorFactory<INetworkConnector> connectorFactory, ApplicationDbContext dbContext) : IQueryHandler<ListNetworks, Result<IEnumerable<DockerNetwork>>>
+internal class ListNetworksHandler(IUnitOfWork unitOfWork, IConnectorFactory<INetworkConnector> connectorFactory) : IQueryHandler<ListNetworks, Result<IEnumerable<DockerNetwork>>>
 {
     public async ValueTask<Result<IEnumerable<DockerNetwork>>> Handle(ListNetworks query, CancellationToken cancellationToken)
     {
-        var platform = await dbContext.Platforms.Where(s => s.Id == query.PlatformId)
-            .Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
-        if (platform == null)
+        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
+        if (string.IsNullOrEmpty(address))
         {
             return Result.Failure<IEnumerable<DockerNetwork>>(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
         var args = new ListNetworksCommand
         (
-            PlatformAddress: platform.Address,
+            PlatformAddress: address,
             Id: query.Id,
             Name: query.Name,
             Driver: query.Driver,
             Dangling: query.Dangling
         );
 
-        var networkConnector = connectorFactory.GetConnector(platform.ConnectorType);
+        var networkConnector = connectorFactory.GetConnector(connectorType);
         return await networkConnector.ListNetworksAsync(args, cancellationToken);
     }
 }

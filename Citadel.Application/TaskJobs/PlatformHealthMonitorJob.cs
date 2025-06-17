@@ -2,7 +2,6 @@
 using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Infrastructure.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -38,12 +37,12 @@ internal class PlatformHealthMonitorJob(
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        // Create a scope and dbContext only for the initial fetch
+        // Create a scope and uow only for the initial fetch
         await using (var scope = scopeFactory.CreateAsyncScope())
         {
-            using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var platforms = await dbContext.Platforms
-                .AsNoTracking()
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var platforms = await uow.Platforms
+                .Query().AsNoTracking()
                 .Select(s => new { s.Id, s.Address, s.ConnectorType })
                 .ToArrayAsync(cancellationToken);
 

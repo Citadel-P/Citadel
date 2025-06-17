@@ -1,9 +1,9 @@
 ﻿using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Domain.Entities;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -19,11 +19,13 @@ public sealed record DeleteContainers(string[] ContainersIds, bool? V = false, b
     }
 }
 
-internal sealed class DeleteContainersHandler(IConnectorFactory<IContainerConnector> connectorFactory, ApplicationDbContext dbContext) : ICommandHandler<DeleteContainers, Result>
+internal sealed class DeleteContainersHandler(IUnitOfWork unitOfWork, IConnectorFactory<IContainerConnector> connectorFactory)
+    : ICommandHandler<DeleteContainers, Result>
 {
     public async ValueTask<Result> Handle(DeleteContainers request, CancellationToken cancellationToken)
     {
-        var platformContainers = await dbContext.Containers.AsNoTracking()
+        var platformContainers = await unitOfWork.Containers
+                    .Query().AsNoTracking()
                     .Include(s => s.Platform)
                     .Where(s => request.ContainersIds.Contains(s.ContainerId))
                     .GroupBy(s => new { s.Platform.Address, s.Platform.ConnectorType })

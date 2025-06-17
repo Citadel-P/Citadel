@@ -1,8 +1,6 @@
 ﻿using System.Text.Json;
-using System.Text.Json.Serialization;
 using Domain;
 using Domain.Entities;
-using Domain.Entities.Registries;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -34,16 +32,4 @@ internal sealed class RegistryConfiguration : IEntityTypeConfiguration<Registry>
                 v => JsonSerializer.Deserialize(v, RegistryJsonContext.Default.RegistryConfigurationBase)!);
 
     }
-}
-
-[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default, PropertyNameCaseInsensitive = true)]
-[JsonSerializable(typeof(Registry))]
-[JsonSerializable(typeof(AWSRegistry))]
-[JsonSerializable(typeof(AzureRegistry))]
-[JsonSerializable(typeof(GitlabRegistry))]
-[JsonSerializable(typeof(DockerHubRegistry))]
-[JsonSerializable(typeof(GitHubRegistry))]
-[JsonSerializable(typeof(RegistryConfigurationBase))]
-public partial class RegistryJsonContext : JsonSerializerContext
-{
 }

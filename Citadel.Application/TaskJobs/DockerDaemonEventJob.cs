@@ -5,7 +5,6 @@ using Application.Services.Abstractions;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
-using Infrastructure.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -68,7 +67,7 @@ internal sealed class DockerDaemonEventJob(
             try
             {
                 using var scope = scopeFactory.CreateAsyncScope();
-                using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
                 var containerHub = scope.ServiceProvider.GetRequiredService<IContainerHubDispatcher>();
 
                 var command = new StreamDaemonEventCommand
@@ -88,25 +87,25 @@ internal sealed class DockerDaemonEventJob(
                             if (reply.Container != null)
                             {
                                 var container = reply.Container;
-                                dbContext.Containers.Add(container);
-                                await dbContext.SaveChangesAsync(cancellationToken);
+                                uow.Containers.Add(container);
+                                await uow.SaveChangesAsync(cancellationToken);
                                 await containerHub.SendContainerEvent(container, reply.Action);
                                 platformContainerCache.TryAddContainer(platform.Id, container.ContainerId, container.Id);
                             }
                            
                             break;
                         case "destroy":
-                            var existingDestroy = await dbContext.Containers.FirstOrDefaultAsync(c => c.ContainerId == reply.ContainerId, cancellationToken);
+                            var existingDestroy = await uow.Containers.Query().FirstOrDefaultAsync(c => c.ContainerId == reply.ContainerId, cancellationToken);
                             if (existingDestroy != null)
                             {
-                                dbContext.Containers.Remove(existingDestroy);
-                                await dbContext.SaveChangesAsync(cancellationToken);
+                                uow.Containers.Remove(existingDestroy);
+                                await uow.SaveChangesAsync(cancellationToken);
                                 await containerHub.SendContainerEvent(existingDestroy, reply.Action);
                                 platformContainerCache.TryRemoveContainer(platform.Id, existingDestroy.ContainerId);
                             }
                             break;
                         default:
-                            var existing = await dbContext.Containers.FirstOrDefaultAsync(c => c.ContainerId == reply.ContainerId, cancellationToken);
+                            var existing = await uow.Containers.Query().FirstOrDefaultAsync(c => c.ContainerId == reply.ContainerId, cancellationToken);
                             if (existing != null)
                             {
                                 var state = reply.Action switch
@@ -119,7 +118,7 @@ internal sealed class DockerDaemonEventJob(
                                 };
 
                                 existing.PartialUpdate(state: reply.Container?.State);
-                                await dbContext.SaveChangesAsync(cancellationToken);
+                                await uow.SaveChangesAsync(cancellationToken);
                                 await containerHub.SendContainerEvent(existing, reply.Action);
                             }
                             break;

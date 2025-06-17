@@ -1,4 +1,4 @@
-﻿using Infrastructure.EntityFramework;
+﻿using Domain.Contracts.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -17,15 +17,15 @@ internal class CleanupStatsJob(IServiceScopeFactory scopeFactory, ILogger<Cleanu
             try
             {
                 using var scope = scopeFactory.CreateScope();
-                using var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
                 var thresholdDate = DateTimeOffset.UtcNow.AddDays(-purgeDays);
                 var thresholdEpochSeconds = thresholdDate.ToUnixTimeSeconds();
 
-                var oldStats = dbContext.ContainerStats.Where(stat => stat.Created < thresholdEpochSeconds);
+                var oldStats = uow.ContainerStats.Query().Where(stat => stat.Created < thresholdEpochSeconds);
 
-                dbContext.ContainerStats.RemoveRange(oldStats);
-                await dbContext.SaveChangesAsync(stoppingToken);
+                uow.ContainerStats.RemoveRange(oldStats);
+                await uow.SaveChangesAsync(stoppingToken);
 
                 logger.LogInformation($"Cleaned up old container stats older than {purgeDays} days.");
             }

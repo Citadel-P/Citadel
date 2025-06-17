@@ -3,7 +3,7 @@ using Refit;
 
 namespace Infrastructure.DockerHub;
 
-public partial interface IDockerHubApi
+internal partial interface IDockerHubApi
 {
     [Get("/v2/repositories/{username}")]
     Task<PaginateRepositories> GetRepositories(string username, [Header("Authorization")] string accessToken, [Query] int? page, [Query] int? page_size, CancellationToken cancellationToken = default);
@@ -14,7 +14,7 @@ public partial interface IDockerHubApi
 }
 
 [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-public partial class PaginateRepositories : Page
+internal partial class PaginateRepositories : Page
 {
 
     [JsonPropertyName("results")]
@@ -24,13 +24,13 @@ public partial class PaginateRepositories : Page
 
 
 [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-public partial class PaginateImageSearch: Page
+internal partial class PaginateImageSearch: Page
 {
     [JsonPropertyName("results")]
     public ICollection<DockerHubImageModel>? Results { get; set; }
 }
 
-public record DockerHubImageModel
+internal record DockerHubImageModel
 {
     [JsonPropertyName("repo_name")] public string? Name { get; set; }
     [JsonPropertyName("short_description")] public string? Description { get; set; }
@@ -43,7 +43,7 @@ public record DockerHubImageModel
 }
 
 [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.2.0.0 (NJsonSchema v11.1.0.0 (Newtonsoft.Json v13.0.0.0))")]
-public partial class DockerHubRepository
+internal partial class DockerHubRepository
 {
     /// <summary>
     /// The name of the repository.

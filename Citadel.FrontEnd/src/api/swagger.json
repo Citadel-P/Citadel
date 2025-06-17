@@ -2597,7 +2597,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/DockerHubImageModel"
+                    "$ref": "#/components/schemas/DockerHubImageResult"
                   }
                 }
               }
@@ -4530,34 +4530,43 @@
           }
         }
       },
-      "DockerHubImageModel": {
+      "DockerHubImageResult": {
+        "required": [
+          "name",
+          "description",
+          "isOfficial",
+          "starCount",
+          "pullCount"
+        ],
         "type": "object",
         "properties": {
-          "repo_name": {
+          "name": {
             "type": "string",
             "nullable": true
           },
-          "short_description": {
+          "description": {
             "type": "string",
             "nullable": true
           },
-          "is_official": {
+          "isOfficial": {
             "type": "boolean"
           },
-          "star_count": {
+          "starCount": {
             "type": "integer",
             "format": "int64"
           },
-          "pull_count": {
+          "pullCount": {
             "type": "integer",
             "format": "int64"
           },
           "url": {
             "type": "string",
+            "default": null,
             "nullable": true
           },
           "icon": {
             "type": "string",
+            "default": null,
             "nullable": true
           }
         }
@@ -6675,6 +6684,7 @@
       },
       "PlatformConnectorType": {
         "enum": [
+          "Unknown",
           "Local",
           "Agent"
         ],
@@ -6682,6 +6692,7 @@
       },
       "PlatformConnectorType2": {
         "enum": [
+          "Unknown",
           "Local",
           "Agent"
         ],

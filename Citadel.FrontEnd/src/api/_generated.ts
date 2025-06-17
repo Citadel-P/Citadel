@@ -50,11 +50,13 @@ export enum PlatformStatus {
 
 /** @default "local" */
 export enum PlatformConnectorType2 {
+  Unknown = "Unknown",
   Local = "Local",
   Agent = "Agent",
 }
 
 export enum PlatformConnectorType {
+  Unknown = "Unknown",
   Local = "Local",
   Agent = "Agent",
 }
@@ -325,15 +327,17 @@ export interface DeleteVolumesInput {
   force: boolean | null;
 }
 
-export interface DockerHubImageModel {
-  repo_name?: string | null;
-  short_description?: string | null;
-  is_official?: boolean;
+export interface DockerHubImageResult {
+  name: string | null;
+  description: string | null;
+  isOfficial: boolean;
   /** @format int64 */
-  star_count?: number;
+  starCount: number;
   /** @format int64 */
-  pull_count?: number;
+  pullCount: number;
+  /** @default null */
   url?: string | null;
+  /** @default null */
   icon?: string | null;
 }
 
@@ -2362,7 +2366,7 @@ export class Api<
      * @summary Search for DockerHub public images, if imageName is empty a default list of docker images will be returned
      * @request GET:/api/v1/images/dockerhub
      * @secure
-     * @response `200` `(DockerHubImageModel)[]` OK
+     * @response `200` `(DockerHubImageResult)[]` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2376,7 +2380,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<
-        DockerHubImageModel[],
+        DockerHubImageResult[],
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/images/dockerhub`,

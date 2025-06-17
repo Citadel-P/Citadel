@@ -3,10 +3,8 @@ using Domain.Contracts.Resources.Images;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Images.Commands;
 
@@ -22,13 +20,12 @@ public sealed record DeleteImages(Guid PlatformId, string[] Ids, bool Force = fa
     }
 }
 
-internal sealed class DeleteImagesHandler(IConnectorFactory<IImageConnector> connectorFactory, ApplicationDbContext dbContext) : ICommandHandler<DeleteImages, Result<DeleteImageResult>>
+internal sealed class DeleteImagesHandler(IUnitOfWork unitOfWork, IConnectorFactory<IImageConnector> connectorFactory) : ICommandHandler<DeleteImages, Result<DeleteImageResult>>
 {
     public async ValueTask<Result<DeleteImageResult>> Handle(DeleteImages command, CancellationToken cancellationToken)
     {
-
-        var platform = await dbContext.Platforms.Where(s => s.Id == command.PlatformId).Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
-        if (platform == null)
+        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
+        if (string.IsNullOrEmpty(address))
         {
             return Result.Failure<DeleteImageResult>(new NotFoundError("The provided platform Id does not exist"));
         }
@@ -38,10 +35,10 @@ internal sealed class DeleteImagesHandler(IConnectorFactory<IImageConnector> con
             Ids: command.Ids,
             Force: command.Force,
             NoPrune: command.NoPrune,
-            PlatformAddress: platform.Address
+            PlatformAddress: address
         );
         return await connectorFactory
-            .GetConnector(platform.ConnectorType)
+            .GetConnector(connectorType)
             .DeleteImageAsync(args, cancellationToken: cancellationToken);
     }
 }

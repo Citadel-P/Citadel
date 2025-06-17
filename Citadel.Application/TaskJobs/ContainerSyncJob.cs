@@ -6,7 +6,6 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
-using Infrastructure.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -44,7 +43,7 @@ internal class ContainerSyncJob(
     private async Task SyncContainersForPlatform(PlatformHealth platformEvent, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var containerHub = scope.ServiceProvider.GetRequiredService<IContainerHubDispatcher>();
 
         Container[] syncedContainers;
@@ -52,7 +51,7 @@ internal class ContainerSyncJob(
         if (platformEvent.IsOnLine)
         {
             logger.LogInformation("Platform {PlatformId} is online. Syncing containers from {Address}...", platformEvent.Id, platformEvent.Address);
-            syncedContainers = await SyncOnlinePlatformContainers(dbContext, platformEvent, cancellationToken);
+            syncedContainers = await SyncOnlinePlatformContainers(uow, platformEvent, cancellationToken);
             var cacheEntry = new PlatformCacheEntry
             (
                 Type: platformEvent.Type,
@@ -64,7 +63,7 @@ internal class ContainerSyncJob(
         else
         {
             logger.LogInformation("Platform {PlatformId} is offline. Updating container states.", platformEvent.Id);
-            syncedContainers = await SyncOfflinePlatformContainers(dbContext, platformEvent.Id, cancellationToken);
+            syncedContainers = await SyncOfflinePlatformContainers(uow, platformEvent.Id, cancellationToken);
             platformContainerCache.EvictPlatform(platformEvent.Id);
         }
 
@@ -74,7 +73,7 @@ internal class ContainerSyncJob(
         logger.LogInformation("Successfully synchronized {Count} containers for platform {PlatformId}.", syncedContainers.Length, platformEvent.Id);
     }
 
-    private async Task<Container[]> SyncOnlinePlatformContainers(ApplicationDbContext dbContext, PlatformHealth platformEvent, CancellationToken cancellationToken)
+    private async Task<Container[]> SyncOnlinePlatformContainers(IUnitOfWork unitOfWork, PlatformHealth platformEvent, CancellationToken cancellationToken)
     {
         var command = new ContainerFilterCommand
         (
@@ -91,8 +90,8 @@ internal class ContainerSyncJob(
         }
 
 
-        var existingContainersInDb = await dbContext.Containers
-            .Where(c => c.PlatformId == platformEvent.Id)
+        var existingContainersInDb = await unitOfWork.Containers
+            .Query().Where(c => c.PlatformId == platformEvent.Id)
             .ToDictionaryAsync(c => c.ContainerId, c => c, cancellationToken);
 
         // This list will hold the containers that are currently active and should be cached
@@ -116,7 +115,7 @@ internal class ContainerSyncJob(
             else
             {
                 // Add new container to DB
-                dbContext.Containers.Add(freshContainer);
+                unitOfWork.Containers.Add(freshContainer);
                 currentActiveContainers.Add(freshContainer);
             }
         }
@@ -129,17 +128,17 @@ internal class ContainerSyncJob(
         if (staleContainers.Length > 0)
         {
             logger.LogInformation("Removing {Count} stale containers for platform {PlatformId}.", staleContainers.Length, platformEvent.Id);
-            dbContext.Containers.RemoveRange(staleContainers);
+            unitOfWork.Containers.RemoveRange(staleContainers);
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return [.. currentActiveContainers];
     }
-    private static async Task<Container[]> SyncOfflinePlatformContainers(ApplicationDbContext dbContext, Guid platformId, CancellationToken cancellationToken)
+    private static async Task<Container[]> SyncOfflinePlatformContainers(IUnitOfWork unitOfWork, Guid platformId, CancellationToken cancellationToken)
     {
-        var offlineContainers = await dbContext.Containers
-            .Where(c => c.PlatformId == platformId)
+        var offlineContainers = await unitOfWork.Containers
+            .Query().Where(c => c.PlatformId == platformId)
             .ToArrayAsync(cancellationToken);
 
         foreach (var container in offlineContainers)
@@ -147,7 +146,7 @@ internal class ContainerSyncJob(
             container.PartialUpdate(state: ContainerStateStatus.Offline);
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
         return offlineContainers;
     }
 }

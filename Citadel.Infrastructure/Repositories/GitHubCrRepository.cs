@@ -5,9 +5,9 @@ using Domain.Entities.Registries;
 using Infrastructure.GithubCr;
 using Refit;
 
-namespace Infrastructure.Services;
+namespace Infrastructure.Repositories;
 
-internal class GitHubCrService(IGithubCrApi gitHubCrApi) : IGitHubCrService
+internal class GitHubCrRepository(IGithubCrApi gitHubCrApi) : IGitHubCrRepository
 {
     public async Task<(bool success, string? errorMessage)> CanConnectAsync(GitHubRegistry gitHubRegistry, CancellationToken cancellationToken)
     {

@@ -10,6 +10,7 @@ using Infrastructure.DockerHub;
 using Infrastructure.EntityFramework;
 using Infrastructure.GithubCr;
 using Infrastructure.HttpClients.Serializer;
+using Infrastructure.Repositories;
 using Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -43,8 +44,8 @@ public static class InfrastructureModule
 
     private static IServiceCollection AddServices(this IServiceCollection services)
         => services
-            .AddSingleton<IGitHubCrService, GitHubCrService>()
-            .AddSingleton<IDockerHubService, DockerHubService>()
+            .AddSingleton<IGitHubCrRepository, GitHubCrRepository>()
+            .AddSingleton<IDockerHubRegistryRepository, DockerHubRegistryRepository>()
             .AddSingleton<AgentImageConnector>()
             .AddSingleton<LocalImageConnector>()
             .AddSingleton<AgentVolumeConnector>()
@@ -85,7 +86,7 @@ public static class InfrastructureModule
         EnsureDatabaseFileExists();
         PerformDatabaseUpgrade();
         EFTrimmingPreserver.PreserveEFCoreTypes();
-
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
         return services.AddDbContextPool<ApplicationDbContext>(options =>
         {
             options.UseSqlite(ApplicationContextFactory.ConnectionString, config =>

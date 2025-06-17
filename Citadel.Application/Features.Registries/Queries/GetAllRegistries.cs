@@ -1,14 +1,14 @@
-﻿using Domain.Entities;
+﻿using Domain.Contracts.Interfaces;
+using Domain.Entities;
+using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
-using Infrastructure.EntityFramework;
-using LightResults;
 
 namespace Application.Features.Registries.Queries;
 
 public sealed record GetAllRegistries : IQuery<Result<IEnumerable<Registry>>>;
 
-internal sealed class GetAllRegistriesHandler(ApplicationDbContext dbContext) : IQueryHandler<GetAllRegistries, Result<IEnumerable<Registry>>>
+internal sealed class GetAllRegistriesHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetAllRegistries, Result<IEnumerable<Registry>>>
 {
     public async ValueTask<Result<IEnumerable<Registry>>> Handle(GetAllRegistries query, CancellationToken cancellationToken)
     {
@@ -16,11 +16,12 @@ internal sealed class GetAllRegistriesHandler(ApplicationDbContext dbContext) : 
         {
             Registry.DefaultRegistry()
         };
-        var result = await dbContext.Registries.AsNoTracking().ToListAsync(cancellationToken);
+        var result = await unitOfWork.Registries.Query().AsNoTracking().ToListAsync(cancellationToken);
         if (result.Count != 0)
         {
             registries.AddRange(result);
         }
+
         return registries.OrderByDescending(s => s.Created).ToList();
     }
 }

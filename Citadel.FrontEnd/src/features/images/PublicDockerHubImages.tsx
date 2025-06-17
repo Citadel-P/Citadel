@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Package, Award, Star } from 'lucide-react';
 import { useGETPublicDockerImages } from './hooks/useGETPublicDockerImages';
-import { DockerHubImageModel } from '@/api/_generated';
+import { DockerHubImageResult } from '@/api/_generated';
 import { PullImageBadge } from '@/components/ui/PullImageBadge';
 import { useSheetState } from './hooks/useSheetState';
 import { Sheet } from '@/components/ui/sheet';
@@ -16,8 +16,8 @@ export function PublicDockerHubImages() {
   const [searchValue, setSearchValue] = useState<string | undefined>('');
   const debouncedSearchValue = useDebounce(searchValue, 300);
   const { data, error, isLoading, isSuccess } = useGETPublicDockerImages(debouncedSearchValue);
-  const [images, setImages] = useState<DockerHubImageModel[]>();
-  const { sheetState, openSheet, closeSheet } = useSheetState<DockerHubImageModel>();
+  const [images, setImages] = useState<DockerHubImageResult[]>();
+  const { sheetState, openSheet, closeSheet } = useSheetState<DockerHubImageResult>();
 
   useEffect(() => {
     if (isSuccess && data?.data) {
@@ -25,16 +25,16 @@ export function PublicDockerHubImages() {
     }
   }, [isSuccess, data]);
 
-  const renderImageCard = (image: DockerHubImageModel) => (
+  const renderImageCard = (image: DockerHubImageResult) => (
     <div
-      key={image.repo_name}
+      key={image.name}
       className="p-4 group/versionrow border rounded-lg shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between">
         <a className="hover:underline flex items-center space-x-3" target="_blank" rel="noreferrer" href={image.url!}>
           {image.icon ? (
             <img
               src={image.icon || '/default-icon.png'}
-              alt={image.repo_name ?? ''}
+              alt={image.name ?? ''}
               className="h-10 w-10 rounded-full object-cover"
             />
           ) : (
@@ -42,8 +42,8 @@ export function PublicDockerHubImages() {
           )}
 
           <div className="flex items-center space-x-2">
-            <h5 className="text-lg font-semibold">{image.repo_name}</h5>
-            {image.is_official && (
+            <h5 className="text-lg font-semibold">{image.name}</h5>
+            {image.isOfficial && (
               <Tooltip>
                 <TooltipTrigger>
                   <Award className="text-green-700 h-5 w-4" />
@@ -59,16 +59,16 @@ export function PublicDockerHubImages() {
           <PullImageBadge onClick={() => openSheet(image)} className="group-hover/versionrow:visible" />
         </div>
       </div>
-      <p className="text-sm text-foreground/70 mt-2">{image.short_description || 'No description available.'}</p>
-      {!(image.is_official && image.pull_count === 0) && (
+      <p className="text-sm text-foreground/70 mt-2">{image.description || 'No description available.'}</p>
+      {!(image.isOfficial && image.pullCount === 0) && (
         <div className="flex justify-between items-center mt-4 text-sm text-foreground/70">
           <div className="flex items-center space-x-1">
             <Star className="h-4 w-4 text-yellow-500" />
-            <span>{formatNumber(image.star_count ?? 0)} Stars</span>
+            <span>{formatNumber(image.starCount ?? 0)} Stars</span>
           </div>
           <div className="flex items-center space-x-1">
             <Package className="h-4 w-4 text-blue-500" />
-            <span>{formatNumber(image.pull_count ?? 0)} Downloads</span>
+            <span>{formatNumber(image.pullCount ?? 0)} Downloads</span>
           </div>
         </div>
       )}
@@ -112,7 +112,7 @@ export function PublicDockerHubImages() {
           <PullProgressSheetContent
             sheetProps={{
               repository: '',
-              imageTag: sheetState.image.repo_name ?? '',
+              imageTag: sheetState.image.name ?? '',
             }}
           />
         </Sheet>

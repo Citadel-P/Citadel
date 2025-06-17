@@ -1,233 +1,233 @@
 [
     {
-        "repo_name": "nginx",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/nginx/live/logo-1720462242584.png",
-        "url": "https://hub.docker.com/_/nginx",
-        "short_description": "A lightweight and high-performance web server used as a reverse proxy or load balancer.",
-        "is_official": true
+        "Name": "nginx",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/nginx/live/logo-1720462242584.png",
+        "Url": "https://hub.docker.com/_/nginx",
+        "Description": "A lightweight and high-performance web server used as a reverse proxy or load balancer.",
+        "IsOfficial": true
     },
     {
-        "repo_name": "redis",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/redis/live/logo-1720462263103.png",
-        "url": "https://hub.docker.com/_/redis",
-        "short_description": "An in-memory data structure store, used as a database, cache, and message broker.",
-        "is_official": true
+        "Name": "redis",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/redis/live/logo-1720462263103.png",
+        "Url": "https://hub.docker.com/_/redis",
+        "Description": "An in-memory data structure store, used as a database, cache, and message broker.",
+        "IsOfficial": true
     },
     {
-        "repo_name": "mysql",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/mysql/live/logo-1720462237323.png",
-        "url": "https://hub.docker.com/_/mysql",
-        "is_official": true,
-        "short_description": "A popular relational database management system."
+        "Name": "mysql",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/mysql/live/logo-1720462237323.png",
+        "Url": "https://hub.docker.com/_/mysql",
+        "IsOfficial": true,
+        "Description": "A popular relational database management system."
     },
     {
-        "repo_name": "postgres",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/postgres/live/logo-1720462257907.png",
-        "url": "https://hub.docker.com/_/postgres",
-        "is_official": true,
-        "short_description": "PostgreSQL, a powerful open-source relational database system."
+        "Name": "postgres",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/postgres/live/logo-1720462257907.png",
+        "Url": "https://hub.docker.com/_/postgres",
+        "IsOfficial": true,
+        "Description": "PostgreSQL, a powerful open-source relational database system."
     },
     {
-        "repo_name": "alpine",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/alpine/live/logo-1720462146426.png",
-        "url": "https://hub.docker.com/_/alpine",
-        "short_description": "A minimal Docker image based on Alpine Linux, known for its small size and security.",
-        "is_official": true
+        "Name": "alpine",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/alpine/live/logo-1720462146426.png",
+        "Url": "https://hub.docker.com/_/alpine",
+        "Description": "A minimal Docker image based on Alpine Linux, known for its small size and security.",
+        "IsOfficial": true
     },
     {
-        "repo_name": "node",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/node/live/logo-1720462243432.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/node",
-        "short_description": "Node.js runtime environment for building server-side applications."
+        "Name": "node",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/node/live/logo-1720462243432.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/node",
+        "Description": "Node.js runtime environment for building server-side applications."
     },
     {
-        "is_official": true,
-        "repo_name": "python",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/python/live/logo-1720462259584.png",
-        "url": "https://hub.docker.com/_/python",
-        "short_description": "Python runtime environment with pre-installed versions of Python (2.x or 3.x)."
+        "IsOfficial": true,
+        "Name": "python",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/python/live/logo-1720462259584.png",
+        "Url": "https://hub.docker.com/_/python",
+        "Description": "Python runtime environment with pre-installed versions of Python (2.x or 3.x)."
     },
     {
-        "is_official": true,
-        "repo_name": "httpd",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/httpd/live/logo-1720462209978.png",
-        "url": "https://hub.docker.com/_/httpd",
-        "short_description": "Apache HTTP Server, an open-source web server."
+        "IsOfficial": true,
+        "Name": "httpd",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/httpd/live/logo-1720462209978.png",
+        "Url": "https://hub.docker.com/_/httpd",
+        "Description": "Apache HTTP Server, an open-source web server."
     },
     {
-        "repo_name": "ubuntu",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/ubuntu/live/logo-1720462303144.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/ubuntu",
-        "short_description": "Ubuntu Linux operating system, widely used as a base image for many containers."
+        "Name": "ubuntu",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/ubuntu/live/logo-1720462303144.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/ubuntu",
+        "Description": "Ubuntu Linux operating system, widely used as a base image for many containers."
     },
     {
-        "repo_name": "busybox",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/busybox/live/logo-1720462159685.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/busybox",
-        "short_description": "A minimal base image that provides a smaller alternative to full Linux distros."
+        "Name": "busybox",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/busybox/live/logo-1720462159685.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/busybox",
+        "Description": "A minimal base image that provides a smaller alternative to full Linux distros."
     },
     {
-        "repo_name": "elasticsearch",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/elasticsearch/live/logo-1744135840564.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/elasticsearch",
-        "short_description": "Elasticsearch, a search and analytics engine."
+        "Name": "elasticsearch",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/elasticsearch/live/logo-1744135840564.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/elasticsearch",
+        "Description": "Elasticsearch, a search and analytics engine."
     },
     {
-        "repo_name": "mariadb",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/mariadb/live/logo-1720462226239.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/mariadb",
-        "short_description": "A fork of MySQL, providing a free and open-source database management system."
+        "Name": "mariadb",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/mariadb/live/logo-1720462226239.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/mariadb",
+        "Description": "A fork of MySQL, providing a free and open-source database management system."
     },
     {
-        "repo_name": "wordpress",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/wordpress/live/logo-1720462319468.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/wordpress",
-        "short_description": "WordPress, a widely-used content management system (CMS)."
+        "Name": "wordpress",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/wordpress/live/logo-1720462319468.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/wordpress",
+        "Description": "WordPress, a widely-used content management system (CMS)."
     },
     {
-        "repo_name": "gitlab/gitlab-ce",
-        "icon": "https://www.gravatar.com/avatar/6edd0acaf80f784fab3dd2c31d604e74?s=120&r=g&d=404",
-        "url": "https://hub.docker.com/r/gitlab/gitlab-ce",
-        "is_official": true,
-        "short_description": "GitLab Community Edition, a complete DevOps platform for Git repository management, CI/CD, and more."
+        "Name": "gitlab/gitlab-ce",
+        "Icon": "https://www.gravatar.com/avatar/6edd0acaf80f784fab3dd2c31d604e74?s=120&r=g&d=404",
+        "Url": "https://hub.docker.com/r/gitlab/gitlab-ce",
+        "IsOfficial": true,
+        "Description": "GitLab Community Edition, a complete DevOps platform for Git repository management, CI/CD, and more."
     },
     {
-        "repo_name": "traefik",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/traefik/live/logo-1720462302224.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/traefik",
-        "short_description": "Traefik, a modern HTTP reverse proxy and load balancer."
+        "Name": "traefik",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/traefik/live/logo-1720462302224.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/traefik",
+        "Description": "Traefik, a modern HTTP reverse proxy and load balancer."
     },
     {
-        "repo_name": "sonarqube",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/sonarqube/live/logo-1738080662182.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/sonarqube",
-        "short_description": "Official images for SonarQube, code analysis tool for code quality and security"
+        "Name": "sonarqube",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/sonarqube/live/logo-1738080662182.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/sonarqube",
+        "Description": "Official images for SonarQube, code analysis tool for code quality and security"
     },
     {
-        "repo_name": "registry",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/registry/live/logo-1720462264832.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/registry",
-        "short_description": "Distribution implementation for storing and distributing of container images and artifacts"
+        "Name": "registry",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/registry/live/logo-1720462264832.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/registry",
+        "Description": "Distribution implementation for storing and distributing of container images and artifacts"
     },
     {
-        "repo_name": "haproxy",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/haproxy/live/logo-1720462205614.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/haproxy",
-        "short_description": "HAProxy - The Reliable, High Performance TCP/HTTP Load Balancer"
+        "Name": "haproxy",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/haproxy/live/logo-1720462205614.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/haproxy",
+        "Description": "HAProxy - The Reliable, High Performance TCP/HTTP Load Balancer"
     },
     {
-        "repo_name": "consul",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/consul/live/logo-1720462171784.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/consul",
-        "short_description": "Consul is a datacenter runtime that provides service discovery, configuration, and orchestration."
+        "Name": "consul",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/consul/live/logo-1720462171784.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/consul",
+        "Description": "Consul is a datacenter runtime that provides service discovery, configuration, and orchestration."
     },
     {
-        "repo_name": "vault",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/vault/live/logo-1720462317417.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/vault",
-        "short_description": "Vault is a tool for securely accessing secrets via a unified interface and tight access control."
+        "Name": "vault",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/vault/live/logo-1720462317417.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/vault",
+        "Description": "Vault is a tool for securely accessing secrets via a unified interface and tight access control."
     },
     {
-        "repo_name": "tomcat",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/tomcat/live/logo-1720462300603.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/tomcat",
-        "short_description": "Apache Tomcat is an open source implementation of the Java Servlet and JavaServer Pages technologies"
+        "Name": "tomcat",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/tomcat/live/logo-1720462300603.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/tomcat",
+        "Description": "Apache Tomcat is an open source implementation of the Java Servlet and JavaServer Pages technologies"
     },
     {
-        "repo_name": "caddy",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/caddy/live/logo.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/caddy",
-        "short_description": "Caddy 2 is a powerful, enterprise-ready, open source web server with automatic HTTPS written in Go."
+        "Name": "caddy",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/caddy/live/logo.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/caddy",
+        "Description": "Caddy 2 is a powerful, enterprise-ready, open source web server with automatic HTTPS written in Go."
     },
     {
-        "repo_name": "ghost",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/ghost/live/logo-1722384580757.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/ghost",
-        "short_description": "Publish by web and email newsletter, with member signups and subscription payments."
+        "Name": "ghost",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/ghost/live/logo-1722384580757.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/ghost",
+        "Description": "Publish by web and email newsletter, with member signups and subscription payments."
     },
     {
-        "repo_name": "kong",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/kong/live/logo-1720462221080.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/kong",
-        "short_description": "The Cloud-Native API Gateway for APIs and Microservices"
+        "Name": "kong",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/kong/live/logo-1720462221080.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/kong",
+        "Description": "The Cloud-Native API Gateway for APIs and Microservices"
     },
     {
-        "repo_name": "zookeeper",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/zookeeper/live/logo-1720462324554.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/zookeeper",
-        "short_description": "Apache ZooKeeper is an open-source server which enables highly reliable distributed coordination."
+        "Name": "zookeeper",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/zookeeper/live/logo-1720462324554.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/zookeeper",
+        "Description": "Apache ZooKeeper is an open-source server which enables highly reliable distributed coordination."
     },
     {
-        "repo_name": "neo4j",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/neo4j/live/logo-1720462240295.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/neo4j",
-        "short_description": "Neo4j is a highly scalable, robust native graph database."
+        "Name": "neo4j",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/neo4j/live/logo-1720462240295.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/neo4j",
+        "Description": "Neo4j is a highly scalable, robust native graph database."
     },
     {
-        "repo_name": "gradle",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/gradle/live/logo-1720462203779.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/gradle",
-        "short_description": "Gradle is a build tool with a focus on build automation and support for multi-language development."
+        "Name": "gradle",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/gradle/live/logo-1720462203779.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/gradle",
+        "Description": "Gradle is a build tool with a focus on build automation and support for multi-language development."
     },
     {
-        "repo_name": "mongo-express",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/mongo-express/live/logo.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/mongo-express",
-        "short_description": "Web-based MongoDB admin interface, written with Node.js and express."
+        "Name": "mongo-express",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/mongo-express/live/logo.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/mongo-express",
+        "Description": "Web-based MongoDB admin interface, written with Node.js and express."
     },
     {
-        "repo_name": "cassandra",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/cassandra/live/logo-1720462160940.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/cassandra",
-        "short_description": "Apache Cassandra is an open-source distributed storage system."
+        "Name": "cassandra",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/cassandra/live/logo-1720462160940.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/cassandra",
+        "Description": "Apache Cassandra is an open-source distributed storage system."
     },
     {
-        "repo_name": "kibana",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/kibana/live/logo-1740168662268.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/kibana",
-        "short_description": "Kibana gives shape to any kind of data — structured and unstructured — indexed in Elasticsearch."
+        "Name": "kibana",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/kibana/live/logo-1740168662268.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/kibana",
+        "Description": "Kibana gives shape to any kind of data — structured and unstructured — indexed in Elasticsearch."
     },
     {
-        "repo_name": "logstash",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/logstash/live/logo-1720462224560.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/logstash",
-        "short_description": "Logstash is a tool for managing events and logs."
+        "Name": "logstash",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/logstash/live/logo-1720462224560.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/logstash",
+        "Description": "Logstash is a tool for managing events and logs."
     },
     {
-        "repo_name": "fedora",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/fedora/live/logo.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/fedora",
-        "short_description": "Official Docker builds of Fedora."
+        "Name": "fedora",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/fedora/live/logo.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/fedora",
+        "Description": "Official Docker builds of Fedora."
     },
     {
-        "repo_name": "couchdb",
-        "icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/couchdb/live/logo-1736273402544.png",
-        "is_official": true,
-        "url": "https://hub.docker.com/_/couchdb",
-        "short_description": "CouchDB is a database that uses JSON for documents, an HTTP API, & JavaScript/declarative indexing."
+        "Name": "couchdb",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/couchdb/live/logo-1736273402544.png",
+        "IsOfficial": true,
+        "Url": "https://hub.docker.com/_/couchdb",
+        "Description": "CouchDB is a database that uses JSON for documents, an HTTP API, & JavaScript/declarative indexing."
     }
 ]

@@ -1,8 +1,6 @@
 ﻿using System.Threading.Channels;
-using EFCore.BulkExtensions;
 using Domain.Entities;
 using Domain.Entities.Platforms;
-using Infrastructure.EntityFramework;
 using Application.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Domain;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Contracts.Interfaces;
 
 namespace Application.TaskJobs;
 
@@ -20,7 +19,7 @@ internal class PlatformsStatsPersistenceJob(
     ILogger<PlatformsStatsPersistenceJob> logger) : BackgroundService
 {
     private const int BatchSize = 200;
-    // Updates to db will be flushed every x seconds or when batch size is reached.
+    // Updates to uow will be flushed every x seconds or when batch size is reached.
     private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(60*2); 
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
@@ -66,10 +65,10 @@ internal class PlatformsStatsPersistenceJob(
     private async Task SaveBatchToDb(Dictionary<Guid, List<PlatformStat>> statsByPlatform, PlatformStatsBatch batch, CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateAsyncScope();
-        using var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         foreach (var (platformId, stats) in statsByPlatform)
         {
-            var existing = await db.Platforms.FirstOrDefaultAsync(s => s.Id == platformId, cancellationToken);
+            var existing = await uow.Platforms.Query().FirstOrDefaultAsync(s => s.Id == platformId, cancellationToken);
             if (existing == null)
             {
                 logger.LogWarning("Platform with ID {PlatformId} not found in the database.", platformId);
@@ -105,7 +104,7 @@ internal class PlatformsStatsPersistenceJob(
         try
         {
             var stats = statsByPlatform.Values.SelectMany(s => s).ToArray();
-            await db.BulkInsertAsync(stats, cancellationToken: cancellationToken);
+            await uow.BulkInsertAsync(stats, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {

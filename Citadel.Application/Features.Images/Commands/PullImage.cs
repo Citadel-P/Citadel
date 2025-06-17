@@ -5,7 +5,6 @@ using Domain.Entities;
 using Domain.Entities.Registries;
 using FluentValidation;
 using Hosting.Common;
-using Infrastructure.EntityFramework;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
@@ -74,11 +73,12 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
     }
 }
 
-internal sealed class PullImageHandler(IConnectorFactory<IImageConnector> connectorFactory, ApplicationDbContext dbContext) : IStreamCommandHandler<PullImage, PullImageResult>
+internal sealed class PullImageHandler(IUnitOfWork unitOfWork, IConnectorFactory<IImageConnector> connectorFactory) 
+    : IStreamCommandHandler<PullImage, PullImageResult>
 {
     public async IAsyncEnumerable<PullImageResult> Handle(PullImage command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var platform = await dbContext.Platforms.Where(s => s.Id == command.PlatformId)
+        var platform = await unitOfWork.Platforms.Query().Where(s => s.Id == command.PlatformId)
             .Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
 
         if (platform == null)
@@ -88,7 +88,8 @@ internal sealed class PullImageHandler(IConnectorFactory<IImageConnector> connec
 
         var registryConfiguration = command.RegistryName == Registry.DefaultRegistryName
             ? Registry.DefaultRegistry().Configuration // Public Docker registry
-            : await dbContext.Registries.AsNoTracking()
+            : await unitOfWork.Registries
+                .Query().AsNoTracking()
                 .Where(s => s.Name == command.RegistryName)
                 .Select(s => s.Configuration).FirstOrDefaultAsync(cancellationToken);
 

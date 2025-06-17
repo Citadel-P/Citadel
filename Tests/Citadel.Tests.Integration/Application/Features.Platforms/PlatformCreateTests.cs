@@ -14,6 +14,7 @@ using Moq;
 using static Citadel.Agent.Containers.V1.ContainerService;
 using static Citadel.Agent.Platforms.V1.PlatformService;
 using Infrastructure.Services;
+using Domain.Contracts.Interfaces;
 
 namespace Tests.Integration.Application.Features.Platforms;
 
@@ -108,9 +109,9 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
 
         // Check DB
         using var scope = Services.CreateScope();
-        using var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var platform = await db.Platforms.AsNoTracking().SingleOrDefaultAsync(x => x.Name == "P-NEW", TestContext.Current.CancellationToken);
-        var containers = await db.Containers.AsNoTracking().ToListAsync(TestContext.Current.CancellationToken);
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = await uow.Platforms.Query().AsNoTracking().SingleOrDefaultAsync(x => x.Name == "P-NEW", TestContext.Current.CancellationToken);
+        var containers = await uow.Containers.Query().AsNoTracking().ToListAsync(TestContext.Current.CancellationToken);
         
         Assert.NotNull(platform);
         Assert.Equal(3, containers.Count);
@@ -124,8 +125,8 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
         // Arrange: Seed a platform
         using (var scope = Services.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            db.Platforms.Add(new Platform(
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            uow.Platforms.Add(new Platform(
                 name: "P-EXIST",
                 address: "https://localhost:9001",
                 networkCount: 1,
@@ -144,7 +145,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
                     ContainersPaused: 2,
                     ContainersStopped: 1)
             ));
-            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            await uow.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         var createJson = """

@@ -2,7 +2,6 @@
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Domain.Entities.Registries;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -23,11 +22,12 @@ public sealed record GetGithubPackageVersions(string RegistryName, string Packag
     }
 }
 
-internal class GetGithubPackageVersionsHander(ApplicationDbContext dbContext, IGitHubCrService gitHubCrService) : IQueryHandler<GetGithubPackageVersions, Result<IEnumerable<GitHubCrPackageVersion>>>
+internal class GetGithubPackageVersionsHander(IUnitOfWork unitOfWork, IGitHubCrRepository gitHubCrService) 
+    : IQueryHandler<GetGithubPackageVersions, Result<IEnumerable<GitHubCrPackageVersion>>>
 {
     public async ValueTask<Result<IEnumerable<GitHubCrPackageVersion>>> Handle(GetGithubPackageVersions query, CancellationToken cancellationToken)
     {
-        var registry = await dbContext.Registries.AsNoTracking().FirstOrDefaultAsync(s => s.Name == query.RegistryName, cancellationToken);
+        var registry = await unitOfWork.Registries.Query().AsNoTracking().FirstOrDefaultAsync(s => s.Name == query.RegistryName, cancellationToken);
         if (registry == null) 
         {
             return Result.Failure<IEnumerable<GitHubCrPackageVersion>>(new NotFoundError("The provided registry name does exist"));

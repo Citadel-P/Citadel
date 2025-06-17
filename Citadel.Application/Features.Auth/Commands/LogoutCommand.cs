@@ -1,18 +1,17 @@
 ﻿using Application.Services;
+using Domain.Contracts.Interfaces;
 using Hosting.Common;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Auth.Commands;
 
 public sealed record LogoutCommand(): ICommand<Result>;
 
-internal sealed class LogoutCommandHandler(
-    IJwtService jwtService,
-    IHttpContextAccessor context,
-    ApplicationDbContext dbContext) : ICommandHandler<LogoutCommand, Result>
+internal sealed class LogoutCommandHandler(IUnitOfWork unitOfWork, IJwtService jwtService,IHttpContextAccessor context) 
+    : ICommandHandler<LogoutCommand, Result>
 {
     public async ValueTask<Result> Handle(LogoutCommand query, CancellationToken cancellationToken)
     {
@@ -26,12 +25,12 @@ internal sealed class LogoutCommandHandler(
         if (!jwtService.TryValidate(refreshToken, out var tokenId))
             return Result.Success();
 
-        var existing = await dbContext.RefreshTokens.FindAsync(tokenId, cancellationToken);
+        var existing = await unitOfWork.RefreshTokens.Query().AsNoTracking().FirstOrDefaultAsync(s => s.Id == tokenId, cancellationToken);
         if (existing == null)
             return Result.Success();
 
-        dbContext.RefreshTokens.Remove(existing);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        unitOfWork.RefreshTokens.Remove(existing);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Result.Success();
     }

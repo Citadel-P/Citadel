@@ -3,10 +3,8 @@ using Domain.Contracts.Resources.Volumes;
 using FluentValidation;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.EntityFramework;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 using static Hosting.Common.Validators;
 
 namespace Application.Features.Volumes.Commands;
@@ -41,7 +39,7 @@ public sealed record CreateVolume(
     }
 }
 
-internal sealed class CreateVolumeHandler(IConnectorFactory<IVolumeConnector> connectorFactory, ApplicationDbContext dbContext) 
+internal sealed class CreateVolumeHandler(IUnitOfWork unitOfWork, IConnectorFactory<IVolumeConnector> connectorFactory) 
     : ICommandHandler<CreateVolume, Result<DockerVolume>>
 {
     
@@ -49,23 +47,22 @@ internal sealed class CreateVolumeHandler(IConnectorFactory<IVolumeConnector> co
     {
         try
         {
-            var platform = await dbContext.Platforms.Where(s => s.Id == command.PlatformId)
-                .Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
-            if (platform == null)
+            var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
+            if (string.IsNullOrEmpty(address))
             {
                 return Result.Failure<DockerVolume>(new NotFoundError("The provided platform Id doesn't exist"));
             }
 
             var request = new CreateVolumeCommand
             (
-                PlatformAddress: platform.Address,
+                PlatformAddress: address,
                 Name: command.Name,
                 Driver: command.Driver,
                 Labels: command.Labels,
                 Options: command.Options
             );
 
-            var volumeConnector = connectorFactory.GetConnector(platform.ConnectorType);
+            var volumeConnector = connectorFactory.GetConnector(connectorType);
             return await volumeConnector.CreateVolumeAsync(request, cancellationToken: cancellationToken);
         }
         catch (RpcException ex)

@@ -2,9 +2,9 @@
 using Domain;
 using Domain.Contracts.Resources.Volumes;
 
-namespace Infrastructure.Connectors.Mappings;
+namespace Infrastructure.Connectors.Mappers;
 
-public static class VolumeMapper
+internal static class VolumeMapper
 {
     public static IEnumerable<DockerVolume> Map(this ListVolumesResponse response)
     {

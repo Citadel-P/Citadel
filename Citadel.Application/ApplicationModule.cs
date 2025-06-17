@@ -22,7 +22,6 @@ public static class ApplicationModule
     public static IServiceCollection RegisterApplicationModule(this IServiceCollection services)
     {
         services
-            .AddMemoryCache()
             .AddServices()
             .AddBackgroundTasks()
             .AddMediator(options =>

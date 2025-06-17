@@ -1,12 +1,11 @@
 using Application;
 using Application.Configs;
 using Application.Models;
+using Domain;
 using Hosting;
 using Hosting.Common;
 using Hosting.OpenApi;
 using Infrastructure;
-using Infrastructure.EntityFramework.Configurations;
-using Application.TaskJobs;
 using Microsoft.AspNetCore.Http.Json;
 using WebApi;
 
@@ -56,7 +55,7 @@ void AdditionalJsonOptions(JsonOptions options)
 
 static IServiceCollection AddIOptionsFromConfiguration(IServiceCollection services, IConfiguration configuration)
 {
-    services.Configure<JwtConfig>(configuration.GetSection("Jwt"));
+    services.Configure<JwtConfiguration>(configuration.GetSection("Jwt"));
     services.Configure<JobConfiguration>(configuration.GetSection("JobConfiguration"));
     return services;
 }

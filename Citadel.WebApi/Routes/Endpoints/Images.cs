@@ -4,7 +4,6 @@ using Application.Features.Images.Queries;
 using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Registries;
 using Hosting.Extensions;
-using Infrastructure.DockerHub;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -45,7 +44,7 @@ public static class Images
         return EndpointHandlers.HandleResult(result, v => v);
     }
 
-    public static async Task<Results<Ok<IEnumerable<DockerHubImageModel>>, ProblemHttpResult>> GetDockerHubPublicImages(IMediator mediator, [FromQuery] string? imageName = null, CancellationToken cancellationToken = default)
+    public static async Task<Results<Ok<IEnumerable<DockerHubImageResult>>, ProblemHttpResult>> GetDockerHubPublicImages(IMediator mediator, [FromQuery] string? imageName = null, CancellationToken cancellationToken = default)
     {
         var result = await mediator.Send(new GetDockerHubPublicImages(imageName), cancellationToken);
         return EndpointHandlers.HandleResult(result, v => v);

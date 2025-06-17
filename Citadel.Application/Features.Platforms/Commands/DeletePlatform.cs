@@ -1,8 +1,8 @@
-﻿using FluentValidation;
-using Hosting.Common.ErrorTypes;
-using Infrastructure.EntityFramework;
-using Application.Services.Abstractions;
+﻿using Application.Services.Abstractions;
 using Application.TaskJobs;
+using Domain.Contracts.Interfaces;
+using FluentValidation;
+using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -20,15 +20,15 @@ public sealed record DeletePlatform(Guid Id) : ICommand<Result>
 }
 
 internal class DeletePlatformHandler(
-    ApplicationDbContext dbContext,
+    IUnitOfWork unitOfWork,
     IPlatformHubDispatcher platformHubDispatcher,
     IPlatformHealthMonitorJob platformHealthMonitorJob,
     ILogger<DeletePlatformHandler> logger) : ICommandHandler<DeletePlatform, Result>
 {
     public async ValueTask<Result> Handle(DeletePlatform command, CancellationToken cancellationToken)
     {
-        var platform = await dbContext.Platforms
-            .AsNoTracking()
+        var platform = await unitOfWork.Platforms
+            .Query().AsNoTracking()
             .SingleOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
 
         if (platform is null)
@@ -36,8 +36,8 @@ internal class DeletePlatformHandler(
             return Result.Failure(new NotFoundError("Platform does not exist"));
         }
 
-        dbContext.Platforms.Remove(platform);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        unitOfWork.Platforms.Remove(platform);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         await platformHealthMonitorJob.UntrackPlatform(platform.Address, cancellationToken);
 

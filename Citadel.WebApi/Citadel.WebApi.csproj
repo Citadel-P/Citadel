@@ -27,6 +27,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Citadel.Contracts\Citadel.Hosting\Citadel.Hosting.csproj" />
 	<ProjectReference Include="..\Citadel.Application\Citadel.Application.csproj" />
+	<ProjectReference Include="..\Citadel.Infrastructure\Citadel.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

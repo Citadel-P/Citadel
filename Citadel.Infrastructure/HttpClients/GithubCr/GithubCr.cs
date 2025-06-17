@@ -6,7 +6,7 @@ namespace Infrastructure.GithubCr
     /// <summary>
     /// <see cref="https://docs.github.com/en/rest/packages/packages?apiVersion=2022-11-28"/>
     /// </summary>
-    public partial interface IGithubCrApi
+    internal partial interface IGithubCrApi
     {
         /// <summary>
         /// List container packages for a user
@@ -58,7 +58,7 @@ namespace Infrastructure.GithubCr
         Task<IEnumerable<GhcrPackageVersion>> ListPackageVersionsForOrg(string org, string package_name, [Authorize("Bearer")] string pat, [Header("User-Agent")] string agent, int page = 1, int per_page = 100, CancellationToken cancellationToken = default);
 
     }
-    public class GhcrPackage
+    internal class GhcrPackage
     {
         [JsonPropertyName("id")]
         required public int Id { get; init; }
@@ -79,7 +79,7 @@ namespace Infrastructure.GithubCr
         public Owner? Owner { get; init; }
     }
 
-    public class Owner
+    internal class Owner
     {
         [JsonPropertyName("id")]
         required public int Id { get; init; }
@@ -93,7 +93,7 @@ namespace Infrastructure.GithubCr
         public string? GistsUrl { get; init; }
     }
 
-    public record GhcrPackageVersion
+    internal record GhcrPackageVersion
     {
         [JsonPropertyName("id")]
         required public int Id { get; init; }
@@ -113,12 +113,13 @@ namespace Infrastructure.GithubCr
         public PackageVersionMetadata? Metadata { get; init; }
     }
 
-    public record PackageVersionMetadata
+    internal record PackageVersionMetadata
     {
         [JsonPropertyName("container")]
         public PackageVersionContainerMetadata? Container {  get; init; }
     }
-    public record PackageVersionContainerMetadata
+
+    internal record PackageVersionContainerMetadata
     {
         [JsonPropertyName("tags")]
         public IEnumerable<string>? Tags { get; init; }

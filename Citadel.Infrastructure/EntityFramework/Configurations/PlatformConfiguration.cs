@@ -1,8 +1,6 @@
 ﻿using System.Text.Json;
-using System.Text.Json.Serialization;
 using Domain;
 using Domain.Entities;
-using Domain.Entities.Platforms;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -43,17 +41,4 @@ internal sealed class PlatformConfiguration : IEntityTypeConfiguration<Platform>
         // Backing field
         builder.Metadata.FindNavigation(nameof(Platform.Stats))?.SetPropertyAccessMode(PropertyAccessMode.Field);
     }
-}
-
-[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default, PropertyNameCaseInsensitive = true)]
-[JsonSerializable(typeof(Platform))]
-[JsonSerializable(typeof(PlatformStat))]
-[JsonSerializable(typeof(ICollection<PlatformStat>))]
-[JsonSerializable(typeof(DockerPlatformDescriptor))]
-[JsonSerializable(typeof(DockerSwarmPlatformDescriptor))]
-[JsonSerializable(typeof(KubernetesPlatformDescriptor))]
-[JsonSerializable(typeof(ICollection<SwarmPeer>))]
-[JsonSerializable(typeof(PlatformDescriptor))]
-public partial class PlatformJsonContext : JsonSerializerContext
-{
 }
