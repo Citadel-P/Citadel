@@ -3,8 +3,9 @@
   title: One or more validation errors occurred.,
   status: 400,
   errors: {
-    0: [
-      Only Docker platform type is supported at the moment.
+    Name: [
+      'Name' must not be empty.,
+      The length of 'Name' must be at least 3 characters. You entered 0 characters.
     ]
   },
   traceId: {Scrubbed}

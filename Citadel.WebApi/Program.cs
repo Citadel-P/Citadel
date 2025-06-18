@@ -13,7 +13,7 @@ CitadelWebApplicationBuilder.Create(args, new CitadelWebApplicationOptions()
 {
     Configure = Configure,
     WithServices = WithServices,
-    WithAdditionalJsonOptions = AdditionalJsonOptions
+    WithJsonResponseOptions = AdditionalJsonResponseOptions
 });
 
 // Add services to the container.
@@ -45,12 +45,13 @@ void Configure(WebApplication app)
     app.MapHealthChecks("/health", HealthCheck.GetHealthCheckOptions());
 }
 
-void AdditionalJsonOptions(JsonOptions options)
+void AdditionalJsonResponseOptions(JsonOptions options)
 {
     options.SerializerOptions.TypeInfoResolverChain.Add(ApplicationJsonContext.Default);
     options.SerializerOptions.TypeInfoResolverChain.Add(ProblemJsonContext.Default);
     options.SerializerOptions.TypeInfoResolverChain.Add(RegistryJsonContext.Default);
     options.SerializerOptions.Converters.AddGenericEnumConverters();
+    Citadel.GeneratedConverters.SafeEnumConverters.Register(options.SerializerOptions);
 }
 
 static IServiceCollection AddIOptionsFromConfiguration(IServiceCollection services, IConfiguration configuration)

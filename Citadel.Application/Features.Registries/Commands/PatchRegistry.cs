@@ -1,9 +1,11 @@
-﻿using Domain;
+﻿using Application.Services;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Domain.Entities.Registries;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
 using LightResults;
@@ -12,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Registries.Commands;
 
+[RequirePermission(nameof(AppPermission.Registry_Update))]
 public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Patch) : ICommand<Result<Registry>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchRegistry, Registry>
@@ -109,18 +112,17 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
     }
 }
 
-internal class PatchRegistryHandler(IUnitOfWork unitOfWork, IDockerHubRegistryRepository dockerHubService, IGitHubCrRepository gitHubCrService) : ICommandHandler<PatchRegistry, Result<Registry>>
+internal class PatchRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorResolver registryResolver) : ICommandHandler<PatchRegistry, Result<Registry>>
 {
     public async ValueTask<Result<Registry>> Handle(PatchRegistry command, CancellationToken cancellationToken)
     {
         var registry = await unitOfWork.Registries.Query().FirstOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
         if (registry == null)
         {
-            return Result.Failure<Registry>(new NotFoundError("The provided Id does not exist"));
+            return Result.Failure<Registry>(new NotFoundError("The provided registry does not exist"));
         }
 
         var patchedRegistry = command.Patch.ApplyTo(registry, RegistryJsonContext.Default.Registry);
-
         if (patchedRegistry.Name != null) 
         {
             var conflict = await unitOfWork.Registries
@@ -131,25 +133,16 @@ internal class PatchRegistryHandler(IUnitOfWork unitOfWork, IDockerHubRegistryRe
             }
         }
 
-        if (patchedRegistry?.Type == RegistryType.DockerHub && patchedRegistry?.Configuration is DockerHubRegistry cfg)
+        var strategy = registryResolver.Resolve(patchedRegistry.Type);
+        if (strategy is null)
         {
-            var (canConnect, errorMessage) = await dockerHubService.CanConnectAsync(cfg, cancellationToken);
-            if (!canConnect)
-            {
-                return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
-            }
+            return Result.Failure<Registry>(new BadRequestError("Unsupported registry type"));
         }
-        else if (patchedRegistry?.Type == RegistryType.GitHub && patchedRegistry?.Configuration is GitHubRegistry githubRegistry)
+
+        var (canConnect, errorMessage) = await strategy.CanConnectAsync(patchedRegistry.Configuration, cancellationToken);
+        if (!canConnect)
         {
-            var (canConnect, errorMessage) = await gitHubCrService.CanConnectAsync(githubRegistry, cancellationToken);
-            if (!canConnect)
-            {
-                return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
-            }
-        }
-        else
-        {
-            return Result.Failure<Registry>(new BadRequestError("Unsupported registry type or configuration."));
+            return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
         }
 
         registry.PartialUpdate(name: patchedRegistry.Name, url: patchedRegistry.Url, configuration: patchedRegistry.Configuration);

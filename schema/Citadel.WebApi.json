@@ -6672,14 +6672,6 @@
         "nullable": true
       },
       "NullableOfRegistryType": {
-        "enum": [
-          "DockerHub",
-          "Azure",
-          "AWS",
-          "Gitlab",
-          "GitHub",
-          null
-        ],
         "nullable": true
       },
       "PlatformConnectorType": {

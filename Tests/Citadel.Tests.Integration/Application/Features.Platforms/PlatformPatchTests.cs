@@ -4,8 +4,6 @@ using Grpc.Core;
 using Domain;
 using Domain.Entities;
 using Domain.Entities.Platforms;
-using Infrastructure.EntityFramework;
-using Application.Services.Abstractions;
 using Application.TaskJobs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

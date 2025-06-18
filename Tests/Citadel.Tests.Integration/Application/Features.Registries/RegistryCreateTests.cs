@@ -1,0 +1,300 @@
+﻿using System.Text;
+using Application.Services;
+using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Entities.Registries;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Moq;
+
+namespace Tests.Integration.Application.Features.Registries;
+
+public class RegistryCreateTests : IntegrationTestBase<WebApi.Program>
+{
+    private readonly Mock<IRegistryConnectorStrategy> registryConnectorMock = new();
+    private readonly Mock<IRegistryConnectorResolver> registryConnectorResolverMock = new();
+
+    protected override void ConfigureTestServices(IServiceCollection services)
+    {
+        services
+            .AddScoped(_ => registryConnectorMock.Object)
+            .AddScoped(_ => registryConnectorResolverMock.Object);
+    }
+
+    [Fact]
+    public async Task Create_DockerHubRegistry_ReturnsSuccess()
+    {
+        // Arrange
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryType>()))
+           .Returns(registryConnectorMock.Object);
+
+        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult<(bool, string?)>((true, null)));
+
+        var createJson = """
+        {
+          "name": "R-NEW",
+          "url": "https://registry123:9999",
+          "type": "DockerHub",
+          "configuration": {
+            "$type": "DockerHub",
+            "userName": "dummy-user",
+            "PAT": "dummy-pat123"
+          }
+        }
+        """;
+        var content = new StringContent(createJson, Encoding.UTF8, "application/json");
+
+        // Act
+        var response = await Client.PostAsync("/api/v1/registries", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        // Check DB
+        using var scope = Services.CreateScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var registry = await uow.Registries.Query().AsNoTracking().SingleOrDefaultAsync(x => x.Name == "R-NEW", TestContext.Current.CancellationToken);
+
+        Assert.NotNull(registry);
+        await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Create_GitHubRegistry_ReturnsSuccess()
+    {
+        // Arrange
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryType>()))
+           .Returns(registryConnectorMock.Object);
+
+        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult<(bool, string?)>((true, null)));
+
+        var createJson = """
+        {
+          "name": "R-NEW",
+          "url": "https://registry123:9999",
+          "type": "GitHub",
+          "configuration": {
+            "$type": "GitHub",
+            "Name": "dummy-user",
+            "PAT": "dummy-pat123"
+          }
+        }
+        """;
+        var content = new StringContent(createJson, Encoding.UTF8, "application/json");
+
+        // Act
+        var response = await Client.PostAsync("/api/v1/registries", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        // Check DB
+        using var scope = Services.CreateScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var registry = await uow.Registries.Query().AsNoTracking().SingleOrDefaultAsync(x => x.Name == "R-NEW", TestContext.Current.CancellationToken);
+
+        Assert.NotNull(registry);
+        await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Create_Registry_With_Empty_Name_Returns_BadRequest()
+    {
+        var createJson = """
+        {
+          "name": "",
+          "url": "https://registry123:9999",
+          "type": "DockerHub",
+          "configuration": {
+            "$type": "DockerHub",
+            "userName": "dummy-user",
+            "PAT": "dummy-pat123"
+          }
+        }
+        """;
+        var content = new StringContent(createJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/registries", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Create_Registry_With_Invalid_Type_Returns_BadRequest()
+    {
+        var createJson = """
+        {
+          "name": "R-NEW",
+          "url": "https://registry123:9999",
+          "type": "InvalidType",
+          "configuration": {
+            "$type": "DockerHub",
+            "userName": "dummy-user",
+            "PAT": "dummy-pat123"
+          }
+        }
+        """;
+        var content = new StringContent(createJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/registries", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Create_Registry_With_Invalid_Configuration_Returns_BadRequest()
+    {
+        var createJson = """
+        {
+          "name": "R-NEW",
+          "url": "https://registry123:9999",
+          "type": "DockerHub",
+          "configuration": {
+            "$type": "DockerHub",
+            "userName": "",
+            "PAT": "short"
+          }
+        }
+        """;
+        var content = new StringContent(createJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/registries", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Create_Registry_With_Duplicate_Name_Returns_Conflict()
+    {
+        // Seed a registry with the same name
+        using (var scope = Services.CreateScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            uow.Registries.Add(new Domain.Entities.Registry(
+                name: "R-NEW",
+                url: "https://existing.url",
+                type: RegistryType.DockerHub,
+                configuration: new DockerHubRegistry("user", "dummy-pat1234")
+            ));
+            await uow.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryType>()))
+            .Returns(registryConnectorMock.Object);
+
+        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult<(bool, string?)>((true, null)));
+
+        var createJson = """
+        {
+          "name": "R-NEW",
+          "url": "https://registry123:9999",
+          "type": "DockerHub",
+          "configuration": {
+            "$type": "DockerHub",
+            "userName": "dummy-user",
+            "PAT": "dummy-pat123"
+          }
+        }
+        """;
+        var content = new StringContent(createJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/registries", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, response.StatusCode);
+        await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Create_Registry_With_Unsupported_Type_Returns_BadRequest()
+    {
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryType>()))
+            .Returns((IRegistryConnectorStrategy?)null);
+
+        var createJson = """
+        {
+          "name": "R-NEW",
+          "url": "https://registry123:9999",
+          "type": "AWS",
+          "configuration": {
+            "$type": "AWS",
+            "accessKey": "accesskey1234",
+            "secretAccessKey": "secretkey1234",
+            "region": "us-west-1"
+          }
+        }
+        """;
+        var content = new StringContent(createJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/registries", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Create_Registry_When_Connector_Fails_Returns_BadRequest()
+    {
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryType>()))
+            .Returns(registryConnectorMock.Object);
+
+        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult<(bool, string?)>((false, "Connection failed")));
+
+        var createJson = """
+        {
+          "name": "R-NEW",
+          "url": "https://registry123:9999",
+          "type": "DockerHub",
+          "configuration": {
+            "$type": "DockerHub",
+            "userName": "dummy-user",
+            "PAT": "dummy-pat123"
+          }
+        }
+        """;
+        var content = new StringContent(createJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/registries", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Create_Registry_With_Invalid_Url_For_Azure_Returns_BadRequest()
+    {
+        var createJson = """
+        {
+          "name": "R-AZURE",
+          "url": "not-a-url",
+          "type": "Azure",
+          "configuration": {
+            "$type": "Azure",
+            "userName": "azureuser",
+            "password": "azurepassword"
+          }
+        }
+        """;
+        var content = new StringContent(createJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/registries", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        await VerifyJson(responseBody);
+    }
+}

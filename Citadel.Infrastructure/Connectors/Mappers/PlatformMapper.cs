@@ -12,7 +12,7 @@ internal static class PlatformMapper
     public static Platform Map(this PlatformInfoResponse platformInfo, string platformName, string platformAddress, PlatformConnectorType type)
     {
         PlatformDescriptor? descriptor = null;
-        if (string.IsNullOrEmpty(platformInfo.SwarmInfo.NodeID))
+        if (string.IsNullOrEmpty(platformInfo.SwarmInfo?.NodeID))
         {
             descriptor = new DockerPlatformDescriptor
             (

@@ -3,8 +3,8 @@
   title: One or more validation errors occurred.,
   status: 400,
   errors: {
-    0: [
-      Only Docker platform type is supported at the moment.
+    Url: [
+      Please provide a valid url
     ]
   },
   traceId: {Scrubbed}

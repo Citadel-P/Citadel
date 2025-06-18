@@ -9,5 +9,6 @@
     Address: [
       Must be a valid Ip or Hostname eg 198.172.0.1:8001
     ]
-  }
+  },
+  traceId: {Scrubbed}
 }

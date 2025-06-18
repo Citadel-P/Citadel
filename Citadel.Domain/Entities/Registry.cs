@@ -19,7 +19,7 @@ public class Registry
         Url = url;
         Type = type;
         Created = DateTime.UtcNow;
-        Configuration = configuration ?? throw new ArgumentNullException(nameof(configuration), "Configuration cannot be null.");
+        Configuration = configuration;
     }
 
     public static readonly string DefaultRegistryName = "Docker Hub";

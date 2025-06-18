@@ -1,0 +1,15 @@
+﻿{
+  type: https://tools.ietf.org/html/rfc9110#section-15.5.1,
+  title: One or more validation errors occurred.,
+  status: 400,
+  errors: {
+    Configuration.PAT: [
+      The length of 'PAT' must be at least 10 characters. You entered 5 characters.
+    ],
+    Configuration.UserName: [
+      'User Name' must not be empty.,
+      The length of 'User Name' must be at least 4 characters. You entered 0 characters.
+    ]
+  },
+  traceId: {Scrubbed}
+}

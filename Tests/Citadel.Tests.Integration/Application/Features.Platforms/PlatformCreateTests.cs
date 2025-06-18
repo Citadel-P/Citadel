@@ -5,8 +5,6 @@ using Grpc.Core;
 using Domain;
 using Domain.Entities;
 using Domain.Entities.Platforms;
-using Infrastructure.EntityFramework;
-using Application.Services.Abstractions;
 using Application.TaskJobs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,7 +30,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
     }
 
     [Fact]
-    public async Task CreatePlatform_Should_Succeed()
+    public async Task CreatePlatform_WithAgentConnector_ReturnsSuccessAndPersistsContainers()
     {
         // Arrange
         var platformInfo = new PlatformInfoResponse
@@ -95,7 +93,8 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
         {
           "name": "P-NEW",
           "address": "https://localhost:9000",
-          "type": "Docker"
+          "type": "Docker",
+          "connectorType": "agent"
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
@@ -116,7 +115,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
         Assert.NotNull(platform);
         Assert.Equal(3, containers.Count);
         healthMonitorMock.Verify(x => x.TrackPlatform("https://localhost:9000", platform.Id, PlatformConnectorType.Agent), Times.Once);
-        await Verify(platform);
+        await VerifyJson(responseBody);
     }
 
     [Fact]

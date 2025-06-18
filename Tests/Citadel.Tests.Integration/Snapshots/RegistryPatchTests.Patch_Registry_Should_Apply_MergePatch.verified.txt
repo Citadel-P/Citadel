@@ -1,0 +1,14 @@
+﻿{
+  id: Guid_1,
+  name: UpdatedName,
+  url: https://original.url,
+  type: DockerHub,
+  created: DateTimeOffset_1,
+  configuration: {
+    $type: DockerHub,
+    userName: patched-user,
+    pat: pat123,
+    registryUrl: https://docker.io
+  },
+  isDefault: false
+}

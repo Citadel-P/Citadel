@@ -2,5 +2,6 @@
   type: https://tools.ietf.org/html/rfc9110#section-15.5.10,
   title: Conflict,
   status: 409,
-  detail: A platform with the same [Name] or [Address] already exists!
+  detail: A platform with the same [Name] or [Address] already exists!,
+  traceId: {Scrubbed}
 }

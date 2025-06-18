@@ -110,6 +110,11 @@ public enum AppPermission
     Image_View,
     Image_Create,
     Image_Delete,
+    // Registries
+    Registry_View,
+    Registry_Create,
+    Registry_Update,
+    Registry_Delete,
 }
 
 public enum DockerHubTagStatus

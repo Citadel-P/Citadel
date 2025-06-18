@@ -1,0 +1,14 @@
+﻿{
+  id: Guid_1,
+  name: R-NEW,
+  url: https://registry123:9999,
+  type: DockerHub,
+  created: DateTimeOffset_1,
+  configuration: {
+    $type: DockerHub,
+    userName: dummy-user,
+    pat: dummy-pat123,
+    registryUrl: https://docker.io
+  },
+  isDefault: false
+}

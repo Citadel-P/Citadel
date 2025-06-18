@@ -2,6 +2,7 @@
 using Application.Permissions;
 using Application.Permissions.Requirements;
 using Application.Services;
+using Application.Services.Abstractions;
 using Application.TaskJobs;
 using Citadel.SourceGen;
 using Domain.Contracts.Resources.Platforms;
@@ -43,7 +44,10 @@ public static class ApplicationModule
         => services
             .AddSingleton<IJwtService, JwtService>()
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>()
-            .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>();
+            .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>()
+            .AddScoped<GitHubConnectorStrategy>()
+            .AddScoped<DockerHubConnectorStrategy>()
+            .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>();
 
     private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)
     {

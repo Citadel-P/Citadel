@@ -1,9 +1,11 @@
-﻿using Domain;
+﻿using Application.Services;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Domain.Entities.Registries;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
@@ -11,11 +13,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Registries.Commands;
 
+[RequirePermission(nameof(AppPermission.Registry_Create))]
 public sealed record CreateRegistry(string Name, string Url, RegistryType Type, RegistryConfigurationBase Configuration) : ICommand<Result<Registry>>
 {
-    internal sealed class CreateRegistryRequestValidator : AbstractValidator<CreateRegistry>
+    internal sealed class Validator : AbstractValidator<CreateRegistry>
     {
-        public CreateRegistryRequestValidator()
+        public Validator()
         {
             RuleFor(x => x.Name).NotEmpty().MinimumLength(3);
             RuleFor(x => x.Type)
@@ -97,7 +100,7 @@ public sealed record CreateRegistry(string Name, string Url, RegistryType Type, 
     }
 }
 
-internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IDockerHubRegistryRepository dockerHubService, IGitHubCrRepository gitHubCrService) : ICommandHandler<CreateRegistry, Result<Registry>>
+internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorResolver registryResolver) : ICommandHandler<CreateRegistry, Result<Registry>>
 {
     public async ValueTask<Result<Registry>> Handle(CreateRegistry command, CancellationToken cancellationToken)
     {
@@ -108,27 +111,17 @@ internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IDockerHubRegistryR
             return Result.Failure<Registry>(new ConflictError("The provided name already exist"));
         }
 
-        if (command.Type == RegistryType.DockerHub &&  command.Configuration is DockerHubRegistry cfg)
+        var strategy = registryResolver.Resolve(command.Type);
+        if (strategy is null)
         {
-            var (canConnect, errorMessage) = await dockerHubService.CanConnectAsync(cfg, cancellationToken);
-            if (!canConnect)
-            {
-                return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
-            }
-        }
-        else if (command.Type == RegistryType.GitHub && command.Configuration is GitHubRegistry githubRegistry) 
-        {
-            var (canConnect, errorMessage) = await gitHubCrService.CanConnectAsync(githubRegistry, cancellationToken);
-            if (!canConnect)
-            {
-                return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
-            }
-        }
-        else
-        {
-            return Result.Failure<Registry>(new BadRequestError("Invalid registry configuration provided."));
+            return Result.Failure<Registry>(new BadRequestError("Unsupported registry type"));
         }
 
+        var (canConnect, errorMessage) = await strategy.CanConnectAsync(command.Configuration, cancellationToken);
+        if (!canConnect)
+        {
+            return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
+        }
 
         registry = new Registry(name: command.Name, url: command.Url, type: command.Type, configuration: command.Configuration);
         repo.Add(registry);

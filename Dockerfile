@@ -15,11 +15,12 @@ WORKDIR /src
 COPY ["Directory.Build.props", "."]
 COPY ["nuget.config", "."]
 COPY ["Citadel.WebApi/Citadel.WebApi.csproj", "Citadel.WebApi/"]
+COPY ["Citadel.Domain/Citadel.Domain.csproj", "Citadel.Domain/"]
 COPY ["Citadel.Application/Citadel.Application.csproj", "Citadel.Application/"]
 COPY ["Citadel.Infrastructure/Citadel.Infrastructure.csproj", "Citadel.Infrastructure/"]
 COPY ["Citadel.Contracts/Citadel.Hosting/Citadel.Hosting.csproj", "Citadel.Contracts/Citadel.Hosting/"]
-COPY ["Citadel.Contracts/Citadel.Hosting.Common/Citadel.Hosting.Common.csproj", "Citadel.Contracts/Citadel.Hosting.Common/"]
 COPY ["Citadel.Contracts/Citadel.SourceGen/Citadel.SourceGen.csproj", "Citadel.Contracts/Citadel.SourceGen/"]
+COPY ["Citadel.Contracts/Citadel.Hosting.Common/Citadel.Hosting.Common.csproj", "Citadel.Contracts/Citadel.Hosting.Common/"]
 
 RUN dotnet restore "./Citadel.WebApi/Citadel.WebApi.csproj"
 
