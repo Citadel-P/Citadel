@@ -1,6 +1,6 @@
 ﻿namespace Domain.Contracts.Resources.Networks;
 
-public sealed record CreateNetworkCommand(
+public sealed record CreateDockerNetworkCommand(
     string PlatformAddress,
     string Name,
     string? Driver,

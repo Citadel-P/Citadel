@@ -1,4 +1,5 @@
 ﻿using System.Threading.Channels;
+using Application.Mappers;
 using Application.Services;
 using Application.Services.Abstractions;
 using Domain;
@@ -97,7 +98,7 @@ internal class ContainerSyncJob(
         // This list will hold the containers that are currently active and should be cached
         var currentActiveContainers = new List<Container>();
 
-        foreach (var freshContainer in freshContainers.Values.ToList())
+        foreach (var freshContainer in freshContainers.Values)
         {
             if (existingContainersInDb.TryGetValue(freshContainer.ContainerId, out var existingDbContainer))
             {
@@ -115,8 +116,9 @@ internal class ContainerSyncJob(
             else
             {
                 // Add new container to DB
-                unitOfWork.Containers.Add(freshContainer);
-                currentActiveContainers.Add(freshContainer);
+                var container = freshContainer.Map(platformEvent.Id);
+                unitOfWork.Containers.Add(container);
+                currentActiveContainers.Add(container);
             }
         }
 

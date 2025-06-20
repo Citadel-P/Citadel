@@ -31,8 +31,8 @@ public sealed record ImageView(
 
 public sealed record ImagesView(IEnumerable<ImageView> Images)
 {
-    internal static ImagesView Map(IEnumerable<DockerImage> images) => new (images.Select(Map));
-    internal static ImageView Map(DockerImage image) 
+    internal static ImagesView Map(IEnumerable<ImageResult> images) => new (images.Select(Map));
+    internal static ImageView Map(ImageResult image) 
         => new (
             Id: image.Id,
             Size: image.Size,

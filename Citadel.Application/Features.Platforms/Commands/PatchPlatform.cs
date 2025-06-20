@@ -84,8 +84,7 @@ internal class PatchPlatformHandler(
                 var platformResult = await platformConnector.GetPlatformAsync(param, cancellationToken);
                 if (!platformResult.IsSuccess(out var platformInfo, out var error))
                 {
-                    logger.LogError("Failed to get platform info for {Address}: {Error}", patchedPlatform.Address, error?.Message);
-                    return platformResult;
+                    return Result.Failure<Platform>(new InternalServerError($"Failed to get platform info for {patchedPlatform.Address}: {error?.Message}"));
                 }
                 
                 platform.PartialUpdate(
@@ -98,7 +97,7 @@ internal class PatchPlatformHandler(
                     memTotal: platformInfo.MemTotal,
                     serverVersion: platformInfo.ServerVersion,
                     agentVersion: platformInfo.AgentVersion,
-                    descriptor: platformInfo.PlatformDescriptor);
+                    descriptor: platformInfo.Descriptor);
 
                 await unitOfWork.SaveChangesAsync(cancellationToken);
                 await UpdatePlatformTracking(platform.Id, platform.Address, platform.ConnectorType, oldPlatformAddress, cancellationToken);

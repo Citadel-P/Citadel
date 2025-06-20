@@ -11,7 +11,7 @@ namespace Infrastructure.Connectors.AgentConnectors;
 
 internal class AgentNetworkConnector(IGrpcClientFactory clientFactory) : INetworkConnector
 {
-    public async Task<Result<IEnumerable<DockerNetwork>>> ListNetworksAsync(ListNetworksCommand command, CancellationToken cancellationToken = default)
+    public async Task<Result<IEnumerable<DockerNetworkResult>>> ListNetworksAsync(ListNetworksCommand command, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -30,7 +30,7 @@ internal class AgentNetworkConnector(IGrpcClientFactory clientFactory) : INetwor
         }
         catch (RpcException ex)
         {
-            return Result.Failure<IEnumerable<DockerNetwork>>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<IEnumerable<DockerNetworkResult>>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 
@@ -53,7 +53,7 @@ internal class AgentNetworkConnector(IGrpcClientFactory clientFactory) : INetwor
         }
     }
 
-    public async Task<Result<CreateNetworkResult>> CreateNetworkAsync(CreateNetworkCommand command, CancellationToken cancellationToken = default)
+    public async Task<Result<CreateDockerNetworkResult>> CreateNetworkAsync(CreateDockerNetworkCommand command, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -94,15 +94,15 @@ internal class AgentNetworkConnector(IGrpcClientFactory clientFactory) : INetwor
                 Options = { command.Options.ToDictionary() ?? [] }
             };
             var response = await client.CreateAsync(request, cancellationToken: cancellationToken);
-            return new CreateNetworkResult(NetworkId: response.Id);
+            return new CreateDockerNetworkResult(NetworkId: response.Id);
         }
         catch (RpcException ex)
         {
-            return Result.Failure<CreateNetworkResult>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<CreateDockerNetworkResult>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 
-    public async Task<Result> DeleteNetworkAsync(DeleteNetworkCommand deleteNetworkCommand, CancellationToken cancellationToken = default)
+    public async Task<Result> DeleteNetworkAsync(DeleteDockerNetworkCommand deleteNetworkCommand, CancellationToken cancellationToken = default)
     {
         try
         {

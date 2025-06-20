@@ -1,9 +1,6 @@
-﻿using Domain.Entities;
+﻿namespace Domain.Contracts.Resources.Platforms;
 
-namespace Domain.Contracts.Resources.Platforms;
-
-public sealed record PlatformStatsBatch(
-    Guid PlatformId,
+public sealed record PlatformStatsResult(
     long MemTotal,
     long ImageCount,
     int VolumeCount,
@@ -12,4 +9,4 @@ public sealed record PlatformStatsBatch(
     long ContainersPaused,
     long ContainersStopped,
     long ContainersRunning,
-    PlatformStat PlatformStat);
+    DockerPlatformStat PlatformStat);

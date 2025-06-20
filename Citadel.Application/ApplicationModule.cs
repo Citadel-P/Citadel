@@ -67,9 +67,9 @@ public static class ApplicationModule
             .AddSingleton(Channel.CreateBounded<ContainersStatBatch>(ChannelDefaultOptions()))
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader)
-            .AddSingleton(Channel.CreateBounded<PlatformStatsBatch>(ChannelDefaultOptions()))
-            .AddSingleton(s => s.GetRequiredService<Channel<PlatformStatsBatch>>().Writer)
-            .AddSingleton(s => s.GetRequiredService<Channel<PlatformStatsBatch>>().Reader);
+            .AddSingleton(Channel.CreateBounded<(Guid Id, PlatformStatsResult Stats)>(ChannelDefaultOptions()))
+            .AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Writer)
+            .AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Reader);
 
         return services;
     }

@@ -3,10 +3,8 @@ using Citadel.Agent.Containers.V1;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
-using Domain.Entities;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
-using Infrastructure.Connectors.Mappers;
 using Infrastructure.Connectors.Mappers;
 using Infrastructure.Services;
 using LightResults;
@@ -16,7 +14,7 @@ namespace Infrastructure.Connectors.AgentConnectors;
 
 internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : IContainerConnector
 {
-    public async Task<Result<IReadOnlyDictionary<string, Container>>> ListContainersAsync(ContainerFilterCommand command, CancellationToken cancellationToken)
+    public async Task<Result<IReadOnlyDictionary<string, DockerContainer>>> ListContainersAsync(ContainerFilterCommand command, CancellationToken cancellationToken)
     {
         try
         {
@@ -34,7 +32,7 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : ICont
         }
         catch (RpcException ex)
         {
-            return Result.Failure<IReadOnlyDictionary<string, Container>>(new ClientRpcException($"An RPC exception occurred: {ex.Message}", ex.StatusCode));
+            return Result.Failure<IReadOnlyDictionary<string, DockerContainer>>(new ClientRpcException($"An RPC exception occurred: {ex.Message}", ex.StatusCode));
         }
     }
 
@@ -109,7 +107,7 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : ICont
         }
     }
 
-    public async IAsyncEnumerable<ContainerStats> StreamContainerStatsAsync(StreamContainerStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<DockerContainerStats> StreamContainerStatsAsync(StreamContainerStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
         using var streamCall = containerClient.StreamContainerStats(new ContainerStatsRequest() { FetchIntervalMs = command.FetchIntervalMs }, cancellationToken: cancellationToken);
@@ -125,7 +123,7 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : ICont
         using var streamCall = containerClient.StreamDaemonEvent(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
         await foreach (var response in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
         {
-            yield return response.Map(command.PlatformId);
+            yield return response.Map();
         }
     }
 }

@@ -1,6 +1,12 @@
 ﻿using System.Net.Http.Headers;
 using System.Security.Claims;
 using Application.Services;
+using Citadel.Agent.Common.V1;
+using Domain;
+using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Platforms;
+using Domain.Entities;
+using Domain.Entities.Platforms;
 using Infrastructure.EntityFramework;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -84,5 +90,47 @@ public abstract class IntegrationTestBase<TEntryPoint> : IAsyncLifetime
     {
         await connection.DisposeAsync();
         factory.Dispose();
+    }
+
+    protected PlatformResult GetDummyPlatform() =>
+        new
+        (
+            Name: "p-01",
+            Address: "https://original.address",
+            NetworkCount: 1,
+            VolumeCount: 2,
+            ImageCount: 3,
+            CpuCount: 4,
+            MemTotal: 500,
+            ServerVersion: "1.0.0",
+            AgentVersion: "1.0.0",
+            Descriptor: new DockerPlatformDescriptor
+                (
+                    DaemonId: "123456",
+                    ContainerCount: 5,
+                    ContainersRunning: 2,
+                    ContainersPaused: 3,
+                    ContainersStopped: 0,
+                    Driver: "overlay2",
+                    OperatingSystem: "Linux",
+                    OsVersion: "5.15",
+                    OsType: "linux",
+                    Architecture: "x86_64"
+                )
+        );
+
+    protected IEnumerable<DockerContainer> GetDummyContainers(int total = 3)
+    {
+        for (int i = 0; i < total; i++)
+        {
+            yield return new
+            (
+                Name: $"c-{i:D2}",
+                Image: $"image-{i}:latest",
+                State: ContainerStateStatus.Running,
+                ContainerId: "container" + i
+            );
+        }
+
     }
 }

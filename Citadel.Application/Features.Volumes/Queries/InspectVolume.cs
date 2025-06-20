@@ -7,7 +7,7 @@ using Mediator;
 
 namespace Application.Features.Volumes.Queries;
 
-public sealed record InspectVolume (Guid PlatformId, string Name) : IQuery<Result<DockerVolume>>
+public sealed record InspectVolume (Guid PlatformId, string Name) : IQuery<Result<DockerVolumeResult>>
 {
     internal class Validator : AbstractValidator<InspectVolume>
     {
@@ -19,17 +19,17 @@ public sealed record InspectVolume (Guid PlatformId, string Name) : IQuery<Resul
     }
 }
 
-internal sealed class InspectVolumeHandler(IUnitOfWork unitOfWork, IConnectorFactory<IVolumeConnector> connectorFactory) : IQueryHandler<InspectVolume, Result<DockerVolume>>
+internal sealed class InspectVolumeHandler(IUnitOfWork unitOfWork, IConnectorFactory<IVolumeConnector> connectorFactory) : IQueryHandler<InspectVolume, Result<DockerVolumeResult>>
 {
-    public async ValueTask<Result<DockerVolume>> Handle(InspectVolume query, CancellationToken cancellationToken)
+    public async ValueTask<Result<DockerVolumeResult>> Handle(InspectVolume query, CancellationToken cancellationToken)
     {
         var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
         if (string.IsNullOrEmpty(address))
         {
-            return Result.Failure<DockerVolume>(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure<DockerVolumeResult>(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
-        var command = new InspectVolumeCommand
+        var command = new InspectDockerVolumeCommand
         (
             Name: query.Name,
             PlatformAddress: address

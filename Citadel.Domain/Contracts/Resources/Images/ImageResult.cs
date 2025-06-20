@@ -1,6 +1,6 @@
 ﻿namespace Domain.Contracts.Resources.Images;
 
-public record DockerImage(
+public record ImageResult(
         string Id,
         double Size,
         int Containers,

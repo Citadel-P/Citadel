@@ -1,91 +1,50 @@
 ﻿using System.Text;
-using Citadel.Agent.Common.V1;
-using Citadel.Agent.Containers.V1;
-using Grpc.Core;
+using Application.TaskJobs;
 using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Platforms;
-using Application.TaskJobs;
+using LightResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using static Citadel.Agent.Containers.V1.ContainerService;
-using static Citadel.Agent.Platforms.V1.PlatformService;
-using Infrastructure.Services;
-using Domain.Contracts.Interfaces;
 
 namespace Tests.Integration.Application.Features.Platforms;
 
 public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
 {
-    private readonly Mock<IGrpcClientFactory> grpcFactoryMock = new();
-    private readonly Mock<PlatformServiceClient> platformClientMock = new();
-    private readonly Mock<ContainerServiceClient> containersClientMock = new();
+    private readonly Mock<IConnectorFactory<IPlatformConnector>> platformFactoryMock = new();
+    private readonly Mock<IConnectorFactory<IContainerConnector>> containerFactoryMock = new();
+    private readonly Mock<IPlatformConnector> platformConnector = new();
+    private readonly Mock<IContainerConnector> containerConnector = new();
     private readonly Mock<IPlatformHealthMonitorJob> healthMonitorMock = new();
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
-        services.AddSingleton(_ => grpcFactoryMock.Object);
         services.AddSingleton(_ => healthMonitorMock.Object);
+        services.AddSingleton(_ => platformFactoryMock.Object); 
+        services.AddSingleton(_ => containerFactoryMock.Object);
+        services.AddSingleton(_ => platformConnector.Object);
+        services.AddSingleton(_ => containerConnector.Object);
     }
 
     [Fact]
     public async Task CreatePlatform_WithAgentConnector_ReturnsSuccessAndPersistsContainers()
     {
         // Arrange
-        var platformInfo = new PlatformInfoResponse
-        {
-            Id = "daemonX",
-            ContainerCount = 10,
-            ContainersRunning = 5,
-            ContainersPaused = 2,
-            ContainersStopped = 3,
-            NetworkCount = 333,
-            VolumeCount = 222,
-            ImageCount = 111,
-            MemTotal = 4096,
-            ServerVersion = "1.2.3",
-            AgentVersion = "2.0.0",
-            Driver = "overlay2",
-            OperatingSystem = "Linux",
-            OsType = "linux",
-            OsVersion = "5.15",
-            Architecture = "x86_64"
-        };
+        platformFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+                      .Returns(platformConnector.Object);
 
-        var containersReply = new ListContainersResponse
-        {
-            Containers =
-            {
-                ["containerId1"] = new ContainerMessage { Id = "c1", Name = "Container 1" },
-                ["containerId2"] = new ContainerMessage { Id = "c2", Name = "Container 2" },
-                ["containerId3"] = new ContainerMessage { Id = "c3", Name = "Container 3" }
-            }
-        };
+        platformConnector.Setup(x => x.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()))
+                         .ReturnsAsync(Result.Success(GetDummyPlatform()));
 
-        platformClientMock.Setup(x => x.GetPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
-            .Returns(new AsyncUnaryCall<PlatformInfoResponse>(
-                Task.FromResult(platformInfo),
-                Task.FromResult(new Metadata()),
-                () => Status.DefaultSuccess,
-                () => [],
-                () => { }
-            ));
+        containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+            .Returns(containerConnector.Object);
 
-        containersClientMock.Setup(x => x.ListAsync(It.IsAny<ListContainersRequest>(), null, null, It.IsAny<CancellationToken>()))
-            .Returns(new AsyncUnaryCall<ListContainersResponse>(
-                Task.FromResult(containersReply),
-                Task.FromResult(new Metadata()),
-                () => Status.DefaultSuccess,
-                () => [],
-                () => { }
-            ));
-
-        grpcFactoryMock.Setup(x => x.GetPlatformClient(It.IsAny<string>()))
-            .Returns(platformClientMock.Object);
-
-        grpcFactoryMock.Setup(x => x.GetContainerClient(It.IsAny<string>()))
-            .Returns(containersClientMock.Object);
+        containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>> (GetDummyContainers().ToDictionary(c => c.ContainerId)));
 
         healthMonitorMock.Setup(x => x.TrackPlatform(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<PlatformConnectorType>())).Returns(true);
 
@@ -109,9 +68,9 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
         // Check DB
         using var scope = Services.CreateScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var platform = await uow.Platforms.Query().AsNoTracking().SingleOrDefaultAsync(x => x.Name == "P-NEW", TestContext.Current.CancellationToken);
+        var platform = await uow.Platforms.Query().AsNoTracking().FirstOrDefaultAsync(x => x.Name == "P-NEW", TestContext.Current.CancellationToken);
         var containers = await uow.Containers.Query().AsNoTracking().ToListAsync(TestContext.Current.CancellationToken);
-        
+
         Assert.NotNull(platform);
         Assert.Equal(3, containers.Count);
         healthMonitorMock.Verify(x => x.TrackPlatform("https://localhost:9000", platform.Id, PlatformConnectorType.Agent), Times.Once);

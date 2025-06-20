@@ -14,7 +14,7 @@ public sealed record CreateVolume(
     string Name,
     string Driver,
     Dictionary<string, string>? Labels = null,
-    Dictionary<string, string>? Options = null) : ICommand<Result<DockerVolume>>
+    Dictionary<string, string>? Options = null) : ICommand<Result<DockerVolumeResult>>
 {
     internal class Validator : AbstractValidator<CreateVolume>
     {
@@ -40,20 +40,20 @@ public sealed record CreateVolume(
 }
 
 internal sealed class CreateVolumeHandler(IUnitOfWork unitOfWork, IConnectorFactory<IVolumeConnector> connectorFactory) 
-    : ICommandHandler<CreateVolume, Result<DockerVolume>>
+    : ICommandHandler<CreateVolume, Result<DockerVolumeResult>>
 {
     
-    public async ValueTask<Result<DockerVolume>> Handle(CreateVolume command, CancellationToken cancellationToken)
+    public async ValueTask<Result<DockerVolumeResult>> Handle(CreateVolume command, CancellationToken cancellationToken)
     {
         try
         {
             var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
             if (string.IsNullOrEmpty(address))
             {
-                return Result.Failure<DockerVolume>(new NotFoundError("The provided platform Id doesn't exist"));
+                return Result.Failure<DockerVolumeResult>(new NotFoundError("The provided platform Id doesn't exist"));
             }
 
-            var request = new CreateVolumeCommand
+            var request = new CreateDockerVolumeCommand
             (
                 PlatformAddress: address,
                 Name: command.Name,
@@ -67,7 +67,7 @@ internal sealed class CreateVolumeHandler(IUnitOfWork unitOfWork, IConnectorFact
         }
         catch (RpcException ex)
         {
-            return Result.Failure<DockerVolume>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<DockerVolumeResult>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 }

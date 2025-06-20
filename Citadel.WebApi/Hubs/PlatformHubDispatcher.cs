@@ -17,6 +17,6 @@ internal sealed class PlatformHubDispatcher(IHubContext<PlatformHub, ITypedPlatf
     public Task PlatformDeleted(Guid platformId)
         => hubContext.Clients.Group("Platforms").PlatformsDeleted(platformId);
 
-    public Task PushPlatformStats(PlatformStatsBatch platform)
-        => hubContext.Clients.Group("Platforms").PlatformStatsUpdated(PlatformStatsBatchView.Map(platform));
+    public Task PushPlatformStats(Guid platformId, PlatformStatsResult platform)
+        => hubContext.Clients.Group("Platforms").PlatformStatsUpdated(PlatformStatsBatchView.Map(platformId, platform));
 }

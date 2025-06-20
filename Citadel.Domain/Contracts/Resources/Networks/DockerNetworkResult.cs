@@ -1,6 +1,6 @@
 ﻿namespace Domain.Contracts.Resources.Networks;
 
-public record DockerNetwork(
+public record DockerNetworkResult(
     string Name,
     string Id,
     string Created,

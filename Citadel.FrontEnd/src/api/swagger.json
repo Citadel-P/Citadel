@@ -3433,7 +3433,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DockerVolume"
+                  "$ref": "#/components/schemas/DockerVolumeResult"
                 }
               }
             }
@@ -3596,7 +3596,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DockerVolume"
+                  "$ref": "#/components/schemas/DockerVolumeResult"
                 }
               }
             }
@@ -4694,84 +4694,6 @@
           }
         }
       },
-      "DockerNetwork": {
-        "required": [
-          "name",
-          "id",
-          "created",
-          "driver",
-          "scope",
-          "enableIPv4",
-          "enableIPv6",
-          "internal",
-          "attachable",
-          "ingress",
-          "configOnly",
-          "inUse",
-          "configFrom",
-          "ipam",
-          "options",
-          "labels"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "created": {
-            "type": "string"
-          },
-          "driver": {
-            "type": "string"
-          },
-          "scope": {
-            "type": "string"
-          },
-          "enableIPv4": {
-            "type": "boolean"
-          },
-          "enableIPv6": {
-            "type": "boolean"
-          },
-          "internal": {
-            "type": "boolean"
-          },
-          "attachable": {
-            "type": "boolean"
-          },
-          "ingress": {
-            "type": "boolean"
-          },
-          "configOnly": {
-            "type": "boolean"
-          },
-          "inUse": {
-            "type": "boolean"
-          },
-          "configFrom": {
-            "type": "string",
-            "nullable": true
-          },
-          "ipam": {
-            "$ref": "#/components/schemas/IpAddressManagementConfig"
-          },
-          "options": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          }
-        }
-      },
       "DockerNetworkDetails": {
         "required": [
           "name",
@@ -4864,7 +4786,85 @@
           }
         }
       },
-      "DockerVolume": {
+      "DockerNetworkResult": {
+        "required": [
+          "name",
+          "id",
+          "created",
+          "driver",
+          "scope",
+          "enableIPv4",
+          "enableIPv6",
+          "internal",
+          "attachable",
+          "ingress",
+          "configOnly",
+          "inUse",
+          "configFrom",
+          "ipam",
+          "options",
+          "labels"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "created": {
+            "type": "string"
+          },
+          "driver": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "enableIPv4": {
+            "type": "boolean"
+          },
+          "enableIPv6": {
+            "type": "boolean"
+          },
+          "internal": {
+            "type": "boolean"
+          },
+          "attachable": {
+            "type": "boolean"
+          },
+          "ingress": {
+            "type": "boolean"
+          },
+          "configOnly": {
+            "type": "boolean"
+          },
+          "inUse": {
+            "type": "boolean"
+          },
+          "configFrom": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipam": {
+            "$ref": "#/components/schemas/IpAddressManagementConfig"
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "DockerVolumeResult": {
         "required": [
           "id",
           "inUse",
@@ -6632,7 +6632,7 @@
           "networks": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/DockerNetwork"
+              "$ref": "#/components/schemas/DockerNetworkResult"
             }
           }
         }
@@ -6672,14 +6672,6 @@
         "nullable": true
       },
       "NullableOfRegistryType": {
-        "enum": [
-          "DockerHub",
-          "Azure",
-          "AWS",
-          "Gitlab",
-          "GitHub",
-          null
-        ],
         "nullable": true
       },
       "PlatformConnectorType": {
@@ -7844,7 +7836,7 @@
           "volumes": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/DockerVolume"
+              "$ref": "#/components/schemas/DockerVolumeResult"
             }
           }
         }

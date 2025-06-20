@@ -8,5 +8,5 @@ public interface IPlatformHubDispatcher
     Task PushPlatformUpdate(Platform platform);
     Task PlatformDeleted(Guid platformId);
     Task PushPlatformsUpdates(IEnumerable<Platform> platforms);
-    Task PushPlatformStats(PlatformStatsBatch platform);
+    Task PushPlatformStats(Guid platformId, PlatformStatsResult platform);
 }

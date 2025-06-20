@@ -1,6 +1,6 @@
 ﻿namespace Domain.Contracts.Resources.Volumes;
 
-public record CreateVolumeCommand(
+public record CreateDockerVolumeCommand(
     string PlatformAddress,
     string Name,
     string Driver,

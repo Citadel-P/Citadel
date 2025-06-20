@@ -11,7 +11,7 @@ public class ContainerStat
         double? memoryLimit,
         double? rxBytes,
         double? txBytes,
-        long? created)
+        long? created = null)
     {
         Id = Guid.CreateVersion7();
         Created = created is not null ? created.Value : DateTimeOffset.UtcNow.Ticks;

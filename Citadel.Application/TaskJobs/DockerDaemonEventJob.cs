@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Threading.Channels;
+using Application.Mappers;
 using Application.Services;
 using Application.Services.Abstractions;
 using Domain;
@@ -70,11 +71,7 @@ internal sealed class DockerDaemonEventJob(
                 var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
                 var containerHub = scope.ServiceProvider.GetRequiredService<IContainerHubDispatcher>();
 
-                var command = new StreamDaemonEventCommand
-                (
-                    PlatformId: platform.Id,
-                    PlatformAddress: platform.Address
-                );
+                var command = new StreamDaemonEventCommand(platform.Address);
                 await foreach (var reply in connectorFactory.GetConnector(platform.Type).StreamDaemonEventAsync(command, cancellationToken))
                 {
                     if (reply.Type != ContainerEventType.Container)
@@ -86,7 +83,7 @@ internal sealed class DockerDaemonEventJob(
                         case "create":
                             if (reply.Container != null)
                             {
-                                var container = reply.Container;
+                                var container = reply.Container.Map(platform.Id);
                                 uow.Containers.Add(container);
                                 await uow.SaveChangesAsync(cancellationToken);
                                 await containerHub.SendContainerEvent(container, reply.Action);

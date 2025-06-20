@@ -14,18 +14,25 @@ public sealed record PlatformStatsBatchView(
     long ContainersStopped,
     PlatformStatView Stat)
 {
-    internal static PlatformStatsBatchView Map(PlatformStatsBatch platform)
+    internal static PlatformStatsBatchView Map(Guid platformId,PlatformStatsResult platform)
     {
         return new PlatformStatsBatchView(
-            ImageCount: platform.ImageCount,
+            PlatformId: platformId,
             MemTotal: platform.MemTotal,
-            PlatformId: platform.PlatformId,
+            ImageCount: platform.ImageCount,
             VolumeCount: platform.VolumeCount,
             ContainerCount: platform.ContainerCount,
             NetworkCount: platform.NetworkCount,
             ContainersRunning: platform.ContainersRunning,
             ContainersPaused: platform.ContainersPaused,
             ContainersStopped: platform.ContainersStopped,
-            Stat: platform.PlatformStat.Map());
+            Stat: Map(platform.PlatformStat));
     }
+
+    internal static PlatformStatView Map(DockerPlatformStat stat) => new(
+            MemoryUsage: stat?.MemoryUsage ?? 0,
+            CpuUsage: stat?.CpuUsage ?? 0,
+            Created: stat?.Created ?? 0,
+            RxBytes: stat?.RxBytes ?? 0,
+            TxBytes: stat?.TxBytes ?? 0);
 }

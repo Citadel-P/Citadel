@@ -61,14 +61,6 @@ export enum PlatformConnectorType {
   Agent = "Agent",
 }
 
-export enum NullableOfRegistryType {
-  DockerHub = "DockerHub",
-  Azure = "Azure",
-  AWS = "AWS",
-  Gitlab = "Gitlab",
-  GitHub = "GitHub",
-}
-
 export enum DockerHubTagStatus {
   Active = "Active",
   Inactive = "Inactive",
@@ -375,25 +367,6 @@ export interface DockerHubTagView {
   lastPulled: string;
 }
 
-export interface DockerNetwork {
-  name: string;
-  id: string;
-  created: string;
-  driver: string;
-  scope: string;
-  enableIPv4: boolean;
-  enableIPv6: boolean;
-  internal: boolean;
-  attachable: boolean;
-  ingress: boolean;
-  configOnly: boolean;
-  inUse: boolean;
-  configFrom: string | null;
-  ipam: IpAddressManagementConfig;
-  options: Record<string, string>;
-  labels: Record<string, string>;
-}
-
 export interface DockerNetworkDetails {
   name: string;
   id: string;
@@ -415,7 +388,26 @@ export interface DockerNetworkDetails {
   peers: NetworkPeerInfo[];
 }
 
-export interface DockerVolume {
+export interface DockerNetworkResult {
+  name: string;
+  id: string;
+  created: string;
+  driver: string;
+  scope: string;
+  enableIPv4: boolean;
+  enableIPv6: boolean;
+  internal: boolean;
+  attachable: boolean;
+  ingress: boolean;
+  configOnly: boolean;
+  inUse: boolean;
+  configFrom: string | null;
+  ipam: IpAddressManagementConfig;
+  options: Record<string, string>;
+  labels: Record<string, string>;
+}
+
+export interface DockerVolumeResult {
   id: string;
   inUse: boolean;
   scope: string;
@@ -874,7 +866,7 @@ export type NetworkSettingsInfo = {
 };
 
 export interface NetworksView {
-  networks: DockerNetwork[];
+  networks: DockerNetworkResult[];
 }
 
 export type NullableOfContainerStatView = {
@@ -893,6 +885,8 @@ export type NullableOfContainerStatView = {
   /** @format int64 */
   created?: number;
 } | null;
+
+export type NullableOfRegistryType = any;
 
 export type PlatformDescriptor = BasePlatformDescriptor &
   (
@@ -1262,7 +1256,7 @@ export type VolumeVersionInfo = {
 };
 
 export interface VolumesView {
-  volumes: DockerVolume[];
+  volumes: DockerVolumeResult[];
 }
 
 type BaseIImageRepository = object;
@@ -2648,7 +2642,7 @@ export class Api<
      * @summary Inspect a volume
      * @request GET:/api/v1/volumes/{platformId}/{name}
      * @secure
-     * @response `200` `DockerVolume` OK
+     * @response `200` `DockerVolumeResult` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2660,15 +2654,16 @@ export class Api<
       name: string,
       params: RequestParams = {},
     ) =>
-      this.request<DockerVolume, HttpValidationProblemDetails | ProblemDetails>(
-        {
-          path: `/api/v1/volumes/${platformId}/${name}`,
-          method: "GET",
-          secure: true,
-          format: "json",
-          ...params,
-        },
-      ),
+      this.request<
+        DockerVolumeResult,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/volumes/${platformId}/${name}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
 
     /**
      * No description
@@ -2703,7 +2698,7 @@ export class Api<
      * @summary Create a volume
      * @request POST:/api/v1/volumes
      * @secure
-     * @response `200` `DockerVolume` OK
+     * @response `200` `DockerVolumeResult` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2711,16 +2706,17 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     volumesCreate: (data: CreateVolumeInput, params: RequestParams = {}) =>
-      this.request<DockerVolume, HttpValidationProblemDetails | ProblemDetails>(
-        {
-          path: `/api/v1/volumes`,
-          method: "POST",
-          body: data,
-          secure: true,
-          type: ContentType.Json,
-          format: "json",
-          ...params,
-        },
-      ),
+      this.request<
+        DockerVolumeResult,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/volumes`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
   };
 }

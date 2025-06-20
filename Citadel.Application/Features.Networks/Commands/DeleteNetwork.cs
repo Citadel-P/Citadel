@@ -30,7 +30,7 @@ internal class DeleteNetworksHandler(IUnitOfWork unitOfWork, IConnectorFactory<I
             return Result.Failure(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
-        var args = new DeleteNetworkCommand
+        var args = new DeleteDockerNetworkCommand
         (
             PlatformAddress: address,
             Ids: command.Ids

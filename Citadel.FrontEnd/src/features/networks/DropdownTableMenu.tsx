@@ -5,9 +5,9 @@ import { useContextSelector } from 'use-context-selector';
 import { useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
 import { NetworksContext } from './NetworksProvider';
-import { DockerNetwork } from '@/api/_generated';
+import { DockerNetworkResult } from '@/api/_generated';
 
-const DropdownTableMenu = ({ network }: { network: DockerNetwork }) => {
+const DropdownTableMenu = ({ network }: { network: DockerNetworkResult }) => {
   const setDialogData = useContextSelector(NetworksContext, (v) => v?.setDialogData)!;
   const setSheetOpen = useContextSelector(NetworksContext, (v) => v?.setSheetOpen)!;
   const setCurrentNetwork = useContextSelector(NetworksContext, (v) => v?.setCurrentNetwork)!;

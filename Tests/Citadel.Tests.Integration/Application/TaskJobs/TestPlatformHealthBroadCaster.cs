@@ -2,7 +2,7 @@
 using Application.Services;
 using Application.TaskJobs;
 
-namespace Tests.Integration.Infrastructure.TaskJobs;
+namespace Tests.Integration.Application.TaskJobs;
 
 internal sealed class TestPlatformHealthBroadCaster : IPlatformHealthBroadCaster
 {

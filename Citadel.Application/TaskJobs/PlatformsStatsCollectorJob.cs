@@ -12,13 +12,15 @@ using Microsoft.Extensions.Options;
 namespace Application.TaskJobs;
 
 /// <summary>
-/// Collects platforms stats from remote agents and pushes into the shared Channel <see cref="PlatformsStatsPersistenceJob"/>.
+/// Background service that monitors platform health events and manages the collection of real-time platform statistics from remote agents.
+/// For each online platform, it starts a streaming task that gathers stats via the appropriate connector and writes <see cref="PlatformStatsResult"/>
+/// data to a shared channel for persistence. When a platform goes offline, the corresponding stats stream is stopped.
 /// </summary>
 internal class PlatformsStatsCollectorJob(
     IOptions<JobConfiguration> options,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
-    ChannelWriter<PlatformStatsBatch> platformStatsWriter,
     IConnectorFactory<IPlatformConnector> connectorFactory,
+    ChannelWriter<(Guid Id, PlatformStatsResult Stats)> platformStatsWriter,
     ILogger<PlatformsStatsCollectorJob> logger) : BackgroundService
 {
     private readonly JobConfiguration jobConfiguration = options.Value;
@@ -70,13 +72,12 @@ internal class PlatformsStatsCollectorJob(
             try
             {
                 var command = new StreamPlatformStatsCommand(
-                    PlatformId: platform.Id,
                     PlatformAddress: platform.Address,
                     FetchIntervalMs: jobConfiguration.SystemInfoInterval * 1000);
                 
-                await foreach (var batch in connectorFactory.GetConnector(platform.Type).StreamStatsAsync(command, cancellationToken))
+                await foreach (var platformStats in connectorFactory.GetConnector(platform.Type).StreamStatsAsync(command, cancellationToken))
                 {
-                    await platformStatsWriter.WriteAsync(batch, cancellationToken);
+                    await platformStatsWriter.WriteAsync((platform.Id, platformStats), cancellationToken);
                 }
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)

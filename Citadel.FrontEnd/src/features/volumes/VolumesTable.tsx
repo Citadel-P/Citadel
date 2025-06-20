@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { DockerVolume } from '@/api/_generated';
+import { DockerVolumeResult } from '@/api/_generated';
 import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -45,7 +45,7 @@ export default function VolumesTable() {
   // Memoized row count
   const rowCount = useMemo(() => volumes?.length ?? 0, [volumes]);
 
-  const handleShowSheet = (volume: DockerVolume) => {
+  const handleShowSheet = (volume: DockerVolumeResult) => {
     setCurrentVolume(volume);
     setSheetOpen(true);
   };
@@ -73,7 +73,7 @@ export default function VolumesTable() {
   );
 }
 
-const columns = (handleShowSheet: (volume: DockerVolume) => void): ColumnDef<DockerVolume>[] => [
+const columns = (handleShowSheet: (volume: DockerVolumeResult) => void): ColumnDef<DockerVolumeResult>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -127,8 +127,8 @@ const VolumeNameRow = ({
   volume,
   onShowSheet,
 }: {
-  volume: DockerVolume;
-  onShowSheet: (volume: DockerVolume) => void;
+  volume: DockerVolumeResult;
+  onShowSheet: (volume: DockerVolumeResult) => void;
 }) => {
   return (
     <div className="flex items-center whitespace-nowrap">

@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { DockerNetwork } from '@/api/_generated';
+import { DockerNetworkResult } from '@/api/_generated';
 import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -44,7 +44,7 @@ export default function NetworksTable() {
   // Memoized row count
   const rowCount = useMemo(() => networks?.length ?? 0, [networks]);
 
-  const handleShowSheet = (network: DockerNetwork) => {
+  const handleShowSheet = (network: DockerNetworkResult) => {
     setCurrentNetwork(network);
     setSheetOpen(true);
   };
@@ -72,7 +72,7 @@ export default function NetworksTable() {
   );
 }
 
-const columns = (handleShowSheet: (network: DockerNetwork) => void): ColumnDef<DockerNetwork>[] => [
+const columns = (handleShowSheet: (network: DockerNetworkResult) => void): ColumnDef<DockerNetworkResult>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -184,8 +184,8 @@ const NetworkNameRow = ({
   network,
   onShowSheet,
 }: {
-  network: DockerNetwork;
-  onShowSheet: (network: DockerNetwork) => void;
+  network: DockerNetworkResult;
+  onShowSheet: (network: DockerNetworkResult) => void;
 }) => {
   return (
     <div className="flex items-center whitespace-nowrap">

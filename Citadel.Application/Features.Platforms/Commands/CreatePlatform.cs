@@ -1,4 +1,5 @@
-﻿using Application.TaskJobs;
+﻿using Application.Mappers;
+using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
@@ -62,20 +63,20 @@ internal sealed class CreatePlatformHandler(
             PlatformName: command.Name
         );
         var platformConnector = platformConnectorFactory.GetConnector(command.ConnectorType);
-        var platformResult = await platformConnector.GetPlatformAsync(param, cancellationToken);
-        if (!platformResult.IsSuccess(out var platform, out var error))
+        var response = await platformConnector.GetPlatformAsync(param, cancellationToken);
+        if (!response.IsSuccess(out var platformResult, out var error))
         {
-            logger.LogError("Failed to get platform info for {Address}: {Error}", command.Address, error?.Message);
-            return platformResult;
+            return Result.Failure<Platform>(new InternalServerError($"Failed to get platform info for {command.Address}: {error?.Message}"));
         }
 
-        // Add platform
+        // Add platform the new platform
+        var platform = platformResult.Map(command.Address, command.Name, command.ConnectorType);
         unitOfWork.Platforms.Add(platform);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Add containers
         var containers = await GetContainers(platform, cancellationToken);
-        if (containers != null && containers.Any()) 
+        if (containers != null && containers.Any())
         {
             await unitOfWork.BulkInsertAsync(containers, cancellationToken: cancellationToken);
         }
@@ -106,6 +107,6 @@ internal sealed class CreatePlatformHandler(
             return [];
         }
 
-        else return containers.Values;
+        return containers.Values.Map(platform.Id);
     }
 }

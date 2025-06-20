@@ -6,14 +6,14 @@ namespace Infrastructure.Connectors.Mappers;
 
 internal static class VolumeMapper
 {
-    public static IEnumerable<DockerVolume> Map(this ListVolumesResponse response)
+    public static IEnumerable<DockerVolumeResult> Map(this ListVolumesResponse response)
     {
         return response.Volumes.Select(Map);
     }
 
-    public static DockerVolume Map(this VolumeResponse volume)
+    public static DockerVolumeResult Map(this VolumeResponse volume)
     {
-        return new DockerVolume(
+        return new DockerVolumeResult(
             Id: volume.Name,
             Driver: volume.Driver,
             Labels: volume.Labels.ToDictionary(kv => kv.Key, kv => kv.Value),

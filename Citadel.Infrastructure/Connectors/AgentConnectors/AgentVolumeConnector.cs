@@ -11,7 +11,7 @@ namespace Infrastructure.Connectors.AgentConnectors;
 
 internal class AgentVolumeConnector(IGrpcClientFactory clientFactory) : IVolumeConnector
 {
-    public async Task<Result<DockerVolume>> CreateVolumeAsync(CreateVolumeCommand command, CancellationToken cancellationToken)
+    public async Task<Result<DockerVolumeResult>> CreateVolumeAsync(CreateDockerVolumeCommand command, CancellationToken cancellationToken)
     {
         try
         {
@@ -29,11 +29,11 @@ internal class AgentVolumeConnector(IGrpcClientFactory clientFactory) : IVolumeC
         }
         catch (RpcException ex)
         {
-            return Result.Failure<DockerVolume>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<DockerVolumeResult>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 
-    public async Task<Result<DockerVolume>> InspectVolumeAsync(InspectVolumeCommand inspectVolumeCommand, CancellationToken cancellationToken)
+    public async Task<Result<DockerVolumeResult>> InspectVolumeAsync(InspectDockerVolumeCommand inspectVolumeCommand, CancellationToken cancellationToken)
     {
         try
         {
@@ -47,11 +47,11 @@ internal class AgentVolumeConnector(IGrpcClientFactory clientFactory) : IVolumeC
         }
         catch (RpcException ex)
         {
-            return Result.Failure<DockerVolume>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<DockerVolumeResult>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 
-    public async Task<Result<IEnumerable<DockerVolume>>> ListVolumesAsync(ListVolumesCommand command, CancellationToken cancellationToken)
+    public async Task<Result<IEnumerable<DockerVolumeResult>>> ListVolumesAsync(ListdDockerVolumesCommand command, CancellationToken cancellationToken)
     {
         try
         {
@@ -68,11 +68,11 @@ internal class AgentVolumeConnector(IGrpcClientFactory clientFactory) : IVolumeC
         }
         catch (RpcException ex)
         {
-            return Result.Failure<IEnumerable<DockerVolume>>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<IEnumerable<DockerVolumeResult>>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 
-    public async Task<Result> DeleteVolumeAsync(DeleteVolumeCommand command, CancellationToken cancellationToken)
+    public async Task<Result> DeleteVolumeAsync(DeleteDockerVolumeCommand command, CancellationToken cancellationToken)
     {
         try
         {

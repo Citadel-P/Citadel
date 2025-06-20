@@ -17,13 +17,13 @@ public static class Volumes
         return EndpointHandlers.HandleResult(result, (v) => new VolumesView(v));
     }
 
-    public static async Task<Results<Ok<DockerVolume>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreateVolumeInput request, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<DockerVolumeResult>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreateVolumeInput request, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResult(result, v => v);
     }
 
-    public static async Task<Results<Ok<DockerVolume>, ProblemHttpResult>> Inspect(IMediator mediator, Guid platformId, string name, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<DockerVolumeResult>, ProblemHttpResult>> Inspect(IMediator mediator, Guid platformId, string name, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new InspectVolume(platformId, name), cancellationToken);
         return EndpointHandlers.HandleResult(result, v => v);

@@ -8,10 +8,10 @@ namespace Infrastructure.Connectors.Mappers;
 
 internal static class ImageMapper
 {
-    public static List<DockerImage> Map(this IEnumerable<ImageReply> images)
+    public static List<ImageResult> Map(this IEnumerable<ImageReply> images)
         => [.. images.Select(Map)];
 
-    public static DockerImage Map(this ImageReply image)
+    public static ImageResult Map(this ImageReply image)
         => new 
         (
             Id: image.Id,

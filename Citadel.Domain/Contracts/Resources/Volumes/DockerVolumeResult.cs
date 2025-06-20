@@ -1,6 +1,6 @@
 ﻿namespace Domain.Contracts.Resources.Volumes;
 
-public record DockerVolume (
+public record DockerVolumeResult (
     string Id,
     bool InUse,
     string Scope,

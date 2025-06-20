@@ -58,8 +58,8 @@ internal class PlatformSyncJob(
                     logger.LogError("Failed to get platform info for {Address}: {Error}", platform.Address, error?.Message);
                     return;
                 }
+
                 // Update platform
-               
                 platform.PartialUpdate(
                     platformStatus: PlatformStatus.Online,
                     networkCount: platformInfo.NetworkCount,
@@ -68,7 +68,8 @@ internal class PlatformSyncJob(
                     memTotal: platformInfo.MemTotal,
                     serverVersion: platformInfo.ServerVersion,
                     agentVersion: platformInfo.AgentVersion,
-                    descriptor: platformInfo.PlatformDescriptor);
+                    cpuCount: platformInfo.CpuCount,
+                    descriptor: platformInfo.Descriptor);
             }
             else
             {

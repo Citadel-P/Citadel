@@ -2,14 +2,13 @@
 using Citadel.Agent.Platforms.V1;
 using Domain;
 using Domain.Contracts.Resources.Platforms;
-using Domain.Entities;
 using Domain.Entities.Platforms;
 
 namespace Infrastructure.Connectors.Mappers;
 
 internal static class PlatformMapper
 {
-    public static Platform Map(this PlatformInfoResponse platformInfo, string platformName, string platformAddress, PlatformConnectorType type)
+    public static PlatformResult Map(this PlatformInfoResponse platformInfo, string platformName, string platformAddress, PlatformConnectorType type)
     {
         PlatformDescriptor? descriptor = null;
         if (string.IsNullOrEmpty(platformInfo.SwarmInfo?.NodeID))
@@ -30,28 +29,27 @@ internal static class PlatformMapper
         }
         else
         {
+            // Todo : Implement Swarm descriptor 
         }
-        return new Platform
+        return new PlatformResult
             (
-                name: platformName,
-                connectorType: type,
-                address: platformAddress,
-                status: PlatformStatus.Online,
-                networkCount: platformInfo.NetworkCount,
-                volumeCount: platformInfo.VolumeCount,
-                imageCount: platformInfo.ImageCount,
-                cpuCount: platformInfo.CpuCount,
-                memTotal: platformInfo.MemTotal,
-                serverVersion: platformInfo.ServerVersion,
-                agentVersion: platformInfo.AgentVersion,
-                platformDescriptor: descriptor
-            ).AppendStat(platformInfo.PlatformStat.Map(created: platformInfo.Created));
+                Name: platformName,
+                Address: platformAddress,
+                NetworkCount: platformInfo.NetworkCount,
+                VolumeCount: platformInfo.VolumeCount,
+                ImageCount: platformInfo.ImageCount,
+                CpuCount: platformInfo.CpuCount,
+                MemTotal: platformInfo.MemTotal,
+                ServerVersion: platformInfo.ServerVersion,
+                AgentVersion: platformInfo.AgentVersion,
+                Descriptor: descriptor,
+                PlatformStat: platformInfo.PlatformStat.Map()
+            );
     }
 
-    public static PlatformStatsBatch Map(this PlatformStatsResponse stat, Guid PlatformId)
+    public static PlatformStatsResult Map(this PlatformStatsResponse stat)
         => new 
         (
-            PlatformId: PlatformId,
             MemTotal: stat.MemTotal,
             ImageCount: stat.ImageCount,
             VolumeCount: stat.VolumeCount,
@@ -60,17 +58,16 @@ internal static class PlatformMapper
             ContainersPaused: stat.ContainersPaused,
             ContainersStopped: stat.ContainersStopped,
             ContainersRunning: stat.ContainersRunning,
-            PlatformStat: stat.Stat.Map(PlatformId)
+            PlatformStat: stat.Stat.Map()
         );
 
-    internal static PlatformStat Map(this PlatformStatMessage stat, Guid? platformId = null, long? created = null)
+    internal static DockerPlatformStat Map(this PlatformStatMessage stat)
         => new
         (
-            created: created ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            platformId: platformId ?? Guid.Empty,
-            memoryUsage: stat?.MemoryUsage ?? 0,
-            cpuUsage: stat?.CpuUsage ?? 0,
-            rxBytes: stat?.RxBytes ?? 0,
-            txBytes: stat?.TxBytes ?? 0
+            Created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            MemoryUsage: stat?.MemoryUsage ?? 0,
+            CpuUsage: stat?.CpuUsage ?? 0,
+            RxBytes: stat?.RxBytes ?? 0,
+            TxBytes: stat?.TxBytes ?? 0
         );
 }

@@ -6,8 +6,8 @@ namespace Domain.Contracts.Interfaces;
 
 public interface IPlatformConnector
 {
-    Task<PlatformHealth> CheckHealthAsync(string platformAddress, CancellationToken cancellationToken);
-    Task<Result<Platform>> GetPlatformAsync(GetPlatformCommand command, CancellationToken cancellationToken);
+    Task<PlatformHealthResult> CheckHealthAsync(string platformAddress, CancellationToken cancellationToken);
+    Task<Result<PlatformResult>> GetPlatformAsync(GetPlatformCommand command, CancellationToken cancellationToken);
 
-    IAsyncEnumerable<PlatformStatsBatch> StreamStatsAsync(StreamPlatformStatsCommand command, CancellationToken cancellationToken);
+    IAsyncEnumerable<PlatformStatsResult> StreamStatsAsync(StreamPlatformStatsCommand command, CancellationToken cancellationToken);
 }

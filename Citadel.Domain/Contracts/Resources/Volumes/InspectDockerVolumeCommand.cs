@@ -1,6 +1,6 @@
 ﻿namespace Domain.Contracts.Resources.Volumes;
 
-public sealed record InspectVolumeCommand(
+public sealed record InspectDockerVolumeCommand(
     string PlatformAddress,
     string Name
     );

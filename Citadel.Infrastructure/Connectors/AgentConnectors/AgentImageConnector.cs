@@ -2,8 +2,6 @@
 using Citadel.Agent.Images.V1;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Images;
-using Domain.Entities;
-using Domain.Entities.Registries;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.Connectors.Mappers;
@@ -14,7 +12,7 @@ namespace Infrastructure.Connectors.AgentConnectors;
 
 internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageConnector
 {
-    public async Task<Result<IReadOnlyList<DockerImage>>> ListImagesAsync(string platformAddress, CancellationToken cancellationToken)
+    public async Task<Result<IReadOnlyList<ImageResult>>> ListImagesAsync(string platformAddress, CancellationToken cancellationToken)
     {
         try
         {
@@ -24,7 +22,7 @@ internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageCon
         }
         catch (RpcException ex)
         {
-            return Result.Failure<IReadOnlyList<DockerImage>>(new ClientRpcException($"An RPC exception occurred: {ex.Message}", ex.StatusCode));
+            return Result.Failure<IReadOnlyList<ImageResult>>(new ClientRpcException($"An RPC exception occurred: {ex.Message}", ex.StatusCode));
         }
     }
 
@@ -84,42 +82,5 @@ internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageCon
         {
             yield return reply.Map();
         }
-    }
-
-    private static PullImageRequest CreatePullImageRequest(PullImageCommand command, RegistryConfigurationBase registryCfg)
-    {
-        var request = new PullImageRequest();
-
-        string domainName = registryCfg.RegistryUrl.Replace("https://", "");
-        switch (registryCfg)
-        {
-            case GitHubRegistry ghCfg:
-                request.FromImage = $"{domainName}/{ghCfg.Name}/{command.Repo}@{command.Tag}".ToLower();
-                request.Repo = $"{domainName}/{ghCfg.Name}/{command.Repo}".ToLower();
-                request.FromSrc = ghCfg.RegistryUrl;
-                request.Auth = ghCfg.GetRegistryAuth();
-                break;
-
-            case DockerHubRegistry dockerCfg:
-                if (command.RegistryName == Registry.DefaultRegistryName)
-                {
-                    request.FromImage = $"{domainName}/{command.Tag}:latest".ToLower();
-                    request.Repo = domainName;
-                    request.FromSrc = dockerCfg.RegistryUrl;
-                }
-                else
-                {
-                    request.FromImage = $"{domainName}/{dockerCfg.UserName}/{command.Repo}:{command.Tag}".ToLower();
-                    request.Repo = $"{domainName}/{dockerCfg.UserName}/{command.Repo}".ToLower();
-                    request.FromSrc = dockerCfg.RegistryUrl;
-                    request.Auth = dockerCfg.GetRegistryAuth();
-                }
-                break;
-
-            default:
-                throw new NotSupportedException("Unsupported registry configuration");
-        }
-
-        return request;
     }
 }

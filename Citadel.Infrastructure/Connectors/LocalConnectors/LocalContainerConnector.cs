@@ -17,7 +17,7 @@ internal class LocalContainerConnector : IContainerConnector
         throw new NotImplementedException();
     }
 
-    public Task<Result<IReadOnlyDictionary<string, Container>>> ListContainersAsync(ContainerFilterCommand containerFilterCommand, CancellationToken cancellationToken)
+    public Task<Result<IReadOnlyDictionary<string, DockerContainer>>> ListContainersAsync(ContainerFilterCommand containerFilterCommand, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
@@ -27,7 +27,7 @@ internal class LocalContainerConnector : IContainerConnector
         throw new NotImplementedException();
     }
 
-    public IAsyncEnumerable<ContainerStats> StreamContainerStatsAsync(StreamContainerStatsCommand streamStatsCommand, CancellationToken cancellationToken)
+    public IAsyncEnumerable<DockerContainerStats> StreamContainerStatsAsync(StreamContainerStatsCommand streamStatsCommand, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }

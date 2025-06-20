@@ -1,30 +1,35 @@
 ﻿using System.Text;
+using Application.TaskJobs;
 using Citadel.Agent.Common.V1;
-using Grpc.Core;
 using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Platforms;
-using Application.TaskJobs;
+using Grpc.Core;
+using Infrastructure.Services;
+using LightResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using static Citadel.Agent.Platforms.V1.PlatformService;
-using Infrastructure.Services;
-using Domain.Contracts.Interfaces;
 
 namespace Tests.Integration.Application.Features.Platforms;
 
 public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
 {
     private Guid platformId;
-    private readonly Mock<IGrpcClientFactory> grpcFactoryMock = new();
-    private readonly Mock<PlatformServiceClient> platformClientMock = new();
+
+    private readonly Mock<IConnectorFactory<IPlatformConnector>> platformFactoryMock = new();
+    private readonly Mock<IPlatformConnector> platformConnector = new();
+
     private readonly Mock<IPlatformHealthMonitorJob> healthMonitorMock = new();
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
-        services.AddSingleton(_ => grpcFactoryMock.Object);
         services.AddSingleton(_ => healthMonitorMock.Object);
+        services.AddSingleton(_ => platformFactoryMock.Object);
+        services.AddSingleton(_ => platformConnector.Object);
     }
 
     protected override async ValueTask SeedDbAsync()
@@ -62,39 +67,14 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
     public async Task Patch_Platform_Should_Update_Entity()
     {
         // Arrange
-        var platformInfo = new PlatformInfoResponse
-        {
-            Id = "daemonX",
-            ContainerCount = 10,
-            ContainersRunning = 5,
-            ContainersPaused = 2,
-            ContainersStopped = 3,
-            NetworkCount = 333,
-            VolumeCount = 222,
-            ImageCount = 111,
-            MemTotal = 4096,
-            ServerVersion = "1.2.3",
-            AgentVersion = "2.0.0",
-            Driver = "overlay2",
-            OperatingSystem = "Linux",
-            OsType = "linux",
-            OsVersion = "5.15",
-            Architecture = "x86_64"
-        };
-        platformClientMock.Setup(x => x.GetPlatformInfoAsync(It.IsAny<Google.Protobuf.WellKnownTypes.Empty>(), null, null, It.IsAny<CancellationToken>()))
-                           .Returns(new AsyncUnaryCall<PlatformInfoResponse>(
-                                Task.FromResult(platformInfo),
-                                Task.FromResult(new Metadata()),
-                                () => Status.DefaultSuccess,
-                                () => [],
-                                () => { }
-                            ));
+        platformFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+                     .Returns(platformConnector.Object);
+
+        platformConnector.Setup(x => x.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()))
+                         .ReturnsAsync(Result.Success(GetDummyPlatform()));
 
         healthMonitorMock.Setup(x => x.UntrackPlatform("https://original.address", It.IsAny<CancellationToken>()))
                          .ReturnsAsync(true);
-
-        grpcFactoryMock.Setup(x => x.GetPlatformClient(It.IsAny<string>()))
-                        .Returns(platformClientMock.Object);
 
         var patchJson = """
         {

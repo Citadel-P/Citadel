@@ -11,22 +11,22 @@ namespace Infrastructure.Connectors.LocalConnectors;
 
 internal class LocalVolumeConnector : IVolumeConnector
 {
-    public Task<Result<DockerVolume>> CreateVolumeAsync(CreateVolumeCommand createVolumeCommand, CancellationToken cancellationToken)
+    public Task<Result<DockerVolumeResult>> CreateVolumeAsync(CreateDockerVolumeCommand createVolumeCommand, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
 
-    public Task<Result> DeleteVolumeAsync(DeleteVolumeCommand removeVolumeCommand, CancellationToken cancellationToken)
+    public Task<Result> DeleteVolumeAsync(DeleteDockerVolumeCommand removeVolumeCommand, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
 
-    public Task<Result<DockerVolume>> InspectVolumeAsync(InspectVolumeCommand inspectVolumeCommand, CancellationToken cancellationToken)
+    public Task<Result<DockerVolumeResult>> InspectVolumeAsync(InspectDockerVolumeCommand inspectVolumeCommand, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
 
-    public Task<Result<IEnumerable<DockerVolume>>> ListVolumesAsync(ListVolumesCommand volumesCommand, CancellationToken cancellationToken)
+    public Task<Result<IEnumerable<DockerVolumeResult>>> ListVolumesAsync(ListdDockerVolumesCommand volumesCommand, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }

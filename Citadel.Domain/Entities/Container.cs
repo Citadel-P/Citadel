@@ -8,11 +8,11 @@ public class Container
     private Container() { /* For EF Core */ }
 
     public Container(
-        ContainerStateStatus state,
-        Guid platformId,
         string name,
         string image,
+         Guid platformId,
         string containerId,
+        ContainerStateStatus state,
         long? sizeRw = null,
         long? created = null,
         string? stack = null,
@@ -20,8 +20,8 @@ public class Container
         IEnumerable<ContainerPort>? ports = null)
     {
         Id = Guid.CreateVersion7();
-        PlatformId = platformId;
         ContainerId = containerId;
+        PlatformId = platformId;
         Name = name;
         Image = image;
         State = state;
@@ -44,12 +44,13 @@ public class Container
     public IReadOnlyCollection<ContainerStat> Stats => stats;
     public Platform Platform { get; private set; } = null!;
 
-    public void PartialUpdate(
+    public Container PartialUpdate(
         string? name = null,
         string? image = null,
         ContainerStateStatus? state = null,
         string? stack = null,
         long? created = null,
+        Guid? platformId = null,
         IEnumerable<ContainerPort>? ports = null)
     {
         if (name != null) Name = name;
@@ -57,12 +58,14 @@ public class Container
         if (state != null) State = state.Value;
         if (stack != null) Stack = stack;
         if (created != null) Created = created.Value;
+        if (platformId != null) PlatformId = platformId.Value;
         if (ports != null)
         {
             this.ports.Clear();
             this.ports.AddRange(ports);
         }
         Updated = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        return this;
     }
 
     public Container AppendStat(ContainerStat stat)

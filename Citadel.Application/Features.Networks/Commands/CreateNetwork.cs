@@ -24,7 +24,7 @@ public sealed record CreateNetwork(
     IPAM? IPAM = null,
     ConfigFrom? ConfigFrom = null,
     Dictionary<string, string>? Labels = null,
-    Dictionary<string, string>? Options = null) : ICommand<Result<CreateNetworkResult>>
+    Dictionary<string, string>? Options = null) : ICommand<Result<CreateDockerNetworkResult>>
 {
 
     internal class Validator : AbstractValidator<CreateNetwork>
@@ -124,7 +124,7 @@ public sealed record CreateNetwork(
 
     }
 
-    internal CreateNetworkCommand ToCommand(string platformAddress)
+    internal CreateDockerNetworkCommand ToCommand(string platformAddress)
         => new
         (
             PlatformAddress: platformAddress,
@@ -167,14 +167,14 @@ public sealed record IPAMConfig(string Subnet, string IpRange, string Gateway);
 public sealed record ConfigFrom(string Network);
 
 internal sealed class CreateNetworkHandler(IUnitOfWork unitOfWork, IConnectorFactory<INetworkConnector> connectorFactory)
-    : ICommandHandler<CreateNetwork, Result<CreateNetworkResult>>
+    : ICommandHandler<CreateNetwork, Result<CreateDockerNetworkResult>>
 {
-    public async ValueTask<Result<CreateNetworkResult>> Handle(CreateNetwork request, CancellationToken cancellationToken)
+    public async ValueTask<Result<CreateDockerNetworkResult>> Handle(CreateNetwork request, CancellationToken cancellationToken)
     {
         var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(request.PlatformId, cancellationToken);
         if (string.IsNullOrEmpty(address))
         {
-            return Result.Failure<CreateNetworkResult>(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure<CreateDockerNetworkResult>(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
         var networkConnector = connectorFactory.GetConnector(connectorType);

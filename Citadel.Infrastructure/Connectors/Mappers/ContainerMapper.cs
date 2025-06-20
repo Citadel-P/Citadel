@@ -289,42 +289,32 @@ internal static class ContainerMapper
         );
 
 
-    public static Dictionary<string, Container> Map(this ListContainersResponse response, Guid platformId)
+    public static Dictionary<string, DockerContainer> Map(this ListContainersResponse response, Guid platformId)
         => response.Containers.ToDictionary(
             pair => pair.Key,
-            pair => pair.Value.Map(platformId));
+            pair => pair.Value.Map());
 
-    private static Container Map(this ContainerMessage container, Guid platformId)
-    {
-        var result = new Container
+    private static DockerContainer Map(this ContainerMessage container)
+    => new
         (
-            name: container.Name,
-            image: container.Image,
-            stack: container.Stack,
-            platformId: platformId,
-            containerId: container.Id,
-            created: container.Created,
-            command: container.Command,
-            state: container.State.Map(),
-            ports: container.Ports?.Map()?.ToList() ?? []
+            Name: container.Name,
+            Image: container.Image,
+            Stack: container.Stack,
+            ContainerId: container.Id,
+            Created: container.Created,
+            Command: container.Command,
+            State: container.State.Map(),
+            ContainerStat: container.ContainerStatMessage?.Map(),
+            Ports: container.Ports?.Map()?.ToList() ?? []
         );
-
-        if (container.ContainerStatMessage != null)
-        {
-            result.AppendStat(container.ContainerStatMessage.Map());
-        }
-        return result;
-    }
-
-    public static ContainerStat Map(this ContainerStatMessage statMessage)
+    
+    public static DockerContainerStat Map(this ContainerStatMessage statMessage)
         => new (
-            memoryUsage: statMessage.MemoryUsage,
-            memoryLimit: statMessage.MemoryLimit,
-            cpuUsage: statMessage.CpuUsage,
-            rxBytes: statMessage.RxBytes,
-            txBytes: statMessage.TxBytes,
-            created: 0,
-            containerId: Guid.Empty
+            MemoryUsage: statMessage.MemoryUsage,
+            MemoryLimit: statMessage.MemoryLimit,
+            CpuUsage: statMessage.CpuUsage,
+            RxBytes: statMessage.RxBytes,
+            TxBytes: statMessage.TxBytes
         );
 
     public static IEnumerable<ContainerPort> Map(this IEnumerable<PortMessage> ports)
@@ -364,17 +354,17 @@ internal static class ContainerMapper
     public static ContainerLogInfo Map(this ContainerLogResponse logInfo)
         => new(Log: logInfo.Log);
 
-    public static ContainerStats Map(this ContainerStatsResponse statsResponse)
+    public static DockerContainerStats Map(this ContainerStatsResponse statsResponse)
         => new (Containers: statsResponse.Containers.ToDictionary(c => c.Key, c => c.Value.Map()));
 
-    public static DaemonEventInfo Map(this DaemonEventResponse response, Guid platformId)
+    public static DaemonEventInfo Map(this DaemonEventResponse response)
         => new
         (
             Id: response.Id,
             Action: response.Action,
             ContainerId: response.ContainerId,
             Type: response.EventMessageType.Map(),
-            Container: response.Container?.Map(platformId)
+            Container: response.Container?.Map()
         );
 
     public static ContainerEventType Map(this EventMessageType type)

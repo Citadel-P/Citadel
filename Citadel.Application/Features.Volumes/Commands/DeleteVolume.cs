@@ -30,7 +30,7 @@ internal class DeleteVolumeHandler(IUnitOfWork unitOfWork, IConnectorFactory<IVo
             return Result.Failure(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
-        var args = new DeleteVolumeCommand
+        var args = new DeleteDockerVolumeCommand
         (
             PlatformAddress: address,
             Names: command.Names,

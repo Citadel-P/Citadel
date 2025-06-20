@@ -11,12 +11,12 @@ namespace Infrastructure.Connectors.LocalConnectors;
 
 internal class LocalNetworkConnector : INetworkConnector
 {
-    public Task<Result<CreateNetworkResult>> CreateNetworkAsync(CreateNetworkCommand createNetworkCommand, CancellationToken cancellationToken = default)
+    public Task<Result<CreateDockerNetworkResult>> CreateNetworkAsync(CreateDockerNetworkCommand createNetworkCommand, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
 
-    public Task<Result> DeleteNetworkAsync(DeleteNetworkCommand deleteNetworkCommand, CancellationToken cancellationToken = default)
+    public Task<Result> DeleteNetworkAsync(DeleteDockerNetworkCommand deleteNetworkCommand, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
@@ -26,7 +26,7 @@ internal class LocalNetworkConnector : INetworkConnector
         throw new NotImplementedException();
     }
 
-    public Task<Result<IEnumerable<DockerNetwork>>> ListNetworksAsync(ListNetworksCommand listNetworksCommand, CancellationToken cancellationToken = default)
+    public Task<Result<IEnumerable<DockerNetworkResult>>> ListNetworksAsync(ListNetworksCommand listNetworksCommand, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }

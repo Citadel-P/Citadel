@@ -6,13 +6,13 @@ namespace Infrastructure.Connectors.Mappers;
 
 internal static class NetworkMapper
 {
-    public static IEnumerable<DockerNetwork> Map(this ListNetworksResponse response)
+    public static IEnumerable<DockerNetworkResult> Map(this ListNetworksResponse response)
         => response.Networks.Select(Map);
 
-    public static IEnumerable<DockerNetwork> Map(this RepeatedField<Network> networks)
+    public static IEnumerable<DockerNetworkResult> Map(this RepeatedField<Network> networks)
         => networks.Select(Map);
 
-    public static DockerNetwork Map(this Network network)
+    public static DockerNetworkResult Map(this Network network)
         => new 
         (
             Name: network.Name,

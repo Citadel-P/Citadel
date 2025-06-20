@@ -11,7 +11,7 @@ internal class LocalImageConnector : IImageConnector
         throw new NotImplementedException();
     }
 
-    public Task<Result<IReadOnlyList<DockerImage>>> ListImagesAsync(string platformAddress, CancellationToken cancellationToken)
+    public Task<Result<IReadOnlyList<ImageResult>>> ListImagesAsync(string platformAddress, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }

@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Application.Configs;
+using Application.Mappers;
 using Application.Services;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
@@ -78,18 +79,17 @@ internal class ContainersStatsCollectorJob(
                     {
                         if (platformContainerCache.TryGetContainers(platform.Id, out var ids))
                         {
+                            List<ContainerStat> stats = new(stream.Containers.Count);
                             var snapshotTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                             foreach (var kvp in stream.Containers)
                             {
                                 if (ids.TryGetValue(kvp.Key, out var containerId))
                                 {
-                                    kvp.Value.PartialUpdate(
-                                        containerId: containerId,
-                                        created: snapshotTime);
+                                    stats.Add(kvp.Value.Map(containerId, snapshotTime));
                                 }
                             }
 
-                            await channel.WriteAsync(new ContainersStatBatch(platform.Id, stream.Containers.Values), cancellationToken);
+                            await channel.WriteAsync(new ContainersStatBatch(platform.Id, stats), cancellationToken);
                         }
                     }
                 }
