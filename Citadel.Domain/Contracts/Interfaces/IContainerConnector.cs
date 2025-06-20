@@ -1,9 +1,11 @@
 ﻿using Domain.Contracts.Resources.Containers;
-using Domain.Entities;
 using LightResults;
 
 namespace Domain.Contracts.Interfaces;
 
+/// <summary>
+/// Defines methods for managing and monitoring containers in a container runtime environment.
+/// </summary>
 public interface IContainerConnector
 {
     Task<Result<IReadOnlyDictionary<string, DockerContainer>>> ListContainersAsync(ContainerFilterCommand containerFilterCommand, CancellationToken cancellationToken);

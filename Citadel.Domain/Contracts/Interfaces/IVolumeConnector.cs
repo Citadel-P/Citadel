@@ -3,6 +3,9 @@ using LightResults;
 
 namespace Domain.Contracts.Interfaces;
 
+/// <summary>
+/// Defines methods for managing container volumes.
+/// </summary>
 public interface IVolumeConnector
 {
     Task<Result<IEnumerable<DockerVolumeResult>>> ListVolumesAsync(ListdDockerVolumesCommand volumesCommand, CancellationToken cancellationToken);

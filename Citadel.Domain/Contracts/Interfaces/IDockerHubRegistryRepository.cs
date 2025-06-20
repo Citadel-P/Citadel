@@ -4,7 +4,7 @@ using Domain.Entities.Registries;
 namespace Domain.Contracts.Interfaces;
 
 /// <summary>
-/// Provides methods for interacting with Docker Hub registries.
+/// Defines methods for interacting with Docker Hub registries.
 /// </summary>
 public interface IDockerHubRegistryRepository
 {

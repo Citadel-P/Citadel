@@ -3,6 +3,9 @@ using LightResults;
 
 namespace Domain.Contracts.Interfaces;
 
+/// <summary>
+/// Defines methods for managing container images.
+/// </summary>
 public interface IImageConnector
 {
     Task<Result<IReadOnlyList<ImageResult>>> ListImagesAsync(string platformAddress, CancellationToken cancellationToken);

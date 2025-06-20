@@ -3,6 +3,9 @@ using LightResults;
 
 namespace Domain.Contracts.Interfaces;
 
+/// <summary>
+/// Defines methods for managing container networks.
+/// </summary>
 public interface INetworkConnector
 {
     Task<Result<IEnumerable<DockerNetworkResult>>> ListNetworksAsync(ListNetworksCommand listNetworksCommand, CancellationToken cancellationToken = default);

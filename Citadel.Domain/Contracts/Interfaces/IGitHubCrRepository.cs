@@ -4,7 +4,7 @@ using Domain.Entities.Registries;
 namespace Domain.Contracts.Interfaces;
 
 /// <summary>
-/// Provides methods for interacting with GitHub Container Registry (ghcr.io).
+/// Defines methods for interacting with GitHub Container Registry (ghcr.io).
 /// </summary>
 public interface IGitHubCrRepository
 {
