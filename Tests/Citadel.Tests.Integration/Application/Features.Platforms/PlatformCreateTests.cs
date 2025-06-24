@@ -38,7 +38,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
                       .Returns(platformConnector.Object);
 
         platformConnector.Setup(x => x.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()))
-                         .ReturnsAsync(Result.Success(GetDummyPlatform()));
+                         .ReturnsAsync(Result.Success(GetDummyPlatformResult()));
 
         containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
             .Returns(containerConnector.Object);

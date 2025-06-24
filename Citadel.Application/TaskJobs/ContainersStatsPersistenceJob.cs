@@ -1,22 +1,26 @@
 ﻿using System.Threading.Channels;
+using Application.Configs;
+using Application.Services.Abstractions;
+using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Application.Services.Abstractions;
-using Domain.Contracts.Interfaces;
+using Microsoft.Extensions.Options;
 
 namespace Application.TaskJobs;
 
 internal class ContainersStatsPersistenceJob(
     IServiceScopeFactory scopeFactory,
+    IOptions<JobConfiguration> options,
     ChannelReader<ContainersStatBatch> reader,
     ISignalRConnectionTracker connectionTracker,
+    IContainerHubDispatcher containerHubDispatcher,
     ILogger<ContainersStatsPersistenceJob> logger) : BackgroundService
 {
-    private const int BatchSize = 300;
-    // Updates to uow will be flushed every x seconds or when batch size is reached.
-    private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(60 * 2); 
+    private readonly int BatchSize = options.Value?.BatchSize ?? 200;
+    // Updates to db will be flushed every x seconds or when batch size is reached.
+    private readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60); 
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -84,11 +88,9 @@ internal class ContainersStatsPersistenceJob(
     {
         if (connectionTracker.HasUsersInGroup($"ContainersInfo/{batch.PlatformId}"))
         {
-            using var scope = scopeFactory.CreateAsyncScope();
-            var hub = scope.ServiceProvider.GetRequiredService<IContainerHubDispatcher>();
             try
             {
-                await hub.SendContainersStats(batch.PlatformId, batch.Stats);
+                await containerHubDispatcher.SendContainersStats(batch.PlatformId, batch.Stats);
             }
             catch (Exception ex)
             {

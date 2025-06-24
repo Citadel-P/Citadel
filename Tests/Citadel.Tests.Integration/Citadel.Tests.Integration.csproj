@@ -30,7 +30,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Folder Include="Infrastructure\" />
 	  <Folder Include="Snapshots\" />
 	</ItemGroup>
 

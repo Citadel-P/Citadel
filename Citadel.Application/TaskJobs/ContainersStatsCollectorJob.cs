@@ -3,6 +3,7 @@ using System.Threading.Channels;
 using Application.Configs;
 using Application.Mappers;
 using Application.Services;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
@@ -45,16 +46,15 @@ internal class ContainersStatsCollectorJob(
 
     public void StartStreamStatsForPlatform(PlatformHealth platform, CancellationToken cancellationToken)
     {
-        if (runningStreams.ContainsKey(platform.Address))
+        
+        if (!runningStreams.TryAdd(platform.Address, CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)))
         {
-            logger.LogWarning("Streaming containers stats for {Address} is already running.", platform.Address);
+            logger.LogWarning("Streaming platform stats for {Address} is already running.", platform.Address);
             return;
         }
 
-        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        runningStreams[platform.Address] = cts;
-
-        _ = Task.Run(() => StreamContainersStats(platform, cts.Token), cts.Token);
+        var cts = runningStreams[platform.Address];
+        _ = StreamContainersStats(platform.Id, platform.Type, platform.Address, cts.Token);
     }
 
     public void StopStreamStatsForPlatform(string address)
@@ -66,18 +66,21 @@ internal class ContainersStatsCollectorJob(
         }
     }
 
-    private async Task StreamContainersStats(PlatformHealth platform, CancellationToken cancellationToken)
+    private async Task StreamContainersStats(Guid platformId, PlatformConnectorType connectorType, string address, CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                var command = new StreamContainerStatsCommand(PlatformAddress: platform.Address, FetchIntervalMs: jobConfiguration.ContainersInfoInterval * 1000);
-                await foreach (var stream in connectorFactory.GetConnector(platform.Type).StreamContainerStatsAsync(command, cancellationToken: cancellationToken))
+                var command = new StreamContainerStatsCommand(
+                    PlatformAddress: address, 
+                    FetchIntervalMs: jobConfiguration.ContainersInfoInterval * 1000);
+
+                await foreach (var stream in connectorFactory.GetConnector(connectorType).StreamContainerStatsAsync(command, cancellationToken))
                 {
                     if (stream.Containers.Count > 0)
                     {
-                        if (platformContainerCache.TryGetContainers(platform.Id, out var ids))
+                        if (platformContainerCache.TryGetContainers(platformId, out var ids))
                         {
                             List<ContainerStat> stats = new(stream.Containers.Count);
                             var snapshotTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -89,20 +92,23 @@ internal class ContainersStatsCollectorJob(
                                 }
                             }
 
-                            await channel.WriteAsync(new ContainersStatBatch(platform.Id, stats), cancellationToken);
+                            await channel.WriteAsync(new ContainersStatBatch(platformId, stats), cancellationToken);
                         }
                     }
                 }
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)
             {
-                logger.LogInformation("Stream for {Address} was canceled.", platform.Address);
-                break;
+                logger.LogInformation("Stream for {Address} was canceled.", address);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error while streaming containers stats for {Address}, retrying in 10s...", platform.Address);
+                logger.LogError(ex, "Error while streaming containers stats for {Address}, retrying in 10s...", address);
                 await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+            }
+            finally
+            {
+                StopStreamStatsForPlatform(address);
             }
         }
     }

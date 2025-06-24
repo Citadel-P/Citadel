@@ -3,6 +3,7 @@
 public class JobConfiguration
 {
     public int SystemInfoInterval { get; set; } = 15;
-
     public int ContainersInfoInterval { get; set; } = 15;
+    public int BatchSize { get; set; } = 200;
+    public int FlashInterval { get; set; } = 120;
 }

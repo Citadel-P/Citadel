@@ -79,7 +79,7 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
                       .Returns(platformConnector.Object);
 
         platformConnector.Setup(x => x.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()))
-                         .ReturnsAsync(Result.Success(GetDummyPlatform()));
+                         .ReturnsAsync(Result.Success(GetDummyPlatformResult()));
 
         // Act
         await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true), 
@@ -104,7 +104,7 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
                       .Returns(platformConnector.Object);
 
         platformConnector.Setup(x => x.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()))
-                         .ReturnsAsync(Result.Success(GetDummyPlatform()));
+                         .ReturnsAsync(Result.Success(GetDummyPlatformResult()));
 
         // Act
         await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: false),

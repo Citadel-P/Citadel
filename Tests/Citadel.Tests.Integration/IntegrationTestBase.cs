@@ -92,7 +92,7 @@ public abstract class IntegrationTestBase<TEntryPoint> : IAsyncLifetime
         factory.Dispose();
     }
 
-    protected PlatformResult GetDummyPlatform() =>
+    protected PlatformResult GetDummyPlatformResult() =>
         new
         (
             Name: "p-01",
@@ -118,6 +118,32 @@ public abstract class IntegrationTestBase<TEntryPoint> : IAsyncLifetime
                     Architecture: "x86_64"
                 )
         );
+
+    protected Platform GetDummyPlatform()
+    {
+        var platformDescriptor = new DockerPlatformDescriptor(
+           DaemonId: "123456",
+           ContainerCount: 5,
+           ContainersRunning: 2,
+           ContainersPaused: 2,
+           ContainersStopped: 1);
+
+        var platform = new Platform(
+            name: "Docker-P-01",
+            address: "https://original.address",
+            networkCount: 1,
+            volumeCount: 2,
+            imageCount: 3,
+            cpuCount: 4,
+            memTotal: 500,
+            serverVersion: "1.0.0",
+            agentVersion: "1.0.0",
+            status: PlatformStatus.Online,
+            connectorType: PlatformConnectorType.Agent,
+            platformDescriptor: platformDescriptor
+        );
+        return platform;
+    }
 
     protected IEnumerable<DockerContainer> GetDummyContainers(int total = 3)
     {

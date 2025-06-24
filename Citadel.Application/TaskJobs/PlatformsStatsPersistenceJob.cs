@@ -1,14 +1,16 @@
 ﻿using System.Threading.Channels;
-using Domain.Entities.Platforms;
+using Application.Configs;
+using Application.Mappers;
 using Application.Services.Abstractions;
+using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Platforms;
+using Domain.Entities.Platforms;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Domain;
-using Domain.Contracts.Resources.Platforms;
-using Domain.Contracts.Interfaces;
-using Application.Mappers;
+using Microsoft.Extensions.Options;
 
 namespace Application.TaskJobs;
 
@@ -18,19 +20,21 @@ namespace Application.TaskJobs;
 /// </summary>
 internal class PlatformsStatsPersistenceJob(
     IServiceScopeFactory scopeFactory,
+    IOptions<JobConfiguration> options,
     ISignalRConnectionTracker connectionTracker,
+    IPlatformHubDispatcher platformHubDispatcher,
     ChannelReader<(Guid Id, PlatformStatsResult Stats)> reader,
     ILogger<PlatformsStatsPersistenceJob> logger) : BackgroundService
 {
-    private const int BatchSize = 200;
-    // Updates to db will be flushed every x seconds or when platform size is reached.
-    private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(60*2); 
+    private readonly int BatchSize = options.Value?.BatchSize ?? 200;
+    // Updates to db will be flushed every x seconds or when platform batch size is reached.
+    private readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60); 
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         var buffer = new Dictionary<Guid, List<PlatformStatsResult>>(); 
         var lastFlush = DateTime.UtcNow;
-
+        
         try
         {
             await foreach (var (platformId, stats) in reader.ReadAllAsync(cancellationToken))
@@ -118,7 +122,7 @@ internal class PlatformsStatsPersistenceJob(
         try
         {
             var batch = statsByPlatform.Map();
-            await uow.BulkInsertAsync(batch, cancellationToken: cancellationToken);
+            await uow.BulkInsertAsync(batch, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -130,11 +134,9 @@ internal class PlatformsStatsPersistenceJob(
     {
         if (connectionTracker.HasUsersInGroup("Platforms"))
         {
-            using var scope = scopeFactory.CreateAsyncScope();
-            var hub = scope.ServiceProvider.GetRequiredService<IPlatformHubDispatcher>();
             try
             {
-                await hub.PushPlatformStats(platformId, stats);
+                await platformHubDispatcher.PushPlatformStats(platformId, stats);
             }
             catch (Exception ex)
             {

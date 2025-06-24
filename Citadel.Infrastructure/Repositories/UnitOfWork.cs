@@ -58,7 +58,7 @@ internal class ContainerRepository(ApplicationDbContext db) : Repository<Contain
 internal class ContainerStatRepository(ApplicationDbContext db) : Repository<ContainerStat>(db), IContainerStatRepository { }
 internal class RefreshTokenRepository(ApplicationDbContext db) : Repository<RefreshToken>(db), IRefreshTokenRepository { }
 internal class PlatformStatRepository(ApplicationDbContext db) : Repository<PlatformStat>(db), IPlatformStatRepository { }
-internal class  TeamRepository(ApplicationDbContext db) : Repository<Team>(db), ITeamRepository { }
+internal class TeamRepository(ApplicationDbContext db) : Repository<Team>(db), ITeamRepository { }
 internal class PlatformRepository(ApplicationDbContext db) : Repository<Platform>(db), IPlatformRepository 
 {
     public async Task<(string, PlatformConnectorType)> GetPlatformInfoAsync(Guid platformId, CancellationToken cancellationToken)

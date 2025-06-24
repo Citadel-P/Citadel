@@ -1,18 +1,14 @@
 ﻿using System.Text;
 using Application.TaskJobs;
-using Citadel.Agent.Common.V1;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Platforms;
-using Grpc.Core;
-using Infrastructure.Services;
 using LightResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using static Citadel.Agent.Platforms.V1.PlatformService;
 
 namespace Tests.Integration.Application.Features.Platforms;
 
@@ -71,7 +67,7 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
                      .Returns(platformConnector.Object);
 
         platformConnector.Setup(x => x.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()))
-                         .ReturnsAsync(Result.Success(GetDummyPlatform()));
+                         .ReturnsAsync(Result.Success(GetDummyPlatformResult()));
 
         healthMonitorMock.Setup(x => x.UntrackPlatform("https://original.address", It.IsAny<CancellationToken>()))
                          .ReturnsAsync(true);

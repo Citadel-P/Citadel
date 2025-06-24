@@ -2,6 +2,7 @@
 using System.Threading.Channels;
 using Application.Configs;
 using Application.Services;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Grpc.Core;
@@ -44,16 +45,14 @@ internal class PlatformsStatsCollectorJob(
 
     public void StartStreamStatsForPlatform(PlatformHealth platform, CancellationToken cancellationToken)
     {
-        if (runningStreams.ContainsKey(platform.Address))
+        if (!runningStreams.TryAdd(platform.Address, CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)))
         {
             logger.LogWarning("Streaming platform stats for {Address} is already running.", platform.Address);
             return;
         }
 
-        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        runningStreams[platform.Address] = cts;
-
-        _ = Task.Run(() => StreamPlatformStats(platform, cts.Token), cts.Token);
+        var cts = runningStreams[platform.Address];
+        _ = StreamPlatformStats(platform.Id, platform.Type, platform.Address, cts.Token);
     }
 
     public void StopStreamStatsForPlatform(string address)
@@ -65,31 +64,32 @@ internal class PlatformsStatsCollectorJob(
         }
     }
 
-    private async Task StreamPlatformStats(PlatformHealth platform, CancellationToken cancellationToken)
+    private async Task StreamPlatformStats(Guid platformId, PlatformConnectorType connectorType, string address, CancellationToken cancellationToken)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        try
         {
-            try
+            var connector = connectorFactory.GetConnector(connectorType);
+            var command = new StreamPlatformStatsCommand(
+                PlatformAddress: address,
+                FetchIntervalMs: jobConfiguration.SystemInfoInterval * 1000);
+
+            await foreach (var platformStats in connector.StreamStatsAsync(command, cancellationToken))
             {
-                var command = new StreamPlatformStatsCommand(
-                    PlatformAddress: platform.Address,
-                    FetchIntervalMs: jobConfiguration.SystemInfoInterval * 1000);
-                
-                await foreach (var platformStats in connectorFactory.GetConnector(platform.Type).StreamStatsAsync(command, cancellationToken))
-                {
-                    await platformStatsWriter.WriteAsync((platform.Id, platformStats), cancellationToken);
-                }
+                await platformStatsWriter.WriteAsync((platformId, platformStats), cancellationToken);
             }
-            catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)
-            {
-                logger.LogInformation("Stream for {Address} was canceled.", platform.Address);
-                break;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error while streaming containers stats for {Address}, retrying in 10s...", platform.Address);
-                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
-            }
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)
+        {
+            logger.LogInformation("Stream for {Address} was canceled.", address);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error while streaming containers stats for {Address}", address);
+            await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+        }
+        finally
+        {
+            StopStreamStatsForPlatform(address);
         }
     }
 }

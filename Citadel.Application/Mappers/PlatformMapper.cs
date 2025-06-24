@@ -38,11 +38,11 @@ internal static class PlatformMapper
     internal static PlatformStat Map(this DockerPlatformStat stat, Guid platformId)
        => new
        (
-           created: stat.Created,
            platformId: platformId,
-           memoryUsage: stat?.MemoryUsage ?? 0,
-           cpuUsage: stat?.CpuUsage ?? 0,
            rxBytes: stat?.RxBytes ?? 0,
-           txBytes: stat?.TxBytes ?? 0
+           txBytes: stat?.TxBytes ?? 0,
+           cpuUsage: stat?.CpuUsage ?? 0,
+           memoryUsage: stat?.MemoryUsage ?? 0,
+           created: stat?.Created ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds()
        );
 }
