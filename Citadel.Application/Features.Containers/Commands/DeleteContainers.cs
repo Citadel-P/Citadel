@@ -47,7 +47,7 @@ internal sealed class DeleteContainersHandler(IUnitOfWork unitOfWork, IConnector
             (
                 PlatformAddress: platform.Address,
                 ContainerIds: platform.ContainersId,
-                Verbose: request.V,
+                Volume: request.V,
                 Force: request.Force,
                 Link: request.Link
             );

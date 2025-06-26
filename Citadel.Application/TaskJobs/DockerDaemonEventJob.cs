@@ -17,7 +17,7 @@ internal sealed class DockerDaemonEventJob(
     ILogger<DockerDaemonEventJob> logger,
     IServiceScopeFactory scopeFactory,
     IPlatformContainerCache platformContainerCache,
-    IConnectorFactory<IContainerConnector> connectorFactory,
+    IConnectorFactory<IPlatformConnector> connectorFactory,
     IPlatformHealthBroadCaster platformHealthBroadCaster) : BackgroundService
 {
     private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();

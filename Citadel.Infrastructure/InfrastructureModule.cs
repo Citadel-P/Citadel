@@ -3,6 +3,7 @@ using System.Reflection;
 using DbUp;
 using Domain.Contracts.Interfaces;
 using Hosting.Common;
+using Hosting.DockerClient;
 using Infrastructure.Connectors;
 using Infrastructure.Connectors.AgentConnectors;
 using Infrastructure.Connectors.LocalConnectors;
@@ -35,7 +36,8 @@ public static class InfrastructureModule
             .AddServices()
             .InitializeDb()
             .AddGrpcClients()
-            .AddHttpClients();
+            .AddHttpClients()
+            .RegisterDockerClient();
 
     private static IServiceCollection AddGrpcClients(this IServiceCollection services)
         => services
@@ -100,9 +102,9 @@ public static class InfrastructureModule
 
     private static void EnsureDatabaseFileExists()
     {
-        if (!File.Exists(Constants.DbFilePath))
+        if (!System.IO.File.Exists(Constants.DbFilePath))
         {
-            File.Create(Constants.DbFilePath).Close();
+            System.IO.File.Create(Constants.DbFilePath).Close();
         }
     }
 

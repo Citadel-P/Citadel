@@ -3,6 +3,6 @@
 public sealed record DeleteContainerCommand(
     IEnumerable<string> ContainerIds,
     string PlatformAddress,
-    bool? Verbose,
+    bool? Volume,
     bool? Force,
     bool? Link);

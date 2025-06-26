@@ -1,4 +1,5 @@
-﻿using Domain.Contracts.Resources.Platforms;
+﻿using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Platforms;
 using LightResults;
 
 namespace Domain.Contracts.Interfaces;
@@ -12,4 +13,5 @@ public interface IPlatformConnector
     Task<Result<PlatformResult>> GetPlatformAsync(GetPlatformCommand command, CancellationToken cancellationToken);
 
     IAsyncEnumerable<PlatformStatsResult> StreamStatsAsync(StreamPlatformStatsCommand command, CancellationToken cancellationToken);
+    IAsyncEnumerable<DaemonEventInfo> StreamDaemonEventAsync(StreamDaemonEventCommand streamContainerLogsCommand, CancellationToken cancellationToken);
 }

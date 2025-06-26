@@ -84,7 +84,7 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : ICont
             var rpcRequest = new DeleteContainerRequest
             {
                 Ids = { deleteContainerCommand.ContainerIds },
-                V = deleteContainerCommand.Verbose ?? false,
+                V = deleteContainerCommand.Volume ?? false,
                 Force = deleteContainerCommand.Force ?? false,
                 Link = deleteContainerCommand.Link ?? false,
             };
@@ -117,13 +117,4 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : ICont
         }
     }
 
-    public async IAsyncEnumerable<DaemonEventInfo> StreamDaemonEventAsync(StreamDaemonEventCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
-        using var streamCall = containerClient.StreamDaemonEvent(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
-        await foreach (var response in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
-        {
-            yield return response.Map();
-        }
-    }
 }

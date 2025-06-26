@@ -1,4 +1,5 @@
 ﻿using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
 using LightResults;
 
@@ -12,6 +13,11 @@ internal class LocalPlatformConnector : IPlatformConnector
     }
 
     public Task<Result<PlatformResult>> GetPlatformAsync(GetPlatformCommand command, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    public IAsyncEnumerable<DaemonEventInfo> StreamDaemonEventAsync(StreamDaemonEventCommand streamContainerLogsCommand, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }

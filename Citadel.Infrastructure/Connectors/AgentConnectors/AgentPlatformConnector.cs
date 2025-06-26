@@ -2,6 +2,7 @@
 using Citadel.Agent.Platforms.V1;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
@@ -47,6 +48,16 @@ internal class AgentPlatformConnector(IGrpcClientFactory clientFactory) : IPlatf
         var client = clientFactory.GetPlatformClient(command.PlatformAddress);
         using var stream = client.StreamPlatformStats(new PlatformStatsRequest { FetchIntervalMs = command.FetchIntervalMs }, cancellationToken: cancellationToken);
         await foreach (var response in stream.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
+        {
+            yield return response.Map();
+        }
+    }
+
+    public async IAsyncEnumerable<DaemonEventInfo> StreamDaemonEventAsync(StreamDaemonEventCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var containerClient = clientFactory.GetPlatformClient(command.PlatformAddress);
+        using var streamCall = containerClient.StreamDaemonEvent(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
+        await foreach (var response in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
         {
             yield return response.Map();
         }

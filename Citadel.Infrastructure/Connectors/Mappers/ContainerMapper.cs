@@ -1,9 +1,11 @@
 ﻿using Citadel.Agent.Common.V1;
 using Citadel.Agent.Containers.V1;
+using Citadel.Agent.Platforms.V1;
 using Domain;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Google.Protobuf.Collections;
+using Hosting.DockerClient.Models.Containers;
 
 namespace Infrastructure.Connectors.Mappers;
 
@@ -37,6 +39,270 @@ internal static class ContainerMapper
             Mounts: response.Mounts?.Select(m => m.Map()).ToList() ?? [],
             Config: response.Config?.Map(),
             NetworkSettings: response.NetworkSettings?.Map()
+        );
+    public static ContainerInspectionInfo Map(this Hosting.DockerClient.ContainerInspectResponse response)
+        => new
+        (
+            Id: response.Id,
+            Created: response.Created,
+            Path: response.Path,
+            Args: response.Args?.ToList() ?? [],
+            State: response.State.Map(),
+            Image: response.Image,
+            ResolvConfPath: response.ResolvConfPath,
+            HostnamePath: response.HostnamePath,
+            HostsPath: response.HostsPath,
+            LogPath: response.LogPath,
+            Name: response.Name,
+            RestartCount: response.RestartCount,
+            Driver: response.Driver,
+            Platform: response.Platform,
+            MountLabel: response.MountLabel,
+            ProcessLabel: response.ProcessLabel,
+            AppArmorProfile: response.AppArmorProfile,
+            ExecIDs: response.ExecIDs?.ToList() ?? [],
+            HostConfig: response.HostConfig?.Map(),
+            GraphDriver: response.GraphDriver?.Map(),
+            SizeRw: response.SizeRw,
+            SizeRootFs: response.SizeRootFs,
+            Mounts: response.Mounts?.Select(m => m.Map()).ToList() ?? [],
+            Config: response.Config?.Map(),
+            NetworkSettings: response.NetworkSettings?.Map()
+        );
+
+    private static NetworkSettingsInfo Map(this Hosting.DockerClient.NetworkSettings settings)
+       => new(
+           Bridge: settings.Bridge,
+           SandboxID: settings.SandboxID,
+           HairpinMode: settings.HairpinMode,
+           LinkLocalIPv6Address: settings.LinkLocalIPv6Address,
+           LinkLocalIPv6PrefixLen: settings.LinkLocalIPv6PrefixLen,
+           Ports: settings.Ports?.Map() ?? [],
+           EndpointID: settings.EndpointID,
+           Gateway: settings.Gateway,
+           IpAddress: settings.IPAddress,
+           IpPrefixLen: settings.IPPrefixLen,
+           Ipv6Gateway: settings.IPv6Gateway,
+           MacAddress: settings.MacAddress,
+           GlobalIPv6Address: settings.GlobalIPv6Address,
+           GlobalIPv6PrefixLen: settings.GlobalIPv6PrefixLen,
+           SandboxKey: settings.SandboxKey,
+           Networks: settings.Networks?.ToDictionary(kv => kv.Key, kv => kv.Value.Map()) ?? [],
+           SecondaryIPAddresses: settings.SecondaryIPAddresses?.Select(s => new IpAddressInfo(Addr: s.Addr, PrefixLen: s.PrefixLen) ).ToList() ?? [],
+           SecondaryIPv6Addresses: settings.SecondaryIPv6Addresses?.Select(s => new IpAddressInfo(Addr: s.Addr, PrefixLen: s.PrefixLen)).ToList() ?? []
+       );
+
+    private static EndpointSettingsInfo Map(this Hosting.DockerClient.EndpointSettings endpoint)
+       => new(
+           IpamConfig: endpoint.IPAMConfig?.Map(),
+           Links: endpoint.Links?.ToList() ?? [],
+           Aliases: endpoint.Aliases?.ToList() ?? [],
+           NetworkID: endpoint.NetworkID,
+           EndpointID: endpoint.EndpointID,
+           Gateway: endpoint.Gateway,
+           IpAddress: endpoint.IPAddress,
+           IpPrefixLen: endpoint.IPPrefixLen,
+           Ipv6Gateway: endpoint.IPv6Gateway,
+           GlobalIPv6Address: endpoint.GlobalIPv6Address,
+           GlobalIPv6PrefixLen: endpoint.GlobalIPv6PrefixLen,
+           MacAddress: endpoint.MacAddress,
+           DNSNames: endpoint.DNSNames.ToList(),
+           DriverOpts: endpoint.DriverOpts?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? []
+       );
+
+    private static EndpointIpamConfiguration Map(this Hosting.DockerClient.EndpointIPAMConfig endpointIPAMConfig)
+        => new
+        (
+            Ipv4Address: endpointIPAMConfig.IPv4Address,
+            Ipv6Address: endpointIPAMConfig.IPv6Address,
+            LinkLocalIPs: endpointIPAMConfig.LinkLocalIPs.ToList()
+        );
+
+    private static ContainerConfiguration Map(this Hosting.DockerClient.ContainerConfig config)
+        => new
+        (
+            Hostname: config.Hostname,
+            Domainname: config.Domainname,
+            User: config.User,
+            AttachStdin: config.AttachStdin,
+            AttachStdout: config.AttachStdout,
+            AttachStderr: config.AttachStderr,
+            Tty: config.Tty,
+            NetworkDisabled: config.NetworkDisabled,
+            MacAddress: config.MacAddress,
+            OpenStdin: config.OpenStdin,
+            StdinOnce: config.StdinOnce,
+            Env: config.Env?.ToList() ?? [],
+            Cmd: config.Cmd?.ToList() ?? [],
+            Image: config.Image,
+            Volumes: config.Volumes?.Select(s => s.Key).ToList(),
+            WorkingDir: config.WorkingDir,
+            OnBuild: config.OnBuild?.ToList() ?? [],
+            Entrypoint: config.Entrypoint?.ToList() ?? [],
+            ExposedPorts: config.ExposedPorts?.Select(s => s.Key).ToList(),
+            Labels: config.Labels?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? []
+        );
+
+    private static MountPointInfo Map(this Hosting.DockerClient.MountPoint mount)
+        => new
+        (
+            Name: mount.Name,
+            Source: mount.Source,
+            Type: mount.Type?.ToString(),
+            Destination: mount.Destination,
+            Driver: mount.Driver,
+            Mode: mount.Mode,
+            RW: mount.RW,
+            Propagation: mount.Propagation
+        );
+
+    private static HostConfiguration Map(this Hosting.DockerClient.HostConfig config)
+        => new
+        (
+            NetworkMode: config.NetworkMode,
+            RestartPolicy: new Domain.Contracts.Resources.Containers.RestartPolicy(config.RestartPolicy?.Name.ToString(), config.RestartPolicy?.MaximumRetryCount),
+            AutoRemove: config.AutoRemove,
+            Privileged: config.Privileged,
+            PublishAllPorts: config.PublishAllPorts,
+            ReadonlyRootfs: config.ReadonlyRootfs,
+            Dns: config.Dns?.ToList() ?? [],
+            DnsOptions: config.DnsOptions?.ToList() ?? [],
+            DnsSearch: config.DnsSearch?.ToList() ?? [],
+            ExtraHosts: config.ExtraHosts?.ToList() ?? [],
+            VolumesFrom: config.VolumesFrom?.ToList() ?? [],
+            CapAdd: config.CapAdd?.ToList() ?? [],
+            CapDrop: config.CapDrop?.ToList() ?? [],
+            SecurityOpt: config.SecurityOpt?.ToList() ?? [],
+            StorageOpt: config.StorageOpt?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? [],
+            CgroupnsMode: config.CgroupnsMode?.ToString(),
+            ShmSize: config.ShmSize ?? 0,
+            Tmpfs: config.Tmpfs?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? [],
+            Sysctls: config.Sysctls?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? [],
+            LogConfig: new LogConfiguration(config.LogConfig?.Type?.ToString(), config.LogConfig?.Config?.ToDictionary() ?? []),
+            Binds: config.Binds?.ToList() ?? [],
+            ContainerIDFile: config.ContainerIDFile,
+            PortBindings: config.PortBindings.Map(),
+            VolumeDriver: config.VolumeDriver,
+            Mounts: config.Mounts?.Map() ?? [],
+            ConsoleSize: config.ConsoleSize?.ToList() ?? [],
+            Annotations: config.Annotations.ToDictionary(),
+            GroupAdd: config.GroupAdd?.ToList() ?? [],
+            IpcMode: config.IpcMode,
+            Cgroup: config.Cgroup,
+            Links: config.Links?.ToList() ?? [],
+            OomScoreAdj: config.OomScoreAdj,
+            PidMode: config.PidMode,
+            UtsMode: config.UTSMode,
+            UsernsMode: config.UsernsMode,
+            Runtime: config.Runtime,
+            Isolation: config.Isolation?.ToString(),
+            MaskedPaths: config.MaskedPaths?.ToList() ?? [],
+            ReadonlyPaths: config.ReadonlyPaths?.ToList() ?? [],
+            MemorySwap: config.MemorySwap,
+            MemorySwappiness: config.MemorySwappiness,
+            MemoryReservation: config.MemoryReservation,
+            KernelMemoryTCP: config.KernelMemoryTCP,
+            NanoCpus: config.NanoCpus,
+            PidsLimit: config.PidsLimit,
+            Memory: config.Memory,
+            IoMaximumBandwidth: config.IOMaximumBandwidth,
+            CpuPeriod: config.CpuPeriod,
+            CpuCount: config.CpuCount,
+            CpuPercent: config.CpuPercent,
+            Ulimits: config.Ulimits?.Map() ?? []
+        );
+
+    private static IReadOnlyList<HostMount> Map(this ICollection<Hosting.DockerClient.Mount> mounts)
+        => [.. mounts.Select(Map)];
+
+    private static HostMount Map(this Hosting.DockerClient.Mount mount)
+        => new
+        (
+            Target: mount.Target,
+            Source: mount.Source,
+            Type: mount.Type?.ToString(),
+            ReadOnly: mount.ReadOnly,
+            Consistency: mount.Consistency,
+            BindOptions: mount.BindOptions?.Map(),
+            VolumeOptions: mount.VolumeOptions?.Map()
+        );
+
+    private static Domain.Contracts.Resources.Containers.BindOptions Map(this Hosting.DockerClient.BindOptions bindOptions)
+        => new
+        (
+             NonRecursive: bindOptions.NonRecursive,
+             CreateMountpoint: bindOptions.CreateMountpoint,
+             Propagation: bindOptions.Propagation?.ToString(),
+             ReadOnlyNonRecursive: bindOptions.ReadOnlyNonRecursive,
+             ReadOnlyForceRecursive: bindOptions.ReadOnlyForceRecursive
+        );
+
+    private static Domain.Contracts.Resources.Containers.VolumeOptions Map(this Hosting.DockerClient.VolumeOptions volumeOptions)
+        => new
+        (
+            NoCopy: volumeOptions.NoCopy,
+            Subpath: volumeOptions.Subpath,
+            Labels: volumeOptions.Labels.ToDictionary(),
+            DriverConfig: volumeOptions.DriverConfig?.Map()
+        );
+
+    private static DriverConfiguration Map(this Hosting.DockerClient.DriverConfig driverConfig)
+       => new
+       (
+           Name: driverConfig.Name,
+           Options: driverConfig.Options.ToDictionary()
+       );
+
+    private static IReadOnlyList<Ulimit> Map(this ICollection<Hosting.DockerClient.Ulimits> ulimits)
+        => [.. ulimits.Select(Map)];
+
+    private static Ulimit Map(this Hosting.DockerClient.Ulimits ulimits)
+        => new
+        (
+            Name: ulimits.Name,
+            Soft: ulimits.Soft,
+            Hard: ulimits.Hard
+        );
+
+    private static GraphDriverDataInfo Map(this Hosting.DockerClient.DriverData graphDriver)
+       => new
+       (
+           Name: graphDriver.Name,
+           Data: graphDriver.Data?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? []
+       );
+    private static IReadOnlyList<IDictionary<string, IReadOnlyList<HostPortBinding>>> Map(this Hosting.DockerClient.PortMap binding)
+    {
+        if (binding is null || binding.Count == 0)
+            return [];
+
+        var result = new List<IDictionary<string, IReadOnlyList<HostPortBinding>>>(binding.Count);
+
+        foreach (var mapField in binding)
+        {
+            var dict = new Dictionary<string, IReadOnlyList<HostPortBinding>>(1);
+            var bindings = mapField.Value?.Select(s => new HostPortBinding(s.HostIp, s.HostPort)).ToList() ?? [];
+            dict[mapField.Key] = bindings;
+            result.Add(dict);
+        }
+
+        return result;
+    }
+
+    private static ContainerRuntimeState Map(this Hosting.DockerClient.ContainerState state)
+        => new
+        (
+            Status: state.Status.Map(),
+            Running: state.Running,
+            Paused: state.Paused,
+            Restarting: state.Restarting,
+            OOMKilled: state.OOMKilled,
+            Dead: state.Dead,
+            Pid: state.Pid,
+            ExitCode: state.ExitCode,
+            Error: state.Error,
+            StartedAt: state.StartedAt,
+            FinishedAt: state.FinishedAt,
+            Health: state.Health is not null ? new ContainerHealthStatus(state.Health?.Status?.ToString(), state.Health?.FailingStreak) : null
         );
 
     private static ContainerRuntimeState Map(this ContainerState state)
@@ -295,7 +561,7 @@ internal static class ContainerMapper
             pair => pair.Value.Map());
 
     private static DockerContainer Map(this ContainerMessage container)
-    => new
+        => new
         (
             Name: container.Name,
             Image: container.Image,
@@ -367,6 +633,51 @@ internal static class ContainerMapper
             Container: response.Container?.Map()
         );
 
+    public static IReadOnlyDictionary<string, DockerContainer> Map(this IReadOnlyDictionary<string, ContainerResult> containers)
+    {
+        return containers.ToDictionary(c => c.Key, c => c.Value.Map());
+    }
+
+    public static DockerContainer Map(this ContainerResult container)
+        => new
+        (
+            Name: container?.Name,
+            Image: container?.Image,
+            Stack: container?.Stack,
+            ContainerId: container?.Id,
+            Created: container?.Created,
+            State: container.State.Map(),
+            ContainerStat: container.ContainerStat?.Map(),
+            Ports: container.Ports?.Select(Map).ToList() ?? []
+        );
+
+    public static ContainerPort Map(this Hosting.DockerClient.Port port)
+        => new
+        (
+            IP: port.IP,
+            PrivatePort: port.PrivatePort,
+            PublicPort: port.PublicPort,
+            Type: port?.Type.ToString()
+        );
+
+    public static DockerContainerStat Map(this ContainerStatResult stat)
+        => new
+        (
+            MemoryUsage: stat.MemoryUsage,
+            MemoryLimit: stat.MemoryLimit,
+            CpuUsage: stat.CpuUsage,
+            RxBytes: stat.RxBytes,
+            TxBytes: stat.TxBytes
+        );
+
+    public static DockerContainerStats Map (this IReadOnlyDictionary<string, ContainerStatResult> containers)
+    {
+        return new DockerContainerStats
+        (
+            Containers: containers.ToDictionary(c => c.Key, c => c.Value.Map())
+        );
+    }
+
     public static ContainerEventType Map(this EventMessageType type)
         => type switch
         {
@@ -395,5 +706,40 @@ internal static class ContainerMapper
             ContainerStateType.Exited => ContainerStateStatus.Exited,
             ContainerStateType.Removing => ContainerStateStatus.Removing,
             _ => ContainerStateStatus.Unknown,
+        };
+
+    public static ContainerStateStatus Map(this Hosting.DockerClient.ContainerSummaryState? state)
+        => state switch
+        {
+            Hosting.DockerClient.ContainerSummaryState.Running => ContainerStateStatus.Running,
+            Hosting.DockerClient.ContainerSummaryState.Paused => ContainerStateStatus.Paused,
+            Hosting.DockerClient.ContainerSummaryState.Restarting => ContainerStateStatus.Restarting,
+            Hosting.DockerClient.ContainerSummaryState.Dead => ContainerStateStatus.Dead,
+            Hosting.DockerClient.ContainerSummaryState.Exited => ContainerStateStatus.Exited,
+            Hosting.DockerClient.ContainerSummaryState.Removing => ContainerStateStatus.Removing,
+            _ => ContainerStateStatus.Unknown,
+        };
+
+    public static ContainerStateStatus Map(this Hosting.DockerClient.ContainerStateStatus? state)
+        => state switch
+        {
+            Hosting.DockerClient.ContainerStateStatus.Running => ContainerStateStatus.Running,
+            Hosting.DockerClient.ContainerStateStatus.Paused => ContainerStateStatus.Paused,
+            Hosting.DockerClient.ContainerStateStatus.Restarting => ContainerStateStatus.Restarting,
+            Hosting.DockerClient.ContainerStateStatus.Dead => ContainerStateStatus.Dead,
+            Hosting.DockerClient.ContainerStateStatus.Exited => ContainerStateStatus.Exited,
+            Hosting.DockerClient.ContainerStateStatus.Removing => ContainerStateStatus.Removing,
+            _ => ContainerStateStatus.Unknown,
+        };
+
+    public static Hosting.DockerClient.Models.Containers.ContainerAction Map(this Domain.ContainerAction action)
+        => action switch
+        {
+            Domain.ContainerAction.START => Hosting.DockerClient.Models.Containers.ContainerAction.START,
+            Domain.ContainerAction.RESTART => Hosting.DockerClient.Models.Containers.ContainerAction.RESTART,
+            Domain.ContainerAction.STOP => Hosting.DockerClient.Models.Containers.ContainerAction.STOP,
+            Domain.ContainerAction.PAUSE => Hosting.DockerClient.Models.Containers.ContainerAction.PAUSE,
+            Domain.ContainerAction.UNPAUSE => Hosting.DockerClient.Models.Containers.ContainerAction.UNPAUSE,
+            _ => Hosting.DockerClient.Models.Containers.ContainerAction.STOP
         };
 }
