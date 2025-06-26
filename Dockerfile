@@ -21,6 +21,7 @@ COPY ["Citadel.Infrastructure/Citadel.Infrastructure.csproj", "Citadel.Infrastru
 COPY ["Citadel.Contracts/Citadel.Hosting/Citadel.Hosting.csproj", "Citadel.Contracts/Citadel.Hosting/"]
 COPY ["Citadel.Contracts/Citadel.SourceGen/Citadel.SourceGen.csproj", "Citadel.Contracts/Citadel.SourceGen/"]
 COPY ["Citadel.Contracts/Citadel.Hosting.Common/Citadel.Hosting.Common.csproj", "Citadel.Contracts/Citadel.Hosting.Common/"]
+COPY ["Citadel.Contracts/Citadel.Hosting.DockerClient/Citadel.Hosting.DockerClient.csproj", "Citadel.Contracts/Citadel.Hosting.DockerClient/"]
 
 RUN dotnet restore "./Citadel.WebApi/Citadel.WebApi.csproj"
 

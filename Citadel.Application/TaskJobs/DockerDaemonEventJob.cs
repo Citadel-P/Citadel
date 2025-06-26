@@ -49,7 +49,7 @@ internal sealed class DockerDaemonEventJob(
         var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         runningStreams[platform.Address] = cts;
 
-        _ = Task.Run(() => MonitorStream(platform, cts.Token), cts.Token);
+        _ = MonitorStream(platform, cts.Token);
     }
 
     public void StopMonitoringPlatform(string address)

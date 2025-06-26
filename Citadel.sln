@@ -35,6 +35,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Citadel.Tests.Common", "Tes
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Citadel.Domain", "Citadel.Domain\Citadel.Domain.csproj", "{BB5B0806-292E-409C-91A4-AE68C2ED161E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Citadel.Hosting.DockerClient", "Citadel.Contracts\Citadel.Hosting.DockerClient\Citadel.Hosting.DockerClient.csproj", "{B1B05412-4FA4-BBBC-1FAE-329C28C081D3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -81,6 +83,10 @@ Global
 		{BB5B0806-292E-409C-91A4-AE68C2ED161E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BB5B0806-292E-409C-91A4-AE68C2ED161E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BB5B0806-292E-409C-91A4-AE68C2ED161E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B1B05412-4FA4-BBBC-1FAE-329C28C081D3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B1B05412-4FA4-BBBC-1FAE-329C28C081D3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B1B05412-4FA4-BBBC-1FAE-329C28C081D3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B1B05412-4FA4-BBBC-1FAE-329C28C081D3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -92,6 +98,7 @@ Global
 		{4A6B2D2B-41EB-4434-BB34-ED7D2A97A477} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{BA7D6ABA-4C24-4695-D100-3831FD99ECA4} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{CB458172-F199-4D5E-ACB4-DE5782A92C70} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{B1B05412-4FA4-BBBC-1FAE-329C28C081D3} = {9731B61B-C938-4004-8B9B-B0217DAF3841}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {48DA8492-726C-427E-AD61-C830928C5938}
