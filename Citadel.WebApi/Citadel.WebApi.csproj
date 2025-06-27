@@ -7,7 +7,7 @@
 	<OpenApiGenerateDocuments>true</OpenApiGenerateDocuments>
 	<OpenApiGenerateDocumentsOnBuild>true</OpenApiGenerateDocumentsOnBuild>
 	<DockerfileFile>..\Dockerfile</DockerfileFile>
-	<DockerfileRunArguments>-p 8000:8000 -p 8001:8001 -v "citadel_data:/app/data"</DockerfileRunArguments>
+	<DockerfileRunArguments>-p 8000:8000 -p 8001:8001 -v "citadel_data:/app/data" -v "/var/run/docker.sock:/var/run/docker.sock"</DockerfileRunArguments>
 	<ContainerRepository>citadel-webapi</ContainerRepository>
 	<PreserveCompilationContext>true</PreserveCompilationContext>
   </PropertyGroup>

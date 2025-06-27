@@ -1,29 +1,43 @@
-﻿using Domain.Contracts.Interfaces;
+﻿using System.Runtime.CompilerServices;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
+using Hosting.DockerClient.Services;
+using Hosting.Extensions;
+using Infrastructure.Connectors.Mappers;
 using LightResults;
 
 namespace Infrastructure.Connectors.LocalConnectors;
 
-internal class LocalPlatformConnector : IPlatformConnector
+internal class LocalPlatformConnector(IPlatformService platformService, IMonitorEventsService monitorEventsService) : IPlatformConnector
 {
-    public Task<PlatformHealthResult> CheckHealthAsync(string platformAddress, CancellationToken cancellationToken)
+    public async Task<PlatformHealthResult> CheckHealthAsync(string platformAddress, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        var result = await platformService.HealthCheck(cancellationToken);
+        return result.IsSuccess(out var res)
+            ? new PlatformHealthResult(Healthy: res.Healthy)
+            : new PlatformHealthResult(Healthy: false);
     }
 
-    public Task<Result<PlatformResult>> GetPlatformAsync(GetPlatformCommand command, CancellationToken cancellationToken)
+    public async Task<Result<PlatformResult>> GetPlatformAsync(GetPlatformCommand command, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        var result = await platformService.GetPlatformInfo(cancellationToken);
+        return ServiceResultHandlers.HandleResult(result, p => PlatformMapper.Map(p, command.PlatformName, command.PlatformAddress));
     }
 
-    public IAsyncEnumerable<DaemonEventInfo> StreamDaemonEventAsync(StreamDaemonEventCommand streamContainerLogsCommand, CancellationToken cancellationToken)
+    public async IAsyncEnumerable<DaemonEventInfo> StreamDaemonEventAsync(StreamDaemonEventCommand streamContainerLogsCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        await foreach (var eventInfo in monitorEventsService.StreamEvents(cancellationToken))
+        {
+            yield return eventInfo.Map();
+        }
     }
 
-    public IAsyncEnumerable<PlatformStatsResult> StreamStatsAsync(StreamPlatformStatsCommand command, CancellationToken cancellationToken)
+    public async IAsyncEnumerable<PlatformStatsResult> StreamStatsAsync(StreamPlatformStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        await foreach (var stat in platformService.StreamPlatformStatsAsync(command.FetchIntervalMs, cancellationToken))
+        {
+            yield return stat.Map();
+        }
     }
 }

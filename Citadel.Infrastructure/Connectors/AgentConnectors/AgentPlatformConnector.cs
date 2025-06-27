@@ -1,6 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
 using Citadel.Agent.Platforms.V1;
-using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
@@ -35,7 +34,7 @@ internal class AgentPlatformConnector(IGrpcClientFactory clientFactory) : IPlatf
             var platformClient = clientFactory.GetPlatformClient(command.PlatformAddress);
             
             var platform = await platformClient.GetPlatformInfoAsync(new Google.Protobuf.WellKnownTypes.Empty(), cancellationToken: cancellationToken);
-            return platform.Map(platformAddress: command.PlatformAddress, platformName: command.PlatformName, type : PlatformConnectorType.Agent);
+            return platform.Map(platformAddress: command.PlatformAddress, platformName: command.PlatformName);
         }
         catch (RpcException ex)
         {

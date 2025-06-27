@@ -24,7 +24,7 @@ public sealed record CreatePlatform(string Name, string Address, PlatformType Ty
         public Validator()
         {
             RuleFor(x => x.Name).ValidNameIdentifier();
-            RuleFor(x => x.Address).ValidHostOrIp();
+            When(x => x.ConnectorType != PlatformConnectorType.Local, () => RuleFor(x => x.Address).ValidHostOrIp());
         }
     }
 }
