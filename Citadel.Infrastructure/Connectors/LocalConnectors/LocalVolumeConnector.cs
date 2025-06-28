@@ -12,7 +12,7 @@ internal class LocalVolumeConnector(IVolumeService volumeService) : IVolumeConne
     public async Task<Result<IEnumerable<DockerVolumeResult>>> ListVolumesAsync(ListdDockerVolumesCommand volumesCommand, CancellationToken cancellationToken)
     {
         var result = await volumeService.ListAsync(new Hosting.DockerClient.Models.Volumes.ListVolumesCommand(volumesCommand.Dangling, volumesCommand.Driver, volumesCommand.Name), cancellationToken);
-        return ServiceResultHandlers.HandleResult(result, VolumeMapper.Map);
+        return ServiceResultHandlers.HandleResult(result, VolumeMappers.Map);
     }
 
     public async Task<Result<DockerVolumeResult>> CreateVolumeAsync(CreateDockerVolumeCommand createVolumeCommand, CancellationToken cancellationToken)
@@ -26,14 +26,14 @@ internal class LocalVolumeConnector(IVolumeService volumeService) : IVolumeConne
         );
 
         var result = await volumeService.CreateAsync(command, cancellationToken);
-        return ServiceResultHandlers.HandleResult(result, VolumeMapper.Map);
+        return ServiceResultHandlers.HandleResult(result, VolumeMappers.Map);
 
     }
 
     public async Task<Result<DockerVolumeResult>> InspectVolumeAsync(InspectDockerVolumeCommand inspectVolumeCommand, CancellationToken cancellationToken)
     {
         var result = await volumeService.InspectAsync(inspectVolumeCommand.Name, cancellationToken);
-        return ServiceResultHandlers.HandleResult(result, VolumeMapper.Map);
+        return ServiceResultHandlers.HandleResult(result, VolumeMappers.Map);
     }
 
     public async Task<Result> DeleteVolumeAsync(DeleteDockerVolumeCommand removeVolumeCommand, CancellationToken cancellationToken)
@@ -46,4 +46,5 @@ internal class LocalVolumeConnector(IVolumeService volumeService) : IVolumeConne
         var result = await volumeService.DeleteAsync(command, cancellationToken);
         return ServiceResultHandlers.HandleResultForNoContent(result);
     }
+
 }

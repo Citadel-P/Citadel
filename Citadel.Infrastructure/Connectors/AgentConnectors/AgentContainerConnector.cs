@@ -28,7 +28,7 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : ICont
             };
             
             var containers = await containerClient.ListAsync(request, cancellationToken: cancellationToken);
-            return containers.Map(command?.PlatformId ?? throw new ArgumentNullException($"{nameof(command.PlatformId)} should not be null"));
+            return containers.Map();
         }
         catch (RpcException ex)
         {

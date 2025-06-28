@@ -79,7 +79,6 @@ internal class ContainerSyncJob(
         var command = new ContainerFilterCommand
         (
             PlatformAddress: platformEvent.Address,
-            PlatformId: platformEvent.Id,
             All: true
         );
 

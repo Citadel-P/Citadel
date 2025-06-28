@@ -2,14 +2,13 @@
 using Citadel.Agent.Platforms.V1;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Platforms;
-using Hosting.DockerClient.Models;
 using Hosting.DockerClient.Models.Platforms;
 using Domain.Contracts.Resources.Containers;
 using Domain;
 
 namespace Infrastructure.Connectors.Mappers;
 
-internal static class PlatformMapper
+internal static class PlatformMappers
 {
     public static PlatformResult Map(this PlatformInfoResponse platformInfo, string platformName, string platformAddress)
     {
@@ -137,15 +136,15 @@ internal static class PlatformMapper
             PlatformStat: stat.PlatformStatistics.Map()
         );
 
-    public static DaemonEventInfo Map(this DaemonEventResult eventResult)
+    public static DaemonEventInfo Map(this DaemonEventResult @event)
     {
         return new DaemonEventInfo
         (
-            Id: eventResult.Id,
-            Action: eventResult.Action,
-            ContainerId: eventResult.ContainerId,
-            Container: eventResult.Container?.Map(),
-            Type: eventResult.Type.Map()
+            Id: @event.Id,
+            Action: @event.Action,
+            ContainerId: @event.ContainerId,
+            Container: @event.Container?.Map(),
+            Type: @event.Type.Map()
         );
     }
 

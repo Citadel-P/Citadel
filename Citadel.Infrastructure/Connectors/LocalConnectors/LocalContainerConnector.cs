@@ -23,7 +23,7 @@ internal class LocalContainerConnector(IContainerService containerService) : ICo
     public async Task<Result<ContainerInspectionInfo>> InspectAsync(InspectContainerCommand inspectContainerCommand, CancellationToken cancellationToken)
     {
         var result = await containerService.InspectAsync(inspectContainerCommand.ContainerId,cancellationToken);
-        return ServiceResultHandlers.HandleResult(result, ContainerMapper.Map);  
+        return ServiceResultHandlers.HandleResult(result, ContainerMappers.Map);  
     }
 
     public async Task<Result<IReadOnlyDictionary<string, DockerContainer>>> ListContainersAsync(ContainerFilterCommand containerFilterCommand, CancellationToken cancellationToken)
@@ -36,7 +36,7 @@ internal class LocalContainerConnector(IContainerService containerService) : ICo
             containerFilterCommand.Filters
         );
         var result = await containerService.ListContainersAsync(command, cancellationToken);
-        return ServiceResultHandlers.HandleResult(result, ContainerMapper.Map);
+        return ServiceResultHandlers.HandleResult(result, ContainerMappers.Map);
     }
 
     public Task<Result> PatchAsync(PatchContainerCommand patchContainerCommand, CancellationToken cancellationToken)

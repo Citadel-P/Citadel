@@ -22,7 +22,7 @@ internal class LocalPlatformConnector(IPlatformService platformService, IMonitor
     public async Task<Result<PlatformResult>> GetPlatformAsync(GetPlatformCommand command, CancellationToken cancellationToken)
     {
         var result = await platformService.GetPlatformInfo(cancellationToken);
-        return ServiceResultHandlers.HandleResult(result, p => PlatformMapper.Map(p, command.PlatformName, command.PlatformAddress));
+        return ServiceResultHandlers.HandleResult(result, p => PlatformMappers.Map(p, command.PlatformName, command.PlatformAddress));
     }
 
     public async IAsyncEnumerable<DaemonEventInfo> StreamDaemonEventAsync(StreamDaemonEventCommand streamContainerLogsCommand, [EnumeratorCancellation] CancellationToken cancellationToken)

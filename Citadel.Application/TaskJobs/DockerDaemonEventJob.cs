@@ -105,15 +105,6 @@ internal sealed class DockerDaemonEventJob(
                             var existing = await uow.Containers.Query().FirstOrDefaultAsync(c => c.ContainerId == reply.ContainerId, cancellationToken);
                             if (existing != null)
                             {
-                                var state = reply.Action switch
-                                {
-                                    "stop" => "exited",
-                                    "start" => "running",
-                                    "pause" => "paused",
-                                    "restart" => "restarting",
-                                    _ => throw new NotImplementedException()
-                                };
-
                                 existing.PartialUpdate(state: reply.Container?.State);
                                 await uow.SaveChangesAsync(cancellationToken);
                                 await containerHub.SendContainerEvent(existing, reply.Action);

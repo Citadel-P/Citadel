@@ -92,7 +92,6 @@ internal sealed class CreatePlatformHandler(
     {
         var command = new ContainerFilterCommand
             (
-                PlatformId: platform.Id,
                 PlatformAddress: platform.Address, 
                 All: true
             );

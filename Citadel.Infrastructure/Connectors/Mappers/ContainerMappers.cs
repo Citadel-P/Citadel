@@ -9,65 +9,66 @@ using Hosting.DockerClient.Models.Containers;
 
 namespace Infrastructure.Connectors.Mappers;
 
-internal static class ContainerMapper
+internal static class ContainerMappers
 {
-    public static ContainerInspectionInfo Map(this InspectContainerResponse response) 
+    public static ContainerInspectionInfo Map(this InspectContainerResponse container) 
         => new 
         (
-            Id: response.Id,
-            Created: response.Created,
-            Path: response.Path,
-            Args: response.Args?.ToList() ?? [],
-            State: response.State.Map(),
-            Image: response.Image,
-            ResolvConfPath: response.ResolvConfPath,
-            HostnamePath: response.HostnamePath,
-            HostsPath: response.HostsPath,
-            LogPath: response.LogPath,
-            Name: response.Name,
-            RestartCount: response.RestartCount,
-            Driver: response.Driver,
-            Platform: response.Platform,
-            MountLabel: response.MountLabel,
-            ProcessLabel: response.ProcessLabel,
-            AppArmorProfile: response.AppArmorProfile,
-            ExecIDs: response.ExecIDs?.ToList() ?? [],
-            HostConfig: response.HostConfig?.Map(),
-            GraphDriver: response.GraphDriver?.Map(),
-            SizeRw: response.SizeRw,
-            SizeRootFs: response.SizeRootFs,
-            Mounts: response.Mounts?.Select(m => m.Map()).ToList() ?? [],
-            Config: response.Config?.Map(),
-            NetworkSettings: response.NetworkSettings?.Map()
+            Id: container.Id,
+            Created: container.Created,
+            Path: container.Path,
+            Args: container.Args?.ToList() ?? [],
+            State: container.State.Map(),
+            Image: container.Image,
+            ResolvConfPath: container.ResolvConfPath,
+            HostnamePath: container.HostnamePath,
+            HostsPath: container.HostsPath,
+            LogPath: container.LogPath,
+            Name: container.Name,
+            RestartCount: container.RestartCount,
+            Driver: container.Driver,
+            Platform: container.Platform,
+            MountLabel: container.MountLabel,
+            ProcessLabel: container.ProcessLabel,
+            AppArmorProfile: container.AppArmorProfile,
+            ExecIDs: container.ExecIDs?.ToList() ?? [],
+            HostConfig: container.HostConfig?.Map(),
+            GraphDriver: container.GraphDriver?.Map(),
+            SizeRw: container.SizeRw,
+            SizeRootFs: container.SizeRootFs,
+            Mounts: container.Mounts?.Select(m => m.Map()).ToList() ?? [],
+            Config: container.Config?.Map(),
+            NetworkSettings: container.NetworkSettings?.Map()
         );
-    public static ContainerInspectionInfo Map(this Hosting.DockerClient.ContainerInspectResponse response)
+
+    public static ContainerInspectionInfo Map(this Hosting.DockerClient.ContainerInspectResponse container)
         => new
         (
-            Id: response.Id,
-            Created: response.Created,
-            Path: response.Path,
-            Args: response.Args?.ToList() ?? [],
-            State: response.State?.Map(),
-            Image: response.Image,
-            ResolvConfPath: response.ResolvConfPath,
-            HostnamePath: response.HostnamePath,
-            HostsPath: response.HostsPath,
-            LogPath: response.LogPath,
-            Name: response.Name,
-            RestartCount: response.RestartCount,
-            Driver: response.Driver,
-            Platform: response.Platform,
-            MountLabel: response.MountLabel,
-            ProcessLabel: response.ProcessLabel,
-            AppArmorProfile: response.AppArmorProfile,
-            ExecIDs: response.ExecIDs?.ToList() ?? [],
-            HostConfig: response.HostConfig?.Map(),
-            GraphDriver: response.GraphDriver?.Map(),
-            SizeRw: response.SizeRw,
-            SizeRootFs: response.SizeRootFs,
-            Mounts: response.Mounts?.Select(m => m.Map()).ToList() ?? [],
-            Config: response.Config?.Map(),
-            NetworkSettings: response.NetworkSettings?.Map()
+            Id: container.Id,
+            Created: container.Created,
+            Path: container.Path,
+            Args: container.Args?.ToList() ?? [],
+            State: container.State?.Map(),
+            Image: container.Image,
+            ResolvConfPath: container.ResolvConfPath,
+            HostnamePath: container.HostnamePath,
+            HostsPath: container.HostsPath,
+            LogPath: container.LogPath,
+            Name: container.Name,
+            RestartCount: container.RestartCount,
+            Driver: container.Driver,
+            Platform: container.Platform,
+            MountLabel: container.MountLabel,
+            ProcessLabel: container.ProcessLabel,
+            AppArmorProfile: container.AppArmorProfile,
+            ExecIDs: container.ExecIDs?.ToList() ?? [],
+            HostConfig: container.HostConfig?.Map(),
+            GraphDriver: container.GraphDriver?.Map(),
+            SizeRw: container.SizeRw,
+            SizeRootFs: container.SizeRootFs,
+            Mounts: container.Mounts?.Select(m => m.Map()).ToList() ?? [],
+            Config: container.Config?.Map(),
+            NetworkSettings: container.NetworkSettings?.Map()
         );
 
     private static NetworkSettingsInfo Map(this Hosting.DockerClient.NetworkSettings settings)
@@ -272,14 +273,15 @@ internal static class ContainerMapper
            Name: graphDriver.Name,
            Data: graphDriver.Data?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? []
        );
-    private static IReadOnlyList<IDictionary<string, IReadOnlyList<HostPortBinding>>> Map(this Hosting.DockerClient.PortMap binding)
+
+    private static IReadOnlyList<IDictionary<string, IReadOnlyList<HostPortBinding>>> Map(this Hosting.DockerClient.PortMap portMap)
     {
-        if (binding is null || binding.Count == 0)
+        if (portMap is null || portMap.Count == 0)
             return [];
 
-        var result = new List<IDictionary<string, IReadOnlyList<HostPortBinding>>>(binding.Count);
+        var result = new List<IDictionary<string, IReadOnlyList<HostPortBinding>>>(portMap.Count);
 
-        foreach (var mapField in binding)
+        foreach (var mapField in portMap)
         {
             var dict = new Dictionary<string, IReadOnlyList<HostPortBinding>>(1);
             var bindings = mapField.Value?.Select(s => new HostPortBinding(s.HostIp, s.HostPort)).ToList() ?? [];
@@ -506,18 +508,17 @@ internal static class ContainerMapper
                 PrefixLen: address.PrefixLen
         );
 
-    private static IReadOnlyList<IDictionary<string, IReadOnlyList<HostPortBinding>>> Map(this RepeatedField<MapFieldPortBinding> binding)
+    private static IReadOnlyList<IDictionary<string, IReadOnlyList<HostPortBinding>>> Map(this RepeatedField<MapFieldPortBinding> bindings)
     {
-        if (binding is null || binding.Count == 0)
+        if (bindings is null || bindings.Count == 0)
             return [];
 
-        var result = new List<IDictionary<string, IReadOnlyList<HostPortBinding>>>(binding.Count);
+        var result = new List<IDictionary<string, IReadOnlyList<HostPortBinding>>>(bindings.Count);
 
-        foreach (var mapField in binding)
+        foreach (var mapField in bindings)
         {
             var dict = new Dictionary<string, IReadOnlyList<HostPortBinding>>(1);
-            var bindings = mapField.Value?.Select(Map).ToList() ?? [];
-            dict[mapField.Key] = bindings;
+            dict[mapField.Key] = mapField.Value?.Select(Map).ToList() ?? [];
             result.Add(dict);
         }
 
@@ -530,22 +531,22 @@ internal static class ContainerMapper
             HostPort: binding.HostPort
         );
 
-    private static EndpointSettingsInfo Map(this EndpointSettings endpoint)
+    private static EndpointSettingsInfo Map(this EndpointSettings endpointSettings)
         => new(
-            IpamConfig: endpoint.IPAMConfig?.Map(),
-            Links: endpoint.Links?.ToList() ?? [],
-            Aliases: endpoint.Aliases?.ToList() ?? [],
-            NetworkID: endpoint.NetworkID,
-            EndpointID: endpoint.EndpointID,
-            Gateway: endpoint.Gateway,
-            IpAddress: endpoint.IpAddress,
-            IpPrefixLen: endpoint.IpPrefixLen,
-            Ipv6Gateway: endpoint.Ipv6Gateway,
-            GlobalIPv6Address: endpoint.GlobalIPv6Address,
-            GlobalIPv6PrefixLen: endpoint.GlobalIPv6PrefixLen,
-            MacAddress: endpoint.MacAddress,
-            DNSNames: endpoint.DNSNames,
-            DriverOpts: endpoint.DriverOpts?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? []
+            IpamConfig: endpointSettings.IPAMConfig?.Map(),
+            Links: endpointSettings.Links?.ToList() ?? [],
+            Aliases: endpointSettings.Aliases?.ToList() ?? [],
+            NetworkID: endpointSettings.NetworkID,
+            EndpointID: endpointSettings.EndpointID,
+            Gateway: endpointSettings.Gateway,
+            IpAddress: endpointSettings.IpAddress,
+            IpPrefixLen: endpointSettings.IpPrefixLen,
+            Ipv6Gateway: endpointSettings.Ipv6Gateway,
+            GlobalIPv6Address: endpointSettings.GlobalIPv6Address,
+            GlobalIPv6PrefixLen: endpointSettings.GlobalIPv6PrefixLen,
+            MacAddress: endpointSettings.MacAddress,
+            DNSNames: endpointSettings.DNSNames,
+            DriverOpts: endpointSettings.DriverOpts?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? []
         );
 
     private static EndpointIpamConfiguration Map(this EndpointIPAMConfig endpointIPAMConfig)
@@ -556,8 +557,7 @@ internal static class ContainerMapper
             LinkLocalIPs: endpointIPAMConfig.LinkLocalIPs
         );
 
-
-    public static Dictionary<string, DockerContainer> Map(this ListContainersResponse response, Guid platformId)
+    public static Dictionary<string, DockerContainer> Map(this ListContainersResponse response)
         => response.Containers.ToDictionary(
             pair => pair.Key,
             pair => pair.Value.Map());
@@ -619,26 +619,24 @@ internal static class ContainerMapper
         return optionChain;
     }
 
-    public static ContainerLogInfo Map(this ContainerLogResponse logInfo)
-        => new(Log: logInfo.Log);
+    public static ContainerLogInfo Map(this ContainerLogResponse log)
+        => new(Log: log.Log);
 
-    public static DockerContainerStats Map(this ContainerStatsResponse statsResponse)
-        => new (Containers: statsResponse.Containers?.ToDictionary(c => c.Key, c => c.Value.Map()) ?? []);
+    public static DockerContainerStats Map(this ContainerStatsResponse stats)
+        => new (Containers: stats.Containers?.ToDictionary(c => c.Key, c => c.Value.Map()) ?? []);
 
-    public static DaemonEventInfo Map(this DaemonEventResponse response)
+    public static DaemonEventInfo Map(this DaemonEventResponse @event)
         => new
         (
-            Id: response.Id,
-            Action: response.Action,
-            ContainerId: response.ContainerId,
-            Type: response.EventMessageType.Map(),
-            Container: response.Container?.Map()
+            Id: @event.Id,
+            Action: @event.Action,
+            ContainerId: @event.ContainerId,
+            Type: @event.EventMessageType.Map(),
+            Container: @event.Container?.Map()
         );
 
-    public static IReadOnlyDictionary<string, DockerContainer> Map(this IReadOnlyDictionary<string, ContainerResult> containers)
-    {
-        return containers.ToDictionary(c => c.Key, c => c.Value.Map());
-    }
+    public static IReadOnlyDictionary<string, DockerContainer> Map(this IReadOnlyDictionary<string, ContainerResult> containers) 
+        => containers.ToDictionary(c => c.Key, c => c.Value.Map());
 
     public static DockerContainer Map(this ContainerResult container)
         => new
@@ -673,12 +671,10 @@ internal static class ContainerMapper
         );
 
     public static DockerContainerStats Map (this IReadOnlyDictionary<string, ContainerStatResult> containers)
-    {
-        return new DockerContainerStats
+        => new
         (
             Containers: containers.ToDictionary(c => c.Key, c => c.Value.Map())
         );
-    }
 
     public static ContainerEventType Map(this EventMessageType type)
         => type switch

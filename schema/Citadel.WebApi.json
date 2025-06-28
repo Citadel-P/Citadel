@@ -4707,7 +4707,6 @@
           "attachable",
           "ingress",
           "configOnly",
-          "inUse",
           "configFrom",
           "ipam",
           "options",
@@ -4748,9 +4747,6 @@
             "type": "boolean"
           },
           "configOnly": {
-            "type": "boolean"
-          },
-          "inUse": {
             "type": "boolean"
           },
           "configFrom": {

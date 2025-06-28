@@ -12,7 +12,6 @@ public record DockerNetworkDetails(
     bool Attachable,
     bool Ingress,
     bool ConfigOnly,
-    bool InUse,
     string? ConfigFrom,
     IpAddressManagementConfig? Ipam,
     IReadOnlyDictionary<string, string> Options,

@@ -5,13 +5,13 @@ using Hosting.DockerClient.Models.Volumes;
 
 namespace Infrastructure.Connectors.Mappers;
 
-internal static class VolumeMapper
+internal static class VolumeMappers
 {
-    public static IEnumerable<DockerVolumeResult> Map(this ListVolumesResponse result) 
-        => result.Volumes.Select(Map);
+    public static IEnumerable<DockerVolumeResult> Map(this ListVolumesResponse volumesResponse) 
+        => volumesResponse.Volumes.Select(Map);
 
-    public static IEnumerable<DockerVolumeResult> Map(this ListVolumesResult result)
-        => result.Volumes.Select(Map);
+    public static IEnumerable<DockerVolumeResult> Map(this ListVolumesResult volumesResult)
+        => volumesResult.Volumes.Select(Map);
 
     public static DockerVolumeResult Map(this VolumeResponse volume)
     {
@@ -53,6 +53,7 @@ internal static class VolumeMapper
             Size: usageData.Size,
             RefCount: usageData.RefCount
         );
+
     private static VolumeUsageData? Map(this Hosting.DockerClient.UsageData usageData)
         => new
         (
