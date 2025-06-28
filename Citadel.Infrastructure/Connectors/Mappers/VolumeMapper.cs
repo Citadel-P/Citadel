@@ -1,15 +1,17 @@
 ﻿using Citadel.Agent.Volumes.V1;
 using Domain;
 using Domain.Contracts.Resources.Volumes;
+using Hosting.DockerClient.Models.Volumes;
 
 namespace Infrastructure.Connectors.Mappers;
 
 internal static class VolumeMapper
 {
-    public static IEnumerable<DockerVolumeResult> Map(this ListVolumesResponse response)
-    {
-        return response.Volumes.Select(Map);
-    }
+    public static IEnumerable<DockerVolumeResult> Map(this ListVolumesResponse result) 
+        => result.Volumes.Select(Map);
+
+    public static IEnumerable<DockerVolumeResult> Map(this ListVolumesResult result)
+        => result.Volumes.Select(Map);
 
     public static DockerVolumeResult Map(this VolumeResponse volume)
     {
@@ -27,8 +29,32 @@ internal static class VolumeMapper
             InUse: volume.InUse);
     }
 
+    public static DockerVolumeResult Map(this VolumeResult volume)
+    {
+        return new DockerVolumeResult
+        (
+            Id: volume.Name,
+            InUse: volume.InUse,
+            Scope: volume.Scope,
+            Driver: volume.Driver,
+            Mountpoint: volume.Mountpoint,
+            CreatedAt: volume.CreatedAt,
+            ClusterVolume: volume.ClusterVolume?.Map(),
+            UsageData: volume.UsageData?.Map(),
+            Status: volume.Status.ToDictionary(kv => kv.Key, kv => kv.Value),
+            Labels: volume.Labels.ToDictionary(kv => kv.Key, kv => kv.Value),
+            Options: volume.Options.ToDictionary(kv => kv.Key, kv => kv.Value)
+        );
+    }
+
     public static VolumeUsageData? Map(this UsageDataMessage usageData) 
         => new 
+        (
+            Size: usageData.Size,
+            RefCount: usageData.RefCount
+        );
+    private static VolumeUsageData? Map(this Hosting.DockerClient.UsageData usageData)
+        => new
         (
             Size: usageData.Size,
             RefCount: usageData.RefCount
@@ -38,6 +64,18 @@ internal static class VolumeMapper
     {
         return clusterVolume == null ? null : new ClusterVolume(
             Id: clusterVolume.Id,
+            Version: clusterVolume.Version?.Map(),
+            CreatedAt: clusterVolume.CreatedAt,
+            UpdatedAt: clusterVolume.UpdatedAt,
+            Spec: clusterVolume.Spec?.Map(),
+            Info: clusterVolume.Info?.Map(),
+            PublishStatus: clusterVolume.PublishStatus?.Select(Map).ToList() ?? []);
+    }
+
+    private static ClusterVolume Map(this Hosting.DockerClient.ClusterVolume clusterVolume)
+    {
+        return new ClusterVolume(
+            Id: clusterVolume.ID,
             Version: clusterVolume.Version?.Map(),
             CreatedAt: clusterVolume.CreatedAt,
             UpdatedAt: clusterVolume.UpdatedAt,
@@ -56,6 +94,16 @@ internal static class VolumeMapper
         );
     }
 
+    private static VolumePublishStatus Map(this Hosting.DockerClient.PublishStatus status)
+    {
+        return new VolumePublishStatus
+        (
+            NodeID: status.NodeID,
+            State: status.State?.ToString(),
+            PublishContext: status.PublishContext?.ToDictionary() ?? []
+        );
+    }
+
     public static ClusterVolumeInfo? Map(this ClusterVolumeInfoMessage info)
     {
         return new ClusterVolumeInfo
@@ -67,22 +115,48 @@ internal static class VolumeMapper
         );
     }
 
-    public static VolumeVersionInfo? Map(this VolumVersionMessage versionInfo)
-    => new (Index: versionInfo.Index);
-
-   public static VolumeSpecification? Map(this VolumeSpecMessage spec)
+    private static ClusterVolumeInfo? Map(this Hosting.DockerClient.Info info)
     {
-        return new VolumeSpecification(Group: spec.Group, AccessMode: spec.AccessMode?.Map());
+        return new ClusterVolumeInfo
+        (
+            VolumeID: info.VolumeID,
+            CapacityBytes: info.CapacityBytes,
+            VolumeContext: info.VolumeContext.ToDictionary(kv => kv.Key, kv => kv.Value),
+            AccessibleTopology: [.. info.AccessibleTopology.Select(t => new TopologyEntry(t.ToDictionary(kv => kv.Key, kv => kv.Value)))]
+        );
     }
-    public static VolumeAccessMode Map(this VolumeAccessModeMessage accessMode)
-        => new 
+
+    public static VolumeVersionInfo? Map(this VolumVersionMessage versionInfo)
+        => new (Index: versionInfo.Index);
+
+    public static VolumeVersionInfo? Map(this Hosting.DockerClient.ObjectVersion versionInfo)
+       => new(Index: versionInfo.Index != null ? (long)versionInfo.Index.Value : 0);
+
+    public static VolumeSpecification? Map(this VolumeSpecMessage spec) 
+        => new (Group: spec.Group, AccessMode: spec.AccessMode?.Map());
+
+    private static VolumeSpecification? Map(this Hosting.DockerClient.ClusterVolumeSpec spec)
+       => new(Group: spec.Group, AccessMode: spec.AccessMode?.Map());
+
+    private static VolumeAccessMode Map(this VolumeAccessModeMessage accessMode)
+        => new
         (
             Scope: accessMode.Scope.Map(),
             Sharing: accessMode.Sharing.Map(),
             Availability: accessMode.Availability,
             CapacityRange: accessMode.CapacityRange?.Map(),
             Secrets: accessMode.Secrets?.Select(Map)?.ToList() ?? []
-            );
+        );
+
+    private static VolumeAccessMode Map(this Hosting.DockerClient.AccessMode accessMode)
+        => new 
+        (
+            Scope: accessMode.Scope.Map(),
+            Sharing: accessMode.Sharing.Map(),
+            Availability: accessMode.Availability?.ToString(),
+            CapacityRange: accessMode.CapacityRange?.Map(),
+            Secrets: accessMode.Secrets?.Select(Map)?.ToList() ?? []
+        );
 
     public static Domain.Contracts.Resources.Volumes.VolumeCapacityRange? Map(this Citadel.Agent.Volumes.V1.VolumeCapacityRange capacityRange)
         => new
@@ -91,12 +165,44 @@ internal static class VolumeMapper
             LimitBytes: capacityRange.LimitBytes
         );
 
+    private static Domain.Contracts.Resources.Volumes.VolumeCapacityRange? Map(this Hosting.DockerClient.CapacityRange capacityRange)
+       => new
+       (
+           RequiredBytes: capacityRange.RequiredBytes,
+           LimitBytes: capacityRange.LimitBytes
+       );
+
+    private static VolumeSecret Map(this Hosting.DockerClient.Secrets2 secret)
+        => new
+        (
+            Key: secret.Key,
+            Secret: secret.Secret
+        );
+
     public static VolumeSecret Map(this VolumeSecretMessage secret)
         => new
         (
             Key: secret.Key,
             Secret: secret.Secret
         );
+
+    private  static VolumeScope Map(this Hosting.DockerClient.AccessModeScope? scope)
+       => scope switch
+       {
+           Hosting.DockerClient.AccessModeScope.Multi => VolumeScope.Multi,
+           Hosting.DockerClient.AccessModeScope.Single => VolumeScope.Single,
+           _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, null)
+       };
+
+    private static VolumeSharing Map(this Hosting.DockerClient.AccessModeSharing? type)
+       => type switch
+       {
+           Hosting.DockerClient.AccessModeSharing.All => VolumeSharing.All,
+           Hosting.DockerClient.AccessModeSharing.Readonly => VolumeSharing.ReadOnly,
+           Hosting.DockerClient.AccessModeSharing.Onewriter => VolumeSharing.OneWriter,
+           Hosting.DockerClient.AccessModeSharing.None => VolumeSharing.None,
+           _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
+       };
 
     public static VolumeScope Map(this VolumeScopeType scope)
         => scope switch
@@ -115,4 +221,5 @@ internal static class VolumeMapper
             VolumeSharingType.None => VolumeSharing.None,
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
         };
+
 }

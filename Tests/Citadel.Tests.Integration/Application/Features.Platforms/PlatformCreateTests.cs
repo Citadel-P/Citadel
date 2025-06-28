@@ -132,7 +132,8 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
         {
           "name": "",
           "address": "invalid-address",
-          "type": "Docker"
+          "type": "Docker",
+          "connectorType": "agent"
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
