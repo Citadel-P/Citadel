@@ -115,7 +115,7 @@ internal static class ContainerMapper
         (
             Ipv4Address: endpointIPAMConfig.IPv4Address,
             Ipv6Address: endpointIPAMConfig.IPv6Address,
-            LinkLocalIPs: endpointIPAMConfig.LinkLocalIPs.ToList()
+            LinkLocalIPs: endpointIPAMConfig.LinkLocalIPs?.ToList() ?? []
         );
 
     private static ContainerConfiguration Map(this Hosting.DockerClient.ContainerConfig config)
@@ -252,7 +252,7 @@ internal static class ContainerMapper
        => new
        (
            Name: driverConfig.Name,
-           Options: driverConfig.Options.ToDictionary()
+           Options: driverConfig.Options?.ToDictionary() ?? []
        );
 
     private static IReadOnlyList<Ulimit> Map(this ICollection<Hosting.DockerClient.Ulimits> ulimits)
@@ -623,7 +623,7 @@ internal static class ContainerMapper
         => new(Log: logInfo.Log);
 
     public static DockerContainerStats Map(this ContainerStatsResponse statsResponse)
-        => new (Containers: statsResponse.Containers.ToDictionary(c => c.Key, c => c.Value.Map()));
+        => new (Containers: statsResponse.Containers?.ToDictionary(c => c.Key, c => c.Value.Map()) ?? []);
 
     public static DaemonEventInfo Map(this DaemonEventResponse response)
         => new
