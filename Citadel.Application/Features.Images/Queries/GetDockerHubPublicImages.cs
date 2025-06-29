@@ -30,12 +30,12 @@ internal sealed class GetDockerHubPublicImagesHandler(IDockerHubRegistryReposito
         }
         else
         {
-            var result = await dockerHubRegistryRepository.SearchImage(query.ImageName, cancellationToken);
-            if (result.errorMessage is not null)
+            var (images, errorMessage) = await dockerHubRegistryRepository.SearchImage(query.ImageName, cancellationToken);
+            if (errorMessage is not null)
             {
-                return Result.Failure<IEnumerable<DockerHubImageResult>>(new InternalServerError(result.errorMessage));
+                return Result.Failure<IEnumerable<DockerHubImageResult>>(new InternalServerError(errorMessage));
             }
-            else return result.images?.ToList() ?? [];
+            else return images?.ToList() ?? [];
         }
     }
 }
