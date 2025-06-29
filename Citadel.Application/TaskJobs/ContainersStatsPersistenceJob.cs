@@ -18,7 +18,7 @@ internal class ContainersStatsPersistenceJob(
     IContainerHubDispatcher containerHubDispatcher,
     ILogger<ContainersStatsPersistenceJob> logger) : BackgroundService
 {
-    private readonly int BatchSize = options.Value?.BatchSize ?? 200;
+    private readonly int BatchSize = options.Value?.BatchSize ?? 500;
     // Updates to db will be flushed every x seconds or when batch size is reached.
     private readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60); 
 
@@ -76,7 +76,7 @@ internal class ContainersStatsPersistenceJob(
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
             var stats = statsByPlatform.SelectMany(s => s.Value).ToList();
-            await uow.BulkInsertAsync(stats, cancellationToken: cancellationToken);
+            await uow.ContainerStats.BulkInsertAsync(stats, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {

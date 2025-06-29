@@ -78,7 +78,7 @@ internal sealed class CreatePlatformHandler(
         var containers = await GetContainers(platform, cancellationToken);
         if (containers != null && containers.Any())
         {
-            await unitOfWork.BulkInsertAsync(containers, cancellationToken: cancellationToken);
+            await unitOfWork.Containers.BulkInsertAsync(containers, cancellationToken: cancellationToken);
         }
 
         // Start tracking the platform

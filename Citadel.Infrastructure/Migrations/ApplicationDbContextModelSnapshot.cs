@@ -15,7 +15,7 @@ namespace Infrastructure.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "9.0.5");
+            modelBuilder.HasAnnotation("ProductVersion", "9.0.6");
 
             modelBuilder.Entity("Domain.Entities.Container", b =>
                 {
@@ -441,7 +441,7 @@ namespace Infrastructure.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "admin@admin.com",
                             Name = "admin",
-                            Password = "kn/ZlacZFe561xtnrbxi0x4yqCJreWYy2jUqamhm1O0gnkfb",
+                            Password = "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
@@ -450,7 +450,7 @@ namespace Infrastructure.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "dev@dev.com",
                             Name = "dev",
-                            Password = "y74xqCo12t/c6V+0/CnE0wv1l71VSVqTgyS9vRkrPqGTquqc",
+                            Password = "eBnEWmOx4+wNHGR/Tunt+Sz5y7y3CQxufbe3lO1vOKwFCrft",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         },
                         new
@@ -459,7 +459,7 @@ namespace Infrastructure.Migrations
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "qa@qa.com",
                             Name = "qa",
-                            Password = "GPxzULFsJ9RUDCa9h6dP65/Ozmmuafe9WHjH+1npuWbKmJZ0",
+                            Password = "MmjMzZZgclu4JrBkm1SbuTKP52DJncsGDuj+/NJe1VW3alHk",
                             UpdatedAt = new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
                         });
                 });

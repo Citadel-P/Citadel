@@ -14,7 +14,6 @@ public interface IUnitOfWork
     IPlatformStatRepository PlatformStats { get; }
     IContainerStatRepository ContainerStats { get; }
 
-    Task BulkInsertAsync<TEntity>(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) where TEntity : class;
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }
 

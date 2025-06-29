@@ -26,7 +26,7 @@ internal class PlatformsStatsPersistenceJob(
     ChannelReader<(Guid Id, PlatformStatsResult Stats)> reader,
     ILogger<PlatformsStatsPersistenceJob> logger) : BackgroundService
 {
-    private readonly int BatchSize = options.Value?.BatchSize ?? 200;
+    private readonly int BatchSize = options.Value?.BatchSize ?? 500;
     // Updates to db will be flushed every x seconds or when platform batch size is reached.
     private readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60); 
 
@@ -122,7 +122,7 @@ internal class PlatformsStatsPersistenceJob(
         try
         {
             var batch = statsByPlatform.Map();
-            await uow.BulkInsertAsync(batch, cancellationToken);
+            await uow.PlatformStats.BulkInsertAsync(batch, cancellationToken);
         }
         catch (Exception ex)
         {

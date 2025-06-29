@@ -2,7 +2,6 @@
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Domain.Entities.Identity;
-using EFCore.BulkExtensions;
 using Infrastructure.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 
@@ -44,9 +43,6 @@ internal class UnitOfWork : IUnitOfWork
     IContainerStatRepository IUnitOfWork.ContainerStats => ContainerStats.Value;
     IPlatformStatRepository IUnitOfWork.PlatformStats => PlatformStats.Value;
     ITeamRepository IUnitOfWork.Teams => Teams.Value;
-
-    public Task BulkInsertAsync<TEntity>(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) where TEntity : class
-        => dbContext.BulkInsertAsync(entities, cancellationToken: cancellationToken);
 
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         => dbContext.SaveChangesAsync(cancellationToken);
