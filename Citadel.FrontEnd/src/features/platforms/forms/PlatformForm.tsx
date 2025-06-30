@@ -1,14 +1,18 @@
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import Loader from '@/components/ui/loader';
+import { usePlatformFormContext } from './PlatformFormProvider';
 
-const AddPlatform = () => {
+const PlatformForm = () => {
+  const { providers, formTitle, setCurrentProvider, currentProvider, isLoading } = usePlatformFormContext();
+
+  if (isLoading) return <Loader />;
   return (
     <div className="mx-auto px-4 py-3 lg:container sm:px-6">
       <div className="w-full rounded-lg border-border bg-background p-4">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h5 className="text-md font-bold text-foreground">Add Platform</h5>
+            <h5 className="text-md font-bold text-foreground">{formTitle}</h5>
           </div>
         </div>
         <ol className="relative border-s border-border ml-1">
@@ -53,4 +57,4 @@ const AddPlatform = () => {
   );
 };
 
-export default AddPlatform;
+export default PlatformForm;

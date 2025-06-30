@@ -28,7 +28,7 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
 
     const routeMap: Record<string, () => void> = {
       [AppPaths.main]: () => crumbs.push({ title: 'Platforms', isActive: true }),
-      [AppPaths.addDockerPlatform]: () => {
+      [AppPaths.addPlatform]: () => {
         crumbs.push({ title: 'Platforms', link: '/' });
         crumbs.push({ title: 'Add Platform', isActive: true });
       },

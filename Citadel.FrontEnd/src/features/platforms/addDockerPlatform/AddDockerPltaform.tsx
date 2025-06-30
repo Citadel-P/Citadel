@@ -1,10 +1,8 @@
 import DockerIcon from '@/assets/docker.min.svg';
 import DockerAgentInstallCmd from './DockerAgentInstallCmd';
 import ConnectAgentForm from './ConnectAgentForm';
-import { useHideBreadcrumb } from '@/layout/breadcrumb/useHideBreadcrumb';
 
 const AddDockerPlatform = () => {
-  useHideBreadcrumb();
   return (
     <div className="mx-auto px-4 py-3 xl:w-2/3 sm:px-6">
       <div className="mb-3 flex items-baseline gap-1">

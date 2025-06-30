@@ -51,7 +51,7 @@ export const AppRoutes = () => {
         {
           path: AppPaths.addPlatform,
           lazy: async () => {
-            return { Component: (await import('@/features/platforms/forms/AddPlatform')).default };
+            return { Component: (await import('@/pages/platforms-page')).PlatformFormPage };
           },
         },
         {
