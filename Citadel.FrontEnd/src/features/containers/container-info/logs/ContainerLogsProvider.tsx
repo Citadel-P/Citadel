@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { createContext, useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { usePOSTContainerLogs } from './hooks/usePOSTContainerLogs';
-import { createContext } from 'use-context-selector';
+import { useRequiredContext } from '@/hooks/useRequiredContext';
 
 interface IContext {
   isPending: boolean;
@@ -45,3 +45,4 @@ const ContainerLogsProvider: React.FC<IProps> = ({ children }) => {
 };
 
 export default ContainerLogsProvider;
+export const useContainerLogsContext = () => useRequiredContext(ContainerLogsContext);

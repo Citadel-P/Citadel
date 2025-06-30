@@ -6,19 +6,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useContextSelector } from 'use-context-selector';
 import { LoaderCircle } from 'lucide-react';
-import { AppContext } from '@/AppProvider';
-import { VolumesContext } from '../VolumesProvider';
+import { useAppContext } from '@/AppProvider';
+import { useVolumesContext } from '../VolumesProvider';
 import { useState } from 'react';
 import { SwitchSection } from '@/components/ui/SwitchSection';
 
 export const DeleteVolumeDialog = () => {
-  const dialogData = useContextSelector(VolumesContext, (v) => v?.dialogData)!;
-  const setDialogData = useContextSelector(VolumesContext, (v) => v?.setDialogData)!;
-  const requestDelete = useContextSelector(VolumesContext, (v) => v?.requestDelete)!;
-  const deleteIsPending = useContextSelector(VolumesContext, (v) => v?.deleteIsPending) ?? false;
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
+  const { dialogData, setDialogData, requestDelete, deleteIsPending } = useVolumesContext();
+  const { currentPlatform } = useAppContext();
   const [forceDelete, setForceDelete] = useState(false);
 
   const volumesId = dialogData.currentSelection?.map((c) => c.id!) ?? [];

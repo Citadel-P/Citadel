@@ -2,8 +2,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ContainerLogsProvider from './logs/ContainerLogsProvider';
 import ContainerLogs from './logs/ContainerLogs';
 import { Container } from 'lucide-react';
-import { AppContext } from '@/AppProvider';
-import { useContextSelector } from 'use-context-selector';
+import { useAppContext } from '@/AppProvider';
 import { useNavigate } from 'react-router';
 import ContainerStatsProvider from './stats/ContainerStatsProvider';
 import NetworkUsage from './stats/NetworkUsage';
@@ -14,10 +13,7 @@ import ContainerInspect from './inspect/ContainerInspect';
 import Loader from '@/components/ui/loader';
 
 const ContainerInfoWrapper = () => {
-  const route = useContextSelector(AppContext, (v) => v?.route);
-  const currentContainer = useContextSelector(AppContext, (v) => v?.currentContainer);
-  const isLoading = useContextSelector(AppContext, (v) => v?.isLoading);
-
+  const { route, currentContainer, isLoading } = useAppContext();
   const navigate = useNavigate();
 
   // Memoize the current tab based on the route

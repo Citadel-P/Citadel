@@ -1,6 +1,5 @@
 import { User, Settings, LogOut, Sun, Moon } from 'lucide-react';
-import { useContextSelector } from 'use-context-selector';
-import { LayoutContext } from '@/layout/LayoutProvider';
+import { useLayoutContext } from '@/layout/LayoutProvider';
 import { JSX } from 'react/jsx-runtime';
 
 interface ProfileMenu {
@@ -69,11 +68,9 @@ const themeModes = [
 ];
 
 export const SidebarDropDown = () => {
-  const theme = useContextSelector(LayoutContext, (v) => v?.theme);
-  const setThemeMode = useContextSelector(LayoutContext, (v) => v?.setThemeMode);
-  const toggleThemeColor = useContextSelector(LayoutContext, (v) => v?.toggleThemeColor);
+  const { toggleThemeColor, setThemeMode, theme } = useLayoutContext();
 
-  const handleMenuClick = (menu: ProfileMenu) => {};
+  const handleMenuClick = (_: ProfileMenu) => {};
   return (
     <div className="absolute bottom-0 z-10 mt-2 w-60 origin-bottom-left transform rounded-md bg-background py-4 drop-shadow-md shadow-custom ring-1 ring-transparent ring-opacity-5 transition focus:outline-hidden">
       <div className="flext-row flex items-center px-4 pb-4">

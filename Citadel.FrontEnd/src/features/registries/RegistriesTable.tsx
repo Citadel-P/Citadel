@@ -4,8 +4,7 @@ import SortableCell from '@/components/ui/SortableCell';
 import DropdownTableMenu from './DropdownTableMenu';
 import { ColumnDef, Row } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useContextSelector } from 'use-context-selector';
-import { RegistriesContext } from './RegistriesProvider';
+import { useRegistriesContext } from './RegistriesProvider';
 import { Link } from 'react-router';
 import { InfoIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -114,9 +113,7 @@ const columns: ColumnDef<RegistryView>[] = [
 ];
 
 export const RegistriesTable = () => {
-  const registries = useContextSelector(RegistriesContext, (v) => v?.registries) ?? [];
-  const isLoading = useContextSelector(RegistriesContext, (v) => v?.isLoading) ?? false;
-  const setSelectedRows = useContextSelector(RegistriesContext, (v) => v?.setSelectedRows)!;
+  const { registries, isLoading, setSelectedRows } = useRegistriesContext();
 
   if (!registries?.length) {
     return null;

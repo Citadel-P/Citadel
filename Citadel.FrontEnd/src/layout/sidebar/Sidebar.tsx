@@ -1,5 +1,4 @@
-import { useContextSelector } from 'use-context-selector';
-import { LayoutContext } from '@/layout/LayoutProvider';
+import { useLayoutContext } from '@/layout/LayoutProvider';
 import { ChevronsRight, ChevronsUpDown, Info } from 'lucide-react';
 import LogoIcon from '@/assets/logo.svg';
 import { SidebarMenu } from './SidebarMenu';
@@ -9,8 +8,7 @@ import { SidebarDropDown } from './SidebarDropDown';
 
 export const Sidebar = () => {
   const navigate = useNavigate();
-  const toggleSidebar = useContextSelector(LayoutContext, (v) => v?.toggleSidebar);
-  const sidebarMinimized = useContextSelector(LayoutContext, (v) => v?.sidebarMinimized);
+  const { toggleSidebar, sidebarMinimized } = useLayoutContext();
 
   const { ref, open, setOpen } = useAnimation('dropDown');
   return (

@@ -3,25 +3,20 @@ import { DockerNetworkResult } from '@/api/_generated';
 import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useContextSelector } from 'use-context-selector';
 import { truncate } from '@/lib/truncate';
 import { useEffect, useCallback, useMemo, memo } from 'react';
-import { AppContext } from '@/AppProvider';
+import { useAppContext } from '@/AppProvider';
 import { useGETNetworks } from './hooks/useGETNetworks';
-import { NetworksContext } from './NetworksProvider';
+import { useNetworksContext } from './NetworksProvider';
 import DropdownTableMenu from './DropdownTableMenu';
 import { DeleteNetworkDialog } from './dialogs/DeleteNetworkDialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { NetworkInspectSheet } from './NetworkInspectSheet';
 
 export default function NetworksTable() {
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
+  const { currentPlatform } = useAppContext();
   const { data, isLoading, isSuccess } = useGETNetworks(currentPlatform?.id);
-  const setSelectedRows = useContextSelector(NetworksContext, (v) => v?.setSelectedRows)!;
-  const setNetworks = useContextSelector(NetworksContext, (v) => v?.setNetworks)!;
-  const networks = useContextSelector(NetworksContext, (v) => v?.networks);
-  const setSheetOpen = useContextSelector(NetworksContext, (v) => v?.setSheetOpen)!;
-  const setCurrentNetwork = useContextSelector(NetworksContext, (v) => v?.setCurrentNetwork)!;
+  const { setSelectedRows, setNetworks, networks, setSheetOpen, setCurrentNetwork } = useNetworksContext();
   // Update networks when data is fetched
   useEffect(() => {
     if (isSuccess && data?.data.networks) {

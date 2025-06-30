@@ -1,15 +1,14 @@
 import { HardDrive, Plus } from 'lucide-react';
-import { useContextSelector } from 'use-context-selector';
 import { SearchField } from '@/components/ui/SearchField';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router';
-import { VolumesContext } from './VolumesProvider';
+import { useVolumesContext } from './VolumesProvider';
 import { ActionBar } from './ActionBar';
 import VolumesTable from './VolumesTable';
 
 const Volumes = () => {
   const navigate = useNavigate();
-  const onSearch = useContextSelector(VolumesContext, (v) => v?.onSearch)!;
+  const { onSearch } = useVolumesContext();
 
   return (
     <div className="flex-col justify-between relative">

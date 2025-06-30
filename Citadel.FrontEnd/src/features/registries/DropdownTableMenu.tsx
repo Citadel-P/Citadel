@@ -8,14 +8,13 @@ import { Button } from '@/components/ui/button';
 import { MoreHorizontal, Pencil, Trash } from 'lucide-react';
 import { RegistryView } from '@/api/_generated';
 import { useNavigate } from 'react-router';
-import { useContextSelector } from 'use-context-selector';
-import { RegistriesContext } from './RegistriesProvider';
+import { useRegistriesContext } from './RegistriesProvider';
 import { useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
 
 const DropdownTableMenu = ({ registry }: { registry: RegistryView }) => {
   const navigate = useNavigate();
-  const setDialogData = useContextSelector(RegistriesContext, (v) => v?.setDialogData)!;
+  const { setDialogData } = useRegistriesContext();
 
   // Memoized function to open the delete dialog
   const openDialog = useCallback(() => {

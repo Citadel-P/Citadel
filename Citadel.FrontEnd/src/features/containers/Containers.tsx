@@ -2,17 +2,18 @@ import { Container } from 'lucide-react';
 import { SearchField } from '../../components/ui/SearchField';
 import { ContainersTable } from './ContainersTable';
 import { ActionBar } from './ActionBar';
-import { useContextSelector } from 'use-context-selector';
 import { AlertMessage } from '@/components/ui/alert-message';
 import { DeleteContainerDialog } from './dialogs/DeleteContainerDialog';
-import { ContainersContext } from './ContainersProvider';
 import { useMemo } from 'react';
 import { ContainerStateStatus } from '@/api/_generated';
+import { useContainersContext } from './ContainersProvider';
 
 const Containers = () => {
-  const containers = useContextSelector(ContainersContext, (v) => v?.containers);
-  const isPlatformOffline = useMemo(() => containers?.some((container) => container.state === ContainerStateStatus.Offline ), [containers]);
-  const onSearch = useContextSelector(ContainersContext, (v) => v?.onSearch)!;
+  const { containers, onSearch } = useContainersContext();
+  const isPlatformOffline = useMemo(
+    () => containers?.some((container) => container.state === ContainerStateStatus.Offline),
+    [containers],
+  );
 
   return (
     <div className="flex-col justify-between relative">

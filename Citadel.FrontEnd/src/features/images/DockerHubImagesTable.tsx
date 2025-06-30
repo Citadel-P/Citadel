@@ -15,8 +15,7 @@ import { cn } from '@/lib/utils';
 import { useGETExternalRepositories } from './hooks/useGETExternalRepositories';
 import Loader from '@/components/ui/loader';
 import { DockerHubTagView, IImageRepositoryDockerHubRepositoryResponse } from '@/api/_generated';
-import { useContextSelector } from 'use-context-selector';
-import { ImagesContext } from './ImagesProvider';
+import { useImagesContext } from './ImagesProvider';
 import { fromNow } from '@/lib/dayjs.helper';
 import { truncate } from '@/lib/truncate';
 import PullProgressSheetContent from './PullProgressSheetContent';
@@ -33,7 +32,7 @@ const tagColumnHelper = createColumnHelper<DockerHubTagView>();
 
 // Nested table component
 function NestedImagesTable({ dockerhubRepo }: { dockerhubRepo: IImageRepositoryDockerHubRepositoryResponse }) {
-  const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
+  const { selectedRegistry } = useImagesContext();
   const { isLoading, data } = useGETDockerHubTags(
     selectedRegistry?.name ?? undefined,
     dockerhubRepo?.name ?? undefined,

@@ -3,11 +3,10 @@ import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/compo
 import { Check, CircleX, LoaderCircle } from 'lucide-react';
 import { usePOSTPullImageStream } from './hooks/usePOSTPullImageStream';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { useContextSelector } from 'use-context-selector';
-import { ImagesContext } from './ImagesProvider';
+import { useImagesContext } from './ImagesProvider';
 import { Highlight, themes } from 'prism-react-renderer';
 import { toast } from 'sonner';
-import { AppContext } from '@/AppProvider';
+import { useAppContext } from '@/AppProvider';
 
 export interface PullProgressSheetProps {
   imageTag: string;
@@ -20,8 +19,8 @@ export default function PullProgressSheetContent({ sheetProps }: { sheetProps: P
   const scrollRef = useRef<HTMLPreElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null); // Persist the AbortController
 
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
-  const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
+  const { currentPlatform } = useAppContext();
+  const { selectedRegistry } = useImagesContext();
 
   const handleChunkReceived = useCallback((chunk: string) => {
     setStreamData((prevChunks) => [...prevChunks, chunk]);
@@ -34,7 +33,7 @@ export default function PullProgressSheetContent({ sheetProps }: { sheetProps: P
     () => ({
       registryName: selectedRegistry?.name ?? '',
       repositoryName: sheetProps.repository,
-      platformId: currentPlatform?.id,
+      platformId: currentPlatform?.id ?? '',
       imageTag: sheetProps.imageTag,
     }),
     [currentPlatform, selectedRegistry, sheetProps.imageTag, sheetProps.repository],

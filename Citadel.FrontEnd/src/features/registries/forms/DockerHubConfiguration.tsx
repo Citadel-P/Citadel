@@ -4,19 +4,14 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle } from 'lucide-react';
-import { useContextSelector } from 'use-context-selector';
-import { RegistryFormContext } from './RegistryFormProvider';
+import { useRegistryFormContext } from './RegistryFormProvider';
 import { FieldChange } from '@/components/ui/field-change';
 import { RegistryInput } from '@/api/_generated';
 import { getEditedFields } from '@/lib/utils';
 
 const DockerHubConfiguration = () => {
   const { form } = useDockerHubForm();
-  const saveButtonTitle = useContextSelector(RegistryFormContext, (v) => v?.saveButtonTitle);
-  const onPostForm = useContextSelector(RegistryFormContext, (v) => v?.onPostForm);
-  const isLoading = useContextSelector(RegistryFormContext, (v) => v?.isLoadingForm);
-  const validationErrors = useContextSelector(RegistryFormContext, (v) => v?.validationErrors);
-  const mode = useContextSelector(RegistryFormContext, (v) => v?.mode);
+  const { saveButtonTitle, onPostForm, isLoading, validationErrors, mode } = useRegistryFormContext();
 
   function onSubmit(values: RegistryInput | Partial<RegistryInput>) {
     if (mode === 'edit') {

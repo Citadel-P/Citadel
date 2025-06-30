@@ -1,8 +1,8 @@
 import { useParams } from 'react-router';
 import { useGetContainerStats } from './hooks/useGetContainerStats';
 import { ContainerStatView } from '@/api/_generated';
-import { createContext } from 'use-context-selector';
-import { useMemo } from 'react';
+import { createContext, useMemo } from 'react';
+import { useRequiredContext } from '@/hooks/useRequiredContext';
 
 interface IContext {
   isLoading: boolean;
@@ -35,3 +35,4 @@ const ContainerStatsProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
 };
 
 export default ContainerStatsProvider;
+export const useContainerStatsContext = () => useRequiredContext(ContainerStatsContext);

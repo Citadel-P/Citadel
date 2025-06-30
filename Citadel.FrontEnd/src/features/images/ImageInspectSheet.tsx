@@ -2,16 +2,13 @@ import { SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetDescription, S
 import { useGETInspect } from './hooks/useGETInspect';
 import { useEffect, useState } from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
-import { useContextSelector } from 'use-context-selector';
-import { AppContext } from '@/AppProvider';
-import { ImagesContext } from './ImagesProvider';
+import { useAppContext } from '@/AppProvider';
+import { useImagesContext } from './ImagesProvider';
 
 export function ImageInspectSheet() {
-  const setSheetOpen = useContextSelector(ImagesContext, (v) => v?.setSheetOpen);
-  const sheetOpen = useContextSelector(ImagesContext, (v) => v?.sheetOpen);
-  const currentImage = useContextSelector(ImagesContext, (v) => v?.currentImage);
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
-  const { data, isSuccess } = useGETInspect(currentPlatform?.id, currentImage?.id ?? null);
+  const { currentPlatform } = useAppContext();
+  const { currentImage, sheetOpen, setSheetOpen } = useImagesContext();
+  const { data, isSuccess } = useGETInspect(currentPlatform?.id ?? null, currentImage?.id ?? null);
   const [inspectData, setInspectData] = useState<string>('');
 
   useEffect(() => {

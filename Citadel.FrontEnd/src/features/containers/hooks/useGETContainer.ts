@@ -1,9 +1,8 @@
-import { ApiClientContext } from '@/api/ApiClientProvider';
-import { useContextSelector } from 'use-context-selector';
+import { useApiClientContext } from '@/api/ApiClientProvider';
 import { useQuery } from '@tanstack/react-query';
 
 export const useGETContainer = (containerId: string | undefined) => {
-  const apiClient = useContextSelector(ApiClientContext, (v) => v?.apiClient);
+  const { apiClient } = useApiClientContext();
   const { data, error, isLoading, isSuccess } = useQuery({
     queryKey: ['getcontainer', containerId],
     queryFn: ({ signal }) => apiClient!.api.containersGetById(containerId!, { signal }),

@@ -2,12 +2,12 @@ import { RegistryConfigurationBaseDockerHubRegistry, RegistryType } from '@/api/
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { RegistryFormContext } from '../RegistryFormProvider';
-import { useContextSelector } from 'use-context-selector';
+import { useRegistryFormContext } from '../RegistryFormProvider';
 import { Constants } from '@/lib/constants';
 
 export const useDockerHubForm = () => {
-  const registry = useContextSelector(RegistryFormContext, (v) => v?.registry);
+  const { registry } = useRegistryFormContext();
+
   const configuration = registry?.configuration as RegistryConfigurationBaseDockerHubRegistry;
   const formSchema = z.object({
     name: z

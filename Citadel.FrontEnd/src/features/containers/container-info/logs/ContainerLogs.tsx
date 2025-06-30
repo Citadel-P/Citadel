@@ -1,11 +1,9 @@
-import { ContainerLogsContext } from './ContainerLogsProvider';
-import { useContextSelector } from 'use-context-selector';
 import { Highlight, themes } from 'prism-react-renderer';
 import { useEffect, useRef } from 'react';
+import { useContainerLogsContext } from './ContainerLogsProvider';
 
 const ContainerLogs = () => {
-  const logs = useContextSelector(ContainerLogsContext, (v) => v?.logs);
-  const isPending = useContextSelector(ContainerLogsContext, (v) => v?.isPending);
+  const { logs, isPending } = useContainerLogsContext();
   const scrollRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {

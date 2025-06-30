@@ -3,11 +3,10 @@ import { DockerVolumeResult } from '@/api/_generated';
 import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useContextSelector } from 'use-context-selector';
 import { useEffect, useCallback, useMemo, memo } from 'react';
-import { AppContext } from '@/AppProvider';
+import { useAppContext } from '@/AppProvider';
 import { useGETVolumes } from './hooks/useGETVolumes';
-import { VolumesContext } from './VolumesProvider';
+import { useVolumesContext } from './VolumesProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import DropdownTableMenu from './DropdownTableMenu';
 import { VolumeInspectSheet } from './VolumeInspectSheet';
@@ -16,13 +15,10 @@ import { byteTransform } from '@/lib/bytes.helper';
 import { fromNow } from '@/lib/dayjs.helper';
 
 export default function VolumesTable() {
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
+  const { currentPlatform } = useAppContext();
   const { data, isLoading, isSuccess } = useGETVolumes(currentPlatform?.id);
-  const setSelectedRows = useContextSelector(VolumesContext, (v) => v?.setSelectedRows)!;
-  const setVolumes = useContextSelector(VolumesContext, (v) => v?.setVolumes)!;
-  const volumes = useContextSelector(VolumesContext, (v) => v?.volumes);
-  const setSheetOpen = useContextSelector(VolumesContext, (v) => v?.setSheetOpen)!;
-  const setCurrentVolume = useContextSelector(VolumesContext, (v) => v?.setCurrentVolume)!;
+  const { setSelectedRows, setVolumes, volumes, setSheetOpen, setCurrentVolume } = useVolumesContext();
+
   // Update volumes when data is fetched
   useEffect(() => {
     if (isSuccess && data?.data.volumes) {

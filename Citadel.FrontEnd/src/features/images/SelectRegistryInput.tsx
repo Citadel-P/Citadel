@@ -7,13 +7,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ImagesContext } from './ImagesProvider';
-import { useContextSelector } from 'use-context-selector';
+import { useImagesContext } from './ImagesProvider';
 
 export default function SelectRegistryInput() {
-  const registries = useContextSelector(ImagesContext, (v) => v?.registries) ?? [];
-  const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
-  const setSelectionChange = useContextSelector(ImagesContext, (v) => v?.setSelectionChange);
+  const { selectedRegistry, setSelectionChange, registries } = useImagesContext();
 
   return (
     <Select defaultValue={selectedRegistry?.name ?? ''} onValueChange={setSelectionChange}>

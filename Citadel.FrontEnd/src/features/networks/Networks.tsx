@@ -1,7 +1,6 @@
 import { Network, Plus } from 'lucide-react';
-import { useContextSelector } from 'use-context-selector';
 import { SearchField } from '@/components/ui/SearchField';
-import { NetworksContext } from './NetworksProvider';
+import { useNetworksContext } from './NetworksProvider';
 import NetworksTable from './NetworksTable';
 import { ActionBar } from './ActionBar';
 import { Button } from '@/components/ui/button';
@@ -9,7 +8,7 @@ import { useNavigate } from 'react-router';
 
 const Networks = () => {
   const navigate = useNavigate();
-  const onSearch = useContextSelector(NetworksContext, (v) => v?.onSearch)!;
+  const { onSearch } = useNetworksContext();
 
   return (
     <div className="flex-col justify-between relative">

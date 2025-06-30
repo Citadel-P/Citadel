@@ -1,5 +1,4 @@
-import { AppContext } from '@/AppProvider';
-import { useContextSelector } from 'use-context-selector';
+import { useAppContext } from '@/AppProvider';
 import { AppPaths } from '@/AppRoutes';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -21,10 +20,7 @@ interface ICrumbs {
 }
 
 const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
-  const route = useContextSelector(AppContext, (v) => v?.route);
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
-  const currentContainer = useContextSelector(AppContext, (v) => v?.currentContainer);
-  const isBreadcrumbHidden = useContextSelector(AppContext, (v) => v?.isBreadcrumbHidden);
+  const { currentPlatform, currentContainer, isBreadcrumbHidden, route } = useAppContext();
 
   const navigate = useNavigate();
   const generateCrumbs = useMemo((): ICrumbs[] => {

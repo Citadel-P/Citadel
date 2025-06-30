@@ -8,15 +8,13 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { Card, CardContent } from '@/components/ui/card';
-import { ContainerStatsContext } from './ContainerStatsProvider';
-import { useContextSelector } from 'use-context-selector';
+import { useContainerStatsContext } from './ContainerStatsProvider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo, useState, useTransition, useEffect } from 'react';
 import dayjs from 'dayjs';
 
 const NetworkUsage = () => {
-  const stats = useContextSelector(ContainerStatsContext, (v) => v?.stats) || [];
-  const isLoading = useContextSelector(ContainerStatsContext, (v) => v?.isLoading) || false;
+  const { stats, isLoading } = useContainerStatsContext();
 
   // Use transition for smoother updates
   const [isPending, startTransition] = useTransition();

@@ -1,27 +1,21 @@
 import { Trash, SearchCode } from 'lucide-react';
-import { useContextSelector } from 'use-context-selector';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
-import { NetworksContext } from './NetworksProvider';
+import { useNetworksContext } from './NetworksProvider';
 
 export const ActionBar = () => {
-  const setDialogData = useContextSelector(NetworksContext, (v) => v?.setDialogData)!;
-  const setSheetOpen = useContextSelector(NetworksContext, (v) => v?.setSheetOpen)!;
-  const setCurrentNetwork = useContextSelector(NetworksContext, (v) => v?.setCurrentNetwork)!;
-
-  const selectedRows = useContextSelector(NetworksContext, (v) => v?.selectedRows) ?? [];
-  const networks = useContextSelector(NetworksContext, (v) => v?.networks) ?? [];
+  const { setDialogData, setSheetOpen, setCurrentNetwork, selectedRows, networks } = useNetworksContext();
 
   const actions: NetworkActionsState = {
-    canDelete: selectedRows?.length > 0 && selectedRows.find((row) => row.inUse) === undefined,
+    canDelete: (selectedRows?.length ?? 0) > 0 && selectedRows?.find((row) => row.inUse) === undefined,
     canInspect: selectedRows?.length === 1,
   };
 
   const handleInspectClick = () => {
     setSheetOpen(true);
-    setCurrentNetwork(selectedRows[0]);
+    if (selectedRows) setCurrentNetwork(selectedRows[0]);
   };
 
-  if (!selectedRows.length) return null;
+  if (!selectedRows?.length) return null;
 
   return (
     <div

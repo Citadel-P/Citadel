@@ -1,25 +1,20 @@
 import { SearchCode, Trash } from 'lucide-react';
-import { useContextSelector } from 'use-context-selector';
-import { ImagesContext } from './ImagesProvider';
+import { useImagesContext } from './ImagesProvider';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
 
 export const ActionBar = () => {
-  const setDialogData = useContextSelector(ImagesContext, (v) => v?.setDialogData)!;
-  const selectedRows = useContextSelector(ImagesContext, (v) => v?.selectedRows) ?? [];
-  const images = useContextSelector(ImagesContext, (v) => v?.localImages) ?? [];
-  const setSheetOpen = useContextSelector(ImagesContext, (v) => v?.setSheetOpen)!;
-  const setCurrentImage = useContextSelector(ImagesContext, (v) => v?.setCurrentImage)!;
+  const { setDialogData, selectedRows, localImages: images, setSheetOpen, setCurrentImage } = useImagesContext();
 
   const actions: ImageActionsState = {
     canInspect: selectedRows?.length === 1,
-    canDelete: selectedRows?.length > 0,
+    canDelete: (selectedRows?.length ?? 0) > 0,
   };
 
   const handleInspectClick = () => {
     setSheetOpen(true);
-    setCurrentImage(selectedRows[0]);
+    if (selectedRows) setCurrentImage(selectedRows[0]);
   };
-  if (!selectedRows.length) return null;
+  if (!selectedRows?.length) return null;
 
   return (
     <div

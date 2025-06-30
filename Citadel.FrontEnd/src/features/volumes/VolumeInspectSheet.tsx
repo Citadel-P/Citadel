@@ -2,16 +2,13 @@ import { SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetDescription, S
 import { useGETInspect } from './hooks/useGETInspect';
 import { useEffect, useState } from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
-import { useContextSelector } from 'use-context-selector';
-import { VolumesContext } from './VolumesProvider';
-import { AppContext } from '@/AppProvider';
+import { useVolumesContext } from './VolumesProvider';
+import { useAppContext } from '@/AppProvider';
 
 export function VolumeInspectSheet() {
-  const setSheetOpen = useContextSelector(VolumesContext, (v) => v?.setSheetOpen);
-  const sheetOpen = useContextSelector(VolumesContext, (v) => v?.sheetOpen);
-  const currentVolume = useContextSelector(VolumesContext, (v) => v?.currentVolume);
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
-  const { data, isSuccess } = useGETInspect(currentPlatform?.id, currentVolume?.id ?? null);
+  const { sheetOpen, setSheetOpen, currentVolume } = useVolumesContext();
+  const { currentPlatform } = useAppContext();
+  const { data, isSuccess } = useGETInspect(currentPlatform?.id ?? null, currentVolume?.id ?? null);
   const [inspectData, setInspectData] = useState<string>('');
 
   useEffect(() => {

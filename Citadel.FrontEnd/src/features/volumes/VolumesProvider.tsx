@@ -1,10 +1,10 @@
-import { createContext } from 'use-context-selector';
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, createContext } from 'react';
 import { DeleteVolumesInput, DockerVolumeResult } from '@/api/_generated';
 import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
 import { useDELETEVolumes } from './hooks/useDELETEVolumes';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useRequiredContext } from '@/hooks/useRequiredContext';
 
 interface IContext {
   selectedRows: DockerVolumeResult[] | undefined;
@@ -127,3 +127,4 @@ const VolumesProvider: React.FC<{ children?: React.ReactNode }> = ({ children })
 };
 
 export default VolumesProvider;
+export const useVolumesContext = () => useRequiredContext(VolumesContext);

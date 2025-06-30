@@ -1,14 +1,11 @@
 import { Play, Pause, RotateCcw, Ban, Trash } from 'lucide-react';
-import { useContextSelector } from 'use-context-selector';
-import { ContainersContext } from './ContainersProvider';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { useMemo } from 'react';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
+import { useContainersContext } from './ContainersProvider';
 
 export const ActionBar = () => {
-  const containers = useContextSelector(ContainersContext, (v) => v?.containers)!;
-  const selectedRows = useContextSelector(ContainersContext, (v) => v?.selectedRows)!;
-  const setDialogData = useContextSelector(ContainersContext, (v) => v?.setDialogData)!;
+  const { containers, selectedRows, setDialogData } = useContainersContext();
   const { availableActions, isPending, requestPatch } = useAvailableActions(selectedRows);
 
   const selectedCount = useMemo(() => selectedRows.length, [selectedRows]);

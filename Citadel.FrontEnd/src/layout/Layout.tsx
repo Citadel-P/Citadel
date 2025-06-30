@@ -1,16 +1,15 @@
 import { Outlet } from 'react-router';
-import LayoutProvider, { LayoutContext } from './LayoutProvider';
+import LayoutProvider, { useLayoutContext } from './LayoutProvider';
 import { Sidebar } from './sidebar/Sidebar';
 import Breadcrumb from './breadcrumb/Breadcrumb';
 import AppProvider from '@/AppProvider';
-import { useContextSelector } from 'use-context-selector';
 import { useEffect, useRef, useState } from 'react';
 
 const LayoutPage = () => {
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [isSticky, setIsSticky] = useState(false);
-  const sidebarMinimized = useContextSelector(LayoutContext, (v) => v?.sidebarMinimized);
+  const { sidebarMinimized } = useLayoutContext();
 
   useEffect(() => {
     const observer = new IntersectionObserver(

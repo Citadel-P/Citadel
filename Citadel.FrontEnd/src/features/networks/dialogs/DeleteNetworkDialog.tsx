@@ -6,17 +6,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useContextSelector } from 'use-context-selector';
 import { LoaderCircle } from 'lucide-react';
-import { AppContext } from '@/AppProvider';
-import { NetworksContext } from '../NetworksProvider';
+import { useAppContext } from '@/AppProvider';
+import { useNetworksContext } from '../NetworksProvider';
 
 export const DeleteNetworkDialog = () => {
-  const dialogData = useContextSelector(NetworksContext, (v) => v?.dialogData)!;
-  const setDialogData = useContextSelector(NetworksContext, (v) => v?.setDialogData)!;
-  const requestDelete = useContextSelector(NetworksContext, (v) => v?.requestDelete)!;
-  const deleteIsPending = useContextSelector(NetworksContext, (v) => v?.deleteIsPending) ?? false;
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
+  const { dialogData, setDialogData, requestDelete, deleteIsPending } = useNetworksContext();
+
+  const { currentPlatform } = useAppContext();
 
   const networksId = dialogData.currentSelection?.map((c) => c.id!) ?? [];
 
@@ -35,7 +32,7 @@ export const DeleteNetworkDialog = () => {
               : `Are you sure you want to delete the selected ${networksId.length} networks?`}
           </DialogDescription>
         </DialogHeader>
-        
+
         <DialogFooter>
           <div className="flex items-center justify-end">
             <button

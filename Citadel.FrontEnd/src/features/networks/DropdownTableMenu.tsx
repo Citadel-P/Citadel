@@ -1,17 +1,13 @@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, Trash, SearchCode } from 'lucide-react';
-import { useContextSelector } from 'use-context-selector';
 import { useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
-import { NetworksContext } from './NetworksProvider';
+import { useNetworksContext } from './NetworksProvider';
 import { DockerNetworkResult } from '@/api/_generated';
 
 const DropdownTableMenu = ({ network }: { network: DockerNetworkResult }) => {
-  const setDialogData = useContextSelector(NetworksContext, (v) => v?.setDialogData)!;
-  const setSheetOpen = useContextSelector(NetworksContext, (v) => v?.setSheetOpen)!;
-  const setCurrentNetwork = useContextSelector(NetworksContext, (v) => v?.setCurrentNetwork)!;
-
+  const { setDialogData, setSheetOpen, setCurrentNetwork } = useNetworksContext();
   const openDialog = useCallback(() => {
     setDialogData({ open: true, currentSelection: [network] });
   }, [setDialogData, network]);

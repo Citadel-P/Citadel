@@ -1,22 +1,19 @@
 import { Images as LucidImages } from 'lucide-react';
-import { useContextSelector } from 'use-context-selector';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { AppContext } from '@/AppProvider';
+import { useAppContext } from '@/AppProvider';
 import ExternalRepositories from './ExternalRepositories';
 import LocalImagesTable from './LocalImagesTable';
 import { ActionBar } from './ActionBar';
 import Loader from '@/components/ui/loader';
 import { SearchField } from '@/components/ui/SearchField';
-import { ImagesContext } from './ImagesProvider';
+import { useImagesContext } from './ImagesProvider';
 
 const Images = () => {
   const navigate = useNavigate();
-  const route = useContextSelector(AppContext, (v) => v?.route);
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
-  const isLoading = useContextSelector(AppContext, (v) => v?.isLoading);
-  const onSearch = useContextSelector(ImagesContext, (v) => v?.onSearch)!;
+  const { isLoading, currentPlatform, route } = useAppContext();
+  const { onSearch } = useImagesContext();
 
   // Memoize the current tab based on the route
   const currentTab = useMemo(() => {

@@ -3,17 +3,14 @@ import { Button } from '@/components/ui/button';
 import Loader from '@/components/ui/loader';
 import { Boxes, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router';
-
-import { RegistriesContext } from './RegistriesProvider';
-import { useContextSelector } from 'use-context-selector';
+import { useRegistriesContext } from './RegistriesProvider';
 import { RegistriesTable } from './RegistriesTable';
 import { ActionBar } from './ActionBar';
 import { DeleteRegistryDialog } from './dialogs/DeleteRegistryDialog';
 
 const Registries = () => {
   const navigate = useNavigate();
-  const registries = useContextSelector(RegistriesContext, (v) => v?.registries);
-  const isLoading = useContextSelector(RegistriesContext, (v) => v?.isLoading);
+  const { registries, isLoading } = useRegistriesContext();
 
   if (isLoading) return <Loader />;
   return (

@@ -1,10 +1,9 @@
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef, createContext } from 'react';
 import { useGETAccessToken } from './useGETAccessToken';
-import { ApiClientContext } from '@/api/ApiClientProvider';
-import { useContextSelector } from 'use-context-selector';
-import { createContext } from 'use-context-selector';
+import { useApiClientContext } from '@/api/ApiClientProvider';
 import { useHTTPErrorHandler } from './useHTTPErrorHandler';
 import { usePOSTLogout } from './usePOSTLogout';
+import { useRequiredContext } from '@/hooks/useRequiredContext';
 
 interface IContext {
   accessToken: string | undefined;
@@ -25,7 +24,7 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
     error: accessTokenError,
     refetch: refetchAccessToken,
   } = useGETAccessToken();
-  const apiClient = useContextSelector(ApiClientContext, (s) => s?.apiClient);
+  const { apiClient } = useApiClientContext();
   const [accessToken, setAccessToken] = useState<string | undefined>(storedJwt ?? undefined);
   const isAuthenticated = useMemo(() => accessToken != null, [accessToken]);
   const isRefreshing = useRef(false);
@@ -116,3 +115,4 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
 };
 
 export default AuthProvider;
+export const useAuthContext = () => useRequiredContext(AuthContext);

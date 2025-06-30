@@ -1,8 +1,7 @@
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useContextSelector } from 'use-context-selector';
-import { ContainersContext } from './ContainersProvider';
+import { useContainersContext } from './ContainersProvider';
 import { ContainerView, ContainerStateStatus, ContainerStatView, PortView } from '@/api/_generated';
 import { truncate } from '@/lib/truncate';
 import { toFixedNumber } from '@/lib/utils';
@@ -137,9 +136,7 @@ const columns: ColumnDef<ContainerView>[] = [
 ];
 
 export const ContainersTable = () => {
-  const containers = useContextSelector(ContainersContext, (v) => v?.containers) ?? [];
-  const isLoading = useContextSelector(ContainersContext, (v) => v?.isLoading) ?? false;
-  const setSelectedRows = useContextSelector(ContainersContext, (v) => v?.setSelectedRows)!;
+  const { containers, isLoading, setSelectedRows } = useContainersContext();
 
   return (
     <div className="flex flex-col gap-3">

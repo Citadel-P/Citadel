@@ -1,6 +1,5 @@
 import { RegistryInput, RegistryType, RegistryView } from '@/api/_generated';
-import { createContext } from 'use-context-selector';
-import { JSX, useEffect, useState } from 'react';
+import { createContext, JSX, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import DockerHubConfiguration from './DockerHubConfiguration';
 import GhcrConfiguration from './GhcrConfiguration';
@@ -8,6 +7,7 @@ import { useNavigate, useParams } from 'react-router';
 import { useGetRegistry } from './hooks/useGetRegistry';
 import { usePOSTRegistry } from './hooks/usePOSTRegistry';
 import { usePATCHRegistry } from './hooks/usePATCHRegistry';
+import { useRequiredContext } from '@/hooks/useRequiredContext';
 
 interface IRegistryProvider {
   id: string;
@@ -34,7 +34,7 @@ interface IProps {
   children?: React.ReactNode;
 }
 
-const RegistryFormContext = createContext<IContext | undefined>(undefined);
+export const RegistryFormContext = createContext<IContext | undefined>(undefined);
 
 const RegistryFormProvider: React.FC<IProps> = ({ children }) => {
   const defaultProviders: IRegistryProvider[] = [
@@ -158,4 +158,6 @@ const RegistryFormProvider: React.FC<IProps> = ({ children }) => {
 };
 
 type FormMode = 'edit' | 'add';
-export { RegistryFormContext, RegistryFormProvider as default };
+
+export default RegistryFormProvider;
+export const useRegistryFormContext = () => useRequiredContext(RegistryFormContext);

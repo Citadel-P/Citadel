@@ -12,8 +12,7 @@ import KeyValuePairInput from '@/components/ui/KeyValuePairInput';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import React, { useEffect } from 'react';
 import { usePOSTNetwork } from './hooks/usePOSTNetwork';
-import { AppContext } from '@/AppProvider';
-import { useContextSelector } from 'use-context-selector';
+import { useAppContext } from '@/AppProvider';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
 
@@ -63,7 +62,7 @@ const AddNetworkForm = () => {
   const { form } = useNetworkForm();
   const navigate = useNavigate();
   const { mutate, isPending, isSuccess, data, validationErrors } = usePOSTNetwork();
-  const platform = useContextSelector(AppContext, (v) => v?.currentPlatform);
+  const { currentPlatform } = useAppContext();
 
   const enableIPv4 = form.watch('enableIPv4');
   const enableIPv6 = form.watch('enableIPv6');
@@ -93,15 +92,15 @@ const AddNetworkForm = () => {
   useEffect(() => {
     if (isSuccess && data?.data) {
       toast.success(`A new network has been added successfully, network ID: ${data?.data.id}`);
-      navigate(`/platforms/${platform?.id}/networks`);
+      navigate(`/platforms/${currentPlatform?.id}/networks`);
     }
-  }, [isSuccess, data, navigate, platform]);
+  }, [isSuccess, data, navigate, currentPlatform]);
 
   function onSubmit(values: CreateNetworkInput | Partial<CreateNetworkInput>) {
     const optionsObj = Object.fromEntries((values.options ?? []).map(({ key, value }) => [key, value]));
     const labelsObj = Object.fromEntries((values.labels ?? []).map(({ key, value }) => [key, value]));
 
-    values.platformId = platform?.id;
+    values.platformId = currentPlatform?.id;
     values.options = optionsObj;
     values.labels = labelsObj;
     mutate(values);

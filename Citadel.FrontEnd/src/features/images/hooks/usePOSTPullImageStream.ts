@@ -1,14 +1,13 @@
-import { ApiClientContext } from '@/api/ApiClientProvider';
-import { useContextSelector } from 'use-context-selector';
+import { useApiClientContext } from '@/api/ApiClientProvider';
 import { useMutation } from '@tanstack/react-query';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 import { PullImageRequest } from '@/api/_generated';
-import { AuthContext } from '@/features/auth/AuthProvider';
+import { useAuthContext } from '@/features/auth/AuthProvider';
 import { Cancellable } from '@/api/models';
 
 export const usePOSTPullImageStream = (onChunkReceived: (chunk: string) => void) => {
-  const apiClient = useContextSelector(ApiClientContext, (s) => s?.apiClient);
-  const accessToken = useContextSelector(AuthContext, (s) => s?.accessToken);
+  const { apiClient } = useApiClientContext();
+  const { accessToken } = useAuthContext();
 
   const mutationFn = async (param: PullImageRequest & Cancellable) => {
     if (!apiClient?.baseUrl) {

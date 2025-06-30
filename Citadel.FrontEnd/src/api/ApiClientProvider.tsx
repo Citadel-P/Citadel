@@ -1,5 +1,6 @@
-import { createContext } from 'use-context-selector';
+import { createContext } from 'react';
 import { Api } from './_generated';
+import { useRequiredContext } from '@/hooks/useRequiredContext';
 
 interface IContext {
   apiClient: Api<unknown>;
@@ -29,3 +30,4 @@ const ApiClientProvider: React.FC<IProps> = ({ children }) => {
 };
 
 export default ApiClientProvider;
+export const useApiClientContext = () => useRequiredContext(ApiClientContext);

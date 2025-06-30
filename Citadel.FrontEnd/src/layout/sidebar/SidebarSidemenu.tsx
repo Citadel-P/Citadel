@@ -1,6 +1,5 @@
 import { Link } from 'react-router';
-import { useContextSelector } from 'use-context-selector';
-import { LayoutContext } from '@/layout/LayoutProvider';
+import { useLayoutContext } from '@/layout/LayoutProvider';
 import { ISubMenuItem } from './menu-items';
 import { ChevronRight } from 'lucide-react';
 
@@ -10,8 +9,7 @@ interface IProps {
 }
 
 export const SidebarSubMenu = ({ submenu, toggleMenu }: IProps) => {
-  const sidebarMinimized = useContextSelector(LayoutContext, (v) => v?.sidebarMinimized);
-
+  const { sidebarMinimized } = useLayoutContext();
   return (
     <div
       className={`transition-all duration-500 overflow-hidden pt-1 pl-4 ${

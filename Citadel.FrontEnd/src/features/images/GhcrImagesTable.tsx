@@ -16,8 +16,7 @@ import { useGETExternalRepositories } from './hooks/useGETExternalRepositories';
 import Loader from '@/components/ui/loader';
 import { GitHubCrPackageVersion, IImageRepositoryGitHubPackageResponse } from '@/api/_generated';
 import { useGETPackageVersions } from './hooks/useGETPackageVersions';
-import { useContextSelector } from 'use-context-selector';
-import { ImagesContext } from './ImagesProvider';
+import { useImagesContext } from './ImagesProvider';
 import { fromNow } from '@/lib/dayjs.helper';
 import { Badge } from '@/components/ui/badge';
 import { truncate } from '@/lib/truncate';
@@ -33,7 +32,7 @@ const versionColumnHelper = createColumnHelper<GitHubCrPackageVersion>();
 
 // Nested table component
 function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubPackageResponse }) {
-  const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
+  const { selectedRegistry } = useImagesContext();
   const { isLoading, data } = useGETPackageVersions(selectedRegistry?.name, ghPackage?.name);
   const { sheetState, openSheet, closeSheet } = useSheetState<GitHubCrPackageVersion>();
 

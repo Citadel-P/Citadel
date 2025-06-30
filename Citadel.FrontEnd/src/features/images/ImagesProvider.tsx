@@ -1,11 +1,11 @@
-import { createContext } from 'use-context-selector';
 import { useGETRegistries } from '../registries/hooks/useGETRegistries';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, createContext } from 'react';
 import { DeleteImagesRequest, ImageView, RegistryView } from '@/api/_generated';
 import { useQueryClient } from '@tanstack/react-query';
 import { useDELETEImages } from './hooks/useDELETEImages';
 import { toast } from 'sonner';
 import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
+import { useRequiredContext } from '@/hooks/useRequiredContext';
 
 interface IContext {
   isLoading: boolean;
@@ -178,3 +178,4 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
 };
 
 export default ImagesProvider;
+export const useImagesContext = () => useRequiredContext(ImagesContext);

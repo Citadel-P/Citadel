@@ -1,8 +1,7 @@
 import { createBrowserRouter, redirect, RouterProvider } from 'react-router';
 import Layout from '@/layout/Layout';
 import NotFound from '@/pages/NotFound';
-import { useContextSelector } from 'use-context-selector';
-import { AuthContext } from '@/features/auth/AuthProvider';
+import { useAuthContext } from '@/features/auth/AuthProvider';
 
 export const AppPaths: Record<string, string> = {
   any: '*',
@@ -27,8 +26,7 @@ export const AppPaths: Record<string, string> = {
 };
 
 export const AppRoutes = () => {
-  const isAuthenticated = useContextSelector(AuthContext, (v) => v?.isAuthenticated);
-
+  const { isAuthenticated } = useAuthContext();
   const protectedRoutes = [
     {
       path: AppPaths.main,

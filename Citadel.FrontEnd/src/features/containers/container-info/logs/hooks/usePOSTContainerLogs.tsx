@@ -1,15 +1,13 @@
 import { StreamLogsRequest } from '@/api/_generated';
-import { ApiClientContext } from '@/api/ApiClientProvider';
-import { useContextSelector } from 'use-context-selector';
+import { useApiClientContext } from '@/api/ApiClientProvider';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 import { useMutation } from '@tanstack/react-query';
-import { AuthContext } from '@/features/auth/AuthProvider';
+import { useAuthContext } from '@/features/auth/AuthProvider';
 import { Cancellable } from '@/api/models';
 
 export const usePOSTContainerLogs = (onChunkReceived: (chunk: string) => void) => {
-  const apiClient = useContextSelector(ApiClientContext, (v) => v?.apiClient);
-  const accessToken = useContextSelector(AuthContext, (s) => s?.accessToken);
-
+  const { apiClient } = useApiClientContext();
+  const { accessToken } = useAuthContext();
   const mutationFn = async (param: StreamLogsRequest & Cancellable) => {
     if (!apiClient?.baseUrl) {
       throw new Error('API client base URL is not defined');

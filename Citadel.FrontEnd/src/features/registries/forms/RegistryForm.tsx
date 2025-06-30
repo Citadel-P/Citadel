@@ -1,15 +1,10 @@
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { useContextSelector } from 'use-context-selector';
-import { RegistryFormContext } from './RegistryFormProvider';
+import { useRegistryFormContext } from './RegistryFormProvider';
 import Loader from '@/components/ui/loader';
 
 const RegistryForm = () => {
-  const providers = useContextSelector(RegistryFormContext, (v) => v?.providers) ?? [];
-  const formTitle = useContextSelector(RegistryFormContext, (v) => v?.formTitle);
-  const setCurrentProvider = useContextSelector(RegistryFormContext, (v) => v?.setCurrentProvider);
-  const currentProvider = useContextSelector(RegistryFormContext, (v) => v?.currentProvider);
-  const isLoading = useContextSelector(RegistryFormContext, (v) => v?.isLoading);
+  const { providers, formTitle, setCurrentProvider, currentProvider, isLoading } = useRegistryFormContext();
 
   if (isLoading) return <Loader />;
   return (

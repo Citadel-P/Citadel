@@ -2,13 +2,12 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { configureHub, IHubConfig, startConnectionWithRetry } from '@/lib/signalr.helpers';
 import { ContainerView, ContainersView, ContainerStatView } from '@/api/_generated';
-import { useContextSelector } from 'use-context-selector';
-import { AuthContext } from '@/features/auth/AuthProvider';
+import { useAuthContext } from '@/features/auth/AuthProvider';
 
 const useContainersHub = (platformId: string) => {
   const [isLoading, setIsLoading] = useState(false);
   const [containersInfo, setContainersInfo] = useState<ContainersView | undefined>();
-  const accessToken = useContextSelector(AuthContext, (v) => v?.accessToken);
+  const { accessToken } = useAuthContext();
   const groupName = `ContainersInfo/${platformId}`;
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
   const isCanceledRef = useRef(false);

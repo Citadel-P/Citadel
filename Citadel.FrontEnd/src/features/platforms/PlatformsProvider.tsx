@@ -1,9 +1,9 @@
-import { createContext } from 'use-context-selector';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 import { PlatformView } from '@/api/_generated';
 import usePlatformHub from './hooks/usePlatformHub';
 import { useDELETEPlatform } from './hooks/useDELETEPlatform';
 import { toast } from 'sonner';
+import { useRequiredContext } from '@/hooks/useRequiredContext';
 
 interface IContext {
   isLoading: boolean;
@@ -66,3 +66,4 @@ const PlatformsProvider: React.FC<{ children?: React.ReactNode }> = ({ children 
 };
 
 export default PlatformsProvider;
+export const usePlatformsContext = () => useRequiredContext(PlatformsContext);

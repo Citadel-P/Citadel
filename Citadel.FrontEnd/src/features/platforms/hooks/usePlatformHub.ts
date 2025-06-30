@@ -1,15 +1,15 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { PlatformDescriptorDockerPlatformDescriptor, PlatformsView, PlatformView } from '@/api/_generated';
 import { HubConnection } from '@microsoft/signalr';
-import { useContextSelector } from 'use-context-selector';
-import { AuthContext } from '@/features/auth/AuthProvider';
+import { useAuthContext } from '@/features/auth/AuthProvider';
 import { configureHub, IHubConfig, startConnectionWithRetry } from '@/lib/signalr.helpers';
 import { PlatformStatsBatchView } from '@/api/models';
 
 const usePlatformHub = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [platformsMessage, setPlatformsMessage] = useState<PlatformView[] | undefined>();
-  const accessToken = useContextSelector(AuthContext, (v) => v?.accessToken);
+  const { accessToken } = useAuthContext();
+
   const groupName = `Platforms`;
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
   const isCanceledRef = useRef(false);

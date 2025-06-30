@@ -1,10 +1,10 @@
-import { useEffect, useState, useMemo } from 'react';
-import { createContext } from 'use-context-selector';
+import { useEffect, useState, useMemo, createContext } from 'react';
 import { matchRoutes, useLocation, useParams } from 'react-router';
 import { AppPaths } from '@/AppRoutes';
 import { ContainerView, PlatformView } from './api/_generated';
 import { useGETPlatform } from './features/platforms/hooks/useGETPlatform';
 import { useGETContainer } from './features/containers/hooks/useGETContainer';
+import { useRequiredContext } from './hooks/useRequiredContext';
 
 interface IContext {
   isLoading: boolean;
@@ -110,3 +110,4 @@ const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => 
 };
 
 export default AppProvider;
+export const useAppContext = () => useRequiredContext(AppContext);

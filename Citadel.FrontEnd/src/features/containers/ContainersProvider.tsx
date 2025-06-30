@@ -1,11 +1,11 @@
 import { ContainerView, DeleteContainersRequest } from '@/api/_generated';
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { createContext } from 'use-context-selector';
+import { useEffect, useState, useMemo, useCallback, createContext } from 'react';
 import useContainersHub from './hooks/useContainersHub';
 import { useParams } from 'react-router';
 import { useDELETEContainers } from './hooks/useDELETEContainers';
 import { toast } from 'sonner';
 import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
+import { useRequiredContext } from '@/hooks/useRequiredContext';
 
 interface IContext {
   isLoading: boolean;
@@ -127,3 +127,4 @@ const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children
 };
 
 export default ContainersProvider;
+export const useContainersContext = () => useRequiredContext(ContainersContext);

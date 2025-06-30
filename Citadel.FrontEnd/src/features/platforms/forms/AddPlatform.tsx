@@ -1,10 +1,10 @@
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { useContextSelector } from 'use-context-selector';
 import Loader from '@/components/ui/loader';
 
 const AddPlatform = () => {
-  return (<div className="mx-auto px-4 py-3 lg:container sm:px-6">
+  return (
+    <div className="mx-auto px-4 py-3 lg:container sm:px-6">
       <div className="w-full rounded-lg border-border bg-background p-4">
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -49,7 +49,8 @@ const AddPlatform = () => {
           </li>
         </ol>
       </div>
-    </div>);
+    </div>
+  );
 };
 
 export default AddPlatform;

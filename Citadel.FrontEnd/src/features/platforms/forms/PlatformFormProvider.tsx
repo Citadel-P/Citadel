@@ -1,12 +1,12 @@
 import { PlatformView, PlatformType, PlatformInput } from '@/api/_generated';
-import { createContext } from 'use-context-selector';
-import { JSX, useEffect, useState } from 'react';
+import { createContext, JSX, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import DockerHubConfiguration from './DockerHubConfiguration';
 import { useNavigate, useParams } from 'react-router';
 import { useGETPlatform } from './../hooks/useGETPlatform';
 import { usePOSTPlatform } from './hooks/usePOSTPlatform';
 import { usePATCHPlatform } from './hooks/usePATCHPlatform';
+import { useRequiredContext } from '@/hooks/useRequiredContext';
 
 interface IPlatformProvider {
   id: 'docker' | 'swarm' | 'k8s';
@@ -143,3 +143,4 @@ const PlatformFormProvider: React.FC<IProps> = ({ children }) => {
 
 type FormMode = 'edit' | 'add';
 export { PlatformFormContext, PlatformFormProvider as default };
+export const usePlatformFormContext = () => useRequiredContext(PlatformFormContext);

@@ -5,8 +5,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useGETAllLocalImages } from './hooks/useGETAllLocalImages';
 import DropdownTableMenu from './DropdownTableMenu';
-import { useContextSelector } from 'use-context-selector';
-import { ImagesContext } from './ImagesProvider';
+import { useImagesContext } from './ImagesProvider';
 import { truncate } from '@/lib/truncate';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { CheckCheck, Clipboard } from 'lucide-react';
@@ -14,7 +13,7 @@ import { useEffect, useCallback, useMemo, memo } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
 import { byteTransform } from '@/lib/bytes.helper';
 import { DeleteLocalImageDialog } from './dialogs/DeleteLocalImageDialog';
-import { AppContext } from '@/AppProvider';
+import { useAppContext } from '@/AppProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ImageInspectSheet } from './ImageInspectSheet';
 
@@ -117,13 +116,9 @@ const ImageIdRow = ({ image }: { image: ImageView }) => {
 };
 
 export default function LocalImagesTable() {
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
+  const { currentPlatform } = useAppContext();
   const { data, isLoading, isSuccess } = useGETAllLocalImages(currentPlatform?.id);
-  const setSelectedRows = useContextSelector(ImagesContext, (v) => v?.setSelectedRows)!;
-  const setLocalImages = useContextSelector(ImagesContext, (v) => v?.setLocalImages)!;
-  const localImages = useContextSelector(ImagesContext, (v) => v?.localImages)!;
-  const setCurrentImage = useContextSelector(ImagesContext, (v) => v?.setCurrentImage)!;
-  const setSheetOpen = useContextSelector(ImagesContext, (v) => v?.setSheetOpen)!;
+  const { setSelectedRows, setLocalImages, localImages, setCurrentImage, setSheetOpen } = useImagesContext();
   // Update local images when data is fetched
   useEffect(() => {
     if (isSuccess && data?.data.images) {

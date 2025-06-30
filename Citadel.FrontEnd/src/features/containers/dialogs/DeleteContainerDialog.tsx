@@ -8,19 +8,14 @@ import {
 } from '@/components/ui/dialog';
 import { useReducer } from 'react';
 import { LoaderCircle } from 'lucide-react';
-import { useContextSelector } from 'use-context-selector';
-import { ContainersContext } from '../ContainersProvider';
+import { useContainersContext } from '../ContainersProvider';
 import { SwitchSection } from '@/components/ui/SwitchSection';
 
 // Reducer for managing volume and force states
 const toggleReducer = (state: boolean, action: void) => !state;
 
 export const DeleteContainerDialog = () => {
-  const dialogData = useContextSelector(ContainersContext, (v) => v?.dialogData)!;
-  const setDialogData = useContextSelector(ContainersContext, (v) => v?.setDialogData)!;
-  const isPending = useContextSelector(ContainersContext, (v) => v?.deleteIsPending)!;
-  const requestDelete = useContextSelector(ContainersContext, (v) => v?.requestDelete)!;
-
+  const { deleteIsPending: isPending, requestDelete, dialogData, setDialogData } = useContainersContext();
   const [volume, toggleVolume] = useReducer(toggleReducer, true);
   const [force, toggleForce] = useReducer(toggleReducer, true);
 

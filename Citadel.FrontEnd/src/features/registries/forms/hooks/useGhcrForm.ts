@@ -1,13 +1,12 @@
 import { RegistryConfigurationBaseGitHubRegistry, RegistryType } from '@/api/_generated';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { useContextSelector } from 'use-context-selector';
 import { z } from 'zod';
-import { RegistryFormContext } from '../RegistryFormProvider';
+import { useRegistryFormContext } from '../RegistryFormProvider';
 import { Constants } from '@/lib/constants';
 
 export const useGhcrForm = () => {
-  const registry = useContextSelector(RegistryFormContext, (v) => v?.registry);
+  const { registry } = useRegistryFormContext();
   const configuration = registry?.configuration as RegistryConfigurationBaseGitHubRegistry;
 
   const formSchema = z.object({

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { createContext } from 'use-context-selector';
+import { useRequiredContext } from '@/hooks/useRequiredContext';
+import { createContext, useState } from 'react';
 
 interface IContext {
   theme: ITheme;
@@ -51,3 +51,4 @@ const LayoutProvider: React.FC<IProps> = ({ children }) => {
 };
 
 export default LayoutProvider;
+export const useLayoutContext = () => useRequiredContext(LayoutContext);

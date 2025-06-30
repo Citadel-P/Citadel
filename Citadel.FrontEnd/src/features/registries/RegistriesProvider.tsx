@@ -1,10 +1,10 @@
 import { RegistryView } from '@/api/_generated';
-import { createContext } from 'use-context-selector';
 import { useGETRegistries } from './hooks/useGETRegistries';
-import { useEffect, useState } from 'react';
+import { createContext, useEffect, useState } from 'react';
 import { useDELETERegistries } from './hooks/useDELETERegistries';
 import { toast } from 'sonner';
 import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
+import { useRequiredContext } from '@/hooks/useRequiredContext';
 
 interface IContext {
   isLoading: boolean;
@@ -76,3 +76,4 @@ const RegistriesProvider: React.FC<IProps> = ({ children }) => {
 };
 
 export default RegistriesProvider;
+export const useRegistriesContext = () => useRequiredContext(RegistriesContext);

@@ -9,8 +9,7 @@ import { LoaderCircle, ChevronDown } from 'lucide-react';
 import KeyValuePairInput from '@/components/ui/KeyValuePairInput';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import React, { useEffect } from 'react';
-import { AppContext } from '@/AppProvider';
-import { useContextSelector } from 'use-context-selector';
+import { useAppContext } from '@/AppProvider';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
 import { useVolumeForm } from './hooks/useVolumeForm';
@@ -22,7 +21,7 @@ const AddVolumeForm = () => {
   const { form } = useVolumeForm();
   const navigate = useNavigate();
   const { mutate, isPending, isSuccess, data, validationErrors } = usePOSTVolume();
-  const platform = useContextSelector(AppContext, (v) => v?.currentPlatform);
+  const { currentPlatform } = useAppContext();
 
   const { control } = form;
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
@@ -50,15 +49,15 @@ const AddVolumeForm = () => {
   useEffect(() => {
     if (isSuccess && data?.data) {
       toast.success(`A new volume has been added successfully, volume ID: ${data?.data.id}`);
-      navigate(`/platforms/${platform?.id}/volumes`);
+      navigate(`/platforms/${currentPlatform?.id}/volumes`);
     }
-  }, [isSuccess, data, navigate, platform]);
+  }, [isSuccess, data, navigate, currentPlatform]);
 
   function onSubmit(values: CreateVolumeInput | Partial<CreateVolumeInput>) {
     const optionsObj = Object.fromEntries((values.options ?? []).map(({ key, value }) => [key, value]));
     const labelsObj = Object.fromEntries((values.labels ?? []).map(({ key, value }) => [key, value]));
 
-    values.platformId = platform?.id;
+    values.platformId = currentPlatform?.id;
     values.options = optionsObj;
     values.labels = labelsObj;
     mutate(values);

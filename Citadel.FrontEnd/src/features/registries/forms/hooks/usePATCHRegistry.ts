@@ -1,5 +1,4 @@
-import { ApiClientContext } from '@/api/ApiClientProvider';
-import { useContextSelector } from 'use-context-selector';
+import { useApiClientContext } from '@/api/ApiClientProvider';
 import { useMutation } from '@tanstack/react-query';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 import { RegistryInput } from '@/api/_generated';
@@ -8,7 +7,7 @@ interface Props {
   data: RegistryInput;
 }
 export const usePATCHRegistry = () => {
-  const apiClient = useContextSelector(ApiClientContext, (s) => s?.apiClient)!;
+  const { apiClient } = useApiClientContext();
   const { mutate, isPending, isSuccess, error, data } = useMutation({
     mutationFn: ({ id, data }: Props) => {
       return apiClient.api.registriesPatch(id!, data);

@@ -7,15 +7,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { LoaderCircle } from 'lucide-react';
-import { useContextSelector } from 'use-context-selector';
-import { PlatformsContext } from '../PlatformsProvider';
+import { usePlatformsContext } from '../PlatformsProvider';
 
 export const DeletePlatformDialog = () => {
-  const dialogData = useContextSelector(PlatformsContext, (v) => v?.dialogData)!;
-  const setDialogData = useContextSelector(PlatformsContext, (v) => v?.setDialogData)!;
-  const isPending = useContextSelector(PlatformsContext, (v) => v?.deleteIsPending)!;
-  const requestDelete = useContextSelector(PlatformsContext, (v) => v?.requestDelete)!;
-
+  const { dialogData, setDialogData, deleteIsPending, requestDelete } = usePlatformsContext();
   const handleDelete = () => {
     if (dialogData.platform) requestDelete(dialogData.platform.id);
   };
@@ -41,11 +36,11 @@ export const DeletePlatformDialog = () => {
             </button>
             <button
               type="button"
-              disabled={isPending}
+              disabled={deleteIsPending}
               onClick={handleDelete}
               className="ml-2 bg-danger hover:bg-danger/85 text-background font-medium rounded-sm text-sm inline-flex items-center px-2 py-2">
               Delete
-              {isPending && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
+              {deleteIsPending && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
             </button>
           </div>
         </DialogFooter>

@@ -1,27 +1,20 @@
 import { Trash, SearchCode } from 'lucide-react';
-import { useContextSelector } from 'use-context-selector';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
-import { VolumesContext } from './VolumesProvider';
+import { useVolumesContext } from './VolumesProvider';
 
 export const ActionBar = () => {
-  const setDialogData = useContextSelector(VolumesContext, (v) => v?.setDialogData)!;
-  const setSheetOpen = useContextSelector(VolumesContext, (v) => v?.setSheetOpen)!;
-  const setCurrentVolume = useContextSelector(VolumesContext, (v) => v?.setCurrentVolume)!;
-
-  const selectedRows = useContextSelector(VolumesContext, (v) => v?.selectedRows) ?? [];
-  const volumes = useContextSelector(VolumesContext, (v) => v?.volumes) ?? [];
-
+  const { setDialogData, setSheetOpen, setCurrentVolume, selectedRows, volumes } = useVolumesContext();
   const actions: VolumeActionsState = {
-    canDelete: selectedRows?.length > 0 && selectedRows.find((row) => row.inUse) === undefined,
+    canDelete: (selectedRows?.length ?? 0) > 0 && selectedRows?.find((row) => row.inUse) === undefined,
     canInspect: selectedRows?.length === 1,
   };
 
   const handleInspectClick = () => {
     setSheetOpen(true);
-    setCurrentVolume(selectedRows[0]);
+    if (selectedRows) setCurrentVolume(selectedRows[0]);
   };
 
-  if (!selectedRows.length) return null;
+  if (!selectedRows?.length) return null;
 
   return (
     <div

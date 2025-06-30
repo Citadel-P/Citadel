@@ -1,8 +1,7 @@
 import Loader from '@/components/ui/loader';
-import { useContextSelector } from 'use-context-selector';
 import { useNavigate } from 'react-router';
 import { AlertMessage } from '@/components/ui/alert-message';
-import { PlatformsContext } from './PlatformsProvider';
+import { usePlatformsContext } from './PlatformsProvider';
 import { DeletePlatformDialog } from './dialogs/DeletePlatformDialog';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
@@ -10,8 +9,7 @@ import { PlatformType } from '@/api/_generated';
 import DockerPlatform from './DockerPlatform';
 
 const Platforms = () => {
-  const platforms = useContextSelector(PlatformsContext, (v) => v?.platforms);
-  const isLoading = useContextSelector(PlatformsContext, (v) => v?.isLoading);
+  const { platforms, isLoading } = usePlatformsContext();
   const navigate = useNavigate();
   return (
     <div className="mx-auto px-4 py-3 lg:container sm:px-6">

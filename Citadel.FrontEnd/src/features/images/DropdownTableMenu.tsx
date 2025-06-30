@@ -7,15 +7,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, SearchCode, Trash } from 'lucide-react';
 import { ImageView } from '@/api/_generated';
-import { useContextSelector } from 'use-context-selector';
-import { ImagesContext } from './ImagesProvider';
+import { useImagesContext } from './ImagesProvider';
 import { useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
 
 const DropdownTableMenu = ({ image }: { image: ImageView }) => {
-  const setDialogData = useContextSelector(ImagesContext, (v) => v?.setDialogData)!;
-  const setSheetOpen = useContextSelector(ImagesContext, (v) => v?.setSheetOpen)!;
-  const setCurrentImage = useContextSelector(ImagesContext, (v) => v?.setCurrentImage)!;
+  const { setDialogData, setSheetOpen, setCurrentImage } = useImagesContext();
 
   // Memoized function to open the delete dialog
   const openDialog = useCallback(() => {

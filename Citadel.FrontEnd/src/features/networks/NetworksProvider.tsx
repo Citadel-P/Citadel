@@ -1,10 +1,10 @@
-import { createContext } from 'use-context-selector';
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, createContext } from 'react';
 import { DeleteNetworksInput, DockerNetworkResult } from '@/api/_generated';
 import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
 import { useDELETENetworks } from './hooks/useDELETENetworks';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useRequiredContext } from '@/hooks/useRequiredContext';
 
 interface IContext {
   selectedRows: DockerNetworkResult[] | undefined;
@@ -132,3 +132,4 @@ const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }
 };
 
 export default NetworksProvider;
+export const useNetworksContext = () => useRequiredContext(NetworksContext);

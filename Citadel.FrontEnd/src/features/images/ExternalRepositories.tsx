@@ -1,15 +1,13 @@
-import { useContextSelector } from 'use-context-selector';
 import GhcrImagesTable from './GhcrImagesTable';
 import SelectRegistryInput from './SelectRegistryInput';
-import { ImagesContext } from './ImagesProvider';
+import { useImagesContext } from './ImagesProvider';
 import Loader from '@/components/ui/loader';
 import { RegistryType } from '@/api/_generated';
 import PrivateDockerHubImagesTable from './DockerHubImagesTable';
 import { PublicDockerHubImages } from './PublicDockerHubImages';
 
 export default function ExternalRepositories() {
-  const isLoading = useContextSelector(ImagesContext, (v) => v?.isLoading) ?? false;
-  const selectedRegistry = useContextSelector(ImagesContext, (v) => v?.selectedRegistry);
+  const { selectedRegistry, isLoading } = useImagesContext();
 
   if (isLoading) return <Loader />;
 

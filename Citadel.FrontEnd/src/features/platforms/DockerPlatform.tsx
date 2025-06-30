@@ -6,11 +6,10 @@ import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { fromNow } from '@/lib/dayjs.helper';
-import { useContextSelector } from 'use-context-selector';
-import { PlatformsContext } from './PlatformsProvider';
+import { usePlatformsContext } from './PlatformsProvider';
 
 const DockerPlatform = ({ platform }: { platform: PlatformView }) => {
-  const setDialogData = useContextSelector(PlatformsContext, (v) => v?.setDialogData)!;
+  const { setDialogData } = usePlatformsContext();
 
   const isPlatfomOnline = platform.status === PlatformStatus.Online;
   const LastSnapshotTooltip = () => {

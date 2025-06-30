@@ -2,16 +2,13 @@ import { SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetDescription, S
 import { useGETInspect } from './hooks/useGETInspect';
 import { useEffect, useState } from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
-import { useContextSelector } from 'use-context-selector';
-import { NetworksContext } from './NetworksProvider';
-import { AppContext } from '@/AppProvider';
+import { useNetworksContext } from './NetworksProvider';
+import { useAppContext } from '@/AppProvider';
 
 export function NetworkInspectSheet() {
-  const setSheetOpen = useContextSelector(NetworksContext, (v) => v?.setSheetOpen);
-  const sheetOpen = useContextSelector(NetworksContext, (v) => v?.sheetOpen);
-  const currentNetwork = useContextSelector(NetworksContext, (v) => v?.currentNetwork);
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform)!;
-  const { data, isSuccess } = useGETInspect(currentPlatform?.id, currentNetwork?.id ?? null);
+  const { currentNetwork, sheetOpen, setSheetOpen } = useNetworksContext();
+  const { currentPlatform } = useAppContext();
+  const { data, isSuccess } = useGETInspect(currentPlatform?.id ?? null, currentNetwork?.id ?? null);
   const [inspectData, setInspectData] = useState<string>('');
 
   useEffect(() => {

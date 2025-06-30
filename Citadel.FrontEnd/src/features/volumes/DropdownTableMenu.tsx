@@ -1,17 +1,13 @@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, Trash, SearchCode } from 'lucide-react';
-import { useContextSelector } from 'use-context-selector';
 import { useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
-import { VolumesContext } from './VolumesProvider';
+import { useVolumesContext } from './VolumesProvider';
 import { DockerVolumeResult } from '@/api/_generated';
 
 const DropdownTableMenu = ({ volume }: { volume: DockerVolumeResult }) => {
-  const setDialogData = useContextSelector(VolumesContext, (v) => v?.setDialogData)!;
-  const setSheetOpen = useContextSelector(VolumesContext, (v) => v?.setSheetOpen)!;
-  const setCurrentVolume = useContextSelector(VolumesContext, (v) => v?.setCurrentVolume)!;
-
+  const { setDialogData, setSheetOpen, setCurrentVolume } = useVolumesContext();
   const openDialog = useCallback(() => {
     setDialogData({ open: true, currentSelection: [volume] });
   }, [setDialogData, volume]);

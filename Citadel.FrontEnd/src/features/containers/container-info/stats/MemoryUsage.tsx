@@ -8,15 +8,13 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { Card, CardContent } from '@/components/ui/card';
-import { ContainerStatsContext } from './ContainerStatsProvider';
-import { useContextSelector } from 'use-context-selector';
+import { useContainerStatsContext } from './ContainerStatsProvider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo, useState, useTransition, useEffect } from 'react';
 import dayjs from 'dayjs';
 
 const MemoryUsage = () => {
-  const stats = useContextSelector(ContainerStatsContext, (v) => v?.stats) || [];
-  const isLoading = useContextSelector(ContainerStatsContext, (v) => v?.isLoading) || false;
+  const { stats, isLoading } = useContainerStatsContext();
 
   // Use transition for smoother updates
   const [isPending, startTransition] = useTransition();
@@ -77,7 +75,7 @@ const MemoryUsage = () => {
           axisLine={false}
           tickMargin={8}
           minTickGap={32}
-          tickFormatter={(timestamp) => dayjs(timestamp * 1000).format('HH:mm:ss')} 
+          tickFormatter={(timestamp) => dayjs(timestamp * 1000).format('HH:mm:ss')}
         />
         <ChartTooltip
           cursor={false}

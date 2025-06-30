@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
-import { useContextSelector } from 'use-context-selector';
-import { LayoutContext } from '@/layout/LayoutProvider';
+import { useLayoutContext } from '@/layout/LayoutProvider';
 import { ISubMenuItem, MenuItems, DockerPlatformMenu, IMenuItem } from './menu-items';
 import { ChevronRight } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { SidebarSubMenu } from './SidebarSidemenu';
-import { AppContext } from '@/AppProvider';
+import { useAppContext } from '@/AppProvider';
 
 export const SidebarMenu = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const sidebarMinimized = useContextSelector(LayoutContext, (v) => v?.sidebarMinimized) ?? false;
-  const currentPlatform = useContextSelector(AppContext, (v) => v?.currentPlatform);
-  const toggleSidebar = useContextSelector(LayoutContext, (v) => v?.toggleSidebar)!;
+  const { currentPlatform } = useAppContext();
+  const { toggleSidebar, sidebarMinimized } = useLayoutContext();
+
   const [menuItems, setMenuItems] = useState<IMenuItem[]>(MenuItems);
   const addedPlatformIdsRef = useRef<Set<string>>(new Set());
 

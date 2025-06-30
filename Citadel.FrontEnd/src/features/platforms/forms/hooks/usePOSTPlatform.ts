@@ -1,10 +1,9 @@
-import { ApiClientContext } from '@/api/ApiClientProvider';
-import { useContextSelector } from 'use-context-selector';
+import { useApiClientContext } from '@/api/ApiClientProvider';
 import { useMutation } from '@tanstack/react-query';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 
 export const usePOSTPlatform = () => {
-  const apiClient = useContextSelector(ApiClientContext, (s) => s?.apiClient);
+  const { apiClient } = useApiClientContext();
   const { mutate, isPending, isSuccess, error, data } = useMutation({ mutationFn: apiClient?.api.platformsCreate });
   const validationErrors = useGetValidationErrors(error);
 

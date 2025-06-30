@@ -6,15 +6,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useContextSelector } from 'use-context-selector';
-import { RegistriesContext } from '../RegistriesProvider';
+import { useRegistriesContext } from '../RegistriesProvider';
 import { LoaderCircle } from 'lucide-react';
 
 export const DeleteRegistryDialog = () => {
-  const requestDelete = useContextSelector(RegistriesContext, (v) => v?.requestDelete)!;
-  const dialogData = useContextSelector(RegistriesContext, (v) => v?.dialogData)!;
-  const setDialogData = useContextSelector(RegistriesContext, (v) => v?.setDialogData)!;
-  const isPending = useContextSelector(RegistriesContext, (v) => v?.deleteIsPending)!;
+  const { requestDelete, dialogData, setDialogData, deleteIsPending: isPending } = useRegistriesContext();
   const registriesId = dialogData.currentSelection?.map((r) => r.id!) ?? [];
 
   const handleDelete = () => {

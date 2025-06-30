@@ -1,15 +1,11 @@
 import { Pencil, Trash } from 'lucide-react';
-import { useContextSelector } from 'use-context-selector';
-import { RegistriesContext } from './RegistriesProvider';
+import { useRegistriesContext } from './RegistriesProvider';
 import { useNavigate } from 'react-router';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
 
 export const ActionBar = () => {
   const navigate = useNavigate();
-  const selectedRows = useContextSelector(RegistriesContext, (v) => v?.selectedRows) ?? [];
-  const registries = useContextSelector(RegistriesContext, (v) => v?.registries) ?? [];
-  const setDialogData = useContextSelector(RegistriesContext, (v) => v?.setDialogData)!;
-  const isPending = useContextSelector(RegistriesContext, (v) => v?.deleteIsPending) ?? false;
+  const { selectedRows, registries, setDialogData, deleteIsPending: isPending } = useRegistriesContext();
 
   const actions: RegistryActionsState = {
     canEdit: selectedRows?.length === 1,
@@ -26,7 +22,7 @@ export const ActionBar = () => {
         width: 'calc(100% - var(--sidebar-width))',
       }}>
       <div className="flex-1 text-xs text-muted-foreground mt-2">
-        {selectedRows.length} of {registries.length} registry(s) selected.
+        {selectedRows.length} of {registries?.length} registry(s) selected.
       </div>
       <div className="mt-1">
         <ActionBarButton
