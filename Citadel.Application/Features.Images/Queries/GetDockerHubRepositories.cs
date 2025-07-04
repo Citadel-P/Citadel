@@ -4,7 +4,6 @@ using Hosting.Common.ErrorTypes;
 using Domain.Entities.Registries;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Registries;
 
@@ -26,13 +25,13 @@ internal sealed class GetDockerHubRepositoriesHandler(IUnitOfWork unitOfWork, ID
 {
     public async ValueTask<Result<IEnumerable<DockerHubRepositoryInfo>>> Handle(GetDockerHubRepositories query, CancellationToken cancellationToken)
     {
-        var registry = await unitOfWork.Registries.Query().AsNoTracking().FirstOrDefaultAsync(s => s.Name == query.RegistryName, cancellationToken);
-        if (registry == null)
+        var configuration = await unitOfWork.Registries.GetRegistryConfigurationAsync(query.RegistryName, cancellationToken);
+        if (configuration == null)
         {
             return Result.Failure<IEnumerable<DockerHubRepositoryInfo>>(new NotFoundError("The provided registry name does exist"));
         }
 
-        if (registry.Configuration is not DockerHubRegistry cfg)
+        if (configuration is not DockerHubRegistry cfg)
         {
             return Result.Failure<IEnumerable<DockerHubRepositoryInfo>>(new NotFoundError("The provided registry is not a DockerHub registry instance"));
         }

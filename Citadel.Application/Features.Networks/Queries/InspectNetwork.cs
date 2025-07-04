@@ -25,8 +25,8 @@ internal sealed class InspectNetworkHandler(IUnitOfWork unitOfWork, IConnectorFa
 {
     public async ValueTask<Result<DockerNetworkDetails>> Handle(InspectNetwork query, CancellationToken cancellationToken)
     {
-        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
-        if (string.IsNullOrEmpty(address))
+        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
+        if (platform is null)
         {
             return Result.Failure<DockerNetworkDetails>(new NotFoundError("The provided platform Id doesn't exist"));
         }
@@ -34,10 +34,10 @@ internal sealed class InspectNetworkHandler(IUnitOfWork unitOfWork, IConnectorFa
         var args = new InspectNetworkCommand
         (
             NetworkId: query.NetworkId, 
-            PlatformAddress: address
+            PlatformAddress: platform.Value.Address
         );
 
-        var networkConnector = connectorFactory.GetConnector(connectorType);
+        var networkConnector = connectorFactory.GetConnector(platform.Value.ConnectorType);
         return await networkConnector.InspectNetworkAsync(args, cancellationToken);
     }
 }

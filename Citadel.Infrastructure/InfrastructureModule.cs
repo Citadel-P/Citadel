@@ -1,21 +1,26 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
+﻿using System.Reflection;
+using Dapper;
 using DbUp;
+using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities;
+using Domain.Entities.Platforms;
+using Domain.Entities.Registries;
 using Hosting.Common;
 using Hosting.DockerClient;
 using Infrastructure.Connectors;
 using Infrastructure.Connectors.AgentConnectors;
 using Infrastructure.Connectors.LocalConnectors;
+using Infrastructure.DapperHandlers;
 using Infrastructure.DockerHub;
-using Infrastructure.EntityFramework;
 using Infrastructure.GithubCr;
 using Infrastructure.HttpClients.Serializer;
+using Infrastructure.Persistence;
 using Infrastructure.Repositories;
 using Infrastructure.Services;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Refit;
 using SQLitePCL;
 
@@ -26,6 +31,7 @@ namespace Infrastructure;
 /// </summary>
 public static class InfrastructureModule
 {
+    internal const string connectionString = $"Data Source={Constants.DbFilePath};Cache=Shared;";
     private static readonly RefitSettings refitSettings = new() { ContentSerializer = new STJSourceGeneratorSerializer() };
 
     /// <summary>
@@ -85,19 +91,21 @@ public static class InfrastructureModule
     private static IServiceCollection InitializeDb(this IServiceCollection services)
     {
         Batteries_V2.Init();
-        EnsureDatabaseFileExists();
-        PerformDatabaseUpgrade();
-        EFTrimmingPreserver.PreserveEFCoreTypes();
-        services.AddScoped<IUnitOfWork, UnitOfWork>();
-        return services.AddDbContextPool<ApplicationDbContext>(options =>
+        RegisterTypeHandlers();
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var env = serviceProvider.GetRequiredService<IHostEnvironment>();
+
+        // Run the migration logic directly if not in a test environment
+        if (!env.IsEnvironment("IntegrationTests"))
         {
-            options.UseSqlite(ApplicationContextFactory.ConnectionString, config =>
-            {
-                config.CommandTimeout(60);
-                config.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
-            });
-            options.AddInterceptors(new SqlitePragmaInterceptor());
-        });
+            EnsureDatabaseFileExists();
+            PerformDatabaseUpgrade();
+        }
+        
+        return services
+            .AddScoped<IUnitOfWork, UnitOfWork>()
+            .AddScoped<IDbConnectionFactory>(_ => new SqliteConnectionFactory(connectionString));
     }
 
     private static void EnsureDatabaseFileExists()
@@ -111,7 +119,7 @@ public static class InfrastructureModule
     private static void PerformDatabaseUpgrade()
     {
         var upgrader = DeployChanges.To
-            .SqliteDatabase(ApplicationContextFactory.ConnectionString)
+            .SqliteDatabase(connectionString)
             .WithScriptsAndCodeEmbeddedInAssembly(Assembly.GetExecutingAssembly())
             .LogToConsole()
             .Build();
@@ -122,10 +130,24 @@ public static class InfrastructureModule
             throw new Exception(result.Error.Message, result.Error);
         }
     }
-}
 
-public static class EFTrimmingPreserver
-{
-    [DynamicDependency(DynamicallyAccessedMemberTypes.PublicConstructors, typeof(EntryCurrentValueComparer<Guid>))]
-    public static void PreserveEFCoreTypes() { }
+    private static void RegisterTypeHandlers()
+    {
+        // Guid to Text
+        SqlMapper.AddTypeHandler(new GuidStringHandler());
+
+        // Json Converters
+        SqlMapper.AddTypeHandler(new JsonTypeHandler<List<ContainerPort>>(
+            ContainerPortsContext.Default.ListContainerPort));
+        SqlMapper.AddTypeHandler(new JsonTypeHandler<PlatformDescriptor>(
+           PlatformJsonContext.Default.PlatformDescriptor));
+        SqlMapper.AddTypeHandler(new JsonTypeHandler<RegistryConfigurationBase>(
+           RegistryJsonContext.Default.RegistryConfigurationBase));
+
+        // Enum Converters
+        SqlMapper.AddTypeHandler(new StringEnumHandler<Domain.ContainerStateStatus>());
+        SqlMapper.AddTypeHandler(new StringEnumHandler<PlatformStatus>()); 
+        SqlMapper.AddTypeHandler(new StringEnumHandler<PlatformConnectorType>());
+        SqlMapper.AddTypeHandler(new StringEnumHandler<RegistryType>());
+    }
 }

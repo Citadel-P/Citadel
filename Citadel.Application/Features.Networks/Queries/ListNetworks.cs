@@ -12,22 +12,22 @@ internal class ListNetworksHandler(IUnitOfWork unitOfWork, IConnectorFactory<INe
 {
     public async ValueTask<Result<IEnumerable<DockerNetworkResult>>> Handle(ListNetworks query, CancellationToken cancellationToken)
     {
-        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
-        if (string.IsNullOrEmpty(address))
+        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
+        if (platform is null)
         {
             return Result.Failure<IEnumerable<DockerNetworkResult>>(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
         var args = new ListNetworksCommand
         (
-            PlatformAddress: address,
+            PlatformAddress: platform.Value.Address,
             Id: query.Id,
             Name: query.Name,
             Driver: query.Driver,
             Dangling: query.Dangling
         );
 
-        var networkConnector = connectorFactory.GetConnector(connectorType);
+        var networkConnector = connectorFactory.GetConnector(platform.Value.ConnectorType);
         return await networkConnector.ListNetworksAsync(args, cancellationToken);
     }
 }

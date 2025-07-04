@@ -3,7 +3,6 @@ using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Registries;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
@@ -53,11 +52,11 @@ public class RegistryCreateTests : IntegrationTestBase<WebApi.Program>
         var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         // Check DB
-        using var scope = Services.CreateScope();
+        await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var registry = await uow.Registries.Query().AsNoTracking().SingleOrDefaultAsync(x => x.Name == "R-NEW", TestContext.Current.CancellationToken);
+        var registries = await uow.Registries.GetAllAsync(TestContext.Current.CancellationToken);
 
-        Assert.NotNull(registry);
+        Assert.Contains(registries, r => r.Name == "R-NEW");
         await VerifyJson(responseBody);
     }
 
@@ -93,11 +92,11 @@ public class RegistryCreateTests : IntegrationTestBase<WebApi.Program>
         var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         // Check DB
-        using var scope = Services.CreateScope();
+        await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var registry = await uow.Registries.Query().AsNoTracking().SingleOrDefaultAsync(x => x.Name == "R-NEW", TestContext.Current.CancellationToken);
+        var registries = await uow.Registries.GetAllAsync(TestContext.Current.CancellationToken);
 
-        Assert.NotNull(registry);
+        Assert.Contains(registries, r => r.Name == "R-NEW");
         await VerifyJson(responseBody);
     }
 
@@ -177,16 +176,16 @@ public class RegistryCreateTests : IntegrationTestBase<WebApi.Program>
     public async Task Create_Registry_With_Duplicate_Name_Returns_Conflict()
     {
         // Seed a registry with the same name
-        using (var scope = Services.CreateScope())
+        await using (var scope = Services.CreateAsyncScope())
         {
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            uow.Registries.Add(new Domain.Entities.Registry(
+            await uow.Registries.AddAsync(new Domain.Entities.Registry(
                 name: "R-NEW",
                 url: "https://existing.url",
                 type: RegistryType.DockerHub,
                 configuration: new DockerHubRegistry("user", "dummy-pat1234")
-            ));
-            await uow.SaveChangesAsync(TestContext.Current.CancellationToken);
+            ), TestContext.Current.CancellationToken);
+            await uow.CommitAsync();
         }
 
         registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryType>()))

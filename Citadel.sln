@@ -37,6 +37,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Citadel.Domain", "Citadel.D
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Citadel.Hosting.DockerClient", "Citadel.Contracts\Citadel.Hosting.DockerClient\Citadel.Hosting.DockerClient.csproj", "{B1B05412-4FA4-BBBC-1FAE-329C28C081D3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Citadel.Infrastructure.MigrationTool", "Citadel.Infrastructure.MigrationTool\Citadel.Infrastructure.MigrationTool.csproj", "{A931307D-FC6B-48CC-A204-EECCFABA4E91}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -87,6 +89,10 @@ Global
 		{B1B05412-4FA4-BBBC-1FAE-329C28C081D3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B1B05412-4FA4-BBBC-1FAE-329C28C081D3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B1B05412-4FA4-BBBC-1FAE-329C28C081D3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A931307D-FC6B-48CC-A204-EECCFABA4E91}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A931307D-FC6B-48CC-A204-EECCFABA4E91}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A931307D-FC6B-48CC-A204-EECCFABA4E91}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A931307D-FC6B-48CC-A204-EECCFABA4E91}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

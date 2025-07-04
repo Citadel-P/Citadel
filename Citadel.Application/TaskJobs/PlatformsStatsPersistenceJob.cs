@@ -6,7 +6,6 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Platforms;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -78,11 +77,11 @@ internal class PlatformsStatsPersistenceJob(
 
     private async Task SaveBatchToDb(Dictionary<Guid, List<PlatformStatsResult>> statsByPlatform, CancellationToken cancellationToken)
     {
-        using var scope = scopeFactory.CreateAsyncScope();
+        await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         foreach (var (platformId, stats) in statsByPlatform)
         {
-            var existing = await uow.Platforms.Query().FirstOrDefaultAsync(s => s.Id == platformId, cancellationToken);
+            var existing = await uow.Platforms.GetByIdAsync(platformId, cancellationToken);
             if (existing == null)
             {
                 logger.LogWarning("Platform with ID {PlatformId} not found in the database.", platformId);
@@ -117,16 +116,20 @@ internal class PlatformsStatsPersistenceJob(
                 imageCount: lastBatch.ImageCount,
                 memTotal: lastBatch.MemTotal,
                 descriptor: descriptor);
+
+            await uow.Platforms.UpdatePlatformAsync(existing, cancellationToken);
+            await uow.CommitAsync();
         }
 
         try
         {
             var batch = statsByPlatform.Map();
             await uow.PlatformStats.BulkInsertAsync(batch, cancellationToken);
+            await uow.CommitAsync();
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to save platform stats batch to the database. Batch size: {BatchSize}", statsByPlatform.Sum(s => s.Value.Count));
+            logger.LogError(ex, "An error occurred while persisting the platform statistics batch to the database. Total stats in batch: {BatchSize}", statsByPlatform.Sum(s => s.Value.Count));
         }
     }
 
@@ -140,7 +143,7 @@ internal class PlatformsStatsPersistenceJob(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to push platform stats to clients for platform: {Id}", platformId);
+                logger.LogError(ex, "An error occurred while sending platform statistics to clients for platform ID: {PlatformId}", platformId);
                 return;
             }
         }

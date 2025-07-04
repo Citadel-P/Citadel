@@ -4,7 +4,6 @@ using Hosting.Common.ErrorTypes;
 using Domain.Entities.Registries;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Registries;
 
@@ -26,13 +25,13 @@ internal sealed class GetExternalRepositoriesHander(IUnitOfWork unitOfWork, IDoc
 {
     public async ValueTask<Result<IEnumerable<IImageRepository>>> Handle(GetExternalRepositories query, CancellationToken cancellationToken)
     {
-        var registry = await unitOfWork.Registries.Query().AsNoTracking().FirstOrDefaultAsync(s => s.Name == query.Name, cancellationToken);
-        if (registry == null) 
+        var configuration = await unitOfWork.Registries.GetRegistryConfigurationAsync(query.Name, cancellationToken);
+        if (configuration == null) 
         {
             return Result.Failure<IEnumerable<IImageRepository>>(new NotFoundError("The provided registry name does exist"));
         }
 
-        if (registry.Configuration is GitHubRegistry ghCfg) 
+        if (configuration is GitHubRegistry ghCfg) 
         {
             var (packages, errorMessage) = await gitHubCrService.GetPackagesAsync(ghCfg, cancellationToken);
             if (errorMessage != null)
@@ -42,7 +41,7 @@ internal sealed class GetExternalRepositoriesHander(IUnitOfWork unitOfWork, IDoc
             return Result.Success(packages?.Map() ?? []);
         }
 
-        if (registry.Configuration is DockerHubRegistry dhCfg)
+        if (configuration is DockerHubRegistry dhCfg)
         {
             var (repositories, errorMessage) = await dockerHubService.GetRepositoriesAsync(dhCfg, cancellationToken);
             if (errorMessage != null)

@@ -1,12 +1,12 @@
 ﻿using Application.Features.Auth.Models;
 using Application.Services;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
 using FluentValidation;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Auth.Commands;
 
@@ -26,49 +26,38 @@ internal sealed class LoginCommandHandler(IUnitOfWork unitOfWork, IJwtService jw
 {
     public async ValueTask<Result<LoginResponse>> Handle(LoginCommand query, CancellationToken cancellationToken)
     {
-        var user = await unitOfWork.Users.Query()
-            .AsNoTracking()
-            .Include(s => s.Teams)
-            .ThenInclude(s => s.Role)
-            .ThenInclude(s => s.Permissions)
-            .FirstOrDefaultAsync(s => s.Email == query.Email, cancellationToken);
-
-        if (user is null)
+        var userAuthInfo = await unitOfWork.Users.GetUserAuthInfoByEmailAsync(query.Email, cancellationToken);
+        if (userAuthInfo is null)
         {
             return Result.Failure<LoginResponse>(new NotFoundError("User does not exist"));
         }
 
-        if (!user.IsValidPassword(query.Password))
+        if (!User.IsValidPassword(query.Password, userAuthInfo.Password))
         {
             return Result.Failure<LoginResponse>(new BadRequestError("Invalid credentials"));
         }
 
-        var (accessToken, refreshToken) = await CreateTokens(user, cancellationToken);
+        var (accessToken, _) = await CreateTokens(userAuthInfo, cancellationToken);
 
         return Result.Success(new LoginResponse(accessToken));
     }
 
-    private async Task<(string accessToken, string refreshToken)> CreateTokens(User user, CancellationToken cancellationToken)
+    private async Task<(string accessToken, string refreshToken)> CreateTokens(UserAuthInfo userAuthInfo, CancellationToken cancellationToken)
     {
-        var accessToken = jwtService.CreateAccessToken(user.GetJwtClaims());
+        var accessToken = jwtService.CreateAccessToken(User.GetJwtClaims(userAuthInfo));
         var (refreshTokenId, refreshToken) = jwtService.CreateRefreshToken();
 
-        unitOfWork.RefreshTokens.Add(RefreshToken.Create(refreshTokenId, user.Id));
+        await unitOfWork.RefreshTokens.AddAsync(RefreshToken.Create(refreshTokenId, userAuthInfo.Id), cancellationToken);
 
-        // Limit the number of refresh tokens per user
-        var tokensCount = await unitOfWork.RefreshTokens.Query().CountAsync(s => s.UserId == user.Id, cancellationToken);
+        // Limit the number of refresh tokens per userAuthInfo
+        var tokensCount = await unitOfWork.RefreshTokens.CountAsync(userAuthInfo.Id, cancellationToken);
         var maxTokensPerUser = 10;
         if (tokensCount > maxTokensPerUser)
         {
-            var stallTokens = await unitOfWork.RefreshTokens.Query().AsNoTracking()
-                .Where(s => s.UserId == user.Id)
-                .OrderBy(s => s.CreatedAt).Take(tokensCount - maxTokensPerUser)
-                .ToListAsync(cancellationToken);
-
-            unitOfWork.RefreshTokens.RemoveRange(stallTokens);
+            await unitOfWork.RefreshTokens.DeleteOldestTokensAsync(userAuthInfo.Id, tokensCount - maxTokensPerUser, cancellationToken);
         }
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await unitOfWork.CommitAsync();
         return (accessToken, refreshToken);
     }
 

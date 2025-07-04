@@ -17,7 +17,6 @@ internal static class ContainerMapper
             platformId: platformId,
             containerId: container.ContainerId,
             created: container.Created,
-            command: container.Command,
             state: container.State,
             ports: container.Ports?.ToList() ?? []
         );

@@ -7,7 +7,6 @@ using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Containers.Queries;
 
@@ -25,11 +24,7 @@ internal class GetContainerByIdHandler(IUnitOfWork unitOfWork) : IQueryHandler<G
 {
     public async ValueTask<Result<Container>> Handle(GetContainerById query, CancellationToken cancellationToken)
     {
-        var container = await unitOfWork.Containers
-            .Query().AsNoTracking()
-            .Include(s => s.Platform)
-            .FirstOrDefaultAsync(s => s.ContainerId.StartsWith(query.ContainerId), cancellationToken: cancellationToken);
-
+        var container = await unitOfWork.Containers.GetByIdAsync(query.ContainerId, cancellationToken);
         return container ?? Result.Failure<Container>(new NotFoundError("Platform does not exist"));
     }
 }

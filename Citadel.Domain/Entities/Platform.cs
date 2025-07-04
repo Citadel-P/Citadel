@@ -4,14 +4,40 @@ using Domain.Entities.Platforms;
 
 namespace Domain.Entities;
 
-public class Platform
+[method: JsonConstructor]
+public class Platform(
+    string name,
+    string address,
+    int networkCount,
+    int volumeCount,
+    long imageCount,
+    long cpuCount,
+    long memTotal,
+    string? serverVersion,
+    string? agentVersion,
+    PlatformStatus status,
+    PlatformConnectorType connectorType,
+    PlatformDescriptor platformDescriptor)
 {
     private readonly List<PlatformStat> stats = [];
 
-    private Platform() { /* For EF Core */ }
+    public Guid Id { get; private set; } = Guid.CreateVersion7();
+    public string Name { get; internal set; } = name;
+    public string Address { get; internal set; } = address;
+    public PlatformStatus Status { get; private set; } = status;
+    public PlatformConnectorType ConnectorType { get; private set; } = connectorType;
+    public int NetworkCount { get; private set; } = networkCount;
+    public int VolumeCount { get; private set; } = volumeCount;
+    public long ImageCount { get; private set; } = imageCount;
+    public long CpuCount { get; private set; } = cpuCount;
+    public long MemTotal { get; private set; } = memTotal;
+    public string? AgentVersion { get; private set; } = agentVersion;
+    public string? ServerVersion { get; private set; } = serverVersion;
+    public PlatformDescriptor PlatformDescriptor { get; private set; } = platformDescriptor;
+    public IReadOnlyCollection<PlatformStat>? Stats => stats;
 
-    [method: JsonConstructor]
-    public Platform(
+    public static Platform FromPersistence(
+        Guid id,
         string name,
         string address,
         int networkCount,
@@ -19,41 +45,38 @@ public class Platform
         long imageCount,
         long cpuCount,
         long memTotal,
-        string? serverVersion,
-        string? agentVersion,
         PlatformStatus status,
         PlatformConnectorType connectorType,
-        PlatformDescriptor platformDescriptor)
+        PlatformDescriptor platformDescriptor,
+        string? serverVersion = null,
+        string? agentVersion = null,
+        IReadOnlyCollection<PlatformStat>? stats = null
+        )
     {
-        Id = Guid.CreateVersion7();
-        Name = name;
-        Status = status;
-        Address = address;
-        MemTotal = memTotal;
-        CpuCount = cpuCount;
-        ImageCount = imageCount;
-        VolumeCount = volumeCount;
-        AgentVersion = agentVersion;
-        NetworkCount = networkCount;
-        ServerVersion = serverVersion;
-        ConnectorType = connectorType;
-        PlatformDescriptor = platformDescriptor;
-    }
+        var platform = new Platform(
+            name: name,
+            address: address,
+            networkCount: networkCount,
+            volumeCount: volumeCount,
+            imageCount: imageCount,
+            cpuCount: cpuCount,
+            memTotal: memTotal,
+            serverVersion: serverVersion,
+            agentVersion: agentVersion,
+            status: status,
+            connectorType: connectorType,
+            platformDescriptor: platformDescriptor)
+        {
+            Id = id,
+        };
+        if (stats is not null)
+        {
+            foreach (var stat in stats)
+                platform.AppendStat(stat);
+        }
 
-    public Guid Id { get; private set; }
-    public string Name { get; internal set; }
-    public string Address { get; internal set; }
-    public PlatformStatus Status { get; private set; }
-    public PlatformConnectorType ConnectorType { get; private set; }
-    public int NetworkCount { get; private set; }
-    public int VolumeCount { get; private set; }
-    public long ImageCount { get; private set; }
-    public long CpuCount { get; private set; }
-    public long MemTotal { get; private set; }
-    public string? AgentVersion { get; private set; }
-    public string? ServerVersion { get; private set; }
-    public PlatformDescriptor PlatformDescriptor { get; private set; }
-    public IReadOnlyCollection<PlatformStat> Stats => stats;
+        return platform;
+    }
 
     public void PartialUpdate(
         string? name = null,

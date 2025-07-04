@@ -24,20 +24,20 @@ internal class DeleteVolumeHandler(IUnitOfWork unitOfWork, IConnectorFactory<IVo
 {
     public async ValueTask<Result> Handle(DeleteVolume command, CancellationToken cancellationToken)
     {
-        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
-        if (string.IsNullOrEmpty(address))
+        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
+        if (platform is null)
         {
             return Result.Failure(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
         var args = new DeleteDockerVolumeCommand
         (
-            PlatformAddress: address,
+            PlatformAddress: platform.Value.Address,
             Names: command.Names,
             Force: command.Force ?? false
         );
 
-        var volumeConnector = connectorFactory.GetConnector(connectorType);
+        var volumeConnector = connectorFactory.GetConnector(platform.Value.ConnectorType);
         return await volumeConnector.DeleteVolumeAsync(args, cancellationToken);
     }
 }

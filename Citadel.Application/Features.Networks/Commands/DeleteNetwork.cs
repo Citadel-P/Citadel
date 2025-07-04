@@ -24,19 +24,19 @@ internal class DeleteNetworksHandler(IUnitOfWork unitOfWork, IConnectorFactory<I
 {
     public async ValueTask<Result> Handle(DeleteNetwork command, CancellationToken cancellationToken)
     {
-        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
-        if (string.IsNullOrEmpty(address))
+        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
+        if (platform is null)
         {
             return Result.Failure(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
         var args = new DeleteDockerNetworkCommand
         (
-            PlatformAddress: address,
+            PlatformAddress: platform.Value.Address,
             Ids: command.Ids
         );
 
-        var networkConnector = connectorFactory.GetConnector(connectorType);
+        var networkConnector = connectorFactory.GetConnector(platform.Value.ConnectorType);
         return await networkConnector.DeleteNetworkAsync(args, cancellationToken);
     }
 }

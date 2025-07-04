@@ -13,21 +13,21 @@ internal class ListVolumesHandler(IUnitOfWork unitOfWork, IConnectorFactory<IVol
 {
     public async ValueTask<Result<IEnumerable<DockerVolumeResult>>> Handle(ListVolumes query, CancellationToken cancellationToken)
     {
-        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
-        if (string.IsNullOrEmpty(address))
+        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
+        if (platform is null)
         {
             return Result.Failure<IEnumerable<DockerVolumeResult>>(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
         var args = new ListdDockerVolumesCommand
             (
-                PlatformAddress: address,
+                PlatformAddress: platform.Value.Address,
                 Dangling: query.Dangling,
                 Driver: query.Driver,
                 Name: query.Name
             );
 
-        var volumeConnector = connectorFactory.GetConnector(connectorType);
+        var volumeConnector = connectorFactory.GetConnector(platform.Value.ConnectorType);
         return await volumeConnector.ListVolumesAsync(args, cancellationToken);
     }
 }

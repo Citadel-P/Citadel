@@ -47,22 +47,22 @@ internal sealed class CreateVolumeHandler(IUnitOfWork unitOfWork, IConnectorFact
     {
         try
         {
-            var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
-            if (string.IsNullOrEmpty(address))
+            var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
+            if (platform is null)
             {
                 return Result.Failure<DockerVolumeResult>(new NotFoundError("The provided platform Id doesn't exist"));
             }
 
             var request = new CreateDockerVolumeCommand
             (
-                PlatformAddress: address,
+                PlatformAddress: platform.Value.Address,
                 Name: command.Name,
                 Driver: command.Driver,
                 Labels: command.Labels,
                 Options: command.Options
             );
 
-            var volumeConnector = connectorFactory.GetConnector(connectorType);
+            var volumeConnector = connectorFactory.GetConnector(platform.Value.ConnectorType);
             return await volumeConnector.CreateVolumeAsync(request, cancellationToken: cancellationToken);
         }
         catch (RpcException ex)

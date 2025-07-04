@@ -2,8 +2,8 @@
 
 namespace WebApi.Routes.Endpoints.Resources.Containers;
 
-public sealed record DeleteContainersRequest(string[] ContainersIds, bool? V = false, bool? Force = false, bool? Link = false)
+public sealed record DeleteContainersRequest(string[] ContainerIds, bool? V = false, bool? Force = false, bool? Link = false)
 {
     internal DeleteContainers ToCommand()
-        => new(ContainersIds, V, Force, Link);
+        => new(ContainerIds, V, Force, Link);
 }

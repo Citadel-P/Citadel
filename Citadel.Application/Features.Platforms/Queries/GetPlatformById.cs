@@ -4,7 +4,6 @@ using FluentValidation;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Platforms.Queries;
 
@@ -25,12 +24,7 @@ internal class GetPlatformByIdHandler(IUnitOfWork unitOfWork) : IQueryHandler<Ge
 {
     public async ValueTask<Result<Platform>> Handle(GetPlatformById query, CancellationToken cancellationToken)
     {
-        // Only include the most recent stat for the platform
-        var platform = await unitOfWork.Platforms
-                .Query().AsNoTracking()
-                .Include(s => s.Stats.OrderByDescending(s => s.Created).Take(1))
-                .SingleOrDefaultAsync(s => s.Id == query.Id, cancellationToken);
-
+        var platform = await unitOfWork.Platforms.GetPlatformWithLatestStatAsync(query.Id, cancellationToken);
         return platform ?? Result.Failure<Platform>(new NotFoundError("Platform does not exist"));
     }
 }

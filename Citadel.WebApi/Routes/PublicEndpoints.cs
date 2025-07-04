@@ -182,14 +182,6 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(PlatformsName + "_" + nameof(Platforms.GetById));
 
-        platforms.MapGet("/{id}/info", Platforms.GetInfo)
-            .WithSummary("Get platform by Id")
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status403Forbidden)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .WithName(PlatformsName + "_" + nameof(Platforms.GetInfo));
-
         platforms.MapGet("{id}/containers", Platforms.ListContainers)
             .WithSummary("Returns the list of containers of the given platform")
             .ProducesValidationProblem()

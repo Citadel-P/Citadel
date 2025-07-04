@@ -1,11 +1,11 @@
 ﻿using Application.Services;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Identity;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Auth.Commands;
 
@@ -24,14 +24,11 @@ internal sealed class RefreshTokenCommandHandler(IUnitOfWork unitOfWork, IJwtSer
         if (!jwtService.TryValidate(refreshToken, out var tokenId))
             return Result.Failure<string>(new UnauthorizedError("Invalid refresh token."));
 
-        var existing = await unitOfWork.RefreshTokens.Query().AsNoTracking().Include(s => s.User).ThenInclude(s => s.Teams).ThenInclude(s => s.Role)
-           
-            .FirstOrDefaultAsync(s => s.Id == tokenId, cancellationToken);
-        
+        var existing = await unitOfWork.RefreshTokens.GetUserAuthInfoByRefreshTokenIdAsync(tokenId, cancellationToken);
         if (existing == null)
             return Result.Failure<string>(new UnauthorizedError("Refresh token does not exist."));
 
-        var accessToken = jwtService.CreateAccessToken(existing.User.GetJwtClaims());
+        var accessToken = jwtService.CreateAccessToken(User.GetJwtClaims(existing));
         
         return Result.Success(accessToken);
     }

@@ -2,7 +2,6 @@
 using Domain;
 using Domain.Entities;
 using Domain.Entities.Registries;
-using Infrastructure.EntityFramework.Configurations;
 
 namespace Tests.Unit;
 

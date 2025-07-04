@@ -72,11 +72,12 @@ internal class ContainersStatsPersistenceJob(
     {
         try
         {
-            using var scope = scopeFactory.CreateAsyncScope();
+            await using var scope = scopeFactory.CreateAsyncScope();
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
             var stats = statsByPlatform.SelectMany(s => s.Value).ToList();
-            await uow.ContainerStats.BulkInsertAsync(stats, cancellationToken: cancellationToken);
+            await uow.ContainerStats.BulkInsertAsync(stats, cancellationToken);
+            await uow.CommitAsync();
         }
         catch (Exception ex)
         {

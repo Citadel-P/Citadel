@@ -1,16 +1,18 @@
 ﻿using System.Net.Http.Headers;
+using System.Reflection;
 using System.Security.Claims;
 using Application.Services;
-using Citadel.Agent.Common.V1;
+using DbUp;
 using Domain;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Platforms;
-using Infrastructure.EntityFramework;
+using Infrastructure.Persistence;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration;
@@ -18,117 +20,117 @@ namespace Tests.Integration;
 public abstract class IntegrationTestBase<TEntryPoint> : IAsyncLifetime
     where TEntryPoint : class
 {
-    private SqliteConnection connection = default!;
     private WebApplicationFactory<TEntryPoint> factory = default!;
     protected HttpClient Client = default!;
     protected IServiceProvider Services = default!;
+        private string _uniqueDbName = Guid.NewGuid().ToString();
 
     public async ValueTask InitializeAsync()
     {
-        connection = new SqliteConnection("DataSource=:memory:");
-        await connection.OpenAsync();
-
         factory = new WebApplicationFactory<TEntryPoint>()
             .WithWebHostBuilder(builder =>
             {
-                builder.ConfigureServices(services =>
-                {
-                    // Remove existing DbContextOptions<AppDbContext>
-                    var descriptor = services.SingleOrDefault(
-                        d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
-                    if (descriptor != null) services.Remove(descriptor);
+                builder.UseEnvironment("IntegrationTests");
 
-                    services.AddDbContextPool<ApplicationDbContext>(options =>
-                    {
-                        options.UseSqlite(connection);
-                    });
+                builder.ConfigureServices(async (services) =>
+                {
+                    RemoveService<IDbConnectionFactory>(services);
+                    RemoveService<IUnitOfWork>(services);
+
+                    services.AddSingleton<IDbConnectionFactory>(
+                        _ => new InMemoryTestDbConnectionFactory(_uniqueDbName));
+                    services.AddScoped<IUnitOfWork, UnitOfWork>();
 
                     ConfigureTestServices(services);
 
-                    // Build the provider and seed database
                     var sp = services.BuildServiceProvider();
-                    using var scope = sp.CreateScope();
-                    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                    db.Database.EnsureCreated();
-
                     Services = sp;
-                    SeedDbAsync().GetAwaiter().GetResult();
+
+                    await using var scope = sp.CreateAsyncScope();
+                    var dbFactory = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>();
+                    var uniqueConnectionString = ((InMemoryTestDbConnectionFactory)dbFactory).GetConnectionString();
+
+                    await InitDbAsync(uniqueConnectionString);
+                    await SeedDbAsync(scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
                 });
             });
 
-        
         Client = factory.CreateClient();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateJwtTokenAsync());
     }
 
-    /// <summary>
-    /// Override this method to configure additional services for testing
-    /// </summary>
     protected virtual void ConfigureTestServices(IServiceCollection services) { }
 
-    /// <summary>
-    /// Override to seed the database with initial data
-    /// </summary>
-    protected virtual ValueTask SeedDbAsync() => ValueTask.CompletedTask;
+    private async Task InitDbAsync(string connectionString)
+    {
+        await using var dbUpConnection = new SqliteConnection(connectionString);
+        await dbUpConnection.OpenAsync();
 
-    /// <summary>
-    /// Override to create new roles, users, etc
-    /// </summary>
+        var upgrader = DeployChanges.To
+            .SqliteDatabase(dbUpConnection.ConnectionString)
+            .WithScriptsAndCodeEmbeddedInAssembly(Assembly.Load("Citadel.Infrastructure"))
+            .LogToConsole()
+            .Build();
+
+        var result = upgrader.PerformUpgrade();
+        if (!result.Successful)
+        {
+            throw new Exception($"Failed to upgrade in-memory test database: {result.Error.Message}", result.Error);
+        }
+    }
+
+    protected virtual ValueTask SeedDbAsync(IUnitOfWork uow) => ValueTask.CompletedTask;
+
     protected string CreateJwtTokenAsync(IEnumerable<Claim>? claims = null)
     {
-        // Create a jwt token
         var jwt = Services.GetRequiredService<IJwtService>();
-        var token = jwt.CreateAccessToken(claims ??
-        [
-            new ("role", "admin"),
-            new ("name", "Test user"),
-        ]);
+        var token = jwt.CreateAccessToken(claims ?? new[]
+        {
+            new Claim("role", "admin"),
+            new Claim("name", "Test user"),
+        });
         return token;
     }
 
     public async ValueTask DisposeAsync()
     {
-        await connection.DisposeAsync();
         factory.Dispose();
     }
 
-    protected PlatformResult GetDummyPlatformResult() =>
-        new
-        (
-            Name: "p-01",
-            Address: "https://original.address",
-            NetworkCount: 1,
-            VolumeCount: 2,
-            ImageCount: 3,
-            CpuCount: 4,
-            MemTotal: 500,
-            ServerVersion: "1.0.0",
-            AgentVersion: "1.0.0",
-            Descriptor: new DockerPlatformDescriptor
-                (
-                    DaemonId: "123456",
-                    ContainerCount: 5,
-                    ContainersRunning: 2,
-                    ContainersPaused: 3,
-                    ContainersStopped: 0,
-                    Driver: "overlay2",
-                    OperatingSystem: "Linux",
-                    OsVersion: "5.15",
-                    OsType: "linux",
-                    Architecture: "x86_64"
-                )
-        );
+    protected PlatformResult GetDummyPlatformResult() => new(
+        Name: "p-01",
+        Address: "https://original.address",
+        NetworkCount: 1,
+        VolumeCount: 2,
+        ImageCount: 3,
+        CpuCount: 4,
+        MemTotal: 500,
+        ServerVersion: "1.0.0",
+        AgentVersion: "1.0.0",
+        Descriptor: new DockerPlatformDescriptor(
+            DaemonId: "123456",
+            ContainerCount: 5,
+            ContainersRunning: 2,
+            ContainersPaused: 3,
+            ContainersStopped: 0,
+            Driver: "overlay2",
+            OperatingSystem: "Linux",
+            OsVersion: "5.15",
+            OsType: "linux",
+            Architecture: "x86_64"
+        )
+    );
 
     protected Platform GetDummyPlatform()
     {
-        var platformDescriptor = new DockerPlatformDescriptor(
-           DaemonId: "123456",
-           ContainerCount: 5,
-           ContainersRunning: 2,
-           ContainersPaused: 2,
-           ContainersStopped: 1);
+        var descriptor = new DockerPlatformDescriptor(
+            DaemonId: "123456",
+            ContainerCount: 5,
+            ContainersRunning: 2,
+            ContainersPaused: 2,
+            ContainersStopped: 1);
 
-        var platform = new Platform(
+        return new Platform(
             name: "Docker-P-01",
             address: "https://original.address",
             networkCount: 1,
@@ -140,23 +142,64 @@ public abstract class IntegrationTestBase<TEntryPoint> : IAsyncLifetime
             agentVersion: "1.0.0",
             status: PlatformStatus.Online,
             connectorType: PlatformConnectorType.Agent,
-            platformDescriptor: platformDescriptor
+            platformDescriptor: descriptor
         );
-        return platform;
     }
 
     protected IEnumerable<DockerContainer> GetDummyContainers(int total = 3)
     {
         for (int i = 0; i < total; i++)
         {
-            yield return new
-            (
+            yield return new(
                 Name: $"c-{i:D2}",
                 Image: $"image-{i}:latest",
                 State: ContainerStateStatus.Running,
-                ContainerId: "container" + i
+                ContainerId: $"container{i}"
             );
         }
+    }
 
+    private static void RemoveService<T>(IServiceCollection services)
+    {
+        var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(T));
+        if (descriptor != null)
+            services.Remove(descriptor);
+    }
+
+}
+
+internal sealed class InMemoryTestDbConnectionFactory : IDbConnectionFactory, IDisposable
+{
+    private readonly string _connectionString;
+    private readonly SqliteConnection _initialConnection;
+
+    public InMemoryTestDbConnectionFactory(string dbName)
+    {
+        _connectionString = $"Data Source={dbName};Mode=Memory;Cache=Shared";
+
+        _initialConnection = new SqliteConnection(_connectionString);
+        _initialConnection.Open();
+
+        using var cmd = _initialConnection.CreateCommand();
+        cmd.CommandText = """
+            PRAGMA journal_mode=WAL;
+            PRAGMA synchronous=NORMAL;
+            PRAGMA busy_timeout=3000;
+        """;
+        cmd.ExecuteNonQuery();
+    }
+
+    public string GetConnectionString() => _connectionString;
+
+    public SqliteConnection Create()
+    {
+        var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        return conn;
+    }
+
+    public void Dispose()
+    {
+        _initialConnection.Dispose();
     }
 }

@@ -9,7 +9,6 @@ using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Platforms;
 using LightResults;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -24,7 +23,8 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
     private readonly Mock<IPlatformConnector> platformConnector = new();
     private readonly TestPlatformHealthBroadCaster broadcaster = new();
     private readonly Mock<IPlatformHubDispatcher> hubMock = new();
-
+    private string? platformName;
+    private Guid platformId;
     protected override void ConfigureTestServices(IServiceCollection services)
     {
         // Remove all existing hosted services to ensure only PlatformSyncJob handles platform health events
@@ -37,11 +37,8 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
         services.AddSingleton<IPlatformHealthBroadCaster>((_) => broadcaster);
     }
 
-    protected override async ValueTask SeedDbAsync()
+    protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
-        using var scope = Services.CreateScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
         var platformDescriptor = new DockerPlatformDescriptor(
             DaemonId: "123456",
             ContainerCount: 5,
@@ -49,7 +46,7 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
             ContainersPaused: 2,
             ContainersStopped: 1);
 
-        var platform = new Platform (
+        var platform = new Platform(
             name: "Docker-P-01",
             address: "https://original.address",
             networkCount: 1,
@@ -63,13 +60,13 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
             connectorType: PlatformConnectorType.Agent,
             platformDescriptor: platformDescriptor
         );
-        uow.Platforms.Add(platform);
-        await uow.SaveChangesAsync();
+        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
+        await uow.CommitAsync();
 
+        platformName = platform.Name;
         platformId = platform.Id;
     }
 
-    private Guid platformId;
 
     [Fact]
     public async Task DockerPlatform_Goes_Online_Should_Update_Platform_Info()
@@ -82,15 +79,15 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
                          .ReturnsAsync(Result.Success(GetDummyPlatformResult()));
 
         // Act
-        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true), 
+        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
 
         await Task.Delay(1000, TestContext.Current.CancellationToken); // wait for job to process
 
         // Assert
-        using var scope = Services.CreateScope();
+        await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var platform = await uow.Platforms.Query().AsNoTracking().SingleAsync(x => x.Id == platformId, TestContext.Current.CancellationToken);
+        var platform = await uow.Platforms.GetByNameAsync(platformName, TestContext.Current.CancellationToken);
 
         hubMock.Verify(x => x.PushPlatformUpdate(It.IsAny<Platform>()), Times.Once);
         await Verify(platform);
@@ -113,9 +110,9 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
         await Task.Delay(1000, TestContext.Current.CancellationToken); // wait for job to process
 
         // Assert
-        using var scope = Services.CreateScope();
+        await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var platform = await uow.Platforms.Query().AsNoTracking().SingleAsync(x => x.Id == platformId, TestContext.Current.CancellationToken);
+        var platform = await uow.Platforms.GetByNameAsync(platformName, TestContext.Current.CancellationToken);
 
         var options = new JsonSerializerOptions
         {

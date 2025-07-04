@@ -11,7 +11,6 @@ using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Platforms.Commands;
@@ -39,8 +38,7 @@ internal sealed class CreatePlatformHandler(
     public async ValueTask<Result<Platform>> Handle(CreatePlatform command, CancellationToken cancellationToken)
     {
         // Check if the platform already exists
-        if (await unitOfWork.Platforms.Query().AsNoTracking()
-                                    .FirstOrDefaultAsync(s => s.Address == command.Address || s.Name == command.Name, cancellationToken: cancellationToken) != null)
+        if (await unitOfWork.Platforms.NameOrAddressExistsAsync(command.Name, command.Address, cancellationToken: cancellationToken))
         {
             return Result.Failure<Platform>(new ConflictError("A platform with the same [Name] or [Address] already exists!"));
         }
@@ -69,17 +67,17 @@ internal sealed class CreatePlatformHandler(
             return Result.Failure<Platform>(new InternalServerError($"Failed to get platform info for {command.Address}: {error?.Message}"));
         }
 
-        // Add platform the new platform
+        // Add the new platform
         var platform = platformResult.Map(command.Address, command.Name, command.ConnectorType);
-        unitOfWork.Platforms.Add(platform);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-
-        // Add containers
+        await unitOfWork.Platforms.AddPlatformAsync(platform, cancellationToken);
+        // Add it's containers
         var containers = await GetContainers(platform, cancellationToken);
         if (containers != null && containers.Any())
         {
-            await unitOfWork.Containers.BulkInsertAsync(containers, cancellationToken: cancellationToken);
+            await unitOfWork.Containers.BulkInsertAsync(containers, cancellationToken);
         }
+        // Commit
+        await unitOfWork.CommitAsync();
 
         // Start tracking the platform
         platformHealthMonitorJob.TrackPlatform(platform.Address, platform.Id, platform.ConnectorType);

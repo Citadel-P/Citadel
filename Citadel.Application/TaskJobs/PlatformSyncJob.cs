@@ -4,7 +4,6 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Application.Services.Abstractions;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -36,7 +35,7 @@ internal class PlatformSyncJob(
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            var platform = await uow.Platforms.Query().FirstOrDefaultAsync(s => s.Address == evt.Address, cancellationToken);
+            var platform = await uow.Platforms.GetByIdAsync(evt.Id, cancellationToken);
             if (platform == null)
             {
                 logger.LogError("Platform with address {Address} not found for synchronization.", evt.Address);
@@ -76,7 +75,9 @@ internal class PlatformSyncJob(
                 platform.PartialUpdate(platformStatus: PlatformStatus.Offline);
             }
 
-            await uow.SaveChangesAsync(cancellationToken);
+            await uow.Platforms.UpdatePlatformAsync(platform, cancellationToken);
+            await uow.CommitAsync();
+
             await platformHub.PushPlatformUpdate(platform);
         }
         catch (Exception ex)

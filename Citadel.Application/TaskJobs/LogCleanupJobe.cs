@@ -14,7 +14,7 @@ internal class LogCleanupJob(ILogger<LogCleanupJob> logger) : BackgroundService
         {
             try
             {
-                await RunJob(cancellationToken);
+                await RunJob();
             }
             catch (Exception ex)
             {
@@ -25,7 +25,7 @@ internal class LogCleanupJob(ILogger<LogCleanupJob> logger) : BackgroundService
         }
     }
 
-    public Task RunJob(CancellationToken cancellationToken)
+    public Task RunJob()
     {
         try
         {

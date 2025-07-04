@@ -29,3 +29,9 @@ public partial class PlatformJsonContext : JsonSerializerContext
 public partial class RegistryJsonContext : JsonSerializerContext
 {
 }
+
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
+[JsonSerializable(typeof(List<ContainerPort>))]
+public partial class ContainerPortsContext : JsonSerializerContext
+{
+}

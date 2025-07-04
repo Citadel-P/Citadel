@@ -43,7 +43,7 @@ internal class LocalContainerConnector(IContainerService containerService) : ICo
     {
         var command = new Hosting.DockerClient.Models.Containers.PatchContainersCommand
         (
-            ContainersIds: [.. patchContainerCommand.ContainerIds],
+            ContainerIds: [.. patchContainerCommand.ContainerIds],
             Action: patchContainerCommand.Action.Map()
         );
         return containerService.PatchAsync(command, cancellationToken);

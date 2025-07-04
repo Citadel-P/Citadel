@@ -9,7 +9,6 @@ using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Registries.Commands;
 
@@ -104,9 +103,8 @@ internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorR
 {
     public async ValueTask<Result<Registry>> Handle(CreateRegistry command, CancellationToken cancellationToken)
     {
-        var repo = unitOfWork.Registries;
-        var registry = await repo.Query().FirstOrDefaultAsync(s => s.Name == command.Name, cancellationToken);
-        if (registry != null)
+        var exist = await unitOfWork.Registries.ExistsAsync(command.Name, cancellationToken);
+        if (exist)
         {
             return Result.Failure<Registry>(new ConflictError("The provided name already exist"));
         }
@@ -123,9 +121,9 @@ internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorR
             return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
         }
 
-        registry = new Registry(name: command.Name, url: command.Url, type: command.Type, configuration: command.Configuration);
-        repo.Add(registry);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        var registry = new Registry(name: command.Name, url: command.Url, type: command.Type, configuration: command.Configuration);
+        await unitOfWork.Registries.AddAsync(registry, cancellationToken);
+        await unitOfWork.CommitAsync();
 
         return registry;
     }

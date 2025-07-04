@@ -4,7 +4,6 @@ using Hosting.Common;
 using LightResults;
 using Mediator;
 using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Auth.Commands;
 
@@ -25,12 +24,8 @@ internal sealed class LogoutCommandHandler(IUnitOfWork unitOfWork, IJwtService j
         if (!jwtService.TryValidate(refreshToken, out var tokenId))
             return Result.Success();
 
-        var existing = await unitOfWork.RefreshTokens.Query().AsNoTracking().FirstOrDefaultAsync(s => s.Id == tokenId, cancellationToken);
-        if (existing == null)
-            return Result.Success();
-
-        unitOfWork.RefreshTokens.Remove(existing);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await unitOfWork.RefreshTokens.DeleteAsync(tokenId, cancellationToken);
+        await unitOfWork.CommitAsync();
 
         return Result.Success();
     }

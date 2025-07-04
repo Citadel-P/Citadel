@@ -233,3 +233,4 @@ _Pvt_Extensions
 # Verify
 *.received.*
 *.received/
+/Citadel.Infrastructure.MigrationTool/temp.db

@@ -1,5 +1,6 @@
 ﻿using System.Security.Claims;
 using System.Security.Cryptography;
+using Domain.Contracts.Resources.Identity;
 
 namespace Domain.Entities.Identity;
 
@@ -32,10 +33,10 @@ public class User
     /// <summary>
     /// Check user password is valid
     /// </summary>
-    public bool IsValidPassword(string plainTextPassword)
+    public static bool IsValidPassword(string plainTextPassword, string originalPassword)
     {
         // Extract the bytes
-        byte[] hashBytes = Convert.FromBase64String(Password);
+        byte[] hashBytes = Convert.FromBase64String(originalPassword);
 
         // Get the salt
         byte[] salt = new byte[16];
@@ -54,35 +55,22 @@ public class User
         return true;
     }
 
-    public IEnumerable<Claim> GetJwtClaims() 
+    public static IEnumerable<Claim> GetJwtClaims(UserAuthInfo userAuthInfo) 
     {
-        yield return new Claim("name", Name);
-        yield return new Claim("email", Email);
-        yield return new Claim("sub", Id.ToString());
+        yield return new Claim("name", userAuthInfo.Name);
+        yield return new Claim("email", userAuthInfo.Email);
+        yield return new Claim("sub", userAuthInfo.Id.ToString());
         yield return new Claim("jti", Guid.CreateVersion7().ToString());
 
-        yield return new Claim("permissions", string.Join(";", GetPermissions()));
-        foreach (var role in Teams.Select(s => s.Role.Name))
+        foreach (var role in userAuthInfo.Roles)
         {
             yield return new Claim("role", role);
         }
-    }
 
-    /// <summary>
-    /// Get user permissions
-    /// </summary>
-    private IEnumerable<AppPermission> GetPermissions()
-    {
-        var permissions = new HashSet<AppPermission>();
-        foreach (var team in Teams)
+        foreach (var permission in userAuthInfo.Permissions)
         {
-            foreach (var permission in team.Role.Permissions)
-            {
-                permissions.Add(permission.PermissionCode);
-            }
+            yield return new Claim("permission", permission.ToString()!);
         }
-
-        return permissions;
     }
 
     /// <summary>

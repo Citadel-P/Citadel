@@ -24,8 +24,8 @@ internal sealed class DeleteImagesHandler(IUnitOfWork unitOfWork, IConnectorFact
 {
     public async ValueTask<Result<DeleteImageResult>> Handle(DeleteImages command, CancellationToken cancellationToken)
     {
-        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
-        if (string.IsNullOrEmpty(address))
+        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
+        if (platform is null)
         {
             return Result.Failure<DeleteImageResult>(new NotFoundError("The provided platform Id does not exist"));
         }
@@ -35,10 +35,10 @@ internal sealed class DeleteImagesHandler(IUnitOfWork unitOfWork, IConnectorFact
             Ids: command.Ids,
             Force: command.Force,
             NoPrune: command.NoPrune,
-            PlatformAddress: address
+            PlatformAddress: platform.Value.Address
         );
         return await connectorFactory
-            .GetConnector(connectorType)
+            .GetConnector(platform.Value.ConnectorType)
             .DeleteImageAsync(args, cancellationToken: cancellationToken);
     }
 }

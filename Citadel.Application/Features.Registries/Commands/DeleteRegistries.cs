@@ -1,24 +1,22 @@
 ﻿using Domain.Contracts.Interfaces;
-using Domain.Entities;
+using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Registries.Commands;
 
-public sealed record DeleteRegistries(IEnumerable<Guid> Ids) : ICommand<Result<IEnumerable<Registry>>>;
+public sealed record DeleteRegistries(IEnumerable<Guid> Ids) : ICommand<Result>;
 
-internal class DeleteRegistriesHandler(IUnitOfWork unitOfWork) : ICommandHandler<DeleteRegistries, Result<IEnumerable<Registry>>>
+internal class DeleteRegistriesHandler(IUnitOfWork unitOfWork) : ICommandHandler<DeleteRegistries, Result>
 {
-    public async ValueTask<Result<IEnumerable<Registry>>> Handle(DeleteRegistries command, CancellationToken cancellationToken)
+    public async ValueTask<Result> Handle(DeleteRegistries command, CancellationToken cancellationToken)
     {
-        var repo = unitOfWork.Registries;
-        var registries = await repo.Query().AsNoTracking().Where(s => command.Ids.Contains(s.Id)).ToListAsync(cancellationToken);
+        var result = await unitOfWork.Registries.RemoveRangeAsync(command.Ids, cancellationToken);
+        await unitOfWork.CommitAsync();
 
-        repo.RemoveRange(registries);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-
-        return registries;
+        return result > 0
+            ? Result.Success()
+            : Result.Failure(new NotFoundError("No registries matching the provided IDs were found for deletion"));
     }
 }
  

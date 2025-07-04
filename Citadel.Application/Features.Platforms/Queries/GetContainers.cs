@@ -3,7 +3,6 @@ using Domain.Entities;
 using FluentValidation;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Platforms.Queries;
 
@@ -25,10 +24,7 @@ internal class GetContainersHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetC
 {
     public async ValueTask<Result<IEnumerable<Container>>> Handle(GetContainers query, CancellationToken cancellationToken)
     {
-        var containers = await unitOfWork.Containers
-                .WithLastStat(query.PlatformId)
-                .ToListAsync(cancellationToken);
-        
-        return Result.Success<IEnumerable<Container>>(containers);
+        var containers = await unitOfWork.Containers.GetAllWithLatestStatAsync(query.PlatformId, cancellationToken);
+        return Result.Success(containers ?? []);
     }
 }

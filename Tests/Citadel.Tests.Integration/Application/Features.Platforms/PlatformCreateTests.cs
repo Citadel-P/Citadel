@@ -7,7 +7,6 @@ using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Platforms;
 using LightResults;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
@@ -24,7 +23,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
     protected override void ConfigureTestServices(IServiceCollection services)
     {
         services.AddSingleton(_ => healthMonitorMock.Object);
-        services.AddSingleton(_ => platformFactoryMock.Object); 
+        services.AddSingleton(_ => platformFactoryMock.Object);
         services.AddSingleton(_ => containerFactoryMock.Object);
         services.AddSingleton(_ => platformConnector.Object);
         services.AddSingleton(_ => containerConnector.Object);
@@ -44,7 +43,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
             .Returns(containerConnector.Object);
 
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>> (GetDummyContainers().ToDictionary(c => c.ContainerId)));
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(GetDummyContainers().ToDictionary(c => c.ContainerId)));
 
         healthMonitorMock.Setup(x => x.TrackPlatform(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<PlatformConnectorType>())).Returns(true);
 
@@ -61,18 +60,18 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
         // Act
         var response = await Client.PostAsync("/api/v1/platforms", content, cancellationToken: TestContext.Current.CancellationToken);
 
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         // Assert
         response.EnsureSuccessStatusCode();
-        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         // Check DB
-        using var scope = Services.CreateScope();
+        await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var platform = await uow.Platforms.Query().AsNoTracking().FirstOrDefaultAsync(x => x.Name == "P-NEW", TestContext.Current.CancellationToken);
-        var containers = await uow.Containers.Query().AsNoTracking().ToListAsync(TestContext.Current.CancellationToken);
+        var platform = await uow.Platforms.GetByNameAsync("P-NEW", TestContext.Current.CancellationToken);
+        var containers = await uow.Containers.GetAllWithLatestStatAsync(platform.Id, TestContext.Current.CancellationToken);
 
         Assert.NotNull(platform);
-        Assert.Equal(3, containers.Count);
+        Assert.Equal(3, containers.Count());
         healthMonitorMock.Verify(x => x.TrackPlatform("https://localhost:9000", platform.Id, PlatformConnectorType.Agent), Times.Once);
         await VerifyJson(responseBody);
     }
@@ -81,30 +80,29 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
     public async Task CreatePlatform_Should_Return_Conflict_If_Name_Or_Address_Exists()
     {
         // Arrange: Seed a platform
-        using (var scope = Services.CreateScope())
-        {
-            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            uow.Platforms.Add(new Platform(
-                name: "P-EXIST",
-                address: "https://localhost:9001",
-                networkCount: 1,
-                volumeCount: 2,
-                imageCount: 3,
-                cpuCount: 4,
-                memTotal: 500,
-                serverVersion: "1.0.0",
-                agentVersion: "1.0.0",
-                status: PlatformStatus.Online,
-                connectorType: PlatformConnectorType.Agent,
-                platformDescriptor: new DockerPlatformDescriptor(
-                    DaemonId: "654321",
-                    ContainerCount: 5,
-                    ContainersRunning: 2,
-                    ContainersPaused: 2,
-                    ContainersStopped: 1)
-            ));
-            await uow.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = new Platform(
+            name: "P-EXIST",
+            address: "https://localhost:9001",
+            networkCount: 1,
+            volumeCount: 2,
+            imageCount: 3,
+            cpuCount: 4,
+            memTotal: 500,
+            serverVersion: "1.0.0",
+            agentVersion: "1.0.0",
+            status: PlatformStatus.Online,
+            connectorType: PlatformConnectorType.Agent,
+            platformDescriptor: new DockerPlatformDescriptor(
+                DaemonId: "654321",
+                ContainerCount: 5,
+                ContainersRunning: 2,
+                ContainersPaused: 2,
+                ContainersStopped: 1));
+
+        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
+        await uow.CommitAsync();
 
         var createJson = """
         {
@@ -119,8 +117,8 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
         var response = await Client.PostAsync("/api/v1/platforms", content, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal(System.Net.HttpStatusCode.Conflict, response.StatusCode);
         var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, response.StatusCode);
         await VerifyJson(responseBody);
     }
 

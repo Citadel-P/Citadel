@@ -5,7 +5,6 @@ using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 using static Hosting.Common.Validators;
 
 namespace Application.Features.Networks.Commands;
@@ -171,13 +170,13 @@ internal sealed class CreateNetworkHandler(IUnitOfWork unitOfWork, IConnectorFac
 {
     public async ValueTask<Result<CreateDockerNetworkResult>> Handle(CreateNetwork request, CancellationToken cancellationToken)
     {
-        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(request.PlatformId, cancellationToken);
-        if (string.IsNullOrEmpty(address))
+        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(request.PlatformId, cancellationToken);
+        if (platform is null)
         {
             return Result.Failure<CreateDockerNetworkResult>(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
-        var networkConnector = connectorFactory.GetConnector(connectorType);
-        return await networkConnector.CreateNetworkAsync(request.ToCommand(address), cancellationToken);
+        var networkConnector = connectorFactory.GetConnector(platform.Value.ConnectorType);
+        return await networkConnector.CreateNetworkAsync(request.ToCommand(platform.Value.Address), cancellationToken);
     }
 }

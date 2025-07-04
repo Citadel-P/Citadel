@@ -12,14 +12,14 @@ internal class GetAllLocalImagesHandler(IUnitOfWork unitOfWork, IConnectorFactor
 {
     public async ValueTask<Result<IReadOnlyList<ImageResult>>> Handle(GetAllLocalImages query, CancellationToken cancellationToken)
     {
-        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
-        if (string.IsNullOrEmpty(address)) 
+        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
+        if (platform is null)
         {
             return Result.Failure<IReadOnlyList<ImageResult>>(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
         return await connectorFactory
-            .GetConnector(connectorType)
-            .ListImagesAsync(address, cancellationToken: cancellationToken);
+            .GetConnector(platform.Value.ConnectorType)
+            .ListImagesAsync(platform.Value.Address, cancellationToken: cancellationToken);
     }
 }

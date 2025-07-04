@@ -8,30 +8,28 @@ namespace Application.TaskJobs;
 internal class CleanupStatsJob(IServiceScopeFactory scopeFactory, ILogger<CleanupStatsJob> logger) : BackgroundService
 {
     private const int purgeDays = 2;
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         // Run cleanup every 3 hours
-        while (!stoppingToken.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested)
         {
-            await Task.Delay(TimeSpan.FromHours(3), stoppingToken);
+            await Task.Delay(TimeSpan.FromHours(3), cancellationToken);
             try
             {
-                using var scope = scopeFactory.CreateScope();
+                await using var scope = scopeFactory.CreateAsyncScope();
                 var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
                 var thresholdDate = DateTimeOffset.UtcNow.AddDays(-purgeDays);
                 var thresholdEpochSeconds = thresholdDate.ToUnixTimeSeconds();
 
-                var oldStats = uow.ContainerStats.Query().Where(stat => stat.Created < thresholdEpochSeconds);
+                await uow.ContainerStats.RemoveOlderThanAsync(thresholdEpochSeconds, cancellationToken);
+                await uow.CommitAsync();
 
-                uow.ContainerStats.RemoveRange(oldStats);
-                await uow.SaveChangesAsync(stoppingToken);
-
-                logger.LogInformation($"Cleaned up old container stats older than {purgeDays} days.");
+                logger.LogInformation("Removed container statistics entries older than {PurgeDays} days.", purgeDays);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error occurred while cleaning up old container stats.");
+                logger.LogError(ex, "Error occurred while removing container statistics.");
             }
         }
     }

@@ -23,8 +23,8 @@ internal sealed class InspectVolumeHandler(IUnitOfWork unitOfWork, IConnectorFac
 {
     public async ValueTask<Result<DockerVolumeResult>> Handle(InspectVolume query, CancellationToken cancellationToken)
     {
-        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
-        if (string.IsNullOrEmpty(address))
+        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
+        if (platform is null)
         {
             return Result.Failure<DockerVolumeResult>(new NotFoundError("The provided platform Id doesn't exist"));
         }
@@ -32,10 +32,10 @@ internal sealed class InspectVolumeHandler(IUnitOfWork unitOfWork, IConnectorFac
         var command = new InspectDockerVolumeCommand
         (
             Name: query.Name,
-            PlatformAddress: address
+            PlatformAddress: platform.Value.Address
         );
 
-        var volumeConnector = connectorFactory.GetConnector(connectorType);
+        var volumeConnector = connectorFactory.GetConnector(platform.Value.ConnectorType);
         return await volumeConnector.InspectVolumeAsync(command, cancellationToken);
     }
 }

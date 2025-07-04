@@ -2,7 +2,6 @@
 using Domain.Entities;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Registries.Queries;
 
@@ -12,16 +11,11 @@ internal sealed class GetAllRegistriesHandler(IUnitOfWork unitOfWork) : IQueryHa
 {
     public async ValueTask<Result<IEnumerable<Registry>>> Handle(GetAllRegistries query, CancellationToken cancellationToken)
     {
-        var registries = new List<Registry>() 
-        {
-            Registry.DefaultRegistry()
-        };
-        var result = await unitOfWork.Registries.Query().AsNoTracking().ToListAsync(cancellationToken);
-        if (result.Count != 0)
-        {
-            registries.AddRange(result);
-        }
+        var registries = await unitOfWork.Registries.GetAllAsync(cancellationToken) ?? [];
+        var allRegistries = registries
+            .Prepend(Registry.DefaultRegistry())
+            .OrderByDescending(s => s.Created);
 
-        return registries.OrderByDescending(s => s.Created).ToList();
+        return Result.Success<IEnumerable<Registry>>(allRegistries);
     }
 }

@@ -1,7 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
-using Domain.Entities;
 using FluentValidation;
 using Hosting.Common;
 using Mediator;
@@ -25,7 +24,7 @@ internal class StreamContainerLogsHandler(IUnitOfWork unitOfWork, IConnectorFact
 {
     public async IAsyncEnumerable<ContainerLogInfo> Handle(StreamContainerLogs query, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var (address, id, connectorType) = await unitOfWork.Containers.GetPlatformIdAsync(query.ContainerId, cancellationToken);
+        var (address, id, connectorType) = await unitOfWork.Containers.GetPlatformByContainerIdAsync(query.ContainerId, cancellationToken);
         if (string.IsNullOrEmpty(address) || id is null || connectorType is null)
         {
             logger.LogError("No platform found for container ID {ContainerId}", query.ContainerId);

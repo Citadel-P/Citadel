@@ -21,33 +21,33 @@ public static class Containers
         return await EndpointHandlers.HandleResults(result, permissionService, ContainerView.Map);
     }
 
-    public static async Task<Results<NoContent, ProblemHttpResult>> StartContainers(IMediator mediator, [FromBody]string[] containersIds, CancellationToken cancellationToken)
+    public static async Task<Results<NoContent, ProblemHttpResult>> StartContainers(IMediator mediator, [FromBody]string[] containerIds, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new PatchContainer(containersIds, ContainerAction.START), cancellationToken);
+        var result = await mediator.Send(new PatchContainer(containerIds, ContainerAction.START), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
-    public static async Task<Results<NoContent, ProblemHttpResult>> StopContainers(IMediator mediator, [FromBody] string[] containersIds, CancellationToken cancellationToken)
+    public static async Task<Results<NoContent, ProblemHttpResult>> StopContainers(IMediator mediator, [FromBody] string[] containerIds, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new PatchContainer(containersIds, ContainerAction.STOP), cancellationToken);
+        var result = await mediator.Send(new PatchContainer(containerIds, ContainerAction.STOP), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
-    public static async Task<Results<NoContent, ProblemHttpResult>> PauseContainers(IMediator mediator, [FromBody] string[] containersIds, CancellationToken cancellationToken)
+    public static async Task<Results<NoContent, ProblemHttpResult>> PauseContainers(IMediator mediator, [FromBody] string[] containerIds, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new PatchContainer(containersIds, ContainerAction.PAUSE), cancellationToken);
+        var result = await mediator.Send(new PatchContainer(containerIds, ContainerAction.PAUSE), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
-    public static async Task<Results<NoContent, ProblemHttpResult>> UnpauseContainers(IMediator mediator, [FromBody] string[] containersIds, CancellationToken cancellationToken)
+    public static async Task<Results<NoContent, ProblemHttpResult>> UnpauseContainers(IMediator mediator, [FromBody] string[] containerIds, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new PatchContainer(containersIds, ContainerAction.UNPAUSE), cancellationToken);
+        var result = await mediator.Send(new PatchContainer(containerIds, ContainerAction.UNPAUSE), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
-    public static async Task<Results<NoContent, ProblemHttpResult>> RestartContainers(IMediator mediator, [FromBody] string[] containersIds, CancellationToken cancellationToken)
+    public static async Task<Results<NoContent, ProblemHttpResult>> RestartContainers(IMediator mediator, [FromBody] string[] containerIds, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new PatchContainer(containersIds, ContainerAction.RESTART), cancellationToken);
+        var result = await mediator.Send(new PatchContainer(containerIds, ContainerAction.RESTART), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 

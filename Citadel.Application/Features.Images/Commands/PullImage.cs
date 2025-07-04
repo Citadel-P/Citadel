@@ -6,7 +6,6 @@ using Domain.Entities.Registries;
 using FluentValidation;
 using Hosting.Common;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Images.Commands;
 
@@ -78,28 +77,23 @@ internal sealed class PullImageHandler(IUnitOfWork unitOfWork, IConnectorFactory
 {
     public async IAsyncEnumerable<PullImageResult> Handle(PullImage command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var platform = await unitOfWork.Platforms.Query().Where(s => s.Id == command.PlatformId)
-            .Select(s => new { s.Address, s.ConnectorType }).FirstOrDefaultAsync(cancellationToken);
-
-        if (platform == null)
+        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
+        if (platform is null)
         {
             yield break;
         }
 
         var registryConfiguration = command.RegistryName == Registry.DefaultRegistryName
             ? Registry.DefaultRegistry().Configuration // Public Docker registry
-            : await unitOfWork.Registries
-                .Query().AsNoTracking()
-                .Where(s => s.Name == command.RegistryName)
-                .Select(s => s.Configuration).FirstOrDefaultAsync(cancellationToken);
+            : await unitOfWork.Registries.GetRegistryConfigurationAsync(command.RegistryName, cancellationToken);
 
         if (registryConfiguration == null)
         {
             yield break;
         }
 
-        var connector = connectorFactory.GetConnector(platform.ConnectorType);
-        await foreach (var reply in connector.PullImageProgressStreamAsync(command.ToConnectorCommand(platform.Address, registryConfiguration), cancellationToken))
+        var connector = connectorFactory.GetConnector(platform.Value.ConnectorType);
+        await foreach (var reply in connector.PullImageProgressStreamAsync(command.ToConnectorCommand(platform.Value.Address, registryConfiguration), cancellationToken))
         {
             yield return reply;
         }

@@ -10,8 +10,6 @@ using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
-
 namespace Application.Features.Registries.Commands;
 
 [RequirePermission(nameof(AppPermission.Registry_Update))]
@@ -116,7 +114,7 @@ internal class PatchRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorRe
 {
     public async ValueTask<Result<Registry>> Handle(PatchRegistry command, CancellationToken cancellationToken)
     {
-        var registry = await unitOfWork.Registries.Query().FirstOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
+        var registry = await unitOfWork.Registries.GetAsync(command.Id, cancellationToken);
         if (registry == null)
         {
             return Result.Failure<Registry>(new NotFoundError("The provided registry does not exist"));
@@ -125,9 +123,8 @@ internal class PatchRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorRe
         var patchedRegistry = command.Patch.ApplyTo(registry, RegistryJsonContext.Default.Registry);
         if (patchedRegistry.Name != null) 
         {
-            var conflict = await unitOfWork.Registries
-                .Query().AsNoTracking().FirstOrDefaultAsync(s => s.Name == patchedRegistry.Name && s.Id != command.Id, cancellationToken);
-            if (conflict != null) 
+            var conflict = await unitOfWork.Registries.IsNameUsedByAnotherRegistryAsync(command.Id, patchedRegistry.Name, cancellationToken);
+            if (conflict) 
             {
                 return Result.Failure<Registry>(new ConflictError("A registry with the same name already exist"));
             }
@@ -146,7 +143,8 @@ internal class PatchRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorRe
         }
 
         registry.PartialUpdate(name: patchedRegistry.Name, url: patchedRegistry.Url, configuration: patchedRegistry.Configuration);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await unitOfWork.Registries.UpdateAsync(registry, cancellationToken);
+        await unitOfWork.CommitAsync();
 
         return registry;
     }

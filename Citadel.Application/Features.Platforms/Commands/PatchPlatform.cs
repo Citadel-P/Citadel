@@ -12,13 +12,12 @@ using Hosting.Common.MergePatch;
 using Application.TaskJobs;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Platforms.Commands;
 
 [RequirePermission(nameof(AppPermission.Platform_Update))]
-public sealed record PatchPlatform(Guid? Id, JsonMergePatchDocument<Platform> Patch) : ICommand<Result<Platform>>
+public sealed record PatchPlatform(Guid Id, JsonMergePatchDocument<Platform> Patch) : ICommand<Result<Platform>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchPlatform, Platform>
     {
@@ -54,7 +53,8 @@ internal class PatchPlatformHandler(
     {
         try
         {
-            var platform = await unitOfWork.Platforms.Query().FirstOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
+            var r = await unitOfWork.Platforms.GetPlatformsWithLatestStatAsync(cancellationToken);
+            var platform = await unitOfWork.Platforms.GetByIdAsync(command.Id, cancellationToken);
             if (platform == null)
             {
                 return Result.Failure<Platform>(new NotFoundError("The provided Id does not exist"));
@@ -64,7 +64,7 @@ internal class PatchPlatformHandler(
 
             if (patchedPlatform.Name != null)
             {
-                var conflict = await unitOfWork.Platforms.Query().AsNoTracking().FirstOrDefaultAsync(s => s.Name == patchedPlatform.Name && s.Id != command.Id, cancellationToken);
+                var conflict = await unitOfWork.Platforms.IsPlatformNameUniqueExceptForIdAsync(command.Id, patchedPlatform.Name, cancellationToken);
                 if (conflict != null)
                 {
                     return Result.Failure<Platform>(new ConflictError("A platform with the same name already exist"));
@@ -99,7 +99,9 @@ internal class PatchPlatformHandler(
                     agentVersion: platformInfo.AgentVersion,
                     descriptor: platformInfo.Descriptor);
 
-                await unitOfWork.SaveChangesAsync(cancellationToken);
+                await unitOfWork.Platforms.UpdatePlatformAsync(platform, cancellationToken);
+                await unitOfWork.CommitAsync();
+
                 await UpdatePlatformTracking(platform.Id, platform.Address, platform.ConnectorType, oldPlatformAddress, cancellationToken);
                 logger.LogInformation("The platform with id = {PlatformId} has been updated", platform.Id);
             }

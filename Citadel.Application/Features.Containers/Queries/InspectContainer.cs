@@ -1,6 +1,5 @@
 ﻿using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
-using Domain.Entities;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
@@ -24,7 +23,7 @@ internal sealed class InspectContainerHandler(IUnitOfWork unitOfWork, IConnector
     
     public async ValueTask<Result<ContainerInspectionInfo>> Handle(InspectContainer query, CancellationToken cancellationToken)
     {
-        var (address, id, connectorType) = await unitOfWork.Containers.GetPlatformIdAsync(query.ContainerId, cancellationToken);
+        var (address, id, connectorType) = await unitOfWork.Containers.GetPlatformByContainerIdAsync(query.ContainerId, cancellationToken);
         if (string.IsNullOrEmpty(address) || id is null || connectorType is null)
         {
             return Result.Failure<ContainerInspectionInfo>(new NotFoundError($"No platform found for container ID {query.ContainerId}"));

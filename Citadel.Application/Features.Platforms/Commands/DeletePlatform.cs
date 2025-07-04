@@ -5,7 +5,6 @@ using FluentValidation;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Features.Platforms.Commands;
@@ -27,19 +26,16 @@ internal class DeletePlatformHandler(
 {
     public async ValueTask<Result> Handle(DeletePlatform command, CancellationToken cancellationToken)
     {
-        var platform = await unitOfWork.Platforms
-            .Query().AsNoTracking()
-            .SingleOrDefaultAsync(s => s.Id == command.Id, cancellationToken);
-
+        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(command.Id, cancellationToken);
         if (platform is null)
         {
             return Result.Failure(new NotFoundError("Platform does not exist"));
         }
 
-        unitOfWork.Platforms.Remove(platform);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await unitOfWork.Platforms.DeleteAsync(command.Id, cancellationToken);
+        await unitOfWork.CommitAsync();
 
-        await platformHealthMonitorJob.UntrackPlatform(platform.Address, cancellationToken);
+        await platformHealthMonitorJob.UntrackPlatform(platform.Value.Address, cancellationToken);
 
         // Notify subscribers about the platform deletion
         await platformHubDispatcher.PlatformDeleted(command.Id);

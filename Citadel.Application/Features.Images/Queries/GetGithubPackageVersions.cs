@@ -4,7 +4,6 @@ using Hosting.Common.ErrorTypes;
 using Domain.Entities.Registries;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Registries;
 
@@ -27,13 +26,13 @@ internal class GetGithubPackageVersionsHander(IUnitOfWork unitOfWork, IGitHubCrR
 {
     public async ValueTask<Result<IEnumerable<GitHubCrPackageVersion>>> Handle(GetGithubPackageVersions query, CancellationToken cancellationToken)
     {
-        var registry = await unitOfWork.Registries.Query().AsNoTracking().FirstOrDefaultAsync(s => s.Name == query.RegistryName, cancellationToken);
-        if (registry == null) 
+        var configuration = await unitOfWork.Registries.GetRegistryConfigurationAsync(query.RegistryName, cancellationToken);
+        if (configuration == null) 
         {
             return Result.Failure<IEnumerable<GitHubCrPackageVersion>>(new NotFoundError("The provided registry name does exist"));
         }
 
-        if (registry.Configuration is not GitHubRegistry cfg)
+        if (configuration is not GitHubRegistry cfg)
         {
             return Result.Failure<IEnumerable<GitHubCrPackageVersion>>(new NotFoundError("The provided registry is not a Github registry instance"));
         }

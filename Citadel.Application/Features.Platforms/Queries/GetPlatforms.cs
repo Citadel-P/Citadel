@@ -2,7 +2,6 @@
 using Domain.Entities;
 using LightResults;
 using Mediator;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.Features.Platforms.Queries;
 
@@ -15,13 +14,7 @@ internal class GetPlatformsHandler(IUnitOfWork unitOfWork): IQueryHandler<GetPla
 {
     public async ValueTask<Result<IEnumerable<Platform>>> Handle(GetPlatforms request, CancellationToken cancellationToken)
     {
-        // Only include the most recent stat for the platform
-        var platforms = await unitOfWork.Platforms
-                .Query().AsNoTracking()
-                .Include(s => s.Stats.OrderByDescending(s => s.Created).Take(1))
-                .OrderBy(s => s.Name)
-                .ToListAsync(cancellationToken);
-
-        return platforms;
+        var platforms = await unitOfWork.Platforms.GetPlatformsWithLatestStatAsync(cancellationToken);
+        return Result.Success(platforms ?? []);
     }
 }

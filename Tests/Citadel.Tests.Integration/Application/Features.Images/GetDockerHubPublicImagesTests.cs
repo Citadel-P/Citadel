@@ -1,9 +1,5 @@
 ﻿using System.Net.Http.Json;
-using System.Text.Json;
-using System.Threading;
-using Application.Features.Images.Queries;
 using Domain.Contracts.Resources.Registries;
-using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Tests.Integration.Application.Features.Images;
 
@@ -20,7 +16,7 @@ public class GetDockerHubPublicImagesTests : IntegrationTestBase<WebApi.Program>
 
         // Assert
         response.EnsureSuccessStatusCode();
-        var images = (await response.Content.ReadFromJsonAsync(typeof(IEnumerable<DockerHubImageResult>), cancellationToken: TestContext.Current.CancellationToken)) 
+        var images = (await response.Content.ReadFromJsonAsync(typeof(IEnumerable<DockerHubImageResult>), cancellationToken: TestContext.Current.CancellationToken))
                         as IEnumerable<DockerHubImageResult>;
 
         Assert.Contains(images ?? [], s => s.Name == "nginx");

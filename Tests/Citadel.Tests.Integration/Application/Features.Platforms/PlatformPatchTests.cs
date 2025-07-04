@@ -1,12 +1,13 @@
 ﻿using System.Text;
+using System.Threading;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Platforms;
+using Infrastructure.Persistence;
 using LightResults;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
@@ -28,11 +29,8 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
         services.AddSingleton(_ => platformConnector.Object);
     }
 
-    protected override async ValueTask SeedDbAsync()
+    protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
-        using var scope = Services.CreateScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
         var platform = new Platform(
             name: "P-01",
             address: "https://original.address",
@@ -52,9 +50,9 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
                 ContainersPaused: 2,
                 ContainersStopped: 1)
         );
-        uow.Platforms.Add(platform);
 
-        await uow.SaveChangesAsync();
+        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
+        await uow.CommitAsync();
 
         platformId = platform.Id;
     }
@@ -80,7 +78,7 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
         }
         """;
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
-        
+
         // Act
 
         var response = await Client.PatchAsync($"/api/v1/platforms/{platformId}", content, cancellationToken: TestContext.Current.CancellationToken);
@@ -90,9 +88,9 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
         var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        using var scope = Services.CreateScope();
+        await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var platform = await uow.Platforms.Query().AsNoTracking().SingleAsync(x => x.Id == platformId, TestContext.Current.CancellationToken);
+        var platform = await uow.Platforms.GetByIdAsync(platformId, TestContext.Current.CancellationToken);
 
         healthMonitorMock.Verify(x => x.TrackPlatform("https://localhost:9000", platformId, PlatformConnectorType.Agent), Times.Once);
         await Verify(platform);
@@ -149,30 +147,31 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
     {
         // Arrange
         // Add another platform with a conflicting name
-        using (var scope = Services.CreateScope())
-        {
-            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            uow.Platforms.Add(new Platform(
-                name: "P-02",
-                address: "https://another.address",
-                networkCount: 1,
-                volumeCount: 2,
-                imageCount: 3,
-                cpuCount: 4,
-                memTotal: 500,
-                serverVersion: "1.0.0",
-                agentVersion: "1.0.0",
-                status: PlatformStatus.Online,
-                connectorType: PlatformConnectorType.Agent,
-                platformDescriptor: new DockerPlatformDescriptor(
-                    DaemonId: "654321",
-                    ContainerCount: 5,
-                    ContainersRunning: 2,
-                    ContainersPaused: 2,
-                    ContainersStopped: 1)
-            ));
-            await uow.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
+        await using var scope = Services.CreateAsyncScope();
+        var platform = new Platform(
+            name: "P-02",
+            address: "https://another.address",
+            networkCount: 1,
+            volumeCount: 2,
+            imageCount: 3,
+            cpuCount: 4,
+            memTotal: 500,
+            serverVersion: "1.0.0",
+            agentVersion: "1.0.0",
+            status: PlatformStatus.Online,
+            connectorType: PlatformConnectorType.Agent,
+            platformDescriptor: new DockerPlatformDescriptor(
+                DaemonId: "654321",
+                ContainerCount: 5,
+                ContainersRunning: 2,
+                ContainersPaused: 2,
+                ContainersStopped: 1)
+        );
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var r = await uow.Platforms.GetPlatformsWithLatestStatAsync(TestContext.Current.CancellationToken);
+        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
+        await uow.CommitAsync();
+        var r2 = await uow.Platforms.GetPlatformsWithLatestStatAsync(TestContext.Current.CancellationToken);
 
         var patchJson = """
         {

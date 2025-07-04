@@ -2,7 +2,6 @@
 using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -41,16 +40,12 @@ internal class PlatformHealthMonitorJob(
         await using (var scope = scopeFactory.CreateAsyncScope())
         {
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            var platforms = await uow.Platforms
-                .Query().AsNoTracking()
-                .Select(s => new { s.Id, s.Address, s.ConnectorType })
-                .ToArrayAsync(cancellationToken);
-
-            if (platforms != null && platforms.Length > 0)
+            var platforms = await uow.Platforms.GetPlatformsInfoAsync(cancellationToken);
+            if (platforms.Any())
             {
-                foreach (var platform in platforms)
+                foreach (var (Id, Address, ConnectorType) in platforms)
                 {
-                    TrackPlatform(platform.Address, platform.Id, platform.ConnectorType);
+                    TrackPlatform(Address, Id, ConnectorType);
                 }
             }
         }

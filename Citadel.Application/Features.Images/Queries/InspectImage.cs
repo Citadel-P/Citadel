@@ -24,19 +24,19 @@ internal sealed class InspectImageHandler(IUnitOfWork unitOfWork, IConnectorFact
 {
     public async ValueTask<Result<InspectImageResult>> Handle(InspectImage query, CancellationToken cancellationToken)
     {
-        var (address, connectorType) = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
-        if (string.IsNullOrEmpty(address))
+        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
+        if (platform is null)
         {
             return Result.Failure<InspectImageResult>(new NotFoundError("The provided platform Id doesn't exist"));
         }
 
         var args = new InspectImageCommand
         (
-            PlatformAddress: address,
+            PlatformAddress: platform.Value.Address,
             ImageId: query.ImageId
         );
         return await connectorFactory
-            .GetConnector(connectorType)
+            .GetConnector(platform.Value.ConnectorType)
             .InspectImageAsync(args, cancellationToken: cancellationToken);
     }
 }

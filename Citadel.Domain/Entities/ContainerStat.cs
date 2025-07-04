@@ -1,35 +1,45 @@
 ﻿namespace Domain.Entities;
 
-public class ContainerStat
+public class ContainerStat(
+    Guid containerId,
+    double? memoryUsage,
+    double? cpuUsage,
+    double? memoryLimit,
+    double? rxBytes,
+    double? txBytes,
+    long? created = null)
 {
-    private ContainerStat() { /* For EF Core */ }
+    public Guid Id { get; private set; } = Guid.CreateVersion7();
+    public Guid ContainerId { get; private set; } = containerId;
+    public long Created { get; private set; } = created is not null ? created.Value : DateTimeOffset.UtcNow.Ticks;
+    public double? MemoryUsage { get; private set; } = memoryUsage;
+    public double? CpuUsage { get; private set; } = cpuUsage;
+    public double? MemoryLimit { get; private set; } = memoryLimit;
+    public double? RxBytes { get; private set; } = rxBytes;
+    public double? TxBytes { get; private set; } = txBytes;
 
-    public ContainerStat(
+    public static ContainerStat FromPersistence(
+        Guid id,
         Guid containerId,
-        double? memoryUsage,
-        double? cpuUsage,
-        double? memoryLimit,
-        double? rxBytes,
-        double? txBytes,
-        long? created = null)
+        long created,
+        double? memoryUsage = null,
+        double? cpuUsage = null,
+        double? memoryLimit = null,
+        double? rxBytes = null,
+        double? txBytes = null)
     {
-        Id = Guid.CreateVersion7();
-        Created = created is not null ? created.Value : DateTimeOffset.UtcNow.Ticks;
-        MemoryUsage = memoryUsage;
-        CpuUsage = cpuUsage;
-        MemoryLimit = memoryLimit;
-        ContainerId = containerId;
-        RxBytes = rxBytes;
-        TxBytes = txBytes;
+        return new ContainerStat(
+            containerId: containerId,
+            memoryUsage: memoryUsage,
+            cpuUsage: cpuUsage,
+            memoryLimit: memoryLimit,
+            rxBytes: rxBytes,
+            txBytes: txBytes,
+            created: created)
+        {
+            Id = id
+        };
     }
-    public Guid Id { get; private set; }
-    public Guid ContainerId { get; private set; }
-    public long Created { get; private set; }
-    public double? MemoryUsage { get; private set; }
-    public double? CpuUsage { get; private set; }
-    public double? MemoryLimit { get; private set; }
-    public double? RxBytes { get; private set; }
-    public double? TxBytes { get; private set; }
 
     public void PartialUpdate(
         Guid? containerId,

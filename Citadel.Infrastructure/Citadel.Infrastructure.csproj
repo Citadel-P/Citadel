@@ -6,26 +6,23 @@
   </PropertyGroup>
 
   <ItemGroup>
+	<PackageReference Include="Dapper" Version="2.1.66" />
+	<PackageReference Include="FluentMigrator" Version="7.1.0" />
 	<PackageReference Include="Refit" Version="8.0.0" />
 	<PackageReference Include="Refit.HttpClientFactory" Version="8.0.0" />
 	<PackageReference Include="dbup-sqlite" Version="6.0.1" />
 	<PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.11" />
-	<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.6" />
-	<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.6">
-		
-	  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-	</PackageReference>
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.12.1" />
   </ItemGroup>
 
   <ItemGroup>
-	<EmbeddedResource Include="Migrations\*.sql" /> <!--for dbup-->
-  </ItemGroup>
-	
-  <ItemGroup>
 	  <ProjectReference Include="..\Citadel.Contracts\Citadel.Hosting.DockerClient\Citadel.Hosting.DockerClient.csproj" />
 	  <ProjectReference Include="..\Citadel.Domain\Citadel.Domain.csproj" />
   </ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Include="Scripts\*.sql" /> <!--for dbup-->
+	</ItemGroup>
 
    <ItemGroup>
 	   <PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
@@ -40,7 +37,7 @@
    </ItemGroup>
 
    <ItemGroup>
-     <Folder Include="Migrations\" />
+     <Folder Include="Scripts\" />
    </ItemGroup>
 
 </Project>

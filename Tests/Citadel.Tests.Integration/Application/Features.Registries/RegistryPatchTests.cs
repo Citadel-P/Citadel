@@ -14,20 +14,17 @@ public class RegistryPatchTests : IntegrationTestBase<WebApi.Program>
     private Guid registryId;
     private readonly Mock<IRegistryConnectorStrategy> registryConnectorMock = new();
     private readonly Mock<IRegistryConnectorResolver> registryConnectorResolverMock = new();
-    protected override async ValueTask SeedDbAsync()
+    protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
-        using var scope = Services.CreateScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
         var registry = new Registry(
             name: "OriginalName",
             url: "https://original.url",
             type: RegistryType.DockerHub,
             configuration: new DockerHubRegistry("original-user", "pat123")
         );
-        uow.Registries.Add(registry);
 
-        await uow.SaveChangesAsync();
+        await uow.Registries.AddAsync(registry, TestContext.Current.CancellationToken);
+        await uow.CommitAsync();
 
         registryId = registry.Id;
     }

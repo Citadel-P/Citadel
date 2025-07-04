@@ -5,7 +5,6 @@ using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -41,20 +40,18 @@ public class PlatformsStatsPersistenceJobTests : IntegrationTestBase<WebApi.Prog
         services.AddSingleton(_ => connectionTrackerMock.Object);
         services.AddSingleton<IPlatformHealthBroadCaster>((_) => broadcaster);
 
-        configMock.Setup(x => x.Value).Returns(new JobConfiguration() 
-        { 
+        configMock.Setup(x => x.Value).Returns(new JobConfiguration()
+        {
             BatchSize = batchSize
         });
     }
 
-    protected override async ValueTask SeedDbAsync()
+    protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
-        using var scope = Services.CreateScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
         var platform = GetDummyPlatform();
-        uow.Platforms.Add(platform);
-        await uow.SaveChangesAsync();
+
+        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
+        await uow.CommitAsync();
 
         platformId = platform.Id;
     }
@@ -64,7 +61,7 @@ public class PlatformsStatsPersistenceJobTests : IntegrationTestBase<WebApi.Prog
     {
         // Arrange
         platformFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(platformConnector.Object);
-        
+
         connectionTrackerMock.Setup(x => x.HasUsersInGroup(It.IsAny<string>())).Returns(true);
 
         platformConnector.Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
@@ -77,15 +74,17 @@ public class PlatformsStatsPersistenceJobTests : IntegrationTestBase<WebApi.Prog
         await Task.Delay(1000, TestContext.Current.CancellationToken); // wait for jobs to process
 
         // Assert
-        using var scope = Services.CreateScope();
+        await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var stats = await db.PlatformStats.Query().ToListAsync(TestContext.Current.CancellationToken);
+        var stats = await db.PlatformStats.GetStatsAggregatedLast24HoursAsync(platformId, TestContext.Current.CancellationToken);
+        var t = await db.Platforms.GetPlatformsWithLatestStatAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(batchSize, stats.Count);
+        Assert.Equal(batchSize, stats.Count());
     }
 
     private static async IAsyncEnumerable<PlatformStatsResult> GetStatsAsync()
     {
+        var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var stat1 = new PlatformStatsResult
         (
             MemTotal: 123456,
@@ -98,7 +97,7 @@ public class PlatformsStatsPersistenceJobTests : IntegrationTestBase<WebApi.Prog
             ContainersRunning: 2,
             PlatformStat: new DockerPlatformStat
             (
-                Created: 1750756087,
+                Created: time,
                 MemoryUsage: 500,
                 CpuUsage: 2,
                 RxBytes: 100,
@@ -118,7 +117,7 @@ public class PlatformsStatsPersistenceJobTests : IntegrationTestBase<WebApi.Prog
             ContainersRunning: 3,
             PlatformStat: new DockerPlatformStat
             (
-                Created: 1750756088,
+                Created: time + (60 * 2),
                 MemoryUsage: 800,
                 CpuUsage: 2,
                 RxBytes: 100,
