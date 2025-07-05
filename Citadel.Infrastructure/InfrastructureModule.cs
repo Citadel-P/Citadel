@@ -11,7 +11,7 @@ using Hosting.DockerClient;
 using Infrastructure.Connectors;
 using Infrastructure.Connectors.AgentConnectors;
 using Infrastructure.Connectors.LocalConnectors;
-using Infrastructure.DapperHandlers;
+using Infrastructure.TypeHandlers;
 using Infrastructure.DockerHub;
 using Infrastructure.GithubCr;
 using Infrastructure.HttpClients.Serializer;
@@ -133,8 +133,12 @@ public static class InfrastructureModule
 
     private static void RegisterTypeHandlers()
     {
-        // Guid to Text
+        // Register custom type handlers to map Guid values to TEXT columns in SQLite, ensuring compatibility between
+        // .NET Guid types and SQLite string storage.
+        SqlMapper.RemoveTypeMap(typeof(Guid));
+        SqlMapper.RemoveTypeMap(typeof(Guid?));
         SqlMapper.AddTypeHandler(new GuidStringHandler());
+        SqlMapper.AddTypeHandler(new NullableGuidStringHandler());
 
         // Json Converters
         SqlMapper.AddTypeHandler(new JsonTypeHandler<List<ContainerPort>>(

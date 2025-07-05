@@ -275,7 +275,7 @@ export interface CreateVolumeInput {
 }
 
 export interface DeleteContainersRequest {
-  containersIds: string[];
+  containerIds: string[];
   /** @default false */
   v?: boolean | null;
   /** @default false */
@@ -379,7 +379,6 @@ export interface DockerNetworkDetails {
   attachable: boolean;
   ingress: boolean;
   configOnly: boolean;
-  inUse: boolean;
   configFrom: string | null;
   ipam: IpAddressManagementConfig;
   options: Record<string, string>;
@@ -2016,33 +2015,6 @@ export class Api<
      * No description
      *
      * @tags Platforms
-     * @name PlatformsGetInfo
-     * @summary Get platform by Id
-     * @request GET:/api/v1/platforms/{id}/info
-     * @secure
-     * @response `200` `PlatformView2` OK
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    platformsGetInfo: (id: string, params: RequestParams = {}) =>
-      this.request<
-        PlatformView2,
-        HttpValidationProblemDetails | ProblemDetails
-      >({
-        path: `/api/v1/platforms/${id}/info`,
-        method: "GET",
-        secure: true,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Platforms
      * @name PlatformsListContainers
      * @summary Returns the list of containers of the given platform
      * @request GET:/api/v1/platforms/{id}/containers
@@ -2187,7 +2159,7 @@ export class Api<
      * @summary Delete registries
      * @request DELETE:/api/v1/registries
      * @secure
-     * @response `200` `RegistriesView` OK
+     * @response `204` `void` No Content
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2198,16 +2170,12 @@ export class Api<
       data: DeleteRegistriesInput,
       params: RequestParams = {},
     ) =>
-      this.request<
-        RegistriesView,
-        HttpValidationProblemDetails | ProblemDetails
-      >({
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/registries`,
         method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: "json",
         ...params,
       }),
 

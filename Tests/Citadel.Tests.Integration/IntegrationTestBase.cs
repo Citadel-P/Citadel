@@ -37,8 +37,7 @@ public abstract class IntegrationTestBase<TEntryPoint> : IAsyncLifetime
                     RemoveService<IDbConnectionFactory>(services);
                     RemoveService<IUnitOfWork>(services);
 
-                    services.AddSingleton<IDbConnectionFactory>(
-                        _ => new InMemoryTestDbConnectionFactory(_uniqueDbName));
+                    services.AddSingleton<IDbConnectionFactory>(_ => new InMemoryTestDbConnectionFactory(_uniqueDbName));
                     services.AddScoped<IUnitOfWork, UnitOfWork>();
 
                     ConfigureTestServices(services);
@@ -182,6 +181,7 @@ internal sealed class InMemoryTestDbConnectionFactory : IDbConnectionFactory, ID
 
         using var cmd = _initialConnection.CreateCommand();
         cmd.CommandText = """
+            PRAGMA foreign_keys = ON;
             PRAGMA journal_mode=WAL;
             PRAGMA synchronous=NORMAL;
             PRAGMA busy_timeout=3000;

@@ -1,7 +1,7 @@
 ﻿using System.Data;
 using Dapper;
 
-namespace Infrastructure.DapperHandlers;
+namespace Infrastructure.TypeHandlers;
 
 public sealed class GuidStringHandler : SqlMapper.TypeHandler<Guid>
 {

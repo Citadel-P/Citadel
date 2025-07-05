@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Dapper;
 
-namespace Infrastructure.DapperHandlers;
+namespace Infrastructure.TypeHandlers;
 
 public class JsonTypeHandler<T> : SqlMapper.TypeHandler<T>
 {

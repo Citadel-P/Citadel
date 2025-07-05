@@ -16,8 +16,8 @@ public sealed record LoginCommand(string Email, string Password) : ICommand<Resu
     {
         public Validator()
         {
-            RuleFor(x => x.Email).EmailAddress();
-            RuleFor(x => x.Password).MinimumLength(8).MaximumLength(128);
+            RuleFor(x => x.Email).NotNull().EmailAddress();
+            RuleFor(x => x.Password).NotNull().MinimumLength(8).MaximumLength(128);
         }
     }
 }

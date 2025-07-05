@@ -15,9 +15,9 @@ internal class RefreshTokenRepository(IDbConnection db, IDbTransaction tx) : IRe
         const string sql = "INSERT INTO RefreshTokens (Id, UserId, CreatedAt) VALUES (@Id, @UserId, @CreatedAt)";
         var parameters = new
         {
-            Id = refreshToken.Id,
-            UserId = refreshToken.UserId,
-            CreatedAt = refreshToken.CreatedAt
+            refreshToken.Id,
+            refreshToken.UserId,
+            refreshToken.CreatedAt
         };
         return db.ExecuteAsync(new CommandDefinition(
             sql,
@@ -47,7 +47,6 @@ internal class RefreshTokenRepository(IDbConnection db, IDbTransaction tx) : IRe
                 Users.Id, 
                 Users.Name, 
                 Users.Email,
-                Users.Password,
                 Roles.Name as RoleName, 
                 Permissions.PermissionCode
             FROM Token

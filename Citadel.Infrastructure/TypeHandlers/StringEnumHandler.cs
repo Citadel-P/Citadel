@@ -1,7 +1,7 @@
 ﻿using System.Data;
 using Dapper;
 
-namespace Infrastructure.DapperHandlers;
+namespace Infrastructure.TypeHandlers;
 
 public sealed class StringEnumHandler<TEnum> : SqlMapper.TypeHandler<TEnum>
     where TEnum : struct, Enum

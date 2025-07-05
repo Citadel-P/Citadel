@@ -23,6 +23,7 @@ internal sealed class SqliteConnectionFactory : IDbConnectionFactory
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
+            PRAGMA foreign_keys = ON;
             PRAGMA journal_mode=WAL;
             PRAGMA synchronous=NORMAL;
             PRAGMA busy_timeout=3000;
