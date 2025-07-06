@@ -6,6 +6,7 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Platforms;
+using Hosting.Common;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -73,6 +74,52 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
         Assert.NotNull(platform);
         Assert.Equal(3, containers.Count());
         healthMonitorMock.Verify(x => x.TrackPlatform("https://localhost:9000", platform.Id, PlatformConnectorType.Agent), Times.Once);
+        await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task CreatePlatform_WithMLocalConnector_ReturnsSuccessAndPersistsContainers()
+    {
+        // Arrange
+        platformFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+                      .Returns(platformConnector.Object);
+
+        platformConnector.Setup(x => x.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()))
+                         .ReturnsAsync(Result.Success(GetDummyPlatformResult()));
+
+        containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+            .Returns(containerConnector.Object);
+
+        containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(GetDummyContainers().ToDictionary(c => c.ContainerId)));
+
+        healthMonitorMock.Setup(x => x.TrackPlatform(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<PlatformConnectorType>())).Returns(true);
+
+        var createJson = """
+        {
+          "name": "P-NEW",
+          "type": "Docker",
+          "connectorType": "local"
+        }
+        """;
+        var content = new StringContent(createJson, Encoding.UTF8, "application/json");
+
+        // Act
+        var response = await Client.PostAsync("/api/v1/platforms", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        // Assert
+        response.EnsureSuccessStatusCode();
+
+        // Check DB
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platform = await uow.Platforms.GetByNameAsync("P-NEW", TestContext.Current.CancellationToken);
+        var containers = await uow.Containers.GetAllWithLatestStatAsync(platform.Id, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(platform);
+        Assert.Equal(3, containers.Count());
+        healthMonitorMock.Verify(x => x.TrackPlatform(Constants.LocalDockerHostUrl, platform.Id, PlatformConnectorType.Local), Times.Once);
         await VerifyJson(responseBody);
     }
 

@@ -14,17 +14,16 @@ internal class UnitOfWork : IUnitOfWork
     public UnitOfWork(IDbConnectionFactory factory, ILogger<UnitOfWork> logger)
     {
         connection = factory.Create();
-        transaction = connection.BeginTransaction();
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        Users = new Lazy<IUserRepository>(() => new UserRepository(connection, transaction));
-        Teams = new Lazy<ITeamRepository>(() => new TeamRepository(connection, transaction));
-        Platforms = new Lazy<IPlatformRepository>(() => new PlatformRepository(connection, transaction));
-        Registries = new Lazy<IRegistryRepository>(() => new RegistryRepository(connection, transaction));
-        Containers = new Lazy<IContainerRepository>(() => new ContainerRepository(connection, transaction));
-        RefreshTokens = new Lazy<IRefreshTokenRepository>(() => new RefreshTokenRepository(connection, transaction));
-        PlatformStats = new Lazy<IPlatformStatRepository>(() => new PlatformStatRepository(connection, transaction));
-        ContainerStats = new Lazy<IContainerStatRepository>(() => new ContainerStatRepository(connection, transaction));
+        Users = new Lazy<IUserRepository>(() => new UserRepository(connection, GetTransaction));
+        Teams = new Lazy<ITeamRepository>(() => new TeamRepository(connection, GetTransaction));
+        Platforms = new Lazy<IPlatformRepository>(() => new PlatformRepository(connection, GetTransaction));
+        Registries = new Lazy<IRegistryRepository>(() => new RegistryRepository(connection, GetTransaction));
+        Containers = new Lazy<IContainerRepository>(() => new ContainerRepository(connection, GetTransaction));
+        RefreshTokens = new Lazy<IRefreshTokenRepository>(() => new RefreshTokenRepository(connection, GetTransaction));
+        PlatformStats = new Lazy<IPlatformStatRepository>(() => new PlatformStatRepository(connection, GetTransaction));
+        ContainerStats = new Lazy<IContainerStatRepository>(() => new ContainerStatRepository(connection, GetTransaction));
     }
 
     private Lazy<IUserRepository> Users { get; }
@@ -45,9 +44,17 @@ internal class UnitOfWork : IUnitOfWork
     IContainerStatRepository IUnitOfWork.ContainerStats => ContainerStats.Value;
     IPlatformStatRepository IUnitOfWork.PlatformStats => PlatformStats.Value;
 
+    // Lazily creates a transaction - to prevent sqlite table locking
+    private IDbTransaction GetTransaction()
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        transaction ??= connection.BeginTransaction();
+        return transaction;
+    }
+
     public async Task CommitAsync()
     {
-        if (disposed) throw new ObjectDisposedException(nameof(UnitOfWork));
+        ObjectDisposedException.ThrowIf(disposed, this);
         if (transaction == null) return;
 
         try

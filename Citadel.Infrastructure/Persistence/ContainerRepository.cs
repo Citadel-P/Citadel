@@ -9,7 +9,7 @@ using Infrastructure.Persistence.Mappers;
 
 namespace Infrastructure.Persistence;
 
-internal class ContainerRepository(IDbConnection db, IDbTransaction tx) : IContainerRepository 
+internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : IContainerRepository 
 {
     public async Task<IEnumerable<Container>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken)
     {
@@ -19,7 +19,7 @@ internal class ContainerRepository(IDbConnection db, IDbTransaction tx) : IConta
             ORDER BY Created DESC
             """;
         var result = await db.QueryAsync<ContainerDto>(
-            new CommandDefinition(sql, new { PlatformId = platformId }, transaction: tx, cancellationToken: cancellationToken));
+            new CommandDefinition(sql, new { PlatformId = platformId }, transaction: tx(), cancellationToken: cancellationToken));
         return result.ToDomain();
     }
 
@@ -37,7 +37,7 @@ internal class ContainerRepository(IDbConnection db, IDbTransaction tx) : IConta
             """;
 
         var flatRows = await db.QueryAsync<(string ContainerId, string Address, PlatformConnectorType ConnectorType)>(
-            new CommandDefinition(sql, new { Ids = containerIds }, transaction: tx, cancellationToken: cancellationToken));
+            new CommandDefinition(sql, new { Ids = containerIds }, transaction: tx(), cancellationToken: cancellationToken));
 
         if (!flatRows.Any())
             return null;
@@ -60,7 +60,7 @@ internal class ContainerRepository(IDbConnection db, IDbTransaction tx) : IConta
             LIMIT 1
             """;
         var result = await db.QuerySingleOrDefaultAsync<ContainerDto>(
-            new CommandDefinition(sql, new { ContainerIdPrefix = containerId }, transaction: tx, cancellationToken: cancellationToken));
+            new CommandDefinition(sql, new { ContainerIdPrefix = containerId }, transaction: tx(), cancellationToken: cancellationToken));
         return result?.ToDomain();
     }
 
@@ -78,7 +78,7 @@ internal class ContainerRepository(IDbConnection db, IDbTransaction tx) : IConta
             """;
 
         return db.QuerySingleOrDefaultAsync<(string? Address, Guid? PlatformId, PlatformConnectorType? ConnectorType)>(
-            new CommandDefinition(sql, new { ContainerIdPrefix = containerId }, transaction: tx, cancellationToken: cancellationToken));
+            new CommandDefinition(sql, new { ContainerIdPrefix = containerId }, transaction: tx(), cancellationToken: cancellationToken));
     }
 
     public Task<int> BulkInsertAsync(IEnumerable<Container> containers, CancellationToken cancellationToken)
@@ -112,7 +112,7 @@ internal class ContainerRepository(IDbConnection db, IDbTransaction tx) : IConta
         }
 
         var finalSql = string.Format(sql, string.Join(", ", valueRows));
-        return db.ExecuteAsync(new CommandDefinition(finalSql, parameters, transaction: tx, cancellationToken: cancellationToken));
+        return db.ExecuteAsync(new CommandDefinition(finalSql, parameters, transaction: tx(), cancellationToken: cancellationToken));
     }
 
     public async Task<IEnumerable<Container>?> GetAllWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken)
@@ -169,7 +169,7 @@ internal class ContainerRepository(IDbConnection db, IDbTransaction tx) : IConta
                 @Id, @PlatformId, @ContainerId, @Name, @Image, @Created, @Updated, @State, @Stack, @Ports
             )
         """;
-        var command = new CommandDefinition(sql, container, transaction: tx, cancellationToken: cancellationToken);
+        var command = new CommandDefinition(sql, container, transaction: tx(), cancellationToken: cancellationToken);
         return db.ExecuteAsync(command);
     }
 
@@ -180,7 +180,7 @@ internal class ContainerRepository(IDbConnection db, IDbTransaction tx) : IConta
             SET State = @State, Updated = @Updated
             WHERE Id IN @Ids
         """;
-        var command = new CommandDefinition(sql, new { State = state, Updated = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), Ids = ids }, transaction: tx, cancellationToken: cancellationToken);
+        var command = new CommandDefinition(sql, new { State = state, Updated = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), Ids = ids }, transaction: tx(), cancellationToken: cancellationToken);
         return db.ExecuteAsync(command);
     }
 
@@ -191,7 +191,7 @@ internal class ContainerRepository(IDbConnection db, IDbTransaction tx) : IConta
             SET Name = @Name, Image = @Image, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports, Created = @Created
             WHERE Id = @Id
         """;
-        var command = new CommandDefinition(sql, container, transaction: tx, cancellationToken: cancellationToken);
+        var command = new CommandDefinition(sql, container, transaction: tx(), cancellationToken: cancellationToken);
         return db.ExecuteAsync(command);
     }
 
@@ -201,7 +201,7 @@ internal class ContainerRepository(IDbConnection db, IDbTransaction tx) : IConta
             DELETE FROM Containers
             WHERE Id IN @Ids
         """;
-        return db.ExecuteAsync(new CommandDefinition(sql, new { Ids = ids }, transaction: tx, cancellationToken: cancellationToken));
+        return db.ExecuteAsync(new CommandDefinition(sql, new { Ids = ids }, transaction: tx(), cancellationToken: cancellationToken));
     }
 
 }

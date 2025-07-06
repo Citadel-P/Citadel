@@ -8,13 +8,13 @@ using Infrastructure.Persistence.Mappers;
 
 namespace Infrastructure.Persistence;
 
-internal class PlatformRepository(IDbConnection db, IDbTransaction tx) : IPlatformRepository 
+internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : IPlatformRepository 
 {
     public async Task<Platform?> GetByIdAsync(Guid platformId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM Platforms WHERE Id = @PlatformId LIMIT 1";
         var result = await db.QuerySingleOrDefaultAsync<PlatformDto?>(
-            new CommandDefinition(sql, new { PlatformId = platformId }, transaction: tx, cancellationToken: cancellationToken));
+            new CommandDefinition(sql, new { PlatformId = platformId }, transaction: tx(), cancellationToken: cancellationToken));
 
         return result?.ToDomain();
     }
@@ -22,7 +22,7 @@ internal class PlatformRepository(IDbConnection db, IDbTransaction tx) : IPlatfo
     public async Task<Platform?> GetByNameAsync(string name, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM Platforms WHERE Name = @Name LIMIT 1";
-        var result = await db.QuerySingleOrDefaultAsync<PlatformDto>(new CommandDefinition(sql, new { Name = name }, transaction: tx, cancellationToken: cancellationToken));
+        var result = await db.QuerySingleOrDefaultAsync<PlatformDto>(new CommandDefinition(sql, new { Name = name }, transaction: tx(), cancellationToken: cancellationToken));
         
         return result?.ToDomain();
     }
@@ -36,14 +36,14 @@ internal class PlatformRepository(IDbConnection db, IDbTransaction tx) : IPlatfo
             LIMIT 1
         """;
         return db.ExecuteScalarAsync<int?>(
-            new CommandDefinition(sql, new { Id = platformId, Name = name }, transaction: tx, cancellationToken: cancellationToken));
+            new CommandDefinition(sql, new { Id = platformId, Name = name }, transaction: tx(), cancellationToken: cancellationToken));
     }
 
     public Task<bool> NameOrAddressExistsAsync(string name, string address, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS(SELECT 1 FROM Platforms WHERE Address=@Address OR Name=@Name)";
         return db.ExecuteScalarAsync<bool>(
-            new CommandDefinition(sql, new { Name = name, Address = address }, transaction: tx, cancellationToken: cancellationToken));
+            new CommandDefinition(sql, new { Name = name, Address = address }, transaction: tx(), cancellationToken: cancellationToken));
     }
 
     public Task<(string Address, PlatformConnectorType ConnectorType)?> GetPlatformInfoAsync(Guid platformId, CancellationToken cancellationToken)
@@ -56,13 +56,13 @@ internal class PlatformRepository(IDbConnection db, IDbTransaction tx) : IPlatfo
         """;
 
         return db.QuerySingleOrDefaultAsync<(string, PlatformConnectorType)?>(
-            new CommandDefinition(sql, new { PlatformId = platformId }, transaction: tx, cancellationToken: cancellationToken));
+            new CommandDefinition(sql, new { PlatformId = platformId }, transaction: tx(), cancellationToken: cancellationToken));
     }
 
     public Task<IEnumerable<(Guid Id, string Address, PlatformConnectorType ConnectorType)>> GetPlatformsInfoAsync(CancellationToken cancellationToken)
     {
         const string sql = "SELECT Id, Address, ConnectorType FROM Platforms ORDER BY Name";
-        return db.QueryAsync<(Guid Id, string Address, PlatformConnectorType ConnectorType)>(new CommandDefinition(sql, transaction: tx, cancellationToken: cancellationToken));
+        return db.QueryAsync<(Guid Id, string Address, PlatformConnectorType ConnectorType)>(new CommandDefinition(sql, transaction: tx(), cancellationToken: cancellationToken));
     }
 
     public Task<int> AddPlatformAsync(Platform platform, CancellationToken cancellationToken)
@@ -74,14 +74,14 @@ internal class PlatformRepository(IDbConnection db, IDbTransaction tx) : IPlatfo
                 @Id, @Name, @Address, @NetworkCount, @VolumeCount, @ImageCount, @CpuCount, @MemTotal, @ServerVersion, @AgentVersion, @Status, @ConnectorType, @PlatformDescriptor)
         """;
         return db.ExecuteAsync(
-            new CommandDefinition(sql, platform, transaction: tx, cancellationToken: cancellationToken));
+            new CommandDefinition(sql, platform, transaction: tx(), cancellationToken: cancellationToken));
     }
 
     public Task<int> DeleteAsync(Guid platformId, CancellationToken cancellationToken)
     {
         const string sql = "DELETE FROM Platforms WHERE Id = @PlatformId";
         return db.ExecuteAsync(
-            new CommandDefinition(sql, new { PlatformId = platformId }, transaction: tx, cancellationToken: cancellationToken));
+            new CommandDefinition(sql, new { PlatformId = platformId }, transaction: tx(), cancellationToken: cancellationToken));
     }
 
     public Task<int> UpdatePlatformAsync(Platform platform, CancellationToken cancellationToken)
@@ -116,7 +116,7 @@ internal class PlatformRepository(IDbConnection db, IDbTransaction tx) : IPlatfo
             platform.PlatformDescriptor,
             platform.Status,
             platform.Id
-        }, transaction: tx, cancellationToken: cancellationToken));
+        }, transaction: tx(), cancellationToken: cancellationToken));
     }
 
     public async Task<Platform?> GetPlatformWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken)

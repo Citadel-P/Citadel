@@ -4,6 +4,7 @@ using Application.Permissions.Requirements;
 using Application.Services;
 using Application.TaskJobs;
 using Citadel.SourceGen;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Hosting.Common;
 using Hosting.Common.Pipelines;

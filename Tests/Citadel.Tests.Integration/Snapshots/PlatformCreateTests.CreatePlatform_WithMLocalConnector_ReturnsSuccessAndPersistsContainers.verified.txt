@@ -1,0 +1,28 @@
+﻿{
+  id: Guid_1,
+  name: P-NEW,
+  address: http://localhost.docker,
+  networkCount: 1,
+  volumeCount: 2,
+  imageCount: 3,
+  cpuCount: 4,
+  memTotal: 500,
+  agentVersion: 1.0.0,
+  serverVersion: 1.0.0,
+  type: Docker,
+  status: Online,
+  connectorType: local,
+  platformDescriptor: {
+    $type: Docker,
+    daemonId: 123456,
+    containerCount: 5,
+    containersRunning: 2,
+    containersPaused: 3,
+    containersStopped: 0,
+    driver: overlay2,
+    operatingSystem: Linux,
+    osVersion: 5.15,
+    osType: linux,
+    architecture: x86_64
+  }
+}

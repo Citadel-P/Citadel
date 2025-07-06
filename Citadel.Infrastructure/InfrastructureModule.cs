@@ -11,13 +11,13 @@ using Hosting.DockerClient;
 using Infrastructure.Connectors;
 using Infrastructure.Connectors.AgentConnectors;
 using Infrastructure.Connectors.LocalConnectors;
-using Infrastructure.TypeHandlers;
 using Infrastructure.DockerHub;
 using Infrastructure.GithubCr;
 using Infrastructure.HttpClients.Serializer;
 using Infrastructure.Persistence;
 using Infrastructure.Repositories;
 using Infrastructure.Services;
+using Infrastructure.TypeHandlers;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -31,16 +31,16 @@ namespace Infrastructure;
 /// </summary>
 public static class InfrastructureModule
 {
-    internal const string connectionString = $"Data Source={Constants.DbFilePath};Cache=Shared;";
+    internal const string connectionString = $"Data Source={Constants.DbFilePath};Mode=ReadWriteCreate;Pooling=True;";
     private static readonly RefitSettings refitSettings = new() { ContentSerializer = new STJSourceGeneratorSerializer() };
 
     /// <summary>
     /// Registers the infrastructure module services and configurations.
     /// </summary>
-    public static IServiceCollection RegisterInfrastructureModule(this IServiceCollection services)
+    public static IServiceCollection RegisterInfrastructureModule(this IServiceCollection services, IWebHostEnvironment environment)
         => services
             .AddServices()
-            .InitializeDb()
+            .InitializeDb(environment)
             .AddGrpcClients()
             .AddHttpClients()
             .RegisterDockerClient();
@@ -88,16 +88,13 @@ public static class InfrastructureModule
     /// <summary>
     /// Initializes the database.
     /// </summary>
-    private static IServiceCollection InitializeDb(this IServiceCollection services)
+    private static IServiceCollection InitializeDb(this IServiceCollection services, IWebHostEnvironment environment)
     {
         Batteries_V2.Init();
         RegisterTypeHandlers();
 
-        using var serviceProvider = services.BuildServiceProvider();
-        var env = serviceProvider.GetRequiredService<IHostEnvironment>();
-
         // Run the migration logic directly if not in a test environment
-        if (!env.IsEnvironment("IntegrationTests"))
+        if (!environment.IsEnvironment("IntegrationTests"))
         {
             EnsureDatabaseFileExists();
             PerformDatabaseUpgrade();
@@ -105,7 +102,8 @@ public static class InfrastructureModule
         
         return services
             .AddScoped<IUnitOfWork, UnitOfWork>()
-            .AddScoped<IDbConnectionFactory>(_ => new SqliteConnectionFactory(connectionString));
+            .AddScoped(sp => sp.GetRequiredService<IDbConnectionFactory>().Create())
+            .AddSingleton<IDbConnectionFactory>(new SqliteConnectionFactory(connectionString));
     }
 
     private static void EnsureDatabaseFileExists()

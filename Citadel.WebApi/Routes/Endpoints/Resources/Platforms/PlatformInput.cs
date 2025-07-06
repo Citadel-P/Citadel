@@ -5,7 +5,7 @@ namespace WebApi.Routes.Endpoints.Resources.Platforms;
 
 public sealed record PlatformInput(
     string Name,
-    string Address,
+    string? Address,
     PlatformType Type = PlatformType.Docker,
     PlatformConnectorType ConnectorType = PlatformConnectorType.Local)
 {

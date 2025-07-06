@@ -1,12 +1,10 @@
 ﻿using System.Text;
-using System.Threading;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Platforms;
-using Infrastructure.Persistence;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -80,7 +78,6 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
 
         // Act
-
         var response = await Client.PatchAsync($"/api/v1/platforms/{platformId}", content, cancellationToken: TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 

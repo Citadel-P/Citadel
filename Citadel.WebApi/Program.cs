@@ -9,7 +9,7 @@ using Infrastructure;
 using Microsoft.AspNetCore.Http.Json;
 using WebApi;
 
-CitadelWebApplicationBuilder.Create(args, new CitadelWebApplicationOptions()
+await CitadelWebApplicationBuilder.Create(args, new CitadelWebApplicationOptions()
 {
     Configure = Configure,
     WithServices = WithServices,
@@ -22,7 +22,7 @@ void WithServices(WebApplicationBuilder builder)
     builder.Services
         .RegisterWebApiModule(builder.Configuration)
         .RegisterApplicationModule()
-        .RegisterInfrastructureModule()
+        .RegisterInfrastructureModule(builder.Environment)
         .AddHealthChecks();
 
     AddIOptionsFromConfiguration(builder.Services, builder.Configuration);

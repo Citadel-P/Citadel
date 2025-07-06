@@ -6,7 +6,7 @@ using Domain.Contracts.Resources.Identity;
 
 namespace Infrastructure.Persistence;
 
-internal sealed class UserRepository(IDbConnection db, IDbTransaction tx) : IUserRepository
+internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) : IUserRepository
 {
     public async Task<UserAuthInfo?> GetUserAuthInfoByEmailAsync(string email, CancellationToken cancellationToken)
     {
@@ -35,7 +35,7 @@ internal sealed class UserRepository(IDbConnection db, IDbTransaction tx) : IUse
         var result = await db.QueryAsync<(Guid Id, string Name, string Email, string Password, string RoleName, int? PermissionCode)>(new CommandDefinition(
             sql,
             new { Email = email},
-            transaction: tx,
+            transaction: tx(),
             cancellationToken: cancellationToken));
 
         return result

@@ -6836,7 +6836,8 @@
             "type": "string"
           },
           "address": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "type": {
             "$ref": "#/components/schemas/PlatformType2"

@@ -1,5 +1,4 @@
 ﻿using System.Data;
-using System.Threading;
 using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -8,7 +7,7 @@ using Domain.Entities.Identity;
 
 namespace Infrastructure.Persistence;
 
-internal class RefreshTokenRepository(IDbConnection db, IDbTransaction tx) : IRefreshTokenRepository 
+internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx) : IRefreshTokenRepository 
 {
     public Task<int> AddAsync(RefreshToken refreshToken, CancellationToken cancellationToken)
     {
@@ -22,7 +21,7 @@ internal class RefreshTokenRepository(IDbConnection db, IDbTransaction tx) : IRe
         return db.ExecuteAsync(new CommandDefinition(
             sql,
             parameters,
-            tx, 
+            tx(), 
             cancellationToken: cancellationToken));
     }
 
@@ -32,7 +31,7 @@ internal class RefreshTokenRepository(IDbConnection db, IDbTransaction tx) : IRe
         return db.ExecuteScalarAsync<int>(new CommandDefinition(
             sql,
             new { UserId = userId },
-            tx, 
+            tx(), 
             cancellationToken: cancellationToken));
     }
 
@@ -60,7 +59,7 @@ internal class RefreshTokenRepository(IDbConnection db, IDbTransaction tx) : IRe
         var result = await db.QueryAsync<(Guid Id, string Name, string Email, string RoleName, int? PermissionCode)>(new CommandDefinition(
             sql,
             new { Id = id },
-            transaction: tx,
+            transaction: tx(),
             cancellationToken: cancellationToken));
 
         return result
@@ -93,7 +92,7 @@ internal class RefreshTokenRepository(IDbConnection db, IDbTransaction tx) : IRe
             )
             """;
 
-        var cmd = new CommandDefinition(sql, new { UserId = userId, Limit = tokensToRemoveCount }, transaction: tx, cancellationToken: cancellationToken);
+        var cmd = new CommandDefinition(sql, new { UserId = userId, Limit = tokensToRemoveCount }, transaction: tx(), cancellationToken: cancellationToken);
         return db.ExecuteAsync(cmd);
     }
 
@@ -103,7 +102,7 @@ internal class RefreshTokenRepository(IDbConnection db, IDbTransaction tx) : IRe
         return db.ExecuteAsync(new CommandDefinition(
             sql,
             new { Id = id },
-            tx, 
+            tx(), 
             cancellationToken: cancellationToken));
     }
 }

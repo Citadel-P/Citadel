@@ -7,7 +7,7 @@ using Infrastructure.Persistence.Mappers;
 
 namespace Infrastructure.Persistence;
 
-internal class ContainerStatRepository(IDbConnection db, IDbTransaction tx) : IContainerStatRepository 
+internal class ContainerStatRepository(IDbConnection db, Func<IDbTransaction> tx) : IContainerStatRepository 
 {
     public async Task<IEnumerable<ContainerStat>> GetStatsAggregatedLast24HoursAsync(string containerId, CancellationToken cancellationToken)
     {
@@ -29,14 +29,14 @@ internal class ContainerStatRepository(IDbConnection db, IDbTransaction tx) : IC
 
         var last24h = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeSeconds();
         var result = await db.QueryAsync<ContainerStatDto>(
-            new CommandDefinition(sql, new { ContainerId = containerId, Last24h = last24h }, transaction: tx, cancellationToken: cancellationToken));
+            new CommandDefinition(sql, new { ContainerId = containerId, Last24h = last24h }, transaction: tx(), cancellationToken: cancellationToken));
         return result?.ToDomain() ?? [];
     }
 
     public Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken)
     {
         const string sql = "DELETE FROM ContainerStats WHERE Created < @CreatedBefore";
-        var command = new CommandDefinition(sql, new { CreatedBefore = createdBeforeEpochSeconds }, transaction: tx, cancellationToken: cancellationToken);
+        var command = new CommandDefinition(sql, new { CreatedBefore = createdBeforeEpochSeconds }, transaction: tx(), cancellationToken: cancellationToken);
         return db.ExecuteAsync(command);
     }
 
@@ -68,6 +68,6 @@ internal class ContainerStatRepository(IDbConnection db, IDbTransaction tx) : IC
         }
 
         var finalSql = string.Format(sql, string.Join(", ", valueRows));
-        return db.ExecuteAsync(new CommandDefinition(finalSql, parameters, transaction: tx, cancellationToken: cancellationToken));
+        return db.ExecuteAsync(new CommandDefinition(finalSql, parameters, transaction: tx(), cancellationToken: cancellationToken));
     }
 }

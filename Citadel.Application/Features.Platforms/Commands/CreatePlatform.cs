@@ -16,7 +16,7 @@ using Microsoft.Extensions.Logging;
 namespace Application.Features.Platforms.Commands;
 
 [RequirePermission(nameof(AppPermission.Platform_Create))]
-public sealed record CreatePlatform(string Name, string Address, PlatformType Type, PlatformConnectorType ConnectorType) : ICommand<Result<Platform>>
+public sealed record CreatePlatform(string Name, string? Address, PlatformType Type, PlatformConnectorType ConnectorType) : ICommand<Result<Platform>>
 {
     internal class Validator : AbstractValidator<CreatePlatform>
     {
@@ -37,8 +37,12 @@ internal sealed class CreatePlatformHandler(
 {
     public async ValueTask<Result<Platform>> Handle(CreatePlatform command, CancellationToken cancellationToken)
     {
+        if (command.ConnectorType == PlatformConnectorType.Local)
+        {
+            command = command with { Address = Constants.LocalDockerHostUrl };
+        }
         // Check if the platform already exists
-        if (await unitOfWork.Platforms.NameOrAddressExistsAsync(command.Name, command.Address, cancellationToken: cancellationToken))
+        if (await unitOfWork.Platforms.NameOrAddressExistsAsync(command.Name, command.Address!, cancellationToken: cancellationToken))
         {
             return Result.Failure<Platform>(new ConflictError("A platform with the same [Name] or [Address] already exists!"));
         }
@@ -57,7 +61,7 @@ internal sealed class CreatePlatformHandler(
     {
         var param = new GetPlatformCommand
         (
-            PlatformAddress: command.Address,
+            PlatformAddress: command.Address!,
             PlatformName: command.Name
         );
         var platformConnector = platformConnectorFactory.GetConnector(command.ConnectorType);

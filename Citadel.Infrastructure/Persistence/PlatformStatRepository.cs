@@ -7,7 +7,7 @@ using Infrastructure.Persistence.Mappers;
 
 namespace Infrastructure.Persistence;
 
-internal class PlatformStatRepository(IDbConnection db, IDbTransaction tx) : IPlatformStatRepository 
+internal class PlatformStatRepository(IDbConnection db, Func<IDbTransaction> tx) : IPlatformStatRepository 
 {
     public async Task<IEnumerable<PlatformStat>> GetStatsAggregatedLast24HoursAsync(Guid platformId, CancellationToken cancellationToken)
     {
@@ -27,7 +27,7 @@ internal class PlatformStatRepository(IDbConnection db, IDbTransaction tx) : IPl
         
         var last24h = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeSeconds();
         var result = await db.QueryAsync<PlatformStatDto>(
-            new CommandDefinition(sql, new { PlatformId = platformId, Last24h = last24h }, transaction: tx, cancellationToken: cancellationToken));
+            new CommandDefinition(sql, new { PlatformId = platformId, Last24h = last24h }, transaction: tx(), cancellationToken: cancellationToken));
         
         return result.ToDomain();
     }
@@ -56,6 +56,6 @@ internal class PlatformStatRepository(IDbConnection db, IDbTransaction tx) : IPl
             i++;
         }
         var finalSql = string.Format(sql, string.Join(", ", valueRows));
-        return db.ExecuteAsync(new CommandDefinition(finalSql, parameters, transaction: tx, cancellationToken: cancellationToken));
+        return db.ExecuteAsync(new CommandDefinition(finalSql, parameters, transaction: tx(), cancellationToken: cancellationToken));
     }
 }

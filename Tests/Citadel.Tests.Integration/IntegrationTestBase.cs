@@ -1,4 +1,5 @@
-﻿using System.Net.Http.Headers;
+﻿using System.Data;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.Security.Claims;
 using Application.Services;
@@ -191,7 +192,7 @@ internal sealed class InMemoryTestDbConnectionFactory : IDbConnectionFactory, ID
 
     public string GetConnectionString() => _connectionString;
 
-    public SqliteConnection Create()
+    public IDbConnection Create()
     {
         var conn = new SqliteConnection(_connectionString);
         conn.Open();

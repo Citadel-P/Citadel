@@ -1,10 +1,11 @@
-﻿using Microsoft.Data.Sqlite;
+﻿using System.Data;
+using Microsoft.Data.Sqlite;
 
 namespace Infrastructure.Persistence;
 
 public interface IDbConnectionFactory
 {
-    SqliteConnection Create();
+    IDbConnection Create();
 }
 
 internal sealed class SqliteConnectionFactory : IDbConnectionFactory
@@ -16,17 +17,17 @@ internal sealed class SqliteConnectionFactory : IDbConnectionFactory
         _connectionString = connectionString;
     }
 
-    public SqliteConnection Create()
+    public IDbConnection Create()
     {
         var conn = new SqliteConnection(_connectionString);
         conn.Open();
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
+            PRAGMA journal_mode = WAL;
+            PRAGMA synchronous = NORMAL;
             PRAGMA foreign_keys = ON;
-            PRAGMA journal_mode=WAL;
-            PRAGMA synchronous=NORMAL;
-            PRAGMA busy_timeout=3000;
+            PRAGMA busy_timeout = 5000;
         """;
         cmd.ExecuteNonQuery();
 
