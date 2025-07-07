@@ -3,7 +3,7 @@ using Hosting.Common;
 
 namespace Tests.Integration.Application.Features.Auth;
 
-public class RefreshTokenCommandTests : IntegrationTestBase<WebApi.Program>
+public class RefreshTokenCommandTests : IntegrationTestBase
 {
     [Fact]
     public async Task Handle_ReturnsSuccess_WhenCredentialsValid()

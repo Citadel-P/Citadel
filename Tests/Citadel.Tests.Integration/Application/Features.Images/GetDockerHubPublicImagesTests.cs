@@ -3,7 +3,7 @@ using Domain.Contracts.Resources.Registries;
 
 namespace Tests.Integration.Application.Features.Images;
 
-public class GetDockerHubPublicImagesTests : IntegrationTestBase<WebApi.Program>
+public class GetDockerHubPublicImagesTests : IntegrationTestBase
 {
     [Fact]
     public async Task GetDockerHubPublicImages_ReturnsDefaultImages_WhenNoImageNameProvided()

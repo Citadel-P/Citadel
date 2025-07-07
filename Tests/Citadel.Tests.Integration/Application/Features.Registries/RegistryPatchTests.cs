@@ -9,7 +9,7 @@ using Moq;
 
 namespace Tests.Integration.Application.Features.Registries;
 
-public class RegistryPatchTests : IntegrationTestBase<WebApi.Program>
+public class RegistryPatchTests : IntegrationTestBase
 {
     private Guid registryId;
     private readonly Mock<IRegistryConnectorStrategy> registryConnectorMock = new();
@@ -127,7 +127,7 @@ public class RegistryPatchTests : IntegrationTestBase<WebApi.Program>
         }
         """;
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
-        var token = CreateJwtTokenAsync([]);
+        var token = CreateJwtToken([]);
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
         // Act

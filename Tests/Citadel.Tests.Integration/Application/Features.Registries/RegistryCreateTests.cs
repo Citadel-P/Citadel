@@ -8,7 +8,7 @@ using Moq;
 
 namespace Tests.Integration.Application.Features.Registries;
 
-public class RegistryCreateTests : IntegrationTestBase<WebApi.Program>
+public class RegistryCreateTests : IntegrationTestBase
 {
     private readonly Mock<IRegistryConnectorStrategy> registryConnectorMock = new();
     private readonly Mock<IRegistryConnectorResolver> registryConnectorResolverMock = new();

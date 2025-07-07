@@ -8,10 +8,11 @@ using Domain.Entities.Platforms;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Platforms;
 
-public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
+public class PlatformPatchTests : IntegrationTestBase
 {
     private Guid platformId;
 
@@ -63,7 +64,7 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
                      .Returns(platformConnector.Object);
 
         platformConnector.Setup(x => x.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()))
-                         .ReturnsAsync(Result.Success(GetDummyPlatformResult()));
+                         .ReturnsAsync(Result.Success(Fakes.GetDummyPlatformResult()));
 
         healthMonitorMock.Setup(x => x.UntrackPlatform("https://original.address", It.IsAny<CancellationToken>()))
                          .ReturnsAsync(true);
@@ -106,7 +107,7 @@ public class PlatformPatchTests : IntegrationTestBase<WebApi.Program>
         """;
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
 
-        var token = CreateJwtTokenAsync([]);
+        var token = CreateJwtToken([]);
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
         // Act

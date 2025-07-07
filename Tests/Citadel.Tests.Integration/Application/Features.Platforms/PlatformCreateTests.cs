@@ -10,10 +10,11 @@ using Hosting.Common;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Platforms;
 
-public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
+public class PlatformCreateTests : IntegrationTestBase
 {
     private readonly Mock<IConnectorFactory<IPlatformConnector>> platformFactoryMock = new();
     private readonly Mock<IConnectorFactory<IContainerConnector>> containerFactoryMock = new();
@@ -38,13 +39,13 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
                       .Returns(platformConnector.Object);
 
         platformConnector.Setup(x => x.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()))
-                         .ReturnsAsync(Result.Success(GetDummyPlatformResult()));
+                         .ReturnsAsync(Result.Success(Fakes.GetDummyPlatformResult()));
 
         containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
             .Returns(containerConnector.Object);
 
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(GetDummyContainers().ToDictionary(c => c.ContainerId)));
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(Fakes.GetDummyContainers().ToDictionary(c => c.ContainerId)));
 
         healthMonitorMock.Setup(x => x.TrackPlatform(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<PlatformConnectorType>())).Returns(true);
 
@@ -72,7 +73,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
         var containers = await uow.Containers.GetAllWithLatestStatAsync(platform.Id, TestContext.Current.CancellationToken);
 
         Assert.NotNull(platform);
-        Assert.Equal(3, containers.Count());
+        Assert.Equal(3, containers?.Count());
         healthMonitorMock.Verify(x => x.TrackPlatform("https://localhost:9000", platform.Id, PlatformConnectorType.Agent), Times.Once);
         await VerifyJson(responseBody);
     }
@@ -85,13 +86,13 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
                       .Returns(platformConnector.Object);
 
         platformConnector.Setup(x => x.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()))
-                         .ReturnsAsync(Result.Success(GetDummyPlatformResult()));
+                         .ReturnsAsync(Result.Success(Fakes.GetDummyPlatformResult()));
 
         containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
             .Returns(containerConnector.Object);
 
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(GetDummyContainers().ToDictionary(c => c.ContainerId)));
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(Fakes.GetDummyContainers().ToDictionary(c => c.ContainerId)));
 
         healthMonitorMock.Setup(x => x.TrackPlatform(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<PlatformConnectorType>())).Returns(true);
 
@@ -204,7 +205,7 @@ public class PlatformCreateTests : IntegrationTestBase<WebApi.Program>
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
-        var token = CreateJwtTokenAsync([]); // No permissions
+        var token = CreateJwtToken([]); // No permissions
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
         // Act

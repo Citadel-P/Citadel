@@ -2,7 +2,7 @@
 
 namespace Tests.Integration.Application.Features.Auth;
 
-public class LoginCommandTests : IntegrationTestBase<WebApi.Program>
+public class LoginCommandTests : IntegrationTestBase
 {
     [Fact]
     public async Task Handle_ReturnsSuccess_WhenCredentialsValid()

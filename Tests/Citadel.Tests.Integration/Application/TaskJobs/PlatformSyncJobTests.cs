@@ -13,10 +13,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Moq;
+using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
 
-public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
+public class PlatformSyncJobTests : IntegrationTestBase
 {
     private readonly Mock<IConnectorFactory<IPlatformConnector>> connectorMock = new();
     private readonly Mock<IPlatformHealthMonitorJob> healthMonitorMock = new();
@@ -76,7 +77,7 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
                       .Returns(platformConnector.Object);
 
         platformConnector.Setup(x => x.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()))
-                         .ReturnsAsync(Result.Success(GetDummyPlatformResult()));
+                         .ReturnsAsync(Result.Success(Fakes.GetDummyPlatformResult()));
 
         // Act
         await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
@@ -101,7 +102,7 @@ public class PlatformSyncJobTests : IntegrationTestBase<WebApi.Program>
                       .Returns(platformConnector.Object);
 
         platformConnector.Setup(x => x.GetPlatformAsync(It.IsAny<GetPlatformCommand>(), It.IsAny<CancellationToken>()))
-                         .ReturnsAsync(Result.Success(GetDummyPlatformResult()));
+                         .ReturnsAsync(Result.Success(Fakes.GetDummyPlatformResult()));
 
         // Act
         await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: false),

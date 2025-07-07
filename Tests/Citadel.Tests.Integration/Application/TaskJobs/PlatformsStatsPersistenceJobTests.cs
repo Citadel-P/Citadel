@@ -10,10 +10,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Moq;
+using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
 
-public class PlatformsStatsPersistenceJobTests : IntegrationTestBase<WebApi.Program>
+public class PlatformsStatsPersistenceJobTests : IntegrationTestBase
 {
     private readonly Mock<IConnectorFactory<IPlatformConnector>> platformFactoryMock = new();
     private readonly Mock<IPlatformConnector> platformConnector = new();
@@ -48,7 +49,7 @@ public class PlatformsStatsPersistenceJobTests : IntegrationTestBase<WebApi.Prog
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
-        var platform = GetDummyPlatform();
+        var platform = Fakes.GetDummyPlatform();
 
         await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
         await uow.CommitAsync();
