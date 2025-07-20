@@ -1,0 +1,55 @@
+﻿using System.Text;
+using Application.Services;
+using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Entities;
+using Domain.Entities.Registries;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Tests.Integration.Application.Features.Registries;
+
+public class RegistryDeleteTests : IntegrationTestBase
+{
+    private Guid registryId;
+
+    protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
+    {
+        var registry = new Registry("fake", "http://registry1", RegistryType.GitHub,
+                new GitHubRegistry("ghcr1", "pat1", GhcrAccountType.User));
+        await uow.Registries.AddAsync(registry, TestContext.Current.CancellationToken);
+        await uow.CommitAsync();
+        registryId = registry.Id;
+    }
+
+    [Fact]
+    public async Task Delete_Registry_ReturnsSuccess()
+    {
+        // Arrange
+        var content = $$"""
+        {
+            "ids": ["{{registryId}}"]
+        }
+        """;
+
+        // Act
+        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/registries")
+        {
+            Content = new StringContent(content, Encoding.UTF8, "application/json")
+        };
+
+        var response = await Client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+
+        // Check DB
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var registries = await uow.Registries.GetAllAsync(TestContext.Current.CancellationToken);
+
+        Assert.Empty(registries);
+        // Response has no content
+        Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
+}

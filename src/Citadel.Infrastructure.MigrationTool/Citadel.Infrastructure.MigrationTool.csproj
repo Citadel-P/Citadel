@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+	<ImplicitUsings>enable</ImplicitUsings>
+	<RootNamespace>Infrastructure.MigrationTool</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentMigrator.Runner" />
+    <PackageReference Include="FluentMigrator.Runner.SQLite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Citadel.Infrastructure\Citadel.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

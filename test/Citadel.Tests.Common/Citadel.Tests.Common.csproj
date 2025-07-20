@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<RootNamespace>Tests.Common</RootNamespace>
+		<PublishTrimmed>false</PublishTrimmed>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Bogus" />
+		<PackageReference Include="Microsoft.NET.Test.Sdk" />
+		<PackageReference Include="Moq" />
+		<PackageReference Include="Verify.XunitV3" />
+		<PackageReference Include="xunit.v3" />
+		<PackageReference Include="xunit.runner.visualstudio" >
+		  <PrivateAssets>all</PrivateAssets>
+		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\src\Citadel.Application\Citadel.Application.csproj" />
+		<ProjectReference Include="..\..\src\Citadel.contracts\Citadel.Hosting.Common\Citadel.Hosting.Common.csproj" />
+		<ProjectReference Include="..\..\src\Citadel.contracts\Citadel.Hosting\Citadel.Hosting.csproj" />
+		<ProjectReference Include="..\..\src\Citadel.Contracts\Citadel.SourceGen\Citadel.SourceGen.csproj" />
+		<ProjectReference Include="..\..\src\Citadel.Infrastructure\Citadel.Infrastructure.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Content Include="xunit.runner.json">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	</ItemGroup>
+
+</Project>

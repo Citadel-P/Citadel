@@ -1,0 +1,46 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+	<RootNamespace>Infrastructure</RootNamespace>
+	<Dapper_SqlSyntax>SQLite</Dapper_SqlSyntax>
+    <InterceptorsPreviewNamespaces>$(InterceptorsPreviewNamespaces);Dapper.AOT</InterceptorsPreviewNamespaces>
+  </PropertyGroup>
+
+  <ItemGroup>
+	<PackageReference Include="Dapper" />
+	<PackageReference Include="Dapper.AOT" />
+	<PackageReference Include="FluentMigrator" />
+	<PackageReference Include="Refit" />
+	<PackageReference Include="Refit.HttpClientFactory" />
+	<PackageReference Include="dbup-sqlite" />
+	<PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+	<PackageReference Include="Grpc.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+	  <ProjectReference Include="..\Citadel.Contracts\Citadel.Hosting.DockerClient\Citadel.Hosting.DockerClient.csproj" />
+	  <ProjectReference Include="..\Citadel.Domain\Citadel.Domain.csproj" />
+  </ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Include="Scripts\*.sql" /> <!--for dbup-->
+	</ItemGroup>
+
+   <ItemGroup>
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.DockerClient\Protos\container_service.proto" GrpcServices="Client" Link="Protos\container_service.proto" />
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.DockerClient\Protos\image_service.proto" GrpcServices="Client" Link="Protos\image_service.proto" />
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.DockerClient\Protos\platform_service.proto" GrpcServices="Client" Link="Protos\platform_service.proto" />
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.DockerClient\Protos\network_service.proto" GrpcServices="Client" Link="Protos\network_service.proto" />
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.DockerClient\Protos\volume_service.proto" GrpcServices="Client" Link="Protos\volume_service.proto" />
+
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.DockerClient\Protos\Common\platform_model.proto" GrpcServices="None" Link="Protos\Common\platform_model.proto" />
+	   <Protobuf Include="..\Citadel.Contracts\Citadel.Hosting.DockerClient\Protos\Common\container_model.proto" GrpcServices="None" Link="Protos\Common\container_model.proto" />
+   </ItemGroup>
+
+   <ItemGroup>
+     <Folder Include="Scripts\" />
+   </ItemGroup>
+
+</Project>
