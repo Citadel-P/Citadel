@@ -40,12 +40,18 @@ jobs:
           submodules: true # Ensure submodules are updated
           fetch-depth: 0 # NB.GV needs full history to calculate version
           token: ${{ secrets.ACCESS_TOKEN }} # Use GitHub token for authentication
-          
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore
+
       - name: Run tests
-        run: dotnet test --verbosity normal
+        run: dotnet test --no-restore --verbosity normal
         
-      # Install the cosign tool except on PR
-      # https://github.com/sigstore/cosign-installer
       - name: Install cosign
         if: github.event_name != 'pull_request'
         uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 #v3.5.0
