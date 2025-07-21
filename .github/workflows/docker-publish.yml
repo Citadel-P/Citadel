@@ -41,7 +41,7 @@ jobs:
           token: ${{ secrets.ACCESS_TOKEN }} # Use GitHub token for authentication
           
       - name: Run tests
-        run: dotnet test ./test --no-restore --verbosity normal
+        run: dotnet test --no-restore --verbosity normal
         
       # Install the cosign tool except on PR
       # https://github.com/sigstore/cosign-installer
