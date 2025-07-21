@@ -48,9 +48,9 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore Citadel.sln
       - name: Build
-        run: dotnet build --no-restore
+        run: dotnet build Citadel.sln --no-restore -c Release
       - name: Test
-        run: dotnet test --no-build --verbosity normal
+        run: dotnet test Citadel.sln --no-build --verbosity normal
         
       - name: Install cosign
         if: github.event_name != 'pull_request'
