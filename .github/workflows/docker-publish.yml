@@ -37,7 +37,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: true # Ensure submodules are updated
+          submodules: recursive # Ensure submodules are updated
           fetch-depth: 0 # NB.GV needs full history to calculate version
           token: ${{ secrets.ACCESS_TOKEN }} # Use GitHub token for authentication
       
@@ -45,12 +45,12 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
-
       - name: Restore dependencies
         run: dotnet restore
-
-      - name: Run tests
-        run: dotnet test --no-restore --verbosity normal
+      - name: Build
+        run: dotnet build --no-restore
+      - name: Test
+        run: dotnet test --no-build --verbosity normal
         
       - name: Install cosign
         if: github.event_name != 'pull_request'
