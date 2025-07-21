@@ -50,7 +50,7 @@ jobs:
       - name: Build
         run: dotnet build --no-restore -c Release
       - name: Test
-        run: dotnet test --no-build --verbosity normal
+        run: dotnet test Citadel.sln --no-build --verbosity normal
         
       - name: Install cosign
         if: github.event_name != 'pull_request'
