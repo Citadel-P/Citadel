@@ -40,7 +40,9 @@ jobs:
           submodules: recursive # Ensure submodules are updated
           fetch-depth: 0 # NB.GV needs full history to calculate version
           token: ${{ secrets.ACCESS_TOKEN }} # Use GitHub token for authentication
-      
+          
+      - name: Initialize and update submodules
+        run: git submodule update --init --recursive --force
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
