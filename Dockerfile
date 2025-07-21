@@ -4,6 +4,7 @@ EXPOSE 8000
 EXPOSE 8001
 
 ENV \
+    DOTNET_RUNNING_IN_CONTAINER=true \
     DOTNET_GCServer=1 \
     DOTNET_System_GC_RetainVM=0 \
     DOTNET_TC_OptimizeForContainer=1
@@ -11,12 +12,18 @@ ENV \
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-COPY ["Directory.Build.props", "."]
 COPY ["nuget.config", "."]
+COPY ["Directory.Build.props", "."]
+COPY ["Directory.Packages.props", "."]
+
 COPY ["src/Citadel.WebApi/Citadel.WebApi.csproj", "Citadel.WebApi/"]
 COPY ["src/Citadel.Domain/Citadel.Domain.csproj", "Citadel.Domain/"]
 COPY ["src/Citadel.Application/Citadel.Application.csproj", "Citadel.Application/"]
 COPY ["src/Citadel.Infrastructure/Citadel.Infrastructure.csproj", "Citadel.Infrastructure/"]
+
+COPY ["src/Citadel.Contracts/Directory.Build.props", "Citadel.Contracts/"]
+COPY ["src/Citadel.Contracts/Directory.Packages.props", "Citadel.Contracts/"]
+
 COPY ["src/Citadel.Contracts/Citadel.Hosting/Citadel.Hosting.csproj", "Citadel.Contracts/Citadel.Hosting/"]
 COPY ["src/Citadel.Contracts/Citadel.SourceGen/Citadel.SourceGen.csproj", "Citadel.Contracts/Citadel.SourceGen/"]
 COPY ["src/Citadel.Contracts/Citadel.Hosting.Common/Citadel.Hosting.Common.csproj", "Citadel.Contracts/Citadel.Hosting.Common/"]

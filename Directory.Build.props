@@ -1,8 +1,8 @@
 <Project>
   <PropertyGroup>
-    <Description>Citadel API for managing platforms, containers, registries, images, networks, and volumes.</Description>
     <Authors>Hammou Arras</Authors>
     <Copyright>Citadel ©, 2024 onwards</Copyright>
+    <Description>Citadel API for managing platforms, containers, registries, images, networks, and volumes.</Description>
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -14,7 +14,8 @@
     <RepositoryUrl>https://github.com/Citadel-P/Citadel</RepositoryUrl>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
-  <ItemGroup>
-	  <PackageReference Include="Nerdbank.GitVersioning" PrivateAssets="all" />
-  </ItemGroup>
+	
+	<ItemGroup Condition="'$(DOTNET_RUNNING_IN_CONTAINER)' != 'true'">
+		<PackageReference Include="Nerdbank.GitVersioning" PrivateAssets="all" />
+	</ItemGroup>
 </Project>
