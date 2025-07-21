@@ -41,18 +41,16 @@ jobs:
           fetch-depth: 0 # NB.GV needs full history to calculate version
           token: ${{ secrets.ACCESS_TOKEN }} # Use GitHub token for authentication
           
-      - name: Initialize and update submodules
-        run: git submodule update --init --recursive --force
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
       - name: Restore dependencies
-        run: dotnet restore Citadel.sln
+        run: dotnet restore 
       - name: Build
-        run: dotnet build Citadel.sln --no-restore -c Release
+        run: dotnet build --no-restore -c Release
       - name: Test
-        run: dotnet test Citadel.sln --no-build --verbosity normal
+        run: dotnet test --no-build --verbosity normal
         
       - name: Install cosign
         if: github.event_name != 'pull_request'
