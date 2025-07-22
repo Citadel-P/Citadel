@@ -30,6 +30,19 @@ internal static class ContainerMapper
             memoryLimit: container.MemoryLimit,
             rxBytes: container.RxBytes,
             txBytes: container.TxBytes,
-            created: created ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            created: created ?? (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds
         );
+
+    public static void Map(this DockerContainerStat container, ContainerStat destination, Guid containerId, long? created)
+    {
+        destination.ReInitialize(
+            containerId: containerId,
+            created: created ?? (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds,
+            memoryUsage: container.MemoryUsage,
+            cpuUsage: container.CpuUsage,
+            memoryLimit: container.MemoryLimit,
+            rxBytes: container.RxBytes,
+            txBytes: container.TxBytes
+        );
+    }
 }

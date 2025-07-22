@@ -10,6 +10,7 @@ using Domain.Entities;
 using Grpc.Core;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.ObjectPool;
 using Microsoft.Extensions.Options;
 
 namespace Application.TaskJobs;
@@ -19,6 +20,8 @@ namespace Application.TaskJobs;
 /// </summary>
 internal class ContainerStatsStreamerJob(
     IOptions<JobConfiguration> options,
+    ObjectPool<List<ContainerStat>> listPool,
+    ObjectPool<ContainerStat> containerStatPool,
     ChannelWriter<ContainersStatBatch> channel,
     IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
@@ -82,13 +85,15 @@ internal class ContainerStatsStreamerJob(
                     {
                         if (platformContainerCache.TryGetContainers(platformId, out var ids))
                         {
-                            List<ContainerStat> stats = new(stream.Containers.Count);
-                            var snapshotTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                            var stats = listPool.Get();
+                            var snapshotTime = (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds; //DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                             foreach (var kvp in stream.Containers)
                             {
                                 if (ids.TryGetValue(kvp.Key, out var containerId))
                                 {
-                                    stats.Add(kvp.Value.Map(containerId, snapshotTime));
+                                    var containerStat = containerStatPool.Get();
+                                    kvp.Value.Map(containerStat, containerId, snapshotTime);
+                                    stats.Add(containerStat);
                                 }
                             }
 
@@ -114,4 +119,4 @@ internal class ContainerStatsStreamerJob(
     }
 }
 
-internal sealed record ContainersStatBatch(Guid PlatformId, IEnumerable<ContainerStat> Stats);
+internal sealed record ContainersStatBatch(Guid PlatformId, List<ContainerStat> Stats);

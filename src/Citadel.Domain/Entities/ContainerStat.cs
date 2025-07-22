@@ -18,6 +18,27 @@ public class ContainerStat(
     public double? RxBytes { get; private set; } = rxBytes;
     public double? TxBytes { get; private set; } = txBytes;
 
+    public ContainerStat() : this(Guid.Empty, 0, 0, 0, 0, 0) { }
+
+    public void ReInitialize(
+        Guid containerId,
+        long created,
+        double? memoryUsage,
+        double? cpuUsage,
+        double? memoryLimit,
+        double? rxBytes,
+        double? txBytes)
+    {
+        Id = Guid.CreateVersion7();
+        ContainerId = containerId;
+        Created = created;
+        MemoryUsage = memoryUsage;
+        CpuUsage = cpuUsage;
+        MemoryLimit = memoryLimit;
+        RxBytes = rxBytes;
+        TxBytes = txBytes;
+    }
+
     public static ContainerStat FromPersistence(
         Guid id,
         Guid containerId,

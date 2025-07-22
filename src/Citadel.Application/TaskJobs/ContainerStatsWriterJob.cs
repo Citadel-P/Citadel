@@ -6,6 +6,7 @@ using Domain.Entities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.ObjectPool;
 using Microsoft.Extensions.Options;
 
 namespace Application.TaskJobs;
@@ -13,43 +14,41 @@ namespace Application.TaskJobs;
 internal class ContainerStatsWriterJob(
     IServiceScopeFactory scopeFactory,
     IOptions<JobConfiguration> options,
+    ObjectPool<List<ContainerStat>> listPool,
+    ObjectPool<ContainerStat> containerStatPool,
     ChannelReader<ContainersStatBatch> reader,
     ISignalRConnectionTracker connectionTracker,
     IContainerHubDispatcher containerHubDispatcher,
     ILogger<ContainerStatsWriterJob> logger) : BackgroundService
 {
-    private readonly int BatchSize = options.Value?.BatchSize ?? 500;
     // Updates to db will be flushed every x seconds or when batch size is reached.
-    private readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60); 
+    private readonly TimeSpan flushInterval = TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60);
+    private readonly int batchSize = options.Value?.BatchSize ?? 100;
+    private readonly Dictionary<Guid, List<ContainerStat>> buffer = [];  // Key: PlatformId
+    private DateTime lastFlush = DateTime.UtcNow;
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        var buffer = new Dictionary<Guid, List<ContainerStat>>(); // Key: PlatformId
-        var lastFlush = DateTime.UtcNow;
-
         try
         {
             await foreach (var batch in reader.ReadAllAsync(cancellationToken))
             {
-                // Add to buffer
-                if (!buffer.TryGetValue(batch.PlatformId, out var list))
+                try
                 {
-                    list = [];
-                    buffer[batch.PlatformId] = list;
-                }
-                list.AddRange(batch.Stats);
+                    AccumulateBatchStats(batch);
+                    await NotifyClients(batch);
 
-                // Flush if batch size exceeded or interval exceeded
-                int totalCount = buffer.Sum(x => x.Value.Count);
-                if (totalCount >= BatchSize || DateTime.UtcNow - lastFlush >= FlushInterval)
+                    if (ShouldFlush())
+                    {
+                        await FlushToDatabase(cancellationToken);
+                    }
+                }
+                finally
                 {
-                    await SaveBatchToDb(buffer, cancellationToken);
-                    buffer.Clear();
-                    lastFlush = DateTime.UtcNow;
+                    // Return stats to pool
+                    batch.Stats.Clear();
+                    listPool.Return(batch.Stats);
                 }
-
-                // Push to clients
-                await NotifyClients(batch);
             }
         }
         catch (OperationCanceledException)
@@ -60,12 +59,52 @@ internal class ContainerStatsWriterJob(
         {
             logger.LogError(ex, $"Error in {nameof(ContainerStatsWriterJob)}");
         }
-
-        // Final flush
+        
+        // Final flush if needed
         if (buffer.Count > 0)
         {
-            await SaveBatchToDb(buffer, CancellationToken.None);
+            await FlushToDatabase(cancellationToken);
         }
+    }
+
+    private void AccumulateBatchStats(ContainersStatBatch batch)
+    {
+        if (!buffer.TryGetValue(batch.PlatformId, out var list))
+        {
+            buffer.TryAdd(batch.PlatformId, list = []);
+        }
+
+        list.AddRange(batch.Stats); // NOTE: only references copied, not the list
+    }
+
+    private bool ShouldFlush()
+    {
+        int totalCount = 0;
+        foreach (var kvp in buffer)
+        {
+            totalCount += kvp.Value.Count;
+        }
+        return totalCount >= batchSize || DateTime.UtcNow - lastFlush >= flushInterval;
+    }
+
+    
+    private async Task FlushToDatabase(CancellationToken cancellationToken)
+    {
+        // Save and then clean up buffer
+        await SaveBatchToDb(buffer, cancellationToken);
+        foreach (var (_, stats) in buffer)
+        {
+            foreach (var stat in stats)
+            {
+                containerStatPool.Return(stat);
+            }
+
+            stats.Clear();
+            listPool.Return(stats);
+        }
+
+        buffer.Clear();
+        lastFlush = DateTime.UtcNow;
     }
 
     private async Task SaveBatchToDb(Dictionary<Guid, List<ContainerStat>> statsByPlatform, CancellationToken cancellationToken)
@@ -75,12 +114,12 @@ internal class ContainerStatsWriterJob(
             await using var scope = scopeFactory.CreateAsyncScope();
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-            var stats = statsByPlatform.SelectMany(s => s.Value).ToList();
+            var stats = statsByPlatform.SelectMany(s => s.Value);
             await uow.ContainerStats.BulkInsertAsync(stats, cancellationToken);
             await uow.CommitAsync();
         }
         catch (Exception ex)
-        {
+        { 
             logger.LogError(ex, "Failed to save container stats to the database.");
         }
     }

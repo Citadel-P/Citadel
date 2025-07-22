@@ -1,6 +1,4 @@
-﻿using System.ComponentModel;
-
-namespace Domain.Entities;
+﻿namespace Domain.Entities;
 
 public class Container(
     string name,
@@ -20,8 +18,8 @@ public class Container(
     public string ContainerId { get; private set; } = containerId;
     public string Name { get; private set; } = name;
     public string Image { get; private set; } = image;
-    public long Created { get; private set; } = created is not null ? created.Value : DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-    public long Updated { get; private set; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    public long Created { get; private set; } = created is not null ? created.Value : (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
+    public long Updated { get; private set; } = (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
     public ContainerStateStatus State { get; set; } = state;
     public string? Stack { get; set; } = stack;
     public IReadOnlyCollection<ContainerPort> Ports => ports;

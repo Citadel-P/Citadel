@@ -6,12 +6,15 @@ using Application.TaskJobs;
 using Citadel.SourceGen;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Entities;
 using Hosting.Common;
 using Hosting.Common.Pipelines;
 using Hosting.Common.Pipelines.Interfaces;
+using Hosting.Common.Utils;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.ObjectPool;
 
 namespace Application;
 
@@ -24,6 +27,7 @@ public static class ApplicationModule
     {
         services
             .AddServices()
+            .AddPooledObjects()
             .AddBackgroundTasks()
             .AddMediator(options =>
             {
@@ -73,6 +77,28 @@ public static class ApplicationModule
         return services;
     }
 
+    private static IServiceCollection AddPooledObjects(this IServiceCollection services)
+    {
+        services.AddSingleton<ObjectPoolProvider, DefaultObjectPoolProvider>();
+        services.AddSingleton<IPooledObjectPolicy<List<ContainerStat>>, ListPoolPolicy<ContainerStat>>();
+        services.AddSingleton(s =>
+        {
+            var provider = s.GetRequiredService<ObjectPoolProvider>();
+            var policy = s.GetRequiredService<IPooledObjectPolicy<List<ContainerStat>>>();
+            return provider.Create(policy);
+        });
+
+        services.AddSingleton<IPooledObjectPolicy<ContainerStat>, ObjectPoolPolicy<ContainerStat>>();
+        services.AddSingleton(s =>
+        {
+            var provider = s.GetRequiredService<ObjectPoolProvider>();
+            var policy = s.GetRequiredService<IPooledObjectPolicy<ContainerStat>>();
+            return provider.Create(policy);
+        });
+
+        return services;
+    }
+        
     private static void EnsureDefaultImagesDefinitionsExists()
     {
         if (!File.Exists(Constants.DefaultImagesDefinitionsPath))
