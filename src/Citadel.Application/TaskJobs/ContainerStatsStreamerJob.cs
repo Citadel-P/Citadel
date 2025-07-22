@@ -86,7 +86,7 @@ internal class ContainerStatsStreamerJob(
                         if (platformContainerCache.TryGetContainers(platformId, out var ids))
                         {
                             var stats = listPool.Get();
-                            var snapshotTime = (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds; //DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                            var snapshotTime = (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
                             foreach (var kvp in stream.Containers)
                             {
                                 if (ids.TryGetValue(kvp.Key, out var containerId))
