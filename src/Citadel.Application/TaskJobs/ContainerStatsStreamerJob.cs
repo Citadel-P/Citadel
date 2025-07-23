@@ -10,7 +10,6 @@ using Domain.Entities;
 using Grpc.Core;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.ObjectPool;
 using Microsoft.Extensions.Options;
 
 namespace Application.TaskJobs;
@@ -20,8 +19,7 @@ namespace Application.TaskJobs;
 /// </summary>
 internal class ContainerStatsStreamerJob(
     IOptions<JobConfiguration> options,
-    ObjectPool<List<ContainerStat>> listPool,
-    ObjectPool<ContainerStat> containerStatPool,
+    IObjectPoolManager objectPoolManager,
     ChannelWriter<ContainersStatBatch> channel,
     IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
@@ -85,20 +83,25 @@ internal class ContainerStatsStreamerJob(
                     {
                         if (platformContainerCache.TryGetContainers(platformId, out var ids))
                         {
-                            var stats = listPool.Get();
+                            var stats = objectPoolManager.Get<List<ContainerStat>>();
                             var snapshotTime = (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
                             foreach (var kvp in stream.Containers)
                             {
                                 if (ids.TryGetValue(kvp.Key, out var containerId))
                                 {
-                                    var containerStat = containerStatPool.Get();
+                                    var containerStat = objectPoolManager.Get<ContainerStat>();
                                     kvp.Value.Map(containerStat, containerId, snapshotTime);
                                     stats.Add(containerStat);
                                 }
                             }
 
                             await channel.WriteAsync(new ContainersStatBatch(platformId, stats), cancellationToken);
-                        }
+                         }
+
+                        foreach (var s in stream.Containers.Values)
+                            objectPoolManager.Return(s);
+
+                        objectPoolManager.Return(stream);
                     }
                 }
             }

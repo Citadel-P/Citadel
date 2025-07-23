@@ -578,11 +578,11 @@ internal static class ContainerMappers
     
     public static DockerContainerStat Map(this ContainerStatMessage statMessage)
         => new (
-            MemoryUsage: statMessage.MemoryUsage,
-            MemoryLimit: statMessage.MemoryLimit,
-            CpuUsage: statMessage.CpuUsage,
-            RxBytes: statMessage.RxBytes,
-            TxBytes: statMessage.TxBytes
+            memoryUsage: statMessage.MemoryUsage,
+            memoryLimit: statMessage.MemoryLimit,
+            cpuUsage: statMessage.CpuUsage,
+            rxBytes: statMessage.RxBytes,
+            txBytes: statMessage.TxBytes
         );
 
     public static IEnumerable<ContainerPort> Map(this IEnumerable<PortMessage> ports)
@@ -622,8 +622,16 @@ internal static class ContainerMappers
     public static ContainerLogInfo Map(this ContainerLogResponse log)
         => new(Log: log.Log);
 
-    public static DockerContainerStats Map(this ContainerStatsResponse stats)
-        => new (Containers: stats.Containers?.ToDictionary(c => c.Key, c => c.Value.Map()) ?? []);
+    public static void Map(this ContainerStatMessage statMessage, DockerContainerStat destination)
+    {
+        destination.ReInitialize(
+            statMessage.MemoryUsage,
+            statMessage.CpuUsage,
+            statMessage.MemoryLimit,
+            statMessage.RxBytes,
+            statMessage.TxBytes
+        );
+    }
 
     public static DaemonEventInfo Map(this DaemonEventResponse @event)
         => new
@@ -647,7 +655,12 @@ internal static class ContainerMappers
             ContainerId: container?.Id,
             Created: container?.Created,
             State: container.State.Map(),
-            ContainerStat: container.ContainerStat?.Map(),
+            ContainerStat: container.ContainerStat == null ? null : new DockerContainerStat(
+                memoryUsage: container.ContainerStat.MemoryUsage, 
+                memoryLimit: container.ContainerStat.MemoryLimit,
+                cpuUsage: container.ContainerStat.CpuUsage,
+                rxBytes: container.ContainerStat.RxBytes,
+                txBytes: container.ContainerStat.TxBytes),
             Ports: container.Ports?.Select(Map).ToList() ?? []
         );
 
@@ -660,21 +673,16 @@ internal static class ContainerMappers
             Type: port?.Type.ToString()
         );
 
-    public static DockerContainerStat Map(this ContainerStatResult stat)
-        => new
-        (
-            MemoryUsage: stat.MemoryUsage,
-            MemoryLimit: stat.MemoryLimit,
-            CpuUsage: stat.CpuUsage,
-            RxBytes: stat.RxBytes,
-            TxBytes: stat.TxBytes
+    public static void Map(this ContainerStatResult stat, DockerContainerStat destination)
+    {
+        destination.ReInitialize(
+            stat.MemoryUsage,
+            stat.CpuUsage,
+            stat.MemoryLimit,
+            stat.RxBytes,
+            stat.TxBytes
         );
-
-    public static DockerContainerStats Map (this IReadOnlyDictionary<string, ContainerStatResult> containers)
-        => new
-        (
-            Containers: containers.ToDictionary(c => c.Key, c => c.Value.Map())
-        );
+    }
 
     public static ContainerEventType Map(this EventMessageType type)
         => type switch

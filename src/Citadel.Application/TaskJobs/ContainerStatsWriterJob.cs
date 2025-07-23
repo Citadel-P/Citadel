@@ -6,7 +6,6 @@ using Domain.Entities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.ObjectPool;
 using Microsoft.Extensions.Options;
 
 namespace Application.TaskJobs;
@@ -14,8 +13,7 @@ namespace Application.TaskJobs;
 internal class ContainerStatsWriterJob(
     IServiceScopeFactory scopeFactory,
     IOptions<JobConfiguration> options,
-    ObjectPool<List<ContainerStat>> listPool,
-    ObjectPool<ContainerStat> containerStatPool,
+    IObjectPoolManager objectPoolManager,
     ChannelReader<ContainersStatBatch> reader,
     ISignalRConnectionTracker connectionTracker,
     IContainerHubDispatcher containerHubDispatcher,
@@ -47,7 +45,7 @@ internal class ContainerStatsWriterJob(
                 {
                     // Return stats to pool
                     batch.Stats.Clear();
-                    listPool.Return(batch.Stats);
+                    objectPoolManager.Return(batch.Stats);
                 }
             }
         }
@@ -96,11 +94,11 @@ internal class ContainerStatsWriterJob(
         {
             foreach (var stat in stats)
             {
-                containerStatPool.Return(stat);
+                objectPoolManager.Return(stat);
             }
 
             stats.Clear();
-            listPool.Return(stats);
+            objectPoolManager.Return(stats);
         }
 
         buffer.Clear();

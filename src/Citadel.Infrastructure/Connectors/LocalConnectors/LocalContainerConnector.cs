@@ -8,7 +8,7 @@ using LightResults;
 
 namespace Infrastructure.Connectors.LocalConnectors;
 
-internal class LocalContainerConnector(IContainerService containerService) : IContainerConnector
+internal class LocalContainerConnector(IContainerService containerService, IObjectPoolManager objectPoolManager) : IContainerConnector
 {
     public Task<Result> DeleteAsync(DeleteContainerCommand deleteContainerCommand, CancellationToken cancellationToken)
         => containerService.DeleteAsync( new Hosting.DockerClient.Models.Containers.DeleteContainersCommand
@@ -53,7 +53,17 @@ internal class LocalContainerConnector(IContainerService containerService) : ICo
     {
         await foreach (var result in containerService.StreamContainerStatsAsync(streamStatsCommand.FetchIntervalMs, cancellationToken))
         {
-            yield return result.Map();
+            var stats = objectPoolManager.Get<DockerContainerStats>();
+            stats.Reset();
+
+            foreach (var kvp in result)
+            {
+                var stat = objectPoolManager.Get<DockerContainerStat>();
+                kvp.Value.Map(stat);
+                stats.Add(kvp.Key, stat);
+            }
+
+            yield return stats;
         }
     }
 

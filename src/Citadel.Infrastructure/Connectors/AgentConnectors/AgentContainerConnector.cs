@@ -12,7 +12,7 @@ using static Citadel.Agent.Containers.V1.ContainerService;
 
 namespace Infrastructure.Connectors.AgentConnectors;
 
-internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : IContainerConnector
+internal class AgentContainerConnector(IGrpcClientFactory clientFactory, IObjectPoolManager objectPoolManager) : IContainerConnector
 {
     public async Task<Result<IReadOnlyDictionary<string, DockerContainer>>> ListContainersAsync(ContainerFilterCommand command, CancellationToken cancellationToken)
     {
@@ -111,9 +111,19 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : ICont
     {
         var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
         using var streamCall = containerClient.StreamContainerStats(new ContainerStatsRequest() { FetchIntervalMs = command.FetchIntervalMs }, cancellationToken: cancellationToken);
-        await foreach (var response in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
+        await foreach (var result in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
         {
-            yield return response.Map();
+            var stats = objectPoolManager.Get<DockerContainerStats>();
+            stats.Reset();
+
+            foreach (var kvp in result.Containers)
+            {
+                var stat = objectPoolManager.Get<DockerContainerStat>();
+                kvp.Value.Map(stat);
+                stats.Add(kvp.Key, stat);
+            }
+
+            yield return stats;
         }
     }
 

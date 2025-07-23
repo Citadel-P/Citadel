@@ -5,6 +5,7 @@ using Application.Services;
 using Application.TaskJobs;
 using Citadel.SourceGen;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Hosting.Common;
@@ -79,23 +80,16 @@ public static class ApplicationModule
 
     private static IServiceCollection AddPooledObjects(this IServiceCollection services)
     {
-        services.AddSingleton<ObjectPoolProvider, DefaultObjectPoolProvider>();
-        services.AddSingleton<IPooledObjectPolicy<List<ContainerStat>>, ListPoolPolicy<ContainerStat>>();
-        services.AddSingleton(s =>
-        {
-            var provider = s.GetRequiredService<ObjectPoolProvider>();
-            var policy = s.GetRequiredService<IPooledObjectPolicy<List<ContainerStat>>>();
-            return provider.Create(policy);
-        });
+        services
+            .AddSingleton<IObjectPoolManager, ObjectPoolManager>()
+            .AddSingleton<ObjectPoolProvider, DefaultObjectPoolProvider>();
 
-        services.AddSingleton<IPooledObjectPolicy<ContainerStat>, ObjectPoolPolicy<ContainerStat>>();
-        services.AddSingleton(s =>
-        {
-            var provider = s.GetRequiredService<ObjectPoolProvider>();
-            var policy = s.GetRequiredService<IPooledObjectPolicy<ContainerStat>>();
-            return provider.Create(policy);
-        });
-
+        services
+            .AddSingleton<IPooledObjectPolicy<ContainerStat>, ObjectPoolPolicy<ContainerStat>>()
+            .AddSingleton<IPooledObjectPolicy<List<ContainerStat>>, ListPoolPolicy<ContainerStat>>()
+            .AddSingleton<IPooledObjectPolicy<DockerContainerStats>, ObjectPoolPolicy<DockerContainerStats>>()
+            .AddSingleton<IPooledObjectPolicy<DockerContainerStat>, ObjectPoolPolicy<DockerContainerStat>>();
+        
         return services;
     }
         

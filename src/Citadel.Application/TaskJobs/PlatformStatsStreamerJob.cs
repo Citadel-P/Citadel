@@ -13,7 +13,7 @@ using Microsoft.Extensions.Options;
 namespace Application.TaskJobs;
 
 /// <summary>
-/// Background service that monitors platform health events and manages the collection of real-time platform statistics from remote agents.
+/// Background service that manages the collection of real-time platform statistics from remote agents.
 /// For each online platform, it starts a streaming task that gathers stats via the appropriate connector and writes <see cref="PlatformStatsResult"/>
 /// data to a shared channel for persistence. When a platform goes offline, the corresponding stats stream is stopped.
 /// </summary>
