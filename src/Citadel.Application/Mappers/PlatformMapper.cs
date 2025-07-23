@@ -24,25 +24,13 @@ internal static class PlatformMapper
             platformDescriptor: platformInfo.Descriptor);
     }
 
-    internal static IEnumerable<PlatformStat> Map(this Dictionary<Guid, List<PlatformStatsResult>> stats)
-    {
-        foreach (var (platformId, platformStats) in stats)
-        {
-            foreach (var stat in platformStats)
-            {
-                yield return Map(stat.PlatformStat, platformId);
-            }
-        }
-    }
-
-    internal static PlatformStat Map(this DockerPlatformStat stat, Guid platformId)
-       => new
-       (
+    public static void Map(this PlatformStatsResult stat, PlatformStat destination, Guid platformId)
+       => destination.ReInitialize(
            platformId: platformId,
-           rxBytes: stat?.RxBytes ?? 0,
-           txBytes: stat?.TxBytes ?? 0,
-           cpuUsage: stat?.CpuUsage ?? 0,
-           memoryUsage: stat?.MemoryUsage ?? 0,
-           created: stat?.Created ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+           rxBytes: stat?.PlatformStat.RxBytes ?? 0,
+           txBytes: stat?.PlatformStat.TxBytes ?? 0,
+           cpuUsage: stat?.PlatformStat.CpuUsage ?? 0,
+           memoryUsage: stat?.PlatformStat.MemoryUsage ?? 0,
+           created: stat?.PlatformStat.Created ?? (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds
        );
 }

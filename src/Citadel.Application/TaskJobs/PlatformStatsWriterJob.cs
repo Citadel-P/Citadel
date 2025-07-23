@@ -5,6 +5,7 @@ using Application.Services.Abstractions;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Entities;
 using Domain.Entities.Platforms;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -145,19 +146,45 @@ internal class PlatformStatsWriterJob(
                 descriptor: descriptor);
 
             await uow.Platforms.UpdatePlatformAsync(existing, cancellationToken);
-            await uow.CommitAsync();
         }
 
+        await uow.CommitAsync();
+        var pooledStats = MapToStats(statsByPlatform);
+        
         try
         {
-            var batch = statsByPlatform.Map();
-            await uow.PlatformStats.BulkInsertAsync(batch, cancellationToken);
+            await uow.PlatformStats.BulkInsertAsync(pooledStats, cancellationToken);
             await uow.CommitAsync();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occurred while persisting the platform statistics batch to the database. Total stats in batch: {BatchSize}", statsByPlatform.Sum(s => s.Value.Count));
         }
+        finally
+        {
+            foreach (var stat in pooledStats)
+            {
+                objectPoolManager.Return(stat);
+            }
+
+            objectPoolManager.Return(pooledStats);
+        }
+    }
+
+    private List<PlatformStat> MapToStats(Dictionary<Guid, List<PlatformStatsResult>> statsByPlatform)
+    {
+        var stats = objectPoolManager.Get<List<PlatformStat>>();
+
+        foreach (var (platformId, platformStats) in statsByPlatform)
+        {
+            foreach (var stat in platformStats)
+            {
+                var destination = objectPoolManager.Get<PlatformStat>();
+                stat.Map(destination, platformId);
+                stats.Add(destination);
+            }
+        }
+        return stats;
     }
 
     private async ValueTask NotifyClients(Guid platformId, PlatformStatsResult stats)

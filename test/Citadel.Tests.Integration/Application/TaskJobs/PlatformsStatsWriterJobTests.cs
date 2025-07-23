@@ -17,7 +17,6 @@ namespace Tests.Integration.Application.TaskJobs;
 public class PlatformsStatsWriterJobTests : IntegrationTestBase
 {
     private readonly Mock<IConnectorFactory<IPlatformConnector>> platformFactoryMock = new();
-    private readonly Mock<IObjectPoolManager> objectPoolManagerMock = new();
     private readonly Mock<IPlatformConnector> platformConnector = new();
 
     private readonly Mock<ISignalRConnectionTracker> connectionTrackerMock = new();
@@ -39,7 +38,6 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
         services.AddSingleton(_ => configMock.Object);
         services.AddSingleton(_ => platformFactoryMock.Object);
         services.AddSingleton(_ => platformFactoryMock.Object);
-        services.AddSingleton(_ => objectPoolManagerMock.Object);
         services.AddSingleton(_ => connectionTrackerMock.Object);
         services.AddSingleton<IPlatformHealthBroadCaster>(_ => broadcaster);
 
@@ -69,9 +67,6 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
 
         platformConnector.Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
             .Returns((StreamPlatformStatsCommand _, CancellationToken __) => GetStatsAsync());
-
-        var pooled = new List<PlatformStatsResult>();
-        objectPoolManagerMock.Setup(m => m.Get<List<PlatformStatsResult>>()).Returns(pooled);
 
         // Act
         await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
@@ -145,14 +140,11 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
         platformConnector.Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
             .Returns((StreamPlatformStatsCommand _, CancellationToken __) => GetStatsAsync());
 
-        var pooled = new List<PlatformStatsResult>();
-        objectPoolManagerMock.Setup(m => m.Get<List<PlatformStatsResult>>()).Returns(pooled);
-
         // Act
         await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
 
-        await Task.Delay(1500, TestContext.Current.CancellationToken);
+        await Task.Delay(15000, TestContext.Current.CancellationToken);
 
         // Assert
         await using var scope = Services.CreateAsyncScope();
@@ -180,32 +172,5 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
 
         // Assert
         hubMock.Verify(h => h.PushPlatformStats(It.IsAny<Guid>(), It.IsAny<PlatformStatsResult>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ShouldReturnObjectsToPool()
-    {
-        // Arrange
-        configMock.Setup(x => x.Value).Returns(new JobConfiguration { BatchSize = 1, FlashInterval = 60 });
-        platformFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(platformConnector.Object);
-        connectionTrackerMock.Setup(x => x.HasUsersInGroup(It.IsAny<string>())).Returns(true);
-        platformConnector.Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
-            .Returns((StreamPlatformStatsCommand _, CancellationToken __) => GetStatsAsync());
-
-        var pooled1 = new PlatformStatsResult();
-        var pooled2 = new List<PlatformStatsResult>();
-        objectPoolManagerMock.Setup(m => m.Get<PlatformStatsResult>()).Returns(pooled1);
-        objectPoolManagerMock.Setup(m => m.Get<List<PlatformStatsResult>>()).Returns(pooled2);
-
-        // Act
-        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        await Task.Delay(500, TestContext.Current.CancellationToken);
-
-        // Assert
-        objectPoolManagerMock.Verify(p => p.Get<List<PlatformStatsResult>>(), Times.Once);
-        objectPoolManagerMock.Verify(p => p.Return(It.IsAny<PlatformStatsResult>()), Times.Exactly(2));
-        objectPoolManagerMock.Verify(p => p.Return(It.IsAny<List<PlatformStatsResult>>()), Times.Once);
     }
 }

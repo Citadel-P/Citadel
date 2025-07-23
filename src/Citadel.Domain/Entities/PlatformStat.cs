@@ -1,8 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿namespace Domain.Entities;
 
-namespace Domain.Entities;
-
-[method: JsonConstructor]
 public class PlatformStat(
     long created,
     double memoryUsage,
@@ -18,6 +15,28 @@ public class PlatformStat(
     public double CpuUsage { get; private set; } = cpuUsage;
     public double RxBytes { get; private set; } = rxBytes;
     public double TxBytes { get; private set; } = txBytes;
+
+    public PlatformStat() : this (0, 0, 0, 0, 0, null)
+    {
+        
+    }
+
+    public void ReInitialize(
+        long created,
+        double memoryUsage,
+        double cpuUsage,
+        double rxBytes,
+        double txBytes,
+        Guid platformId)
+    {
+        Id = Guid.CreateVersion7();
+        PlatformId = platformId;
+        Created = created;
+        MemoryUsage = memoryUsage;
+        CpuUsage = cpuUsage;
+        RxBytes = rxBytes;
+        TxBytes = txBytes;
+    }
 
     public static PlatformStat FromPersistence(
         Guid id,
