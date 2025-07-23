@@ -9,7 +9,7 @@ using LightResults;
 
 namespace Infrastructure.Connectors.LocalConnectors;
 
-internal class LocalPlatformConnector(IPlatformService platformService, IMonitorEventsService monitorEventsService) : IPlatformConnector
+internal class LocalPlatformConnector(IPlatformService platformService, IMonitorEventsService monitorEventsService, IObjectPoolManager objectPoolManager) : IPlatformConnector
 {
     public async Task<PlatformHealthResult> CheckHealthAsync(string platformAddress, CancellationToken cancellationToken)
     {
@@ -35,9 +35,11 @@ internal class LocalPlatformConnector(IPlatformService platformService, IMonitor
 
     public async IAsyncEnumerable<PlatformStatsResult> StreamStatsAsync(StreamPlatformStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await foreach (var stat in platformService.StreamPlatformStatsAsync(command.FetchIntervalMs, cancellationToken))
+        await foreach (var result in platformService.StreamPlatformStatsAsync(command.FetchIntervalMs, cancellationToken))
         {
-            yield return stat.Map();
+            var stat = objectPoolManager.Get<PlatformStatsResult>();
+            result.Map(stat);
+            yield return stat;
         }
     }
 }

@@ -15,48 +15,36 @@ namespace Application.TaskJobs;
 
 /// <summary>
 /// Background service that batches and persists platforms statistics received from a channel, periodically flushing them to the database and notifying connected clients 
-/// with the latest stats updates.
+/// with the latest platformStat updates.
 /// </summary>
 internal class PlatformStatsWriterJob(
     IServiceScopeFactory scopeFactory,
     IOptions<JobConfiguration> options,
+    IObjectPoolManager objectPoolManager,
     ISignalRConnectionTracker connectionTracker,
     IPlatformHubDispatcher platformHubDispatcher,
     ChannelReader<(Guid Id, PlatformStatsResult Stats)> reader,
     ILogger<PlatformStatsWriterJob> logger) : BackgroundService
 {
-    private readonly int BatchSize = options.Value?.BatchSize ?? 500;
     // Updates to db will be flushed every x seconds or when platform batch size is reached.
-    private readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60); 
+    private readonly TimeSpan flushInterval = TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60);
+    private readonly int batchSize = options.Value?.BatchSize ?? 100;
+    private readonly Dictionary<Guid, List<PlatformStatsResult>> buffer = [];
+    private DateTime lastFlush = DateTime.UtcNow;
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        var buffer = new Dictionary<Guid, List<PlatformStatsResult>>(); 
-        var lastFlush = DateTime.UtcNow;
-        
         try
         {
-            await foreach (var (platformId, stats) in reader.ReadAllAsync(cancellationToken))
+            await foreach (var (platformId, platformStat) in reader.ReadAllAsync(cancellationToken))
             {
-                // Add to buffer
-                if (!buffer.TryGetValue(platformId, out var list))
-                {
-                    list = [];
-                    buffer[platformId] = list;
-                }
-                list.Add(stats);
+                AccumulateBatchStats(platformId, platformStat);
+                await NotifyClients(platformId, platformStat);
 
-                // Flush if platform size exceeded or interval exceeded
-                int totalCount = buffer.Sum(x => x.Value.Count);
-                if (totalCount >= BatchSize || DateTime.UtcNow - lastFlush >= FlushInterval)
+                if (ShouldFlush())
                 {
-                    await SaveBatchToDb(buffer, cancellationToken);
-                    buffer.Clear();
-                    lastFlush = DateTime.UtcNow;
+                    await FlushToDatabase(cancellationToken);
                 }
-
-                // Push to clients
-                await NotifyClients(platformId, stats);
             }
         }
         catch (OperationCanceledException)
@@ -73,6 +61,45 @@ internal class PlatformStatsWriterJob(
         {
             await SaveBatchToDb(buffer, CancellationToken.None);
         }
+    }
+
+    private void AccumulateBatchStats(Guid platformId, PlatformStatsResult stat)
+    {
+        if (!buffer.TryGetValue(platformId, out var list))
+        {
+            buffer.TryAdd(platformId, list = objectPoolManager.Get<List<PlatformStatsResult>>());
+        }
+
+        list.Add(stat); // NOTE: only references copied, not the list
+    }
+
+    private bool ShouldFlush()
+    {
+        int totalCount = 0;
+        foreach (var kvp in buffer)
+        {
+            totalCount += kvp.Value.Count;
+        }
+        return totalCount >= batchSize || DateTime.UtcNow - lastFlush >= flushInterval;
+    }
+
+    private async Task FlushToDatabase(CancellationToken cancellationToken)
+    {
+        // Save and then clean up buffer
+        await SaveBatchToDb(buffer, cancellationToken);
+        foreach (var (_, stats) in buffer)
+        {
+            foreach (var stat in stats)
+            {
+                objectPoolManager.Return(stat);
+            }
+
+            stats.Clear();
+            objectPoolManager.Return(stats);
+        }
+
+        buffer.Clear();
+        lastFlush = DateTime.UtcNow;
     }
 
     private async Task SaveBatchToDb(Dictionary<Guid, List<PlatformStatsResult>> statsByPlatform, CancellationToken cancellationToken)

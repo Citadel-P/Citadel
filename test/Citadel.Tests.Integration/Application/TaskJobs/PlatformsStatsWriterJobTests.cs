@@ -17,6 +17,7 @@ namespace Tests.Integration.Application.TaskJobs;
 public class PlatformsStatsWriterJobTests : IntegrationTestBase
 {
     private readonly Mock<IConnectorFactory<IPlatformConnector>> platformFactoryMock = new();
+    private readonly Mock<IObjectPoolManager> objectPoolManagerMock = new();
     private readonly Mock<IPlatformConnector> platformConnector = new();
 
     private readonly Mock<ISignalRConnectionTracker> connectionTrackerMock = new();
@@ -38,8 +39,9 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
         services.AddSingleton(_ => configMock.Object);
         services.AddSingleton(_ => platformFactoryMock.Object);
         services.AddSingleton(_ => platformFactoryMock.Object);
+        services.AddSingleton(_ => objectPoolManagerMock.Object);
         services.AddSingleton(_ => connectionTrackerMock.Object);
-        services.AddSingleton<IPlatformHealthBroadCaster>((_) => broadcaster);
+        services.AddSingleton<IPlatformHealthBroadCaster>(_ => broadcaster);
 
         configMock.Setup(x => x.Value).Returns(new JobConfiguration()
         {
@@ -68,6 +70,9 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
         platformConnector.Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
             .Returns((StreamPlatformStatsCommand _, CancellationToken __) => GetStatsAsync());
 
+        var pooled = new List<PlatformStatsResult>();
+        objectPoolManagerMock.Setup(m => m.Get<List<PlatformStatsResult>>()).Returns(pooled);
+
         // Act
         await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
@@ -87,46 +92,120 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
         var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var stat1 = new PlatformStatsResult
         (
-            MemTotal: 123456,
-            ImageCount: 5,
-            VolumeCount: 2,
-            NetworkCount: 1,
-            ContainerCount: 3,
-            ContainersPaused: 0,
-            ContainersStopped: 1,
-            ContainersRunning: 2,
-            PlatformStat: new DockerPlatformStat
+            memTotal: 123456,
+            imageCount: 5,
+            volumeCount: 2,
+            networkCount: 1,
+            containerCount: 3,
+            containersPaused: 0,
+            containersStopped: 1,
+            containersRunning: 2,
+            platformStat: new DockerPlatformStat
             (
-                Created: time,
-                MemoryUsage: 500,
-                CpuUsage: 2,
-                RxBytes: 100,
-                TxBytes: 200
+                created: time,
+                memoryUsage: 500,
+                cpuUsage: 2,
+                rxBytes: 100,
+                txBytes: 200
             )
         );
 
         var stat2 = new PlatformStatsResult
         (
-            MemTotal: 123456,
-            ImageCount: 6,
-            VolumeCount: 3,
-            NetworkCount: 10,
-            ContainerCount: 5,
-            ContainersPaused: 1,
-            ContainersStopped: 1,
-            ContainersRunning: 3,
-            PlatformStat: new DockerPlatformStat
+            memTotal: 123456,
+            imageCount: 6,
+            volumeCount: 3,
+            networkCount: 10,
+            containerCount: 5,
+            containersPaused: 1,
+            containersStopped: 1,
+            containersRunning: 3,
+            platformStat: new DockerPlatformStat
             (
-                Created: time + (60 * 2),
-                MemoryUsage: 800,
-                CpuUsage: 2,
-                RxBytes: 100,
-                TxBytes: 200
+                created: time + (60 * 2),
+                memoryUsage: 800,
+                cpuUsage: 2,
+                rxBytes: 100,
+                txBytes: 200
             )
         );
         yield return stat1;
         await Task.Delay(100);
         yield return stat2;
         await Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldFlushWhenFlushIntervalIsReached()
+    {
+        // Arrange
+        configMock.Setup(x => x.Value).Returns(new JobConfiguration { BatchSize = 100, FlashInterval = 1 });
+        platformFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(platformConnector.Object);
+        connectionTrackerMock.Setup(x => x.HasUsersInGroup(It.IsAny<string>())).Returns(true);
+        platformConnector.Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
+            .Returns((StreamPlatformStatsCommand _, CancellationToken __) => GetStatsAsync());
+
+        var pooled = new List<PlatformStatsResult>();
+        objectPoolManagerMock.Setup(m => m.Get<List<PlatformStatsResult>>()).Returns(pooled);
+
+        // Act
+        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await Task.Delay(1500, TestContext.Current.CancellationToken);
+
+        // Assert
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stats = await db.PlatformStats.GetStatsAggregatedLast24HoursAsync(platformId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, stats.Count());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldNotNotifyClients_WhenNoUsersInGroup()
+    {
+        // Arrange
+        configMock.Setup(x => x.Value).Returns(new JobConfiguration { BatchSize = 1, FlashInterval = 60 });
+        platformFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(platformConnector.Object);
+        connectionTrackerMock.Setup(x => x.HasUsersInGroup(It.IsAny<string>())).Returns(false);
+        platformConnector.Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
+            .Returns((StreamPlatformStatsCommand _, CancellationToken __) => GetStatsAsync());
+
+        // Act
+        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+
+        // Assert
+        hubMock.Verify(h => h.PushPlatformStats(It.IsAny<Guid>(), It.IsAny<PlatformStatsResult>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldReturnObjectsToPool()
+    {
+        // Arrange
+        configMock.Setup(x => x.Value).Returns(new JobConfiguration { BatchSize = 1, FlashInterval = 60 });
+        platformFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(platformConnector.Object);
+        connectionTrackerMock.Setup(x => x.HasUsersInGroup(It.IsAny<string>())).Returns(true);
+        platformConnector.Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
+            .Returns((StreamPlatformStatsCommand _, CancellationToken __) => GetStatsAsync());
+
+        var pooled1 = new PlatformStatsResult();
+        var pooled2 = new List<PlatformStatsResult>();
+        objectPoolManagerMock.Setup(m => m.Get<PlatformStatsResult>()).Returns(pooled1);
+        objectPoolManagerMock.Setup(m => m.Get<List<PlatformStatsResult>>()).Returns(pooled2);
+
+        // Act
+        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+
+        // Assert
+        objectPoolManagerMock.Verify(p => p.Get<List<PlatformStatsResult>>(), Times.Once);
+        objectPoolManagerMock.Verify(p => p.Return(It.IsAny<PlatformStatsResult>()), Times.Exactly(2));
+        objectPoolManagerMock.Verify(p => p.Return(It.IsAny<List<PlatformStatsResult>>()), Times.Once);
     }
 }

@@ -11,7 +11,7 @@ using LightResults;
 
 namespace Infrastructure.Connectors.AgentConnectors;
 
-internal class AgentPlatformConnector(IGrpcClientFactory clientFactory) : IPlatformConnector
+internal class AgentPlatformConnector(IGrpcClientFactory clientFactory, IObjectPoolManager objectPoolManager) : IPlatformConnector
 {
     public async Task<PlatformHealthResult> CheckHealthAsync(string platformAddress, CancellationToken cancellationToken)
     {
@@ -48,7 +48,9 @@ internal class AgentPlatformConnector(IGrpcClientFactory clientFactory) : IPlatf
         using var stream = client.StreamPlatformStats(new PlatformStatsRequest { FetchIntervalMs = command.FetchIntervalMs }, cancellationToken: cancellationToken);
         await foreach (var response in stream.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
         {
-            yield return response.Map();
+            var stat = objectPoolManager.Get<PlatformStatsResult>();
+            response.Map(stat);
+            yield return stat;
         }
     }
 

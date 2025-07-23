@@ -69,7 +69,7 @@ internal class ContainerStatsWriterJob(
     {
         if (!buffer.TryGetValue(batch.PlatformId, out var list))
         {
-            buffer.TryAdd(batch.PlatformId, list = []);
+            buffer.TryAdd(batch.PlatformId, list = objectPoolManager.Get<List<ContainerStat>>());
         }
 
         list.AddRange(batch.Stats); // NOTE: only references copied, not the list
@@ -85,7 +85,6 @@ internal class ContainerStatsWriterJob(
         return totalCount >= batchSize || DateTime.UtcNow - lastFlush >= flushInterval;
     }
 
-    
     private async Task FlushToDatabase(CancellationToken cancellationToken)
     {
         // Save and then clean up buffer

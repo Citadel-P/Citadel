@@ -91,50 +91,66 @@ internal static class PlatformMappers
     public static DockerPlatformStat Map(this PlatformStatResult stat)
         => new 
         (
-            Created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            MemoryUsage: stat.MemoryUsage,
-            CpuUsage: stat.CpuUsage,
-            RxBytes: stat.RxBytes,
-            TxBytes: stat.TxBytes
+            created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            memoryUsage: stat.MemoryUsage,
+            cpuUsage: stat.CpuUsage,
+            rxBytes: stat.RxBytes,
+            txBytes: stat.TxBytes
         );
 
-    public static PlatformStatsResult Map(this PlatformStatsResponse stat)
-        => new 
-        (
-            MemTotal: stat.MemTotal,
-            ImageCount: stat.ImageCount,
-            VolumeCount: stat.VolumeCount,
-            NetworkCount: stat.NetworkCount,
-            ContainerCount: stat.ContainerCount,
-            ContainersPaused: stat.ContainersPaused,
-            ContainersStopped: stat.ContainersStopped,
-            ContainersRunning: stat.ContainersRunning,
-            PlatformStat: stat.Stat.Map()
+    public static void Map(this PlatformStatsResponse source, PlatformStatsResult destination)
+    {
+        destination.PlatformStat.ReInitialize(
+            created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            memoryUsage: source.Stat.MemoryUsage,
+            cpuUsage: source.Stat.CpuUsage,
+            rxBytes: source.Stat.RxBytes,
+            txBytes: source.Stat.TxBytes
         );
+
+        destination.ReInitialize(
+            memTotal: source.MemTotal,
+            imageCount: source.ImageCount,
+            volumeCount: source.VolumeCount,
+            networkCount: source.NetworkCount,
+            containerCount: source.ContainerCount,
+            containersPaused: source.ContainersPaused,
+            containersStopped: source.ContainersStopped,
+            containersRunning: source.ContainersRunning,
+            platformStat: destination.PlatformStat);
+    }
 
     internal static DockerPlatformStat Map(this PlatformStatMessage stat)
         => new
         (
-            Created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            MemoryUsage: stat?.MemoryUsage ?? 0,
-            CpuUsage: stat?.CpuUsage ?? 0,
-            RxBytes: stat?.RxBytes ?? 0,
-            TxBytes: stat?.TxBytes ?? 0
+            created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            memoryUsage: stat?.MemoryUsage ?? 0,
+            cpuUsage: stat?.CpuUsage ?? 0,
+            rxBytes: stat?.RxBytes ?? 0,
+            txBytes: stat?.TxBytes ?? 0
         );
 
-    public static PlatformStatsResult Map (this PlatformStreamResult stat)
-        => new 
-        (
-            MemTotal: stat.MemoryTotal,
-            ImageCount: stat.ImageCount,
-            VolumeCount: stat.VolumeCount,
-            NetworkCount: stat.NetworkCount,
-            ContainerCount: stat.ContainerCount,
-            ContainersPaused: stat.ContainersPaused,
-            ContainersStopped: stat.ContainersStopped,
-            ContainersRunning: stat.ContainersRunning,
-            PlatformStat: stat.PlatformStatistics.Map()
+    public static void Map (this PlatformStreamResult source, PlatformStatsResult destination)
+    {
+        destination.PlatformStat.ReInitialize(
+            created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            memoryUsage: source.PlatformStatistics.MemoryUsage,
+            cpuUsage: source.PlatformStatistics.CpuUsage,
+            rxBytes: source.PlatformStatistics.RxBytes,
+            txBytes: source.PlatformStatistics.TxBytes
         );
+
+        destination.ReInitialize(
+            memTotal: source.MemoryTotal, 
+            imageCount: source.ImageCount, 
+            volumeCount: source.VolumeCount, 
+            networkCount: source.NetworkCount, 
+            containerCount: source.ContainerCount, 
+            containersPaused: source.ContainersPaused, 
+            containersStopped: source.ContainersStopped, 
+            containersRunning: source.ContainersRunning,
+            platformStat: destination.PlatformStat);
+    }
 
     public static DaemonEventInfo Map(this DaemonEventResult @event)
     {

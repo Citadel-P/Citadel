@@ -87,8 +87,10 @@ public static class ApplicationModule
         services
             .AddSingleton<IPooledObjectPolicy<ContainerStat>, ObjectPoolPolicy<ContainerStat>>()
             .AddSingleton<IPooledObjectPolicy<List<ContainerStat>>, ListPoolPolicy<ContainerStat>>()
-            .AddSingleton<IPooledObjectPolicy<DockerContainerStats>, ObjectPoolPolicy<DockerContainerStats>>()
-            .AddSingleton<IPooledObjectPolicy<DockerContainerStat>, ObjectPoolPolicy<DockerContainerStat>>();
+            .AddSingleton<IPooledObjectPolicy<PlatformStatsResult>, ObjectPoolPolicy<PlatformStatsResult>>()
+            .AddSingleton<IPooledObjectPolicy<List<PlatformStatsResult>>, ListPoolPolicy<PlatformStatsResult>>()
+            .AddSingleton<IPooledObjectPolicy<DockerContainerStat>, ObjectPoolPolicy<DockerContainerStat>>()
+            .AddSingleton<IPooledObjectPolicy<DockerContainerStats>, ObjectPoolPolicy<DockerContainerStats>>();
         
         return services;
     }

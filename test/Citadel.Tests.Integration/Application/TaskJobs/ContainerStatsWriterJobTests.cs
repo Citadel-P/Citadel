@@ -76,6 +76,8 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
             new(_containerId, 100, 5, 300, 100, 200, time),
             new(_containerId, 200, 2, 600, 200, 400, time - 60),
         };
+        var pooled = new List<ContainerStat>();
+        _objectPoolManagerMock.Setup(m => m.Get<List<ContainerStat>>()).Returns(pooled);
 
         _connectionTrackerMock.Setup(c => c.HasUsersInGroup(It.IsAny<string>())).Returns(true);
         var batch = new ContainersStatBatch(_platformId, stats);
@@ -107,6 +109,9 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
             new(_containerId, 200, 2, 600, 200, 400, time - 60),
         };
 
+        var pooled = new List<ContainerStat>();
+        _objectPoolManagerMock.Setup(m => m.Get<List<ContainerStat>>()).Returns(pooled);
+
         var batch = new ContainersStatBatch(_platformId, stats);
         _connectionTrackerMock.Setup(c => c.HasUsersInGroup(It.IsAny<string>())).Returns(true);
 
@@ -136,12 +141,15 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
             new(_containerId, 200, 2, 600, 200, 400, time - 60),
         };
 
+        var pooled = new List<ContainerStat>();
+        _objectPoolManagerMock.Setup(m => m.Get<List<ContainerStat>>()).Returns(pooled);
+
         var batch = new ContainersStatBatch(_platformId, stats);
         _connectionTrackerMock.Setup(c => c.HasUsersInGroup(It.IsAny<string>())).Returns(false);
 
         // Act
         await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);
-        await Task.Delay(1500, TestContext.Current.CancellationToken);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
 
         // Assert
         _containerHubDispatcherMock.Verify(d => d.SendContainersStats(It.IsAny<Guid>(), It.IsAny<List<ContainerStat>>()), Times.Never);

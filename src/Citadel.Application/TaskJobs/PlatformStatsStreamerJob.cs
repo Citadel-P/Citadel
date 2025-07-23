@@ -19,6 +19,7 @@ namespace Application.TaskJobs;
 /// </summary>
 internal class PlatformStatsStreamerJob(
     IOptions<JobConfiguration> options,
+    IObjectPoolManager objectPoolManager,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IConnectorFactory<IPlatformConnector> connectorFactory,
     ChannelWriter<(Guid Id, PlatformStatsResult Stats)> platformStatsWriter,

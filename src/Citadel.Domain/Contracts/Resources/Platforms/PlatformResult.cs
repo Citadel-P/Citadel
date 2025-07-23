@@ -15,9 +15,24 @@ public sealed record PlatformResult(
         PlatformDescriptor? Descriptor,
         DockerPlatformStat? PlatformStat = null);
 
-public sealed record DockerPlatformStat(
-        long Created,
-        double MemoryUsage,
-        double CpuUsage,
-        double RxBytes,
-        double TxBytes);
+public sealed class DockerPlatformStat(
+        long created,
+        double memoryUsage,
+        double cpuUsage,
+        double rxBytes,
+        double txBytes)
+{
+    public long Created { get; private set; } = created;
+    public double MemoryUsage { get; private set; } = memoryUsage;
+    public double CpuUsage { get; private set; } = cpuUsage;
+    public double RxBytes { get; private set; } = rxBytes;
+    public double TxBytes { get; private set; } = txBytes;
+    public void ReInitialize(long created, double memoryUsage, double cpuUsage, double rxBytes, double txBytes)
+    {
+        Created = created;
+        MemoryUsage = memoryUsage;
+        CpuUsage = cpuUsage;
+        RxBytes = rxBytes;
+        TxBytes = txBytes;
+    }
+}
