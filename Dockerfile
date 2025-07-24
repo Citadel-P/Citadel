@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview-alpine AS base
 WORKDIR /app
 EXPOSE 8000
 EXPOSE 8001
@@ -9,7 +9,9 @@ ENV \
     DOTNET_System_GC_RetainVM=0 \
     DOTNET_TC_OptimizeForContainer=1
 
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0-preview-alpine AS build
+RUN apk add --no-cache libc6-compat
+
 WORKDIR /src
 
 COPY ["nuget.config", "."]

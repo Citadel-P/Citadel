@@ -3,7 +3,7 @@
     <Authors>Hammou Arras</Authors>
     <Copyright>Citadel ©, 2024 onwards</Copyright>
     <Description>Citadel API for managing platforms, containers, registries, images, networks, and volumes.</Description>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PublishTrimmed>true</PublishTrimmed>

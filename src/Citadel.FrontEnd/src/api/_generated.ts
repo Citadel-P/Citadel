@@ -30,13 +30,6 @@ export enum RegistryType {
   GitHub = "GitHub",
 }
 
-/** @default "Docker" */
-export enum PlatformType2 {
-  Docker = "Docker",
-  DockerSwarm = "DockerSwarm",
-  Kubernetes = "Kubernetes",
-}
-
 export enum PlatformType {
   Docker = "Docker",
   DockerSwarm = "DockerSwarm",
@@ -48,17 +41,15 @@ export enum PlatformStatus {
   Online = "Online",
 }
 
-/** @default "local" */
-export enum PlatformConnectorType2 {
+export enum PlatformConnectorType {
   Unknown = "Unknown",
   Local = "Local",
   Agent = "Agent",
 }
 
-export enum PlatformConnectorType {
-  Unknown = "Unknown",
-  Local = "Local",
-  Agent = "Agent",
+export enum NullableOfGhcrAccountType {
+  Organization = "Organization",
+  User = "User",
 }
 
 export enum DockerHubTagStatus {
@@ -83,19 +74,19 @@ export enum ContainerStateStatus {
   Offline = "Offline",
 }
 
-export type AttestationData = {
-  for: string | null;
-};
+export interface AttestationData {
+  for: null | string;
+}
 
-export type BindOptions = {
-  propagation: string | null;
-  nonRecursive: boolean | null;
-  createMountpoint: boolean | null;
-  readOnlyNonRecursive: boolean | null;
-  readOnlyForceRecursive: boolean | null;
-};
+export interface BindOptions {
+  propagation: null | string;
+  nonRecursive: null | boolean;
+  createMountpoint: null | boolean;
+  readOnlyNonRecursive: null | boolean;
+  readOnlyForceRecursive: null | boolean;
+}
 
-export type ClusterVolume = {
+export interface ClusterVolume {
   id: string;
   version: VolumeVersionInfo;
   createdAt: string;
@@ -103,49 +94,54 @@ export type ClusterVolume = {
   spec: VolumeSpecification;
   info: ClusterVolumeInfo;
   publishStatus: VolumePublishStatus[];
-} | null;
+}
 
-export type ClusterVolumeInfo = {
-  /** @format int64 */
-  capacityBytes: number | null;
+export interface ClusterVolumeInfo {
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  capacityBytes: null | number | string;
   volumeContext: Record<string, string>;
   volumeID: string;
   accessibleTopology: TopologyEntry[];
-};
+}
 
-/** @default null */
-export type ConfigFromInput = {
+export interface ConfigFromInput {
   network: string;
-} | null;
+}
 
-export type ContainerConfiguration = {
-  hostname: string | null;
-  domainname: string | null;
-  user: string | null;
-  attachStdin: boolean | null;
-  attachStdout: boolean | null;
-  attachStderr: boolean | null;
-  exposedPorts: string[] | null;
-  tty: boolean | null;
-  openStdin: boolean | null;
-  stdinOnce: boolean | null;
+export interface ContainerConfiguration {
+  hostname: null | string;
+  domainname: null | string;
+  user: null | string;
+  attachStdin: null | boolean;
+  attachStdout: null | boolean;
+  attachStderr: null | boolean;
+  exposedPorts: null | any[];
+  tty: null | boolean;
+  openStdin: null | boolean;
+  stdinOnce: null | boolean;
   env: string[];
   cmd: string[];
-  image: string | null;
-  volumes: string[] | null;
-  workingDir: string | null;
+  image: null | string;
+  volumes: null | any[];
+  workingDir: null | string;
   entrypoint: string[];
-  networkDisabled: boolean | null;
-  macAddress: string | null;
+  networkDisabled: null | boolean;
+  macAddress: null | string;
   onBuild: string[];
   labels: Record<string, string>;
-};
+}
 
-export type ContainerHealthStatus = {
-  status: string | null;
-  /** @format int32 */
-  failingStreak: number | null;
-};
+export interface ContainerHealthStatus {
+  status: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  failingStreak: null | number | string;
+}
 
 export interface ContainerInfoView {
   /** @format uuid */
@@ -160,66 +156,99 @@ export interface ContainerInfoView {
 export interface ContainerInspectView {
   id: string;
   created: string;
-  path: string | null;
+  path: null | string;
   state: ContainerRuntimeState;
-  image: string | null;
-  resolvConfPath: string | null;
-  hostnamePath: string | null;
-  hostsPath: string | null;
-  logPath: string | null;
-  name: string | null;
-  /** @format int32 */
-  restartCount: number | null;
-  driver: string | null;
-  platform: string | null;
-  mountLabel: string | null;
-  processLabel: string | null;
-  appArmorProfile: string | null;
-  /** @format int64 */
-  sizeRw: number | null;
-  /** @format int64 */
-  sizeRootFs: number | null;
-  args: string[] | null;
+  image: null | string;
+  resolvConfPath: null | string;
+  hostnamePath: null | string;
+  hostsPath: null | string;
+  logPath: null | string;
+  name: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  restartCount: null | number | string;
+  driver: null | string;
+  platform: null | string;
+  mountLabel: null | string;
+  processLabel: null | string;
+  appArmorProfile: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  sizeRw: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  sizeRootFs: null | number | string;
+  args: null | any[];
   execIDs: string[];
-  mounts: MountPointInfo[] | null;
+  mounts: null | any[];
   hostConfig: HostConfiguration;
   graphDriver: GraphDriverDataInfo;
   config: ContainerConfiguration;
   networkSettings: NetworkSettingsInfo;
 }
 
-export type ContainerRuntimeState = {
+export interface ContainerRuntimeState {
   status: ContainerStateStatus;
-  running: boolean | null;
-  paused: boolean | null;
-  restarting: boolean | null;
-  oomKilled: boolean | null;
-  dead: boolean | null;
-  /** @format int32 */
-  pid: number | null;
-  /** @format int32 */
-  exitCode: number | null;
-  error: string | null;
-  startedAt: string | null;
-  finishedAt: string | null;
+  running: null | boolean;
+  paused: null | boolean;
+  restarting: null | boolean;
+  oomKilled: null | boolean;
+  dead: null | boolean;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  pid: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  exitCode: null | number | string;
+  error: null | string;
+  startedAt: null | string;
+  finishedAt: null | string;
   health: ContainerHealthStatus;
-};
+}
 
 export interface ContainerStatView {
   /** @format uuid */
   containerId?: string;
-  /** @format double */
-  memoryUsage?: number;
-  /** @format double */
-  cpuUsage?: number;
-  /** @format double */
-  memoryLimit?: number;
-  /** @format double */
-  rxBytes?: number;
-  /** @format double */
-  txBytes?: number;
-  /** @format int64 */
-  created?: number;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  memoryUsage?: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  cpuUsage?: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  memoryLimit?: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  rxBytes?: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  txBytes?: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  created?: number | string;
 }
 
 export interface ContainerStatsView {
@@ -235,14 +264,13 @@ export interface ContainerView {
   name: string;
   image: string;
   /** @format date-time */
-  created: string;
+  created: any;
   state: ContainerStateStatus;
   /** @format date-time */
-  updated: string;
-  stack: string | null;
+  updated: any;
+  stack: null | string;
   lastStats: NullableOfContainerStatView;
-  /** @default null */
-  ports?: PortView[] | null;
+  ports?: null | any[];
   platform?: PlatformView;
   metadata?: EndpointMetadata;
 }
@@ -257,18 +285,16 @@ export interface CreateNetworkInput {
   name: string;
   driver: string;
   scope: string;
-  internal: boolean | null;
-  attachable: boolean | null;
-  ingress: boolean | null;
-  enableIPv6: boolean | null;
-  enableIPv4: boolean | null;
-  configOnly: boolean | null;
+  internal: null | boolean;
+  attachable: null | boolean;
+  ingress: null | boolean;
+  enableIPv6: null | boolean;
+  enableIPv4: null | boolean;
+  configOnly: null | boolean;
   ipam?: IPAMInput;
   configFrom?: ConfigFromInput;
-  /** @default null */
-  labels?: Record<string, string>;
-  /** @default null */
-  options?: Record<string, string>;
+  labels?: null | object;
+  options?: null | object;
 }
 
 export interface CreateNetworkView {
@@ -280,20 +306,18 @@ export interface CreateVolumeInput {
   platformId: string;
   name: string;
   driver: string;
-  /** @default null */
-  labels?: Record<string, string>;
-  /** @default null */
-  options?: Record<string, string>;
+  labels?: null | object;
+  options?: null | object;
 }
 
 export interface DeleteContainersRequest {
   containerIds: string[];
   /** @default false */
-  v?: boolean | null;
+  v?: null | boolean;
   /** @default false */
-  force?: boolean | null;
+  force?: null | boolean;
   /** @default false */
-  link?: boolean | null;
+  link?: null | boolean;
 }
 
 export interface DeleteImageResponseItem {
@@ -328,53 +352,69 @@ export interface DeleteVolumesInput {
   /** @format uuid */
   platformId: string;
   names: string[];
-  force: boolean | null;
+  force: null | boolean;
 }
 
 export interface DockerHubImageResult {
-  name: string | null;
-  description: string | null;
+  name: null | string;
+  description: null | string;
   isOfficial: boolean;
-  /** @format int64 */
-  starCount: number;
-  /** @format int64 */
-  pullCount: number;
-  /** @default null */
-  url?: string | null;
-  /** @default null */
-  icon?: string | null;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  starCount: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  pullCount: number | string;
+  url?: null | string;
+  icon?: null | string;
 }
 
-export type DockerHubImageView = {
+export interface DockerHubImageView {
   architecture: string;
   digest: string;
   os: string;
-  /** @format int32 */
-  size: number;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  size: number | string;
   status: DockerHubImageStatus;
   lastPulled: string;
-} | null;
+}
 
 export interface DockerHubRepositoryInfo {
-  name: string | null;
-  namespace: string | null;
+  name: null | string;
+  namespace: null | string;
   /** @format date-time */
-  lastUpdated: string;
+  lastUpdated: any;
   isPrivate: boolean;
   isTrusted: boolean;
   isAutomated: boolean;
-  /** @format int32 */
-  pullCount: number;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  pullCount: number | string;
 }
 
 export interface DockerHubTagView {
-  /** @format int32 */
-  id: number;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  id: number | string;
   name: string;
   image: DockerHubImageView;
   lastUpdated: string;
-  /** @format int32 */
-  fullSize: number;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  fullSize: number | string;
   status: DockerHubTagStatus;
   lastPulled: string;
 }
@@ -391,7 +431,7 @@ export interface DockerNetworkDetails {
   attachable: boolean;
   ingress: boolean;
   configOnly: boolean;
-  configFrom: string | null;
+  configFrom: null | string;
   ipam: IpAddressManagementConfig;
   options: Record<string, string>;
   labels: Record<string, string>;
@@ -412,7 +452,7 @@ export interface DockerNetworkResult {
   ingress: boolean;
   configOnly: boolean;
   inUse: boolean;
-  configFrom: string | null;
+  configFrom: null | string;
   ipam: IpAddressManagementConfig;
   options: Record<string, string>;
   labels: Record<string, string>;
@@ -432,160 +472,210 @@ export interface DockerVolumeResult {
   options: Record<string, string>;
 }
 
-export type DriverConfiguration = {
-  name: string | null;
+export interface DriverConfiguration {
+  name: null | string;
   options: Record<string, string>;
-};
+}
 
-export type Empty = object;
+export type Empty = any;
 
-export type EndpointIpamConfiguration = {
-  ipv4Address: string | null;
-  ipv6Address: string | null;
+export interface EndpointIpamConfiguration {
+  ipv4Address: null | string;
+  ipv6Address: null | string;
   linkLocalIPs: string[];
-};
+}
 
-/** @default null */
-export type EndpointMetadata = {
+export interface EndpointMetadata {
   /** @default false */
-  canEdit?: boolean | null;
+  canEdit?: null | boolean;
   /** @default false */
-  canDelete?: boolean | null;
-};
+  canDelete?: null | boolean;
+}
 
 export interface EndpointSettingsInfo {
   ipamConfig: EndpointIpamConfiguration;
   links: string[];
-  macAddress: string | null;
+  macAddress: null | string;
   aliases: string[];
-  networkID: string | null;
-  endpointID: string | null;
-  gateway: string | null;
-  ipAddress: string | null;
-  /** @format int64 */
-  ipPrefixLen: number | null;
-  ipv6Gateway: string | null;
-  globalIPv6Address: string | null;
-  /** @format int64 */
-  globalIPv6PrefixLen: number | null;
+  networkID: null | string;
+  endpointID: null | string;
+  gateway: null | string;
+  ipAddress: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  ipPrefixLen: null | number | string;
+  ipv6Gateway: null | string;
+  globalIPv6Address: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  globalIPv6PrefixLen: null | number | string;
   driverOpts: Record<string, string>;
   dnsNames: string[];
 }
 
 export interface GitHubCrPackageVersion {
-  /** @format int32 */
-  id: number;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  id: number | string;
   url: string;
   name: string;
-  htmlUrl: string | null;
-  createdAt: string | null;
-  updatedAt: string | null;
-  packageHtmlUrl: string | null;
+  htmlUrl: null | string;
+  createdAt: null | string;
+  updatedAt: null | string;
+  packageHtmlUrl: null | string;
   metadata: GitHubCrPackageVersionMetadata;
 }
 
-export type GitHubCrPackageVersionContainerMetadata = {
-  tags: string[] | null;
-};
+export interface GitHubCrPackageVersionContainerMetadata {
+  tags: null | any[];
+}
 
-export type GitHubCrPackageVersionMetadata = {
+export interface GitHubCrPackageVersionMetadata {
   container: GitHubCrPackageVersionContainerMetadata;
-} | null;
+}
 
-export type GraphDriverDataInfo = {
-  name: string | null;
+export interface GraphDriverDataInfo {
+  name: null | string;
   data: Record<string, string>;
-};
+}
 
-export type HostConfiguration = {
+export interface HostConfiguration {
   binds: string[];
-  containerIDFile: string | null;
+  containerIDFile: null | string;
   logConfig: LogConfiguration;
-  networkMode: string | null;
+  networkMode: null | string;
   portBindings: Record<string, HostPortBinding[]>[];
   restartPolicy: RestartPolicy;
-  autoRemove: boolean | null;
-  volumeDriver: string | null;
+  autoRemove: null | boolean;
+  volumeDriver: null | string;
   volumesFrom: string[];
   mounts: HostMount[];
-  consoleSize: number[];
+  consoleSize: (number | string)[];
   annotations: Record<string, string>;
   capAdd: string[];
   capDrop: string[];
-  cgroupnsMode: string | null;
+  cgroupnsMode: null | string;
   dns: string[];
   dnsOptions: string[];
   dnsSearch: string[];
   extraHosts: string[];
   groupAdd: string[];
-  ipcMode: string | null;
-  cgroup: string | null;
+  ipcMode: null | string;
+  cgroup: null | string;
   links: string[];
-  /** @format int32 */
-  oomScoreAdj: number | null;
-  pidMode: string | null;
-  privileged: boolean | null;
-  publishAllPorts: boolean | null;
-  readonlyRootfs: boolean | null;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  oomScoreAdj: null | number | string;
+  pidMode: null | string;
+  privileged: null | boolean;
+  publishAllPorts: null | boolean;
+  readonlyRootfs: null | boolean;
   securityOpt: string[];
   storageOpt: Record<string, string>;
   tmpfs: Record<string, string>;
-  utsMode: string | null;
-  usernsMode: string | null;
-  /** @format int64 */
-  shmSize: number;
+  utsMode: null | string;
+  usernsMode: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  shmSize: number | string;
   sysctls: Record<string, string>;
-  runtime: string | null;
-  isolation: string | null;
+  runtime: null | string;
+  isolation: null | string;
   maskedPaths: string[];
   readonlyPaths: string[];
-  /** @format int64 */
-  memorySwap: number | null;
-  /** @format int64 */
-  memorySwappiness: number | null;
-  /** @format int64 */
-  nanoCpus: number | null;
-  /** @format int64 */
-  pidsLimit: number | null;
-  /** @format int64 */
-  memory: number | null;
-  /** @format int64 */
-  memoryReservation: number | null;
-  /** @format int64 */
-  ioMaximumBandwidth: number | null;
-  /** @format int64 */
-  cpuPeriod: number | null;
-  /** @format int64 */
-  cpuPercent: number | null;
-  /** @format int64 */
-  cpuCount: number | null;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  memorySwap: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  memorySwappiness: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  nanoCpus: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  pidsLimit: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  memory: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  memoryReservation: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  ioMaximumBandwidth: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  cpuPeriod: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  cpuPercent: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  cpuCount: null | number | string;
   ulimits: Ulimit[];
-  /** @format int64 */
-  kernelMemoryTCP: number | null;
-};
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  kernelMemoryTCP: null | number | string;
+}
 
 export interface HostMount {
-  target: string | null;
-  source: string | null;
-  type: string | null;
-  readOnly: boolean | null;
-  consistency: string | null;
+  target: null | string;
+  source: null | string;
+  type: null | string;
+  readOnly: null | boolean;
+  consistency: null | string;
   bindOptions: BindOptions;
   volumeOptions: VolumeOptions;
 }
 
 export interface HostPortBinding {
-  hostIP: string | null;
-  hostPort: string | null;
+  hostIP: null | string;
+  hostPort: null | string;
 }
 
 export interface HttpValidationProblemDetails {
-  type?: string | null;
-  title?: string | null;
-  /** @format int32 */
-  status?: number | null;
-  detail?: string | null;
-  instance?: string | null;
+  type?: null | string;
+  title?: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  status?: null | number | string;
+  detail?: null | string;
+  instance?: null | string;
   errors?: Record<string, string[]>;
 }
 
@@ -603,23 +693,26 @@ export type IImageRepository = BaseIImageRepository &
 
 export interface IImageRepositoryDockerHubRepositoryResponse {
   $type?: "DockerHub";
-  name?: string | null;
-  namespace?: string | null;
+  name?: null | string;
+  namespace?: null | string;
   /** @format date-time */
-  lastUpdated?: string;
+  lastUpdated?: any;
   isPrivate?: boolean;
-  /** @format int32 */
-  pullCount?: number;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  pullCount?: number | string;
 }
 
 export interface IImageRepositoryGitHubPackageResponse {
   $type?: "GitHub";
   id?: string;
   name?: string;
-  createdAt?: string | null;
-  updatedAt?: string | null;
-  url?: string | null;
-  htmlUrl?: string | null;
+  createdAt?: null | string;
+  updatedAt?: null | string;
+  url?: null | string;
+  htmlUrl?: null | string;
 }
 
 export interface IPAMConfigInput {
@@ -628,16 +721,13 @@ export interface IPAMConfigInput {
   gateway: string;
 }
 
-/** @default null */
-export type IPAMInput = {
+export interface IPAMInput {
   driver: string;
-  /** @default null */
-  config?: IPAMConfigInput[] | null;
-  /** @default null */
-  options?: Record<string, string>;
-};
+  config?: null | any[];
+  options?: null | object;
+}
 
-export type ImageConfig = {
+export interface ImageConfig {
   tty: boolean;
   user: string;
   image: string;
@@ -659,51 +749,69 @@ export type ImageConfig = {
   entryPoint: string[];
   volumes: Record<string, Empty>;
   labels: Record<string, string>;
-  exposedPorts: Record<string, any>;
-} | null;
+  exposedPorts: Record<string, Empty>;
+}
 
-export type ImageData = {
+export interface ImageData {
   platform: ImagePlatformDescriptor;
   containers: string[];
   size: SizeInfo;
-} | null;
+}
 
-export type ImageDescriptor = {
-  /** @format int64 */
-  size: number;
-  data: string | null;
+export interface ImageDescriptor {
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  size: number | string;
+  data: null | string;
   digest: string;
   mediaType: string;
   artifactType: string;
   platform: ImagePlatformDescriptor;
-  urls: string[];
-  annotations: Record<string, string>;
-};
+  urls: any;
+  annotations: any;
+}
 
-export type ImageGraphDriverData = {
+export interface ImageGraphDriverData {
   mergedDir: string;
   upperDir: string;
   workDir: string;
-} | null;
+}
 
-export type ImageGraphicDriver = {
+export interface ImageGraphicDriver {
   name: string;
   data: ImageGraphDriverData;
-} | null;
+}
 
-export type ImageHealthCheck = {
+export interface ImageHealthCheck {
   test: string[];
-  /** @format int64 */
-  interval: number | null;
-  /** @format int64 */
-  timeout: number | null;
-  /** @format int64 */
-  retries: number | null;
-  /** @format int64 */
-  startPeriod: number | null;
-  /** @format int64 */
-  startInterval: number | null;
-};
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  interval: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  timeout: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  retries: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  startPeriod: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  startInterval: null | number | string;
+}
 
 export interface ImageManifest {
   id: string;
@@ -715,56 +823,74 @@ export interface ImageManifest {
   attestationData: AttestationData;
 }
 
-export type ImageMetadata = {
+export interface ImageMetadata {
   lastTagTime: string;
-} | null;
+}
 
-export type ImagePlatformDescriptor = {
-  os: string;
-  variant: string;
-  osVersion: string;
-  architecture: string;
-  osFeatures: string[];
-} | null;
+export type ImagePlatformDescriptor = any;
 
-export type ImagePullError = {
-  /** @format int64 */
-  code: number | null;
-  message: string | null;
-};
+export interface ImagePullError {
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  code: null | number | string;
+  message: null | string;
+}
 
-export type ImagePullProgress = {
-  units: string | null;
-  /** @format int64 */
-  current: number | null;
-  /** @format int64 */
-  total: number | null;
-  /** @format int64 */
-  start: number | null;
-};
+export interface ImagePullProgress {
+  units: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  current: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  total: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  start: null | number | string;
+}
 
-export type ImageRootFs = {
+export interface ImageRootFs {
   type: string;
   layers: string[];
-} | null;
+}
 
 export interface ImageView {
   id: string;
-  /** @format int64 */
-  created: number;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  created: number | string;
   parentId: string;
   repoDigests: string[];
   repoTags: string[];
-  /** @format int64 */
-  sharedSize: number;
-  /** @format double */
-  size: number;
-  /** @format double */
-  virtualSize: number;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  sharedSize: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  size: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  virtualSize: number | string;
   isInUse: boolean;
   labels: Record<string, string>;
-  name?: string | null;
-  tag?: string | null;
+  name?: null | string;
+  tag?: null | string;
 }
 
 export interface ImagesView {
@@ -780,12 +906,18 @@ export interface InspectImageResult {
   dockerVersion: string;
   architecture: string;
   osVersion: string;
-  /** @format int64 */
-  virtualSize: number;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  virtualSize: number | string;
   variant: string;
   os: string;
-  /** @format int64 */
-  size: number;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  size: number | string;
   rootFS: ImageRootFs;
   metadata: ImageMetadata;
   config: ImageConfig;
@@ -796,28 +928,24 @@ export interface InspectImageResult {
   repoDigests: string[];
 }
 
-export interface IpAddressInfo {
-  addr: string | null;
-  /** @format int64 */
-  prefixLen: number | null;
-}
+export type IpAddressInfo = any;
 
-export type IpAddressManagementConfig = {
-  driver: string | null;
+export interface IpAddressManagementConfig {
+  driver: null | string;
   config: IpamSubnetConfiguration[];
   options: Record<string, string>;
-};
-
-export interface IpamSubnetConfiguration {
-  subnet: string | null;
-  ipRange: string | null;
-  gateway: string | null;
 }
 
-export type LogConfiguration = {
-  type: string | null;
+export interface IpamSubnetConfiguration {
+  subnet: null | string;
+  ipRange: null | string;
+  gateway: null | string;
+}
+
+export interface LogConfiguration {
+  type: null | string;
   config: Record<string, string>;
-};
+}
 
 export interface LoginRequest {
   email: string;
@@ -829,14 +957,14 @@ export interface LoginResponse {
 }
 
 export interface MountPointInfo {
-  type: string | null;
-  name: string | null;
-  source: string | null;
-  destination: string | null;
-  driver: string | null;
-  mode: string | null;
-  rw: boolean | null;
-  propagation: string | null;
+  type: null | string;
+  name: null | string;
+  source: null | string;
+  destination: null | string;
+  driver: null | string;
+  mode: null | string;
+  rw: null | boolean;
+  propagation: null | string;
 }
 
 export interface NetworkConnectedContainer {
@@ -852,50 +980,77 @@ export interface NetworkPeerInfo {
   ip: string;
 }
 
-export type NetworkSettingsInfo = {
-  bridge: string | null;
-  sandboxID: string | null;
-  hairpinMode: boolean | null;
-  linkLocalIPv6Address: string | null;
-  /** @format int64 */
-  linkLocalIPv6PrefixLen: number | null;
-  sandboxKey: string | null;
+export interface NetworkSettingsInfo {
+  bridge: null | string;
+  sandboxID: null | string;
+  hairpinMode: null | boolean;
+  linkLocalIPv6Address: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  linkLocalIPv6PrefixLen: null | number | string;
+  sandboxKey: null | string;
   secondaryIPAddresses: IpAddressInfo[];
-  secondaryIPv6Addresses: any[];
-  endpointID: string | null;
-  gateway: string | null;
-  globalIPv6Address: string | null;
-  /** @format int64 */
-  globalIPv6PrefixLen: number | null;
-  ipAddress: string | null;
-  /** @format int64 */
-  ipPrefixLen: number | null;
-  ipv6Gateway: string | null;
-  macAddress: string | null;
-  ports: Record<string, HostPortBinding[]>[];
+  secondaryIPv6Addresses: IpAddressInfo[];
+  endpointID: null | string;
+  gateway: null | string;
+  globalIPv6Address: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  globalIPv6PrefixLen: null | number | string;
+  ipAddress: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  ipPrefixLen: null | number | string;
+  ipv6Gateway: null | string;
+  macAddress: null | string;
+  ports: any[];
   networks: Record<string, EndpointSettingsInfo>;
-};
+}
 
 export interface NetworksView {
   networks: DockerNetworkResult[];
 }
 
-export type NullableOfContainerStatView = {
+export interface NullableOfContainerStatView {
   /** @format uuid */
   containerId?: string;
-  /** @format double */
-  memoryUsage?: number;
-  /** @format double */
-  cpuUsage?: number;
-  /** @format double */
-  memoryLimit?: number;
-  /** @format double */
-  rxBytes?: number;
-  /** @format double */
-  txBytes?: number;
-  /** @format int64 */
-  created?: number;
-} | null;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  memoryUsage?: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  cpuUsage?: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  memoryLimit?: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  rxBytes?: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  txBytes?: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  created?: number | string;
+}
 
 export type NullableOfRegistryType = any;
 
@@ -918,24 +1073,31 @@ export type PlatformDescriptor = BasePlatformDescriptor &
 export interface PlatformDescriptorDockerPlatformDescriptor {
   $type?: "Docker";
   daemonId: string;
-  /** @format int64 */
-  containerCount: number;
-  /** @format int64 */
-  containersRunning: number;
-  /** @format int64 */
-  containersPaused: number;
-  /** @format int64 */
-  containersStopped: number;
-  /** @default null */
-  driver?: string | null;
-  /** @default null */
-  operatingSystem?: string | null;
-  /** @default null */
-  osVersion?: string | null;
-  /** @default null */
-  osType?: string | null;
-  /** @default null */
-  architecture?: string | null;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  containerCount: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  containersRunning: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  containersPaused: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  containersStopped: number | string;
+  driver?: null | string;
+  operatingSystem?: null | string;
+  osVersion?: null | string;
+  osType?: null | string;
+  architecture?: null | string;
 }
 
 export interface PlatformDescriptorDockerSwarmPlatformDescriptor {
@@ -944,134 +1106,156 @@ export interface PlatformDescriptorDockerSwarmPlatformDescriptor {
   nodeAddr: string;
   localNodeState: string;
   controlAvailable: boolean;
-  /** @format int64 */
-  nodes: number;
-  /** @format int64 */
-  managers: number;
-  /** @default null */
-  error?: string | null;
-  /** @default null */
-  remoteManagers?: {
-    nodeID: string | null;
-    addr: string | null;
-  }[];
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  nodes: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  managers: number | string;
+  error?: null | string;
+  remoteManagers?: null | any[];
   daemonId: string;
-  /** @format int64 */
-  containerCount: number;
-  /** @format int64 */
-  containersRunning: number;
-  /** @format int64 */
-  containersPaused: number;
-  /** @format int64 */
-  containersStopped: number;
-  /** @default null */
-  driver?: string | null;
-  /** @default null */
-  operatingSystem?: string | null;
-  /** @default null */
-  osVersion?: string | null;
-  /** @default null */
-  osType?: string | null;
-  /** @default null */
-  architecture?: string | null;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  containerCount: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  containersRunning: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  containersPaused: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  containersStopped: number | string;
+  driver?: null | string;
+  operatingSystem?: null | string;
+  osVersion?: null | string;
+  osType?: null | string;
+  architecture?: null | string;
 }
 
 export interface PlatformDescriptorKubernetesPlatformDescriptor {
   $type?: "Kubernetes";
-  clusterName: string | null;
-  clusterVersion: string | null;
-  apiServerUrl: string | null;
-  namespace: string | null;
+  clusterName: null | string;
+  clusterVersion: null | string;
+  apiServerUrl: null | string;
+  namespace: null | string;
 }
 
 export interface PlatformInput {
   name: string;
-  address: string | null;
-  type?: PlatformType2;
-  connectorType?: PlatformConnectorType2;
+  address: null | string;
+  type?: PlatformType;
+  connectorType?: PlatformConnectorType;
 }
 
 export interface PlatformStatView {
-  /** @format int64 */
-  created?: number;
-  /** @format double */
-  txBytes?: number;
-  /** @format double */
-  rxBytes?: number;
-  /** @format double */
-  cpuUsage?: number;
-  /** @format double */
-  memoryUsage?: number;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  created?: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  txBytes?: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  rxBytes?: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  cpuUsage?: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  memoryUsage?: number | string;
 }
 
-/** @default null */
-export type PlatformView = {
+export interface PlatformView {
   /** @format uuid */
   id: string;
   name: string;
   address: string;
-  /** @format int32 */
-  networkCount: number;
-  /** @format int32 */
-  volumeCount: number;
-  /** @format int64 */
-  imageCount: number;
-  /** @format int64 */
-  cpuCount: number;
-  /** @format int64 */
-  memTotal: number;
-  agentVersion: string | null;
-  serverVersion: string | null;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  networkCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  volumeCount: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  imageCount: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  cpuCount: number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  memTotal: number | string;
+  agentVersion: null | string;
+  serverVersion: null | string;
   type: PlatformType;
   status: PlatformStatus;
   connectorType: PlatformConnectorType;
-  stats: PlatformStatView[] | null;
-  platformDescriptor: PlatformDescriptor;
-};
-
-export interface PlatformView2 {
-  /** @format uuid */
-  id: string;
-  name: string;
-  address: string;
-  /** @format int32 */
-  networkCount: number;
-  /** @format int32 */
-  volumeCount: number;
-  /** @format int64 */
-  imageCount: number;
-  /** @format int64 */
-  cpuCount: number;
-  /** @format int64 */
-  memTotal: number;
-  agentVersion: string | null;
-  serverVersion: string | null;
-  type: PlatformType;
-  status: PlatformStatus;
-  connectorType: PlatformConnectorType;
-  stats: PlatformStatView[] | null;
+  stats: null | any[];
   platformDescriptor: PlatformDescriptor;
 }
 
 export interface PlatformsView {
-  platforms: PlatformView2[];
+  platforms: PlatformView[];
 }
 
 export interface PortView {
   ip?: string;
-  /** @format int32 */
-  privatePort?: number;
-  /** @format int32 */
-  publicPort?: number;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  privatePort?: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  publicPort?: number | string;
 }
 
 export interface ProblemDetails {
-  type?: string | null;
-  title?: string | null;
-  /** @format int32 */
-  status?: number | null;
-  detail?: string | null;
-  instance?: string | null;
+  type?: null | string;
+  title?: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  status?: null | number | string;
+  detail?: null | string;
+  instance?: null | string;
 }
 
 export interface PullImageRequest {
@@ -1083,12 +1267,12 @@ export interface PullImageRequest {
 }
 
 export interface PullImageResult {
-  id: string | null;
-  from: string | null;
-  stream: string | null;
-  status: string | null;
-  errorMessage: string | null;
-  progressMessage: string | null;
+  id: null | string;
+  from: null | string;
+  stream: null | string;
+  status: null | string;
+  errorMessage: null | string;
+  progressMessage: null | string;
   progress: ImagePullProgress;
   error: ImagePullError;
 }
@@ -1107,8 +1291,7 @@ export type RegistryConfigurationBase =
   | RegistryConfigurationBaseGitlabRegistry
   | RegistryConfigurationBaseDockerHubRegistry
   | RegistryConfigurationBaseGitHubRegistry
-  | RegistryConfigurationBaseBase
-  | null;
+  | RegistryConfigurationBaseBase;
 
 export interface RegistryConfigurationBaseAWSRegistry {
   $type: "AWS";
@@ -1132,10 +1315,8 @@ export interface RegistryConfigurationBaseBase {
 
 export interface RegistryConfigurationBaseDockerHubRegistry {
   $type: "DockerHub";
-  /** @default null */
-  userName?: string | null;
-  /** @default null */
-  pat?: string | null;
+  userName?: null | string;
+  pat?: null | string;
   registryUrl?: string;
 }
 
@@ -1143,7 +1324,7 @@ export interface RegistryConfigurationBaseGitHubRegistry {
   $type: "GitHub";
   name: string;
   pat: string;
-  type: "Organization" | "User" | null;
+  type: NullableOfGhcrAccountType;
   registryUrl?: string;
 }
 
@@ -1156,8 +1337,8 @@ export interface RegistryConfigurationBaseGitlabRegistry {
 }
 
 export interface RegistryInput {
-  name: string | null;
-  url: string | null;
+  name: null | string;
+  url: null | string;
   type: NullableOfRegistryType;
   configuration: RegistryConfigurationBase;
 }
@@ -1169,28 +1350,45 @@ export interface RegistryView {
   url: string;
   type: RegistryType;
   /** @format date-time */
-  created: string;
+  created: any;
   configuration: RegistryConfigurationBase;
   isDefault?: boolean;
 }
 
-export type RestartPolicy = {
-  name: string | null;
-  /** @format int32 */
-  maximumRetryCount: number | null;
-};
+export interface RestartPolicy {
+  name: null | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  maximumRetryCount: null | number | string;
+}
 
-export type SizeInfo = {
-  /** @format int64 */
-  total: number | null;
-  /** @format int64 */
-  content: number | null;
-  /** @format int64 */
-  unpacked: number | null;
-};
+export interface SizeInfo {
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  total: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  content: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  unpacked: null | number | string;
+}
 
 export interface StreamLogsRequest {
   containerId: string;
+}
+
+export interface SwarmPeer {
+  nodeID: null | string;
+  addr: null | string;
 }
 
 export interface TopologyEntry {
@@ -1198,34 +1396,46 @@ export interface TopologyEntry {
 }
 
 export interface Ulimit {
-  name: string | null;
-  /** @format int64 */
-  soft: number | null;
-  /** @format int64 */
-  hard: number | null;
+  name: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  soft: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  hard: null | number | string;
 }
 
-export type VolumeAccessMode = {
+export interface VolumeAccessMode {
   scope: VolumeScope;
   sharing: VolumeSharing;
   secrets: VolumeSecret[];
   capacityRange: VolumeCapacityRange;
   availability: string;
-} | null;
+}
 
-export type VolumeCapacityRange = {
-  /** @format int64 */
-  requiredBytes: number | null;
-  /** @format int64 */
-  limitBytes: number | null;
-};
+export interface VolumeCapacityRange {
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  requiredBytes: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  limitBytes: null | number | string;
+}
 
-export type VolumeOptions = {
-  noCopy: boolean | null;
+export interface VolumeOptions {
+  noCopy: null | boolean;
   labels: Record<string, string>;
   driverConfig: DriverConfiguration;
-  subpath: string | null;
-};
+  subpath: null | string;
+}
 
 export interface VolumePublishStatus {
   nodeID: string;
@@ -1238,22 +1448,31 @@ export interface VolumeSecret {
   secret: string;
 }
 
-export type VolumeSpecification = {
+export interface VolumeSpecification {
   group: string;
   accessMode: VolumeAccessMode;
-} | null;
+}
 
-export type VolumeUsageData = {
-  /** @format int64 */
-  size: number | null;
-  /** @format int64 */
-  refCount: number | null;
-};
+export interface VolumeUsageData {
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  size: null | number | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  refCount: null | number | string;
+}
 
-export type VolumeVersionInfo = {
-  /** @format int64 */
-  index: number | null;
-};
+export interface VolumeVersionInfo {
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  index: null | number | string;
+}
 
 export interface VolumesView {
   volumes: DockerVolumeResult[];
@@ -1265,7 +1484,7 @@ type BaseIImageRepositoryTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
-type BasePlatformDescriptor = object | null;
+type BasePlatformDescriptor = object;
 
 type BasePlatformDescriptorTypeMapping<Key, Type> = {
   $type: Key;
@@ -1918,7 +2137,7 @@ export class Api<
      * @summary Create a platform
      * @request POST:/api/v1/platforms
      * @secure
-     * @response `200` `PlatformView2` OK
+     * @response `200` `PlatformView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -1926,18 +2145,17 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     platformsCreate: (data: PlatformInput, params: RequestParams = {}) =>
-      this.request<
-        PlatformView2,
-        HttpValidationProblemDetails | ProblemDetails
-      >({
-        path: `/api/v1/platforms`,
-        method: "POST",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
+      this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/platforms`,
+          method: "POST",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -1980,7 +2198,7 @@ export class Api<
      * @summary Get platform by Id
      * @request GET:/api/v1/platforms/{id}
      * @secure
-     * @response `200` `PlatformView2` OK
+     * @response `200` `PlatformView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -1988,16 +2206,15 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     platformsGetById: (id: string, params: RequestParams = {}) =>
-      this.request<
-        PlatformView2,
-        HttpValidationProblemDetails | ProblemDetails
-      >({
-        path: `/api/v1/platforms/${id}`,
-        method: "GET",
-        secure: true,
-        format: "json",
-        ...params,
-      }),
+      this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/platforms/${id}`,
+          method: "GET",
+          secure: true,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -2007,7 +2224,7 @@ export class Api<
      * @summary Patch a platform
      * @request PATCH:/api/v1/platforms/{id}
      * @secure
-     * @response `200` `PlatformView2` OK
+     * @response `200` `PlatformView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2020,18 +2237,17 @@ export class Api<
       data: PlatformInput,
       params: RequestParams = {},
     ) =>
-      this.request<
-        PlatformView2,
-        HttpValidationProblemDetails | ProblemDetails
-      >({
-        path: `/api/v1/platforms/${id}`,
-        method: "PATCH",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
+      this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/platforms/${id}`,
+          method: "PATCH",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -2358,7 +2574,6 @@ export class Api<
      */
     imagesGetDockerHubPublicImages: (
       query?: {
-        /** @default null */
         imageName?: string;
       },
       params: RequestParams = {},
@@ -2481,13 +2696,9 @@ export class Api<
     networksList: (
       id: string,
       query?: {
-        /** @default null */
         Dangling?: boolean;
-        /** @default null */
         Driver?: string;
-        /** @default null */
         Id?: string;
-        /** @default null */
         Name?: string;
       },
       params: RequestParams = {},
@@ -2606,11 +2817,8 @@ export class Api<
     volumesList: (
       id: string,
       query?: {
-        /** @default null */
         Dangling?: boolean;
-        /** @default null */
         Driver?: string;
-        /** @default null */
         Name?: string;
       },
       params: RequestParams = {},

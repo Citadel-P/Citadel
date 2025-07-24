@@ -1,5 +1,5 @@
 {
-  "openapi": "3.0.1",
+  "openapi": "3.1.1",
   "info": {
     "title": "Citadel.WebApi | v1",
     "version": "1.0.0"
@@ -97,14 +97,6 @@
           },
           "200": {
             "description": "OK",
-            "headers": {
-              "refresh_token": {
-                "description": "refresh_token",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1237,7 +1229,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlatformView2"
+                  "$ref": "#/components/schemas/PlatformView"
                 }
               }
             }
@@ -1404,7 +1396,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlatformView2"
+                  "$ref": "#/components/schemas/PlatformView"
                 }
               }
             }
@@ -1505,7 +1497,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlatformView2"
+                  "$ref": "#/components/schemas/PlatformView"
                 }
               }
             }
@@ -1836,19 +1828,73 @@
               },
               "examples": {
                 "Azure": {
-                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Type\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\",\"RegistryUrl\":\"\"}}"
+                  "value": {
+                    "Name": "my-azure-registry",
+                    "Url": "myproject.azurecr.io",
+                    "Type": "Azure",
+                    "Configuration": {
+                      "$type": "Azure",
+                      "UserName": "johnDoe",
+                      "Password": "myPassword",
+                      "RegistryUrl": ""
+                    }
+                  }
                 },
                 "AWS": {
-                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Type\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"AccessKey\":\"\",\"AuthenticationRequired\":true,\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\",\"RegistryUrl\":\"\"}}"
+                  "value": {
+                    "Name": "my-ecr-registry",
+                    "Url": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
+                    "Type": "AWS",
+                    "Configuration": {
+                      "$type": "AWS",
+                      "AccessKey": "",
+                      "AuthenticationRequired": true,
+                      "SecretAccessKey": "",
+                      "Region": "us-east-2",
+                      "RegistryUrl": ""
+                    }
+                  }
                 },
                 "Gitlab": {
-                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Type\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\",\"RegistryUrl\":\"\"}}"
+                  "value": {
+                    "Name": "",
+                    "Url": "https://registry.gitlab.com",
+                    "Type": "Gitlab",
+                    "Configuration": {
+                      "$type": "Gitlab",
+                      "UserName": "",
+                      "PAT": "",
+                      "InstanceUrl": "https://gitlab.com",
+                      "RegistryUrl": ""
+                    }
+                  }
                 },
                 "DockerHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"UserName\":\"\",\"PAT\":\"\",\"RegistryUrl\":\"https://docker.io\"}}"
+                  "value": {
+                    "Name": "my-custom-registry",
+                    "Url": "",
+                    "Type": "DockerHub",
+                    "Configuration": {
+                      "$type": "DockerHub",
+                      "UserName": "",
+                      "PAT": "",
+                      "RegistryUrl": "https://docker.io"
+                    }
+                  }
                 },
                 "GitHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"Name\":\"organization or user name\",\"PAT\":\"\",\"Type\":\"Organization\",\"RegistryUrl\":\"https://ghcr.io\"}}"
+                  "value": {
+                    "Name": "my-custom-registry",
+                    "Url": "",
+                    "Type": "GitHub",
+                    "Configuration": {
+                      "$type": "GitHub",
+                      "Name": "organization or user name",
+                      "PAT": "",
+                      "Type": "Organization",
+                      "RegistryUrl": "https://ghcr.io"
+                    }
+                  }
                 }
               }
             },
@@ -1858,19 +1904,73 @@
               },
               "examples": {
                 "Azure": {
-                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Type\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\",\"RegistryUrl\":\"\"}}"
+                  "value": {
+                    "Name": "my-azure-registry",
+                    "Url": "myproject.azurecr.io",
+                    "Type": "Azure",
+                    "Configuration": {
+                      "$type": "Azure",
+                      "UserName": "johnDoe",
+                      "Password": "myPassword",
+                      "RegistryUrl": ""
+                    }
+                  }
                 },
                 "AWS": {
-                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Type\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"AccessKey\":\"\",\"AuthenticationRequired\":true,\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\",\"RegistryUrl\":\"\"}}"
+                  "value": {
+                    "Name": "my-ecr-registry",
+                    "Url": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
+                    "Type": "AWS",
+                    "Configuration": {
+                      "$type": "AWS",
+                      "AccessKey": "",
+                      "AuthenticationRequired": true,
+                      "SecretAccessKey": "",
+                      "Region": "us-east-2",
+                      "RegistryUrl": ""
+                    }
+                  }
                 },
                 "Gitlab": {
-                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Type\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\",\"RegistryUrl\":\"\"}}"
+                  "value": {
+                    "Name": "",
+                    "Url": "https://registry.gitlab.com",
+                    "Type": "Gitlab",
+                    "Configuration": {
+                      "$type": "Gitlab",
+                      "UserName": "",
+                      "PAT": "",
+                      "InstanceUrl": "https://gitlab.com",
+                      "RegistryUrl": ""
+                    }
+                  }
                 },
                 "DockerHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"UserName\":\"\",\"PAT\":\"\",\"RegistryUrl\":\"https://docker.io\"}}"
+                  "value": {
+                    "Name": "my-custom-registry",
+                    "Url": "",
+                    "Type": "DockerHub",
+                    "Configuration": {
+                      "$type": "DockerHub",
+                      "UserName": "",
+                      "PAT": "",
+                      "RegistryUrl": "https://docker.io"
+                    }
+                  }
                 },
                 "GitHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"Name\":\"organization or user name\",\"PAT\":\"\",\"Type\":\"Organization\",\"RegistryUrl\":\"https://ghcr.io\"}}"
+                  "value": {
+                    "Name": "my-custom-registry",
+                    "Url": "",
+                    "Type": "GitHub",
+                    "Configuration": {
+                      "$type": "GitHub",
+                      "Name": "organization or user name",
+                      "PAT": "",
+                      "Type": "Organization",
+                      "RegistryUrl": "https://ghcr.io"
+                    }
+                  }
                 }
               }
             }
@@ -1972,19 +2072,73 @@
               },
               "examples": {
                 "Azure": {
-                  "value": "{\"Name\":\"my-azure-registry\",\"Url\":\"myproject.azurecr.io\",\"Type\":\"Azure\",\"Configuration\":{\"$type\":\"Azure\",\"UserName\":\"johnDoe\",\"Password\":\"myPassword\",\"RegistryUrl\":\"\"}}"
+                  "value": {
+                    "Name": "my-azure-registry",
+                    "Url": "myproject.azurecr.io",
+                    "Type": "Azure",
+                    "Configuration": {
+                      "$type": "Azure",
+                      "UserName": "johnDoe",
+                      "Password": "myPassword",
+                      "RegistryUrl": ""
+                    }
+                  }
                 },
                 "AWS": {
-                  "value": "{\"Name\":\"my-ecr-registry\",\"Url\":\"aws-account-id.dkr.ecr.us-east-2.amazonaws.com/\",\"Type\":\"AWS\",\"Configuration\":{\"$type\":\"AWS\",\"AccessKey\":\"\",\"AuthenticationRequired\":true,\"SecretAccessKey\":\"\",\"Region\":\"us-east-2\",\"RegistryUrl\":\"\"}}"
+                  "value": {
+                    "Name": "my-ecr-registry",
+                    "Url": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
+                    "Type": "AWS",
+                    "Configuration": {
+                      "$type": "AWS",
+                      "AccessKey": "",
+                      "AuthenticationRequired": true,
+                      "SecretAccessKey": "",
+                      "Region": "us-east-2",
+                      "RegistryUrl": ""
+                    }
+                  }
                 },
                 "Gitlab": {
-                  "value": "{\"Name\":\"\",\"Url\":\"https://registry.gitlab.com\",\"Type\":\"Gitlab\",\"Configuration\":{\"$type\":\"Gitlab\",\"UserName\":\"\",\"PAT\":\"\",\"InstanceUrl\":\"https://gitlab.com\",\"RegistryUrl\":\"\"}}"
+                  "value": {
+                    "Name": "",
+                    "Url": "https://registry.gitlab.com",
+                    "Type": "Gitlab",
+                    "Configuration": {
+                      "$type": "Gitlab",
+                      "UserName": "",
+                      "PAT": "",
+                      "InstanceUrl": "https://gitlab.com",
+                      "RegistryUrl": ""
+                    }
+                  }
                 },
                 "DockerHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"DockerHub\",\"Configuration\":{\"$type\":\"DockerHub\",\"UserName\":\"\",\"PAT\":\"\",\"RegistryUrl\":\"https://docker.io\"}}"
+                  "value": {
+                    "Name": "my-custom-registry",
+                    "Url": "",
+                    "Type": "DockerHub",
+                    "Configuration": {
+                      "$type": "DockerHub",
+                      "UserName": "",
+                      "PAT": "",
+                      "RegistryUrl": "https://docker.io"
+                    }
+                  }
                 },
                 "GitHub": {
-                  "value": "{\"Name\":\"my-custom-registry\",\"Url\":\"\",\"Type\":\"GitHub\",\"Configuration\":{\"$type\":\"GitHub\",\"Name\":\"organization or user name\",\"PAT\":\"\",\"Type\":\"Organization\",\"RegistryUrl\":\"https://ghcr.io\"}}"
+                  "value": {
+                    "Name": "my-custom-registry",
+                    "Url": "",
+                    "Type": "GitHub",
+                    "Configuration": {
+                      "$type": "GitHub",
+                      "Name": "organization or user name",
+                      "PAT": "",
+                      "Type": "Organization",
+                      "RegistryUrl": "https://ghcr.io"
+                    }
+                  }
                 }
               }
             }
@@ -2565,8 +2719,7 @@
             "name": "imageName",
             "in": "query",
             "schema": {
-              "type": "string",
-              "default": null
+              "type": "string"
             }
           }
         ],
@@ -2914,32 +3067,28 @@
             "name": "Dangling",
             "in": "query",
             "schema": {
-              "type": "boolean",
-              "default": null
+              "type": "boolean"
             }
           },
           {
             "name": "Driver",
             "in": "query",
             "schema": {
-              "type": "string",
-              "default": null
+              "type": "string"
             }
           },
           {
             "name": "Id",
             "in": "query",
             "schema": {
-              "type": "string",
-              "default": null
+              "type": "string"
             }
           },
           {
             "name": "Name",
             "in": "query",
             "schema": {
-              "type": "string",
-              "default": null
+              "type": "string"
             }
           }
         ],
@@ -3292,24 +3441,21 @@
             "name": "Dangling",
             "in": "query",
             "schema": {
-              "type": "boolean",
-              "default": null
+              "type": "boolean"
             }
           },
           {
             "name": "Driver",
             "in": "query",
             "schema": {
-              "type": "string",
-              "default": null
+              "type": "string"
             }
           },
           {
             "name": "Name",
             "in": "query",
             "schema": {
-              "type": "string",
-              "default": null
+              "type": "string"
             }
           }
         ],
@@ -3647,14 +3793,18 @@
         "required": [
           "for"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "for": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           }
-        },
-        "nullable": true
+        }
       },
       "BindOptions": {
         "required": [
@@ -3664,30 +3814,42 @@
           "readOnlyNonRecursive",
           "readOnlyForceRecursive"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "propagation": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "nonRecursive": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "createMountpoint": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "readOnlyNonRecursive": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "readOnlyForceRecursive": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
-        },
-        "nullable": true
+        }
       },
       "ClusterVolume": {
         "required": [
@@ -3699,7 +3861,10 @@
           "info",
           "publishStatus"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "id": {
             "type": "string"
@@ -3725,8 +3890,7 @@
               "$ref": "#/components/schemas/VolumePublishStatus"
             }
           }
-        },
-        "nullable": true
+        }
       },
       "ClusterVolumeInfo": {
         "required": [
@@ -3735,12 +3899,19 @@
           "volumeID",
           "accessibleTopology"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "capacityBytes": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "volumeContext": {
             "type": "object",
@@ -3757,21 +3928,21 @@
               "$ref": "#/components/schemas/TopologyEntry"
             }
           }
-        },
-        "nullable": true
+        }
       },
       "ConfigFromInput": {
         "required": [
           "network"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "network": {
             "type": "string"
           }
-        },
-        "default": null,
-        "nullable": true
+        }
       },
       "ContainerConfiguration": {
         "required": [
@@ -3796,50 +3967,73 @@
           "onBuild",
           "labels"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "hostname": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "domainname": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "user": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "attachStdin": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "attachStdout": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "attachStderr": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "exposedPorts": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "tty": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "openStdin": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "stdinOnce": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "env": {
             "type": "array",
@@ -3854,19 +4048,25 @@
             }
           },
           "image": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "volumes": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "workingDir": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "entrypoint": {
             "type": "array",
@@ -3875,12 +4075,16 @@
             }
           },
           "networkDisabled": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "macAddress": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "onBuild": {
             "type": "array",
@@ -3894,27 +4098,34 @@
               "type": "string"
             }
           }
-        },
-        "nullable": true
+        }
       },
       "ContainerHealthStatus": {
         "required": [
           "status",
           "failingStreak"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "status": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "failingStreak": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
-        },
-        "nullable": true
+        }
       },
       "ContainerInfoView": {
         "required": [
@@ -3982,77 +4193,115 @@
             "type": "string"
           },
           "path": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "state": {
             "$ref": "#/components/schemas/ContainerRuntimeState"
           },
           "image": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "resolvConfPath": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "hostnamePath": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "hostsPath": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "logPath": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "name": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "restartCount": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           },
           "driver": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "platform": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "mountLabel": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "processLabel": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "appArmorProfile": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "sizeRw": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "sizeRootFs": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "args": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           },
           "execIDs": {
             "type": "array",
@@ -4061,11 +4310,13 @@
             }
           },
           "mounts": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "$ref": "#/components/schemas/MountPointInfo"
-            },
-            "nullable": true
+            }
           },
           "hostConfig": {
             "$ref": "#/components/schemas/HostConfiguration"
@@ -4096,58 +4347,84 @@
           "finishedAt",
           "health"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "status": {
             "$ref": "#/components/schemas/ContainerStateStatus"
           },
           "running": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "paused": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "restarting": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "oomKilled": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "dead": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "pid": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           },
           "exitCode": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           },
           "error": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "startedAt": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "finishedAt": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "health": {
             "$ref": "#/components/schemas/ContainerHealthStatus"
           }
-        },
-        "nullable": true
+        }
       },
       "ContainerStatView": {
         "type": "object",
@@ -4157,27 +4434,51 @@
             "format": "uuid"
           },
           "memoryUsage": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           },
           "cpuUsage": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           },
           "memoryLimit": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           },
           "rxBytes": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           },
           "txBytes": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           },
           "created": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           }
         }
@@ -4243,30 +4544,31 @@
             "type": "string"
           },
           "created": {
-            "type": "string",
             "format": "date-time"
           },
           "state": {
             "$ref": "#/components/schemas/ContainerStateStatus"
           },
           "updated": {
-            "type": "string",
             "format": "date-time"
           },
           "stack": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "lastStats": {
             "$ref": "#/components/schemas/NullableOfContainerStatView"
           },
           "ports": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "$ref": "#/components/schemas/PortView"
-            },
-            "default": null,
-            "nullable": true
+            }
           },
           "platform": {
             "$ref": "#/components/schemas/PlatformView"
@@ -4319,28 +4621,40 @@
             "type": "string"
           },
           "internal": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "attachable": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "ingress": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "enableIPv6": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "enableIPv4": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "configOnly": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "ipam": {
             "$ref": "#/components/schemas/IPAMInput"
@@ -4349,20 +4663,22 @@
             "$ref": "#/components/schemas/ConfigFromInput"
           },
           "labels": {
-            "type": "object",
+            "type": [
+              "null",
+              "object"
+            ],
             "additionalProperties": {
               "type": "string"
-            },
-            "default": null,
-            "nullable": true
+            }
           },
           "options": {
-            "type": "object",
+            "type": [
+              "null",
+              "object"
+            ],
             "additionalProperties": {
               "type": "string"
-            },
-            "default": null,
-            "nullable": true
+            }
           }
         }
       },
@@ -4396,20 +4712,22 @@
             "type": "string"
           },
           "labels": {
-            "type": "object",
+            "type": [
+              "null",
+              "object"
+            ],
             "additionalProperties": {
               "type": "string"
-            },
-            "default": null,
-            "nullable": true
+            }
           },
           "options": {
-            "type": "object",
+            "type": [
+              "null",
+              "object"
+            ],
             "additionalProperties": {
               "type": "string"
-            },
-            "default": null,
-            "nullable": true
+            }
           }
         }
       },
@@ -4426,19 +4744,25 @@
             }
           },
           "v": {
-            "type": "boolean",
-            "default": false,
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "default": false
           },
           "force": {
-            "type": "boolean",
-            "default": false,
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "default": false
           },
           "link": {
-            "type": "boolean",
-            "default": false,
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "default": false
           }
         }
       },
@@ -4550,8 +4874,10 @@
             }
           },
           "force": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
         }
       },
@@ -4566,33 +4892,47 @@
         "type": "object",
         "properties": {
           "name": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "description": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "isOfficial": {
             "type": "boolean"
           },
           "starCount": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "pullCount": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "url": {
-            "type": "string",
-            "default": null,
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "icon": {
-            "type": "string",
-            "default": null,
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -4612,7 +4952,10 @@
           "status",
           "lastPulled"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "architecture": {
             "type": "string"
@@ -4624,7 +4967,11 @@
             "type": "string"
           },
           "size": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int32"
           },
           "status": {
@@ -4633,8 +4980,7 @@
           "lastPulled": {
             "type": "string"
           }
-        },
-        "nullable": true
+        }
       },
       "DockerHubRepositoryInfo": {
         "required": [
@@ -4649,15 +4995,18 @@
         "type": "object",
         "properties": {
           "name": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "namespace": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "lastUpdated": {
-            "type": "string",
             "format": "date-time"
           },
           "isPrivate": {
@@ -4670,7 +5019,11 @@
             "type": "boolean"
           },
           "pullCount": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int32"
           }
         }
@@ -4695,7 +5048,11 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int32"
           },
           "name": {
@@ -4708,7 +5065,11 @@
             "type": "string"
           },
           "fullSize": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int32"
           },
           "status": {
@@ -4775,8 +5136,10 @@
             "type": "boolean"
           },
           "configFrom": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "ipam": {
             "$ref": "#/components/schemas/IpAddressManagementConfig"
@@ -4865,8 +5228,10 @@
             "type": "boolean"
           },
           "configFrom": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "ipam": {
             "$ref": "#/components/schemas/IpAddressManagementConfig"
@@ -4950,11 +5315,16 @@
           "name",
           "options"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "name": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "options": {
             "type": "object",
@@ -4962,27 +5332,31 @@
               "type": "string"
             }
           }
-        },
-        "nullable": true
+        }
       },
-      "Empty": {
-        "type": "object"
-      },
+      "Empty": { },
       "EndpointIpamConfiguration": {
         "required": [
           "ipv4Address",
           "ipv6Address",
           "linkLocalIPs"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "ipv4Address": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "ipv6Address": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "linkLocalIPs": {
             "type": "array",
@@ -4990,25 +5364,29 @@
               "type": "string"
             }
           }
-        },
-        "nullable": true
+        }
       },
       "EndpointMetadata": {
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "canEdit": {
-            "type": "boolean",
-            "default": false,
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "default": false
           },
           "canDelete": {
-            "type": "boolean",
-            "default": false,
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "default": false
           }
-        },
-        "default": null,
-        "nullable": true
+        }
       },
       "EndpointSettingsInfo": {
         "required": [
@@ -5039,8 +5417,10 @@
             }
           },
           "macAddress": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "aliases": {
             "type": "array",
@@ -5049,38 +5429,58 @@
             }
           },
           "networkID": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "endpointID": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "gateway": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "ipAddress": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "ipPrefixLen": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "ipv6Gateway": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "globalIPv6Address": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "globalIPv6PrefixLen": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "driverOpts": {
             "type": "object",
@@ -5110,7 +5510,11 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int32"
           },
           "url": {
@@ -5120,20 +5524,28 @@
             "type": "string"
           },
           "htmlUrl": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "createdAt": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "updatedAt": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "packageHtmlUrl": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "metadata": {
             "$ref": "#/components/schemas/GitHubCrPackageVersionMetadata"
@@ -5144,40 +5556,51 @@
         "required": [
           "tags"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "tags": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "type": "string"
-            },
-            "nullable": true
+            }
           }
-        },
-        "nullable": true
+        }
       },
       "GitHubCrPackageVersionMetadata": {
         "required": [
           "container"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "container": {
             "$ref": "#/components/schemas/GitHubCrPackageVersionContainerMetadata"
           }
-        },
-        "nullable": true
+        }
       },
       "GraphDriverDataInfo": {
         "required": [
           "name",
           "data"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "name": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "data": {
             "type": "object",
@@ -5185,8 +5608,7 @@
               "type": "string"
             }
           }
-        },
-        "nullable": true
+        }
       },
       "HostConfiguration": {
         "required": [
@@ -5242,7 +5664,10 @@
           "ulimits",
           "kernelMemoryTCP"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "binds": {
             "type": "array",
@@ -5251,15 +5676,19 @@
             }
           },
           "containerIDFile": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "logConfig": {
             "$ref": "#/components/schemas/LogConfiguration"
           },
           "networkMode": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "portBindings": {
             "type": "array",
@@ -5277,12 +5706,16 @@
             "$ref": "#/components/schemas/RestartPolicy"
           },
           "autoRemove": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "volumeDriver": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "volumesFrom": {
             "type": "array",
@@ -5299,7 +5732,11 @@
           "consoleSize": {
             "type": "array",
             "items": {
-              "type": "integer",
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
               "format": "int32"
             }
           },
@@ -5322,8 +5759,10 @@
             }
           },
           "cgroupnsMode": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "dns": {
             "type": "array",
@@ -5356,12 +5795,16 @@
             }
           },
           "ipcMode": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "cgroup": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "links": {
             "type": "array",
@@ -5370,25 +5813,37 @@
             }
           },
           "oomScoreAdj": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           },
           "pidMode": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "privileged": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "publishAllPorts": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "readonlyRootfs": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "securityOpt": {
             "type": "array",
@@ -5409,15 +5864,23 @@
             }
           },
           "utsMode": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "usernsMode": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "shmSize": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "sysctls": {
@@ -5427,12 +5890,16 @@
             }
           },
           "runtime": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "isolation": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "maskedPaths": {
             "type": "array",
@@ -5447,54 +5914,94 @@
             }
           },
           "memorySwap": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "memorySwappiness": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "nanoCpus": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "pidsLimit": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "memory": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "memoryReservation": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "ioMaximumBandwidth": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "cpuPeriod": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "cpuPercent": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "cpuCount": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "ulimits": {
             "type": "array",
@@ -5503,12 +6010,15 @@
             }
           },
           "kernelMemoryTCP": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
-        },
-        "nullable": true
+        }
       },
       "HostMount": {
         "required": [
@@ -5523,24 +6033,34 @@
         "type": "object",
         "properties": {
           "target": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "source": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "type": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "readOnly": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "consistency": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "bindOptions": {
             "$ref": "#/components/schemas/BindOptions"
@@ -5558,12 +6078,16 @@
         "type": "object",
         "properties": {
           "hostIP": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "hostPort": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -5571,25 +6095,37 @@
         "type": "object",
         "properties": {
           "type": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "title": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "status": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           },
           "detail": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "instance": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "errors": {
             "type": "object",
@@ -5632,22 +6168,29 @@
             "type": "string"
           },
           "name": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "namespace": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "lastUpdated": {
-            "type": "string",
             "format": "date-time"
           },
           "isPrivate": {
             "type": "boolean"
           },
           "pullCount": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int32"
           }
         }
@@ -5667,20 +6210,28 @@
             "type": "string"
           },
           "createdAt": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "updatedAt": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "url": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "htmlUrl": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -5707,30 +6258,33 @@
         "required": [
           "driver"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "driver": {
             "type": "string"
           },
           "config": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "$ref": "#/components/schemas/IPAMConfigInput"
-            },
-            "default": null,
-            "nullable": true
+            }
           },
           "options": {
-            "type": "object",
+            "type": [
+              "null",
+              "object"
+            ],
             "additionalProperties": {
               "type": "string"
-            },
-            "default": null,
-            "nullable": true
+            }
           }
-        },
-        "default": null,
-        "nullable": true
+        }
       },
       "ImageConfig": {
         "required": [
@@ -5757,7 +6311,10 @@
           "labels",
           "exposedPorts"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "tty": {
             "type": "boolean"
@@ -5845,10 +6402,11 @@
           },
           "exposedPorts": {
             "type": "object",
-            "additionalProperties": { }
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Empty"
+            }
           }
-        },
-        "nullable": true
+        }
       },
       "ImageData": {
         "required": [
@@ -5856,7 +6414,10 @@
           "containers",
           "size"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "platform": {
             "$ref": "#/components/schemas/ImagePlatformDescriptor"
@@ -5870,8 +6431,7 @@
           "size": {
             "$ref": "#/components/schemas/SizeInfo"
           }
-        },
-        "nullable": true
+        }
       },
       "ImageDescriptor": {
         "required": [
@@ -5884,15 +6444,24 @@
           "urls",
           "annotations"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "size": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "data": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "digest": {
             "type": "string"
@@ -5907,19 +6476,12 @@
             "$ref": "#/components/schemas/ImagePlatformDescriptor"
           },
           "urls": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "$ref": "#/components/schemas/InspectImageResult/properties/descriptor/properties/urls"
           },
           "annotations": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
+            "$ref": "#/components/schemas/InspectImageResult/properties/descriptor/properties/annotations"
           }
-        },
-        "nullable": true
+        }
       },
       "ImageGraphDriverData": {
         "required": [
@@ -5927,7 +6489,10 @@
           "upperDir",
           "workDir"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "mergedDir": {
             "type": "string"
@@ -5938,15 +6503,17 @@
           "workDir": {
             "type": "string"
           }
-        },
-        "nullable": true
+        }
       },
       "ImageGraphicDriver": {
         "required": [
           "name",
           "data"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "name": {
             "type": "string"
@@ -5954,8 +6521,7 @@
           "data": {
             "$ref": "#/components/schemas/ImageGraphDriverData"
           }
-        },
-        "nullable": true
+        }
       },
       "ImageHealthCheck": {
         "required": [
@@ -5966,7 +6532,10 @@
           "startPeriod",
           "startInterval"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "test": {
             "type": "array",
@@ -5975,32 +6544,51 @@
             }
           },
           "interval": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "timeout": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "retries": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "startPeriod": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "startInterval": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
-        },
-        "nullable": true
+        }
       },
       "ImageManifest": {
         "required": [
@@ -6041,63 +6629,43 @@
         "required": [
           "lastTagTime"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "lastTagTime": {
             "type": "string"
           }
-        },
-        "nullable": true
+        }
       },
-      "ImagePlatformDescriptor": {
-        "required": [
-          "os",
-          "variant",
-          "osVersion",
-          "architecture",
-          "osFeatures"
-        ],
-        "type": "object",
-        "properties": {
-          "os": {
-            "type": "string"
-          },
-          "variant": {
-            "type": "string"
-          },
-          "osVersion": {
-            "type": "string"
-          },
-          "architecture": {
-            "type": "string"
-          },
-          "osFeatures": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "nullable": true
-      },
+      "ImagePlatformDescriptor": { },
       "ImagePullError": {
         "required": [
           "code",
           "message"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "code": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "message": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           }
-        },
-        "nullable": true
+        }
       },
       "ImagePullProgress": {
         "required": [
@@ -6106,36 +6674,55 @@
           "total",
           "start"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "units": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "current": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "total": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "start": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
-        },
-        "nullable": true
+        }
       },
       "ImageRootFs": {
         "required": [
           "type",
           "layers"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "type": {
             "type": "string"
@@ -6146,8 +6733,7 @@
               "type": "string"
             }
           }
-        },
-        "nullable": true
+        }
       },
       "ImageView": {
         "required": [
@@ -6168,7 +6754,11 @@
             "type": "string"
           },
           "created": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "parentId": {
@@ -6187,15 +6777,27 @@
             }
           },
           "sharedSize": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "size": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           },
           "virtualSize": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           },
           "isInUse": {
@@ -6208,12 +6810,16 @@
             }
           },
           "name": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "tag": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -6281,7 +6887,11 @@
             "type": "string"
           },
           "virtualSize": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "variant": {
@@ -6291,7 +6901,11 @@
             "type": "string"
           },
           "size": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "rootFS": {
@@ -6329,35 +6943,23 @@
           }
         }
       },
-      "IpAddressInfo": {
-        "required": [
-          "addr",
-          "prefixLen"
-        ],
-        "type": "object",
-        "properties": {
-          "addr": {
-            "type": "string",
-            "nullable": true
-          },
-          "prefixLen": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          }
-        }
-      },
+      "IpAddressInfo": { },
       "IpAddressManagementConfig": {
         "required": [
           "driver",
           "config",
           "options"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "driver": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "config": {
             "type": "array",
@@ -6371,8 +6973,7 @@
               "type": "string"
             }
           }
-        },
-        "nullable": true
+        }
       },
       "IpamSubnetConfiguration": {
         "required": [
@@ -6383,16 +6984,22 @@
         "type": "object",
         "properties": {
           "subnet": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "ipRange": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "gateway": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -6401,11 +7008,16 @@
           "type",
           "config"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "type": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "config": {
             "type": "object",
@@ -6413,8 +7025,7 @@
               "type": "string"
             }
           }
-        },
-        "nullable": true
+        }
       },
       "LoginRequest": {
         "required": [
@@ -6456,36 +7067,52 @@
         "type": "object",
         "properties": {
           "type": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "name": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "source": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "destination": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "driver": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "mode": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "rw": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "propagation": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -6552,32 +7179,49 @@
           "ports",
           "networks"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "bridge": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "sandboxID": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "hairpinMode": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "linkLocalIPv6Address": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "linkLocalIPv6PrefixLen": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "sandboxKey": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "secondaryIPAddresses": {
             "type": "array",
@@ -6587,52 +7231,68 @@
           },
           "secondaryIPv6Addresses": {
             "type": "array",
-            "items": { }
+            "items": {
+              "$ref": "#/components/schemas/IpAddressInfo"
+            }
           },
           "endpointID": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "gateway": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "globalIPv6Address": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "globalIPv6PrefixLen": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "ipAddress": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "ipPrefixLen": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "ipv6Gateway": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "macAddress": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "ports": {
             "type": "array",
             "items": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/HostPortBinding"
-                }
-              }
+              "$ref": "#/components/schemas/ContainerInspectView/properties/hostConfig/properties/portBindings/items"
             }
           },
           "networks": {
@@ -6641,8 +7301,7 @@
               "$ref": "#/components/schemas/EndpointSettingsInfo"
             }
           }
-        },
-        "nullable": true
+        }
       },
       "NetworksView": {
         "required": [
@@ -6659,42 +7318,73 @@
         }
       },
       "NullableOfContainerStatView": {
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "containerId": {
             "type": "string",
             "format": "uuid"
           },
           "memoryUsage": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           },
           "cpuUsage": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           },
           "memoryLimit": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           },
           "rxBytes": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           },
           "txBytes": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           },
           "created": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           }
-        },
-        "nullable": true
+        }
       },
-      "NullableOfRegistryType": {
-        "nullable": true
+      "NullableOfGhcrAccountType": {
+        "enum": [
+          "Organization",
+          "User",
+          null
+        ]
       },
+      "NullableOfRegistryType": { },
       "PlatformConnectorType": {
         "enum": [
           "Unknown",
@@ -6702,15 +7392,6 @@
           "Agent"
         ],
         "type": "string"
-      },
-      "PlatformConnectorType2": {
-        "enum": [
-          "Unknown",
-          "Local",
-          "Agent"
-        ],
-        "type": "string",
-        "default": "local"
       },
       "PlatformDescriptor": {
         "required": [
@@ -6728,7 +7409,6 @@
             "$ref": "#/components/schemas/PlatformDescriptorKubernetesPlatformDescriptor"
           }
         ],
-        "nullable": true,
         "discriminator": {
           "propertyName": "$type",
           "mapping": {
@@ -6757,45 +7437,66 @@
             "type": "string"
           },
           "containerCount": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "containersRunning": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "containersPaused": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "containersStopped": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "driver": {
-            "type": "string",
-            "default": null,
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "operatingSystem": {
-            "type": "string",
-            "default": null,
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "osVersion": {
-            "type": "string",
-            "default": null,
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "osType": {
-            "type": "string",
-            "default": null,
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "architecture": {
-            "type": "string",
-            "default": null,
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -6833,83 +7534,100 @@
             "type": "boolean"
           },
           "nodes": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "managers": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "error": {
-            "type": "string",
-            "default": null,
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "remoteManagers": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
-              "required": [
-                "nodeID",
-                "addr"
-              ],
-              "type": "object",
-              "properties": {
-                "nodeID": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "addr": {
-                  "type": "string",
-                  "nullable": true
-                }
-              }
-            },
-            "default": null,
-            "nullable": true
+              "$ref": "#/components/schemas/SwarmPeer"
+            }
           },
           "daemonId": {
             "type": "string"
           },
           "containerCount": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "containersRunning": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "containersPaused": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "containersStopped": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "driver": {
-            "type": "string",
-            "default": null,
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "operatingSystem": {
-            "type": "string",
-            "default": null,
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "osVersion": {
-            "type": "string",
-            "default": null,
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "osType": {
-            "type": "string",
-            "default": null,
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "architecture": {
-            "type": "string",
-            "default": null,
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -6928,20 +7646,28 @@
             "type": "string"
           },
           "clusterName": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "clusterVersion": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "apiServerUrl": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "namespace": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -6956,14 +7682,16 @@
             "type": "string"
           },
           "address": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "type": {
-            "$ref": "#/components/schemas/PlatformType2"
+            "$ref": "#/components/schemas/PlatformType"
           },
           "connectorType": {
-            "$ref": "#/components/schemas/PlatformConnectorType2"
+            "$ref": "#/components/schemas/PlatformConnectorType"
           }
         }
       },
@@ -6971,23 +7699,43 @@
         "type": "object",
         "properties": {
           "created": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "txBytes": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           },
           "rxBytes": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           },
           "cpuUsage": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           },
           "memoryUsage": {
-            "type": "number",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
             "format": "double"
           }
         }
@@ -7007,15 +7755,6 @@
         ],
         "type": "string"
       },
-      "PlatformType2": {
-        "enum": [
-          "Docker",
-          "DockerSwarm",
-          "Kubernetes"
-        ],
-        "type": "string",
-        "default": "Docker"
-      },
       "PlatformView": {
         "required": [
           "id",
@@ -7034,88 +7773,10 @@
           "stats",
           "platformDescriptor"
         ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "address": {
-            "type": "string"
-          },
-          "networkCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "volumeCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "imageCount": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "cpuCount": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "memTotal": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "agentVersion": {
-            "type": "string",
-            "nullable": true
-          },
-          "serverVersion": {
-            "type": "string",
-            "nullable": true
-          },
-          "type": {
-            "$ref": "#/components/schemas/PlatformType"
-          },
-          "status": {
-            "$ref": "#/components/schemas/PlatformStatus"
-          },
-          "connectorType": {
-            "$ref": "#/components/schemas/PlatformConnectorType"
-          },
-          "stats": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlatformStatView"
-            },
-            "nullable": true
-          },
-          "platformDescriptor": {
-            "$ref": "#/components/schemas/PlatformDescriptor"
-          }
-        },
-        "default": null,
-        "nullable": true
-      },
-      "PlatformView2": {
-        "required": [
-          "id",
-          "name",
-          "address",
-          "networkCount",
-          "volumeCount",
-          "imageCount",
-          "cpuCount",
-          "memTotal",
-          "agentVersion",
-          "serverVersion",
-          "type",
-          "status",
-          "connectorType",
-          "stats",
-          "platformDescriptor"
+        "type": [
+          "null",
+          "object"
         ],
-        "type": "object",
         "properties": {
           "id": {
             "type": "string",
@@ -7128,32 +7789,56 @@
             "type": "string"
           },
           "networkCount": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int32"
           },
           "volumeCount": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int32"
           },
           "imageCount": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "cpuCount": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "memTotal": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int64"
           },
           "agentVersion": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "serverVersion": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "type": {
             "$ref": "#/components/schemas/PlatformType"
@@ -7165,11 +7850,13 @@
             "$ref": "#/components/schemas/PlatformConnectorType"
           },
           "stats": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "$ref": "#/components/schemas/PlatformStatView"
-            },
-            "nullable": true
+            }
           },
           "platformDescriptor": {
             "$ref": "#/components/schemas/PlatformDescriptor"
@@ -7185,7 +7872,7 @@
           "platforms": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/PlatformView2"
+              "$ref": "#/components/schemas/PlatformView"
             }
           }
         }
@@ -7197,11 +7884,19 @@
             "type": "string"
           },
           "privatePort": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int32"
           },
           "publicPort": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
             "format": "int32"
           }
         }
@@ -7210,25 +7905,37 @@
         "type": "object",
         "properties": {
           "type": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "title": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "status": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           },
           "detail": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "instance": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -7270,28 +7977,40 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "from": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "stream": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "status": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "errorMessage": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "progressMessage": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "progress": {
             "$ref": "#/components/schemas/ImagePullProgress"
@@ -7347,8 +8066,7 @@
           {
             "$ref": "#/components/schemas/RegistryConfigurationBaseBase"
           }
-        ],
-        "nullable": true
+        ]
       },
       "RegistryConfigurationBaseAWSRegistry": {
         "required": [
@@ -7428,14 +8146,16 @@
             "type": "string"
           },
           "userName": {
-            "type": "string",
-            "default": null,
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "pat": {
-            "type": "string",
-            "default": null,
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "registryUrl": {
             "type": "string"
@@ -7463,12 +8183,7 @@
             "type": "string"
           },
           "type": {
-            "enum": [
-              "Organization",
-              "User",
-              null
-            ],
-            "nullable": true
+            "$ref": "#/components/schemas/NullableOfGhcrAccountType"
           },
           "registryUrl": {
             "type": "string"
@@ -7513,12 +8228,16 @@
         "type": "object",
         "properties": {
           "name": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "url": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "type": {
             "$ref": "#/components/schemas/NullableOfRegistryType"
@@ -7563,7 +8282,6 @@
             "$ref": "#/components/schemas/RegistryType"
           },
           "created": {
-            "type": "string",
             "format": "date-time"
           },
           "configuration": {
@@ -7579,19 +8297,27 @@
           "name",
           "maximumRetryCount"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "name": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "maximumRetryCount": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
-        },
-        "nullable": true
+        }
       },
       "SizeInfo": {
         "required": [
@@ -7599,25 +8325,39 @@
           "content",
           "unpacked"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "total": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "content": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "unpacked": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
-        },
-        "nullable": true
+        }
       },
       "StreamLogsRequest": {
         "required": [
@@ -7627,6 +8367,27 @@
         "properties": {
           "containerId": {
             "type": "string"
+          }
+        }
+      },
+      "SwarmPeer": {
+        "required": [
+          "nodeID",
+          "addr"
+        ],
+        "type": "object",
+        "properties": {
+          "nodeID": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "addr": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -7653,18 +8414,28 @@
         "type": "object",
         "properties": {
           "name": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "soft": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "hard": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
         }
       },
@@ -7676,7 +8447,10 @@
           "capacityRange",
           "availability"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "scope": {
             "$ref": "#/components/schemas/VolumeScope"
@@ -7696,28 +8470,37 @@
           "availability": {
             "type": "string"
           }
-        },
-        "nullable": true
+        }
       },
       "VolumeCapacityRange": {
         "required": [
           "requiredBytes",
           "limitBytes"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "requiredBytes": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "limitBytes": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
-        },
-        "nullable": true
+        }
       },
       "VolumeOptions": {
         "required": [
@@ -7726,11 +8509,16 @@
           "driverConfig",
           "subpath"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "noCopy": {
-            "type": "boolean",
-            "nullable": true
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "labels": {
             "type": "object",
@@ -7742,11 +8530,12 @@
             "$ref": "#/components/schemas/DriverConfiguration"
           },
           "subpath": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ]
           }
-        },
-        "nullable": true
+        }
       },
       "VolumePublishStatus": {
         "required": [
@@ -7806,7 +8595,10 @@
           "group",
           "accessMode"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "group": {
             "type": "string"
@@ -7814,42 +8606,57 @@
           "accessMode": {
             "$ref": "#/components/schemas/VolumeAccessMode"
           }
-        },
-        "nullable": true
+        }
       },
       "VolumeUsageData": {
         "required": [
           "size",
           "refCount"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "size": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "refCount": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
-        },
-        "nullable": true
+        }
       },
       "VolumeVersionInfo": {
         "required": [
           "index"
         ],
-        "type": "object",
+        "type": [
+          "null",
+          "object"
+        ],
         "properties": {
           "index": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
-        },
-        "nullable": true
+        }
       },
       "VolumesView": {
         "required": [
@@ -7869,7 +8676,7 @@
     "securitySchemes": {
       "Bearer": {
         "type": "http",
-        "scheme": "bearer",
+        "scheme": "Bearer",
         "bearerFormat": "Json Web Token"
       }
     }
