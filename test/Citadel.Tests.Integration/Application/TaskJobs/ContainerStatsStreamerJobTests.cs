@@ -1,4 +1,3 @@
-
 using System.Threading.Channels;
 using Application.Configs;
 using Application.Services;
@@ -7,6 +6,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using Hosting.Common.ObjectPoolManager;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -68,14 +68,13 @@ public class ContainerStatsStreamerJobTests : IntegrationTestBase
     public async Task StreamerJob_ProcessesStats_And_ReturnsToPool()
     {
         // Arrange
-        var containerStats = new DockerContainerStats();
-       
+        var objectPoolManager = Services.GetRequiredService<IObjectPoolManager>();
+        var pooledDict = objectPoolManager.GetPooled<Dictionary<string, DockerContainerStat>>();
+
         _containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(_containerConnectorMock.Object);
         _containerConnectorMock
-            .Setup(x => x.StreamContainerStatsAsync(It.IsAny<StreamContainerStatsCommand>(), It.IsAny<CancellationToken>()))
-            .Returns(GetDockerContainerStats(containerStats));
-
-        var objectPoolManager = Services.GetRequiredService<IObjectPoolManager>();
+            .Setup(x => x.StreamContainersStatsAsync(It.IsAny<StreamContainersStatsCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(GetDockerContainerStats(pooledDict));
 
         // Act
         await _broadcaster.BroadcastAsync(new PlatformHealth(_platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
@@ -83,18 +82,18 @@ public class ContainerStatsStreamerJobTests : IntegrationTestBase
         await Task.Delay(500, TestContext.Current.CancellationToken);
 
         // Assert: Verify that the objects were returned to the pool
-        var pool = objectPoolManager.GetPool<DockerContainerStats>();
-        var statsFromPool = pool.Get();
-        Assert.NotSame(containerStats, statsFromPool);
-        pool.Return(statsFromPool);
+        var pooledDict2 = objectPoolManager.GetPooled<Dictionary<string, DockerContainerStat>>();
+        Assert.Same(pooledDict.Value, pooledDict2.Value);
+        Assert.Empty(pooledDict2.Value);
+        pooledDict2.Dispose();
     }
 
-    private static async IAsyncEnumerable<DockerContainerStats> GetDockerContainerStats(DockerContainerStats containerStats)
+    private static async IAsyncEnumerable<PooledHandle<Dictionary<string, DockerContainerStat>>> GetDockerContainerStats(PooledHandle<Dictionary<string, DockerContainerStat>> pooledDict)
     {
-        containerStats.Add("container-id-0", new DockerContainerStat(1, 1, 1, 1, 1));
-        yield return containerStats;
-        containerStats.Add("container-id-1", new DockerContainerStat(2, 2, 2, 2, 2));
-        yield return containerStats;
+        pooledDict.Value.Add("container-id-0", new DockerContainerStat(1, 1, 1, 1, 1));
+        yield return pooledDict;
+        pooledDict.Value.Add("container-id-1", new DockerContainerStat(2, 2, 2, 2, 2));
+        yield return pooledDict;
         await Task.CompletedTask;
     }
 }

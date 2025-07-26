@@ -4,14 +4,16 @@ using Application.Permissions.Requirements;
 using Application.Services;
 using Application.TaskJobs;
 using Citadel.SourceGen;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Hosting.Common;
+using Hosting.Common.ObjectPoolManager;
+using Hosting.Common.ObjectPoolManager.Policies;
 using Hosting.Common.Pipelines;
 using Hosting.Common.Pipelines.Interfaces;
-using Hosting.Common.Utils;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
@@ -71,9 +73,9 @@ public static class ApplicationModule
             .AddSingleton(Channel.CreateBounded<ContainersStatBatch>(ChannelDefaultOptions()))
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader)
-            .AddSingleton(Channel.CreateBounded<(Guid Id, PlatformStatsResult Stats)>(ChannelDefaultOptions()))
-            .AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Writer)
-            .AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Reader);
+            .AddSingleton(Channel.CreateBounded<(Guid Id, PooledHandle<PlatformStatsResult> Stats)>(ChannelDefaultOptions()))
+            .AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PooledHandle<PlatformStatsResult> Stats)>>().Writer)
+            .AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PooledHandle<PlatformStatsResult> Stats)>>().Reader);
 
         return services;
     }
@@ -81,19 +83,12 @@ public static class ApplicationModule
     private static IServiceCollection AddPooledObjects(this IServiceCollection services)
     {
         services
-            .AddSingleton<IObjectPoolManager, ObjectPoolManager>()
-            .AddSingleton<ObjectPoolProvider, DefaultObjectPoolProvider>();
-
-        services
-            .AddSingleton<IPooledObjectPolicy<ContainerStat>, ObjectPoolPolicy<ContainerStat>>()
-            .AddSingleton<IPooledObjectPolicy<List<ContainerStat>>, ListPoolPolicy<ContainerStat>>()
-            .AddSingleton<IPooledObjectPolicy<PlatformStatsResult>, ObjectPoolPolicy<PlatformStatsResult>>()
-            .AddSingleton<IPooledObjectPolicy<List<PlatformStatsResult>>, ListPoolPolicy<PlatformStatsResult>>()
-            .AddSingleton<IPooledObjectPolicy<PlatformStat>, ObjectPoolPolicy<PlatformStat>>()
+            .AddDomainPooledObjects()
             .AddSingleton<IPooledObjectPolicy<List<PlatformStat>>, ListPoolPolicy<PlatformStat>>()
-            .AddSingleton<IPooledObjectPolicy<DockerContainerStat>, ObjectPoolPolicy<DockerContainerStat>>()
-            .AddSingleton<IPooledObjectPolicy<DockerContainerStats>, ObjectPoolPolicy<DockerContainerStats>>();
-        
+            .AddSingleton<IPooledObjectPolicy<List<ContainerStat>>, ListPoolPolicy<ContainerStat>>()
+            .AddSingleton<IPooledObjectPolicy<Dictionary<string, DockerContainerStat>>, DictionaryPooledPolicy<string, DockerContainerStat>>()
+            .AddSingleton<IPooledObjectPolicy<List<PooledHandle<PlatformStatsResult>>>, ObjectPoolPolicy<List<PooledHandle<PlatformStatsResult>>>>();
+
         return services;
     }
         

@@ -7,50 +7,49 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
 import { useContainerStatsContext } from './ContainerStatsProvider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo, useState, useTransition, useEffect } from 'react';
 import dayjs from 'dayjs';
+import { ContainerView } from '@/api/_generated';
 
 const CpuUsage = () => {
-  const { stats, isLoading } = useContainerStatsContext();
-
-  // Use transition for smoother updates
   const [isPending, startTransition] = useTransition();
-
-  // State to hold the transitioned stats
+  const { stats, container, isLoading } = useContainerStatsContext();
   const [transitionedStats, setTransitionedStats] = useState(stats);
 
-  // Downsample the stats to reduce the number of data points
   const downsampledStats = useMemo(() => {
     const step = Math.ceil(stats.length / (24 * 60)); // Keep only 1440 points
     return stats.filter((_, index) => index % step === 0);
   }, [stats]);
 
-  // Start a transition when stats change
   useEffect(() => {
     startTransition(() => {
       setTransitionedStats(downsampledStats);
     });
   }, [downsampledStats, startTransition]);
 
-  // Memoize chart configuration
+  useEffect(() => {
+    if (container?.lastStats) {
+      setTransitionedStats((prev) => [...prev, container?.lastStats]);
+    }
+  }, [container]);
+
   const chartConfig = useMemo(
     () =>
       ({
         stats: {
-          label: 'Cpu',
+          label: 'CPU',
         },
         cpuUsage: {
-          label: 'Cpu Usage',
+          label: 'CPU Usage',
           color: 'var(--chart-1)',
         },
       }) satisfies ChartConfig,
     [],
   );
 
-  // Memoize gradient definitions
   const gradientDefs = useMemo(
     () => (
       <defs>
@@ -63,7 +62,6 @@ const CpuUsage = () => {
     [],
   );
 
-  // Memoize the chart rendering logic
   const memoizedChart = useMemo(
     () => (
       <AreaChart data={transitionedStats} accessibilityLayer>
@@ -96,7 +94,7 @@ const CpuUsage = () => {
                   />
                   {chartConfig['stats']?.label || name}
                   <div className="ml-auto flex items-baseline gap-0.5 font-mono font-medium tabular-nums text-foreground">
-                    {value}
+                    {(value as number).toFixed(2)}
                     <span className="font-normal text-muted-foreground">%</span>
                   </div>
                 </>
@@ -115,12 +113,28 @@ const CpuUsage = () => {
     <Skeleton className="h-[225px] w-full rounded-xl" />
   ) : (
     <Card className="bg-background rounded-sm shadow-xs">
-      <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+      <CardHeader>
+        <CardDescription className="ml-1.5">
+          <CardInfo container={container} />
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="px-2 sm:px-6">
         <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
           {memoizedChart}
         </ChartContainer>
       </CardContent>
     </Card>
+  );
+};
+
+const CardInfo = ({ container }: { container: ContainerView | undefined }) => {
+  return (
+    <div className="flex items-center gap-x-1">
+      <div className="font-medium text-foreground">CPU usage:</div>
+      <div className="text-xs">
+        {container?.state === 'Running' && container?.lastStats ? container?.lastStats.cpuUsage + '%' : '-%'}
+      </div>
+    </div>
   );
 };
 

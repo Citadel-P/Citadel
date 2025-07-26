@@ -1,4 +1,5 @@
 ﻿using Domain.Contracts.Resources.Containers;
+using Hosting.Common.ObjectPoolManager;
 using LightResults;
 
 namespace Domain.Contracts.Interfaces;
@@ -14,5 +15,5 @@ public interface IContainerConnector
     Task<Result> DeleteAsync(DeleteContainerCommand deleteContainerCommand, CancellationToken cancellationToken);
 
     IAsyncEnumerable<ContainerLogInfo> StreamLogsAsync(StreamContainerLogsCommand streamContainerLogsCommand, CancellationToken cancellationToken);
-    IAsyncEnumerable<DockerContainerStats> StreamContainerStatsAsync(StreamContainerStatsCommand streamStatsCommand, CancellationToken cancellationToken);
+    IAsyncEnumerable<PooledHandle<Dictionary<string, DockerContainerStat>>> StreamContainersStatsAsync(StreamContainersStatsCommand streamStatsCommand, CancellationToken cancellationToken);
 }

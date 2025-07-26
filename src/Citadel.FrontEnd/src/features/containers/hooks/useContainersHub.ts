@@ -4,7 +4,7 @@ import { configureHub, IHubConfig, startConnectionWithRetry } from '@/lib/signal
 import { ContainerView, ContainersView, ContainerStatView } from '@/api/_generated';
 import { useAuthContext } from '@/features/auth/AuthProvider';
 
-const useContainersHub = (platformId: string) => {
+const useContainersHub = (platformId?: string) => {
   const [isLoading, setIsLoading] = useState(false);
   const [containersInfo, setContainersInfo] = useState<ContainersView | undefined>();
   const { accessToken } = useAuthContext();
@@ -106,7 +106,7 @@ const useContainersHub = (platformId: string) => {
   }, []);
 
   useEffect(() => {
-    if (!accessToken) return;
+    if (!platformId || !accessToken) return;
 
     let hubConnection: HubConnection;
 
@@ -143,7 +143,7 @@ const useContainersHub = (platformId: string) => {
     connect();
 
     return cleanup;
-  }, [accessToken, baseUrl, groupName, setupEventListeners, removeEventListeners, getContainersList]);
+  }, [accessToken, baseUrl, groupName, platformId, setupEventListeners, removeEventListeners, getContainersList]);
 
   return { containersInfo, isLoading };
 };

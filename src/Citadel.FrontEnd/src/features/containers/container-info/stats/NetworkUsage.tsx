@@ -7,35 +7,36 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
 import { useContainerStatsContext } from './ContainerStatsProvider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo, useState, useTransition, useEffect } from 'react';
 import dayjs from 'dayjs';
+import { ContainerView } from '@/api/_generated';
+import { byteTransform } from '@/lib/bytes.helper';
 
 const NetworkUsage = () => {
-  const { stats, isLoading } = useContainerStatsContext();
-
-  // Use transition for smoother updates
   const [isPending, startTransition] = useTransition();
-
-  // State to hold the transitioned stats
+  const { stats, container, isLoading } = useContainerStatsContext();
   const [transitionedStats, setTransitionedStats] = useState(stats);
 
-  // Downsample the stats to reduce the number of data points
   const downsampledStats = useMemo(() => {
     const step = Math.ceil(stats.length / (60 * 24)); // Keep only 1440 points
     return stats.filter((_, index) => index % step === 0);
   }, [stats]);
 
-  // Start a transition when stats change
   useEffect(() => {
     startTransition(() => {
       setTransitionedStats(downsampledStats);
     });
   }, [downsampledStats, startTransition]);
 
-  // Memoize chart configuration
+  useEffect(() => {
+    if (container?.lastStats) {
+      setTransitionedStats((prev) => [...prev, container?.lastStats]);
+    }
+  }, [container]);
+
   const chartConfig = useMemo(
     () =>
       ({
@@ -119,12 +120,32 @@ const NetworkUsage = () => {
     <Skeleton className="h-[225px] w-full rounded-xl" />
   ) : (
     <Card className="bg-background rounded-sm shadow-xs">
-      <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+      <CardHeader>
+        <CardDescription className="ml-1.5">
+          <CardInfo container={container} />
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="px-2 sm:px-6">
         <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
           {memoizedChart}
         </ChartContainer>
       </CardContent>
     </Card>
+  );
+};
+
+const CardInfo = ({ container }: { container: ContainerView | undefined }) => {
+  return (
+    <div className="flex items-center gap-x-1">
+      <div className="font-medium text-foreground">Network I/O:</div>
+      <div className="text-xs">
+        {container?.state === 'Running' && container?.lastStats
+          ? byteTransform(container?.lastStats.rxBytes ?? 0, 2) +
+            ' / ' +
+            byteTransform(container?.lastStats.txBytes ?? 0, 2)
+          : '-/-'}
+      </div>
+    </div>
   );
 };
 

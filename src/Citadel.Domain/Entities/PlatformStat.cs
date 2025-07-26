@@ -16,10 +16,7 @@ public class PlatformStat(
     public double RxBytes { get; private set; } = rxBytes;
     public double TxBytes { get; private set; } = txBytes;
 
-    public PlatformStat() : this (0, 0, 0, 0, 0, null)
-    {
-        
-    }
+    internal PlatformStat() : this (0, 0, 0, 0, 0, null) { }
 
     public void ReInitialize(
         long created,

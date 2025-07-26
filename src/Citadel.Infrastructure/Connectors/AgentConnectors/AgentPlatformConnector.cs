@@ -5,6 +5,7 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
+using Hosting.Common.ObjectPoolManager;
 using Infrastructure.Connectors.Mappers;
 using Infrastructure.Services;
 using LightResults;
@@ -42,15 +43,15 @@ internal class AgentPlatformConnector(IGrpcClientFactory clientFactory, IObjectP
         }
     }
 
-    public async IAsyncEnumerable<PlatformStatsResult> StreamStatsAsync(StreamPlatformStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<PooledHandle<PlatformStatsResult>> StreamStatsAsync(StreamPlatformStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var client = clientFactory.GetPlatformClient(command.PlatformAddress);
         using var stream = client.StreamPlatformStats(new PlatformStatsRequest { FetchIntervalMs = command.FetchIntervalMs }, cancellationToken: cancellationToken);
         await foreach (var response in stream.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
         {
-            var stat = objectPoolManager.Get<PlatformStatsResult>();
-            response.Map(stat);
-            yield return stat;
+            var statPooled = objectPoolManager.GetPooled<PlatformStatsResult>();
+            response.Map(statPooled.Value);
+            yield return statPooled;
         }
     }
 

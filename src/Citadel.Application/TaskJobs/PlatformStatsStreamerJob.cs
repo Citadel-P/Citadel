@@ -6,6 +6,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Grpc.Core;
+using Hosting.Common.ObjectPoolManager;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -19,19 +20,18 @@ namespace Application.TaskJobs;
 /// </summary>
 internal class PlatformStatsStreamerJob(
     IOptions<JobConfiguration> options,
-    IObjectPoolManager objectPoolManager,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IConnectorFactory<IPlatformConnector> connectorFactory,
-    ChannelWriter<(Guid Id, PlatformStatsResult Stats)> platformStatsWriter,
+    ChannelWriter<(Guid Id, PooledHandle<PlatformStatsResult> Stats)> platformStatsWriter,
     ILogger<PlatformStatsStreamerJob> logger) : BackgroundService
 {
-    private readonly JobConfiguration jobConfiguration = options.Value;
-    private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
-    private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.Register();
+    private readonly int _fetchIntervalMs = options.Value.SystemInfoInterval * 1000;
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _runningStreams = new();
+    private readonly ChannelReader<PlatformHealth> _platformHealthReader = platformHealthBroadCaster.Register();
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        await foreach (var platform in platformHealthReader.ReadAllAsync(cancellationToken))
+        await foreach (var platform in _platformHealthReader.ReadAllAsync(cancellationToken))
         {
             if (platform.IsOnLine)
             {
@@ -46,19 +46,19 @@ internal class PlatformStatsStreamerJob(
 
     public void StartStreamStatsForPlatform(PlatformHealth platform, CancellationToken cancellationToken)
     {
-        if (!runningStreams.TryAdd(platform.Address, CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)))
+        if (!_runningStreams.TryAdd(platform.Address, CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)))
         {
             logger.LogWarning("Streaming platform stats for {Address} is already running.", platform.Address);
             return;
         }
 
-        var cts = runningStreams[platform.Address];
+        var cts = _runningStreams[platform.Address];
         _ = StreamPlatformStats(platform.Id, platform.Type, platform.Address, cts.Token);
     }
 
     public void StopStreamStatsForPlatform(string address)
     {
-        if (runningStreams.TryRemove(address, out var cts))
+        if (_runningStreams.TryRemove(address, out var cts))
         {
             logger.LogInformation("Aborting streaming containers stats for {Address}", address);
             cts.Cancel();
@@ -72,7 +72,7 @@ internal class PlatformStatsStreamerJob(
             var connector = connectorFactory.GetConnector(connectorType);
             var command = new StreamPlatformStatsCommand(
                 PlatformAddress: address,
-                FetchIntervalMs: jobConfiguration.SystemInfoInterval * 1000);
+                FetchIntervalMs: _fetchIntervalMs);
 
             await foreach (var platformStats in connector.StreamStatsAsync(command, cancellationToken))
             {

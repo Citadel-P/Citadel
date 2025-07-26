@@ -1,4 +1,3 @@
-
 using System.Threading.Channels;
 using Application.Configs;
 using Application.Services;
@@ -7,6 +6,7 @@ using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
+using Hosting.Common.ObjectPoolManager;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -18,7 +18,6 @@ namespace Tests.Integration.Application.TaskJobs;
 
 public class ContainerStatsWriterJobTests : IntegrationTestBase
 {
-    private readonly Mock<IObjectPoolManager> _objectPoolManagerMock = new();
     private readonly Mock<ISignalRConnectionTracker> _connectionTrackerMock = new();
     private readonly Mock<IContainerHubDispatcher> _containerHubDispatcherMock = new();
     private readonly Channel<ContainersStatBatch> _channel = Channel.CreateUnbounded<ContainersStatBatch>();
@@ -38,7 +37,6 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
         services.AddSingleton(_channel);
         services.AddSingleton(_configMock.Object);
         services.AddSingleton(_containerFactoryMock.Object);
-        services.AddSingleton(_objectPoolManagerMock.Object);
         services.AddSingleton(_connectionTrackerMock.Object);
         services.AddSingleton(_containerConnectorMock.Object);
         services.AddSingleton(_containerHubDispatcherMock.Object);
@@ -71,16 +69,17 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
     {
         // Arrange
         var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var stats = new List<ContainerStat>
-        {
+        var objectPoolManager = Services.GetRequiredService<IObjectPoolManager>();
+        var pooledStats = objectPoolManager.GetPooled<List<ContainerStat>>();
+        var stats = pooledStats.Value;
+        stats.AddRange(
+        [
             new(_containerId, 100, 5, 300, 100, 200, time),
             new(_containerId, 200, 2, 600, 200, 400, time - 60),
-        };
-        var pooled = new List<ContainerStat>();
-        _objectPoolManagerMock.Setup(m => m.Get<List<ContainerStat>>()).Returns(pooled);
+        ]);
 
         _connectionTrackerMock.Setup(c => c.HasUsersInGroup(It.IsAny<string>())).Returns(true);
-        var batch = new ContainersStatBatch(_platformId, stats);
+        var batch = new ContainersStatBatch(_platformId, pooledStats);
 
         // Act
         await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);
@@ -88,9 +87,7 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
 
         // Assert
         _containerHubDispatcherMock.Verify(d => d.SendContainersStats(_platformId, It.IsAny<IEnumerable<ContainerStat>>()), Times.Once);
-        _objectPoolManagerMock.Verify(p => p.Return(It.IsAny<List<ContainerStat>>()), Times.Exactly(2));
-        _objectPoolManagerMock.Verify(p => p.Return(It.IsAny<ContainerStat>()), Times.Exactly(2));
-
+        
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var containers = await db.ContainerStats.GetStatsAggregatedLast24HoursAsync("container-id-1", TestContext.Current.CancellationToken);
@@ -101,18 +98,19 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
     public async Task ExecuteAsync_ShouldFlushWhenFlushIntervalIsReached()
     {
         // Arrange
-        _configMock.Setup(c => c.Value).Returns(new JobConfiguration { BatchSize = 100, FlashInterval = 1 });
+        _configMock.Setup(c => c.Value).Returns(new JobConfiguration { BatchSize = 100, FlashInterval = 0 });
         var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var stats = new List<ContainerStat>
-        {
+        var objectPoolManager = Services.GetRequiredService<IObjectPoolManager>();
+        var pooledStats = objectPoolManager.GetPooled<List<ContainerStat>>();
+        var stats = pooledStats.Value;
+        stats.AddRange(
+        [
             new(_containerId, 100, 5, 300, 100, 200, time),
             new(_containerId, 200, 2, 600, 200, 400, time - 60),
-        };
+        ]);
 
-        var pooled = new List<ContainerStat>();
-        _objectPoolManagerMock.Setup(m => m.Get<List<ContainerStat>>()).Returns(pooled);
 
-        var batch = new ContainersStatBatch(_platformId, stats);
+        var batch = new ContainersStatBatch(_platformId, pooledStats);
         _connectionTrackerMock.Setup(c => c.HasUsersInGroup(It.IsAny<string>())).Returns(true);
 
         // Act
@@ -121,9 +119,7 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
 
         // Assert
         _containerHubDispatcherMock.Verify(d => d.SendContainersStats(_platformId, It.IsAny<IEnumerable<ContainerStat>>()), Times.Once);
-        _objectPoolManagerMock.Verify(p => p.Return(It.IsAny<List<ContainerStat>>()), Times.Exactly(2));
-        _objectPoolManagerMock.Verify(p => p.Return(It.IsAny<ContainerStat>()), Times.Exactly(2));
-
+        
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var containers = await db.ContainerStats.GetStatsAggregatedLast24HoursAsync("container-id-1", TestContext.Current.CancellationToken);
@@ -135,16 +131,16 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
     {
         // Arrange
         var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var stats = new List<ContainerStat>
-        {
+        var objectPoolManager = Services.GetRequiredService<IObjectPoolManager>();
+        var pooledStats = objectPoolManager.GetPooled<List<ContainerStat>>();
+        var stats = pooledStats.Value;
+        stats.AddRange(
+        [
             new(_containerId, 100, 5, 300, 100, 200, time),
             new(_containerId, 200, 2, 600, 200, 400, time - 60),
-        };
+        ]);
 
-        var pooled = new List<ContainerStat>();
-        _objectPoolManagerMock.Setup(m => m.Get<List<ContainerStat>>()).Returns(pooled);
-
-        var batch = new ContainersStatBatch(_platformId, stats);
+        var batch = new ContainersStatBatch(_platformId, pooledStats);
         _connectionTrackerMock.Setup(c => c.HasUsersInGroup(It.IsAny<string>())).Returns(false);
 
         // Act
@@ -153,12 +149,37 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
 
         // Assert
         _containerHubDispatcherMock.Verify(d => d.SendContainersStats(It.IsAny<Guid>(), It.IsAny<List<ContainerStat>>()), Times.Never);
-        _objectPoolManagerMock.Verify(p => p.Return(It.IsAny<List<ContainerStat>>()), Times.Exactly(2));
-        _objectPoolManagerMock.Verify(p => p.Return(It.IsAny<ContainerStat>()), Times.Exactly(2));
-
+       
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var containers = await db.ContainerStats.GetStatsAggregatedLast24HoursAsync("container-id-1", TestContext.Current.CancellationToken);
         Assert.Equal(2, containers.Count());
+    }
+
+    [Fact]
+    public async Task ProcessesStats_And_ReturnsToPool()
+    {
+        // Arrange
+        var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var objectPoolManager = Services.GetRequiredService<IObjectPoolManager>();
+        var pooledStats = objectPoolManager.GetPooled<List<ContainerStat>>();
+        var stats = pooledStats.Value;
+        stats.AddRange(
+        [
+            new(_containerId, 100, 5, 300, 100, 200, time),
+            new(_containerId, 200, 2, 600, 200, 400, time - 60),
+        ]);
+        var batch = new ContainersStatBatch(_platformId, pooledStats);
+        _connectionTrackerMock.Setup(c => c.HasUsersInGroup(It.IsAny<string>())).Returns(false);
+
+        // Act
+        await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+
+        // Assert
+        var pool = objectPoolManager.GetPooled<List<ContainerStat>>();
+        Assert.Same(stats, pool.Value);
+        Assert.Empty(pool.Value);
+        pool.Dispose();
     }
 }

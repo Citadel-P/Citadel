@@ -2,6 +2,7 @@
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
+using Hosting.Common.ObjectPoolManager;
 using Hosting.DockerClient.Services;
 using Hosting.Extensions;
 using Infrastructure.Connectors.Mappers;
@@ -33,13 +34,13 @@ internal class LocalPlatformConnector(IPlatformService platformService, IMonitor
         }
     }
 
-    public async IAsyncEnumerable<PlatformStatsResult> StreamStatsAsync(StreamPlatformStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<PooledHandle<PlatformStatsResult>> StreamStatsAsync(StreamPlatformStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await foreach (var result in platformService.StreamPlatformStatsAsync(command.FetchIntervalMs, cancellationToken))
         {
-            var stat = objectPoolManager.Get<PlatformStatsResult>();
-            result.Map(stat);
-            yield return stat;
+            var pooledStat = objectPoolManager.GetPooled<PlatformStatsResult>();
+            result.Map(pooledStat.Value);
+            yield return pooledStat;
         }
     }
 }

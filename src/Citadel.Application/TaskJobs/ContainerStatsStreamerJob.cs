@@ -8,6 +8,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Grpc.Core;
+using Hosting.Common.ObjectPoolManager;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -26,13 +27,13 @@ internal class ContainerStatsStreamerJob(
     IConnectorFactory<IContainerConnector> connectorFactory,
     ILogger<ContainerStatsStreamerJob> logger) : BackgroundService
 {
-    private readonly JobConfiguration jobConfiguration = options.Value;
-    private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
-    private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.Register();
+    private readonly int _fetchIntervalMs = options.Value.ContainersInfoInterval * 1000;
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _runningStreams = new();
+    private readonly ChannelReader<PlatformHealth> _platformHealthReader = platformHealthBroadCaster.Register();
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        await foreach (var platform in platformHealthReader.ReadAllAsync(cancellationToken))
+        await foreach (var platform in _platformHealthReader.ReadAllAsync(cancellationToken))
         {
             if (platform.IsOnLine)
             {
@@ -48,19 +49,19 @@ internal class ContainerStatsStreamerJob(
     public void StartStreamStatsForPlatform(PlatformHealth platform, CancellationToken cancellationToken)
     {
         
-        if (!runningStreams.TryAdd(platform.Address, CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)))
+        if (!_runningStreams.TryAdd(platform.Address, CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)))
         {
             logger.LogWarning("Streaming platform stats for {Address} is already running.", platform.Address);
             return;
         }
 
-        var cts = runningStreams[platform.Address];
+        var cts = _runningStreams[platform.Address];
         _ = StreamContainersStats(platform.Id, platform.Type, platform.Address, cts.Token);
     }
 
     public void StopStreamStatsForPlatform(string address)
     {
-        if (runningStreams.TryRemove(address, out var cts))
+        if (_runningStreams.TryRemove(address, out var cts))
         {
             logger.LogInformation("Aborting streaming containers stats for {Address}", address);
             cts.Cancel();
@@ -73,35 +74,45 @@ internal class ContainerStatsStreamerJob(
         {
             try
             {
-                var command = new StreamContainerStatsCommand(
+                var command = new StreamContainersStatsCommand(
                     PlatformAddress: address, 
-                    FetchIntervalMs: jobConfiguration.ContainersInfoInterval * 1000);
+                    FetchIntervalMs: _fetchIntervalMs);
 
-                await foreach (var stream in connectorFactory.GetConnector(connectorType).StreamContainerStatsAsync(command, cancellationToken))
+                await foreach (var pooledStats in connectorFactory.GetConnector(connectorType).StreamContainersStatsAsync(command, cancellationToken))
                 {
-                    if (stream.Containers.Count > 0)
+                    using var _ = pooledStats;
+                    var containers = pooledStats.Value;
+                    try
                     {
-                        if (platformContainerCache.TryGetContainers(platformId, out var ids))
+                        if (containers.Count > 0)
                         {
-                            var stats = objectPoolManager.Get<List<ContainerStat>>();
-                            var snapshotTime = (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
-                            foreach (var kvp in stream.Containers)
+                            if (platformContainerCache.TryGetContainers(platformId, out var ids))
                             {
-                                if (ids.TryGetValue(kvp.Key, out var containerId))
+                                var pooledStatsList = objectPoolManager.GetPooled<List<ContainerStat>>();
+                                var stats = pooledStatsList.Value;
+                                stats.Clear();
+
+                                var snapshotTime = (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
+                                foreach (var kvp in containers)
                                 {
-                                    var containerStat = objectPoolManager.Get<ContainerStat>();
-                                    kvp.Value.Map(containerStat, containerId, snapshotTime);
-                                    stats.Add(containerStat);
+                                    if (ids.TryGetValue(kvp.Key, out var containerId))
+                                    {
+                                        var containerStat = objectPoolManager.Get<ContainerStat>();
+                                        kvp.Value.Map(containerStat, containerId, snapshotTime);
+                                        stats.Add(containerStat);
+                                    }
                                 }
+
+                                await channel.WriteAsync(new ContainersStatBatch(platformId, pooledStatsList), cancellationToken);
                             }
-
-                            await channel.WriteAsync(new ContainersStatBatch(platformId, stats), cancellationToken);
-                         }
-
-                        foreach (var s in stream.Containers.Values)
+                        }
+                    }
+                    finally
+                    {
+                        foreach (var s in pooledStats.Value.Values)
+                        {
                             objectPoolManager.Return(s);
-
-                        objectPoolManager.Return(stream);
+                        }
                     }
                 }
             }
@@ -122,4 +133,4 @@ internal class ContainerStatsStreamerJob(
     }
 }
 
-internal sealed record ContainersStatBatch(Guid PlatformId, List<ContainerStat> Stats);
+internal sealed record ContainersStatBatch(Guid PlatformId, PooledHandle<List<ContainerStat>> Stats);

@@ -23,7 +23,7 @@ public class DockerContainerStat(double? memoryUsage, double? cpuUsage, double? 
     public double? RxBytes { get; private set; } = rxBytes;
     public double? TxBytes { get; private set; } = txBytes;
 
-    public DockerContainerStat() : this(0, 0, 0, 0, 0) { }
+    internal DockerContainerStat() : this(0, 0, 0, 0, 0) { }
 
     public void ReInitialize(
         double? memoryUsage,

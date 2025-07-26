@@ -1,6 +1,8 @@
 ﻿using System.Runtime.CompilerServices;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Hosting.Common.ObjectPoolManager;
+using Hosting.DockerClient.Models.Containers;
 using Hosting.DockerClient.Services;
 using Hosting.Extensions;
 using Infrastructure.Connectors.Mappers;
@@ -28,7 +30,7 @@ internal class LocalContainerConnector(IContainerService containerService, IObje
 
     public async Task<Result<IReadOnlyDictionary<string, DockerContainer>>> ListContainersAsync(ContainerFilterCommand containerFilterCommand, CancellationToken cancellationToken)
     {
-        var command = new Hosting.DockerClient.Models.Containers.ListContainersCommand
+        var command = new ListContainersCommand
         (
             containerFilterCommand.All,
             containerFilterCommand.Limit,
@@ -41,7 +43,7 @@ internal class LocalContainerConnector(IContainerService containerService, IObje
 
     public Task<Result> PatchAsync(PatchContainerCommand patchContainerCommand, CancellationToken cancellationToken)
     {
-        var command = new Hosting.DockerClient.Models.Containers.PatchContainersCommand
+        var command = new PatchContainersCommand
         (
             ContainerIds: [.. patchContainerCommand.ContainerIds],
             Action: patchContainerCommand.Action.Map()
@@ -49,21 +51,23 @@ internal class LocalContainerConnector(IContainerService containerService, IObje
         return containerService.PatchAsync(command, cancellationToken);
     }
 
-    public async IAsyncEnumerable<DockerContainerStats> StreamContainerStatsAsync(StreamContainerStatsCommand streamStatsCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<PooledHandle<Dictionary<string, DockerContainerStat>>> StreamContainersStatsAsync(StreamContainersStatsCommand streamStatsCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await foreach (var result in containerService.StreamContainerStatsAsync(streamStatsCommand.FetchIntervalMs, cancellationToken))
+        await foreach (var result in containerService.StreamContainersStatsAsync(streamStatsCommand.FetchIntervalMs, cancellationToken))
         {
-            var stats = objectPoolManager.Get<DockerContainerStats>();
-            stats.Reset();
+            using var _ = result;
+            var pooledDictionary = objectPoolManager.GetPooled<Dictionary<string, DockerContainerStat>>();
+            var dictionary = pooledDictionary.Value;
+            dictionary.Clear();
 
-            foreach (var kvp in result)
+            foreach (var kvp in result.Value)
             {
                 var stat = objectPoolManager.Get<DockerContainerStat>();
                 kvp.Value.Map(stat);
-                stats.Add(kvp.Key, stat);
+                dictionary.Add(kvp.Key, stat);
             }
 
-            yield return stats;
+            yield return pooledDictionary;
         }
     }
 

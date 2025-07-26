@@ -7,6 +7,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Platforms;
+using Hosting.Common.ObjectPoolManager;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -24,14 +25,11 @@ internal class PlatformStatsWriterJob(
     IObjectPoolManager objectPoolManager,
     ISignalRConnectionTracker connectionTracker,
     IPlatformHubDispatcher platformHubDispatcher,
-    ChannelReader<(Guid Id, PlatformStatsResult Stats)> reader,
+    ChannelReader<(Guid Id, PooledHandle<PlatformStatsResult> Stats)> reader,
     ILogger<PlatformStatsWriterJob> logger) : BackgroundService
 {
-    // Updates to db will be flushed every x seconds or when platform batch size is reached.
-    private readonly TimeSpan flushInterval = TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60);
-    private readonly int batchSize = options.Value?.BatchSize ?? 100;
-    private readonly Dictionary<Guid, List<PlatformStatsResult>> buffer = [];
-    private DateTime lastFlush = DateTime.UtcNow;
+    private readonly Dictionary<Guid, List<PooledHandle<PlatformStatsResult>>> _buffer = [];
+    private DateTime _lastFlush = DateTime.UtcNow;
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -39,8 +37,9 @@ internal class PlatformStatsWriterJob(
         {
             await foreach (var (platformId, platformStat) in reader.ReadAllAsync(cancellationToken))
             {
+                // We delay the disposal of the pooled handle until we have processed it
                 AccumulateBatchStats(platformId, platformStat);
-                await NotifyClients(platformId, platformStat);
+                await NotifyClients(platformId, platformStat.Value);
 
                 if (ShouldFlush())
                 {
@@ -58,17 +57,17 @@ internal class PlatformStatsWriterJob(
         }
 
         // Final flush
-        if (buffer.Count > 0)
+        if (_buffer.Count > 0)
         {
-            await SaveBatchToDb(buffer, CancellationToken.None);
+            await SaveBatchToDb(CancellationToken.None);
         }
     }
 
-    private void AccumulateBatchStats(Guid platformId, PlatformStatsResult stat)
+    private void AccumulateBatchStats(Guid platformId, PooledHandle<PlatformStatsResult> stat)
     {
-        if (!buffer.TryGetValue(platformId, out var list))
+        if (!_buffer.TryGetValue(platformId, out var list))
         {
-            buffer.TryAdd(platformId, list = objectPoolManager.Get<List<PlatformStatsResult>>());
+            _buffer.TryAdd(platformId, list = objectPoolManager.Get<List<PooledHandle<PlatformStatsResult>>>());
         }
 
         list.Add(stat); // NOTE: only references copied, not the list
@@ -77,37 +76,45 @@ internal class PlatformStatsWriterJob(
     private bool ShouldFlush()
     {
         int totalCount = 0;
-        foreach (var kvp in buffer)
+        foreach (var kvp in _buffer)
         {
             totalCount += kvp.Value.Count;
         }
-        return totalCount >= batchSize || DateTime.UtcNow - lastFlush >= flushInterval;
+
+        return totalCount >= options.Value?.BatchSize || 
+            (DateTime.UtcNow - _lastFlush) >= TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60);
     }
 
     private async Task FlushToDatabase(CancellationToken cancellationToken)
     {
-        // Save and then clean up buffer
-        await SaveBatchToDb(buffer, cancellationToken);
-        foreach (var (_, stats) in buffer)
+        try
         {
-            foreach (var stat in stats)
+            await SaveBatchToDb(cancellationToken);
+        }
+        finally
+        {
+            // Clean up
+            foreach (var (_, stats) in _buffer)
             {
-                objectPoolManager.Return(stat);
+                foreach (var stat in stats)
+                {
+                    stat.Dispose();
+                }
+
+                stats.Clear();
+                objectPoolManager.Return(stats);
             }
 
-            stats.Clear();
-            objectPoolManager.Return(stats);
+            _buffer.Clear();
+            _lastFlush = DateTime.UtcNow;
         }
-
-        buffer.Clear();
-        lastFlush = DateTime.UtcNow;
     }
 
-    private async Task SaveBatchToDb(Dictionary<Guid, List<PlatformStatsResult>> statsByPlatform, CancellationToken cancellationToken)
+    private async Task SaveBatchToDb(CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        foreach (var (platformId, stats) in statsByPlatform)
+        foreach (var (platformId, stats) in _buffer)
         {
             var existing = await uow.Platforms.GetByIdAsync(platformId, cancellationToken);
             if (existing == null)
@@ -124,9 +131,9 @@ internal class PlatformStatsWriterJob(
             if (existing.PlatformDescriptor is DockerPlatformDescriptor dockerPlatform)
             {
                 descriptor = dockerPlatform.Create(
-                    containersRunning: lastBatch.ContainersRunning,
-                    containersPaused: lastBatch.ContainersPaused,
-                    containersStopped: lastBatch.ContainersStopped);
+                    containersRunning: lastBatch.Value.ContainersRunning,
+                    containersPaused: lastBatch.Value.ContainersPaused,
+                    containersStopped: lastBatch.Value.ContainersStopped);
             }
             else if (existing.PlatformDescriptor is DockerSwarmPlatformDescriptor swarmDescriptor)
             {
@@ -139,49 +146,46 @@ internal class PlatformStatsWriterJob(
 
             existing.PartialUpdate(
                 platformStatus: PlatformStatus.Online,
-                networkCount: lastBatch.NetworkCount,
-                volumeCount: lastBatch.VolumeCount,
-                imageCount: lastBatch.ImageCount,
-                memTotal: lastBatch.MemTotal,
+                networkCount: lastBatch.Value.NetworkCount,
+                volumeCount: lastBatch.Value.VolumeCount,
+                imageCount: lastBatch.Value.ImageCount,
+                memTotal: lastBatch.Value.MemTotal,
                 descriptor: descriptor);
 
             await uow.Platforms.UpdatePlatformAsync(existing, cancellationToken);
         }
 
-        await uow.CommitAsync();
-        var pooledStats = MapToStats(statsByPlatform);
-        
+        using var pooledStats = MapToStats();
         try
         {
-            await uow.PlatformStats.BulkInsertAsync(pooledStats, cancellationToken);
+            await uow.PlatformStats.BulkInsertAsync(pooledStats.Value, cancellationToken);
             await uow.CommitAsync();
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "An error occurred while persisting the platform statistics batch to the database. Total stats in batch: {BatchSize}", statsByPlatform.Sum(s => s.Value.Count));
+            logger.LogError(ex, "An error occurred while persisting the platform statistics batch to the database. Total stats in batch: {BatchSize}", _buffer.Sum(s => s.Value.Count));
         }
         finally
         {
-            foreach (var stat in pooledStats)
+            foreach (var stat in pooledStats.Value)
             {
                 objectPoolManager.Return(stat);
             }
-
-            objectPoolManager.Return(pooledStats);
+            objectPoolManager.Return(pooledStats.Value);
         }
     }
 
-    private List<PlatformStat> MapToStats(Dictionary<Guid, List<PlatformStatsResult>> statsByPlatform)
+    private PooledHandle<List<PlatformStat>> MapToStats()
     {
-        var stats = objectPoolManager.Get<List<PlatformStat>>();
+        var stats = objectPoolManager.GetPooled<List<PlatformStat>>();
 
-        foreach (var (platformId, platformStats) in statsByPlatform)
+        foreach (var (platformId, platformStats) in _buffer)
         {
             foreach (var stat in platformStats)
             {
                 var destination = objectPoolManager.Get<PlatformStat>();
-                stat.Map(destination, platformId);
-                stats.Add(destination);
+                stat.Value.Map(destination, platformId);
+                stats.Value.Add(destination);
             }
         }
         return stats;

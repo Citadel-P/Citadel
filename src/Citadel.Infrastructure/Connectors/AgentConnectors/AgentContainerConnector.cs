@@ -5,6 +5,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
+using Hosting.Common.ObjectPoolManager;
 using Infrastructure.Connectors.Mappers;
 using Infrastructure.Services;
 using LightResults;
@@ -107,23 +108,24 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory, IObject
         }
     }
 
-    public async IAsyncEnumerable<DockerContainerStats> StreamContainerStatsAsync(StreamContainerStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<PooledHandle<Dictionary<string, DockerContainerStat>>> StreamContainersStatsAsync(StreamContainersStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
         using var streamCall = containerClient.StreamContainerStats(new ContainerStatsRequest() { FetchIntervalMs = command.FetchIntervalMs }, cancellationToken: cancellationToken);
         await foreach (var result in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
         {
-            var stats = objectPoolManager.Get<DockerContainerStats>();
-            stats.Reset();
+            var pooledDictionary = objectPoolManager.GetPooled<Dictionary<string, DockerContainerStat>>();
+            var dictionary = pooledDictionary.Value;
+            dictionary.Clear();
 
             foreach (var kvp in result.Containers)
             {
                 var stat = objectPoolManager.Get<DockerContainerStat>();
                 kvp.Value.Map(stat);
-                stats.Add(kvp.Key, stat);
+                dictionary.Add(kvp.Key, stat);
             }
 
-            yield return stats;
+            yield return pooledDictionary;
         }
     }
 

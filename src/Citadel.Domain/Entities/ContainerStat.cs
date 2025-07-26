@@ -18,7 +18,7 @@ public class ContainerStat(
     public double? RxBytes { get; private set; } = rxBytes;
     public double? TxBytes { get; private set; } = txBytes;
 
-    public ContainerStat() : this(Guid.Empty, 0, 0, 0, 0, 0) { }
+    internal ContainerStat() : this(Guid.Empty, 0, 0, 0, 0, 0) { }
 
     public void ReInitialize(
         Guid containerId,

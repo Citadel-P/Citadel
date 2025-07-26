@@ -11,9 +11,7 @@ public sealed class PlatformStatsResult(
     long containersRunning,
     DockerPlatformStat platformStat)
 {
-    public PlatformStatsResult() : this(0,0,0,0,0,0,0,0, new DockerPlatformStat(0,0,0,0,0))
-    {
-    }
+    internal PlatformStatsResult() : this(0,0,0,0,0,0,0,0, new DockerPlatformStat(0,0,0,0,0)) { }
 
     public long MemTotal { get; private set; } = memTotal;
     public long ImageCount { get; private set; } = imageCount;
