@@ -5,6 +5,7 @@ import { useDELETENetworks } from './hooks/useDELETENetworks';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
+import { use400ErrorToast } from '@/hooks/use400ErrorToast';
 
 interface IContext {
   selectedRows: DockerNetworkResult[] | undefined;
@@ -37,7 +38,17 @@ const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }
   const { dialogData, setDialogData } = useDialogState<DockerNetworkResult>();
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
-  const { mutate: deleteNetworks, isSuccess: deleteIsSuccess, isPending: deleteIsPending } = useDELETENetworks();
+  const {
+    mutate: deleteNetworks,
+    isSuccess: deleteIsSuccess,
+    isPending: deleteIsPending,
+    error: deleteInError,
+  } = useDELETENetworks();
+  use400ErrorToast(
+    deleteInError,
+    'The selected network(s) could not be deleted (status code: 400).',
+    on400ErrorHandled,
+  );
 
   // Wrapper function that handles both original and filtered networks
   const handleNetworksUpdate = useCallback((networks: DockerNetworkResult[]) => {
@@ -85,6 +96,10 @@ const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }
       toast.success('The selected network(s) has been successfully deleted');
     }
   }, [deleteIsSuccess, client, setDialogData]);
+
+  function on400ErrorHandled() {
+    setDialogData({ open: false });
+  }
 
   // Handle network deletion request
   const requestDelete = useCallback(

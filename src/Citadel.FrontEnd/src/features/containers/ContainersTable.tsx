@@ -63,13 +63,7 @@ const columns: ColumnDef<ContainerView>[] = [
   {
     accessorKey: 'CPU',
     header: ({ column }) => <SortableCell cellName="Cpu" column={column} />,
-    cell: ({ row }) => (
-      <div className="text-xs">
-        {row.original.state === ContainerStateStatus.Running &&
-          (row.original as ContainerView).lastStats &&
-          toFixedNumber((row.original as ContainerView).lastStats?.cpuUsage, 'percent')}
-      </div>
-    ),
+    cell: ({ row }) => <CPUCell container={row.original} />,
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
       if (!rowA.original.stats || !rowB.original.stats) return 0;
       return rowA.original.stats[0]?.cpuUsage < rowB.original.stats[0]?.cpuUsage ? 1 : -1;
@@ -78,19 +72,7 @@ const columns: ColumnDef<ContainerView>[] = [
   {
     accessorKey: 'memory',
     header: ({ column }) => <SortableCell cellName="Memory" column={column} />,
-    cell: ({ row }) => (
-      <div className="text-xs">
-        {(row.original.lastStats as ContainerStatView)?.memoryUsage == 0 ? (
-          ''
-        ) : (
-          <span>
-            {byteTransform((row.original.lastStats as ContainerStatView)?.memoryUsage ?? 0, 2) +
-              ' / ' +
-              byteTransform((row.original.lastStats as ContainerStatView)?.memoryLimit ?? 0, 2)}
-          </span>
-        )}
-      </div>
-    ),
+    cell: ({ row }) => <MemoryUsageCell container={row.original} />,
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
       const cA = rowA.original.lastStats as ContainerStatView;
       const cB = rowB.original.lastStats as ContainerStatView;
@@ -134,6 +116,32 @@ const columns: ColumnDef<ContainerView>[] = [
     ),
   },
 ];
+
+const MemoryUsageCell = ({ container }: { container: ContainerView }) => {
+  if (container.state !== ContainerStateStatus.Running) {
+    return <div className="text-xs text-muted">0B / 0B</div>;
+  }
+  return (
+    <div className="text-xs">
+      <span>
+        {byteTransform(container.lastStats?.memoryUsage ?? 0, 2) +
+          ' / ' +
+          byteTransform(container.lastStats?.memoryLimit ?? 0, 2)}
+      </span>
+    </div>
+  );
+};
+
+const CPUCell = ({ container }: { container: ContainerView }) => {
+  if (container.state !== ContainerStateStatus.Running) {
+    return <div className="text-xs text-muted">0%</div>;
+  }
+  return (
+    <div className="text-xs">
+      {container.lastStats?.cpuUsage ? toFixedNumber(container.lastStats?.cpuUsage, 'percent') : '0%'}
+    </div>
+  );
+};
 
 export const ContainersTable = () => {
   const { containers, isLoading, setSelectedRows } = useContainersContext();

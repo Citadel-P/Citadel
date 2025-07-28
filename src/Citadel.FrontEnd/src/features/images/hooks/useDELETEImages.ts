@@ -7,5 +7,5 @@ export const useDELETEImages = () => {
   const { mutate, isPending, isSuccess, error, data } = useMutation({ mutationFn: apiClient?.api.imagesDelete });
   const validationErrors = useGetValidationErrors(error);
 
-  return { mutate, isPending, isSuccess, data, validationErrors };
+  return { mutate, isPending, isSuccess, data, error, validationErrors };
 };

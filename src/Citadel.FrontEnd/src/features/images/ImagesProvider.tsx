@@ -6,6 +6,7 @@ import { useDELETEImages } from './hooks/useDELETEImages';
 import { toast } from 'sonner';
 import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
+import { use400ErrorToast } from '@/hooks/use400ErrorToast';
 
 interface IContext {
   isLoading: boolean;
@@ -36,7 +37,14 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
   const { data, isLoading, isSuccess } = useGETRegistries();
 
   // Delete images mutation
-  const { mutate, isSuccess: deleteIsSuccess, isPending: deleteIsPending, data: deleteData } = useDELETEImages();
+  const {
+    mutate,
+    isSuccess: deleteIsSuccess,
+    isPending: deleteIsPending,
+    data: deleteData,
+    error: deleteInError,
+  } = useDELETEImages();
+  use400ErrorToast(deleteInError, 'The selected image(s) could not be deleted (status code: 400).', on400ErrorHandled);
 
   // State variables
   const [registries, setRegistries] = useState<RegistryView[]>([]);
@@ -107,6 +115,10 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
       toast.success(message);
     }
   }, [deleteIsSuccess, client, deleteData, setDialogData]);
+
+  function on400ErrorHandled() {
+    setDialogData({ open: false });
+  }
 
   // Handle registry selection change
   const setSelectionChange = useCallback(

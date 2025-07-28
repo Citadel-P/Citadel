@@ -7,5 +7,5 @@ export const useDELETENetworks = () => {
   const { mutate, isPending, isSuccess, error, data } = useMutation({ mutationFn: apiClient?.api.networksDelete });
   const validationErrors = useGetValidationErrors(error);
 
-  return { mutate, isPending, isSuccess, data, validationErrors };
+  return { mutate, isPending, isSuccess, data, error, validationErrors };
 };

@@ -5,6 +5,7 @@ import { useDELETEVolumes } from './hooks/useDELETEVolumes';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
+import { use400ErrorToast } from '@/hooks/use400ErrorToast';
 
 interface IContext {
   selectedRows: DockerVolumeResult[] | undefined;
@@ -37,7 +38,13 @@ const VolumesProvider: React.FC<{ children?: React.ReactNode }> = ({ children })
   const { dialogData, setDialogData } = useDialogState<DockerVolumeResult>();
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
-  const { mutate: deleteVolumes, isSuccess: deleteIsSuccess, isPending: deleteIsPending } = useDELETEVolumes();
+  const {
+    mutate: deleteVolumes,
+    isSuccess: deleteIsSuccess,
+    isPending: deleteIsPending,
+    error: deleteInError,
+  } = useDELETEVolumes();
+  use400ErrorToast(deleteInError, 'The selected volume(s) could not be deleted (status code: 400).', on400ErrorHandled);
 
   // Wrapper function that handles both original and filtered Volumes
   const handleVolumesUpdate = useCallback((Volumes: DockerVolumeResult[]) => {
@@ -80,6 +87,10 @@ const VolumesProvider: React.FC<{ children?: React.ReactNode }> = ({ children })
       toast.success('The selected volume(s) has been successfully deleted');
     }
   }, [deleteIsSuccess, client, setDialogData]);
+
+  function on400ErrorHandled() {
+    setDialogData({ open: false });
+  }
 
   // Handle volume deletion request
   const requestDelete = useCallback(
