@@ -578,7 +578,8 @@ internal static class ContainerMappers
     
     public static DockerContainerStat Map(this ContainerStatMessage statMessage)
         => new (
-            memoryUsage: statMessage.MemoryUsage,
+            memoryActive: statMessage.MemoryActive,
+            memoryCache: statMessage.MemoryCache,
             memoryLimit: statMessage.MemoryLimit,
             cpuUsage: statMessage.CpuUsage,
             rxBytes: statMessage.RxBytes,
@@ -625,7 +626,8 @@ internal static class ContainerMappers
     public static void Map(this ContainerStatMessage statMessage, DockerContainerStat destination)
     {
         destination.ReInitialize(
-            statMessage.MemoryUsage,
+            statMessage.MemoryActive,
+            statMessage.MemoryCache,
             statMessage.CpuUsage,
             statMessage.MemoryLimit,
             statMessage.RxBytes,
@@ -656,7 +658,8 @@ internal static class ContainerMappers
             Created: container?.Created,
             State: container.State.Map(),
             ContainerStat: container.ContainerStat == null ? null : new DockerContainerStat(
-                memoryUsage: container.ContainerStat.MemoryUsage, 
+                memoryActive: container.ContainerStat.MemoryActive,
+                memoryCache: container.ContainerStat.MemoryCache,
                 memoryLimit: container.ContainerStat.MemoryLimit,
                 cpuUsage: container.ContainerStat.CpuUsage,
                 rxBytes: container.ContainerStat.RxBytes,
@@ -676,7 +679,8 @@ internal static class ContainerMappers
     public static void Map(this ContainerStatResult stat, DockerContainerStat destination)
     {
         destination.ReInitialize(
-            stat.MemoryUsage,
+            stat.MemoryActive,
+            stat.MemoryCache,
             stat.CpuUsage,
             stat.MemoryLimit,
             stat.RxBytes,

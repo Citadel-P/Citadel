@@ -11,7 +11,7 @@
   serverVersion: 1.0.0,
   type: Docker,
   status: Online,
-  connectorType: agent,
+  connectorType: Agent,
   platformDescriptor: {
     $type: Docker,
     daemonId: 123456,

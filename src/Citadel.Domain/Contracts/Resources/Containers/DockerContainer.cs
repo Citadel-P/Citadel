@@ -15,24 +15,27 @@ public sealed record DockerContainer
     IReadOnlyList<ContainerPort>? Ports = null
     );
 
-public class DockerContainerStat(double? memoryUsage, double? cpuUsage, double? memoryLimit, double? rxBytes, double? txBytes)
+public class DockerContainerStat(double? memoryActive, double? memoryCache, double? cpuUsage, double? memoryLimit, double? rxBytes, double? txBytes)
 {
-    public double? MemoryUsage { get; private set; } = memoryUsage;
+    public double? MemoryActive { get; private set; } = memoryActive;
+    public double? MemoryCache { get; private set; } = memoryCache;
     public double? CpuUsage { get; private set; } = cpuUsage;
     public double? MemoryLimit { get; private set; } = memoryLimit;
     public double? RxBytes { get; private set; } = rxBytes;
     public double? TxBytes { get; private set; } = txBytes;
 
-    internal DockerContainerStat() : this(0, 0, 0, 0, 0) { }
+    internal DockerContainerStat() : this(0, 0, 0, 0, 0, 0) { }
 
     public void ReInitialize(
-        double? memoryUsage,
+        double? memoryActive,
+        double? memoryCache,
         double? cpuUsage,
         double? memoryLimit,
         double? rxBytes,
         double? txBytes)
     {
-        MemoryUsage = memoryUsage;
+        MemoryActive = memoryActive;
+        MemoryCache = memoryCache;
         CpuUsage = cpuUsage;
         MemoryLimit = memoryLimit;
         RxBytes = rxBytes;

@@ -18,57 +18,66 @@ const useContainersHub = (platformId?: string) => {
 
   const handleContainersStatsUpdated = useCallback((stats: ContainerStatView[]) => {
     setContainersInfo((currentInfo) => {
-      if (!currentInfo || !currentInfo.containers) return;
+      if (!currentInfo || !currentInfo.containers) {
+        return currentInfo;
+      }
+
       const statsMap = new Map(stats.map((stat) => [stat.containerId, stat]));
+      let hasChanged = false;
 
       const updatedContainers = currentInfo.containers.map((container) => {
         const stat = statsMap.get(container.id);
-        return stat ? { ...container, lastStats: stat } : container;
+        if (stat) {
+          hasChanged = true;
+          return { ...container, lastStats: stat };
+        }
+        return container;
       });
 
-      return { ...currentInfo, containers: updatedContainers };
+      if (hasChanged) {
+        return { ...currentInfo, containers: updatedContainers };
+      }
+
+      return currentInfo;
     });
   }, []);
 
   const handleContainerEventReceived = useCallback((containerInfo: ContainerView, eventType: string) => {
     setContainersInfo((currentInfo) => {
-      // If we don't have any current info, initialize with empty containers array
       if (!currentInfo) {
-        return;
+        return currentInfo;
       }
-      const updatedContainers = [...(currentInfo.containers ?? [])];
 
-      const existingIndex = updatedContainers.findIndex(
-        (container) => container.containerId === containerInfo.containerId,
-      );
+      const updatedContainers = [...(currentInfo.containers ?? [])];
+      const existingIndex = updatedContainers.findIndex((c) => c.containerId === containerInfo.containerId);
 
       switch (eventType) {
         case 'create':
-          // Add container if it doesn't exist
           if (existingIndex === -1) {
-            return {
-              ...currentInfo,
-              containers: [containerInfo, ...updatedContainers],
-            };
+            return { ...currentInfo, containers: [containerInfo, ...updatedContainers] };
           }
-          updatedContainers[existingIndex] = containerInfo;
-          return { ...currentInfo, containers: updatedContainers };
+          if (JSON.stringify(updatedContainers[existingIndex]) !== JSON.stringify(containerInfo)) {
+            updatedContainers[existingIndex] = containerInfo;
+            return { ...currentInfo, containers: updatedContainers };
+          }
+          break;
 
         case 'destroy':
           if (existingIndex !== -1) {
             updatedContainers.splice(existingIndex, 1);
             return { ...currentInfo, containers: updatedContainers };
           }
-          // No change if container doesn't exist
-          return currentInfo;
+          break;
 
         default:
-          // Update container for all other event types (stop, start, etc.)
-          if (existingIndex !== -1) {
+          if (existingIndex !== -1 && JSON.stringify(updatedContainers[existingIndex]) !== JSON.stringify(containerInfo)) {
             updatedContainers[existingIndex] = containerInfo;
             return { ...currentInfo, containers: updatedContainers };
           }
+          break;
       }
+
+      return currentInfo;
     });
   }, []);
 

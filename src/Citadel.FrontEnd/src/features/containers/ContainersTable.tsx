@@ -77,7 +77,7 @@ const columns: ColumnDef<ContainerView>[] = [
       const cA = rowA.original.lastStats as ContainerStatView;
       const cB = rowB.original.lastStats as ContainerStatView;
 
-      return (cA?.memoryUsage ?? 0) < (cB?.memoryUsage ?? 0) ? 1 : -1;
+      return (cA?.memoryActive ?? 0) < (cB?.memoryActive ?? 0) ? 1 : -1;
     },
   },
   {
@@ -124,7 +124,7 @@ const MemoryUsageCell = ({ container }: { container: ContainerView }) => {
   return (
     <div className="text-xs">
       <span>
-        {byteTransform(container.lastStats?.memoryUsage ?? 0, 2) +
+        {byteTransform(container.lastStats?.memoryActive ?? 0, 2) +
           ' / ' +
           byteTransform(container.lastStats?.memoryLimit ?? 0, 2)}
       </span>

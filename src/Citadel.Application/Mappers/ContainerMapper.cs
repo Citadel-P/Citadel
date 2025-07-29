@@ -25,7 +25,8 @@ internal static class ContainerMapper
         => new
         (
             containerId: containerId,
-            memoryUsage: container.MemoryUsage,
+            memoryActive: container.MemoryActive,
+            memoryCache: container.MemoryCache,
             cpuUsage: container.CpuUsage,
             memoryLimit: container.MemoryLimit,
             rxBytes: container.RxBytes,
@@ -38,7 +39,8 @@ internal static class ContainerMapper
         destination.ReInitialize(
             containerId: containerId,
             created: created ?? (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds,
-            memoryUsage: container.MemoryUsage,
+            memoryActive: container.MemoryActive,
+            memoryCache: container.MemoryCache,
             cpuUsage: container.CpuUsage,
             memoryLimit: container.MemoryLimit,
             rxBytes: container.RxBytes,

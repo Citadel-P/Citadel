@@ -74,8 +74,8 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
         var stats = pooledStats.Value;
         stats.AddRange(
         [
-            new(_containerId, 100, 5, 300, 100, 200, time),
-            new(_containerId, 200, 2, 600, 200, 400, time - 60),
+            new(_containerId, 100, 200, 5, 300, 100, 200, time),
+            new(_containerId, 200, 150, 2, 600, 200, 400, time - 60),
         ]);
 
         _connectionTrackerMock.Setup(c => c.HasUsersInGroup(It.IsAny<string>())).Returns(true);
@@ -105,8 +105,8 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
         var stats = pooledStats.Value;
         stats.AddRange(
         [
-            new(_containerId, 100, 5, 300, 100, 200, time),
-            new(_containerId, 200, 2, 600, 200, 400, time - 60),
+            new(_containerId, 100, 200, 5, 300, 100, 200, time),
+            new(_containerId, 200, 150, 2, 600, 200, 400, time - 60),
         ]);
 
 
@@ -136,8 +136,8 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
         var stats = pooledStats.Value;
         stats.AddRange(
         [
-            new(_containerId, 100, 5, 300, 100, 200, time),
-            new(_containerId, 200, 2, 600, 200, 400, time - 60),
+            new(_containerId, 100, 200, 5, 300, 100, 200, time),
+            new(_containerId, 200, 150, 2, 600, 200, 400, time - 60),
         ]);
 
         var batch = new ContainersStatBatch(_platformId, pooledStats);
@@ -166,8 +166,8 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
         var stats = pooledStats.Value;
         stats.AddRange(
         [
-            new(_containerId, 100, 5, 300, 100, 200, time),
-            new(_containerId, 200, 2, 600, 200, 400, time - 60),
+            new(_containerId, 100, 200, 5, 300, 100, 200, time),
+            new(_containerId, 200, 150, 2, 600, 200, 400, time - 60),
         ]);
         var batch = new ContainersStatBatch(_platformId, pooledStats);
         _connectionTrackerMock.Setup(c => c.HasUsersInGroup(It.IsAny<string>())).Returns(false);

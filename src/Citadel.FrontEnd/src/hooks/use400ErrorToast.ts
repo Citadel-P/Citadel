@@ -13,7 +13,7 @@ export const use400ErrorToast = (error: Error | null, errorMessage?: string, on4
       const validationError = problem as HttpValidationProblemDetails;
       if (!validationError) return;
 
-      let description = Object.values(validationError.errors)[0];
+      const description = Object.values(validationError.errors)[0];
       const title = errorMessage ?? '400: ' + problem.title;
       toast.error(title, {
         description: description,
@@ -22,5 +22,5 @@ export const use400ErrorToast = (error: Error | null, errorMessage?: string, on4
         on400ErrorHandled();
       }
     }
-  }, [error]);
+  }, [error, errorMessage, on400ErrorHandled]);
 };

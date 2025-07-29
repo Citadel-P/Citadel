@@ -27,14 +27,15 @@ internal sealed record ContainerStatDto(
      string Id,// Guid
      string ContainerId,// Guid
      long Created,
-     double MemoryUsage,
+     double MemoryActive,
+     double MemoryCache,
      double? CpuUsage,
      double? MemoryLimit,
      double? RxBytes,
      double? TxBytes
 )
 {
-    public ContainerStatDto() : this(string.Empty, string.Empty, 0, 0, 0, 0, 0, 0)
+    public ContainerStatDto() : this(string.Empty, string.Empty, 0, 0, 0, 0, 0, 0, 0)
     {
         
     }

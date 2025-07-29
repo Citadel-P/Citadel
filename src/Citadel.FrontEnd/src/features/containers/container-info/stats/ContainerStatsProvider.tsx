@@ -12,20 +12,21 @@ interface IContext {
   container: ContainerView | undefined;
 }
 
-export const ContainerStatsContext = createContext<IContext | undefined>(undefined);
+const ContainerStatsContext = createContext<IContext | undefined>(undefined);
 
 const ContainerStatsProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const { currentContainer } = useAppContext();
   const { containersInfo } = useContainersHub(currentContainer?.platformId);
   const { containerId } = useParams<{ containerId: string }>();
   const { data, isSuccess, isLoading } = useGetContainerStats(containerId);
-  const [container, setContainer] = useState<ContainerView>();
+  const [container, setContainer] = useState<ContainerView | undefined>();
+
   // Extract stats from API response
   const stats = useMemo(() => (isSuccess ? data?.data.stats || [] : []), [isSuccess, data]);
 
   useEffect(() => {
     if (containersInfo && containerId) {
-      const found = containersInfo.containers.find((s) => s.containerId.includes(containerId));
+      const found = containersInfo.containers?.find((s) => s.containerId.startsWith(containerId));
       if (found) {
         setContainer(found);
       }

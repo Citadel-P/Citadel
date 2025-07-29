@@ -104,7 +104,6 @@ internal static class WebApiModule
         return app;
     }
 
-
     private static void HttpConnectionDispatcherOptions(HttpConnectionDispatcherOptions options)
     {
         options.LongPolling.PollTimeout = TimeSpan.FromSeconds(30);

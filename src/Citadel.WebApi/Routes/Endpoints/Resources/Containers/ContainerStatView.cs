@@ -4,7 +4,8 @@ namespace WebApi.Routes.Endpoints.Resources.Containers;
 
 public record struct ContainerStatView(
         Guid ContainerId,
-        double MemoryUsage,
+        double MemoryActive,
+        double MemoryCache,
         double CpuUsage,
         double MemoryLimit,
         double RxBytes,
@@ -17,7 +18,8 @@ public record struct ContainerStatView(
     internal static ContainerStatView Map(ContainerStat stats)
         => new (
             ContainerId: stats.ContainerId,
-            MemoryUsage: stats?.MemoryUsage ?? 0,
+            MemoryActive: stats?.MemoryActive ?? 0,
+            MemoryCache: stats?.MemoryCache ?? 0,
             CpuUsage: stats?.CpuUsage ?? 0,
             MemoryLimit: stats?.MemoryLimit ?? 0,
             RxBytes: stats?.RxBytes ?? 0,

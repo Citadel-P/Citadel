@@ -2,70 +2,44 @@
 
 namespace Domain;
 
-[JsonConverter(typeof(JsonStringEnumConverter<PlatformType>))]
 public enum PlatformType
 {
-    [JsonStringEnumMemberName("Docker")]
     Docker,
-    [JsonStringEnumMemberName("DockerSwarm")]
     DockerSwarm,
-    [JsonStringEnumMemberName("Kubernetes")]
     Kubernetes
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<PlatformStatus>))]
 public enum PlatformStatus
 {
-    [JsonStringEnumMemberName("Offline")]
     Offline,
-    [JsonStringEnumMemberName("Online")]
     Online
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<RegistryType>))]
 public enum RegistryType
 {
-    [JsonStringEnumMemberName("DockerHub")] 
     DockerHub,
-    [JsonStringEnumMemberName("Azure")]
     Azure,
-    [JsonStringEnumMemberName("AWS")]
     AWS,
-    [JsonStringEnumMemberName("Gitlab")]
     Gitlab,
-    [JsonStringEnumMemberName("GitHub")]
     GitHub
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<GhcrAccountType>))]
 public enum GhcrAccountType
 {
-    [JsonStringEnumMemberName("Organization")]
     Organization,
-    [JsonStringEnumMemberName("User")]
     User
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<ContainerStateStatus>))]
 public enum ContainerStateStatus
 {
-    [JsonStringEnumMemberName("Unknown")]
     Unknown,
-    [JsonStringEnumMemberName("Created")]
     Created,
-    [JsonStringEnumMemberName("Running")]
     Running,
-    [JsonStringEnumMemberName("Paused")]
     Paused,
-    [JsonStringEnumMemberName("Restarting")]
     Restarting,
-    [JsonStringEnumMemberName("Exited")]
     Exited,
-    [JsonStringEnumMemberName("Removing")]
     Removing,
-    [JsonStringEnumMemberName("Dead")]
     Dead,
-    [JsonStringEnumMemberName("Offline")]
     Offline,
 }
 
@@ -119,17 +93,13 @@ public enum AppPermission
 
 public enum DockerHubTagStatus
 {
-    [JsonStringEnumMemberName("active")]
     Active = 0,
-    [JsonStringEnumMemberName("inactive")]
     Inactive = 1,
 }
 
 public enum DockerHubImageStatus
 {
-    [JsonStringEnumMemberName("active")]
     Active = 0,
-    [JsonStringEnumMemberName("inactive")]
     Inactive = 1,
 }
 
@@ -172,13 +142,9 @@ public enum VolumeSharing
     All
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<PlatformConnectorType>))]
 public enum PlatformConnectorType
 {
-    [JsonStringEnumMemberName("unknown")]
     Unknown,
-    [JsonStringEnumMemberName("local")]
     Local,
-    [JsonStringEnumMemberName("agent")]
     Agent
 }

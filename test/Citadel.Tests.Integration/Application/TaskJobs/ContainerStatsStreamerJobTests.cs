@@ -90,9 +90,9 @@ public class ContainerStatsStreamerJobTests : IntegrationTestBase
 
     private static async IAsyncEnumerable<PooledHandle<Dictionary<string, DockerContainerStat>>> GetDockerContainerStats(PooledHandle<Dictionary<string, DockerContainerStat>> pooledDict)
     {
-        pooledDict.Value.Add("container-id-0", new DockerContainerStat(1, 1, 1, 1, 1));
+        pooledDict.Value.Add("container-id-0", new DockerContainerStat(1, 1, 1, 1, 1, 1));
         yield return pooledDict;
-        pooledDict.Value.Add("container-id-1", new DockerContainerStat(2, 2, 2, 2, 2));
+        pooledDict.Value.Add("container-id-1", new DockerContainerStat(2, 2, 2, 2, 2, 2));
         yield return pooledDict;
         await Task.CompletedTask;
     }

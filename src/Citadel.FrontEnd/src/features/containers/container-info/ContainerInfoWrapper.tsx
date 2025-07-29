@@ -80,7 +80,7 @@ const ContainerInfoWrapper = () => {
             </TabsContent>
             <TabsContent value="stats">
               <ContainerStatsProvider>
-                <div className="flex flex-col gap gap-y-3">
+                <div className="flex flex-col gap gap-y-4">
                   <MemoryUsage />
                   <CpuUsage />
                   <NetworkUsage />
@@ -93,5 +93,4 @@ const ContainerInfoWrapper = () => {
     </div>
   );
 };
-
 export default ContainerInfoWrapper;

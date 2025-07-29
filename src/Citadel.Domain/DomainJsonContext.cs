@@ -18,7 +18,7 @@ public partial class PlatformJsonContext : JsonSerializerContext
 {
 }
 
-[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default, PropertyNameCaseInsensitive = true)]
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default, PropertyNameCaseInsensitive = true, Converters = new[] { typeof(JsonStringEnumConverter) })]
 [JsonSerializable(typeof(Registry))]
 [JsonSerializable(typeof(AWSRegistry))]
 [JsonSerializable(typeof(AzureRegistry))]

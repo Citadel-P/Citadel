@@ -17,7 +17,8 @@ internal class ContainerStatRepository(IDbConnection db, Func<IDbTransaction> tx
             SELECT 
               MIN(S.Created) AS Created, 
               AVG(S.CpuUsage) AS CpuUsage, 
-              AVG(S.MemoryUsage) AS MemoryUsage,
+              AVG(S.MemoryActive) AS MemoryActive,
+              AVG(S.MemoryCache) AS MemoryCache,
               AVG(S.MemoryLimit) AS MemoryLimit,
               AVG(S.RxBytes) AS RxBytes,
               AVG(S.TxBytes) AS TxBytes
@@ -44,7 +45,7 @@ internal class ContainerStatRepository(IDbConnection db, Func<IDbTransaction> tx
     {
         const string sql = """  
             INSERT INTO ContainerStats
-            (Id, ContainerId, Created, MemoryUsage, CpuUsage, MemoryLimit, RxBytes, TxBytes)
+            (Id, ContainerId, Created, MemoryActive, MemoryCache, CpuUsage, MemoryLimit, RxBytes, TxBytes)
             VALUES
             {0}   
          """;
@@ -55,11 +56,12 @@ internal class ContainerStatRepository(IDbConnection db, Func<IDbTransaction> tx
 
         foreach (var stat in stats)
         {
-            valueRows.Add($"(@Id{i}, @ContainerId{i}, @Created{i}, @MemoryUsage{i}, @CpuUsage{i}, @MemoryLimit{i}, @RxBytes{i}, @TxBytes{i})");
+            valueRows.Add($"(@Id{i}, @ContainerId{i}, @Created{i}, @MemoryActive{i}, @MemoryCache{i}, @CpuUsage{i}, @MemoryLimit{i}, @RxBytes{i}, @TxBytes{i})");
             parameters.Add($"Id{i}", stat.Id.Format());
             parameters.Add($"ContainerId{i}", stat.ContainerId.Format());
             parameters.Add($"Created{i}", stat.Created);
-            parameters.Add($"MemoryUsage{i}", stat.MemoryUsage);
+            parameters.Add($"MemoryActive{i}", stat.MemoryActive);
+            parameters.Add($"MemoryCache{i}", stat.MemoryCache);
             parameters.Add($"CpuUsage{i}", stat.CpuUsage);
             parameters.Add($"MemoryLimit{i}", stat.MemoryLimit);
             parameters.Add($"RxBytes{i}", stat.RxBytes);

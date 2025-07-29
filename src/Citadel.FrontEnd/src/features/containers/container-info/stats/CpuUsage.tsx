@@ -7,34 +7,46 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
-import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardDescription, CardTitle } from '@/components/ui/card';
 import { useContainerStatsContext } from './ContainerStatsProvider';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useMemo, useState, useTransition, useEffect } from 'react';
+import { useMemo } from 'react';
 import dayjs from 'dayjs';
-import { ContainerView } from '@/api/_generated';
+import { ContainerView, NullableOfContainerStatView } from '@/api/_generated';
+
+const CpuUsageHeader = ({ container }: { container: ContainerView | undefined }) => (
+  <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
+    <div className="flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0">
+      <CardTitle className="text-bg-ss">CPU Usage</CardTitle>
+      <CardDescription>Showing total CPU usage for the past 24 hours</CardDescription>
+    </div>
+    <div className="flex">
+      <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
+        <span className="text-xs text-muted-foreground">Usage</span>
+        <span className="text-md font-medium leading-none sm:text-1xl">
+          {container?.state === 'Running' && container?.lastStats && container.lastStats.cpuUsage
+            ? `${(container.lastStats.cpuUsage as number).toFixed(2)}%`
+            : '-'}
+        </span>
+      </div>
+    </div>
+  </CardHeader>
+);
 
 const CpuUsage = () => {
-  const [isPending, startTransition] = useTransition();
   const { stats, container, isLoading } = useContainerStatsContext();
-  const [transitionedStats, setTransitionedStats] = useState(stats);
 
   const downsampledStats = useMemo(() => {
-    const step = Math.ceil(stats.length / (24 * 60)); // Keep only 1440 points
-    return stats.filter((_, index) => index % step === 0);
-  }, [stats]);
-
-  useEffect(() => {
-    startTransition(() => {
-      setTransitionedStats(downsampledStats);
-    });
-  }, [downsampledStats, startTransition]);
-
-  useEffect(() => {
-    if (container?.lastStats) {
-      setTransitionedStats((prev) => [...prev, container?.lastStats]);
+    if (!stats.length || !container) {
+      return [];
     }
-  }, [container]);
+    const step = Math.ceil(stats.length / 1440); // Keep a max of 1440 points
+    const filteredStats = stats.filter((_, index) => index % step === 0);
+    if (container?.lastStats) {
+      return [...filteredStats, container.lastStats];
+    }
+    return filteredStats;
+  }, [stats, container]);
 
   const chartConfig = useMemo(
     () =>
@@ -64,7 +76,7 @@ const CpuUsage = () => {
 
   const memoizedChart = useMemo(
     () => (
-      <AreaChart data={transitionedStats} accessibilityLayer>
+      <AreaChart data={downsampledStats} accessibilityLayer>
         {gradientDefs}
         <CartesianGrid vertical={true} />
         <XAxis
@@ -82,6 +94,10 @@ const CpuUsage = () => {
             <ChartTooltipContent
               nameKey="stats"
               indicator="dot"
+              labelFormatter={(_, n) => {
+                const created = (n.at(0)?.payload as NullableOfContainerStatView).created as number;
+                return dayjs(created * 1000).format('HH:mm:ss');
+              }}
               formatter={(value, name) => (
                 <>
                   <div
@@ -106,35 +122,20 @@ const CpuUsage = () => {
         <ChartLegend content={<ChartLegendContent />} />
       </AreaChart>
     ),
-    [transitionedStats, gradientDefs, chartConfig],
+    [downsampledStats, gradientDefs, chartConfig],
   );
 
-  return isLoading || isPending ? (
+  return isLoading ? (
     <Skeleton className="h-[225px] w-full rounded-xl" />
   ) : (
-    <Card className="bg-background rounded-sm shadow-xs">
-      <CardHeader>
-        <CardDescription className="ml-1.5">
-          <CardInfo container={container} />
-        </CardDescription>
-      </CardHeader>
+    <Card className="bg-background rounded-sm shadow-xs py-0">
+      <CpuUsageHeader container={container} />
       <CardContent className="px-2 sm:px-6">
         <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
           {memoizedChart}
         </ChartContainer>
       </CardContent>
     </Card>
-  );
-};
-
-const CardInfo = ({ container }: { container: ContainerView | undefined }) => {
-  return (
-    <div className="flex items-center gap-x-1">
-      <div className="font-medium text-foreground">CPU usage:</div>
-      <div className="text-xs">
-        {container?.state === 'Running' && container?.lastStats ? container?.lastStats.cpuUsage + '%' : '-%'}
-      </div>
-    </div>
   );
 };
 

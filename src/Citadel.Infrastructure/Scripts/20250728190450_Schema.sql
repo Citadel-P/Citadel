@@ -1,5 +1,5 @@
--- Migration: 20250708071103_Schema.sql
--- Generated: 2025-07-08 07:11:04 UTC
+-- Migration: 20250728190450_Schema.sql
+-- Generated: 2025-07-28 19:04:51 UTC
 
 CREATE TABLE IF NOT EXISTS "Platforms" ("Id" TEXT NOT NULL, "Name" TEXT NOT NULL, "Address" TEXT NOT NULL, "Status" TEXT NOT NULL, "ConnectorType" TEXT NOT NULL, "NetworkCount" INTEGER NOT NULL, "VolumeCount" INTEGER NOT NULL, "ImageCount" INTEGER NOT NULL, "CpuCount" INTEGER NOT NULL, "MemTotal" INTEGER NOT NULL, "AgentVersion" TEXT, "ServerVersion" TEXT, "PlatformDescriptor" TEXT NOT NULL, CONSTRAINT "PK_Platforms" PRIMARY KEY ("Id"))
 ;
@@ -45,7 +45,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "IX_Containers_ContainerId" ON "Containers" ("
 ;
 CREATE INDEX IF NOT EXISTS "IX_Containers_PlatformId" ON "Containers" ("PlatformId" ASC)
 ;
-CREATE TABLE IF NOT EXISTS "ContainerStats" ("Id" TEXT NOT NULL, "ContainerId" TEXT NOT NULL, "Created" INTEGER NOT NULL, "MemoryUsage" REAL, "CpuUsage" REAL, "MemoryLimit" REAL, "RxBytes" REAL, "TxBytes" REAL, CONSTRAINT "PK_ContainerStats" PRIMARY KEY ("Id"), CONSTRAINT "FK_ContainerStats_ContainerId_Containers_Id" FOREIGN KEY ("ContainerId") REFERENCES "Containers" ("Id") ON DELETE CASCADE ON UPDATE CASCADE)
+CREATE TABLE IF NOT EXISTS "ContainerStats" ("Id" TEXT NOT NULL, "ContainerId" TEXT NOT NULL, "Created" INTEGER NOT NULL, "MemoryActive" REAL, "MemoryCache" REAL, "CpuUsage" REAL, "MemoryLimit" REAL, "RxBytes" REAL, "TxBytes" REAL, CONSTRAINT "PK_ContainerStats" PRIMARY KEY ("Id"), CONSTRAINT "FK_ContainerStats_ContainerId_Containers_Id" FOREIGN KEY ("ContainerId") REFERENCES "Containers" ("Id") ON DELETE CASCADE ON UPDATE CASCADE)
 ;
 CREATE INDEX IF NOT EXISTS "IX_ContainerStats_ContainerId" ON "ContainerStats" ("ContainerId" ASC)
 ;

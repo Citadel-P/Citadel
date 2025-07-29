@@ -1,4 +1,4 @@
-import { PlatformView, PlatformType, PlatformInput } from '@/api/_generated';
+import { PlatformView, PlatformType } from '@/api/_generated';
 import { createContext, JSX, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate, useParams } from 'react-router';
@@ -114,13 +114,13 @@ const PlatformFormProvider: React.FC<IProps> = ({ children }) => {
     }
   }, [patchIsSuccess, patchData, navigate]);
 
-  function onPostForm(data: PlatformInput | Partial<PlatformInput>) {
-    if (mode === 'add') {
-      requestCreate(data as PlatformInput);
-    } else {
-      requestPatch(payload as PlatformInput);
-    }
-  }
+  // function onPostForm(data: PlatformInput | Partial<PlatformInput>) {
+  //   if (mode === 'add') {
+  //     requestCreate(data as PlatformInput);
+  //   } else {
+  //     requestPatch(payload as PlatformInput);
+  //   }
+  // }
 
   return (
     <PlatformFormContext.Provider

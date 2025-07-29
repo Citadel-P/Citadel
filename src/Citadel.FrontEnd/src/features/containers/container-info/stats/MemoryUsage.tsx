@@ -7,47 +7,43 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
-import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardDescription, CardTitle } from '@/components/ui/card';
 import { useContainerStatsContext } from './ContainerStatsProvider';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useMemo, useState, useTransition, useEffect } from 'react';
+import { useMemo } from 'react';
 import dayjs from 'dayjs';
 import { byteTransform } from '@/lib/bytes.helper';
-import { ContainerView } from '@/api/_generated';
+import { ContainerView, NullableOfContainerStatView } from '@/api/_generated';
+
+interface MemoryUsageHeaderProps {
+  container: ContainerView | undefined;
+}
 
 const MemoryUsage = () => {
-  const [isPending, startTransition] = useTransition();
   const { stats, container, isLoading } = useContainerStatsContext();
-  const [transitionedStats, setTransitionedStats] = useState(stats);
 
-  // Downsample the stats to reduce the number of data points
   const downsampledStats = useMemo(() => {
-    const step = Math.ceil(stats.length / (24 * 60)); // Keep only 1440 points
-    return stats.filter((_, index) => index % step === 0);
-  }, [stats]);
-
-  // Start a transition when stats change
-  useEffect(() => {
-    startTransition(() => {
-      setTransitionedStats(downsampledStats);
-    });
-  }, [downsampledStats, startTransition]);
-
-  useEffect(() => {
-    if (container?.lastStats) {
-      setTransitionedStats((prev) => [...prev, container?.lastStats]);
+    if (!stats.length || !container) {
+      return [];
     }
-  }, [container]);
+    const step = Math.ceil(stats.length / 1440); // Keep a max of 1440 points
+    const filteredStats = stats.filter((_, index) => index % step === 0);
+    if (container?.lastStats) {
+      return [...filteredStats, container.lastStats];
+    }
+    return filteredStats;
+  }, [stats, container]);
 
   const chartConfig = useMemo(
     () =>
       ({
-        stats: {
-          label: 'Memory',
-        },
-        memoryUsage: {
-          label: 'Memory Usage',
+        memoryActive: {
+          label: 'Active',
           color: 'var(--chart-1)',
+        },
+        memoryCache: {
+          label: 'Cache',
+          color: 'var(--chart-2)',
         },
       }) satisfies ChartConfig,
     [],
@@ -56,9 +52,13 @@ const MemoryUsage = () => {
   const gradientDefs = useMemo(
     () => (
       <defs>
-        <linearGradient id="fillmemoryUsage" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="5%" stopColor="var(--color-memoryUsage)" stopOpacity={0.8} />
-          <stop offset="95%" stopColor="var(--color-memoryUsage)" stopOpacity={0.1} />
+        <linearGradient id="fillmemoryActive" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="5%" stopColor="var(--color-memoryActive)" stopOpacity={0.8} />
+          <stop offset="95%" stopColor="var(--color-memoryActive)" stopOpacity={0.1} />
+        </linearGradient>
+        <linearGradient id="fillmemoryCache" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="5%" stopColor="var(--color-memoryCache)" stopOpacity={0.8} />
+          <stop offset="95%" stopColor="var(--color-memoryCache)" stopOpacity={0.1} />
         </linearGradient>
       </defs>
     ),
@@ -67,7 +67,7 @@ const MemoryUsage = () => {
 
   const memoizedChart = useMemo(
     () => (
-      <AreaChart data={transitionedStats} accessibilityLayer>
+      <AreaChart data={downsampledStats} accessibilityLayer>
         {gradientDefs}
         <CartesianGrid vertical={true} />
         <XAxis
@@ -85,6 +85,10 @@ const MemoryUsage = () => {
             <ChartTooltipContent
               nameKey="stats"
               indicator="dot"
+              labelFormatter={(_, n) => {
+                const created = (n.at(0)?.payload as NullableOfContainerStatView).created as number;
+                return dayjs(created * 1000).format('HH:mm:ss');
+              }}
               formatter={(value, name) => (
                 <>
                   <div
@@ -95,9 +99,9 @@ const MemoryUsage = () => {
                       } as React.CSSProperties
                     }
                   />
-                  {chartConfig['stats']?.label || name}
+                  {chartConfig[name as keyof typeof chartConfig]?.label || name}
                   <div className="ml-auto flex items-baseline gap-0.5 font-mono font-medium tabular-nums text-foreground">
-                    {((value as number) / 1024 / 1004).toFixed(2)}
+                    {((value as number) / 1024 / 1024).toFixed(2)}
                     <span className="font-normal text-muted-foreground">MB</span>
                   </div>
                 </>
@@ -106,27 +110,30 @@ const MemoryUsage = () => {
           }
         />
         <Area
-          dataKey="memoryUsage"
+          dataKey="memoryActive"
           type="natural"
-          fill="url(#fillmemoryUsage)"
-          stroke="var(--color-memoryUsage)"
+          fill="url(#fillmemoryActive)"
+          stroke="var(--color-memoryActive)"
+          stackId="a"
+        />
+        <Area
+          dataKey="memoryCache"
+          type="natural"
+          fill="url(#fillmemoryCache)"
+          stroke="var(--color-memoryCache)"
           stackId="a"
         />
         <ChartLegend content={<ChartLegendContent />} />
       </AreaChart>
     ),
-    [transitionedStats, gradientDefs, chartConfig],
+    [downsampledStats, gradientDefs, chartConfig],
   );
 
-  return isLoading || isPending ? (
+  return isLoading ? (
     <Skeleton className="h-[225px] w-full rounded-xl" />
   ) : (
-    <Card className="bg-background rounded-sm shadow-xs">
-      <CardHeader>
-        <CardDescription className="ml-1.5">
-          <CardInfo container={container} />
-        </CardDescription>
-      </CardHeader>
+    <Card className="bg-background rounded-sm shadow-xs py-0">
+      <MemoryUsageHeader container={container} />
       <CardContent className="px-2 sm:px-6">
         <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
           {memoizedChart}
@@ -136,18 +143,28 @@ const MemoryUsage = () => {
   );
 };
 
-const CardInfo = ({ container }: { container: ContainerView | undefined }) => {
-  return (
-    <div className="flex items-center gap-x-1">
-      <div className="font-medium text-foreground">Memory usage:</div>
-      <div className="text-xs">
-        {container?.state === 'Running' && container?.lastStats
-          ? byteTransform(container?.lastStats.memoryUsage ?? 0, 2) +
-            ' / ' +
-            byteTransform(container?.lastStats?.memoryLimit ?? 0, 2)
-          : '-/-'}
-      </div>
+const MemoryUsageHeader = ({ container }: MemoryUsageHeaderProps) => {
+  const renderStat = (label: string, value: string | number | undefined) => (
+    <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-md font-medium leading-none sm:text-1xl">
+        {container?.state === 'Running' && value !== undefined ? byteTransform(value, 2) : '-'}
+      </span>
     </div>
+  );
+
+  return (
+    <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
+      <div className="flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0">
+        <CardTitle>Memory Usagess</CardTitle>
+        <CardDescription>Showing total memory usage for the past 24 hours</CardDescription>
+      </div>
+      <div className="flex">
+        {renderStat('Active', container?.lastStats?.memoryActive)}
+        {renderStat('Cache', container?.lastStats?.memoryCache)}
+        {renderStat('Limit', container?.lastStats?.memoryLimit)}
+      </div>
+    </CardHeader>
   );
 };
 
