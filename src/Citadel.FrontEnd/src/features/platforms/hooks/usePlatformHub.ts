@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { PlatformDescriptorDockerPlatformDescriptor, PlatformsView, PlatformView } from '@/api/_generated';
 import { HubConnection } from '@microsoft/signalr';
-import { useAuthContext } from '@/features/auth/AuthProvider';
+import { useAuthContext } from '@/features/auth/AuthContext';
 import { configureHub, IHubConfig, startConnectionWithRetry } from '@/lib/signalr.helpers';
 import { PlatformStatsBatchView } from '@/api/models';
 

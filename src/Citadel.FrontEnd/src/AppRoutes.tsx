@@ -1,7 +1,7 @@
 import { createBrowserRouter, redirect, RouterProvider } from 'react-router';
 import Layout from '@/layout/Layout';
 import NotFound from '@/pages/NotFound';
-import { useAuthContext } from '@/features/auth/AuthProvider';
+import { useAuthContext } from './features/auth/AuthContext';
 
 export const AppPaths: Record<string, string> = {
   any: '*',

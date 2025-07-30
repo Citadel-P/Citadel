@@ -7,8 +7,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { LoaderCircle } from 'lucide-react';
-import { useAppContext } from '@/AppProvider';
-import { useNetworksContext } from '../NetworksProvider';
+import { useAppContext } from '@/AppContext';
+import { useNetworksContext } from '../NetworksContext';
 
 export const DeleteNetworkDialog = () => {
   const { dialogData, setDialogData, requestDelete, deleteIsPending } = useNetworksContext();

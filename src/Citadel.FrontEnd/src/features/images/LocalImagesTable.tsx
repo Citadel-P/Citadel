@@ -5,7 +5,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useGETAllLocalImages } from './hooks/useGETAllLocalImages';
 import DropdownTableMenu from './DropdownTableMenu';
-import { useImagesContext } from './ImagesProvider';
+import { useImagesContext } from './ImagesContext';
 import { truncate } from '@/lib/truncate';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { CheckCheck, Clipboard } from 'lucide-react';
@@ -13,7 +13,7 @@ import { useEffect, useCallback, useMemo, memo } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
 import { byteTransform } from '@/lib/bytes.helper';
 import { DeleteLocalImageDialog } from './dialogs/DeleteLocalImageDialog';
-import { useAppContext } from '@/AppProvider';
+import { useAppContext } from '@/AppContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ImageInspectSheet } from './ImageInspectSheet';
 

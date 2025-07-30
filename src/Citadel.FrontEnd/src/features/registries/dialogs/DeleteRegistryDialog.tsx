@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useRegistriesContext } from '../RegistriesProvider';
+import { useRegistriesContext } from '../RegistriesContext';
 import { LoaderCircle } from 'lucide-react';
 
 export const DeleteRegistryDialog = () => {

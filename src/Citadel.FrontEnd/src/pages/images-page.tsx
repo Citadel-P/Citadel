@@ -1,5 +1,5 @@
 import Images from '@/features/images/Images';
-import ImagesProvider from '@/features/images/ImagesProvider';
+import { ImagesProvider } from '@/features/images/ImagesProvider';
 
 const ImagesPage = () => {
   return (

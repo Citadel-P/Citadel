@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { MoreHorizontal, Trash, SearchCode } from 'lucide-react';
 import { useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
-import { useNetworksContext } from './NetworksProvider';
+import { useNetworksContext } from './NetworksContext';
 import { DockerNetworkResult } from '@/api/_generated';
 
 const DropdownTableMenu = ({ network }: { network: DockerNetworkResult }) => {

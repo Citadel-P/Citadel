@@ -1,6 +1,6 @@
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { useRegistryFormContext } from './RegistryFormProvider';
+import { useRegistryFormContext } from './RegistryFormContext';
 import Loader from '@/components/ui/loader';
 
 const RegistryForm = () => {

@@ -4,7 +4,7 @@ import SortableCell from '@/components/ui/SortableCell';
 import DropdownTableMenu from './DropdownTableMenu';
 import { ColumnDef, Row } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useRegistriesContext } from './RegistriesProvider';
+import { useRegistriesContext } from './RegistriesContext';
 import { Link } from 'react-router';
 import { InfoIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';

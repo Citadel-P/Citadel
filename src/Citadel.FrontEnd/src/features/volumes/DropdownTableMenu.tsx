@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { MoreHorizontal, Trash, SearchCode } from 'lucide-react';
 import { useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
-import { useVolumesContext } from './VolumesProvider';
+import { useVolumesContext } from './VolumesContext';
 import { DockerVolumeResult } from '@/api/_generated';
 
 const DropdownTableMenu = ({ volume }: { volume: DockerVolumeResult }) => {

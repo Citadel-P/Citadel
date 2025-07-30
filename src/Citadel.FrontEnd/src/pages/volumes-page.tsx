@@ -1,5 +1,5 @@
 import Volumes from '@/features/volumes/Volumes';
-import VolumesProvider from '@/features/volumes/VolumesProvider';
+import { VolumesProvider } from '@/features/volumes/VolumesProvider';
 
 const VolumesPage = () => {
   return (

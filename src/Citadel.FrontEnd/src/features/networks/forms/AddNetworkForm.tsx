@@ -12,7 +12,7 @@ import KeyValuePairInput from '@/components/ui/KeyValuePairInput';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import React, { useEffect } from 'react';
 import { usePOSTNetwork } from './hooks/usePOSTNetwork';
-import { useAppContext } from '@/AppProvider';
+import { useAppContext } from '@/AppContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
 

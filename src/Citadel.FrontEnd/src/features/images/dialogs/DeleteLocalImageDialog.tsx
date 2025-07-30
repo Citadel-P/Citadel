@@ -6,10 +6,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useImagesContext } from '../ImagesProvider';
+import { useImagesContext } from '../ImagesContext';
 import { useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
-import { useAppContext } from '@/AppProvider';
+import { useAppContext } from '@/AppContext';
 import { SwitchSection } from '@/components/ui/SwitchSection';
 
 export const DeleteLocalImageDialog = () => {

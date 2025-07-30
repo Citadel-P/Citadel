@@ -1,28 +1,13 @@
 import { ContainerView, DeleteContainersRequest } from '@/api/_generated';
-import { useEffect, useState, useMemo, useCallback, createContext } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import useContainersHub from './hooks/useContainersHub';
 import { useParams } from 'react-router';
 import { useDELETEContainers } from './hooks/useDELETEContainers';
 import { toast } from 'sonner';
-import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
-import { useRequiredContext } from '@/hooks/useRequiredContext';
+import { useDialogState } from '@/hooks/useDialogState';
+import { ContainersContext } from './ContainersContext';
 
-interface IContext {
-  isLoading: boolean;
-  platformId: string | undefined;
-  containers: ContainerView[];
-  dialogData: IDeleteDialogData<ContainerView>;
-  setDialogData: (data: IDeleteDialogData<ContainerView>) => void;
-  selectedRows: ContainerView[];
-  setSelectedRows: (containers: ContainerView[]) => void;
-  requestDelete: (data: DeleteContainersRequest) => void;
-  deleteIsPending: boolean;
-  onSearch: (searchTerm: string) => void;
-}
-
-export const ContainersContext = createContext<IContext | undefined>(undefined);
-
-const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+export const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const { platformId } = useParams<{ platformId: string }>();
 
   // Fetch containers data
@@ -32,9 +17,9 @@ const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children
   const { mutate, isSuccess: deleteIsSuccess, isPending: deleteIsPending } = useDELETEContainers();
 
   // State for selected rows and containers
-  const [selectedRows, setSelectedRows] = useState<ContainerView[]>([]);
-  const [containers, setContainers] = useState<ContainerView[]>([]);
-  const [originalContainers, setOriginalContainers] = useState<ContainerView[]>([]);
+  const [selectedRows, setSelectedRows] = useState<ContainerView[] | undefined>([]);
+  const [containers, setContainers] = useState<ContainerView[] | undefined>([]);
+  const [originalContainers, setOriginalContainers] = useState<ContainerView[] | undefined>([]);
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
   // Dialog state
@@ -55,7 +40,7 @@ const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children
       const searchLower = currentSearchTerm.toLowerCase();
 
       // Filter containers by name OR containerId containing the search term
-      const filtered = originalContainers.filter((container) => {
+      const filtered = originalContainers?.filter((container) => {
         // Check container name (if it exists)
         const nameMatches = container.name?.toLowerCase().includes(searchLower) || false;
 
@@ -125,6 +110,3 @@ const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children
 
   return <ContainersContext.Provider value={contextValue}>{children}</ContainersContext.Provider>;
 };
-
-export default ContainersProvider;
-export const useContainersContext = () => useRequiredContext(ContainersContext);

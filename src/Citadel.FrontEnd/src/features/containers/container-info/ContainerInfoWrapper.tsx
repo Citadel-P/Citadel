@@ -2,15 +2,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ContainerLogsProvider from './logs/ContainerLogsProvider';
 import ContainerLogs from './logs/ContainerLogs';
 import { Container } from 'lucide-react';
-import { useAppContext } from '@/AppProvider';
+import { useAppContext } from '@/AppContext';
 import { useNavigate } from 'react-router';
-import ContainerStatsProvider from './stats/ContainerStatsProvider';
 import NetworkUsage from './stats/NetworkUsage';
 import MemoryUsage from './stats/MemoryUsage';
 import CpuUsage from './stats/CpuUsage';
 import { useMemo, useCallback } from 'react';
 import ContainerInspect from './inspect/ContainerInspect';
 import Loader from '@/components/ui/loader';
+import { ContainerStatsProvider } from './stats/ContainerStatsProvider';
 
 const ContainerInfoWrapper = () => {
   const { route, currentContainer, isLoading } = useAppContext();
@@ -58,7 +58,7 @@ const ContainerInfoWrapper = () => {
             </div>
             <div className="text-md font-bold text-foreground">
               <span>{currentContainer.containerName?.slice(1)}</span>
-              <span className="text-sm text-muted ml-2">({currentContainer.containerId?.slice(0, 12)})</span>
+              <span className="text-sm text-foreground/40 ml-2">({currentContainer.containerId?.slice(0, 12)})</span>
             </div>
           </div>
 

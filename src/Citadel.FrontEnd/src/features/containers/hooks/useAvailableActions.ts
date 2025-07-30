@@ -2,12 +2,12 @@ import { useMemo } from 'react';
 import { ContainerView, ContainerStateStatus } from '@/api/_generated';
 import { actionType, usePATCHContainers } from './usePATCHContainers';
 
-export const useAvailableActions = (containers: ContainerView[]) => {
+export const useAvailableActions = (containers: ContainerView[] | undefined) => {
   const { mutate, isPending } = usePATCHContainers();
 
   // Calculate available actions using useMemo
-  const availableActions = useMemo<ContainerActionsState>(() => {
-    return containers.reduce<ContainerActionsState>(
+  const availableActions = useMemo<ContainerActionsState | undefined>(() => {
+    return containers?.reduce<ContainerActionsState>(
       (actions, container) => {
         const isRunningOrPaused =
           container.state === ContainerStateStatus.Running || container.state === ContainerStateStatus.Paused;
@@ -40,7 +40,7 @@ export const useAvailableActions = (containers: ContainerView[]) => {
     if (isPending) return; // Prevent duplicate requests if a mutation is already pending
     mutate({
       action,
-      containersId: containers.map((s) => s.containerId!).filter(Boolean), // Ensure containerId is not null or undefined
+      containersId: containers?.map((s) => s.containerId!).filter(Boolean) ?? [],
     });
   };
 

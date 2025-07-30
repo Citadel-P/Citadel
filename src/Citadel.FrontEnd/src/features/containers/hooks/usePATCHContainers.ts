@@ -1,5 +1,5 @@
 import { RequestParams } from '@/api/_generated';
-import { useApiClientContext } from '@/api/ApiClientProvider';
+import { useApiClientContext } from '@/api/ApiClientContext';
 import { useMutation } from '@tanstack/react-query';
 
 export type actionType = 'start' | 'stop' | 'pause' | 'restart';

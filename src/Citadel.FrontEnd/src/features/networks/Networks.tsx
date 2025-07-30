@@ -1,6 +1,6 @@
 import { Network, Plus } from 'lucide-react';
 import { SearchField } from '@/components/ui/SearchField';
-import { useNetworksContext } from './NetworksProvider';
+import { useNetworksContext } from './NetworksContext';
 import NetworksTable from './NetworksTable';
 import { ActionBar } from './ActionBar';
 import { Button } from '@/components/ui/button';

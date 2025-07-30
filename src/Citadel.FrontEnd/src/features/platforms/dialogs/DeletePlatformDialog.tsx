@@ -7,7 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { LoaderCircle } from 'lucide-react';
-import { usePlatformsContext } from '../PlatformsProvider';
+import { usePlatformsContext } from '../PlatformsContext';
 
 export const DeletePlatformDialog = () => {
   const { dialogData, setDialogData, deleteIsPending, requestDelete } = usePlatformsContext();

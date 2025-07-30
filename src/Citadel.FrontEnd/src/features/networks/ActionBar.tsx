@@ -1,6 +1,6 @@
 import { Trash, SearchCode } from 'lucide-react';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
-import { useNetworksContext } from './NetworksProvider';
+import { useNetworksContext } from './NetworksContext';
 
 export const ActionBar = () => {
   const { setDialogData, setSheetOpen, setCurrentNetwork, selectedRows, networks } = useNetworksContext();

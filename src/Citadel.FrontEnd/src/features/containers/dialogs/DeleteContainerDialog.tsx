@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { useReducer } from 'react';
 import { LoaderCircle } from 'lucide-react';
-import { useContainersContext } from '../ContainersProvider';
+import { useContainersContext } from '../ContainersContext';
 import { SwitchSection } from '@/components/ui/SwitchSection';
 
 // Reducer for managing volume and force states

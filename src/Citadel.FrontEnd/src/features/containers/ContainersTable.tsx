@@ -1,7 +1,7 @@
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useContainersContext } from './ContainersProvider';
+import { useContainersContext } from './ContainersContext';
 import { ContainerView, ContainerStateStatus, ContainerStatView, PortView } from '@/api/_generated';
 import { truncate } from '@/lib/truncate';
 import { toFixedNumber } from '@/lib/utils';
@@ -150,14 +150,14 @@ export const ContainersTable = () => {
     <div className="flex flex-col gap-3">
       <DataTable
         columns={columns}
-        data={containers}
+        data={containers ?? []}
         isLoading={isLoading}
-        onSelectionChange={(ids: string[]) => setSelectedRows(containers.filter((c) => ids.includes(c.id!)))}
+        onSelectionChange={(ids: string[]) => setSelectedRows(containers?.filter((c) => ids.includes(c.id!)))}
       />
       <div className="text-muted-foreground text-xs font-normal ">
-        {containers?.length > 0 && (
+        {containers && containers.length > 0 && (
           <span>
-            Showing {containers.length} of {containers.length} container(s)
+            Showing {containers?.length} of {containers?.length} container(s)
           </span>
         )}
       </div>

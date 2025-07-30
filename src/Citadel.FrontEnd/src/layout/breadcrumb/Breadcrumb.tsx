@@ -1,4 +1,4 @@
-import { useAppContext } from '@/AppProvider';
+import { useAppContext } from '@/AppContext';
 import { AppPaths } from '@/AppRoutes';
 import { Badge } from '@/components/ui/badge';
 import {

@@ -1,6 +1,6 @@
 import { Trash, SearchCode } from 'lucide-react';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
-import { useVolumesContext } from './VolumesProvider';
+import { useVolumesContext } from './VolumesContext';
 
 export const ActionBar = () => {
   const { setDialogData, setSheetOpen, setCurrentVolume, selectedRows, volumes } = useVolumesContext();

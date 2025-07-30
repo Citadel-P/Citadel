@@ -7,8 +7,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { LoaderCircle } from 'lucide-react';
-import { useAppContext } from '@/AppProvider';
-import { useVolumesContext } from '../VolumesProvider';
+import { useAppContext } from '@/AppContext';
+import { useVolumesContext } from '../VolumesContext';
 import { useState } from 'react';
 import { SwitchSection } from '@/components/ui/SwitchSection';
 

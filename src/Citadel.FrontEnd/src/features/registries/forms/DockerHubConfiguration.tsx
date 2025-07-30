@@ -4,7 +4,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle } from 'lucide-react';
-import { useRegistryFormContext } from './RegistryFormProvider';
+import { useRegistryFormContext } from './RegistryFormContext';
 import { FieldChange } from '@/components/ui/field-change';
 import { RegistryInput } from '@/api/_generated';
 import { getEditedFields } from '@/lib/utils';
@@ -24,13 +24,13 @@ const DockerHubConfiguration = () => {
   return (
     <div>
       <AlertMessage type="info">
-        For information on how to generate a DockerHub Access Token, follow the{' '}
+        To generate a DockerHub Access Token, please refer to the official{' '}
         <a
-          className="hover:underline"
+          className="underline"
           target="_blank"
           rel="noreferrer"
           href="https://docs.docker.com/security/for-developers/access-tokens/">
-          DockerHub guide
+          DockerHub documentation
         </a>
         .
       </AlertMessage>
@@ -121,7 +121,7 @@ const DockerHubConfiguration = () => {
               </FormItem>
             )}
           />
-          <Button type="submit" disabled={isLoading || !form.formState.isDirty}>
+          <Button type="submit" disabled={isLoading || !form.formState.isDirty || !form.formState.isValid}>
             <span>{saveButtonTitle}</span>
             {isLoading && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
           </Button>

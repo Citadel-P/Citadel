@@ -8,12 +8,12 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from '@/components/ui/card';
-import { useContainerStatsContext } from './ContainerStatsProvider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
 import dayjs from 'dayjs';
 import { ContainerView, NullableOfContainerStatView } from '@/api/_generated';
 import { byteTransform } from '@/lib/bytes.helper';
+import { useContainerStatsContext } from './ContainerStatsContext';
 
 const NetworkUsageHeader = ({ container }: { container: ContainerView | undefined }) => (
   <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
@@ -24,13 +24,13 @@ const NetworkUsageHeader = ({ container }: { container: ContainerView | undefine
     <div className="flex">
       <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
         <span className="text-xs text-muted-foreground">Received</span>
-        <span className="text-md font-medium leading-none sm:text-1xl">
+        <span className="text-sm text-foreground font-medium leading-none">
           {container?.state === 'Running' && container?.lastStats ? byteTransform(container.lastStats.rxBytes, 2) : '-'}
         </span>
       </div>
       <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
         <span className="text-xs text-muted-foreground">Sent</span>
-        <span className="text-md font-medium leading-none sm:text-1xl">
+        <span className="text-sm text-foreground font-medium leading-none">
           {container?.state === 'Running' && container?.lastStats ? byteTransform(container.lastStats.txBytes, 2) : '-'}
         </span>
       </div>
@@ -57,11 +57,11 @@ const NetworkUsage = () => {
     () =>
       ({
         rxBytes: {
-          label: 'Data received',
+          label: <span className="text-foreground">Data received</span>,
           color: 'var(--chart-1)',
         },
         txBytes: {
-          label: 'Data sent',
+          label: <span className="text-foreground">Data sent</span>,
           color: 'var(--chart-2)',
         },
       }) satisfies ChartConfig,
@@ -104,7 +104,7 @@ const NetworkUsage = () => {
             <ChartTooltipContent
               labelFormatter={(_, n) => {
                 const created = (n.at(0)?.payload as NullableOfContainerStatView).created as number;
-                return dayjs(created * 1000).format('HH:mm:ss');
+                return <span className="text-foreground">{dayjs(created * 1000).format('HH:mm:ss')}</span>;
               }}
               formatter={(value, name) => (
                 <>

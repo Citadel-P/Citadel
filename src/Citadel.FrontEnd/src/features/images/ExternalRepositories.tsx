@@ -1,6 +1,6 @@
 import GhcrImagesTable from './GhcrImagesTable';
 import SelectRegistryInput from './SelectRegistryInput';
-import { useImagesContext } from './ImagesProvider';
+import { useImagesContext } from './ImagesContext';
 import Loader from '@/components/ui/loader';
 import { RegistryType } from '@/api/_generated';
 import PrivateDockerHubImagesTable from './DockerHubImagesTable';

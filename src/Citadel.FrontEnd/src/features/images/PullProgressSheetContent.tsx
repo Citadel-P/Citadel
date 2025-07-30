@@ -3,10 +3,10 @@ import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/compo
 import { Check, CircleX, LoaderCircle } from 'lucide-react';
 import { usePOSTPullImageStream } from './hooks/usePOSTPullImageStream';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { useImagesContext } from './ImagesProvider';
+import { useImagesContext } from './ImagesContext';
 import { Highlight, themes } from 'prism-react-renderer';
 import { toast } from 'sonner';
-import { useAppContext } from '@/AppProvider';
+import { useAppContext } from '@/AppContext';
 
 export interface PullProgressSheetProps {
   imageTag: string;

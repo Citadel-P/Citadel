@@ -1,6 +1,6 @@
 import { Pencil, Trash } from 'lucide-react';
-import { useRegistriesContext } from './RegistriesProvider';
 import { useNavigate } from 'react-router';
+import { useRegistriesContext } from './RegistriesContext';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
 
 export const ActionBar = () => {

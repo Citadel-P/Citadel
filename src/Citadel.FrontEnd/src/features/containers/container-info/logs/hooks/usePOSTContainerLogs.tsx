@@ -1,8 +1,8 @@
 import { StreamLogsRequest } from '@/api/_generated';
-import { useApiClientContext } from '@/api/ApiClientProvider';
+import { useApiClientContext } from '@/api/ApiClientContext';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 import { useMutation } from '@tanstack/react-query';
-import { useAuthContext } from '@/features/auth/AuthProvider';
+import { useAuthContext } from '@/features/auth/AuthContext';
 import { Cancellable } from '@/api/models';
 
 export const usePOSTContainerLogs = (onChunkReceived: (chunk: string) => void) => {

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { MoreHorizontal, Pencil, Trash } from 'lucide-react';
 import { RegistryView } from '@/api/_generated';
 import { useNavigate } from 'react-router';
-import { useRegistriesContext } from './RegistriesProvider';
+import { useRegistriesContext } from './RegistriesContext';
 import { useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
 

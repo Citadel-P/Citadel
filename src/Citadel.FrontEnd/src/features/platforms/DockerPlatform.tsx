@@ -6,7 +6,7 @@ import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { fromNow } from '@/lib/dayjs.helper';
-import { usePlatformsContext } from './PlatformsProvider';
+import { usePlatformsContext } from './PlatformsContext';
 
 const DockerPlatform = ({ platform }: { platform: PlatformView }) => {
   const { setDialogData } = usePlatformsContext();

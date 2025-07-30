@@ -2,7 +2,7 @@ import { HardDrive, Plus } from 'lucide-react';
 import { SearchField } from '@/components/ui/SearchField';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router';
-import { useVolumesContext } from './VolumesProvider';
+import { useVolumesContext } from './VolumesContext';
 import { ActionBar } from './ActionBar';
 import VolumesTable from './VolumesTable';
 

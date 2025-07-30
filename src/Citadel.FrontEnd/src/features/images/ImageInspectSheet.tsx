@@ -2,8 +2,8 @@ import { SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetDescription, S
 import { useGETInspect } from './hooks/useGETInspect';
 import { useEffect, useState } from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
-import { useAppContext } from '@/AppProvider';
-import { useImagesContext } from './ImagesProvider';
+import { useAppContext } from '@/AppContext';
+import { useImagesContext } from './ImagesContext';
 
 export function ImageInspectSheet() {
   const { currentPlatform } = useAppContext();

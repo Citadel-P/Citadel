@@ -1,5 +1,5 @@
 import Containers from '@/features/containers/Containers';
-import ContainersProvider from '@/features/containers/ContainersProvider';
+import { ContainersProvider } from '@/features/containers/ContainersProvider';
 
 const ContainersPage = () => {
   return (

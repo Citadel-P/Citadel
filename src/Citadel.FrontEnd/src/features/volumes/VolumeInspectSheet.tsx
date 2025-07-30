@@ -2,8 +2,8 @@ import { SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetDescription, S
 import { useGETInspect } from './hooks/useGETInspect';
 import { useEffect, useState } from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
-import { useVolumesContext } from './VolumesProvider';
-import { useAppContext } from '@/AppProvider';
+import { useVolumesContext } from './VolumesContext';
+import { useAppContext } from '@/AppContext';
 
 export function VolumeInspectSheet() {
   const { sheetOpen, setSheetOpen, currentVolume } = useVolumesContext();

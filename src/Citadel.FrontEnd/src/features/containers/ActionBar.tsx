@@ -2,14 +2,14 @@ import { Play, Pause, RotateCcw, Ban, Trash } from 'lucide-react';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { useMemo } from 'react';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
-import { useContainersContext } from './ContainersProvider';
+import { useContainersContext } from './ContainersContext';
 
 export const ActionBar = () => {
   const { containers, selectedRows, setDialogData } = useContainersContext();
   const { availableActions, isPending, requestPatch } = useAvailableActions(selectedRows);
 
-  const selectedCount = useMemo(() => selectedRows.length, [selectedRows]);
-  const containerCount = useMemo(() => containers.length, [containers]);
+  const selectedCount = useMemo(() => selectedRows?.length, [selectedRows]);
+  const containerCount = useMemo(() => containers?.length, [containers]);
 
   if (!selectedCount) return null;
 
@@ -26,7 +26,7 @@ export const ActionBar = () => {
       <div className="mt-1">
         <ActionBarButton
           onClick={() => requestPatch('start')}
-          disabled={!availableActions.canStart || isPending}
+          disabled={!availableActions?.canStart || isPending}
           icon={Play}
           label="Start"
           className="rounded-l-lg"
@@ -34,28 +34,28 @@ export const ActionBar = () => {
         />
         <ActionBarButton
           onClick={() => requestPatch('stop')}
-          disabled={!availableActions.canStop || isPending}
+          disabled={!availableActions?.canStop || isPending}
           icon={Ban}
           label="Stop"
           ariaLabel="Stop selected containers"
         />
         <ActionBarButton
           onClick={() => requestPatch('pause')}
-          disabled={!availableActions.canPause || isPending}
+          disabled={!availableActions?.canPause || isPending}
           icon={Pause}
           label="Pause"
           ariaLabel="Pause selected containers"
         />
         <ActionBarButton
           onClick={() => requestPatch('restart')}
-          disabled={!availableActions.canRestart || isPending}
+          disabled={!availableActions?.canRestart || isPending}
           icon={RotateCcw}
           label="Restart"
           ariaLabel="Restart selected containers"
         />
         <ActionBarButton
           onClick={() => setDialogData({ open: true, currentSelection: selectedRows })}
-          disabled={!availableActions.canDelete || isPending}
+          disabled={!availableActions?.canDelete || isPending}
           icon={Trash}
           label="Delete"
           ariaLabel="Delete selected containers"

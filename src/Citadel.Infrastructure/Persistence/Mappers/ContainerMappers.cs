@@ -39,6 +39,7 @@ internal static class ContainerMappers
             containerId: stat.ContainerId != null ? Guid.Parse(stat.ContainerId) : Guid.Empty,
             created: stat.Created,
             memoryActive: stat.MemoryActive,
+            memoryCache: stat.MemoryCache,
             cpuUsage: stat.CpuUsage,
             memoryLimit: stat.MemoryLimit,
             rxBytes: stat.RxBytes,

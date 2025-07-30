@@ -1,21 +1,12 @@
-import { useEffect, useState, useMemo, createContext } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { matchRoutes, useLocation, useParams } from 'react-router';
 import { AppPaths } from '@/AppRoutes';
 import { ContainerInfoView, PlatformView } from './api/_generated';
 import { useGETPlatform } from './features/platforms/hooks/useGETPlatform';
 import { useGETContainerInfo } from './features/containers/hooks/useGETContainerInfo';
-import { useRequiredContext } from './hooks/useRequiredContext';
+import { AppContext } from './AppContext';
 
-interface IContext {
-  isLoading: boolean;
-  route: { path: string };
-  currentPlatform: PlatformView | undefined;
-  currentContainer: ContainerInfoView | undefined;
-}
-
-export const AppContext = createContext<IContext | undefined>(undefined);
-
-const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+export const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const { platformId, containerId } = useParams();
 
@@ -103,6 +94,3 @@ const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => 
 
   return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
 };
-
-export default AppProvider;
-export const useAppContext = () => useRequiredContext(AppContext);

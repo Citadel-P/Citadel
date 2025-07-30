@@ -2,7 +2,7 @@ import { RegistryConfigurationBaseGitHubRegistry, RegistryType } from '@/api/_ge
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { useRegistryFormContext } from '../RegistryFormProvider';
+import { useRegistryFormContext } from '../RegistryFormContext';
 import { Constants } from '@/lib/constants';
 
 export const useGhcrForm = () => {
@@ -30,6 +30,7 @@ export const useGhcrForm = () => {
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
+    mode: 'all',
     values: {
       name: registry?.name ?? '',
       url: 'https://ghcr.io',

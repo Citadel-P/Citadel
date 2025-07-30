@@ -1,7 +1,7 @@
 import PlatformForm from '@/features/platforms/forms/PlatformForm';
 import PlatformFormProvider from '@/features/platforms/forms/PlatformFormProvider';
 import Platforms from '@/features/platforms/Platforms';
-import PlatformsProvider from '@/features/platforms/PlatformsProvider';
+import { PlatformsProvider } from '@/features/platforms/PlatformsProvider';
 
 const PlatformPage = () => {
   return (

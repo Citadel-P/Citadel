@@ -1,27 +1,10 @@
-import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
-import { PlatformView } from '@/api/_generated';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import usePlatformHub from './hooks/usePlatformHub';
 import { useDELETEPlatform } from './hooks/useDELETEPlatform';
 import { toast } from 'sonner';
-import { useRequiredContext } from '@/hooks/useRequiredContext';
+import { IDeleteDialogData, PlatformsContext } from './PlatformsContext';
 
-interface IContext {
-  isLoading: boolean;
-  platforms: PlatformView[] | undefined;
-  dialogData: IDeleteDialogData;
-  setDialogData: (data: IDeleteDialogData) => void;
-  requestDelete: (platformId: string) => void;
-  deleteIsPending: boolean;
-}
-
-interface IDeleteDialogData {
-  open: boolean;
-  platform?: PlatformView | undefined;
-}
-
-export const PlatformsContext = createContext<IContext | undefined>(undefined);
-
-const PlatformsProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+export const PlatformsProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const { platformsMessage, isLoading } = usePlatformHub();
   const [dialogData, setDialogData] = useState<IDeleteDialogData>({ open: false });
   const { mutate, isSuccess: deleteIsSuccess, isPending: deleteIsPending } = useDELETEPlatform();
@@ -64,6 +47,3 @@ const PlatformsProvider: React.FC<{ children?: React.ReactNode }> = ({ children 
 
   return <PlatformsContext.Provider value={contextValue}>{children}</PlatformsContext.Provider>;
 };
-
-export default PlatformsProvider;
-export const usePlatformsContext = () => useRequiredContext(PlatformsContext);

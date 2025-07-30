@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import Loader from '@/components/ui/loader';
 import { Boxes, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router';
-import { useRegistriesContext } from './RegistriesProvider';
+import { useRegistriesContext } from './RegistriesContext';
 import { RegistriesTable } from './RegistriesTable';
 import { ActionBar } from './ActionBar';
 import { DeleteRegistryDialog } from './dialogs/DeleteRegistryDialog';

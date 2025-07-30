@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { configureHub, IHubConfig, startConnectionWithRetry } from '@/lib/signalr.helpers';
 import { ContainerView, ContainersView, ContainerStatView } from '@/api/_generated';
-import { useAuthContext } from '@/features/auth/AuthProvider';
+import { useAuthContext } from '@/features/auth/AuthContext';
 
 const useContainersHub = (platformId?: string) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -70,7 +70,10 @@ const useContainersHub = (platformId?: string) => {
           break;
 
         default:
-          if (existingIndex !== -1 && JSON.stringify(updatedContainers[existingIndex]) !== JSON.stringify(containerInfo)) {
+          if (
+            existingIndex !== -1 &&
+            JSON.stringify(updatedContainers[existingIndex]) !== JSON.stringify(containerInfo)
+          ) {
             updatedContainers[existingIndex] = containerInfo;
             return { ...currentInfo, containers: updatedContainers };
           }

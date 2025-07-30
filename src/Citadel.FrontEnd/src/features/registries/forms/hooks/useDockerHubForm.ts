@@ -2,7 +2,7 @@ import { RegistryConfigurationBaseDockerHubRegistry, RegistryType } from '@/api/
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { useRegistryFormContext } from '../RegistryFormProvider';
+import { useRegistryFormContext } from '../RegistryFormContext';
 import { Constants } from '@/lib/constants';
 
 export const useDockerHubForm = () => {
@@ -29,6 +29,7 @@ export const useDockerHubForm = () => {
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
+    mode: 'all',
     values: {
       name: registry?.name ?? '',
       url: 'https://hub.docker.com',

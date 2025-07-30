@@ -1,4 +1,4 @@
-import { useApiClientContext } from '@/api/ApiClientProvider';
+import { useApiClientContext } from '@/api/ApiClientContext';
 import { useQuery } from '@tanstack/react-query';
 
 export const useGETPlatform = (platformId: string | undefined) => {

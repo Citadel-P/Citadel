@@ -2,13 +2,13 @@ import { Images as LucidImages } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { useAppContext } from '@/AppProvider';
+import { useAppContext } from '@/AppContext';
 import ExternalRepositories from './ExternalRepositories';
 import LocalImagesTable from './LocalImagesTable';
 import { ActionBar } from './ActionBar';
 import Loader from '@/components/ui/loader';
 import { SearchField } from '@/components/ui/SearchField';
-import { useImagesContext } from './ImagesProvider';
+import { useImagesContext } from './ImagesContext';
 
 const Images = () => {
   const navigate = useNavigate();

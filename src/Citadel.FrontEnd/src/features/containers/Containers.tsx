@@ -6,7 +6,7 @@ import { AlertMessage } from '@/components/ui/alert-message';
 import { DeleteContainerDialog } from './dialogs/DeleteContainerDialog';
 import { useMemo } from 'react';
 import { ContainerStateStatus } from '@/api/_generated';
-import { useContainersContext } from './ContainersProvider';
+import { useContainersContext } from './ContainersContext';
 
 const Containers = () => {
   const { containers, onSearch } = useContainersContext();

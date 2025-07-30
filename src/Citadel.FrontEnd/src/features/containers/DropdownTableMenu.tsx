@@ -10,8 +10,8 @@ import { Ban, MoreHorizontal, Pause, Play, RotateCcw, Trash, Eye } from 'lucide-
 import { ContainerView } from '@/api/_generated';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { useNavigate } from 'react-router';
-import { useContainersContext } from './ContainersProvider';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
+import { useContainersContext } from './ContainersContext';
 
 const DropdownTableMenu: React.FC<{ container: ContainerView }> = ({ container }) => {
   const navigate = useNavigate();
@@ -36,7 +36,7 @@ const DropdownTableMenu: React.FC<{ container: ContainerView }> = ({ container }
         {/* Start Action */}
         <ActionMenuItem
           onClick={() => requestPatch('start')}
-          disabled={!availableActions.canStart || isPending}
+          disabled={!availableActions?.canStart || isPending}
           icon={<Play className="mr-2 h-3 w-3" />}
           label="Start"
         />
@@ -44,7 +44,7 @@ const DropdownTableMenu: React.FC<{ container: ContainerView }> = ({ container }
         {/* Stop Action */}
         <ActionMenuItem
           onClick={() => requestPatch('stop')}
-          disabled={!availableActions.canStop || isPending}
+          disabled={!availableActions?.canStop || isPending}
           icon={<Ban className="mr-2 h-3 w-3" />}
           label="Stop"
         />
@@ -52,7 +52,7 @@ const DropdownTableMenu: React.FC<{ container: ContainerView }> = ({ container }
         {/* Pause Action */}
         <ActionMenuItem
           onClick={() => requestPatch('pause')}
-          disabled={!availableActions.canPause || isPending}
+          disabled={!availableActions?.canPause || isPending}
           icon={<Pause className="mr-2 h-3 w-3" />}
           label="Pause"
         />
@@ -60,7 +60,7 @@ const DropdownTableMenu: React.FC<{ container: ContainerView }> = ({ container }
         {/* Restart Action */}
         <ActionMenuItem
           onClick={() => requestPatch('restart')}
-          disabled={!availableActions.canRestart || isPending}
+          disabled={!availableActions?.canRestart || isPending}
           icon={<RotateCcw className="mr-2 h-3 w-3" />}
           label="Restart"
         />
@@ -80,7 +80,7 @@ const DropdownTableMenu: React.FC<{ container: ContainerView }> = ({ container }
         {/* Delete Action */}
         <ActionMenuItem
           onClick={openDialog}
-          disabled={!availableActions.canDelete || isPending}
+          disabled={!availableActions?.canDelete || isPending}
           icon={<Trash className="mr-2 h-3 w-3 text-danger" />}
           label="Delete"
           className="text-danger"

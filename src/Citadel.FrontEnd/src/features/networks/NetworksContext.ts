@@ -1,0 +1,25 @@
+import { createContext } from 'react';
+import { useRequiredContext } from '@/hooks/useRequiredContext';
+import { IDeleteDialogData } from '@/hooks/useDialogState';
+import { DeleteNetworksInput, DockerNetworkResult } from '@/api/_generated';
+
+interface IContext {
+  selectedRows: DockerNetworkResult[] | undefined;
+  networks: DockerNetworkResult[] | undefined;
+  setSelectedRows: (networks: DockerNetworkResult[] | undefined) => void;
+  setNetworks: (networks: DockerNetworkResult[]) => void;
+  dialogData: IDeleteDialogData<DockerNetworkResult>;
+  setDialogData: (data: IDeleteDialogData<DockerNetworkResult>) => void;
+  onSearch: (searchTerm: string) => void;
+  requestDelete: (request: DeleteNetworksInput) => void;
+  deleteIsPending: boolean;
+  sheetOpen: boolean;
+  setSheetOpen: (open: boolean) => void;
+  currentNetwork: DockerNetworkResult | undefined;
+  setCurrentNetwork: (network: DockerNetworkResult | undefined) => void;
+}
+
+export const NetworksContext = createContext<IContext | undefined>(undefined);
+NetworksContext.displayName = 'NetworksContext';
+
+export const useNetworksContext = () => useRequiredContext(NetworksContext);

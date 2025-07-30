@@ -1,42 +1,16 @@
 import { useGETRegistries } from '../registries/hooks/useGETRegistries';
-import { useEffect, useState, useCallback, useMemo, createContext } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { DeleteImagesRequest, ImageView, RegistryView } from '@/api/_generated';
 import { useQueryClient } from '@tanstack/react-query';
 import { useDELETEImages } from './hooks/useDELETEImages';
 import { toast } from 'sonner';
-import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
-import { useRequiredContext } from '@/hooks/useRequiredContext';
+import { useDialogState } from '@/hooks/useDialogState';
 import { use400ErrorToast } from '@/hooks/use400ErrorToast';
+import { ImagesContext } from './ImagesContext';
 
-interface IContext {
-  isLoading: boolean;
-  registries: RegistryView[];
-  setSelectionChange: (name: string) => void;
-  selectedRegistry: RegistryView | undefined;
-  selectedRows: ImageView[] | undefined;
-  localImages: ImageView[];
-  requestDelete: (request: DeleteImagesRequest) => void;
-  setSelectedRows: (images: ImageView[] | undefined) => void;
-  setLocalImages: (images: ImageView[]) => void;
-  deleteIsPending: boolean;
-  dialogData: IDeleteDialogData<ImageView>;
-  setDialogData: (data: IDeleteDialogData<ImageView>) => void;
-  onSearch: (searchTerm: string) => void;
-  currentImage: ImageView | undefined;
-  setCurrentImage: (image: ImageView | undefined) => void;
-  sheetOpen: boolean;
-  setSheetOpen: (open: boolean) => void;
-}
-
-export const ImagesContext = createContext<IContext | undefined>(undefined);
-
-const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const client = useQueryClient();
-
-  // Fetch registries
   const { data, isLoading, isSuccess } = useGETRegistries();
-
-  // Delete images mutation
   const {
     mutate,
     isSuccess: deleteIsSuccess,
@@ -51,7 +25,7 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
   const [selectedRows, setSelectedRows] = useState<ImageView[] | undefined>();
   const [selectedRegistry, setSelectedRegistry] = useState<RegistryView | undefined>();
   const [localImages, setLocalImages] = useState<ImageView[]>([]);
-  const [originalLocalImages, setOriginalLocalImages] = useState<ImageView[]>([]);
+  const [originalLocalImages, setOriginalLocalImages] = useState<ImageView[] | undefined>([]);
   const { dialogData, setDialogData } = useDialogState<ImageView>();
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
   // Sheet state
@@ -75,7 +49,7 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
 
   // Filter images whenever search term changes
   useEffect(() => {
-    if (!originalLocalImages.length) return;
+    if (!originalLocalImages?.length) return;
 
     if (currentSearchTerm.trim() === '') {
       // If no search term, show all images
@@ -188,6 +162,3 @@ const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) 
 
   return <ImagesContext.Provider value={contextValue}>{children}</ImagesContext.Provider>;
 };
-
-export default ImagesProvider;
-export const useImagesContext = () => useRequiredContext(ImagesContext);

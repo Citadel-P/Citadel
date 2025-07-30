@@ -16,7 +16,7 @@ import { useGETExternalRepositories } from './hooks/useGETExternalRepositories';
 import Loader from '@/components/ui/loader';
 import { GitHubCrPackageVersion, IImageRepositoryGitHubPackageResponse } from '@/api/_generated';
 import { useGETPackageVersions } from './hooks/useGETPackageVersions';
-import { useImagesContext } from './ImagesProvider';
+import { useImagesContext } from './ImagesContext';
 import { fromNow } from '@/lib/dayjs.helper';
 import { Badge } from '@/components/ui/badge';
 import { truncate } from '@/lib/truncate';

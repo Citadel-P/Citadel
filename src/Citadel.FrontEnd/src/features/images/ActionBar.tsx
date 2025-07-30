@@ -1,6 +1,6 @@
 import { SearchCode, Trash } from 'lucide-react';
-import { useImagesContext } from './ImagesProvider';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
+import { useImagesContext } from './ImagesContext';
 
 export const ActionBar = () => {
   const { setDialogData, selectedRows, localImages: images, setSheetOpen, setCurrentImage } = useImagesContext();

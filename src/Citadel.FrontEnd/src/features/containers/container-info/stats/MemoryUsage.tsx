@@ -8,12 +8,12 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from '@/components/ui/card';
-import { useContainerStatsContext } from './ContainerStatsProvider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
 import dayjs from 'dayjs';
 import { byteTransform } from '@/lib/bytes.helper';
 import { ContainerView, NullableOfContainerStatView } from '@/api/_generated';
+import { useContainerStatsContext } from './ContainerStatsContext';
 
 interface MemoryUsageHeaderProps {
   container: ContainerView | undefined;
@@ -38,11 +38,11 @@ const MemoryUsage = () => {
     () =>
       ({
         memoryActive: {
-          label: 'Active',
+          label: <span className="text-foreground">Active</span>,
           color: 'var(--chart-1)',
         },
         memoryCache: {
-          label: 'Cache',
+          label: <span className="text-foreground">Cache</span>,
           color: 'var(--chart-2)',
         },
       }) satisfies ChartConfig,
@@ -87,7 +87,7 @@ const MemoryUsage = () => {
               indicator="dot"
               labelFormatter={(_, n) => {
                 const created = (n.at(0)?.payload as NullableOfContainerStatView).created as number;
-                return dayjs(created * 1000).format('HH:mm:ss');
+                return <span className="text-foreground">{dayjs(created * 1000).format('HH:mm:ss')}</span>;
               }}
               formatter={(value, name) => (
                 <>
@@ -147,7 +147,7 @@ const MemoryUsageHeader = ({ container }: MemoryUsageHeaderProps) => {
   const renderStat = (label: string, value: string | number | undefined) => (
     <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
       <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-md font-medium leading-none sm:text-1xl">
+      <span className="text-sm text-foreground font-medium leading-none">
         {container?.state === 'Running' && value !== undefined ? byteTransform(value, 2) : '-'}
       </span>
     </div>
@@ -156,7 +156,7 @@ const MemoryUsageHeader = ({ container }: MemoryUsageHeaderProps) => {
   return (
     <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
       <div className="flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0">
-        <CardTitle>Memory Usagess</CardTitle>
+        <CardTitle>Memory Usage</CardTitle>
         <CardDescription>Showing total memory usage for the past 24 hours</CardDescription>
       </div>
       <div className="flex">

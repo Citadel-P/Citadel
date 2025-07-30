@@ -2,7 +2,7 @@ import { Outlet } from 'react-router';
 import LayoutProvider, { useLayoutContext } from './LayoutProvider';
 import { Sidebar } from './sidebar/Sidebar';
 import Breadcrumb from './breadcrumb/Breadcrumb';
-import AppProvider from '@/AppProvider';
+import { AppProvider } from '@/AppProvider';
 import { useEffect, useRef, useState } from 'react';
 
 const LayoutPage = () => {

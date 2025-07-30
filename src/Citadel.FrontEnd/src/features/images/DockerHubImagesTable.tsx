@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import { useGETExternalRepositories } from './hooks/useGETExternalRepositories';
 import Loader from '@/components/ui/loader';
 import { DockerHubTagView, IImageRepositoryDockerHubRepositoryResponse } from '@/api/_generated';
-import { useImagesContext } from './ImagesProvider';
+import { useImagesContext } from './ImagesContext';
 import { fromNow } from '@/lib/dayjs.helper';
 import { truncate } from '@/lib/truncate';
 import PullProgressSheetContent from './PullProgressSheetContent';

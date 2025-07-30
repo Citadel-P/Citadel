@@ -8,22 +8,22 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from '@/components/ui/card';
-import { useContainerStatsContext } from './ContainerStatsProvider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
 import dayjs from 'dayjs';
 import { ContainerView, NullableOfContainerStatView } from '@/api/_generated';
+import { useContainerStatsContext } from './ContainerStatsContext';
 
 const CpuUsageHeader = ({ container }: { container: ContainerView | undefined }) => (
   <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
     <div className="flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0">
-      <CardTitle className="text-bg-ss">CPU Usage</CardTitle>
+      <CardTitle>CPU Usage</CardTitle>
       <CardDescription>Showing total CPU usage for the past 24 hours</CardDescription>
     </div>
     <div className="flex">
       <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
         <span className="text-xs text-muted-foreground">Usage</span>
-        <span className="text-md font-medium leading-none sm:text-1xl">
+        <span className="text-sm text-foreground font-medium leading-none">
           {container?.state === 'Running' && container?.lastStats && container.lastStats.cpuUsage
             ? `${(container.lastStats.cpuUsage as number).toFixed(2)}%`
             : '-'}
@@ -51,11 +51,8 @@ const CpuUsage = () => {
   const chartConfig = useMemo(
     () =>
       ({
-        stats: {
-          label: 'CPU',
-        },
         cpuUsage: {
-          label: 'CPU Usage',
+          label: <span className="text-foreground">CPU Usage</span>,
           color: 'var(--chart-1)',
         },
       }) satisfies ChartConfig,
@@ -96,7 +93,7 @@ const CpuUsage = () => {
               indicator="dot"
               labelFormatter={(_, n) => {
                 const created = (n.at(0)?.payload as NullableOfContainerStatView).created as number;
-                return dayjs(created * 1000).format('HH:mm:ss');
+                return <span className="text-foreground">{dayjs(created * 1000).format('HH:mm:ss')}</span>;
               }}
               formatter={(value, name) => (
                 <>
@@ -108,7 +105,7 @@ const CpuUsage = () => {
                       } as React.CSSProperties
                     }
                   />
-                  {chartConfig['stats']?.label || name}
+                  {chartConfig['cpuUsage']?.label || name}
                   <div className="ml-auto flex items-baseline gap-0.5 font-mono font-medium tabular-nums text-foreground">
                     {(value as number).toFixed(2)}
                     <span className="font-normal text-muted-foreground">%</span>

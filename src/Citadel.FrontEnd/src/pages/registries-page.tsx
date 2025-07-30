@@ -1,7 +1,7 @@
 import RegistryForm from '@/features/registries/forms/RegistryForm';
-import RegistryFormProvider from '@/features/registries/forms/RegistryFormProvider';
 import Registries from '@/features/registries/Registries';
-import RegistriesProvider from '@/features/registries/RegistriesProvider';
+import { RegistryFormProvider } from '@/features/registries/forms/RegistryFormProvider';
+import { RegistriesProvider } from '@/features/registries/RegistriesProvider';
 
 const RegistriesPage = () => {
   return (

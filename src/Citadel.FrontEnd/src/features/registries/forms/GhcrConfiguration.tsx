@@ -5,11 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useRegistryFormContext } from './RegistryFormProvider';
+import { useRegistryFormContext } from './RegistryFormContext';
 import { FieldChange } from '@/components/ui/field-change';
 import { RegistryInput } from '@/api/_generated';
 import { getEditedFields } from '@/lib/utils';
 import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 
 const GhcrConfiguration = () => {
   const { form } = useGhcrForm();
@@ -27,15 +28,16 @@ const GhcrConfiguration = () => {
   return (
     <div>
       <AlertMessage type="info">
-        Please provide a Personal Access Token with `read-package` scope, follow the{' '}
+        Please provide a Personal Access Token (PAT) with the <Badge variant="secondary">read:packages</Badge> scope to
+        proceed. You can follow the{' '}
         <a
-          className="hover:underline"
+          className="underline"
           target="_blank"
           rel="noreferrer"
           href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic">
           GitHub guide
-        </a>
-        .
+        </a>{' '}
+        to generate one.
       </AlertMessage>
 
       <Form {...form}>
@@ -156,7 +158,7 @@ const GhcrConfiguration = () => {
               </FormItem>
             )}
           />
-          <Button type="submit" disabled={isLoading || !form.formState.isDirty}>
+          <Button type="submit" disabled={isLoading || !form.formState.isDirty || !form.formState.isValid}>
             <span>{saveButtonTitle}</span>
             {isLoading && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
           </Button>

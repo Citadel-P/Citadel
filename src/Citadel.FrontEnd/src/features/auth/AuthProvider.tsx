@@ -1,22 +1,15 @@
-import { useEffect, useState, useMemo, useCallback, useRef, createContext } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useGETAccessToken } from './useGETAccessToken';
-import { useApiClientContext } from '@/api/ApiClientProvider';
+import { useApiClientContext } from '@/api/ApiClientContext';
 import { useHTTPErrorHandler } from './useHTTPErrorHandler';
 import { usePOSTLogout } from './usePOSTLogout';
 import { useInterval } from '@/hooks/useInterval';
-import { useRequiredContext } from '@/hooks/useRequiredContext';
-
-interface IContext {
-  accessToken: string | undefined;
-  isAuthenticated: boolean;
-}
+import { AuthContext } from './AuthContext';
 
 const accessTokenKey = 'access_token';
 const storedJwt = sessionStorage.getItem(accessTokenKey);
 
-export const AuthContext = createContext<IContext | undefined>(undefined);
-
-const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   useHTTPErrorHandler();
   const { mutate: logout, isSuccess: logoutIsSuccess } = usePOSTLogout();
   const {
@@ -65,7 +58,7 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
 
   // Handle 401 errors by logging out
   useEffect(() => {
-    if (accessTokenError && accessTokenError?.error?.status === 401) {
+    if (accessTokenError && (accessTokenError as any)?.error?.status === 401) {
       logout({});
     }
   }, [accessTokenError, logout]);
@@ -136,6 +129,3 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
     </AuthContext.Provider>
   );
 };
-
-export default AuthProvider;
-export const useAuthContext = () => useRequiredContext(AuthContext);

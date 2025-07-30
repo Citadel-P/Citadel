@@ -1,36 +1,18 @@
-import { useState, useMemo, useCallback, useEffect, createContext } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { DeleteNetworksInput, DockerNetworkResult } from '@/api/_generated';
-import { IDeleteDialogData, useDialogState } from '@/hooks/useDialogState';
+import { useDialogState } from '@/hooks/useDialogState';
 import { useDELETENetworks } from './hooks/useDELETENetworks';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { use400ErrorToast } from '@/hooks/use400ErrorToast';
+import { NetworksContext } from './NetworksContext';
 
-interface IContext {
-  selectedRows: DockerNetworkResult[] | undefined;
-  networks: DockerNetworkResult[];
-  setSelectedRows: (networks: DockerNetworkResult[] | undefined) => void;
-  setNetworks: (networks: DockerNetworkResult[]) => void;
-  dialogData: IDeleteDialogData<DockerNetworkResult>;
-  setDialogData: (data: IDeleteDialogData<DockerNetworkResult>) => void;
-  onSearch: (searchTerm: string) => void;
-  requestDelete: (request: DeleteNetworksInput) => void;
-  deleteIsPending: boolean;
-  sheetOpen: boolean;
-  setSheetOpen: (open: boolean) => void;
-  currentNetwork: DockerNetworkResult | undefined;
-  setCurrentNetwork: (network: DockerNetworkResult | undefined) => void;
-}
-
-export const NetworksContext = createContext<IContext | undefined>(undefined);
-
-const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+export const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const client = useQueryClient();
   // State variables
   const [selectedRows, setSelectedRows] = useState<DockerNetworkResult[] | undefined>();
-  const [networks, setNetworks] = useState<DockerNetworkResult[]>([]);
-  const [originalNetworks, setOriginalNetworks] = useState<DockerNetworkResult[]>([]);
+  const [networks, setNetworks] = useState<DockerNetworkResult[] | undefined>([]);
+  const [originalNetworks, setOriginalNetworks] = useState<DockerNetworkResult[] | undefined>([]);
   // Sheet state
   const [currentNetwork, setCurrentNetwork] = useState<DockerNetworkResult>();
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -63,7 +45,7 @@ const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }
 
   // Filter networks whenever search term changes
   useEffect(() => {
-    if (!originalNetworks.length) return;
+    if (!originalNetworks?.length) return;
 
     if (currentSearchTerm.trim() === '') {
       // If no search term, show all networks
@@ -145,6 +127,3 @@ const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }
 
   return <NetworksContext.Provider value={contextValue}>{children}</NetworksContext.Provider>;
 };
-
-export default NetworksProvider;
-export const useNetworksContext = () => useRequiredContext(NetworksContext);

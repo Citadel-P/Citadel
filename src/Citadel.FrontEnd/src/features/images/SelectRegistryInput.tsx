@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useImagesContext } from './ImagesProvider';
+import { useImagesContext } from './ImagesContext';
 
 export default function SelectRegistryInput() {
   const { selectedRegistry, setSelectionChange, registries } = useImagesContext();
