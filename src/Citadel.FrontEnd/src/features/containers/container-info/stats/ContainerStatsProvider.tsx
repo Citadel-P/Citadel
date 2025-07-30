@@ -1,6 +1,6 @@
 import { useParams } from 'react-router';
 import { useGetContainerStats } from './hooks/useGetContainerStats';
-import { ContainerView } from '@/api/_generated';
+import { ContainerStatView, ContainerView } from '@/api/_generated';
 import { useEffect, useMemo, useState } from 'react';
 import useContainersHub from '../../hooks/useContainersHub';
 import { useAppContext } from '@/AppContext';
@@ -12,17 +12,25 @@ export const ContainerStatsProvider: React.FC<{ children?: React.ReactNode }> = 
   const { containerId } = useParams<{ containerId: string }>();
   const { data, isSuccess, isLoading } = useGetContainerStats(containerId);
   const [container, setContainer] = useState<ContainerView | undefined>();
+  const [stats, setStats] = useState<ContainerStatView[]>([]);
 
-  const stats = useMemo(() => (isSuccess ? data?.data.stats || [] : []), [isSuccess, data]);
+  useEffect(() => {
+    if (isSuccess && data?.data) {
+      setStats(data?.data.stats);
+    }
+  }, [isSuccess, data]);
 
   useEffect(() => {
     if (containersInfo && containerId) {
       const found = containersInfo.containers?.find((s) => s.containerId.startsWith(containerId));
       if (found) {
         setContainer(found);
+        setStats((prev) => [...prev, found.lastStats]);
       }
     }
   }, [containersInfo, containerId]);
+
+  useEffect(() => {}, []);
 
   const contextValue = useMemo(
     () => ({

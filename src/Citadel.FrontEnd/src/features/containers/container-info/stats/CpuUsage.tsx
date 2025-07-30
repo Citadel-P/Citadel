@@ -36,18 +36,6 @@ const CpuUsageHeader = ({ container }: { container: ContainerView | undefined })
 const CpuUsage = () => {
   const { stats, container, isLoading } = useContainerStatsContext();
 
-  const downsampledStats = useMemo(() => {
-    if (!stats.length || !container) {
-      return [];
-    }
-    const step = Math.ceil(stats.length / 1440); // Keep a max of 1440 points
-    const filteredStats = stats.filter((_, index) => index % step === 0);
-    if (container?.lastStats) {
-      return [...filteredStats, container.lastStats];
-    }
-    return filteredStats;
-  }, [stats, container]);
-
   const chartConfig = useMemo(
     () =>
       ({
@@ -73,7 +61,7 @@ const CpuUsage = () => {
 
   const memoizedChart = useMemo(
     () => (
-      <AreaChart data={downsampledStats} accessibilityLayer>
+      <AreaChart data={stats} accessibilityLayer>
         {gradientDefs}
         <CartesianGrid vertical={true} />
         <XAxis
@@ -119,7 +107,7 @@ const CpuUsage = () => {
         <ChartLegend content={<ChartLegendContent />} />
       </AreaChart>
     ),
-    [downsampledStats, gradientDefs, chartConfig],
+    [stats, gradientDefs, chartConfig],
   );
 
   return isLoading ? (

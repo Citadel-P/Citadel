@@ -13,7 +13,7 @@ namespace Infrastructure.Connectors.LocalConnectors;
 internal class LocalContainerConnector(IContainerService containerService, IObjectPoolManager objectPoolManager) : IContainerConnector
 {
     public Task<Result> DeleteAsync(DeleteContainerCommand deleteContainerCommand, CancellationToken cancellationToken)
-        => containerService.DeleteAsync( new Hosting.DockerClient.Models.Containers.DeleteContainersCommand
+        => containerService.DeleteAsync( new DeleteContainersCommand
             (
                 [.. deleteContainerCommand.ContainerIds],
                 deleteContainerCommand.Volume,
