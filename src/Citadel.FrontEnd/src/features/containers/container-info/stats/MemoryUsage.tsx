@@ -12,8 +12,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
 import dayjs from 'dayjs';
 import { byteTransform } from '@/lib/bytes.helper';
-import { ContainerView, NullableOfContainerStatView } from '@/api/_generated';
+import { NullableOfContainerStatView } from '@/api/_generated';
 import { useContainerStatsContext } from './ContainerStatsContext';
+import { DockerContainerView } from '@/api/models';
 
 const MemoryUsage = () => {
   const { stats, container, isLoading } = useContainerStatsContext();
@@ -127,7 +128,7 @@ const MemoryUsage = () => {
   );
 };
 interface MemoryUsageHeaderProps {
-  container: ContainerView | undefined;
+  container: DockerContainerView | undefined;
 }
 
 const MemoryUsageHeader = ({ container }: MemoryUsageHeaderProps) => {
@@ -147,9 +148,9 @@ const MemoryUsageHeader = ({ container }: MemoryUsageHeaderProps) => {
         <CardDescription>Showing total memory usage for the past 24 hours</CardDescription>
       </div>
       <div className="flex">
-        {renderStat('Active', container?.lastStats?.memoryActive)}
-        {renderStat('Cache', container?.lastStats?.memoryCache)}
-        {renderStat('Limit', container?.lastStats?.memoryLimit)}
+        {renderStat('Active', container?.containerStat?.memoryActive)}
+        {renderStat('Cache', container?.containerStat?.memoryCache)}
+        {renderStat('Limit', container?.containerStat?.memoryLimit)}
       </div>
     </CardHeader>
   );

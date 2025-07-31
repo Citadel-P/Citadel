@@ -1,6 +1,6 @@
 import { Highlight, themes } from 'prism-react-renderer';
 import { useEffect, useRef } from 'react';
-import { useContainerLogsContext } from './ContainerLogsProvider';
+import { useContainerLogsContext } from './ContainerLogsContext';
 
 const ContainerLogs = () => {
   const { logs, isPending } = useContainerLogsContext();

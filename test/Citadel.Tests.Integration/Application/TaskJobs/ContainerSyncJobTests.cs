@@ -144,13 +144,13 @@ public class ContainerSyncJobTests : IntegrationTestBase
     {
         // Arrange: DB has no containers, but fresh list has one
         var newDockerContainer = new DockerContainer(
-            Name: "new",
-            Image: "new:latest",
-            ContainerId: "new-id",
-            State: ContainerStateStatus.Running,
-            Ports: [],
-            Created: 123456,
-            Stack: null
+            name: "new",
+            image: "new:latest",
+            containerId: "new-id",
+            state: ContainerStateStatus.Running,
+            ports: [],
+            created: 123456,
+            stack: null
         );
         containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(containerConnector.Object);
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
@@ -187,13 +187,13 @@ public class ContainerSyncJobTests : IntegrationTestBase
         }
 
         var updatedDockerContainer = new DockerContainer(
-            Name: "updated",
-            Image: "updated:latest",
-            ContainerId: containerId,
-            State: ContainerStateStatus.Running,
-            Ports: [],
-            Created: 123456,
-            Stack: null
+            name: "updated",
+            image: "updated:latest",
+            containerId: containerId,
+            state: ContainerStateStatus.Running,
+            ports: [],
+            created: 123456,
+            stack: null
         );
         containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(containerConnector.Object);
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))

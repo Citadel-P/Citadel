@@ -21,7 +21,7 @@ public static class Containers
         return await EndpointHandlers.HandleResult(result, permissionService, ContainerView.Map);
     }
 
-    public static async Task<Results<Ok<ContainerInfoView>, ProblemHttpResult>> GetInfo(IMediator mediator, IContainerPermissionService permissionService, string id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<ContainerInfoView>, ProblemHttpResult>> GetInfo(IMediator mediator, string id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetContainerInfoById(id), cancellationToken);
         return EndpointHandlers.HandleResult(result, ContainerInfoView.Map);

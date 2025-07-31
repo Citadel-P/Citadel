@@ -8,7 +8,7 @@ const useContainersHub = (platformId?: string) => {
   const [isLoading, setIsLoading] = useState(false);
   const [containersInfo, setContainersInfo] = useState<ContainersView | undefined>();
   const { accessToken } = useAuthContext();
-  const groupName = `ContainersInfo/${platformId}`;
+  const groupName = `containers/${platformId}`;
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
   const isCanceledRef = useRef(false);
 
@@ -124,7 +124,7 @@ const useContainersHub = (platformId?: string) => {
 
     const initHub = () => {
       const config: IHubConfig = {
-        url: `${baseUrl}/hubs/container`,
+        url: `${baseUrl}/hubs/containers`,
         accessToken,
       };
       hubConnection = configureHub(config);

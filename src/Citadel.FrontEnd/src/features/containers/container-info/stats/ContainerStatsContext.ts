@@ -1,11 +1,12 @@
 import { createContext } from 'react';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
-import { ContainerStatView, ContainerView } from '@/api/_generated';
+import { ContainerStatView } from '@/api/_generated';
+import { DockerContainerView } from '@/api/models';
 
 export interface ContainerStatsContextValue {
   isLoading: boolean;
   stats: ContainerStatView[];
-  container: ContainerView | undefined;
+  container: DockerContainerView | undefined;
 }
 
 export const ContainerStatsContext = createContext<ContainerStatsContextValue | undefined>(undefined);

@@ -7,11 +7,10 @@ import { truncate } from '@/lib/truncate';
 import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
 import SortableCell from '@/components/ui/SortableCell';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Link } from 'react-router';
 import DropdownTableMenu from './DropdownTableMenu';
-import { memo } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
+import { ContainerStateIndicator } from './ContainerStateIndicator';
 
 const columns: ColumnDef<ContainerView>[] = [
   {
@@ -39,7 +38,7 @@ const columns: ColumnDef<ContainerView>[] = [
     cell: ({ row }) => (
       <div className="flex items-center whitespace-nowrap">
         <div className="flex items-center">
-          <ContainerStatTooltip stat={row.original.state ?? ContainerStateStatus.Exited} />
+          <ContainerStateIndicator stat={row.original.state ?? ContainerStateStatus.Exited} />
         </div>
         <div>
           <div className="mb-1 text-[13px] font-semibold text-foreground">
@@ -164,37 +163,3 @@ export const ContainersTable = () => {
     </div>
   );
 };
-
-const ContainerStatTooltip = memo(({ stat }: { stat: ContainerStateStatus }) => {
-  const getStatusClass = (status: ContainerStateStatus) => {
-    switch (status) {
-      case ContainerStateStatus.Exited:
-        return 'bg-gray-500';
-      case ContainerStateStatus.Paused:
-        return 'bg-orange-500';
-      case ContainerStateStatus.Running:
-        return 'bg-green-500';
-      case ContainerStateStatus.Offline:
-        return 'bg-red-500';
-      default:
-        return '';
-    }
-  };
-
-  const statusText = stat.charAt(0).toUpperCase() + stat.slice(1);
-
-  return (
-    <TooltipProvider delayDuration={200}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className={`${getStatusClass(stat)} mr-2 h-2 w-2 rounded-full`} />
-        </TooltipTrigger>
-        <TooltipContent>
-          <span>{statusText}</span>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-});
-
-ContainerStatTooltip.displayName = 'ContainerStatTooltip2';

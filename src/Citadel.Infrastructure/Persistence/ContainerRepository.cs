@@ -64,16 +64,17 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         return result?.ToDomain();
     }
 
-    public Task<ContainerInfo?> GetContainerInfoAsync(string containerId, CancellationToken cancellationToken)
+    public async Task<ContainerInfo?> GetContainerInfoAsync(string containerId, CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT C.Id, C.Name, C.ContainerId, P.Id as PlatformId, P.Name as PlatformName 
+            SELECT C.Id, C.Name, C.ContainerId, C.State, P.Id as PlatformId, P.Name as PlatformName 
             FROM Containers C
             LEFT JOIN Platforms P ON C.PlatformId = P.Id
             WHERE C.ContainerId LIKE @ContainerIdPrefix
             LIMIT 1
             """;
-        return db.QuerySingleOrDefaultAsync<ContainerInfo>(sql, new { ContainerIdPrefix = containerId + '%' }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<ContainerInfoDto>(sql, new { ContainerIdPrefix = containerId + '%' }, transaction: tx());
+        return result?.Map();
     }
 
     public Task<int> BulkInsertAsync(IEnumerable<Container> containers, CancellationToken cancellationToken)

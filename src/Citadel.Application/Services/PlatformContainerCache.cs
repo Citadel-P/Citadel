@@ -62,4 +62,23 @@ internal class PlatformContainerCache : IPlatformContainerCache
         }
         return false;
     }
+
+    /// <inheritdoc />
+    public bool TryGetPlatformByContainerId(string containerId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry)
+    {
+        cacheEntry = null;
+        foreach (var (_, platformCacheEntry) in cache)
+        {
+            foreach (var key in platformCacheEntry.Containers.Keys)
+            {
+                if (key.StartsWith(containerId, StringComparison.OrdinalIgnoreCase))
+                {
+                    cacheEntry = platformCacheEntry;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 }

@@ -1,4 +1,5 @@
 ﻿using System.Text.Json.Serialization;
+using Domain.Contracts.Resources.Containers;
 using Domain.Entities.Platforms;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Platforms;
@@ -28,6 +29,8 @@ namespace WebApi.Hubs;
 [JsonSerializable(typeof(PlatformsView))]
 [JsonSerializable(typeof(PlatformStatsBatchView))]
 [JsonSerializable(typeof(PlatformStatView))]
+[JsonSerializable(typeof(DockerContainer))]
+[JsonSerializable(typeof(DockerContainerStat))]
 internal partial class SignalRSerializeContext : JsonSerializerContext
 {
 }

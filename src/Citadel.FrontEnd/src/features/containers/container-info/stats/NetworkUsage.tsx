@@ -11,11 +11,12 @@ import { Card, CardContent, CardHeader, CardDescription, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
 import dayjs from 'dayjs';
-import { ContainerView, NullableOfContainerStatView } from '@/api/_generated';
+import { NullableOfContainerStatView } from '@/api/_generated';
 import { byteTransform } from '@/lib/bytes.helper';
 import { useContainerStatsContext } from './ContainerStatsContext';
+import { DockerContainerView } from '@/api/models';
 
-const NetworkUsageHeader = ({ container }: { container: ContainerView | undefined }) => (
+const NetworkUsageHeader = ({ container }: { container: DockerContainerView | undefined }) => (
   <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
     <div className="flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0">
       <CardTitle>Network Usage</CardTitle>
@@ -25,13 +26,17 @@ const NetworkUsageHeader = ({ container }: { container: ContainerView | undefine
       <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
         <span className="text-xs text-muted-foreground">Received</span>
         <span className="text-sm text-foreground font-medium leading-none">
-          {container?.state === 'Running' && container?.lastStats ? byteTransform(container.lastStats.rxBytes, 2) : '-'}
+          {container?.state === 'Running' && container?.containerStat
+            ? byteTransform(container.containerStat.rxBytes, 2)
+            : '-'}
         </span>
       </div>
       <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
         <span className="text-xs text-muted-foreground">Sent</span>
         <span className="text-sm text-foreground font-medium leading-none">
-          {container?.state === 'Running' && container?.lastStats ? byteTransform(container.lastStats.txBytes, 2) : '-'}
+          {container?.state === 'Running' && container?.containerStat
+            ? byteTransform(container.containerStat.txBytes, 2)
+            : '-'}
         </span>
       </div>
     </div>

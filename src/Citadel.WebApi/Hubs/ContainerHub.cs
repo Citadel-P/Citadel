@@ -12,7 +12,6 @@ public interface ITypedContainerHub
     Task ContainerEventReceived(ContainerView message, string @event);
     Task ContainersInfoUpdated(ContainersView message);
     Task ContainersStatsUpdated(IEnumerable<ContainerStatView> containers);
-    Task ContainerLogsReceived(ContainerLogView message);
 }
 
 [Authorize]

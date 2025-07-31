@@ -52,6 +52,7 @@ public static class ApplicationModule
             .AddSingleton<IJwtService, JwtService>()
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>()
             .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>()
+            .AddSingleton<IContainerInfoStreamManager, ContainerInfoStreamManager>()
             .AddScoped<GitHubConnectorStrategy>()
             .AddScoped<DockerHubConnectorStrategy>()
             .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>();

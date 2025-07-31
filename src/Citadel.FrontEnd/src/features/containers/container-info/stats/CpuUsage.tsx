@@ -11,10 +11,11 @@ import { Card, CardContent, CardHeader, CardDescription, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
 import dayjs from 'dayjs';
-import { ContainerView, NullableOfContainerStatView } from '@/api/_generated';
+import { NullableOfContainerStatView } from '@/api/_generated';
 import { useContainerStatsContext } from './ContainerStatsContext';
+import { DockerContainerView } from '@/api/models';
 
-const CpuUsageHeader = ({ container }: { container: ContainerView | undefined }) => (
+const CpuUsageHeader = ({ container }: { container: DockerContainerView | undefined }) => (
   <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
     <div className="flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0">
       <CardTitle>CPU Usage</CardTitle>
@@ -24,8 +25,8 @@ const CpuUsageHeader = ({ container }: { container: ContainerView | undefined })
       <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
         <span className="text-xs text-muted-foreground">Usage</span>
         <span className="text-sm text-foreground font-medium leading-none">
-          {container?.state === 'Running' && container?.lastStats && container.lastStats.cpuUsage
-            ? `${(container.lastStats.cpuUsage as number).toFixed(2)}%`
+          {container?.state === 'Running' && container?.containerStat && container.containerStat.cpuUsage
+            ? `${(container.containerStat.cpuUsage as number).toFixed(2)}%`
             : '-'}
         </span>
       </div>

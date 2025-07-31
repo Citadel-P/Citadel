@@ -56,13 +56,15 @@ public sealed record ContainerInfoView(
     Guid PlatformId,
     string ContainerId,
     string ContainerName,
-    string PlatformName)
+    string PlatformName,
+    ContainerStateStatus State)
 {
     internal static ContainerInfoView Map(ContainerInfo container) => new(
          Id: container.Id,
          PlatformId: container.PlatformId,
          ContainerId: container.ContainerId,
          PlatformName: container.PlatformName,
-         ContainerName: container.Name
+         ContainerName: container.Name,
+         State: container.State
         );
 }

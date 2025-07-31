@@ -37,4 +37,6 @@ public interface IPlatformContainerCache
     /// Tries to get the cache entry for a specific platform.
     /// </summary>
     bool TryGetCacheEntry(Guid platformId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry);
+
+    bool TryGetPlatformByContainerId(string containerId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry);
 }

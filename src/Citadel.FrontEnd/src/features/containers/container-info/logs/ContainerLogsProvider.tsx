@@ -1,20 +1,9 @@
-import { createContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { usePOSTContainerLogs } from './hooks/usePOSTContainerLogs';
-import { useRequiredContext } from '@/hooks/useRequiredContext';
+import { ContainerLogsContext } from './ContainerLogsContext';
 
-interface IContext {
-  isPending: boolean;
-  isSuccess: boolean;
-  logs: string[];
-}
-interface IProps {
-  children?: React.ReactNode;
-}
-
-export const ContainerLogsContext = createContext<IContext | undefined>(undefined);
-
-const ContainerLogsProvider: React.FC<IProps> = ({ children }) => {
+export const ContainerLogsProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const { containerId } = useParams();
   const [logs, setLogs] = useState<string[] | undefined>(undefined);
   const handleChunkReceived = (chunk: string) => {
@@ -43,6 +32,3 @@ const ContainerLogsProvider: React.FC<IProps> = ({ children }) => {
     </ContainerLogsContext.Provider>
   );
 };
-
-export default ContainerLogsProvider;
-export const useContainerLogsContext = () => useRequiredContext(ContainerLogsContext);

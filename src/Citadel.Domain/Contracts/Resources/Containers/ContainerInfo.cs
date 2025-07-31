@@ -5,4 +5,5 @@ public sealed record ContainerInfo (
     string Name,
     string ContainerId,
     Guid PlatformId,
-    string PlatformName);
+    string PlatformName,
+    ContainerStateStatus State);

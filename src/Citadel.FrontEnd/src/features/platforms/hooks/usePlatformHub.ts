@@ -123,7 +123,7 @@ const usePlatformHub = () => {
 
     const initHub = () => {
       const config: IHubConfig = {
-        url: `${baseUrl}/hubs/platform`,
+        url: `${baseUrl}/hubs/platforms`,
         accessToken,
       };
       hubConnection = configureHub(config);

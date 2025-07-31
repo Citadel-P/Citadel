@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using Domain;
+using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Infrastructure.Persistence.Dtos;
 
@@ -44,6 +45,17 @@ internal static class ContainerMappers
             memoryLimit: stat.MemoryLimit,
             rxBytes: stat.RxBytes,
             txBytes: stat.TxBytes);
+    }
+
+    internal static ContainerInfo Map(this ContainerInfoDto container)
+    {
+        return new ContainerInfo(
+            Id: container.Id,
+            Name: container.Name,
+            PlatformId: container.PlatformId,
+            ContainerId: container.ContainerId,
+            PlatformName: container.PlatformName,
+            State: Enum.Parse<ContainerStateStatus>(container.State));
     }
 }
 

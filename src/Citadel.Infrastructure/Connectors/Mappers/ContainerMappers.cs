@@ -565,15 +565,14 @@ internal static class ContainerMappers
     private static DockerContainer Map(this ContainerMessage container)
         => new
         (
-            Name: container.Name,
-            Image: container.Image,
-            Stack: container.Stack,
-            ContainerId: container.Id,
-            Created: container.Created,
-            Command: container.Command,
-            State: container.State.Map(),
-            ContainerStat: container.ContainerStatMessage?.Map(),
-            Ports: container.Ports?.Map()?.ToList() ?? []
+            name: container.Name,
+            image: container.Image,
+            stack: container.Stack,
+            containerId: container.Id,
+            created: container.Created,
+            state: container.State.Map(),
+            containerStat: container.ContainerStatMessage?.Map(),
+            ports: container.Ports?.Map()?.ToList() ?? []
         );
     
     public static DockerContainerStat Map(this ContainerStatMessage statMessage)
@@ -651,20 +650,40 @@ internal static class ContainerMappers
     public static DockerContainer Map(this ContainerResult container)
         => new
         (
-            Name: container?.Name,
-            Image: container?.Image,
-            Stack: container?.Stack,
-            ContainerId: container?.Id,
-            Created: container?.Created,
-            State: container.State.Map(),
-            ContainerStat: container.ContainerStat == null ? null : new DockerContainerStat(
-                memoryActive: container.ContainerStat.MemoryActive,
-                memoryCache: container.ContainerStat.MemoryCache,
-                memoryLimit: container.ContainerStat.MemoryLimit,
-                cpuUsage: container.ContainerStat.CpuUsage,
-                rxBytes: container.ContainerStat.RxBytes,
-                txBytes: container.ContainerStat.TxBytes),
-            Ports: container.Ports?.Select(Map).ToList() ?? []
+            name: container?.Name,
+            image: container?.Image,
+            stack: container?.Stack,
+            containerId: container?.Id,
+            created: container?.Created,
+            containerStat: container.ContainerStat?.Map(),
+            ports: container.Ports?.Select(Map).ToList() ?? [],
+            state: container?.State?.Map() ?? ContainerStateStatus.Unknown
+        );
+
+    public static void Map(ContainerResult container, DockerContainer destination)
+    {
+        
+        destination.ReInitialize(
+          name: container?.Name,
+          image: container?.Image,
+          stack: container?.Stack,
+          containerId: container?.Id,
+          created: container?.Created,
+          containerStat: container?.ContainerStat?.Map(),
+          ports: container?.Ports?.Select(Map).ToList() ?? [],
+          state: container?.State?.Map() ?? ContainerStateStatus.Unknown
+          );
+    }
+
+    private static DockerContainerStat Map(this ContainerStatResult stats)
+        => new
+        (
+            memoryActive: stats.MemoryActive,
+            memoryCache: stats.MemoryCache,
+            cpuUsage: stats.CpuUsage,
+            memoryLimit: stats.MemoryLimit,
+            rxBytes: stats.RxBytes,
+            txBytes: stats.TxBytes
         );
 
     public static ContainerPort Map(this Hosting.DockerClient.Port port)
@@ -718,7 +737,7 @@ internal static class ContainerMappers
             _ => ContainerStateStatus.Unknown,
         };
 
-    public static ContainerStateStatus Map(this Hosting.DockerClient.ContainerSummaryState? state)
+    public static ContainerStateStatus Map(this Hosting.DockerClient.ContainerSummaryState state)
         => state switch
         {
             Hosting.DockerClient.ContainerSummaryState.Running => ContainerStateStatus.Running,

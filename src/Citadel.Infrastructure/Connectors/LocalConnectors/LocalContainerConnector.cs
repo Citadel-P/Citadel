@@ -71,6 +71,19 @@ internal class LocalContainerConnector(IContainerService containerService, IObje
         }
     }
 
+    public async IAsyncEnumerable<PooledHandle<DockerContainer>> StreamContainerStatsAsync(StreamContainerStatsCommand streamStatsCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var result in containerService.StreamContainerStatsAsync(streamStatsCommand.ContainerId, streamStatsCommand.FetchIntervalMs, cancellationToken))
+        {
+            using var _ = result;
+            var pooledContainer = objectPoolManager.GetPooled<DockerContainer>();
+
+            ContainerMappers.Map(result.Value, pooledContainer.Value);
+            // Todo: Map
+            yield return pooledContainer;
+        }
+    }
+
     public async IAsyncEnumerable<ContainerLogInfo> StreamLogsAsync(StreamContainerLogsCommand streamContainerLogsCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await foreach (var log in containerService.StreamLogsAsync(streamContainerLogsCommand.ContainerId, cancellationToken))
