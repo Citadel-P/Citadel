@@ -28,7 +28,7 @@ public class RegistryCreateTests : IntegrationTestBase
            .Returns(registryConnectorMock.Object);
 
         registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.FromResult<(bool, string?)>((true, null)));
+            .ReturnsAsync((true, null));
 
         var createJson = """
         {
@@ -68,7 +68,7 @@ public class RegistryCreateTests : IntegrationTestBase
            .Returns(registryConnectorMock.Object);
 
         registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.FromResult<(bool, string?)>((true, null)));
+            .ReturnsAsync((true, null));
 
         var createJson = """
         {
@@ -192,7 +192,7 @@ public class RegistryCreateTests : IntegrationTestBase
             .Returns(registryConnectorMock.Object);
 
         registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.FromResult<(bool, string?)>((true, null)));
+            .ReturnsAsync((true, null));
 
         var createJson = """
         {
@@ -250,7 +250,7 @@ public class RegistryCreateTests : IntegrationTestBase
             .Returns(registryConnectorMock.Object);
 
         registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.FromResult<(bool, string?)>((false, "Connection failed")));
+            .ReturnsAsync((false, "Connection failed"));
 
         var createJson = """
         {

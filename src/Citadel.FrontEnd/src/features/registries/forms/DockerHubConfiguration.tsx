@@ -37,13 +37,13 @@ const DockerHubConfiguration = () => {
 
       <Form {...form}>
         {validationErrors && <AlertMessage type="error">{validationErrors}</AlertMessage>}
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <FormField
             control={form.control}
             name="name"
             render={({ field }) => (
-              <FormItem className="flex items-baseline">
-                <FormLabel className="flex-none w-36 text-xs">Name</FormLabel>
+              <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
+                <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">Name</FormLabel>
                 <div className="flex-1">
                   {mode === 'edit' && <FieldChange form={form} fieldName={field.name} />}
                   <FormControl>
@@ -63,8 +63,8 @@ const DockerHubConfiguration = () => {
             control={form.control}
             name="url"
             render={({ field }) => (
-              <FormItem className="flex items-baseline">
-                <FormLabel className="flex-none w-36 text-xs">Url</FormLabel>
+              <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
+                <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">Url</FormLabel>
                 <FormControl className="flex-1">
                   <Input
                     type="text"
@@ -83,8 +83,8 @@ const DockerHubConfiguration = () => {
             control={form.control}
             name="configuration.username"
             render={({ field }) => (
-              <FormItem className="flex items-baseline">
-                <FormLabel className="flex-none w-36 text-xs">DockerHub Username</FormLabel>
+              <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
+                <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">DockerHub Username</FormLabel>
                 <div className="flex-1">
                   {mode === 'edit' && <FieldChange form={form} fieldName={field.name} />}
                   <FormControl>
@@ -104,8 +104,8 @@ const DockerHubConfiguration = () => {
             control={form.control}
             name="configuration.pat"
             render={({ field }) => (
-              <FormItem className="flex items-baseline">
-                <FormLabel className="flex-none w-36 text-xs">DockerHub PAT</FormLabel>
+              <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
+                <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">DockerHub PAT</FormLabel>
                 <div className="flex-1">
                   {mode === 'edit' && <FieldChange form={form} fieldName={field.name} />}
                   <FormControl>

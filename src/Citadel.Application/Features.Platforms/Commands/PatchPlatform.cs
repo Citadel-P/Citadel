@@ -35,7 +35,7 @@ public sealed record PatchPlatform(Guid Id, JsonMergePatchDocument<Platform> Pat
         public PlatformValidator()
         {
             When(x => x.Name is not null, () => RuleFor(x => x.Name).ValidNameIdentifier());
-            When(x => x.Address is not null, () => RuleFor(x => x.Address).ValidHostOrIp());
+            When(x => x.Address is not null, () => RuleFor(x => x.Address).ValidHostOrIP());
             RuleFor(x => x.ConnectorType)
                 .Must(x => Enum.IsDefined(x))
                 .WithMessage("'{PropertyName}' must be a valid type");

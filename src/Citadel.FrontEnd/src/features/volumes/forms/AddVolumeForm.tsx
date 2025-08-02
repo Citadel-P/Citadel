@@ -84,8 +84,8 @@ const AddVolumeForm = () => {
                     control={form.control}
                     name="name"
                     render={({ field }) => (
-                      <FormItem className="flex items-baseline">
-                        <FormLabel className="flex-none w-36 text-xs">Name</FormLabel>
+                      <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
+                        <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">Name</FormLabel>
                         <div className="flex-1">
                           <FormControl>
                             <Input
@@ -105,8 +105,8 @@ const AddVolumeForm = () => {
                     control={form.control}
                     name="driver"
                     render={({ field }) => (
-                      <FormItem className="flex items-baseline">
-                        <FormLabel className="flex-none w-36 text-xs">Driver</FormLabel>
+                      <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
+                        <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">Driver</FormLabel>
                         <div className="flex-1">
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl className="w-full shadow-none">
@@ -151,7 +151,7 @@ const AddVolumeForm = () => {
                     </button>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                       <KeyValuePairInput
                         name="labels"
                         fields={labelFields}

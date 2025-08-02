@@ -39,7 +39,7 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
         services.AddSingleton(_channel);
         services.AddSingleton(_ => _hubMock.Object);
         services.AddSingleton(_ => _configMock.Object);
-        services.AddSingleton(_ => _platformFactoryMock.Object);
+        services.AddSingleton(_ => _platformConnector.Object);
         services.AddSingleton(_ => _platformFactoryMock.Object);
         services.AddSingleton(_ => _connectionTrackerMock.Object);
         services.AddSingleton<IPlatformHealthBroadCaster>(_ => _broadcaster);

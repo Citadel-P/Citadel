@@ -5,6 +5,7 @@ using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
+using static Application.Features.Networks.Commands.CreateNetwork.Validator;
 using static Hosting.Common.Validators;
 
 namespace Application.Features.Networks.Commands;
@@ -77,8 +78,8 @@ public sealed record CreateNetwork(
                 .WithMessage("At least one of EnableIPv4 or EnableIPv6 must be enabled.");
             });
         }
-        
-        internal sealed class IPAMValidator : AbstractValidator<IPAM>
+
+        public class IPAMValidator : AbstractValidator<IPAM>
         {
             public IPAMValidator()
             {
@@ -86,25 +87,43 @@ public sealed record CreateNetwork(
                 {
                     RuleFor(x => x.Driver).NotEmpty().MinimumLength(3);
                 });
-                RuleForEach(x => x.Config).SetValidator(new IPAMConfigValidator());
+
+                RuleFor(x => x.Config)
+                    .Must(configs => configs.Count == 2)
+                    .WithMessage("Config must contain exactly two entries: IPv4 at index 0 and IPv6 at index 1.");
+
+                RuleFor(x => x.Config).Custom((configs, context) =>
+                {
+                    if (configs.Count != 2)
+                        return;
+
+                    var ipv4Result = new IPv4ConfigValidator().Validate(configs[0]);
+                    var ipv6Result = new IPv6ConfigValidator().Validate(configs[1]);
+
+                    foreach (var error in ipv4Result.Errors)
+                        context.AddFailure($"Config[0].{error.PropertyName}", error.ErrorMessage);
+
+                    foreach (var error in ipv6Result.Errors)
+                        context.AddFailure($"Config[1].{error.PropertyName}", error.ErrorMessage);
+                });
             }
         }
 
-        internal sealed class IPAMConfigValidator : AbstractValidator<IPAMConfig>
+        internal sealed class IPv4ConfigValidator : AbstractValidator<IPAMConfig>
         {
-            public IPAMConfigValidator()
+            public IPv4ConfigValidator()
             {
                 When(s => !string.IsNullOrEmpty(s.Gateway), () =>
                 {
-                    RuleFor(x => x.Gateway).ValidGatewayAddress();
+                    RuleFor(x => x.Gateway).ValidIPv4GatewayAddress();
                 });
                 When(s => !string.IsNullOrEmpty(s.IpRange), () =>
                 {
-                    RuleFor(x => x.IpRange).ValidIpRangeOrSubnet();
+                    RuleFor(x => x.IpRange).ValidIPv4RangeOrSubnet();
                 });
                 When(s => !string.IsNullOrEmpty(s.Subnet), () =>
                 {
-                    RuleFor(x => x.Subnet).ValidIpRangeOrSubnet("Subnet must be a valid CIDR notation (e.g., 172.20.0.0/16)");
+                    RuleFor(x => x.Subnet).ValidIPv4RangeOrSubnet("Subnet must be a valid CIDR notation (e.g., 172.20.0.0/16)");
                 });
 
                 When(s => !string.IsNullOrEmpty(s.Gateway), () =>
@@ -118,6 +137,37 @@ public sealed record CreateNetwork(
                     });
                 });
                
+            }
+        }
+
+        internal sealed class IPv6ConfigValidator : AbstractValidator<IPAMConfig>
+        {
+            public IPv6ConfigValidator()
+            {
+                When(s => !string.IsNullOrEmpty(s.Gateway), () =>
+                {
+                    RuleFor(x => x.Gateway).ValidIPv6GatewayAddress();
+                });
+                When(s => !string.IsNullOrEmpty(s.IpRange), () =>
+                {
+                    RuleFor(x => x.IpRange).ValidIPv6Range();
+                });
+                When(s => !string.IsNullOrEmpty(s.Subnet), () =>
+                {
+                    RuleFor(x => x.Subnet).ValidIPv6CIDR("IPv6 Subnet must be in CIDR format (e.g., fd00::/64)");
+                });
+
+                When(s => !string.IsNullOrEmpty(s.Gateway), () =>
+                {
+                    RuleFor(x => x).Custom((config, context) =>
+                    {
+                        if (!IsGatewayInSubnet(config.Gateway, config.Subnet))
+                        {
+                            context.AddFailure("Gateway", "The Gateway must be within the specified Subnet.");
+                        }
+                    });
+                });
+
             }
         }
 

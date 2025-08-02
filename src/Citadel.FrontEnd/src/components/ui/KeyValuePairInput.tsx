@@ -46,12 +46,12 @@ const KeyValuePairInput = ({
     </div>
     <div className="space-y-2">
       {fields.map((field, idx: number) => (
-        <div key={field.id} className="flex gap-2 items-center">
+        <div key={field.id} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
           <FormField
             control={control}
             name={`${name}.${idx}.key`}
             render={({ field }) => (
-              <FormItem className="flex-1">
+              <FormItem className="flex-1 w-full">
                 <FormControl>
                   <div className="flex items-stretch">
                     <span className="flex z-10 items-center px-6 bg-accent-foreground/5 border-l rounded-l-sm border-y border-border text-xs h-full">
@@ -71,7 +71,7 @@ const KeyValuePairInput = ({
             control={control}
             name={`${name}.${idx}.value`}
             render={({ field }) => (
-              <FormItem className="flex-1">
+              <FormItem className="flex-1 w-full">
                 <FormControl>
                   <div className="flex items-stretch">
                     <span className="flex z-10 items-center px-6 bg-accent-foreground/5 border-l rounded-l-sm border-y border-border text-xs h-full">

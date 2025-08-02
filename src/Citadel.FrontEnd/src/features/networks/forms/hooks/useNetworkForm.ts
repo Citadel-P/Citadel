@@ -7,7 +7,7 @@ export const useNetworkForm = () => {
   const ipv4CidrRegex =
     /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}\/([0-9]|[1-2][0-9]|3[0-2])$/;
   const ipv4Regex = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-  const ipv6CidrRegex = /^([a-fA-F0-9:]+:+)+[a-fA-F0-9]+\/\d{1,3}$/;
+  const ipv6CidrRegex = /^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|:(:[0-9a-fA-F]{1,4}){1,7}|([0-9a-fA-F]{1,4}:){1,6}(:[0-9a-fA-F]{1,4}){1}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){5}|([0-9a-fA-F]{1,4}:){1}(:[0-9a-fA-F]{1,4}){6}|:((:[0-9a-fA-F]{1,4}){1,7}|:))\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$/;
   const ipv6Regex = /^([a-fA-F0-9:]+:+)+[a-fA-F0-9]+$/;
 
   const formSchema = z
@@ -45,7 +45,7 @@ export const useNetworkForm = () => {
 
       if (data.ipam?.config?.length > 2) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           message: 'Only two IPAM config entries are allowed (IPv4 and IPv6).',
           path: ['ipam', 'config'],
         });
@@ -54,21 +54,21 @@ export const useNetworkForm = () => {
       if (data.enableIPv4 && v4) {
         if (v4.subnet && !ipv4CidrRegex.test(v4.subnet.trim())) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: 'Invalid IPv4 subnet (e.g. 192.168.1.0/24)',
             path: ['ipam', 'config', 0, 'subnet'],
           });
         }
         if (v4.ipRange && !ipv4CidrRegex.test(v4.ipRange.trim())) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: 'Invalid IPv4 range (e.g. 192.168.1.0/25)',
             path: ['ipam', 'config', 0, 'ipRange'],
           });
         }
         if (v4.gateway && !ipv4Regex.test(v4.gateway.trim())) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: 'Invalid IPv4 gateway (e.g. 192.168.1.1)',
             path: ['ipam', 'config', 0, 'gateway'],
           });
@@ -78,21 +78,21 @@ export const useNetworkForm = () => {
       if (data.enableIPv6 && v6) {
         if (v6.subnet && !ipv6CidrRegex.test(v6.subnet.trim())) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: 'Invalid IPv6 subnet (e.g. fd00::/64)',
             path: ['ipam', 'config', 1, 'subnet'],
           });
         }
         if (v6.ipRange && !ipv6CidrRegex.test(v6.ipRange.trim())) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: 'Invalid IPv6 range (e.g. fd00::1/64)',
             path: ['ipam', 'config', 1, 'ipRange'],
           });
         }
         if (v6.gateway && !ipv6Regex.test(v6.gateway.trim())) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: 'Invalid IPv6 gateway (e.g. fd00::1)',
             path: ['ipam', 'config', 1, 'gateway'],
           });
@@ -101,7 +101,7 @@ export const useNetworkForm = () => {
       // At least one of IPv4 or IPv6 must be enabled
       if (!data.enableIPv4 && !data.enableIPv6) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           message: 'At least one of IPv4 or IPv6 must be enabled.',
           path: ['enableIPv4'],
         });
