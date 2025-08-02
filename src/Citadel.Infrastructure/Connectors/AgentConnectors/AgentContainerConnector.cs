@@ -1,5 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 using Citadel.Agent.Containers.V1;
+using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
@@ -111,7 +112,7 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory, IObject
     public async IAsyncEnumerable<PooledHandle<Dictionary<string, DockerContainerStat>>> StreamContainersStatsAsync(StreamContainersStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
-        using var streamCall = containerClient.StreamContainerStats(new ContainerStatsRequest() { FetchIntervalMs = command.FetchIntervalMs }, cancellationToken: cancellationToken);
+        using var streamCall = containerClient.StreamContainersStats(new StreamContainersStatsRequest() { FetchIntervalMs = command.FetchIntervalMs }, cancellationToken: cancellationToken);
         await foreach (var result in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
         {
             var pooledDictionary = objectPoolManager.GetPooled<Dictionary<string, DockerContainerStat>>();
@@ -129,8 +130,15 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory, IObject
         }
     }
 
-    public IAsyncEnumerable<PooledHandle<DockerContainer>> StreamContainerStatsAsync(StreamContainerStatsCommand streamStatsCommand, CancellationToken cancellationToken)
+    public async IAsyncEnumerable<PooledHandle<DockerContainer>> StreamContainerStatsAsync(StreamContainerStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
+        using var streamCall = containerClient.StreamContainerStats(new StreamContainerStatsRequest() { ContainerId = command.ContainerId, FetchIntervalMs = command.FetchIntervalMs }, cancellationToken: cancellationToken);
+        await foreach (var result in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
+        {
+            var pooledContainer = objectPoolManager.GetPooled<DockerContainer>();
+            ContainerMappers.Map(result, pooledContainer.Value);
+            yield return pooledContainer;
+        }
     }
 }

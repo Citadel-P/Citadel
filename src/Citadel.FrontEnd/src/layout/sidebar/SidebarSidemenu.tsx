@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { useLayoutContext } from '@/layout/LayoutProvider';
+import { useLayoutContext } from '@/layout/LayoutContext';
 import { ISubMenuItem } from './menu-items';
 import { ChevronRight } from 'lucide-react';
 

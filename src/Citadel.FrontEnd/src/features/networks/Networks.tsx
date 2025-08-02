@@ -2,7 +2,7 @@ import { Network, Plus } from 'lucide-react';
 import { SearchField } from '@/components/ui/SearchField';
 import { useNetworksContext } from './NetworksContext';
 import NetworksTable from './NetworksTable';
-import { ActionBar } from './ActionBar';
+import { NetworksActionBar } from './NetworksActionBar';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router';
 
@@ -36,7 +36,7 @@ const Networks = () => {
           <NetworksTable />
         </div>
       </div>
-      <ActionBar />
+      <NetworksActionBar />
     </div>
   );
 };

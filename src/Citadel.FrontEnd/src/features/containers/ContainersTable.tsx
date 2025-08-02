@@ -8,7 +8,7 @@ import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
 import SortableCell from '@/components/ui/SortableCell';
 import { Link } from 'react-router';
-import DropdownTableMenu from './DropdownTableMenu';
+import { ContainerDropdownActions } from './ContainerDropdownActions';
 import { fromNow } from '@/lib/dayjs.helper';
 import { ContainerStateIndicator } from './ContainerStateIndicator';
 
@@ -86,7 +86,7 @@ const columns: ColumnDef<ContainerView>[] = [
       (row.original.ports as PortView[])?.map((port: PortView, i) => (
         <div key={i} className="text-xs">
           <span>
-            {port.publicPort !== undefined && port.publicPort !== null && port.publicPort > 0 && (
+            {port.publicPort !== undefined && port.publicPort !== null && (port.publicPort as number) > 0 && (
               <span>{port.publicPort + ':' + port.privatePort}</span>
             )}
           </span>
@@ -108,11 +108,7 @@ const columns: ColumnDef<ContainerView>[] = [
   },
   {
     id: 'actions',
-    cell: ({ row }) => (
-      <div className="text-center">
-        <DropdownTableMenu container={row.original} />
-      </div>
-    ),
+    cell: ({ row }) => <ActionsCell container={row.original} />,
   },
 ];
 
@@ -138,6 +134,15 @@ const CPUCell = ({ container }: { container: ContainerView }) => {
   return (
     <div className="text-xs">
       {container.lastStats?.cpuUsage ? toFixedNumber(container.lastStats?.cpuUsage, 'percent') : '0%'}
+    </div>
+  );
+};
+
+const ActionsCell = ({ container }: { container: ContainerView }) => {
+  const { setDialogData } = useContainersContext();
+  return (
+    <div className="text-center">
+      <ContainerDropdownActions container={container} setDialogData={setDialogData} />
     </div>
   );
 };

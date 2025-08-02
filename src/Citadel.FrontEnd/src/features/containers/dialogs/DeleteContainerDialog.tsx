@@ -8,14 +8,25 @@ import {
 } from '@/components/ui/dialog';
 import { useReducer } from 'react';
 import { LoaderCircle } from 'lucide-react';
-import { useContainersContext } from '../ContainersContext';
 import { SwitchSection } from '@/components/ui/SwitchSection';
+import { IDeleteDialogData } from '@/hooks/useDialogState';
+import { ContainerView, DeleteContainersRequest } from '@/api/_generated';
+import { DockerContainerView } from '@/api/models';
 
 // Reducer for managing volume and force states
 const toggleReducer = (state: boolean, _action: void) => !state;
 
-export const DeleteContainerDialog = () => {
-  const { deleteIsPending: isPending, requestDelete, dialogData, setDialogData } = useContainersContext();
+export const DeleteContainerDialog = ({
+  isPending,
+  requestDelete,
+  setDialogData,
+  dialogData,
+}: {
+  dialogData: IDeleteDialogData<ContainerView | DockerContainerView>;
+  isPending: boolean;
+  setDialogData: (data: IDeleteDialogData<ContainerView | DockerContainerView>) => void;
+  requestDelete: (request: DeleteContainersRequest) => void;
+}) => {
   const [volume, toggleVolume] = useReducer(toggleReducer, true);
   const [force, toggleForce] = useReducer(toggleReducer, true);
 
@@ -29,11 +40,16 @@ export const DeleteContainerDialog = () => {
     <Dialog open={dialogData.open} onOpenChange={(open) => setDialogData({ open })}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Delete Confirmation</DialogTitle>
+          <DialogTitle>Confirm Deletion</DialogTitle>
           <DialogDescription>
-            {containerIds.length === 1
-              ? 'Are you sure you want to delete the selected container?'
-              : `Are you sure you want to delete the selected ${containerIds.length} containers?`}
+            {containerIds.length === 1 ? (
+              'Are you sure you want to delete this container? This action cannot be undone.'
+            ) : (
+              <>
+                You&apos;re about to delete <span className="font-medium text-foreground">{containerIds.length}</span>{' '}
+                containers. This action is permanent. Do you want to continue?
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">

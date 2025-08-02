@@ -2,24 +2,27 @@ import { Pencil, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useRegistriesContext } from './RegistriesContext';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
+import { useLayoutContext } from '@/layout/LayoutContext';
 
-export const ActionBar = () => {
+export const RegistriesActionBar = () => {
   const navigate = useNavigate();
+  const { sidebarMinimized } = useLayoutContext();
   const { selectedRows, registries, setDialogData, deleteIsPending: isPending } = useRegistriesContext();
 
   const actions: RegistryActionsState = {
     canEdit: selectedRows?.length === 1,
-    canDelete: selectedRows?.length > 0,
+    canDelete: selectedRows ? selectedRows.length > 0 : false,
   };
 
-  if (!selectedRows.length) return null;
+  if (!selectedRows?.length) return null;
 
   return (
     <div
-      className="h-14 fixed -translate-x-5 inset-x-0 bottom-0 shadow-lg p-2 bg-background sm:flex sm:justify-between"
+      className={`fixed -translate-x-5 inset-x-0 bottom-0 shadow-lg p-2 bg-background flex flex-wrap justify-center items-center gap-x-4 gap-y-2 sm:justify-between ${
+        sidebarMinimized ? 'action-bar-left-collapsed' : 'action-bar-left'
+      }`}
       style={{
-        left: 'var(--sidebar-width)',
-        width: 'calc(100% - var(--sidebar-width))',
+        width: sidebarMinimized ? 'calc(100% - var(--sidebar-minimized-width))' : 'calc(100% - var(--sidebar-width))',
       }}>
       <div className="flex-1 text-xs text-muted-foreground mt-2">
         {selectedRows.length} of {registries?.length} registry(s) selected.

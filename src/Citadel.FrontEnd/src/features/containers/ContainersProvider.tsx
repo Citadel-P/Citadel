@@ -1,11 +1,9 @@
-import { ContainerView, DeleteContainersRequest } from '@/api/_generated';
+import { ContainerView } from '@/api/_generated';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import useContainersHub from './hooks/useContainersHub';
 import { useParams } from 'react-router';
-import { useDELETEContainers } from './hooks/useDELETEContainers';
-import { toast } from 'sonner';
-import { useDialogState } from '@/hooks/useDialogState';
 import { ContainersContext } from './ContainersContext';
+import { useDeleteContainerDialog } from './dialogs/useDeleteContainerDialog';
 
 export const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const { platformId } = useParams<{ platformId: string }>();
@@ -13,17 +11,13 @@ export const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ c
   // Fetch containers data
   const { containersInfo, isLoading } = useContainersHub(platformId!);
 
-  // Handle container deletion
-  const { mutate, isSuccess: deleteIsSuccess, isPending: deleteIsPending } = useDELETEContainers();
-
   // State for selected rows and containers
   const [selectedRows, setSelectedRows] = useState<ContainerView[] | undefined>([]);
   const [containers, setContainers] = useState<ContainerView[] | undefined>([]);
   const [originalContainers, setOriginalContainers] = useState<ContainerView[] | undefined>([]);
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
-  // Dialog state
-  const { dialogData, setDialogData } = useDialogState<ContainerView>();
+  const { deleteIsPending, requestDelete, dialogData, setDialogData } = useDeleteContainerDialog();
 
   // Update containers when hub info changes
   useEffect(() => {
@@ -60,22 +54,6 @@ export const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ c
     }
   }, [originalContainers, currentSearchTerm]);
 
-  // Handle successful deletion
-  useEffect(() => {
-    if (deleteIsSuccess) {
-      setDialogData({ open: false });
-      toast.success('The selected container(s) has been successfully deleted');
-    }
-  }, [deleteIsSuccess, setDialogData]);
-
-  // Request to delete containers
-  const requestDelete = useCallback(
-    (data: DeleteContainersRequest) => {
-      mutate(data);
-    },
-    [mutate],
-  );
-
   // Search function to filter containers by name
   const onSearch = useCallback((searchTerm: string) => {
     setCurrentSearchTerm(searchTerm);
@@ -88,19 +66,19 @@ export const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ c
       platformId,
       containers,
       dialogData,
+      deleteIsPending,
       setDialogData,
       selectedRows,
       setSelectedRows,
       requestDelete,
-      deleteIsPending,
       onSearch,
     }),
     [
       isLoading,
       platformId,
       containers,
-      dialogData,
       selectedRows,
+      dialogData,
       deleteIsPending,
       requestDelete,
       setDialogData,

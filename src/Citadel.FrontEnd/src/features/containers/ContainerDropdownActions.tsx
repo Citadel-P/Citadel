@@ -11,17 +11,23 @@ import { ContainerView } from '@/api/_generated';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { useNavigate } from 'react-router';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
-import { useContainersContext } from './ContainersContext';
+import { IDeleteDialogData } from '@/hooks/useDialogState';
+import { DockerContainerView } from '@/api/models';
 
-const DropdownTableMenu: React.FC<{ container: ContainerView }> = ({ container }) => {
+export const ContainerDropdownActions: React.FC<{
+  container: ContainerView | DockerContainerView | undefined;
+  setDialogData: (data: IDeleteDialogData<ContainerView | DockerContainerView>) => void;
+  hideDetails?: boolean;
+}> = ({ container, hideDetails, setDialogData }) => {
   const navigate = useNavigate();
-  const { setDialogData } = useContainersContext();
 
-  const { availableActions, isPending, requestPatch } = useAvailableActions([container]);
+  const { availableActions, isPending, requestPatch } = useAvailableActions([container as ContainerView]);
 
   // Memoized function to open the delete dialog
   const openDialog = useCallback(() => {
-    setDialogData({ open: true, currentSelection: [container] });
+    if (container) {
+      setDialogData({ open: true, currentSelection: [container] });
+    }
   }, [setDialogData, container]);
 
   return (
@@ -65,16 +71,19 @@ const DropdownTableMenu: React.FC<{ container: ContainerView }> = ({ container }
           label="Restart"
         />
 
-        <DropdownMenuSeparator />
+        {!hideDetails && (
+          <>
+            <DropdownMenuSeparator />
 
-        {/* View Details */}
-        <ActionMenuItem
-          onClick={() => navigate(`../containers/${container.containerId?.slice(0, 12)}/logs`)}
-          disabled={false}
-          icon={<Eye className="mr-2 h-3 w-3" />}
-          label="View details"
-        />
-
+            {/* View Details */}
+            <ActionMenuItem
+              onClick={() => navigate(`../containers/${container?.containerId?.slice(0, 12)}/logs`)}
+              disabled={false}
+              icon={<Eye className="mr-2 h-3 w-3" />}
+              label="View details"
+            />
+          </>
+        )}
         <DropdownMenuSeparator />
 
         {/* Delete Action */}
@@ -89,5 +98,3 @@ const DropdownTableMenu: React.FC<{ container: ContainerView }> = ({ container }
     </DropdownMenu>
   );
 };
-
-export default DropdownTableMenu;

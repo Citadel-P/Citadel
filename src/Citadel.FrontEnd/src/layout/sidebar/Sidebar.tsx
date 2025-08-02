@@ -1,4 +1,4 @@
-import { useLayoutContext } from '@/layout/LayoutProvider';
+import { useLayoutContext } from '@/layout/LayoutContext';
 import { ChevronsRight, ChevronsUpDown, Info } from 'lucide-react';
 import LogoIcon from '@/assets/logo.svg';
 import { SidebarMenu } from './SidebarMenu';
@@ -21,6 +21,9 @@ export const Sidebar = () => {
             <div className="flex items-center">
               <span
                 onClick={() => navigate('/')}
+                onKeyDown={(e) => e.key === 'Enter' && navigate('/')}
+                role="button"
+                tabIndex={0}
                 className="flex text-background cursor-pointer items-center justify-center rounded bg-primary p-2 focus:outline-hidden focus:ring-1">
                 <LogoIcon />
               </span>
@@ -68,6 +71,9 @@ export const Sidebar = () => {
           <div
             ref={ref}
             onClick={() => setOpen(!open)}
+            onKeyDown={(e) => e.key === 'Enter' && setOpen(!open)}
+            role="button"
+            tabIndex={0}
             className="mr-1 relative hover:cursor-pointer rounded-full hover:bg-foreground/5 p-1">
             <span>
               <ChevronsUpDown width={15} className="text-muted-foreground/90" />

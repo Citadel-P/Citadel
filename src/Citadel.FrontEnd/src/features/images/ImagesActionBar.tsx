@@ -1,9 +1,11 @@
 import { SearchCode, Trash } from 'lucide-react';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
 import { useImagesContext } from './ImagesContext';
+import { useLayoutContext } from '@/layout/LayoutContext';
 
-export const ActionBar = () => {
+export const ImagesActionBar = () => {
   const { setDialogData, selectedRows, localImages: images, setSheetOpen, setCurrentImage } = useImagesContext();
+  const { sidebarMinimized } = useLayoutContext();
 
   const actions: ImageActionsState = {
     canInspect: selectedRows?.length === 1,
@@ -18,10 +20,11 @@ export const ActionBar = () => {
 
   return (
     <div
-      className="h-14 fixed -translate-x-5 inset-x-0 bottom-0 shadow-lg p-2 bg-background sm:flex sm:justify-between"
+      className={`fixed -translate-x-5 inset-x-0 bottom-0 shadow-lg p-2 bg-background flex flex-wrap justify-center items-center gap-x-4 gap-y-2 sm:justify-between ${
+        sidebarMinimized ? 'action-bar-left-collapsed' : 'action-bar-left'
+      }`}
       style={{
-        left: 'var(--sidebar-width)',
-        width: 'calc(100% - var(--sidebar-width))',
+        width: sidebarMinimized ? 'calc(100% - var(--sidebar-minimized-width))' : 'calc(100% - var(--sidebar-width))',
       }}>
       <div className="flex-1 text-xs text-muted-foreground mt-2">
         {selectedRows.length} of {images.length} image(s) selected.

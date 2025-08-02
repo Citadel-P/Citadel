@@ -29,11 +29,16 @@ export const DeleteLocalImageDialog = () => {
     <Dialog open={dialogData.open} onOpenChange={(open) => setDialogData({ open })}>
       <DialogContent className="sm:max-w-[600px]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Delete Confirmation</DialogTitle>
+          <DialogTitle>Confirm Deletion</DialogTitle>
           <DialogDescription>
-            {imagesId.length === 1
-              ? 'Are you sure you want to delete the selected image?'
-              : `Are you sure you want to delete the selected ${imagesId.length} images?`}
+            {imagesId.length === 1 ? (
+              'Are you sure you want to delete the selected image?'
+            ) : (
+              <>
+                You&apos;re about to delete <span className="font-medium text-foreground">{imagesId.length}</span>{' '}
+                images. This action is permanent. Do you want to continue?
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">

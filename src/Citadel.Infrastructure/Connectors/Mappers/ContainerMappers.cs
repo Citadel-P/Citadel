@@ -644,6 +644,25 @@ internal static class ContainerMappers
             Container: @event.Container?.Map()
         );
 
+    public static void Map(ContainerMessage container, DockerContainer destination)
+    {
+        if (destination.ContainerStat is not null)
+        {
+            Map(container.ContainerStatMessage, destination.ContainerStat);
+        }
+        
+        destination.ReInitialize(
+            name: container.Name,
+            image: container.Image,
+            stack: container.Stack,
+            containerId: container.Id,
+            created: container.Created,
+            state: container.State.Map(),
+            containerStat: destination.ContainerStat,
+            ports: container.Ports?.Map()?.ToList() ?? []
+        );
+    }
+
     public static IReadOnlyDictionary<string, DockerContainer> Map(this IReadOnlyDictionary<string, ContainerResult> containers) 
         => containers.ToDictionary(c => c.Key, c => c.Value.Map());
 
@@ -662,14 +681,17 @@ internal static class ContainerMappers
 
     public static void Map(ContainerResult container, DockerContainer destination)
     {
-        
+        if (container.ContainerStat != null)
+        {
+            Map(container.ContainerStat, destination.ContainerStat);
+        }
         destination.ReInitialize(
           name: container?.Name,
           image: container?.Image,
           stack: container?.Stack,
           containerId: container?.Id,
           created: container?.Created,
-          containerStat: container?.ContainerStat?.Map(),
+          containerStat: destination.ContainerStat,
           ports: container?.Ports?.Select(Map).ToList() ?? [],
           state: container?.State?.Map() ?? ContainerStateStatus.Unknown
           );

@@ -21,15 +21,16 @@ export const DeleteRegistryDialog = () => {
     <Dialog open={dialogData.open} onOpenChange={(open) => setDialogData({ open })}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Delete Confirmation</DialogTitle>
+          <DialogTitle>Confirm Deletion</DialogTitle>
           <DialogDescription></DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           {registriesId.length === 1 && <p>Are you sure you want to delete the selected registry?</p>}
           {registriesId.length > 1 && (
-            <p>
-              Are you sure you want to delete the selected <b>{registriesId.length}</b> registries?
-            </p>
+            <>
+              You&apos;re about to delete <span className="font-medium text-foreground">{registriesId.length}</span>{' '}
+              registries. This action is permanent. Do you want to continue?
+            </>
           )}
         </div>
         <DialogFooter>

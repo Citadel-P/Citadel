@@ -13,22 +13,37 @@ import { ContainerStatsProvider } from './stats/ContainerStatsProvider';
 import useContainerInfoHub from '../hooks/useContainerInfoHub';
 import { ContainerStateStatus } from '@/api/_generated';
 import { ContainerStateIndicator } from '../ContainerStateIndicator';
+import { ContainersActionButtons } from '../ContainersActionButtons';
+import { useDeleteContainerDialog } from '../dialogs/useDeleteContainerDialog';
+import { DeleteContainerDialog } from '../dialogs/DeleteContainerDialog';
 
 const ContainerInfoWrapper = () => {
   const navigate = useNavigate();
   const { route, currentContainer, isLoading } = useAppContext();
   const { containerInfo } = useContainerInfoHub(currentContainer?.containerId);
+  const {
+    deleteIsPending: isPending,
+    requestDelete,
+    deleteIsSuccess,
+    dialogData,
+    setDialogData,
+  } = useDeleteContainerDialog();
 
   const [containerId, setContainerId] = useState<string | undefined>();
   const [containerName, setContainerName] = useState<string | undefined>();
   const [containerState, setContainerState] = useState<ContainerStateStatus | undefined>();
 
   useEffect(() => {
-    console.log(currentContainer, containerInfo);
     setContainerName(containerInfo?.name ?? currentContainer?.containerName);
     setContainerId(containerInfo?.containerId ?? currentContainer?.containerId);
     setContainerState(containerInfo?.state ?? currentContainer?.state);
   }, [currentContainer, containerInfo]);
+
+  useEffect(() => {
+    if (deleteIsSuccess) {
+      navigate(`/platforms/${currentContainer?.platformId}/containers`);
+    }
+  }, [deleteIsSuccess, navigate, currentContainer]);
 
   // Memoize the current tab based on the route
   const currentTab = useMemo(() => {
@@ -48,7 +63,6 @@ const ContainerInfoWrapper = () => {
   );
 
   if (isLoading) return <Loader />;
-
   // Render a fallback if currentContainer is undefined
   if (!containerId) {
     return (
@@ -63,11 +77,19 @@ const ContainerInfoWrapper = () => {
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
         <div className="max-w-full rounded-lg border-border bg-background p-4">
           {/* Header */}
-          <div className="flex items-baseline gap-1 mb-3">
-            <ContainerStateIndicator stat={containerState ?? ContainerStateStatus.Exited} />
-            <div className="text-md font-bold text-foreground">
-              <span>{containerName?.slice(1)}</span>
-              <span className="text-sm text-foreground/40 ml-2">({containerId?.slice(0, 12)})</span>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-1">
+              <ContainerStateIndicator stat={containerState ?? ContainerStateStatus.Exited} />
+              <div className="text-md font-bold text-foreground">
+                <span>{containerName?.slice(1)}</span>
+                <span className="text-sm text-foreground/40 ml-2">({containerId?.slice(0, 12)})</span>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <ContainersActionButtons
+                selectedContainers={[containerInfo! ?? currentContainer]}
+                setDialogData={setDialogData}
+              />
             </div>
           </div>
 
@@ -99,6 +121,12 @@ const ContainerInfoWrapper = () => {
           </Tabs>
         </div>
       </div>
+      <DeleteContainerDialog
+        requestDelete={requestDelete}
+        isPending={isPending}
+        dialogData={dialogData}
+        setDialogData={setDialogData}
+      />
     </div>
   );
 };

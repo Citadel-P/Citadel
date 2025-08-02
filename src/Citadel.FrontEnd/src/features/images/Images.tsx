@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router';
 import { useAppContext } from '@/AppContext';
 import ExternalRepositories from './ExternalRepositories';
 import LocalImagesTable from './LocalImagesTable';
-import { ActionBar } from './ActionBar';
+import { ImagesActionBar } from './ImagesActionBar';
 import Loader from '@/components/ui/loader';
 import { SearchField } from '@/components/ui/SearchField';
 import { useImagesContext } from './ImagesContext';
@@ -76,7 +76,7 @@ const Images = () => {
           </Tabs>
         </div>
       </div>
-      <ActionBar />
+      <ImagesActionBar />
     </div>
   );
 };

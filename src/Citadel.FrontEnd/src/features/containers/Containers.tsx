@@ -1,7 +1,7 @@
 import { Container } from 'lucide-react';
 import { SearchField } from '../../components/ui/SearchField';
 import { ContainersTable } from './ContainersTable';
-import { ActionBar } from './ActionBar';
+import { ContainersActionBar } from './ContainersActionBar';
 import { AlertMessage } from '@/components/ui/alert-message';
 import { DeleteContainerDialog } from './dialogs/DeleteContainerDialog';
 import { useMemo } from 'react';
@@ -9,7 +9,14 @@ import { ContainerStateStatus } from '@/api/_generated';
 import { useContainersContext } from './ContainersContext';
 
 const Containers = () => {
-  const { containers, onSearch } = useContainersContext();
+  const {
+    containers,
+    onSearch,
+    deleteIsPending: isPending,
+    requestDelete,
+    dialogData,
+    setDialogData,
+  } = useContainersContext();
   const isPlatformOffline = useMemo(
     () => containers?.some((container) => container.state === ContainerStateStatus.Offline),
     [containers],
@@ -37,8 +44,13 @@ const Containers = () => {
           <ContainersTable />
         </div>
       </div>
-      <ActionBar />
-      <DeleteContainerDialog />
+      <ContainersActionBar />
+      <DeleteContainerDialog
+        requestDelete={requestDelete}
+        isPending={isPending}
+        dialogData={dialogData}
+        setDialogData={setDialogData}
+      />
     </div>
   );
 };

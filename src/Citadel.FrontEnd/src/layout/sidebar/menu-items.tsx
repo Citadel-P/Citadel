@@ -67,7 +67,7 @@ const DockerPlatformMenu = (platform: { id: string; name: string }): ISubMenuIte
   route: `/platforms/${platform.id}`,
   isPlatform: true,
   children: [
-    { label: 'Containers', route: `/platforms/${platform.id}/containers`,  },
+    { label: 'Containers', route: `/platforms/${platform.id}/containers` },
     { label: 'Images', route: `/platforms/${platform.id}/images` },
     { label: 'Networks', route: `/platforms/${platform.id}/networks` },
     { label: 'Volumes', route: `/platforms/${platform.id}/volumes` },

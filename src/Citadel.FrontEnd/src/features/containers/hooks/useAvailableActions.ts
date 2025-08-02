@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 import { ContainerView, ContainerStateStatus } from '@/api/_generated';
 import { actionType, usePATCHContainers } from './usePATCHContainers';
+import { DockerContainerView } from '@/api/models';
 
-export const useAvailableActions = (containers: ContainerView[] | undefined) => {
+export const useAvailableActions = (containers: ContainerView[] | DockerContainerView[] | undefined) => {
   const { mutate, isPending } = usePATCHContainers();
-
   // Calculate available actions using useMemo
   const availableActions = useMemo<ContainerActionsState | undefined>(() => {
     return containers?.reduce<ContainerActionsState>(
@@ -47,7 +47,7 @@ export const useAvailableActions = (containers: ContainerView[] | undefined) => 
   return { availableActions, requestPatch, isPending };
 };
 
-type ContainerActionsState = {
+export type ContainerActionsState = {
   canStart: boolean;
   canStop: boolean;
   canRestart: boolean;

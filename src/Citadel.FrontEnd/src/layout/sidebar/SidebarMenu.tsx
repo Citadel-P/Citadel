@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
-import { useLayoutContext } from '@/layout/LayoutProvider';
+import { useLayoutContext } from '@/layout/LayoutContext';
 import { ISubMenuItem, MenuItems, DockerPlatformMenu, IMenuItem } from './menu-items';
 import { ChevronRight } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';

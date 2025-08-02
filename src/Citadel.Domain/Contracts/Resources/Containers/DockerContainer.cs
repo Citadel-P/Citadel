@@ -22,7 +22,7 @@ public sealed class DockerContainer
     public string? Stack { get; private set; } = stack;
     public DockerContainerStat? ContainerStat { get; private set; } = containerStat;
     public IReadOnlyList<ContainerPort>? Ports { get; private set; } = ports;
-    internal DockerContainer() : this(string.Empty, string.Empty, string.Empty, ContainerStateStatus.Unknown) { } // For pooled object usage
+    internal DockerContainer() : this(string.Empty, string.Empty, string.Empty, ContainerStateStatus.Unknown, containerStat: new DockerContainerStat()) { } // For pooled object usage
     public void ReInitialize(
         string name,
         string image,

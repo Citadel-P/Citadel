@@ -25,11 +25,16 @@ export const DeleteNetworkDialog = () => {
     <Dialog open={dialogData.open} onOpenChange={(open) => setDialogData({ open })}>
       <DialogContent className="sm:max-w-[600px]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Delete Confirmation</DialogTitle>
+          <DialogTitle>Confirm Deletion</DialogTitle>
           <DialogDescription>
-            {networksId.length === 1
-              ? 'Are you sure you want to delete the selected network?'
-              : `Are you sure you want to delete the selected ${networksId.length} networks?`}
+            {networksId.length === 1 ? (
+              'Are you sure you want to delete the selected network?'
+            ) : (
+              <>
+                You&apos;re about to delete <span className="font-medium text-foreground">{networksId.length}</span>{' '}
+                networks. This action is permanent. Do you want to continue?
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 

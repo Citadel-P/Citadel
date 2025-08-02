@@ -1,34 +1,28 @@
-import { useRequiredContext } from '@/hooks/useRequiredContext';
-import { createContext, useState } from 'react';
-
-interface IContext {
-  theme: ITheme;
-  sidebarMinimized: boolean;
-  mobileMenuVisible: boolean;
-  toggleSidebar: () => void;
-  toggleMobileMenu: () => void;
-  toggleThemeColor: (color: string) => void;
-  setThemeMode: (mode: 'light' | 'dark') => void;
-}
-
-interface ITheme {
-  mode: 'light' | 'dark';
-  color?: string;
-}
-
-interface IProps {
-  children?: React.ReactNode;
-}
-
-export const LayoutContext = createContext<IContext | undefined>(undefined);
+import { useState, useEffect } from 'react';
+import { ITheme, LayoutContext } from './LayoutContext';
 
 const theme = localStorage.getItem('theme');
 const initTheme: ITheme = theme ? JSON.parse(theme) : { color: 'blue', mode: 'light' };
 
-const LayoutProvider: React.FC<IProps> = ({ children }) => {
+export const LayoutProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState(initTheme);
   const [mobileMenuVisible, setMobileMenuVisibility] = useState(false);
   const [sidebarMinimized, setSidebarMinimized] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setSidebarMinimized(true);
+      } else {
+        setSidebarMinimized(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    handleResize(); // Initial check
+
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   document.querySelector('html')!.setAttribute('data-theme', theme.color ?? 'base');
   document.querySelector('html')!.className = theme.mode;
@@ -49,6 +43,3 @@ const LayoutProvider: React.FC<IProps> = ({ children }) => {
     </LayoutContext.Provider>
   );
 };
-
-export default LayoutProvider;
-export const useLayoutContext = () => useRequiredContext(LayoutContext);

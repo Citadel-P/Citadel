@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router';
-import LayoutProvider, { useLayoutContext } from './LayoutProvider';
+import { useLayoutContext } from './LayoutContext';
+import { LayoutProvider } from './LayoutProvider';
 import { Sidebar } from './sidebar/Sidebar';
 import Breadcrumb from './breadcrumb/Breadcrumb';
 import { AppProvider } from '@/AppProvider';
@@ -23,13 +24,14 @@ const LayoutPage = () => {
       },
     );
 
-    if (breadcrumbRef.current) {
-      observer.observe(breadcrumbRef.current);
+    const breadcrumbElement = breadcrumbRef.current;
+    if (breadcrumbElement) {
+      observer.observe(breadcrumbElement);
     }
 
     return () => {
-      if (breadcrumbRef.current) {
-        observer.unobserve(breadcrumbRef.current);
+      if (breadcrumbElement) {
+        observer.unobserve(breadcrumbElement);
       }
     };
   }, []);

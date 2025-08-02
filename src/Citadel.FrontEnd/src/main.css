@@ -201,6 +201,7 @@ layer(base);
     --chart-1: #2490ff;
     --chart-2: #e76a4b;
     --sidebar-width: 250px;
+    --sidebar-minimized-width: 40px;
   }
 
   .dark {
@@ -365,4 +366,12 @@ select {
 
 .sidebar-collapsed {
   --sidebar-width: 105px;
+}
+
+.action-bar-left {
+  left: var(--sidebar-width);
+}
+
+.action-bar-left-collapsed {
+  left: var(--sidebar-minimized-width) - 50;
 }

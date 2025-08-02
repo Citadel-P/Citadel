@@ -64,19 +64,20 @@ const PlatformFormProvider: React.FC<IProps> = ({ children }) => {
   const mode: FormMode = platformId ? 'edit' : 'add';
   const { data, isLoading } = useGETPlatform(platformId);
   const {
-    mutate: requestCreate,
+    mutate: _requestCreate,
     validationErrors: createErrors,
     isSuccess: createIsSuccess,
     isPending: createIsPending,
     data: createData,
   } = usePOSTPlatform();
   const {
-    mutate: requestPatch,
+    mutate: _requestPatch,
     validationErrors: patchErrors,
     isSuccess: patchIsSuccess,
     isPending: patchIsPending,
     data: patchData,
   } = usePATCHPlatform();
+
   const [currentProvider, setCurrentProvider] = useState<string>(PlatformType.Docker);
   const [platform, setPlatform] = useState<PlatformView | undefined>(undefined);
   let providers = [...defaultProviders];

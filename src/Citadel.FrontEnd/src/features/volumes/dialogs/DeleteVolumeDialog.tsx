@@ -27,11 +27,16 @@ export const DeleteVolumeDialog = () => {
     <Dialog open={dialogData.open} onOpenChange={(open) => setDialogData({ open })}>
       <DialogContent className="sm:max-w-[600px]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Delete Confirmation</DialogTitle>
+          <DialogTitle>Confirm Deletion</DialogTitle>
           <DialogDescription>
-            {volumesId.length === 1
-              ? 'Are you sure you want to delete the selected volume?'
-              : `Are you sure you want to delete the selected ${volumesId.length} volumes?`}
+            {volumesId.length === 1 ? (
+              'Are you sure you want to delete the selected volume?'
+            ) : (
+              <>
+                You&apos;re about to delete <span className="font-medium text-foreground">{volumesId.length}</span>{' '}
+                volumes. This action is permanent. Do you want to continue?
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
         <SwitchSection

@@ -77,9 +77,7 @@ internal class LocalContainerConnector(IContainerService containerService, IObje
         {
             using var _ = result;
             var pooledContainer = objectPoolManager.GetPooled<DockerContainer>();
-
             ContainerMappers.Map(result.Value, pooledContainer.Value);
-            // Todo: Map
             yield return pooledContainer;
         }
     }

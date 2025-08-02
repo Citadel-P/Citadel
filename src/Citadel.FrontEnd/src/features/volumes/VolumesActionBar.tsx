@@ -1,31 +1,34 @@
 import { Trash, SearchCode } from 'lucide-react';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
-import { useNetworksContext } from './NetworksContext';
+import { useVolumesContext } from './VolumesContext';
+import { useLayoutContext } from '@/layout/LayoutContext';
 
-export const ActionBar = () => {
-  const { setDialogData, setSheetOpen, setCurrentNetwork, selectedRows, networks } = useNetworksContext();
+export const VolumesActionBar = () => {
+  const { setDialogData, setSheetOpen, setCurrentVolume, selectedRows, volumes } = useVolumesContext();
+  const { sidebarMinimized } = useLayoutContext();
 
-  const actions: NetworkActionsState = {
+  const actions: VolumeActionsState = {
     canDelete: (selectedRows?.length ?? 0) > 0 && selectedRows?.find((row) => row.inUse) === undefined,
     canInspect: selectedRows?.length === 1,
   };
 
   const handleInspectClick = () => {
     setSheetOpen(true);
-    if (selectedRows) setCurrentNetwork(selectedRows[0]);
+    if (selectedRows) setCurrentVolume(selectedRows[0]);
   };
 
   if (!selectedRows?.length) return null;
 
   return (
     <div
-      className="h-14 fixed -translate-x-5 inset-x-0 bottom-0 shadow-lg p-2 bg-background sm:flex sm:justify-between"
+      className={`fixed -translate-x-5 inset-x-0 bottom-0 shadow-lg p-2 bg-background flex flex-wrap justify-center items-center gap-x-4 gap-y-2 sm:justify-between ${
+        sidebarMinimized ? 'action-bar-left-collapsed' : 'action-bar-left'
+      }`}
       style={{
-        left: 'var(--sidebar-width)',
-        width: 'calc(100% - var(--sidebar-width))',
+        width: sidebarMinimized ? 'calc(100% - var(--sidebar-minimized-width))' : 'calc(100% - var(--sidebar-width))',
       }}>
       <div className="flex-1 text-xs text-muted-foreground mt-2">
-        {selectedRows.length} of {networks.length} network(s) selected.
+        {selectedRows.length} of {volumes?.length} volume(s) selected.
       </div>
       <div className="mt-1">
         <ActionBarButton
@@ -34,14 +37,14 @@ export const ActionBar = () => {
           icon={SearchCode}
           label="Inspect"
           className="rounded-l-lg"
-          ariaLabel="Inspect selected network"
+          ariaLabel="Inspect selected volume"
         />
         <ActionBarButton
           onClick={() => setDialogData({ open: true, currentSelection: selectedRows })}
           disabled={!actions.canDelete}
           icon={Trash}
           label="Delete"
-          ariaLabel="Delete selected networks"
+          ariaLabel="Delete selected volumes"
           className="inline-flex items-center rounded-r-md border border-border px-2 py-2 text-background bg-danger enabled:hover:bg-danger/85 enabled:hover:text-background font-medium text-xs disabled:cursor-not-allowed disabled:opacity-60"
         />
       </div>
@@ -49,7 +52,7 @@ export const ActionBar = () => {
   );
 };
 
-type NetworkActionsState = {
+type VolumeActionsState = {
   canDelete: boolean;
   canInspect: boolean;
 };

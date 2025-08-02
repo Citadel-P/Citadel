@@ -19,7 +19,7 @@ export const DeletePlatformDialog = () => {
     <Dialog open={dialogData.open} onOpenChange={(open) => setDialogData({ open })}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Delete Confirmation</DialogTitle>
+          <DialogTitle>Confirm Deletion</DialogTitle>
           <DialogDescription>
             Are you sure you want to delete the <span className="font-medium">{dialogData.platform?.name}</span>{' '}
             platform?

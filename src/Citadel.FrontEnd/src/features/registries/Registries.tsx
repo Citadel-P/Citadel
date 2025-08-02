@@ -5,7 +5,7 @@ import { Boxes, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useRegistriesContext } from './RegistriesContext';
 import { RegistriesTable } from './RegistriesTable';
-import { ActionBar } from './ActionBar';
+import { RegistriesActionBar } from './RegistriesActionBar';
 import { DeleteRegistryDialog } from './dialogs/DeleteRegistryDialog';
 
 const Registries = () => {
@@ -46,7 +46,7 @@ const Registries = () => {
           <RegistriesTable />
         </div>
       </div>
-      <ActionBar />
+      <RegistriesActionBar />
       <DeleteRegistryDialog />
     </div>
   );

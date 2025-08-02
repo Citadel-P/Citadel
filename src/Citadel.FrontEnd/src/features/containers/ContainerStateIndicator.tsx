@@ -1,5 +1,5 @@
-import { ContainerStateStatus } from "@/api/_generated";
-import { memo } from "react";
+import { ContainerStateStatus } from '@/api/_generated';
+import { memo } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export const ContainerStateIndicator = memo(({ stat }: { stat: ContainerStateStatus }) => {
