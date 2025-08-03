@@ -72,13 +72,12 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
     }
 }
 
-internal sealed class PullImageHandler(IUnitOfWork unitOfWork, IConnectorFactory<IImageConnector> connectorFactory) 
+internal sealed class PullImageHandler(IUnitOfWork unitOfWork, IPlatformContainerCache platformContainerCache, IConnectorFactory<IImageConnector> connectorFactory) 
     : IStreamCommandHandler<PullImage, PullImageResult>
 {
     public async IAsyncEnumerable<PullImageResult> Handle(PullImage command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
-        if (platform is null)
+        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform))
         {
             yield break;
         }

@@ -19,12 +19,11 @@ public sealed record InspectVolume (Guid PlatformId, string Name) : IQuery<Resul
     }
 }
 
-internal sealed class InspectVolumeHandler(IUnitOfWork unitOfWork, IConnectorFactory<IVolumeConnector> connectorFactory) : IQueryHandler<InspectVolume, Result<DockerVolumeResult>>
+internal sealed class InspectVolumeHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IVolumeConnector> connectorFactory) : IQueryHandler<InspectVolume, Result<DockerVolumeResult>>
 {
     public async ValueTask<Result<DockerVolumeResult>> Handle(InspectVolume query, CancellationToken cancellationToken)
     {
-        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
-        if (platform is null)
+        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
         {
             return Result.Failure<DockerVolumeResult>(new NotFoundError("The provided platform Id doesn't exist"));
         }

@@ -54,8 +54,8 @@ internal class ContainerSyncJob(
             syncedContainers = await SyncOnlinePlatformContainers(uow, platformEvent, cancellationToken);
             var cacheEntry = new PlatformCacheEntry
             (
-                Type: platformEvent.Type,
-                PlatformAddress: platformEvent.Address,
+                Address: platformEvent.Address,
+                ConnectorType: platformEvent.Type,
                 Containers: syncedContainers.ToDictionary(c => c.ContainerId, c => c.Id)
             );
             platformContainerCache.ReplacePlatformContainers(platformEvent.Id, cacheEntry);

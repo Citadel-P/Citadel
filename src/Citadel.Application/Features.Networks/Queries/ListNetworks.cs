@@ -8,12 +8,11 @@ namespace Application.Features.Networks.Queries;
 
 public sealed record ListNetworks (Guid PlatformId, bool? Dangling = null, string? Driver = null, string? Id = null, string? Name = null) : IQuery<Result<IEnumerable<DockerNetworkResult>>>;
 
-internal class ListNetworksHandler(IUnitOfWork unitOfWork, IConnectorFactory<INetworkConnector> connectorFactory) : IQueryHandler<ListNetworks, Result<IEnumerable<DockerNetworkResult>>>
+internal class ListNetworksHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<INetworkConnector> connectorFactory) : IQueryHandler<ListNetworks, Result<IEnumerable<DockerNetworkResult>>>
 {
     public async ValueTask<Result<IEnumerable<DockerNetworkResult>>> Handle(ListNetworks query, CancellationToken cancellationToken)
     {
-        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
-        if (platform is null)
+        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
         {
             return Result.Failure<IEnumerable<DockerNetworkResult>>(new NotFoundError("The provided platform Id doesn't exist"));
         }

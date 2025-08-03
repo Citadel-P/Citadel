@@ -121,55 +121,57 @@ const AddNetworkForm = () => {
                 <span className="absolute flex items-center justify-center w-5 h-5 bg-primary/80 rounded-full -start-2.5 ring-4 ring-background text-xs text-primary-foreground">
                   1
                 </span>
-                <h2 className="text-sm mb-2 font-semibold text-foreground">Basic Configuration</h2>
-                <div className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
-                        <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">Name</FormLabel>
-                        <div className="flex-1">
-                          <FormControl>
-                            <Input
-                              type="text"
-                              placeholder="e.g. my-network"
-                              className="rounded-sm focus-visible:ring-transparent"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage className="text-xs" />
-                        </div>
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="driver"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
-                        <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">Driver</FormLabel>
-                        <div className="flex-1">
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl className="w-full shadow-none">
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select your account type" />
-                              </SelectTrigger>
+                <div className="flex flex-col space-y-4">
+                  <div className="text-sm mt-0.5 font-semibold text-foreground leading-none">Basic Configuration</div>
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
+                          <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">Name</FormLabel>
+                          <div className="flex-1">
+                            <FormControl>
+                              <Input
+                                type="text"
+                                placeholder="e.g. my-network"
+                                className="rounded-sm focus-visible:ring-transparent"
+                                {...field}
+                              />
                             </FormControl>
-                            <SelectContent className="bg-background">
-                              {driverOptions.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </div>
-                      </FormItem>
-                    )}
-                  />
+                            <FormMessage className="text-xs" />
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="driver"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
+                          <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">Driver</FormLabel>
+                          <div className="flex-1">
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl className="w-full shadow-none">
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select your account type" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="bg-background">
+                                {driverOptions.map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
               </li>
 
@@ -179,148 +181,33 @@ const AddNetworkForm = () => {
                   2
                 </span>
                 <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-                  <CollapsibleTrigger asChild>
-                    <button
-                      type="button"
-                      aria-expanded={advancedOpen}
-                      className="flex items-center justify-between w-full px-2 py-2 rounded transition-colors hover:bg-accent group focus:outline-none">
-                      <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-                        Advanced Configuration (Optional)
-                      </span>
-                      <ChevronDown
-                        className={`transition-transform ml-2 ${advancedOpen ? 'rotate-180' : ''} group-hover:text-primary`}
-                        size={18}
-                      />
-                    </button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                      <FormField
-                        control={form.control}
-                        name="enableIPv4"
-                        render={({ field }) => (
-                          <FormItem className="col-span-2 flex flex-row items-center justify-between rounded-lg border p-3">
-                            <div className="space-y-0.5">
-                              <FormLabel>Enable IPv4</FormLabel>
-                              <FormDescription>
-                                <FormMessage className="text-xs" />
-                                Controls whether IPv4 address allocation is enabled for this network.
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch checked={field.value} onCheckedChange={field.onChange} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-
-                      {enableIPv4 && (
-                        <>
-                          <div className="col-span-2 md:col-span-1">
-                            <IPField
-                              control={form.control}
-                              name="ipam.config.0.subnet"
-                              label="IPv4 Subnet"
-                              placeholder="e.g. 192.168.1.0/24"
-                            />
-                          </div>
-                          <div className="col-span-2 md:col-span-1">
-                            <IPField
-                              control={form.control}
-                              name="ipam.config.0.gateway"
-                              label="IPv4 Gateway"
-                              placeholder="e.g. 192.168.1.1"
-                            />
-                          </div>
-                          <div className="col-span-2 md:col-span-1">
-                            <IPField
-                              control={form.control}
-                              name="ipam.config.0.ipRange"
-                              label="IPv4 Range"
-                              placeholder="e.g. 192.168.1.0/25"
-                            />
-                          </div>
-                        </>
-                      )}
-
-                      <FormField
-                        control={form.control}
-                        name="enableIPv6"
-                        render={({ field }) => (
-                          <FormItem className="col-span-2 flex flex-row items-center justify-between rounded-lg border p-3">
-                            <div className="space-y-0.5">
-                              <FormLabel>Enable IPv6</FormLabel>
-                              <FormDescription>
-                                Controls whether IPv6 address allocation is enabled for this network.
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch checked={field.value} onCheckedChange={field.onChange} />
-                            </FormControl>
-                            <FormMessage className="text-xs" />
-                          </FormItem>
-                        )}
-                      />
-                      {enableIPv6 && (
-                        <>
-                          <div className="col-span-2 md:col-span-1">
-                            <IPField
-                              control={form.control}
-                              name="ipam.config.1.subnet"
-                              label="IPv6 Subnet"
-                              placeholder="e.g. fd00::/64"
-                            />
-                          </div>
-                          <div className="col-span-2 md:col-span-1">
-                            <IPField
-                              control={form.control}
-                              name="ipam.config.1.gateway"
-                              label="IPv6 Gateway"
-                              placeholder="e.g. fd00::1"
-                            />
-                          </div>
-                          <div className="col-span-2 md:col-span-1">
-                            <IPField
-                              control={form.control}
-                              name="ipam.config.1.ipRange"
-                              label="IPv6 Range"
-                              placeholder="e.g. fd00::/64"
-                            />
-                          </div>
-                        </>
-                      )}
-                      <KeyValuePairInput
-                        name="labels"
-                        fields={labelFields}
-                        control={control}
-                        append={appendLabel}
-                        remove={removeLabel}
-                        label="Labels"
-                        addButtonLabel="Add label"
-                        keyPlaceHolder="com.example.foo"
-                        valuePlaceHolder="bar"
-                      />
-                      <KeyValuePairInput
-                        name="options"
-                        fields={optionFields}
-                        control={control}
-                        append={appendOption}
-                        remove={removeOption}
-                        label="Driver Options"
-                        addButtonLabel="Add driver option"
-                      />
-
-                      <div className="col-span-2 md:col-span-1">
+                  <div className="flex flex-col space-y-4">
+                    <CollapsibleTrigger asChild>
+                      <button
+                        type="button"
+                        aria-expanded={advancedOpen}
+                        className="flex items-center justify-between w-full px-2 py-2 rounded transition-colors hover:bg-accent group focus:outline-none -mt-0.5">
+                        <span className="text-sm font-semibold text-foreground leading-none group-hover:text-primary transition-colors">
+                          Advanced Configuration (Optional)
+                        </span>
+                        <ChevronDown
+                          className={`transition-transform ml-2 ${advancedOpen ? 'rotate-180' : ''} group-hover:text-primary`}
+                          size={18}
+                        />
+                      </button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                         <FormField
                           control={form.control}
-                          name="internal"
+                          name="enableIPv4"
                           render={({ field }) => (
-                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 h-full">
+                            <FormItem className="col-span-2 flex flex-row items-center justify-between rounded-lg border p-3">
                               <div className="space-y-0.5">
-                                <FormLabel>Internal</FormLabel>
+                                <FormLabel>Enable IPv4</FormLabel>
                                 <FormDescription>
-                                  Restrict external access to and from this network. This feature provides network
-                                  isolation for containers.
+                                  <FormMessage className="text-xs" />
+                                  Controls whether IPv4 address allocation is enabled for this network.
                                 </FormDescription>
                               </div>
                               <FormControl>
@@ -329,29 +216,146 @@ const AddNetworkForm = () => {
                             </FormItem>
                           )}
                         />
-                      </div>
 
-                      <div className="col-span-2 md:col-span-1">
+                        {enableIPv4 && (
+                          <>
+                            <div className="col-span-2 md:col-span-1">
+                              <IPField
+                                control={form.control}
+                                name="ipam.config.0.subnet"
+                                label="IPv4 Subnet"
+                                placeholder="e.g. 192.168.1.0/24"
+                              />
+                            </div>
+                            <div className="col-span-2 md:col-span-1">
+                              <IPField
+                                control={form.control}
+                                name="ipam.config.0.gateway"
+                                label="IPv4 Gateway"
+                                placeholder="e.g. 192.168.1.1"
+                              />
+                            </div>
+                            <div className="col-span-2 md:col-span-1">
+                              <IPField
+                                control={form.control}
+                                name="ipam.config.0.ipRange"
+                                label="IPv4 Range"
+                                placeholder="e.g. 192.168.1.0/25"
+                              />
+                            </div>
+                          </>
+                        )}
+
                         <FormField
                           control={form.control}
-                          name="attachable"
+                          name="enableIPv6"
                           render={({ field }) => (
-                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 h-full">
+                            <FormItem className="col-span-2 flex flex-row items-center justify-between rounded-lg border p-3">
                               <div className="space-y-0.5">
-                                <FormLabel>Attachable</FormLabel>
+                                <FormLabel>Enable IPv6</FormLabel>
                                 <FormDescription>
-                                  Controls which types of containers can connect to an overlay network.
+                                  Controls whether IPv6 address allocation is enabled for this network.
                                 </FormDescription>
                               </div>
                               <FormControl>
                                 <Switch checked={field.value} onCheckedChange={field.onChange} />
                               </FormControl>
+                              <FormMessage className="text-xs" />
                             </FormItem>
                           )}
                         />
+                        {enableIPv6 && (
+                          <>
+                            <div className="col-span-2 md:col-span-1">
+                              <IPField
+                                control={form.control}
+                                name="ipam.config.1.subnet"
+                                label="IPv6 Subnet"
+                                placeholder="e.g. fd00::/64"
+                              />
+                            </div>
+                            <div className="col-span-2 md:col-span-1">
+                              <IPField
+                                control={form.control}
+                                name="ipam.config.1.gateway"
+                                label="IPv6 Gateway"
+                                placeholder="e.g. fd00::1"
+                              />
+                            </div>
+                            <div className="col-span-2 md:col-span-1">
+                              <IPField
+                                control={form.control}
+                                name="ipam.config.1.ipRange"
+                                label="IPv6 Range"
+                                placeholder="e.g. fd00::/64"
+                              />
+                            </div>
+                          </>
+                        )}
+                        <KeyValuePairInput
+                          name="labels"
+                          fields={labelFields}
+                          control={control}
+                          append={appendLabel}
+                          remove={removeLabel}
+                          label="Labels"
+                          addButtonLabel="Add label"
+                          keyPlaceHolder="com.example.foo"
+                          valuePlaceHolder="bar"
+                        />
+                        <KeyValuePairInput
+                          name="options"
+                          fields={optionFields}
+                          control={control}
+                          append={appendOption}
+                          remove={removeOption}
+                          label="Driver Options"
+                          addButtonLabel="Add driver option"
+                        />
+
+                        <div className="col-span-2 md:col-span-1">
+                          <FormField
+                            control={form.control}
+                            name="internal"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 h-full">
+                                <div className="space-y-0.5">
+                                  <FormLabel>Internal</FormLabel>
+                                  <FormDescription>
+                                    Restrict external access to and from this network. This feature provides network
+                                    isolation for containers.
+                                  </FormDescription>
+                                </div>
+                                <FormControl>
+                                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <div className="col-span-2 md:col-span-1">
+                          <FormField
+                            control={form.control}
+                            name="attachable"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 h-full">
+                                <div className="space-y-0.5">
+                                  <FormLabel>Attachable</FormLabel>
+                                  <FormDescription>
+                                    Controls which types of containers can connect to an overlay network.
+                                  </FormDescription>
+                                </div>
+                                <FormControl>
+                                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  </CollapsibleContent>
+                    </CollapsibleContent>
+                  </div>
                 </Collapsible>
                 <Button type="submit" className="mt-4" disabled={!form.formState.isDirty || !form.formState.isValid}>
                   <span>Create Network</span>

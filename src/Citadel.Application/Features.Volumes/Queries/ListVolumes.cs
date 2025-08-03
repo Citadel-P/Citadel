@@ -9,12 +9,11 @@ namespace Application.Features.Volumes.Queries;
 public sealed record ListVolumes(Guid PlatformId, bool? Dangling = null, string? Driver = null, string? Name = null) 
     : IQuery<Result<IEnumerable<DockerVolumeResult>>>;
 
-internal class ListVolumesHandler(IUnitOfWork unitOfWork, IConnectorFactory<IVolumeConnector> connectorFactory) : IQueryHandler<ListVolumes, Result<IEnumerable<DockerVolumeResult>>>
+internal class ListVolumesHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IVolumeConnector> connectorFactory) : IQueryHandler<ListVolumes, Result<IEnumerable<DockerVolumeResult>>>
 {
     public async ValueTask<Result<IEnumerable<DockerVolumeResult>>> Handle(ListVolumes query, CancellationToken cancellationToken)
     {
-        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
-        if (platform is null)
+        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
         {
             return Result.Failure<IEnumerable<DockerVolumeResult>>(new NotFoundError("The provided platform Id doesn't exist"));
         }

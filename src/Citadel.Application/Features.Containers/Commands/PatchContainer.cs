@@ -33,10 +33,10 @@ internal class PatchContainerHandler(IPlatformContainerCache platformContainerCa
             var command = new PatchContainerCommand
             (
                 Action: request.Action,
-                PlatformAddress: platform.PlatformAddress,
+                PlatformAddress: platform.Address,
                 ContainerIds: platform.Containers.Select(s => s.Key)
             );
-            await connectorFactory.GetConnector(platform.Type).PatchAsync(command, cancellationToken);
+            await connectorFactory.GetConnector(platform.ConnectorType).PatchAsync(command, cancellationToken);
         }
 
         return Result.Success();

@@ -20,12 +20,11 @@ public sealed record DeleteImages(Guid PlatformId, string[] Ids, bool Force = fa
     }
 }
 
-internal sealed class DeleteImagesHandler(IUnitOfWork unitOfWork, IConnectorFactory<IImageConnector> connectorFactory) : ICommandHandler<DeleteImages, Result<DeleteImageResult>>
+internal sealed class DeleteImagesHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IImageConnector> connectorFactory) : ICommandHandler<DeleteImages, Result<DeleteImageResult>>
 {
     public async ValueTask<Result<DeleteImageResult>> Handle(DeleteImages command, CancellationToken cancellationToken)
     {
-        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
-        if (platform is null)
+        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform)) 
         {
             return Result.Failure<DeleteImageResult>(new NotFoundError("The provided platform Id does not exist"));
         }

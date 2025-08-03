@@ -8,14 +8,13 @@ namespace Application.Features.Images.Queries;
 
 public sealed record GetAllLocalImages(Guid PlatformId): IQuery<Result<IReadOnlyList<ImageResult>>>;
 
-internal class GetAllLocalImagesHandler(IUnitOfWork unitOfWork, IConnectorFactory<IImageConnector> connectorFactory) : IQueryHandler<GetAllLocalImages, Result<IReadOnlyList<ImageResult>>>
+internal class GetAllLocalImagesHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IImageConnector> connectorFactory) : IQueryHandler<GetAllLocalImages, Result<IReadOnlyList<ImageResult>>>
 {
     public async ValueTask<Result<IReadOnlyList<ImageResult>>> Handle(GetAllLocalImages query, CancellationToken cancellationToken)
     {
-        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
-        if (platform is null)
+        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
         {
-            return Result.Failure<IReadOnlyList<ImageResult>>(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure<IReadOnlyList<ImageResult>>(new NotFoundError("The provided platform Id does not exist"));
         }
 
         return await connectorFactory

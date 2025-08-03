@@ -215,13 +215,12 @@ public sealed record IPAM(
 public sealed record IPAMConfig(string Subnet, string IpRange, string Gateway);
 public sealed record ConfigFrom(string Network);
 
-internal sealed class CreateNetworkHandler(IUnitOfWork unitOfWork, IConnectorFactory<INetworkConnector> connectorFactory)
+internal sealed class CreateNetworkHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<INetworkConnector> connectorFactory)
     : ICommandHandler<CreateNetwork, Result<CreateDockerNetworkResult>>
 {
     public async ValueTask<Result<CreateDockerNetworkResult>> Handle(CreateNetwork request, CancellationToken cancellationToken)
     {
-        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(request.PlatformId, cancellationToken);
-        if (platform is null)
+        if (!platformContainerCache.TryGetCacheEntry(request.PlatformId, out var platform))
         {
             return Result.Failure<CreateDockerNetworkResult>(new NotFoundError("The provided platform Id doesn't exist"));
         }

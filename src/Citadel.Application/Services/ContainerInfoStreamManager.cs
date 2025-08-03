@@ -70,7 +70,7 @@ public class ContainerInfoStreamManager(
         {
             while (!token.IsCancellationRequested)
             {
-                await foreach(var container in connectorFactory.GetConnector(platformInfo.Type).StreamContainerStatsAsync(new StreamContainerStatsCommand(containerId, platformInfo.PlatformAddress, options.Value.ContainersInfoInterval * 1000), token))
+                await foreach(var container in connectorFactory.GetConnector(platformInfo.ConnectorType).StreamContainerStatsAsync(new StreamContainerStatsCommand(containerId, platformInfo.Address, options.Value.ContainersInfoInterval * 1000), token))
                 {
                     await writer.WriteAsync(container, token);
                 }

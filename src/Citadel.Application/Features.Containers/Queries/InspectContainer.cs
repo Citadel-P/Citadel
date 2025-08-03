@@ -17,23 +17,22 @@ public sealed record InspectContainer(string ContainerId) : IQuery<Result<Contai
     }
 }
 
-internal sealed class InspectContainerHandler(IUnitOfWork unitOfWork, IConnectorFactory<IContainerConnector> connectorFactory)
+internal sealed class InspectContainerHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IContainerConnector> connectorFactory)
     : IQueryHandler<InspectContainer, Result<ContainerInspectionInfo>>
 {
     
     public async ValueTask<Result<ContainerInspectionInfo>> Handle(InspectContainer query, CancellationToken cancellationToken)
     {
-        var platformDetails = await unitOfWork.Platforms.GetPlatformDetailsByContainerIdAsync(query.ContainerId, cancellationToken);
-        if (platformDetails is null)
+        if (!platformContainerCache.TryGetPlatformByContainerId(query.ContainerId, out var platform))
         {
             return Result.Failure<ContainerInspectionInfo>(new NotFoundError($"No platform found for container ID {query.ContainerId}"));
         }
 
         var command = new InspectContainerCommand
         (
-            PlatformAddress: platformDetails.Address, 
+            PlatformAddress: platform.Address, 
             ContainerId: query.ContainerId
         );
-        return await connectorFactory.GetConnector(platformDetails.ConnectorType).InspectAsync(command, cancellationToken);
+        return await connectorFactory.GetConnector(platform.ConnectorType).InspectAsync(command, cancellationToken);
     }
 }

@@ -20,12 +20,11 @@ public sealed record InspectImage(Guid PlatformId, string ImageId) : IQuery<Resu
     }
 }
 
-internal sealed class InspectImageHandler(IUnitOfWork unitOfWork, IConnectorFactory<IImageConnector> connectorFactory) : IQueryHandler<InspectImage, Result<InspectImageResult>>
+internal sealed class InspectImageHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IImageConnector> connectorFactory) : IQueryHandler<InspectImage, Result<InspectImageResult>>
 {
     public async ValueTask<Result<InspectImageResult>> Handle(InspectImage query, CancellationToken cancellationToken)
     {
-        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
-        if (platform is null)
+        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
         {
             return Result.Failure<InspectImageResult>(new NotFoundError("The provided platform Id doesn't exist"));
         }

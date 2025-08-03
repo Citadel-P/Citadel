@@ -39,7 +39,7 @@ public sealed record CreateVolume(
     }
 }
 
-internal sealed class CreateVolumeHandler(IUnitOfWork unitOfWork, IConnectorFactory<IVolumeConnector> connectorFactory) 
+internal sealed class CreateVolumeHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IVolumeConnector> connectorFactory) 
     : ICommandHandler<CreateVolume, Result<DockerVolumeResult>>
 {
     
@@ -47,8 +47,7 @@ internal sealed class CreateVolumeHandler(IUnitOfWork unitOfWork, IConnectorFact
     {
         try
         {
-            var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
-            if (platform is null)
+            if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform))
             {
                 return Result.Failure<DockerVolumeResult>(new NotFoundError("The provided platform Id doesn't exist"));
             }

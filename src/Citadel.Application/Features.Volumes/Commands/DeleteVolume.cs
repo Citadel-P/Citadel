@@ -20,12 +20,11 @@ public sealed record DeleteVolume(Guid PlatformId, string[] Names, bool? Force =
     }
 }
 
-internal class DeleteVolumeHandler(IUnitOfWork unitOfWork, IConnectorFactory<IVolumeConnector> connectorFactory) : ICommandHandler<DeleteVolume, Result>
+internal class DeleteVolumeHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IVolumeConnector> connectorFactory) : ICommandHandler<DeleteVolume, Result>
 {
     public async ValueTask<Result> Handle(DeleteVolume command, CancellationToken cancellationToken)
     {
-        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
-        if (platform is null)
+        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform))
         {
             return Result.Failure(new NotFoundError("The provided platform Id doesn't exist"));
         }

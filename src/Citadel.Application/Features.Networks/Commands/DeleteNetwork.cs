@@ -5,6 +5,7 @@ using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
+using static Google.Rpc.Context.AttributeContext.Types;
 
 namespace Application.Features.Networks.Commands;
 
@@ -20,12 +21,11 @@ public sealed record class DeleteNetwork(Guid PlatformId, string[] Ids) : IComma
     }
 }
 
-internal class DeleteNetworksHandler(IUnitOfWork unitOfWork, IConnectorFactory<INetworkConnector> connectorFactory) : ICommandHandler<DeleteNetwork, Result>
+internal class DeleteNetworksHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<INetworkConnector> connectorFactory) : ICommandHandler<DeleteNetwork, Result>
 {
     public async ValueTask<Result> Handle(DeleteNetwork command, CancellationToken cancellationToken)
     {
-        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(command.PlatformId, cancellationToken);
-        if (platform is null)
+        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform))
         {
             return Result.Failure(new NotFoundError("The provided platform Id doesn't exist"));
         }

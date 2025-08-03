@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using Application.Services;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using FluentValidation;
@@ -19,13 +20,12 @@ public sealed record StreamContainerLogs(string ContainerId) : IStreamCommand<Co
     }
 }
 
-internal class StreamContainerLogsHandler(IUnitOfWork unitOfWork, IConnectorFactory<IContainerConnector> connectorFactory, ILogger<StreamContainerLogsHandler> logger)
+internal class StreamContainerLogsHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IContainerConnector> connectorFactory, ILogger<StreamContainerLogsHandler> logger)
     : IStreamCommandHandler<StreamContainerLogs, ContainerLogInfo>
 {
     public async IAsyncEnumerable<ContainerLogInfo> Handle(StreamContainerLogs query, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var platformDetails = await unitOfWork.Platforms.GetPlatformDetailsByContainerIdAsync(query.ContainerId, cancellationToken);
-        if (platformDetails is null)
+        if (!platformContainerCache.TryGetPlatformByContainerId(query.ContainerId, out var platform))
         {
             logger.LogError("No platform found for container ID {ContainerId}", query.ContainerId);
             yield break; // No platform found for the given container ID
@@ -34,9 +34,9 @@ internal class StreamContainerLogsHandler(IUnitOfWork unitOfWork, IConnectorFact
         var command = new StreamContainerLogsCommand
         (
             ContainerId: query.ContainerId,
-            PlatformAddress: platformDetails.Address
+            PlatformAddress: platform.Address
         );
-        await foreach(var log in connectorFactory.GetConnector(platformDetails.ConnectorType).StreamLogsAsync(command, cancellationToken))
+        await foreach(var log in connectorFactory.GetConnector(platform.ConnectorType).StreamLogsAsync(command, cancellationToken))
         {
             yield return log;
         }

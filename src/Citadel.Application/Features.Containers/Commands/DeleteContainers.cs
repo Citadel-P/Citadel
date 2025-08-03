@@ -32,12 +32,12 @@ internal sealed class DeleteContainersHandler(IPlatformContainerCache platformCo
             var command = new DeleteContainerCommand
             (
                 ContainerIds: platform.Containers.Select(s => s.Key),
-                PlatformAddress: platform.PlatformAddress,
+                PlatformAddress: platform.Address,
                 Volume: request.V,
                 Force: request.Force,
                 Link: request.Link
             );
-            await connectorFactory.GetConnector(platform.Type).DeleteAsync(command, cancellationToken);
+            await connectorFactory.GetConnector(platform.ConnectorType).DeleteAsync(command, cancellationToken);
         }
 
         return Result.Success();

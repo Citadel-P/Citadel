@@ -20,13 +20,12 @@ public sealed record InspectNetwork(Guid PlatformId, string NetworkId): IQuery<R
     }
 }
 
-internal sealed class InspectNetworkHandler(IUnitOfWork unitOfWork, IConnectorFactory<INetworkConnector> connectorFactory) 
+internal sealed class InspectNetworkHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<INetworkConnector> connectorFactory) 
     : IQueryHandler<InspectNetwork, Result<DockerNetworkDetails>>
 {
     public async ValueTask<Result<DockerNetworkDetails>> Handle(InspectNetwork query, CancellationToken cancellationToken)
     {
-        var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(query.PlatformId, cancellationToken);
-        if (platform is null)
+        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
         {
             return Result.Failure<DockerNetworkDetails>(new NotFoundError("The provided platform Id doesn't exist"));
         }

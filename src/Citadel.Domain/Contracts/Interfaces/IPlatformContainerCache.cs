@@ -4,7 +4,7 @@ using Domain.Contracts.Resources;
 namespace Domain.Contracts.Interfaces;
 
 /// <summary>
-/// A centralized, thread-safe cache for managing the mapping of platform containers.
+/// A centralized, thread-safe cache for managing the mapping of platform containers (online platforms only).
 /// </summary>
 public interface IPlatformContainerCache
 {
