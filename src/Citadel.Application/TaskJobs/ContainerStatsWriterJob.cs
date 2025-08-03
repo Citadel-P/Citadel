@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using static Hosting.Common.Constants;
 
 namespace Application.TaskJobs;
 
@@ -117,7 +118,7 @@ internal class ContainerStatsWriterJob(
 
     private async ValueTask NotifyClients(ContainersStatBatch batch)
     {
-        if (connectionTracker.HasUsersInGroup($"ContainersInfo/{batch.PlatformId}"))
+        if (connectionTracker.HasUsersInGroup(SignalRGroups.ContainersGroup(batch.PlatformId)))
         {
             try
             {

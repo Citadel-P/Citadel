@@ -25,5 +25,5 @@ export interface DockerContainerView {
   created: number | null;
   stack: string | null;
   containerStat: NullableOfContainerStatView;
-  ContainerPort: null | [];
+  containerPort: null | [];
 }

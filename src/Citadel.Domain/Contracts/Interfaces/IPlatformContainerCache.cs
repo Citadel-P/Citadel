@@ -38,5 +38,13 @@ public interface IPlatformContainerCache
     /// </summary>
     bool TryGetCacheEntry(Guid platformId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry);
 
+    /// <summary>
+    /// Tries to get the cache entry for a specific platform by its container ID.
+    /// </summary>
     bool TryGetPlatformByContainerId(string containerId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry);
+
+    /// <summary>
+    /// Tries to get platforms cache entries by a list of container IDs.
+    /// </summary>
+    bool TryGetPlatformsByContainersId(string[] containersId, [MaybeNullWhen(false)] out List<PlatformCacheEntry> cacheEntries);
 }

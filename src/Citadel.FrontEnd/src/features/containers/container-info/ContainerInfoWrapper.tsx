@@ -10,7 +10,7 @@ import { useMemo, useCallback, useEffect, useState } from 'react';
 import ContainerInspect from './inspect/ContainerInspect';
 import Loader from '@/components/ui/loader';
 import { ContainerStatsProvider } from './stats/ContainerStatsProvider';
-import useContainerInfoHub from '../hooks/useContainerInfoHub';
+import { useContainerInfoHub } from '../hooks/useContainerInfoHub';
 import { ContainerStateStatus } from '@/api/_generated';
 import { ContainerStateIndicator } from '../ContainerStateIndicator';
 import { ContainersActionButtons } from '../ContainersActionButtons';
@@ -20,7 +20,7 @@ import { DeleteContainerDialog } from '../dialogs/DeleteContainerDialog';
 const ContainerInfoWrapper = () => {
   const navigate = useNavigate();
   const { route, currentContainer, isLoading } = useAppContext();
-  const { containerInfo } = useContainerInfoHub(currentContainer?.containerId);
+  const { containerInfo } = useContainerInfoHub(currentContainer?.containerId, currentContainer?.platformId);
   const {
     deleteIsPending: isPending,
     requestDelete,

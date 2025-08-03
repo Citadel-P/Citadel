@@ -17,14 +17,12 @@ public sealed record DeleteContainers(string[] ContainerIds, bool? V = false, bo
     }
 }
 
-internal sealed class DeleteContainersHandler(IUnitOfWork unitOfWork, IConnectorFactory<IContainerConnector> connectorFactory)
+internal sealed class DeleteContainersHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IContainerConnector> connectorFactory)
     : ICommandHandler<DeleteContainers, Result>
 {
     public async ValueTask<Result> Handle(DeleteContainers request, CancellationToken cancellationToken)
     {
-        var platformContainers = await unitOfWork.Containers.GetPlatformsByContainerIdsAsync(request.ContainerIds, cancellationToken);
-
-        if (platformContainers == null)
+        if (!platformContainerCache.TryGetPlatformsByContainersId(request.ContainerIds, out var platformContainers))
         {
             return Result.Failure(new NotFoundError("No platform found for the given IDs."));
         }
@@ -33,13 +31,13 @@ internal sealed class DeleteContainersHandler(IUnitOfWork unitOfWork, IConnector
         {
             var command = new DeleteContainerCommand
             (
-                PlatformAddress: platform.Address,
-                ContainerIds: platform.ContainerIds,
+                ContainerIds: platform.Containers.Select(s => s.Key),
+                PlatformAddress: platform.PlatformAddress,
                 Volume: request.V,
                 Force: request.Force,
                 Link: request.Link
             );
-            await connectorFactory.GetConnector(platform.ConnectorType).DeleteAsync(command, cancellationToken);
+            await connectorFactory.GetConnector(platform.Type).DeleteAsync(command, cancellationToken);
         }
 
         return Result.Success();

@@ -1,6 +1,6 @@
 import { ContainerView } from '@/api/_generated';
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import useContainersHub from './hooks/useContainersHub';
+import { useContainersHub } from './hooks/useContainersHub';
 import { useParams } from 'react-router';
 import { ContainersContext } from './ContainersContext';
 import { useDeleteContainerDialog } from './dialogs/useDeleteContainerDialog';
@@ -9,7 +9,7 @@ export const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ c
   const { platformId } = useParams<{ platformId: string }>();
 
   // Fetch containers data
-  const { containersInfo, isLoading } = useContainersHub(platformId!);
+  const { containersInfo, isLoading } = useContainersHub(platformId);
 
   // State for selected rows and containers
   const [selectedRows, setSelectedRows] = useState<ContainerView[] | undefined>([]);
@@ -18,7 +18,6 @@ export const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ c
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
   const { deleteIsPending, requestDelete, dialogData, setDialogData } = useDeleteContainerDialog();
-
   // Update containers when hub info changes
   useEffect(() => {
     if (containersInfo?.containers) {

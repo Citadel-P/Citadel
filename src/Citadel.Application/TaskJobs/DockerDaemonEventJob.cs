@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Threading;
 using System.Threading.Channels;
 using Application.Mappers;
 using Application.Services;
@@ -6,15 +7,19 @@ using Application.Services.Abstractions;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Domain.Entities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using static Hosting.Common.Constants;
 
 namespace Application.TaskJobs;
 
 internal sealed class DockerDaemonEventJob(
-    ILogger<DockerDaemonEventJob> logger,
     IServiceScopeFactory scopeFactory,
+    ILogger<DockerDaemonEventJob> logger,
+    IDockerDaemonHubDispatcher dockerDaemonHub,
+    ISignalRConnectionTracker connectionTracker,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IPlatformConnector> connectorFactory,
     IPlatformHealthBroadCaster platformHealthBroadCaster) : BackgroundService
@@ -66,10 +71,6 @@ internal sealed class DockerDaemonEventJob(
         {
             try
             {
-                await using var scope = scopeFactory.CreateAsyncScope();
-                var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-                var containerHub = scope.ServiceProvider.GetRequiredService<IContainerHubDispatcher>();
-
                 var command = new StreamDaemonEventCommand(platform.Address);
                 await foreach (var reply in connectorFactory.GetConnector(platform.Type).StreamDaemonEventAsync(command, cancellationToken))
                 {
@@ -80,38 +81,13 @@ internal sealed class DockerDaemonEventJob(
                     switch (reply.Action)
                     {
                         case "create":
-                            if (reply.Container != null)
-                            {
-                                var container = reply.Container.Map(platform.Id);
-                                await uow.Containers.AddAsync(container, cancellationToken);
-                                await uow.CommitAsync();
-
-                                await containerHub.SendContainerEvent(container, reply.Action);
-                                platformContainerCache.TryAddContainer(platform.Id, container.ContainerId, container.Id);
-                            }
-                           
+                            await HandleContainerCreateEvent(reply, platform.Id, cancellationToken);
                             break;
                         case "destroy":
-                            var existingDestroy = await uow.Containers.GetByIdAsync(reply.ContainerId, cancellationToken);
-                            if (existingDestroy != null)
-                            {
-                                await uow.Containers.DeleteAsync([existingDestroy.Id], cancellationToken);
-                                await uow.CommitAsync();
-
-                                await containerHub.SendContainerEvent(existingDestroy, reply.Action);
-                                platformContainerCache.TryRemoveContainer(platform.Id, existingDestroy.ContainerId);
-                            }
+                            await HandleContainerDestroyEvent(reply, platform.Id, cancellationToken);
                             break;
                         default:
-                            var existing = await uow.Containers.GetByIdAsync(reply.ContainerId, cancellationToken);
-                            if (existing != null)
-                            {
-                                existing.PartialUpdate(state: reply.Container?.State);
-                                await uow.Containers.UpdateContainersStateAsync([existing.Id], existing.State, cancellationToken);
-                                await uow.CommitAsync();
-
-                                await containerHub.SendContainerEvent(existing, reply.Action);
-                            }
+                            await HandleContainerUpdateEvent(reply, cancellationToken);
                             break;
                     }
                 }
@@ -120,6 +96,69 @@ internal sealed class DockerDaemonEventJob(
             {
                 logger.LogError(ex, "Error while monitoring {Address}, retrying in 10s...", platform.Address);
                 await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+            }
+        }
+    }
+
+    private async Task HandleContainerCreateEvent(DaemonEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
+    {
+        if (eventInfo.Container != null)
+        {
+            var container = eventInfo.Container.Map(platformId);
+
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+            await uow.Containers.AddAsync(container, cancellationToken);
+            await uow.CommitAsync();
+
+            await SendContainerEventChanges(container, eventInfo.Action);
+            platformContainerCache.TryAddContainer(platformId, container.ContainerId, container.Id);
+        }
+    }
+
+    private async Task HandleContainerUpdateEvent(DaemonEventInfo eventInfo, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var existing = await uow.Containers.GetByIdAsync(eventInfo.ContainerId, cancellationToken);
+        if (existing != null)
+        {
+            existing.PartialUpdate(state: eventInfo.Container?.State);
+            await uow.Containers.UpdateContainersStateAsync([existing.Id], existing.State, cancellationToken);
+            await uow.CommitAsync();
+            await SendContainerEventChanges(existing, eventInfo.Action);
+        }
+    }
+
+    private async Task HandleContainerDestroyEvent(DaemonEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var existingDestroy = await uow.Containers.GetByIdAsync(eventInfo.ContainerId, cancellationToken);
+        if (existingDestroy != null)
+        {
+            await uow.Containers.DeleteAsync([existingDestroy.Id], cancellationToken);
+            await uow.CommitAsync();
+
+            await SendContainerEventChanges(existingDestroy, eventInfo.Action);
+            platformContainerCache.TryRemoveContainer(platformId, existingDestroy.ContainerId);
+        }
+    }
+
+    private async Task SendContainerEventChanges(Container container, string action)
+    {
+        if (connectionTracker.HasUsersInGroup(SignalRGroups.DockerDaemonGroup(container.PlatformId)))
+        {
+            try
+            {
+                await dockerDaemonHub.SendContainerEvent(container, action);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to notify clients about containers stats for platform {PlatformId}", container.PlatformId);
             }
         }
     }

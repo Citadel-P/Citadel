@@ -44,7 +44,6 @@ public interface IContainerRepository
     Task<ContainerInfo?> GetContainerInfoAsync(string containerId, CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<Container>?> GetAllWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken);
-    Task<IEnumerable<PlatformContainersInfo>?> GetPlatformsByContainerIdsAsync(IEnumerable<string> containerIds, CancellationToken cancellationToken);
 
     Task<int> AddAsync(Container container, CancellationToken cancellationToken);
     Task<int> BulkInsertAsync(IEnumerable<Container> containers, CancellationToken cancellationToken);

@@ -98,9 +98,10 @@ internal static class WebApiModule
 
         app.MapPublicEndpoints();
 
-        app.MapHub<ContainerHub>("/hubs/containers", HttpConnectionDispatcherOptions);
-        app.MapHub<ContainerInfoHub>("/hubs/container-info", HttpConnectionDispatcherOptions);
         app.MapHub<PlatformHub>("/hubs/platforms", HttpConnectionDispatcherOptions);
+        app.MapHub<ContainerHub>("/hubs/containers", HttpConnectionDispatcherOptions);
+        app.MapHub<DockerDaemonHub>("/hubs/docker-daemon", HttpConnectionDispatcherOptions);
+        app.MapHub<ContainerInfoHub>("/hubs/container-info", HttpConnectionDispatcherOptions);
 
         return app;
     }
@@ -118,6 +119,11 @@ internal static class WebApiModule
         {
             var context = provider.GetRequiredService<IHubContext<ContainerHub, ITypedContainerHub>>();
             return new ContainerHubDispatcher(context);
+        });
+        services.AddSingleton<IDockerDaemonHubDispatcher>(provider =>
+        {
+            var context = provider.GetRequiredService<IHubContext<DockerDaemonHub, ITypedDockerDaemonHub>>();
+            return new DockerDaemonHubDispatcher(context);
         });
         services.AddSingleton<IContainerInfoHubDispatcher>(provider =>
         {

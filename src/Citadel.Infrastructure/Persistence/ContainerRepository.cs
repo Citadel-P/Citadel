@@ -25,34 +25,6 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         return result.ToDomain();
     }
 
-    [DapperAot(false)]
-    public async Task<IEnumerable<PlatformContainersInfo>?> GetPlatformsByContainerIdsAsync(IEnumerable<string> containerIds, CancellationToken cancellationToken)
-    {
-        var (clause, parameters) = SqliteInClauseBuilder.BuildInClauseForStrings("ContainerId", containerIds);
-        string sql = $"""
-            SELECT 
-                Containers.ContainerId, 
-                Platforms.Address, 
-                Platforms.ConnectorType
-            FROM Containers
-            JOIN Platforms ON Platforms.Id = Containers.PlatformId
-            WHERE Containers.ContainerId IN ({clause})
-            """;
-
-        var flatRows = await db.QueryAsync<PlatformContainerInfoDto>(sql, parameters, transaction: tx());
-
-        if (!flatRows.Any())
-            return null;
-            
-        return [.. flatRows
-            .GroupBy(r => new { r.Address, r.ConnectorType })
-            .Select(g => new PlatformContainersInfo(
-                Address: g.Key.Address,
-                ConnectorType: Enum.Parse<PlatformConnectorType>(g.Key.ConnectorType),
-                ContainerIds: [.. g.Select(x => x.ContainerId).Distinct()]
-            ))];
-    }
-
     public async Task<Container?> GetByIdAsync(string containerId, CancellationToken cancellationToken)
     {
         var sql = """

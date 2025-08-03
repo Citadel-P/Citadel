@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using static Hosting.Common.Constants;
 
 namespace Application.TaskJobs;
 
@@ -193,7 +194,7 @@ internal class PlatformStatsWriterJob(
 
     private async ValueTask NotifyClients(Guid platformId, PlatformStatsResult stats)
     {
-        if (connectionTracker.HasUsersInGroup("Platforms"))
+        if (connectionTracker.HasUsersInGroup(SignalRGroups.PlatformsGroup))
         {
             try
             {

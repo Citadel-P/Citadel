@@ -18,6 +18,7 @@ namespace Application.TaskJobs;
 /// </summary>
 internal class ContainerSyncJob(
     IServiceScopeFactory scopeFactory,
+    IContainerHubDispatcher containerHub,
     IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IConnectorFactory<IContainerConnector> connectorFactory,
@@ -44,7 +45,6 @@ internal class ContainerSyncJob(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var containerHub = scope.ServiceProvider.GetRequiredService<IContainerHubDispatcher>();
 
         IEnumerable<Container> syncedContainers;
 

@@ -15,13 +15,13 @@ internal sealed class ContainerInfoHub(IContainerInfoStreamManager streamManager
 {
     public static string GroupName(string id) => $"container-{id}";
 
-    public async Task Subscribe(string containerId)
+    public async Task JoinGroup(string containerId)
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, GroupName(containerId));
         streamManager.AddSubscriber(containerId, Context.ConnectionId);
     }
 
-    public async Task Unsubscribe(string containerId)
+    public async Task LeaveGroup(string containerId)
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, GroupName(containerId));
         streamManager.RemoveSubscriber(containerId, Context.ConnectionId);

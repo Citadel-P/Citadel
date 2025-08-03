@@ -81,4 +81,48 @@ internal class PlatformContainerCache : IPlatformContainerCache
 
         return false;
     }
+
+    /// <inheritdoc />
+    public bool TryGetPlatformsByContainersId(string[] containersId, [MaybeNullWhen(false)] out List<PlatformCacheEntry> cacheEntries)
+    {
+        cacheEntries = null;
+        var foundEntries = new List<PlatformCacheEntry>();
+        foreach (var (_, platformCacheEntry) in cache)
+        {
+            foreach (var key in platformCacheEntry.Containers.Keys)
+            {
+                var found = false;
+                PlatformCacheEntry? cacheEntry = null;
+                foreach (var containerId in containersId)
+                {
+                    if (key.StartsWith(containerId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        
+                        if (!found)
+                        {
+                            cacheEntry = new PlatformCacheEntry(
+                             PlatformAddress: platformCacheEntry.PlatformAddress,
+                             Type: platformCacheEntry.Type,
+                             Containers: []);
+                        }
+                        if (cacheEntry != null)
+                        {
+                            cacheEntry.Containers[key] = platformCacheEntry.Containers[key];    
+                        }
+                        found = true;
+
+                        foundEntries.Add(platformCacheEntry);
+                    }
+                }
+
+                if (found && cacheEntry != null)
+                {
+                    cacheEntries ??= [];
+                    cacheEntries.Add(cacheEntry);
+                }
+
+            }
+        }
+        return foundEntries.Count > 0;
+    }
 }

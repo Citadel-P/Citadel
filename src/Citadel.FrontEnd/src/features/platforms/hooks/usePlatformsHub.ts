@@ -5,12 +5,12 @@ import { useAuthContext } from '@/features/auth/AuthContext';
 import { configureHub, IHubConfig, startConnectionWithRetry } from '@/lib/signalr.helpers';
 import { PlatformStatsBatchView } from '@/api/models';
 
-const usePlatformHub = () => {
+export const usePlatformsHub = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [platformsMessage, setPlatformsMessage] = useState<PlatformView[] | undefined>();
   const { accessToken } = useAuthContext();
 
-  const groupName = `Platforms`;
+  const groupName = `platforms`;
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
   const isCanceledRef = useRef(false);
 
@@ -160,5 +160,3 @@ const usePlatformHub = () => {
     isLoading,
   };
 };
-
-export default usePlatformHub;

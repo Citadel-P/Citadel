@@ -18,14 +18,12 @@ public sealed record PatchContainer(string[] ContainerIds, ContainerAction Actio
     }
 }
 
-internal class PatchContainerHandler(IUnitOfWork unitOfWork, IConnectorFactory<IContainerConnector> connectorFactory)
+internal class PatchContainerHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IContainerConnector> connectorFactory)
     : ICommandHandler<PatchContainer, Result>
 {
     public async ValueTask<Result> Handle(PatchContainer request, CancellationToken cancellationToken)
     {
-        var platformContainers = await unitOfWork.Containers.GetPlatformsByContainerIdsAsync(request.ContainerIds, cancellationToken);
-
-        if (platformContainers == null)
+        if (!platformContainerCache.TryGetPlatformsByContainersId(request.ContainerIds, out var platformContainers))
         {
             return Result.Failure(new NotFoundError("No platform found for the given IDs."));
         }
@@ -34,11 +32,11 @@ internal class PatchContainerHandler(IUnitOfWork unitOfWork, IConnectorFactory<I
         {
             var command = new PatchContainerCommand
             (
-                PlatformAddress: platform.Address,
-                ContainerIds: platform.ContainerIds,
-                Action: request.Action
+                Action: request.Action,
+                PlatformAddress: platform.PlatformAddress,
+                ContainerIds: platform.Containers.Select(s => s.Key)
             );
-            await connectorFactory.GetConnector(platform.ConnectorType).PatchAsync(command, cancellationToken);
+            await connectorFactory.GetConnector(platform.Type).PatchAsync(command, cancellationToken);
         }
 
         return Result.Success();

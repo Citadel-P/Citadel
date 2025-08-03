@@ -3,10 +3,13 @@ import { HubConnection } from '@microsoft/signalr';
 import { configureHub, IHubConfig, startConnectionWithRetry } from '@/lib/signalr.helpers';
 import { useAuthContext } from '@/features/auth/AuthContext';
 import { DockerContainerView } from '@/api/models';
+import { useDockerDaemonHub } from '@/features/platforms/hooks/useDockerDaemonHub';
 
-const useContainersHub = (containerId?: string) => {
-  const [containerInfo, setContainerInfo] = useState<DockerContainerView | undefined>();
+export const useContainerInfoHub = (containerId?: string, platformId?: string) => {
   const { accessToken } = useAuthContext();
+  const { containerEvent } = useDockerDaemonHub(platformId);
+
+  const [containerInfo, setContainerInfo] = useState<DockerContainerView | undefined>();
   const groupName = `container-${containerId}`;
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
   const isCanceledRef = useRef(false);
@@ -32,6 +35,26 @@ const useContainersHub = (containerId?: string) => {
   }, []);
 
   useEffect(() => {
+    if (
+      containerId &&
+      containerEvent?.container.containerId.startsWith(containerId) &&
+      containerEvent?.eventType !== 'destroy'
+    ) {
+      const container: DockerContainerView = {
+        containerId: containerEvent.container.containerId,
+        name: containerEvent.container.name,
+        state: containerEvent.container.state,
+        created: containerEvent.container.created,
+        image: containerEvent.container.image,
+        stack: containerEvent.container.stack,
+        containerStat: containerEvent.container.lastStats,
+        containerPort: containerEvent.container.ports as any,
+      };
+      setContainerInfo(() => container);
+    }
+  }, [containerEvent, containerId]);
+
+  useEffect(() => {
     if (!containerId || !accessToken) return;
 
     let hubConnection: HubConnection;
@@ -45,7 +68,7 @@ const useContainersHub = (containerId?: string) => {
     };
 
     const onConnected = () => {
-      hubConnection.send('Subscribe', containerId).catch((error) => console.error('Failed to join group:', error));
+      hubConnection.send('JoinGroup', containerId).catch((error) => console.error('Failed to join group:', error));
     };
 
     const connect = async () => {
@@ -56,7 +79,7 @@ const useContainersHub = (containerId?: string) => {
     const cleanup = () => {
       isCanceledRef.current = true;
       if (hubConnection) {
-        hubConnection.send('Unsubscribe', containerId);
+        hubConnection.send('LeaveGroup', containerId);
         removeEventListeners(hubConnection);
         hubConnection.stop();
       }
@@ -70,5 +93,3 @@ const useContainersHub = (containerId?: string) => {
 
   return { containerInfo };
 };
-
-export default useContainersHub;

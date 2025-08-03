@@ -1,14 +1,17 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { configureHub, IHubConfig, startConnectionWithRetry } from '@/lib/signalr.helpers';
-import { ContainerView, ContainersView, ContainerStatView } from '@/api/_generated';
+import { ContainersView, ContainerStatView } from '@/api/_generated';
 import { useAuthContext } from '@/features/auth/AuthContext';
+import { useDockerDaemonHub } from '@/features/platforms/hooks/useDockerDaemonHub';
 
-const useContainersHub = (platformId?: string) => {
+export const useContainersHub = (platformId?: string) => {
   const [isLoading, setIsLoading] = useState(false);
   const [containersInfo, setContainersInfo] = useState<ContainersView | undefined>();
   const { accessToken } = useAuthContext();
-  const groupName = `containers/${platformId}`;
+  const { containerEvent } = useDockerDaemonHub(platformId);
+
+  const groupName = `containers-${platformId}`;
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
   const isCanceledRef = useRef(false);
 
@@ -42,22 +45,22 @@ const useContainersHub = (platformId?: string) => {
     });
   }, []);
 
-  const handleContainerEventReceived = useCallback((containerInfo: ContainerView, eventType: string) => {
+  useEffect(() => {
     setContainersInfo((currentInfo) => {
       if (!currentInfo) {
         return currentInfo;
       }
 
       const updatedContainers = [...(currentInfo.containers ?? [])];
-      const existingIndex = updatedContainers.findIndex((c) => c.containerId === containerInfo.containerId);
+      const existingIndex = updatedContainers.findIndex((c) => c.containerId === containerEvent?.container.containerId);
 
-      switch (eventType) {
+      switch (containerEvent?.eventType) {
         case 'create':
           if (existingIndex === -1) {
-            return { ...currentInfo, containers: [containerInfo, ...updatedContainers] };
+            return { ...currentInfo, containers: [containerEvent.container, ...updatedContainers] };
           }
-          if (JSON.stringify(updatedContainers[existingIndex]) !== JSON.stringify(containerInfo)) {
-            updatedContainers[existingIndex] = containerInfo;
+          if (JSON.stringify(updatedContainers[existingIndex]) !== JSON.stringify(containerEvent.container)) {
+            updatedContainers[existingIndex] = containerEvent.container;
             return { ...currentInfo, containers: updatedContainers };
           }
           break;
@@ -72,9 +75,11 @@ const useContainersHub = (platformId?: string) => {
         default:
           if (
             existingIndex !== -1 &&
-            JSON.stringify(updatedContainers[existingIndex]) !== JSON.stringify(containerInfo)
+            JSON.stringify(updatedContainers[existingIndex]) !== JSON.stringify(containerEvent?.container)
           ) {
-            updatedContainers[existingIndex] = containerInfo;
+            if (containerEvent?.container) {
+              updatedContainers[existingIndex] = containerEvent?.container;
+            }
             return { ...currentInfo, containers: updatedContainers };
           }
           break;
@@ -82,7 +87,7 @@ const useContainersHub = (platformId?: string) => {
 
       return currentInfo;
     });
-  }, []);
+  }, [containerEvent]);
 
   const getContainersList = useCallback(
     async (hubConnection: HubConnection) => {
@@ -106,15 +111,13 @@ const useContainersHub = (platformId?: string) => {
 
       hubConnection.on('ContainersInfoUpdated', handleContainersInfoUpdated);
       hubConnection.on('ContainersStatsUpdated', handleContainersStatsUpdated);
-      hubConnection.on('ContainerEventReceived', handleContainerEventReceived);
     },
-    [handleContainerEventReceived, handleContainersStatsUpdated, handleContainersInfoUpdated, getContainersList],
+    [handleContainersStatsUpdated, handleContainersInfoUpdated, getContainersList],
   );
 
   const removeEventListeners = useCallback((hubConnection: HubConnection) => {
     hubConnection.off('ContainersInfoUpdated');
     hubConnection.off('ContainersStatsUpdated');
-    hubConnection.off('ContainerEventReceived');
   }, []);
 
   useEffect(() => {
@@ -159,5 +162,3 @@ const useContainersHub = (platformId?: string) => {
 
   return { containersInfo, isLoading };
 };
-
-export default useContainersHub;
