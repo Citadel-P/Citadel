@@ -1,9 +1,9 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { PlatformDescriptorDockerPlatformDescriptor, PlatformsView, PlatformView } from '@/api/_generated';
 import { HubConnection } from '@microsoft/signalr';
 import { useAuthContext } from '@/features/auth/AuthContext';
-import { configureHub, IHubConfig, startConnectionWithRetry } from '@/lib/signalr.helpers';
 import { PlatformStatsBatchView } from '@/api/models';
+import { useSignalRHub } from '@/hooks/useSignalRHub';
 
 export const usePlatformsHub = () => {
   const [isLoading, setIsLoading] = useState(true);
@@ -12,7 +12,6 @@ export const usePlatformsHub = () => {
 
   const groupName = `platforms`;
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
-  const isCanceledRef = useRef(false);
 
   // Callback to handle platform updates
   const handlePlatformsUpdated = useCallback((platforms: PlatformView[]) => {
@@ -116,44 +115,21 @@ export const usePlatformsHub = () => {
     hubConnection.off('PlatformStatsUpdated');
   }, []);
 
-  useEffect(() => {
-    if (!accessToken) return;
+  const onConnected = useCallback(
+    (hubConnection: HubConnection) => {
+      getPlatformsList(hubConnection);
+    },
+    [getPlatformsList],
+  );
 
-    let hubConnection: HubConnection;
-
-    const initHub = () => {
-      const config: IHubConfig = {
-        url: `${baseUrl}/hubs/platforms`,
-        accessToken,
-      };
-      hubConnection = configureHub(config);
-    };
-    const onConnected = () => {
-      hubConnection
-        .send('JoinGroup', groupName)
-        .then(() => getPlatformsList(hubConnection))
-        .catch((error) => console.error('Failed to join group:', error));
-    };
-
-    const connect = async () => {
-      setupEventListeners(hubConnection);
-      await startConnectionWithRetry(hubConnection, onConnected, isCanceledRef);
-    };
-
-    const cleanup = () => {
-      isCanceledRef.current = true;
-      if (hubConnection) {
-        hubConnection.send('LeaveGroup', groupName);
-        removeEventListeners(hubConnection);
-        hubConnection.stop();
-      }
-    };
-
-    initHub();
-    connect();
-
-    return cleanup;
-  }, [accessToken, baseUrl, groupName, setupEventListeners, removeEventListeners, getPlatformsList]);
+  useSignalRHub({
+    url: `${baseUrl}/hubs/platforms`,
+    accessToken,
+    groupName: groupName,
+    setupEventListeners,
+    removeEventListeners,
+    onConnected,
+  });
 
   return {
     platformsMessage,

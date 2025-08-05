@@ -85,7 +85,7 @@ internal class ContainerStatsWriterJob(
 
     private async Task FlushToDatabase(CancellationToken cancellationToken)
     {
-        // Save and then clean up _buffer
+        // Save and then clean up buffer
         await SaveBatchToDb(cancellationToken);
         foreach (var (_, stats) in buffer)
         {

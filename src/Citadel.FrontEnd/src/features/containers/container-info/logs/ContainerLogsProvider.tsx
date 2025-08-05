@@ -1,31 +1,31 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router';
-import { usePOSTContainerLogs } from './hooks/usePOSTContainerLogs';
 import { ContainerLogsContext } from './ContainerLogsContext';
+import { useContainerLogHub } from './hooks/useContainerLogHub';
 
-export const ContainerLogsProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
-  const { containerId } = useParams();
+export const ContainerLogsProvider: React.FC<{ children?: React.ReactNode; containerId: string | undefined }> = ({
+  children,
+  containerId,
+}) => {
   const [logs, setLogs] = useState<string[] | undefined>(undefined);
-  const handleChunkReceived = (chunk: string) => {
-    setLogs((prevChunks) => [...(prevChunks ?? []), chunk]);
-  };
-  const { mutate, isPending, isSuccess } = usePOSTContainerLogs(handleChunkReceived);
+
+  const { containerLog, containerLogs } = useContainerLogHub(containerId);
+  const isPending = false;
+  useEffect(() => {
+    if (containerLog) {
+      setLogs((prevChunks) => [...(prevChunks ?? []), containerLog]);
+    }
+  }, [containerLog]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    if (containerId) {
-      mutate({ containerId, signal: controller.signal });
+    if (containerLogs) {
+      setLogs(containerLogs);
     }
-    return () => {
-      controller.abort();
-    };
-  }, [containerId, mutate]);
+  }, [containerLogs]);
 
   return (
     <ContainerLogsContext.Provider
       value={{
         isPending,
-        isSuccess,
         logs: logs ?? [],
       }}>
       {children}

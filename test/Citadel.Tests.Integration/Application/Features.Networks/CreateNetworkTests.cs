@@ -1,46 +1,30 @@
 ﻿using System.Text;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Networks;
-using Domain.Entities;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Networks;
 
 public class CreateNetworkTests : IntegrationTestBase
 {
     private readonly Mock<IConnectorFactory<INetworkConnector>> networkFactoryMock = new();
+    private readonly Mock<IPlatformContainerCache> platformContainerCacheMock = new();
     private readonly Mock<INetworkConnector> networkConnectorMock = new();
-    private Guid _platformId;
     protected override void ConfigureTestServices(IServiceCollection services)
     {
         services
             .AddSingleton(networkFactoryMock.Object)
-            .AddSingleton(networkConnectorMock.Object);
+            .AddSingleton(networkConnectorMock.Object)
+            .AddSingleton(platformContainerCacheMock.Object);
 
         networkFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(networkConnectorMock.Object);
-    }
 
-    protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
-    {
-        var platform = Fakes.GetDummyPlatform();
-        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
-
-        foreach (var container in Fakes.GetDummyContainers())
-        {
-            await uow.Containers.AddAsync(new Container(
-                name: container.Name,
-                image: container.Image,
-                platformId: platform.Id,
-                ports: [],
-                containerId: container.ContainerId,
-                state: ContainerStateStatus.Running), TestContext.Current.CancellationToken);
-        }
-
-        await uow.CommitAsync();
-        _platformId = platform.Id;
+        var cacheEntry = new PlatformCacheEntry("localhost:9000", PlatformConnectorType.Local, []);
+        platformContainerCacheMock.Setup(x => x.TryGetCacheEntry(It.IsAny<Guid>(), out cacheEntry))
+            .Returns(true);
     }
 
     [Fact]
@@ -81,7 +65,7 @@ public class CreateNetworkTests : IntegrationTestBase
                  }
               ]
            },
-           "platformId": "{{_platformId}}"
+           "platformId": "0198740b-a501-7ae8-8afc-1e6ce659ee02"
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
@@ -132,7 +116,7 @@ public class CreateNetworkTests : IntegrationTestBase
                  }
               ]
            },
-           "platformId": "{{_platformId}}"
+           "platformId": "0198740b-a501-7ae8-8afc-1e6ce659ee02"
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
@@ -183,7 +167,7 @@ public class CreateNetworkTests : IntegrationTestBase
                  }
               ]
            },
-           "platformId": "{{_platformId}}"
+           "platformId": "0198740b-a501-7ae8-8afc-1e6ce659ee02"
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
@@ -236,7 +220,7 @@ public class CreateNetworkTests : IntegrationTestBase
                  }
               ]
            },
-           "platformId": "{{_platformId}}"
+           "platformId": "0198740b-a501-7ae8-8afc-1e6ce659ee02"
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
@@ -277,7 +261,7 @@ public class CreateNetworkTests : IntegrationTestBase
                  {}
               ]
            },
-           "platformId": "{{_platformId}}"
+           "platformId": "0198740b-a501-7ae8-8afc-1e6ce659ee02"
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
@@ -320,7 +304,7 @@ public class CreateNetworkTests : IntegrationTestBase
                  {}
               ]
            },
-           "platformId": "{{_platformId}}"
+           "platformId": "0198740b-a501-7ae8-8afc-1e6ce659ee02"
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");

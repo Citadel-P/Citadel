@@ -17,7 +17,7 @@ import { ContainersActionButtons } from '../ContainersActionButtons';
 import { useDeleteContainerDialog } from '../dialogs/useDeleteContainerDialog';
 import { DeleteContainerDialog } from '../dialogs/DeleteContainerDialog';
 
-const ContainerInfoWrapper = () => {
+export const ContainerInfoWrapper = () => {
   const navigate = useNavigate();
   const { route, currentContainer, isLoading } = useAppContext();
   const { containerInfo } = useContainerInfoHub(currentContainer?.containerId, currentContainer?.platformId);
@@ -102,7 +102,7 @@ const ContainerInfoWrapper = () => {
             </TabsList>
 
             <TabsContent value="logs">
-              <ContainerLogsProvider>
+              <ContainerLogsProvider containerId={containerInfo?.containerId}>
                 <ContainerLogs />
               </ContainerLogsProvider>
             </TabsContent>

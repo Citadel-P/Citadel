@@ -31,6 +31,7 @@ namespace WebApi.Hubs;
 [JsonSerializable(typeof(PlatformStatView))]
 [JsonSerializable(typeof(DockerContainer))]
 [JsonSerializable(typeof(DockerContainerStat))]
+[JsonSerializable(typeof(IEnumerable<string>))]
 internal partial class SignalRSerializeContext : JsonSerializerContext
 {
 }

@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
 using WebApi.Hubs;
+using WebApi.Hubs.Dispatchers;
 using WebApi.Middlewares;
 using WebApi.Routes;
 
@@ -102,6 +103,7 @@ internal static class WebApiModule
         app.MapHub<ContainerHub>("/hubs/containers", HttpConnectionDispatcherOptions);
         app.MapHub<DockerDaemonHub>("/hubs/docker-daemon", HttpConnectionDispatcherOptions);
         app.MapHub<ContainerInfoHub>("/hubs/container-info", HttpConnectionDispatcherOptions);
+        app.MapHub<ContainerLogHub>("/hubs/container-log", HttpConnectionDispatcherOptions);
 
         return app;
     }
@@ -115,26 +117,32 @@ internal static class WebApiModule
     private static void AddSignalRDependencies(this IServiceCollection services)
     {
         // We need to register this factories in order to use the view models
-        services.AddSingleton<IContainerHubDispatcher>(provider =>
-        {
-            var context = provider.GetRequiredService<IHubContext<ContainerHub, ITypedContainerHub>>();
-            return new ContainerHubDispatcher(context);
-        });
-        services.AddSingleton<IDockerDaemonHubDispatcher>(provider =>
-        {
-            var context = provider.GetRequiredService<IHubContext<DockerDaemonHub, ITypedDockerDaemonHub>>();
-            return new DockerDaemonHubDispatcher(context);
-        });
-        services.AddSingleton<IContainerInfoHubDispatcher>(provider =>
-        {
-            var context = provider.GetRequiredService<IHubContext<ContainerInfoHub, ITypedContainerInfoHub>>();
-            return new ContainerInfoHubDispatcher(context);
-        });
-        services.AddSingleton<IPlatformHubDispatcher>(provider =>
-        {
-            var context = provider.GetRequiredService<IHubContext<PlatformHub, ITypedPlatformHub>>();
-            return new PlatformHubDispatcher(context);
-        });
+        services
+            .AddSingleton<IContainerHubDispatcher>(provider =>
+            {
+                var context = provider.GetRequiredService<IHubContext<ContainerHub, ITypedContainerHub>>();
+                return new ContainerHubDispatcher(context);
+            })
+            .AddSingleton<IDockerDaemonHubDispatcher>(provider =>
+            {
+                var context = provider.GetRequiredService<IHubContext<DockerDaemonHub, ITypedDockerDaemonHub>>();
+                return new DockerDaemonHubDispatcher(context);
+            })
+            .AddSingleton<IContainerInfoHubDispatcher>(provider =>
+            {
+                var context = provider.GetRequiredService<IHubContext<ContainerInfoHub, ITypedContainerInfoHub>>();
+                return new ContainerInfoHubDispatcher(context);
+            })
+            .AddSingleton<IContainerLogHubDispatcher>(provider =>
+            {
+                var context = provider.GetRequiredService<IHubContext<ContainerLogHub, ITypedContainerLogHub>>();
+                return new ContainerLogHubDispatcher(context);
+            })
+            .AddSingleton<IPlatformHubDispatcher>(provider =>
+            {
+                var context = provider.GetRequiredService<IHubContext<PlatformHub, ITypedPlatformHub>>();
+                return new PlatformHubDispatcher(context);
+            });
 
         services.AddSingleton<ISignalRConnectionTracker, SignalRConnectionTracker>();
 

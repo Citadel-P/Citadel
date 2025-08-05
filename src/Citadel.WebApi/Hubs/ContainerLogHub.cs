@@ -1,19 +1,19 @@
 ﻿using Application.Services.Abstractions;
 using Application.Services.SignalR;
-using Domain.Contracts.Resources.Containers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using static Hosting.Common.Constants;
 
 namespace WebApi.Hubs;
 
-public interface ITypedContainerInfoHub
+public interface ITypedContainerLogHub
 {
-    Task ReceiveContainerInfo(DockerContainer container);
+    Task SendContainerLog(string logLine);
+    Task SendContainerLogsBatch(IEnumerable<string> recentLogs);
 }
 
 [Authorize]
-internal sealed class ContainerInfoHub(IContainerInfoStreamManager streamManager, ISignalRConnectionTracker connectionTracker) : Hub<ITypedContainerInfoHub>
+internal sealed class ContainerLogHub(IContainerLogStreamManager streamManager, ISignalRConnectionTracker connectionTracker) : Hub<ITypedContainerLogHub>
 {
     public override Task OnConnectedAsync()
     {
@@ -30,14 +30,14 @@ internal sealed class ContainerInfoHub(IContainerInfoStreamManager streamManager
 
     public async Task JoinGroup(string containerId)
     {
-        await Groups.AddToGroupAsync(Context.ConnectionId, SignalRGroups.ContainerInfoGroup(containerId));
-        streamManager.AddSubscriber(containerId, Context.ConnectionId);
+        await streamManager.AddSubscriber(containerId, Context.ConnectionId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, SignalRGroups.ContainerLogGroup(containerId));
     }
 
-    public async Task LeaveGroup(string containerId)
+    public Task LeaveGroup(string containerId)
     {
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, SignalRGroups.ContainerInfoGroup(containerId));
-        streamManager.RemoveSubscriber(SignalRGroups.ContainerInfoGroup(containerId), Context.ConnectionId);
+        streamManager.RemoveSubscriber(SignalRGroups.ContainerLogGroup(containerId), Context.ConnectionId);
+        return Groups.RemoveFromGroupAsync(Context.ConnectionId, SignalRGroups.ContainerLogGroup(containerId));
     }
 
 }

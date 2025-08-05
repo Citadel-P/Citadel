@@ -2,6 +2,7 @@
 using Application.Permissions;
 using Application.Permissions.Requirements;
 using Application.Services;
+using Application.Services.SignalR;
 using Application.TaskJobs;
 using Citadel.SourceGen;
 using Domain;
@@ -53,6 +54,7 @@ public static class ApplicationModule
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>()
             .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>()
             .AddSingleton<IContainerInfoStreamManager, ContainerInfoStreamManager>()
+            .AddSingleton<IContainerLogStreamManager, ContainerLogStreamManager>()
             .AddScoped<GitHubConnectorStrategy>()
             .AddScoped<DockerHubConnectorStrategy>()
             .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>();

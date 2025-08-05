@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.SignalR;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using static Hosting.Common.Constants;
 
-namespace WebApi.Hubs;
+namespace WebApi.Hubs.Dispatchers;
 
 internal sealed class ContainerHubDispatcher(IHubContext<ContainerHub, ITypedContainerHub> hubContext) : IContainerHubDispatcher
 {

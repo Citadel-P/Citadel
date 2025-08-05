@@ -5,9 +5,10 @@ namespace WebApi.Hubs;
 
 internal sealed class SignalRConnectionTracker : ISignalRConnectionTracker
 {
-    private readonly ConcurrentDictionary<string, string> connections = new(); 
-    private readonly ConcurrentDictionary<string, HashSet<string>> userConnections = new(); 
-    private readonly ConcurrentDictionary<string, HashSet<string>> groupUsers = new();
+    private readonly ConcurrentDictionary<string, string> connections = new(); // connectionId -> userId
+    private readonly ConcurrentDictionary<string, HashSet<string>> userConnections = new(); // userId -> connectionIds
+    private readonly ConcurrentDictionary<string, HashSet<string>> groupUsers = new(); // groupName -> userIds
+    private readonly ConcurrentDictionary<string, HashSet<string>> connectionGroups = new(); // connectionId -> groupNames
 
     private readonly Lock @lock = new();
 
@@ -39,17 +40,23 @@ internal sealed class SignalRConnectionTracker : ISignalRConnectionTracker
                 conns.Remove(connectionId);
 
                 if (conns.Count == 0)
-                {
                     userConnections.Remove(userId, out _);
+            }
 
-                    // Remove user from all groups
-                    foreach (var (group, users) in groupUsers)
+            // Remove from connectionGroups
+            if (connectionGroups.TryGetValue(connectionId, out var groups))
+            {
+                foreach (var group in groups)
+                {
+                    if (groupUsers.TryGetValue(group, out var users))
                     {
                         users.Remove(userId);
                         if (users.Count == 0)
                             groupUsers.Remove(group, out _);
                     }
                 }
+
+                connectionGroups.Remove(connectionId, out _);
             }
         }
     }
@@ -65,6 +72,14 @@ internal sealed class SignalRConnectionTracker : ISignalRConnectionTracker
             }
 
             users.Add(userId);
+
+            if (!connectionGroups.TryGetValue(connectionId, out var groups))
+            {
+                groups = [];
+                connectionGroups[connectionId] = groups;
+            }
+
+            groups.Add(group);
         }
     }
 
@@ -78,6 +93,26 @@ internal sealed class SignalRConnectionTracker : ISignalRConnectionTracker
                 if (users.Count == 0)
                     groupUsers.Remove(group, out _);
             }
+
+            if (connectionGroups.TryGetValue(connectionId, out var groups))
+            {
+                groups.Remove(group);
+                if (groups.Count == 0)
+                    connectionGroups.Remove(connectionId, out _);
+            }
+        }
+    }
+
+    public bool TryGetUserId(string connectionId, out string userId)
+        => connections.TryGetValue(connectionId, out userId);
+
+    public IReadOnlyCollection<string> GetGroupsForConnection(string connectionId)
+    {
+        lock (@lock)
+        {
+            return connectionGroups.TryGetValue(connectionId, out var groups)
+                ? [.. groups]
+                : [];
         }
     }
 

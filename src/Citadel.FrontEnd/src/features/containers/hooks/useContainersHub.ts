@@ -1,9 +1,9 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { HubConnection } from '@microsoft/signalr';
-import { configureHub, IHubConfig, startConnectionWithRetry } from '@/lib/signalr.helpers';
 import { ContainersView, ContainerStatView } from '@/api/_generated';
 import { useAuthContext } from '@/features/auth/AuthContext';
 import { useDockerDaemonHub } from '@/features/platforms/hooks/useDockerDaemonHub';
+import { useSignalRHub } from '@/hooks/useSignalRHub';
 
 export const useContainersHub = (platformId?: string) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -13,7 +13,6 @@ export const useContainersHub = (platformId?: string) => {
 
   const groupName = `containers-${platformId}`;
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
-  const isCanceledRef = useRef(false);
 
   const handleContainersInfoUpdated = useCallback((containers: ContainersView) => {
     setContainersInfo(containers);
@@ -120,45 +119,21 @@ export const useContainersHub = (platformId?: string) => {
     hubConnection.off('ContainersStatsUpdated');
   }, []);
 
-  useEffect(() => {
-    if (!platformId || !accessToken) return;
+  const onConnected = useCallback(
+    (hubConnection: HubConnection) => {
+      getContainersList(hubConnection);
+    },
+    [getContainersList],
+  );
 
-    let hubConnection: HubConnection;
-
-    const initHub = () => {
-      const config: IHubConfig = {
-        url: `${baseUrl}/hubs/containers`,
-        accessToken,
-      };
-      hubConnection = configureHub(config);
-    };
-
-    const onConnected = () => {
-      hubConnection
-        .send('JoinGroup', groupName)
-        .then(() => getContainersList(hubConnection))
-        .catch((error) => console.error('Failed to join group:', error));
-    };
-
-    const connect = async () => {
-      setupEventListeners(hubConnection);
-      await startConnectionWithRetry(hubConnection, onConnected, isCanceledRef);
-    };
-
-    const cleanup = () => {
-      isCanceledRef.current = true;
-      if (hubConnection) {
-        hubConnection.send('LeaveGroup', groupName);
-        removeEventListeners(hubConnection);
-        hubConnection.stop();
-      }
-    };
-
-    initHub();
-    connect();
-
-    return cleanup;
-  }, [accessToken, baseUrl, groupName, platformId, setupEventListeners, removeEventListeners, getContainersList]);
+  useSignalRHub({
+    url: `${baseUrl}/hubs/containers`,
+    accessToken,
+    groupName: groupName,
+    setupEventListeners,
+    removeEventListeners,
+    onConnected,
+  });
 
   return { containersInfo, isLoading };
 };

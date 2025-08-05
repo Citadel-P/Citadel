@@ -3,7 +3,6 @@ import { createContext } from 'react';
 
 interface IContext {
   isPending: boolean;
-  isSuccess: boolean;
   logs: string[];
 }
 

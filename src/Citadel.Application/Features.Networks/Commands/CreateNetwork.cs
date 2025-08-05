@@ -5,7 +5,6 @@ using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
-using static Application.Features.Networks.Commands.CreateNetwork.Validator;
 using static Hosting.Common.Validators;
 
 namespace Application.Features.Networks.Commands;

@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.SignalR;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using static Hosting.Common.Constants;
 
-namespace WebApi.Hubs;
+namespace WebApi.Hubs.Dispatchers;
 
 internal sealed class PlatformHubDispatcher(IHubContext<PlatformHub, ITypedPlatformHub> hubContext) : IPlatformHubDispatcher
 {
