@@ -1,7 +1,7 @@
 ﻿using System.Threading.Channels;
 using Application.Configs;
 using Application.Mappers;
-using Application.Services.Abstractions;
+using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
@@ -12,7 +12,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using static Hosting.Common.Constants;
 
 namespace Application.TaskJobs;
 
@@ -24,8 +23,7 @@ internal class PlatformStatsWriterJob(
     IServiceScopeFactory scopeFactory,
     IOptions<JobConfiguration> options,
     IObjectPoolManager objectPoolManager,
-    ISignalRConnectionTracker connectionTracker,
-    IPlatformHubDispatcher platformHubDispatcher,
+    IPlatformsStreamManager platformStreamManager,
     ChannelReader<(Guid Id, PooledHandle<PlatformStatsResult> Stats)> reader,
     ILogger<PlatformStatsWriterJob> logger) : BackgroundService
 {
@@ -40,7 +38,7 @@ internal class PlatformStatsWriterJob(
             {
                 // We delay the disposal of the pooled handle until we have processed it
                 AccumulateBatchStats(platformId, platformStat);
-                await NotifyClients(platformId, platformStat.Value);
+                await platformStreamManager.PushPlatformStats(platformId, platformStat.Value);
 
                 if (ShouldFlush())
                 {
@@ -190,21 +188,5 @@ internal class PlatformStatsWriterJob(
             }
         }
         return stats;
-    }
-
-    private async ValueTask NotifyClients(Guid platformId, PlatformStatsResult stats)
-    {
-        if (connectionTracker.HasUsersInGroup(SignalRGroups.PlatformsGroup))
-        {
-            try
-            {
-                await platformHubDispatcher.PushPlatformStats(platformId, stats);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "An error occurred while sending platform statistics to clients for platform ID: {PlatformId}", platformId);
-                return;
-            }
-        }
     }
 }

@@ -2,6 +2,7 @@
 using Application.Mappers;
 using Application.Services;
 using Application.Services.Abstractions;
+using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
@@ -18,8 +19,8 @@ namespace Application.TaskJobs;
 /// </summary>
 internal class ContainerSyncJob(
     IServiceScopeFactory scopeFactory,
-    IContainerHubDispatcher containerHub,
     IPlatformContainerCache platformContainerCache,
+    IContainersStreamManager containerStreamManager,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IConnectorFactory<IContainerConnector> connectorFactory,
     ILogger<ContainerSyncJob> logger) : BackgroundService
@@ -68,7 +69,7 @@ internal class ContainerSyncJob(
         }
 
         // Notify clients and update the cache
-        await containerHub.SendContainersInfo(platformEvent.Id, syncedContainers);
+        await containerStreamManager.SendContainersInfo(platformEvent.Id, syncedContainers);
 
         logger.LogInformation("Synchronized {Count} containers for platform ID {PlatformId}.", syncedContainers.Count(), platformEvent.Id);
     }

@@ -1,4 +1,5 @@
 ﻿using Application.Services.Abstractions;
+using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain.Contracts.Interfaces;
 using FluentValidation;
@@ -20,7 +21,7 @@ public sealed record DeletePlatform(Guid Id) : ICommand<Result>
 
 internal class DeletePlatformHandler(
     IUnitOfWork unitOfWork,
-    IPlatformHubDispatcher platformHubDispatcher,
+    IPlatformsStreamManager platformStreamManager,
     IPlatformHealthMonitorJob platformHealthMonitorJob,
     ILogger<DeletePlatformHandler> logger) : ICommandHandler<DeletePlatform, Result>
 {
@@ -37,8 +38,8 @@ internal class DeletePlatformHandler(
 
         await platformHealthMonitorJob.UntrackPlatform(platform.Address, cancellationToken);
 
-        // Notify subscribers about the platform deletion
-        await platformHubDispatcher.PlatformDeleted(command.Id);
+        // Notify subscribers
+        await platformStreamManager.PlatformDeleted(command.Id);
 
         logger.LogInformation("Platform {Id} deleted successfully", command.Id);
 

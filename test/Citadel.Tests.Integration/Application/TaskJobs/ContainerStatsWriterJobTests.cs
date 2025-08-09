@@ -1,7 +1,7 @@
 using System.Threading.Channels;
 using Application.Configs;
 using Application.Services;
-using Application.Services.Abstractions;
+using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -18,8 +18,7 @@ namespace Tests.Integration.Application.TaskJobs;
 
 public class ContainerStatsWriterJobTests : IntegrationTestBase
 {
-    private readonly Mock<ISignalRConnectionTracker> _connectionTrackerMock = new();
-    private readonly Mock<IContainerHubDispatcher> _containerHubDispatcherMock = new();
+    private readonly Mock<IContainersStreamManager> _containerStreamManagerMock = new();
     private readonly Channel<ContainersStatBatch> _channel = Channel.CreateUnbounded<ContainersStatBatch>();
 
     private readonly Mock<IConnectorFactory<IContainerConnector>> _containerFactoryMock = new();
@@ -37,9 +36,8 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
         services.AddSingleton(_channel);
         services.AddSingleton(_configMock.Object);
         services.AddSingleton(_containerFactoryMock.Object);
-        services.AddSingleton(_connectionTrackerMock.Object);
         services.AddSingleton(_containerConnectorMock.Object);
-        services.AddSingleton(_containerHubDispatcherMock.Object);
+        services.AddSingleton(_containerStreamManagerMock.Object);
         services.AddSingleton<IPlatformHealthBroadCaster>(_broadcaster);
 
         _configMock.Setup(x => x.Value).Returns(new JobConfiguration() { BatchSize = 2 });
@@ -78,7 +76,6 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
             new(_containerId, 200, 150, 2, 600, 200, 400, time - 60),
         ]);
 
-        _connectionTrackerMock.Setup(c => c.HasUsersInGroup(It.IsAny<string>())).Returns(true);
         var batch = new ContainersStatBatch(_platformId, pooledStats);
 
         // Act
@@ -86,7 +83,7 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
         await Task.Delay(500, TestContext.Current.CancellationToken);
 
         // Assert
-        _containerHubDispatcherMock.Verify(d => d.SendContainersStats(_platformId, It.IsAny<IEnumerable<ContainerStat>>()), Times.Once);
+        _containerStreamManagerMock.Verify(d => d.SendContainersStats(_platformId, It.IsAny<IEnumerable<ContainerStat>>()), Times.Once);
         
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -111,45 +108,14 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
 
 
         var batch = new ContainersStatBatch(_platformId, pooledStats);
-        _connectionTrackerMock.Setup(c => c.HasUsersInGroup(It.IsAny<string>())).Returns(true);
 
         // Act
         await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);
         await Task.Delay(1500, TestContext.Current.CancellationToken);
 
         // Assert
-        _containerHubDispatcherMock.Verify(d => d.SendContainersStats(_platformId, It.IsAny<IEnumerable<ContainerStat>>()), Times.Once);
+        _containerStreamManagerMock.Verify(d => d.SendContainersStats(_platformId, It.IsAny<IEnumerable<ContainerStat>>()), Times.Once);
         
-        await using var scope = Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var containers = await db.ContainerStats.GetStatsAggregatedLast24HoursAsync("container-id-1", TestContext.Current.CancellationToken);
-        Assert.Equal(2, containers.Count());
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ShouldNotNotifyClients_WhenNoUsersInGroup()
-    {
-        // Arrange
-        var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var objectPoolManager = Services.GetRequiredService<IObjectPoolManager>();
-        var pooledStats = objectPoolManager.GetPooled<List<ContainerStat>>();
-        var stats = pooledStats.Value;
-        stats.AddRange(
-        [
-            new(_containerId, 100, 200, 5, 300, 100, 200, time),
-            new(_containerId, 200, 150, 2, 600, 200, 400, time - 60),
-        ]);
-
-        var batch = new ContainersStatBatch(_platformId, pooledStats);
-        _connectionTrackerMock.Setup(c => c.HasUsersInGroup(It.IsAny<string>())).Returns(false);
-
-        // Act
-        await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
-
-        // Assert
-        _containerHubDispatcherMock.Verify(d => d.SendContainersStats(It.IsAny<Guid>(), It.IsAny<List<ContainerStat>>()), Times.Never);
-       
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var containers = await db.ContainerStats.GetStatsAggregatedLast24HoursAsync("container-id-1", TestContext.Current.CancellationToken);
@@ -170,7 +136,6 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
             new(_containerId, 200, 150, 2, 600, 200, 400, time - 60),
         ]);
         var batch = new ContainersStatBatch(_platformId, pooledStats);
-        _connectionTrackerMock.Setup(c => c.HasUsersInGroup(It.IsAny<string>())).Returns(false);
 
         // Act
         await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);

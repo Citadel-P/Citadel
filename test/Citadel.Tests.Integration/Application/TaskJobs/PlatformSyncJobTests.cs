@@ -2,6 +2,7 @@
 using System.Text.Json.Serialization;
 using Application.Services;
 using Application.Services.Abstractions;
+using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -21,9 +22,9 @@ public class PlatformSyncJobTests : IntegrationTestBase
 {
     private readonly Mock<IConnectorFactory<IPlatformConnector>> connectorMock = new();
     private readonly Mock<IPlatformHealthMonitorJob> healthMonitorMock = new();
+    private readonly Mock<IPlatformsStreamManager> hubManagerMock = new();
     private readonly Mock<IPlatformConnector> platformConnector = new();
     private readonly TestPlatformHealthBroadCaster broadcaster = new();
-    private readonly Mock<IPlatformHubDispatcher> hubMock = new();
     private string? platformName;
     private Guid platformId;
     protected override void ConfigureTestServices(IServiceCollection services)
@@ -31,7 +32,7 @@ public class PlatformSyncJobTests : IntegrationTestBase
         // Remove all existing hosted services to ensure only PlatformSyncJob handles platform health events
         services.RemoveAll<IHostedService>();
         services.AddHostedService<PlatformSyncJob>();
-        services.AddSingleton(_ => hubMock.Object);
+        services.AddSingleton(_ => hubManagerMock.Object);
         services.AddSingleton(_ => connectorMock.Object);
         services.AddSingleton(_ => platformConnector.Object);
         services.AddSingleton(_ => healthMonitorMock.Object);
@@ -90,7 +91,7 @@ public class PlatformSyncJobTests : IntegrationTestBase
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var platform = await uow.Platforms.GetByNameAsync(platformName, TestContext.Current.CancellationToken);
 
-        hubMock.Verify(x => x.PushPlatformUpdate(It.IsAny<Platform>()), Times.Once);
+        hubManagerMock.Verify(x => x.PushPlatformUpdate(It.IsAny<Platform>()), Times.Once);
         await Verify(platform);
     }
 
@@ -119,7 +120,7 @@ public class PlatformSyncJobTests : IntegrationTestBase
         {
             DefaultIgnoreCondition = JsonIgnoreCondition.Never // Always include all properties, even if default
         };
-        hubMock.Verify(x => x.PushPlatformUpdate(It.IsAny<Platform>()), Times.Once);
+        hubManagerMock.Verify(x => x.PushPlatformUpdate(It.IsAny<Platform>()), Times.Once);
         await Verify(platform);
     }
 
@@ -137,6 +138,6 @@ public class PlatformSyncJobTests : IntegrationTestBase
         await Task.Delay(500, TestContext.Current.CancellationToken);
 
         // Assert: No hub notification
-        hubMock.Verify(x => x.PushPlatformUpdate(It.IsAny<Platform>()), Times.Never);
+        hubManagerMock.Verify(x => x.PushPlatformUpdate(It.IsAny<Platform>()), Times.Never);
     }
 }

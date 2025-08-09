@@ -1,9 +1,8 @@
 ﻿using System.Collections.Concurrent;
-using System.Threading;
 using System.Threading.Channels;
 using Application.Mappers;
 using Application.Services;
-using Application.Services.Abstractions;
+using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
@@ -11,15 +10,13 @@ using Domain.Entities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using static Hosting.Common.Constants;
 
 namespace Application.TaskJobs;
 
 internal sealed class DockerDaemonEventJob(
     IServiceScopeFactory scopeFactory,
     ILogger<DockerDaemonEventJob> logger,
-    IDockerDaemonHubDispatcher dockerDaemonHub,
-    ISignalRConnectionTracker connectionTracker,
+    IDockerDaemonStreamManager dockerDaemonHub,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IPlatformConnector> connectorFactory,
     IPlatformHealthBroadCaster platformHealthBroadCaster) : BackgroundService
@@ -150,16 +147,13 @@ internal sealed class DockerDaemonEventJob(
 
     private async Task SendContainerEventChanges(Container container, string action)
     {
-        if (connectionTracker.HasUsersInGroup(SignalRGroups.DockerDaemonGroup(container.PlatformId)))
+        try
         {
-            try
-            {
-                await dockerDaemonHub.SendContainerEvent(container, action);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to notify clients about containers stats for platform {PlatformId}", container.PlatformId);
-            }
+            await dockerDaemonHub.SendContainerEvent(container, action);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to notify clients about containers stats for platform {PlatformId}", container.PlatformId);
         }
     }
 }

@@ -1,9 +1,9 @@
 ﻿using System.Threading.Channels;
 using Application.Services;
+using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
-using Application.Services.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -15,6 +15,7 @@ namespace Application.TaskJobs;
 /// </summary>
 internal class PlatformSyncJob(
     IServiceScopeFactory scopeFactory,
+    IPlatformsStreamManager platformStreamManager,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IConnectorFactory<IPlatformConnector> connectorFactory,
     ILogger<PlatformSyncJob> logger) : BackgroundService
@@ -41,8 +42,6 @@ internal class PlatformSyncJob(
                 logger.LogError("Platform with address {Address} not found for synchronization.", evt.Address);
                 return;
             }
-
-            var platformHub = scope.ServiceProvider.GetRequiredService<IPlatformHubDispatcher>();
 
             if (evt.IsOnLine)
             {
@@ -78,7 +77,7 @@ internal class PlatformSyncJob(
             await uow.Platforms.UpdatePlatformAsync(platform, cancellationToken);
             await uow.CommitAsync();
 
-            await platformHub.PushPlatformUpdate(platform);
+            await platformStreamManager.PushPlatformUpdate(platform);
         }
         catch (Exception ex)
         {

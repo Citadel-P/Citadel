@@ -11,7 +11,7 @@ export const useContainersHub = (platformId?: string) => {
   const { accessToken } = useAuthContext();
   const { containerEvent } = useDockerDaemonHub(platformId);
 
-  const groupName = `containers-${platformId}`;
+  const groupName = `containers:${platformId}`;
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
   const handleContainersInfoUpdated = useCallback((containers: ContainersView) => {
@@ -127,12 +127,13 @@ export const useContainersHub = (platformId?: string) => {
   );
 
   useSignalRHub({
-    url: `${baseUrl}/hubs/containers`,
-    accessToken,
+    url: `${baseUrl}/hubs/docker`,
     groupName: groupName,
+    accessToken,
     setupEventListeners,
     removeEventListeners,
     onConnected,
+    skip: !platformId,
   });
 
   return { containersInfo, isLoading };

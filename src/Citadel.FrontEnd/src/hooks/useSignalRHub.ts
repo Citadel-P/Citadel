@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { HubConnection, HubConnectionBuilder, HttpTransportType } from '@microsoft/signalr';
+import { HubConnection, HubConnectionBuilder, HttpTransportType, IHttpConnectionOptions } from '@microsoft/signalr';
 import { startConnectionWithRetry } from '@/lib/startConnectionWithRetry';
 
 type SignalRHookOptions = {
@@ -16,6 +16,7 @@ type SignalRHookOptions = {
     jitterFactor?: number;
     onRetryAttempt?: (attempt: number, delay: number, error: Error) => void;
   };
+  skip?: boolean;
 };
 
 export const useSignalRHub = ({
@@ -26,61 +27,79 @@ export const useSignalRHub = ({
   removeEventListeners,
   onConnected,
   retryOptions,
+  skip,
 }: SignalRHookOptions) => {
   const isCanceledRef = useRef(false);
   const connectionRef = useRef<HubConnection | null>(null);
 
   useEffect(() => {
-    if (!accessToken || !groupName) return;
+    if (skip) {
+      return;
+    }
+
     isCanceledRef.current = false;
+    let active = true;
 
-    const connect = async () => {
-      const hub = new HubConnectionBuilder()
-        .withUrl(url, {
-          accessTokenFactory: () => accessToken,
-          transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
-        })
-        .withAutomaticReconnect()
-        .build();
+    const hub = new HubConnectionBuilder()
+      .withUrl(url, {
+        accessTokenFactory: () => accessToken,
+        transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
+      } as IHttpConnectionOptions)
+      .withAutomaticReconnect()
+      .build();
 
-      setupEventListeners(hub);
+    setupEventListeners(hub);
 
+    (async () => {
       try {
         await startConnectionWithRetry(hub, isCanceledRef, retryOptions);
-        if (isCanceledRef.current) {
+
+        if (!active || isCanceledRef.current) {
           await hub.stop();
           return;
         }
 
-        await hub.send('JoinGroup', groupName);
+        if (groupName) {
+          await hub.send('JoinGroup', groupName);
+          console.log('JoinGroup:', groupName);
+        }
         onConnected?.(hub);
         connectionRef.current = hub;
       } catch (err) {
         console.error('SignalR final connection failure:', err);
         await hub.stop();
       }
-    };
-
-    connect();
+    })();
 
     return () => {
+      if (skip) {
+        return;
+      }
       isCanceledRef.current = true;
+      active = false;
+
       const conn = connectionRef.current;
       connectionRef.current = null;
 
       if (conn) {
         (async () => {
           try {
-            if (conn.state === 'Connected') {
+            if (groupName) {
               await conn.send('LeaveGroup', groupName);
             }
+          } catch (err) {
+            console.warn('LeaveGroup failed:', err);
+          }
+
+          try {
             removeEventListeners?.(conn);
             await conn.stop();
+            console.log('Connection stopped');
           } catch (err) {
-            console.warn('SignalR cleanup failed:', err);
+            console.warn('Cleanup failed:', err);
           }
         })();
       }
     };
-  }, [url, accessToken, groupName, retryOptions, setupEventListeners, removeEventListeners, onConnected]);
+  }, [url, accessToken, groupName, retryOptions, setupEventListeners, removeEventListeners, onConnected, skip]);
 };

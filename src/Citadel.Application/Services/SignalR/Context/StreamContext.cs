@@ -1,18 +1,12 @@
-﻿using System.Threading.Channels;
-using Hosting.Common.ObjectPoolManager;
+﻿namespace Application.Services.SignalR.Context;
 
-namespace Application.Services.SignalR.Context;
-
-internal class StreamContext<T> where T : class
+internal class StreamContext
 {
-    public CancellationTokenSource Cancellation { get; } = new();
-    public Channel<PooledHandle<T>> Channel { get; } 
-        = System.Threading.Channels.Channel.CreateBounded<PooledHandle<T>>(ApplicationModule.ChannelDefaultOptions());
-    
-    private readonly Lock @lock = new();
-    private readonly HashSet<string> subscribers = [];
+    protected bool started;
+    protected readonly Lock @lock = new();
+    protected readonly HashSet<string> subscribers = [];
 
-    public void AddSubscriber(string connectionId)
+    public virtual void AddSubscriber(string connectionId)
     {
         lock (@lock)
         {
@@ -20,11 +14,15 @@ internal class StreamContext<T> where T : class
         }
     }
 
-    public void RemoveSubscriber(string connectionId)
+    public virtual void RemoveSubscriber(string connectionId)
     {
         lock (@lock)
         {
             subscribers.Remove(connectionId);
+            if (IsEmpty)
+            {
+                started = false;
+            }
         }
     }
 
@@ -34,6 +32,16 @@ internal class StreamContext<T> where T : class
         {
             lock (@lock)
                 return subscribers.Count == 0;
+        }
+    }
+
+    public bool TryStart()
+    {
+        lock (@lock)
+        {
+            if (started) return false;
+            started = true;
+            return true;
         }
     }
 }

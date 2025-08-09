@@ -7,7 +7,7 @@ import { useSignalRHub } from '@/hooks/useSignalRHub';
 export const useDockerDaemonHub = (platformId?: string) => {
   const [containerEvent, setContainerEvent] = useState<ContainerEvent | undefined>();
   const { accessToken } = useAuthContext();
-  const groupName = `docker-daemon-${platformId}`;
+  const groupName = `docker-daemon:${platformId}`;
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
   const handleContainerEventReceived = useCallback((container: ContainerView, eventType: string) => {
@@ -31,11 +31,12 @@ export const useDockerDaemonHub = (platformId?: string) => {
   }, []);
 
   useSignalRHub({
-    url: `${baseUrl}/hubs/docker-daemon`,
-    accessToken,
+    url: `${baseUrl}/hubs/docker`,
     groupName: groupName,
+    accessToken,
     setupEventListeners,
     removeEventListeners,
+    skip: !platformId,
   });
 
   return { containerEvent };

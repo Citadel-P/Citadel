@@ -1,6 +1,6 @@
 ﻿using System.Threading.Channels;
 using Application.Configs;
-using Application.Services.Abstractions;
+using Application.Services.SignalR;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Hosting.Common.ObjectPoolManager;
@@ -8,7 +8,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using static Hosting.Common.Constants;
 
 namespace Application.TaskJobs;
 
@@ -17,8 +16,7 @@ internal class ContainerStatsWriterJob(
     IOptions<JobConfiguration> options,
     IObjectPoolManager objectPoolManager,
     ChannelReader<ContainersStatBatch> reader,
-    ISignalRConnectionTracker connectionTracker,
-    IContainerHubDispatcher containerHubDispatcher,
+    IContainersStreamManager containersStreamManager,
     ILogger<ContainerStatsWriterJob> logger) : BackgroundService
 {
     private readonly Dictionary<Guid, List<ContainerStat>> buffer = [];  // Key: PlatformId
@@ -118,16 +116,13 @@ internal class ContainerStatsWriterJob(
 
     private async ValueTask NotifyClients(ContainersStatBatch batch)
     {
-        if (connectionTracker.HasUsersInGroup(SignalRGroups.ContainersGroup(batch.PlatformId)))
+        try
         {
-            try
-            {
-                await containerHubDispatcher.SendContainersStats(batch.PlatformId, batch.Stats.Value);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to notify clients about containers stats for platform {PlatformId}", batch.PlatformId);
-            }
+            await containersStreamManager.SendContainersStats(batch.PlatformId, batch.Stats.Value);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to notify clients about containers stats for platform {PlatformId}", batch.PlatformId);
         }
     }
 }

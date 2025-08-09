@@ -2,6 +2,7 @@
 using Application.Configs;
 using Application.Services;
 using Application.Services.Abstractions;
+using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -21,9 +22,8 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
     private readonly Mock<IConnectorFactory<IPlatformConnector>> _platformFactoryMock = new();
     private readonly Mock<IOptions<JobConfiguration>> _configMock = new();
     private readonly Mock<IPlatformConnector> _platformConnector = new();
-    private readonly Mock<ISignalRConnectionTracker> _connectionTrackerMock = new();
     private readonly TestPlatformHealthBroadCaster _broadcaster = new();
-    private readonly Mock<IPlatformHubDispatcher> _hubMock = new();
+    private readonly Mock<IPlatformsStreamManager> _streamManagerMock = new();
     private readonly Channel<(Guid Id, PooledHandle<PlatformStatsResult> Stats)> _channel = Channel.CreateUnbounded<(Guid Id, PooledHandle<PlatformStatsResult> Stats)>();
 
 
@@ -37,11 +37,10 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
         services.AddHostedService<PlatformStatsWriterJob>();
         services.AddHostedService<PlatformStatsStreamerJob>();
         services.AddSingleton(_channel);
-        services.AddSingleton(_ => _hubMock.Object);
+        services.AddSingleton(_ => _streamManagerMock.Object);
         services.AddSingleton(_ => _configMock.Object);
         services.AddSingleton(_ => _platformConnector.Object);
         services.AddSingleton(_ => _platformFactoryMock.Object);
-        services.AddSingleton(_ => _connectionTrackerMock.Object);
         services.AddSingleton<IPlatformHealthBroadCaster>(_ => _broadcaster);
 
         _configMock.Setup(x => x.Value).Returns(new JobConfiguration());
@@ -63,7 +62,6 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
         // Arrange
         _configMock.Setup(x => x.Value).Returns(new JobConfiguration() { BatchSize = 2 });
 
-        _connectionTrackerMock.Setup(x => x.HasUsersInGroup(It.IsAny<string>())).Returns(true);
         _platformFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(_platformConnector.Object);
         _platformConnector.Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
             .Returns((StreamPlatformStatsCommand _, CancellationToken __) => GetStatsAsync());
@@ -88,7 +86,6 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
         // Arrange
         _configMock.Setup(x => x.Value).Returns(new JobConfiguration() { BatchSize = 100, FlashInterval = 0 });
         _platformFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(_platformConnector.Object);
-        _connectionTrackerMock.Setup(x => x.HasUsersInGroup(It.IsAny<string>())).Returns(true);
         _platformConnector.Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
             .Returns((StreamPlatformStatsCommand _, CancellationToken __) => GetStatsAsync());
 
@@ -104,26 +101,6 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
         var stats = await db.PlatformStats.GetStatsAggregatedLast24HoursAsync(_platformId, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, stats.Count());
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ShouldNotNotifyClients_WhenNoUsersInGroup()
-    {
-        // Arrange
-        _configMock.Setup(x => x.Value).Returns(new JobConfiguration { BatchSize = 1, FlashInterval = 60 });
-        _platformFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(_platformConnector.Object);
-        _connectionTrackerMock.Setup(x => x.HasUsersInGroup(It.IsAny<string>())).Returns(false);
-        _platformConnector.Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
-            .Returns((StreamPlatformStatsCommand _, CancellationToken __) => GetStatsAsync());
-
-        // Act
-        await _broadcaster.BroadcastAsync(new PlatformHealth(_platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        await Task.Delay(500, TestContext.Current.CancellationToken);
-
-        // Assert
-        _hubMock.Verify(h => h.PushPlatformStats(It.IsAny<Guid>(), It.IsAny<PlatformStatsResult>()), Times.Never);
     }
 
     [Fact]
@@ -152,7 +129,6 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
 
         _configMock.Setup(x => x.Value).Returns(new JobConfiguration { BatchSize = 1, FlashInterval = 1 });
         _platformFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(_platformConnector.Object);
-        _connectionTrackerMock.Setup(x => x.HasUsersInGroup(It.IsAny<string>())).Returns(true);
         
         // Act
         await _channel.Writer.WriteAsync((_platformId, pooledStat), TestContext.Current.CancellationToken);

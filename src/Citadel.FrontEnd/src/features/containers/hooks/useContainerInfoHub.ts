@@ -33,11 +33,12 @@ export const useContainerInfoHub = (containerId?: string, platformId?: string) =
   }, []);
 
   useSignalRHub({
-    url: `${baseUrl}/hubs/container-info`,
+    url: `${baseUrl}/hubs/docker`,
     accessToken,
-    groupName: containerId,
+    groupName: `container-info:${containerId}`,
     setupEventListeners,
     removeEventListeners,
+    skip: !containerId,
   });
 
   useEffect(() => {

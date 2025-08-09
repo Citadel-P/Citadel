@@ -1,6 +1,7 @@
 ﻿using Application.Configs;
 using Application.Services;
 using Application.Services.Abstractions;
+using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -21,10 +22,9 @@ public class ContainerSyncJobTests : IntegrationTestBase
     private readonly Mock<IConnectorFactory<IContainerConnector>> containerFactoryMock = new();
     private readonly Mock<IContainerConnector> containerConnector = new();
 
-    private readonly Mock<ISignalRConnectionTracker> connectionTrackerMock = new();
     private readonly Mock<IOptions<JobConfiguration>> configMock = new();
     private readonly TestPlatformHealthBroadCaster broadcaster = new();
-    private readonly Mock<IContainerHubDispatcher> hubMock = new();
+    private readonly Mock<IContainersStreamManager> streamManagerMock = new();
 
     private Guid platformId;
     private const int batchSize = 2;
@@ -36,11 +36,10 @@ public class ContainerSyncJobTests : IntegrationTestBase
 
         services.AddHostedService<ContainerSyncJob>();
 
-        services.AddSingleton(hubMock.Object);
+        services.AddSingleton(streamManagerMock.Object);
         services.AddSingleton(configMock.Object);
         services.AddSingleton(containerConnector.Object);
         services.AddSingleton(containerFactoryMock.Object);
-        services.AddSingleton(connectionTrackerMock.Object);
         services.AddSingleton<IPlatformHealthBroadCaster>(broadcaster);
 
         configMock.Setup(x => x.Value).Returns(new JobConfiguration()
@@ -77,8 +76,6 @@ public class ContainerSyncJobTests : IntegrationTestBase
         // Arrange
         containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(containerConnector.Object);
 
-        connectionTrackerMock.Setup(x => x.HasUsersInGroup(It.IsAny<string>())).Returns(true);
-
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success(Fakes.GetDummyContainers().ToDictionary(c => c.ContainerId) as IReadOnlyDictionary<string, DockerContainer>));
 
@@ -102,7 +99,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
             ));
         Assert.True(cache.TryGetContainers(platformId, out var cacheContainers));
         Assert.Equal(3, cacheContainers.Count);
-        hubMock.Verify(x => x.SendContainersInfo(It.IsAny<Guid>(), It.IsAny<IEnumerable<Container>>()), Times.Once);
+        streamManagerMock.Verify(x => x.SendContainersInfo(It.IsAny<Guid>(), It.IsAny<IEnumerable<Container>>()), Times.Once);
     }
 
     [Fact]

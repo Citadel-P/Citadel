@@ -1,80 +1,50 @@
-﻿using System.Collections.Concurrent;
-using Application.Configs;
+﻿using Application.Configs;
 using Application.Services.Abstractions;
 using Application.Services.SignalR.Context;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using static Hosting.Common.Constants;
 
 namespace Application.Services.SignalR;
 
 internal sealed class ContainerInfoStreamManager(
     IOptions<JobConfiguration> options,
-    IContainerInfoHubDispatcher dispatcher, 
-    ISignalRConnectionTracker connectionTracker,
+    IDockerHubDispatcher dispatcher,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IContainerConnector> connectorFactory,
-    ILogger<ContainerInfoStreamManager> logger) : IContainerInfoStreamManager
+    ILogger<ContainerInfoStreamManager> logger) : BaseStreamManager<PooledStreamContext<DockerContainer>>, IStreamGroupManager
 {
-    private readonly ConcurrentDictionary<string, StreamContext<DockerContainer>> streams = new();
-
-    public void AddSubscriber(string containerId, string connectionId)
-    {
-        if (!connectionTracker.TryGetUserId(connectionId, out var userId))
-        {
-            logger.LogWarning("Unknown connection ID {ConnectionId}", connectionId);
-            return;
-        }
-
-        var group = SignalRGroups.ContainerLogGroup(containerId);
-        var context = streams.GetOrAdd(group, _ =>
-        {
-            var ctx = new StreamContext<DockerContainer>();
-            Task.Run(() => PollDockerStats(containerId, ctx));
-            Task.Run(() => BroadcastStats(ctx));
-            return ctx;
-        });
-
-        context.AddSubscriber(connectionId);
-        connectionTracker.JoinGroup(group, connectionId, userId);
-    }
-
-    public void RemoveSubscriber(string groupId, string connectionId)
+    protected override void OnSubscriberAdded(string groupId, string connectionId)
     {
         if (!streams.TryGetValue(groupId, out var context))
             return;
 
-        CleanUp(context, connectionId, groupId);
-    }
-
-    public void RemoveConnection(string connectionId)
-    {
-        var groups = connectionTracker.GetGroupsForConnection(connectionId);
-
-        foreach (var groupId in groups)
+        var containerId = GetEntityId(groupId.AsSpan()).ToString();
+        if (string.IsNullOrEmpty(containerId))
         {
-            if (!streams.TryGetValue(groupId, out var context))
-                continue;
-
-            connectionTracker.LeaveGroup(groupId, connectionId, connectionTracker.TryGetUserId(connectionId, out var userId) ? userId : "unknown");
-
-            CleanUp(context, connectionId, groupId);
+            logger.LogError("Invalid group ID format: {GroupId}", groupId);
+            return;
+        }
+        if (context.TryStart())
+        {
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.WhenAll(
+                        PollDockerStats(containerId, context),
+                        BroadcastStats(context));
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error in container info streaming for {ContainerId}", containerId);
+                }
+            });
         }
     }
 
-    private void CleanUp(StreamContext<DockerContainer> context, string connectionId, string groupId)
-    {
-        context.RemoveSubscriber(connectionId);
-        if (context.IsEmpty)
-        {
-            context.Cancellation.Cancel();
-            streams.TryRemove(groupId, out _);
-        }
-    }
-
-    private async Task PollDockerStats(string containerId, StreamContext<DockerContainer> ctx)
+    private async Task PollDockerStats(string containerId, PooledStreamContext<DockerContainer> ctx)
     {
         var writer = ctx.Channel.Writer;
         var token = ctx.Cancellation.Token;
@@ -102,7 +72,7 @@ internal sealed class ContainerInfoStreamManager(
         }
     }
 
-    private async Task BroadcastStats(StreamContext<DockerContainer> ctx)
+    private async Task BroadcastStats(PooledStreamContext<DockerContainer> ctx)
     {
         var reader = ctx.Channel.Reader;
         var token = ctx.Cancellation.Token;

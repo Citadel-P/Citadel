@@ -1,35 +1,60 @@
-﻿using System.IO;
-using System.Threading.Channels;
+﻿using System.Threading.Channels;
 
 namespace Application.Services.SignalR.Context;
 
-internal sealed class LogStreamContext(string containerId, int maxBufferSize = 50)
+internal sealed class LogStreamContext : StreamContext
 {
-    public string ContainerId => containerId;
-    public OneTimeFlag Started { get; } = new();
+    public Channel<string> Channel { get; } = System.Threading.Channels.Channel.CreateBounded<string>(ApplicationModule.ChannelDefaultOptions());
     public CancellationTokenSource Cancellation { get; } = new();
-    public Channel<string> Channel { get; }
-        = System.Threading.Channels.Channel.CreateBounded<string>(ApplicationModule.ChannelDefaultOptions());
 
-    private readonly Lock @lock = new();
-    private readonly HashSet<string> subscribers = [];
-    private readonly Queue<string> buffer = new(maxBufferSize);
+    private readonly LimitedQueue<string> buffer = new(50);
 
-    public int MaxBufferSize { get; }
 
-    public void AddSubscriber(string connectionId)
-    {
-        lock (@lock)
-        {
-            subscribers.Add(connectionId);
-        }
-    }
-
-    public void RemoveSubscriber(string connectionId)
+    public override void RemoveSubscriber(string connectionId)
     {
         lock (@lock)
         {
             subscribers.Remove(connectionId);
+            if (IsEmpty)
+            {
+                buffer.Clear();
+                Cancellation.Cancel();
+                Channel.Writer.TryComplete();
+                started = false;
+            }
+        }
+    }
+
+    public void AddToBuffer(string log)
+    {
+        buffer.Enqueue(log);
+    }
+
+    public IReadOnlyCollection<string> GetBufferedLogs() => buffer.ToArray();
+}
+
+internal sealed class LimitedQueue<T>(int capacity)
+{
+    private readonly Queue<T> queue = new(capacity);
+    private readonly int capacity = capacity;
+    private readonly Lock @lock = new();
+
+    public void Enqueue(T item)
+    {
+        lock (@lock)
+        {
+            if (capacity <= 0) return;
+            if (queue.Count >= capacity)
+                queue.Dequeue();
+            queue.Enqueue(item);
+        }
+    }
+
+    public T[] ToArray()
+    {
+        lock (@lock)
+        {
+            return [.. queue];
         }
     }
 
@@ -37,52 +62,7 @@ internal sealed class LogStreamContext(string containerId, int maxBufferSize = 5
     {
         lock (@lock)
         {
-            buffer.Clear();
-            subscribers.Clear();
+            queue.Clear();
         }
-
-        while (Channel.Reader.TryRead(out _)) { }
-        Channel.Writer.TryComplete();
-    }
-
-    public bool IsEmpty
-    {
-        get
-        {
-            lock (@lock)
-                return subscribers.Count == 0;
-        }
-    }
-
-    public List<string> SubscribersSnapshot()
-    {
-        lock (@lock)
-            return [.. subscribers];
-    }
-
-    public void AddToBuffer(string line)
-    {
-        lock (@lock)
-        {
-            if (MaxBufferSize > 0 && buffer.Count >= MaxBufferSize)
-            {
-                if (buffer.Count > 0)
-                    buffer.Dequeue();
-            }
-
-            buffer.Enqueue(line);
-        }
-    }
-
-    public string[] GetBufferedLogs()
-    {
-        lock (@lock)
-            return [.. buffer];
-    }
-
-    internal sealed class OneTimeFlag
-    {
-        private int _value = 0;
-        public bool TrySet() => Interlocked.Exchange(ref _value, 1) == 0;
     }
 }

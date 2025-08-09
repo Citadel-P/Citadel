@@ -15,6 +15,7 @@ export const useContainerLogHub = (containerId?: string) => {
   }, []);
 
   const handleContainerLogsBatch = useCallback((logs: string[]) => {
+    console.log(logs);
     setContainerLogs(logs);
   }, []);
 
@@ -37,11 +38,12 @@ export const useContainerLogHub = (containerId?: string) => {
   }, []);
 
   useSignalRHub({
-    url: `${baseUrl}/hubs/container-log`,
+    url: `${baseUrl}/hubs/docker`,
+    groupName: `container-log:${containerId}`,
     accessToken,
-    groupName: containerId,
     setupEventListeners,
     removeEventListeners,
+    skip: !containerId,
   });
 
   return { containerLog, containerLogs };

@@ -9,8 +9,6 @@ export const usePlatformsHub = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [platformsMessage, setPlatformsMessage] = useState<PlatformView[] | undefined>();
   const { accessToken } = useAuthContext();
-
-  const groupName = `platforms`;
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
   // Callback to handle platform updates
@@ -123,9 +121,9 @@ export const usePlatformsHub = () => {
   );
 
   useSignalRHub({
-    url: `${baseUrl}/hubs/platforms`,
+    url: `${baseUrl}/hubs/docker`,
+    groupName: 'platforms',
     accessToken,
-    groupName: groupName,
     setupEventListeners,
     removeEventListeners,
     onConnected,

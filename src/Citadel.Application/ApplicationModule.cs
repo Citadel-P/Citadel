@@ -33,6 +33,7 @@ public static class ApplicationModule
             .AddServices()
             .AddPooledObjects()
             .AddBackgroundTasks()
+            .AddSignalRServices()
             .AddMediator(options =>
             {
                 options.ServiceLifetime = ServiceLifetime.Scoped;
@@ -53,11 +54,22 @@ public static class ApplicationModule
             .AddSingleton<IJwtService, JwtService>()
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>()
             .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>()
-            .AddSingleton<IContainerInfoStreamManager, ContainerInfoStreamManager>()
-            .AddSingleton<IContainerLogStreamManager, ContainerLogStreamManager>()
+            
             .AddScoped<GitHubConnectorStrategy>()
             .AddScoped<DockerHubConnectorStrategy>()
             .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>();
+
+    private static IServiceCollection AddSignalRServices(this IServiceCollection services) =>
+        services
+            .AddSingleton<IStreamSubscriptionResolver, StreamSubscriptionResolver>()
+            .AddSingleton<ContainerInfoStreamManager>()
+            .AddSingleton<ContainerLogStreamManager>()
+            .AddSingleton<PlatformsStreamManager>()
+            .AddSingleton<ContainersStreamManager>()
+            .AddSingleton<DockerDaemonStreamManager>()
+            .AddSingleton<IPlatformsStreamManager>(s => s.GetRequiredService<PlatformsStreamManager>())
+            .AddSingleton<IContainersStreamManager>(s => s.GetRequiredService<ContainersStreamManager>())
+            .AddSingleton<IDockerDaemonStreamManager>(s => s.GetRequiredService<DockerDaemonStreamManager>());
 
     private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)
     {
