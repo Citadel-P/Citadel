@@ -9,7 +9,7 @@ internal interface IDockerDaemonStreamManager : IStreamGroupManager
     Task SendContainerEvent(Container container, string @event);
 }
 
-internal class DockerDaemonStreamManager(IDockerHubDispatcher dispatcher) : BaseStreamManager<StreamContext>, IDockerDaemonStreamManager
+internal class DockerDaemonStreamManager(IApplicationHubDispatcher dispatcher) : BaseStreamManager<StreamContext>, IDockerDaemonStreamManager
 {
     public Task SendContainerEvent(Container container, string @event)
     {

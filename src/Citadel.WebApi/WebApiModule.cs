@@ -98,9 +98,7 @@ internal static class WebApiModule
 
         app.MapPublicEndpoints();
 
-        app.MapHub<DockerHub>("/hubs/docker", HttpConnectionDispatcherOptions);
-        //app.MapHub<SwarmHub>("/hubs/swarm", HttpConnectionDispatcherOptions);
-        //app.MapHub<K8sHub>("/hubs/k8s", HttpConnectionDispatcherOptions);
+        app.MapHub<ApplicationHub>("/hubs/global", HttpConnectionDispatcherOptions);
         return app;
     }
 
@@ -114,10 +112,10 @@ internal static class WebApiModule
     {
         // We need to register this factories in order to use the view models
         services
-            .AddSingleton<IDockerHubDispatcher>(provider =>
+            .AddSingleton<IApplicationHubDispatcher>(provider =>
             {
-                var context = provider.GetRequiredService<IHubContext<DockerHub, ITypedDockerHub>>();
-                return new DockerHubDispatcher(context);
+                var context = provider.GetRequiredService<IHubContext<ApplicationHub, ITypedApplicationHub>>();
+                return new ApplicationHubDispatcher(context);
             });
 
         services.AddSignalR().AddJsonProtocol(c =>
@@ -140,7 +138,6 @@ internal static class WebApiModule
         converters.Add(new JsonStringEnumConverter<PlatformConnectorType>());
     }
 }
-
 
 // Required for integration tests to work properly
 public partial class Program { }

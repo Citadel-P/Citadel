@@ -10,7 +10,7 @@ internal interface IContainersStreamManager : IStreamGroupManager
     Task SendContainersStats(Guid platformId, IEnumerable<ContainerStat> containers);
 }
 
-internal class ContainersStreamManager(IDockerHubDispatcher dispatcher) : BaseStreamManager<StreamContext>, IContainersStreamManager
+internal class ContainersStreamManager(IApplicationHubDispatcher dispatcher) : BaseStreamManager<StreamContext>, IContainersStreamManager
 {
     public Task SendContainersInfo(Guid platformId, IEnumerable<Container> containers)
     {

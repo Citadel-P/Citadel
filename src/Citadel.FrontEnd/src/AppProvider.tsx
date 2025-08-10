@@ -4,6 +4,7 @@ import { AppPaths } from '@/AppRoutes';
 import { useGETPlatform } from './features/platforms/hooks/useGETPlatform';
 import { useGETContainerInfo } from './features/containers/hooks/useGETContainerInfo';
 import { AppContext } from './AppContext';
+import { SignalRProvider } from './SignalRProvider';
 
 export const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -30,5 +31,9 @@ export const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children
     [route, platformIsLoading, containerIsLoading, platformData, containerData],
   );
 
-  return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
+  return (
+    <AppContext.Provider value={contextValue}>
+      <SignalRProvider>{children}</SignalRProvider>
+    </AppContext.Provider>
+  );
 };

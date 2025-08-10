@@ -9,7 +9,7 @@ using static Hosting.Common.Constants;
 
 namespace WebApi.Hubs;
 
-internal class DockerHubDispatcher(IHubContext<DockerHub, ITypedDockerHub> hubContext) : IDockerHubDispatcher
+internal class ApplicationHubDispatcher(IHubContext<ApplicationHub, ITypedApplicationHub> hubContext) : IApplicationHubDispatcher
 {
     #region Container Info
     public Task SendContainerInfo(DockerContainer container, CancellationToken cancellationToken)

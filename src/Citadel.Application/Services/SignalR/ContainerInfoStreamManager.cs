@@ -10,7 +10,7 @@ namespace Application.Services.SignalR;
 
 internal sealed class ContainerInfoStreamManager(
     IOptions<JobConfiguration> options,
-    IDockerHubDispatcher dispatcher,
+    IApplicationHubDispatcher dispatcher,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IContainerConnector> connectorFactory,
     ILogger<ContainerInfoStreamManager> logger) : BaseStreamManager<PooledStreamContext<DockerContainer>>, IStreamGroupManager

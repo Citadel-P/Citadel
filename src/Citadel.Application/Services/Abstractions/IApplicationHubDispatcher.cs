@@ -4,7 +4,7 @@ using Domain.Entities;
 
 namespace Application.Services.Abstractions;
 
-public interface IDockerHubDispatcher
+public interface IApplicationHubDispatcher
 {
     #region Daemon events
     Task SendContainerEvent(Container container, string @event);

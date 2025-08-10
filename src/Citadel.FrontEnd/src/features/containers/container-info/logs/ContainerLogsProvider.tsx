@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ContainerLogsContext } from './ContainerLogsContext';
-import { useContainerLogHub } from './hooks/useContainerLogHub';
+import { useContainerLogGroup } from './hooks/useContainerLogGroup';
 
 export const ContainerLogsProvider: React.FC<{ children?: React.ReactNode; containerId: string | undefined }> = ({
   children,
@@ -8,7 +8,7 @@ export const ContainerLogsProvider: React.FC<{ children?: React.ReactNode; conta
 }) => {
   const [logs, setLogs] = useState<string[] | undefined>(undefined);
 
-  const { containerLog, containerLogs } = useContainerLogHub(containerId);
+  const { containerLog, containerLogs } = useContainerLogGroup(containerId);
   const isPending = false;
   useEffect(() => {
     if (containerLog) {

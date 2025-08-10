@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace Application.Services.SignalR;
 
 internal sealed class ContainerLogStreamManager(
-    IDockerHubDispatcher dispatcher,
+    IApplicationHubDispatcher dispatcher,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IContainerConnector> connectorFactory,
     ILogger<ContainerLogStreamManager> logger

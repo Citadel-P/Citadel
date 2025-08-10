@@ -1,18 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { ContainersView, ContainerStatView } from '@/api/_generated';
-import { useAuthContext } from '@/features/auth/AuthContext';
-import { useDockerDaemonHub } from '@/features/platforms/hooks/useDockerDaemonHub';
-import { useSignalRHub } from '@/hooks/useSignalRHub';
+import { useDockerDaemonGroup } from '@/features/platforms/hooks/useDockerDaemonGroup';
+import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 
-export const useContainersHub = (platformId?: string) => {
+export const useContainersGroup = (platformId?: string) => {
   const [isLoading, setIsLoading] = useState(false);
   const [containersInfo, setContainersInfo] = useState<ContainersView | undefined>();
-  const { accessToken } = useAuthContext();
-  const { containerEvent } = useDockerDaemonHub(platformId);
-
-  const groupName = `containers:${platformId}`;
-  const baseUrl = import.meta.env.VITE_API_BASE_URL;
+  const { containerEvent } = useDockerDaemonGroup(platformId);
 
   const handleContainersInfoUpdated = useCallback((containers: ContainersView) => {
     setContainersInfo(containers);
@@ -102,37 +97,36 @@ export const useContainersHub = (platformId?: string) => {
 
   const setupEventListeners = useCallback(
     (hubConnection: HubConnection) => {
-      hubConnection.onreconnecting(() => console.log('Reconnecting...'));
-      hubConnection.onreconnected(() => {
-        console.log('Reconnected');
-        getContainersList(hubConnection);
-      });
-
       hubConnection.on('ContainersInfoUpdated', handleContainersInfoUpdated);
       hubConnection.on('ContainersStatsUpdated', handleContainersStatsUpdated);
     },
-    [handleContainersStatsUpdated, handleContainersInfoUpdated, getContainersList],
+    [handleContainersStatsUpdated, handleContainersInfoUpdated],
   );
 
-  const removeEventListeners = useCallback((hubConnection: HubConnection) => {
-    hubConnection.off('ContainersInfoUpdated');
-    hubConnection.off('ContainersStatsUpdated');
-  }, []);
-
-  const onConnected = useCallback(
+  const removeEventListeners = useCallback(
     (hubConnection: HubConnection) => {
+      hubConnection.off('ContainersInfoUpdated', handleContainersInfoUpdated);
+      hubConnection.off('ContainersStatsUpdated', handleContainersStatsUpdated);
+    },
+    [handleContainersInfoUpdated, handleContainersStatsUpdated],
+  );
+
+  const onJoinedGroup = useCallback(
+    (hubConnection: HubConnection) => {
+      if (!hubConnection) return;
       getContainersList(hubConnection);
+      hubConnection.onreconnected(() => {
+        getContainersList(hubConnection);
+      });
     },
     [getContainersList],
   );
 
-  useSignalRHub({
-    url: `${baseUrl}/hubs/docker`,
-    groupName: groupName,
-    accessToken,
+  useSignalRGroup({
+    groupName: `containers:${platformId}`,
     setupEventListeners,
     removeEventListeners,
-    onConnected,
+    onJoinedGroup,
     skip: !platformId,
   });
 

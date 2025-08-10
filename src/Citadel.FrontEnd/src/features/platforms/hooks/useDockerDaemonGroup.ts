@@ -1,14 +1,10 @@
 import { useState, useCallback } from 'react';
 import { HubConnection } from '@microsoft/signalr';
-import { useAuthContext } from '@/features/auth/AuthContext';
 import { ContainerView } from '@/api/_generated';
-import { useSignalRHub } from '@/hooks/useSignalRHub';
+import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 
-export const useDockerDaemonHub = (platformId?: string) => {
+export const useDockerDaemonGroup = (platformId?: string) => {
   const [containerEvent, setContainerEvent] = useState<ContainerEvent | undefined>();
-  const { accessToken } = useAuthContext();
-  const groupName = `docker-daemon:${platformId}`;
-  const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
   const handleContainerEventReceived = useCallback((container: ContainerView, eventType: string) => {
     setContainerEvent({ container, eventType });
@@ -16,24 +12,17 @@ export const useDockerDaemonHub = (platformId?: string) => {
 
   const setupEventListeners = useCallback(
     (hubConnection: HubConnection) => {
-      hubConnection.onreconnecting(() => console.log('Reconnecting...'));
-      hubConnection.onreconnected(() => {
-        console.log('Reconnected');
-      });
-
       hubConnection.on('ContainerEventReceived', handleContainerEventReceived);
     },
     [handleContainerEventReceived],
   );
 
   const removeEventListeners = useCallback((hubConnection: HubConnection) => {
-    hubConnection.off('ContainerEventReceived');
-  }, []);
+    hubConnection.off('ContainerEventReceived', handleContainerEventReceived);
+  }, [handleContainerEventReceived]);
 
-  useSignalRHub({
-    url: `${baseUrl}/hubs/docker`,
-    groupName: groupName,
-    accessToken,
+  useSignalRGroup({
+    groupName: `docker-daemon:${platformId}`,
     setupEventListeners,
     removeEventListeners,
     skip: !platformId,

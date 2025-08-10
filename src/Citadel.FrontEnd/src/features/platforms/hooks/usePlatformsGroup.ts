@@ -1,15 +1,12 @@
 import { useState, useCallback } from 'react';
 import { PlatformDescriptorDockerPlatformDescriptor, PlatformsView, PlatformView } from '@/api/_generated';
 import { HubConnection } from '@microsoft/signalr';
-import { useAuthContext } from '@/features/auth/AuthContext';
 import { PlatformStatsBatchView } from '@/api/models';
-import { useSignalRHub } from '@/hooks/useSignalRHub';
+import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 
-export const usePlatformsHub = () => {
+export const usePlatformsGroup = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [platformsMessage, setPlatformsMessage] = useState<PlatformView[] | undefined>();
-  const { accessToken } = useAuthContext();
-  const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
   // Callback to handle platform updates
   const handlePlatformsUpdated = useCallback((platforms: PlatformView[]) => {
@@ -87,10 +84,6 @@ export const usePlatformsHub = () => {
   // Setup event listeners for the hub connection
   const setupEventListeners = useCallback(
     (hubConnection: HubConnection) => {
-      hubConnection.onreconnecting(() => console.log('Reconnecting...'));
-      hubConnection.onreconnected(() => {
-        getPlatformsList(hubConnection);
-      });
       hubConnection.on('PlatformsUpdated', handlePlatformsUpdated);
       hubConnection.on('PlatformUpdated', handlePlatformUpdated);
       hubConnection.on('PlatformsDeleted', handlePlatformDeleted);
@@ -101,32 +94,33 @@ export const usePlatformsHub = () => {
       handlePlatformUpdated,
       handlePlatformDeleted,
       handlePlatformStatsUpdated,
-      getPlatformsList,
     ],
   );
 
   // Remove event listeners from the hub connection
   const removeEventListeners = useCallback((hubConnection: HubConnection) => {
-    hubConnection.off('PlatformsUpdated');
-    hubConnection.off('PlatformUpdated');
-    hubConnection.off('PlatformsDeleted');
-    hubConnection.off('PlatformStatsUpdated');
-  }, []);
+    hubConnection.off('PlatformsUpdated', handlePlatformsUpdated);
+    hubConnection.off('PlatformUpdated', handlePlatformUpdated);
+    hubConnection.off('PlatformsDeleted', handlePlatformDeleted);
+    hubConnection.off('PlatformStatsUpdated', handlePlatformStatsUpdated);
+  }, [handlePlatformsUpdated, handlePlatformUpdated, handlePlatformDeleted, handlePlatformStatsUpdated]);
 
-  const onConnected = useCallback(
+  const onJoinedGroup = useCallback(
     (hubConnection: HubConnection) => {
+      if (!hubConnection) return;
       getPlatformsList(hubConnection);
+      hubConnection.onreconnected(() => {
+        getPlatformsList(hubConnection);
+      });
     },
     [getPlatformsList],
   );
 
-  useSignalRHub({
-    url: `${baseUrl}/hubs/docker`,
+  useSignalRGroup({
     groupName: 'platforms',
-    accessToken,
     setupEventListeners,
     removeEventListeners,
-    onConnected,
+    onJoinedGroup,
   });
 
   return {

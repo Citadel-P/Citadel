@@ -1,16 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { HubConnection } from '@microsoft/signalr';
-import { useAuthContext } from '@/features/auth/AuthContext';
 import { DockerContainerView } from '@/api/models';
-import { useDockerDaemonHub } from '@/features/platforms/hooks/useDockerDaemonHub';
-import { useSignalRHub } from '@/hooks/useSignalRHub';
+import { useDockerDaemonGroup } from '@/features/platforms/hooks/useDockerDaemonGroup';
+import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 
-export const useContainerInfoHub = (containerId?: string, platformId?: string) => {
-  const { accessToken } = useAuthContext();
-  const { containerEvent } = useDockerDaemonHub(platformId);
+export const useContainerInfoGroup = (containerId?: string, platformId?: string) => {
+  const { containerEvent } = useDockerDaemonGroup(platformId);
 
   const [containerInfo, setContainerInfo] = useState<DockerContainerView | undefined>();
-  const baseUrl = import.meta.env.VITE_API_BASE_URL;
 
   const handleContainerInfoUpdated = useCallback((container: DockerContainerView) => {
     setContainerInfo(container);
@@ -18,23 +15,16 @@ export const useContainerInfoHub = (containerId?: string, platformId?: string) =
 
   const setupEventListeners = useCallback(
     (hubConnection: HubConnection) => {
-      hubConnection.onreconnecting(() => console.log('Reconnecting...'));
-      hubConnection.onreconnected(() => {
-        console.log('Reconnected');
-      });
-
       hubConnection.on('ReceiveContainerInfo', handleContainerInfoUpdated);
     },
     [handleContainerInfoUpdated],
   );
 
   const removeEventListeners = useCallback((hubConnection: HubConnection) => {
-    hubConnection.off('ReceiveContainerInfo');
-  }, []);
+    hubConnection.off('ReceiveContainerInfo', handleContainerInfoUpdated);
+  }, [handleContainerInfoUpdated]);
 
-  useSignalRHub({
-    url: `${baseUrl}/hubs/docker`,
-    accessToken,
+  useSignalRGroup({
     groupName: `container-info:${containerId}`,
     setupEventListeners,
     removeEventListeners,

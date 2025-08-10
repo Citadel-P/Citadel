@@ -1,6 +1,6 @@
 import { ContainerView } from '@/api/_generated';
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useContainersHub } from './hooks/useContainersHub';
+import { useContainersGroup } from './hooks/useContainersGroup';
 import { useParams } from 'react-router';
 import { ContainersContext } from './ContainersContext';
 import { useDeleteContainerDialog } from './dialogs/useDeleteContainerDialog';
@@ -9,7 +9,7 @@ export const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ c
   const { platformId } = useParams<{ platformId: string }>();
 
   // Fetch containers data
-  const { containersInfo, isLoading } = useContainersHub(platformId);
+  const { containersInfo, isLoading } = useContainersGroup(platformId);
 
   // State for selected rows and containers
   const [selectedRows, setSelectedRows] = useState<ContainerView[] | undefined>([]);

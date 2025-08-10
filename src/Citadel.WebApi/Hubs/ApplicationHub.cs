@@ -9,7 +9,7 @@ using WebApi.Routes.Endpoints.Resources.Platforms;
 
 namespace WebApi.Hubs;
 
-public interface ITypedDockerHub
+public interface ITypedApplicationHub
 {
     #region Docker Daemon Events
     Task ContainerEventReceived(ContainerView message, string @event);
@@ -38,7 +38,7 @@ public interface ITypedDockerHub
 }
 
 [Authorize]
-internal sealed class DockerHub(IStreamSubscriptionResolver resolver, IMediator mediator) : Hub<ITypedDockerHub>
+internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMediator mediator) : Hub<ITypedApplicationHub>
 {
     #region Overrides
     public override Task OnDisconnectedAsync(Exception? exception)
