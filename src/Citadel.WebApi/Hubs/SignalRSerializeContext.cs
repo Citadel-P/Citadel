@@ -24,7 +24,6 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<List<PlatformStatView>>]
 [GenerateShapeFor<SwarmInfoView>]
 [GenerateShapeFor<List<SwarmPeerView>>]
-[GenerateShapeFor<ContainerLogView>]
 [GenerateShapeFor<PlatformsView>]
 [GenerateShapeFor<PlatformStatsBatchView>]
 [GenerateShapeFor<PlatformStatView>]

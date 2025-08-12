@@ -81,7 +81,6 @@ export const usePlatformsGroup = () => {
           s.platformDescriptor = (s.platformDescriptor as any)[1]; // message pack derived type
           s.platformDescriptor.$type = (s.platformDescriptor as any)[0];
         });
-        console.log(response);
         setPlatformsMessage(response.platforms);
       }
     } finally {

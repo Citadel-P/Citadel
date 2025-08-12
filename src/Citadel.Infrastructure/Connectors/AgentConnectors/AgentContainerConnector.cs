@@ -98,15 +98,14 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory, IObject
         }
     }
 
-    public IAsyncEnumerable<ReadOnlyMemory<byte>> StreamLogsAsync(StreamContainerLogsCommand command, CancellationToken cancellationToken)
+    public async IAsyncEnumerable<ReadOnlyMemory<byte>> StreamLogsAsync(StreamContainerLogsCommand command, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
-        //var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
-        //using var streamCall = containerClient.StreamContainerLogs(new ContainerLogRequest() { ContainerId = command .ContainerId}, cancellationToken: cancellationToken);
-        //await foreach (var response in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
-        //{
-        //    yield return response.Map();
-        //}
+        var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
+        using var streamCall = containerClient.StreamContainerLogs(new ContainerLogRequest() { ContainerId = command.ContainerId }, cancellationToken: cancellationToken);
+        await foreach (var response in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
+        {
+            yield return response.Log.Memory;
+        }
     }
 
     public async IAsyncEnumerable<PooledHandle<Dictionary<string, DockerContainerStat>>> StreamContainersStatsAsync(StreamContainersStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
