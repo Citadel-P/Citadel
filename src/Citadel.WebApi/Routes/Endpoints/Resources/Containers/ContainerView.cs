@@ -22,7 +22,7 @@ public sealed record ContainerView(
     EndpointMetadata? Metadata = null)
 {
     internal static IEnumerable<ContainerView> Map(IEnumerable<Container> containersInfo)
-        => containersInfo?.Select(Map) ?? [];
+        => containersInfo?.Select(Map).ToList() ?? [];
 
     internal static ContainerView Map(Container container)
     {

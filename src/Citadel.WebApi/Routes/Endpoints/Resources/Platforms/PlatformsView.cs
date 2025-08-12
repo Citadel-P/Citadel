@@ -22,8 +22,8 @@ public sealed record PlatformView(
     PlatformDescriptor? PlatformDescriptor
     )
 {
-    internal static IEnumerable<PlatformView> Map(IEnumerable<Platform> platforms)
-        => platforms.Select(Map);
+    internal static List<PlatformView> Map(IEnumerable<Platform> platforms)
+        => [.. platforms.Select(Map)];
 
     internal static PlatformView Map(Platform platform)
         => platform.Map();
@@ -52,7 +52,7 @@ internal static class PlatformMapperExtension
         ServerVersion: platform.ServerVersion,
         AgentVersion: platform.AgentVersion,
         PlatformDescriptor: platform.PlatformDescriptor,
-        Stats: platform.Stats?.Select(Map));
+        Stats: platform.Stats?.Select(Map)?.ToList());
 
     private static PlatformType GetPlatformType(PlatformDescriptor platformDescriptor) =>
         platformDescriptor switch

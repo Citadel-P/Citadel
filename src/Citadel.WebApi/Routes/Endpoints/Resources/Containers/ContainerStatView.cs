@@ -12,8 +12,8 @@ public record struct ContainerStatView(
         double TxBytes,
         long Created)
 {
-    internal static IEnumerable<ContainerStatView> Map(IEnumerable<ContainerStat> stats)
-        => stats.Select(Map);
+    internal static List<ContainerStatView> Map(IEnumerable<ContainerStat> stats)
+        => [.. stats.Select(Map)];
 
     internal static ContainerStatView Map(ContainerStat stats)
         => new (

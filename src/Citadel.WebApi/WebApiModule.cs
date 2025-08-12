@@ -2,16 +2,18 @@
 using System.Text.Json.Serialization;
 using Application.Services.Abstractions;
 using Domain;
-using Hosting.Common.Converters;
 using Hosting.OpenApi;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
+using Nerdbank.MessagePack;
+using Nerdbank.MessagePack.SignalR;
 using WebApi.Hubs;
 using WebApi.Middlewares;
 using WebApi.Routes;
+using static Nerdbank.MessagePack.OptionalConverters;
 
 namespace WebApi;
 
@@ -118,14 +120,12 @@ internal static class WebApiModule
                 return new ApplicationHubDispatcher(context);
             });
 
-        services.AddSignalR().AddJsonProtocol(c =>
+        services.AddSignalR().AddMessagePackProtocol(SignalRMessagePackContext.ShapeProvider, new MessagePackSerializer
         {
-            c.PayloadSerializerOptions.TypeInfoResolverChain.Add(SignalRSerializeContext.Default);
-            c.PayloadSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-            c.PayloadSerializerOptions.Converters.Add(new DatetimeOffsetConverter());
-            c.PayloadSerializerOptions.Converters.Add(new DatetimeConverter());
-            c.PayloadSerializerOptions.Converters.AddGenericEnumConverters();
-        });
+            SerializeEnumValuesByName = true,
+            PropertyNamingPolicy = MessagePackNamingPolicy.CamelCase,
+            DerivedTypeMappings = [DerivedTypesMapping.PlatformDescriptorMappings],
+        }.WithGuidConverter(GuidFormat.StringD));
     }
 
     internal static void AddGenericEnumConverters(this IList<JsonConverter> converters)

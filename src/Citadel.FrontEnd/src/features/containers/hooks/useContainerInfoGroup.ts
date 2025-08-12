@@ -20,9 +20,12 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
     [handleContainerInfoUpdated],
   );
 
-  const removeEventListeners = useCallback((hubConnection: HubConnection) => {
-    hubConnection.off('ReceiveContainerInfo', handleContainerInfoUpdated);
-  }, [handleContainerInfoUpdated]);
+  const removeEventListeners = useCallback(
+    (hubConnection: HubConnection) => {
+      hubConnection.off('ReceiveContainerInfo', handleContainerInfoUpdated);
+    },
+    [handleContainerInfoUpdated],
+  );
 
   useSignalRGroup({
     groupName: `container-info:${containerId}`,

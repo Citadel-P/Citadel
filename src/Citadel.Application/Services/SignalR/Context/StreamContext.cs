@@ -5,6 +5,7 @@ internal class StreamContext
     protected bool started;
     protected readonly Lock @lock = new();
     protected readonly HashSet<string> subscribers = [];
+    public Task? StreamTask { get; set; }
 
     public virtual void AddSubscriber(string connectionId)
     {

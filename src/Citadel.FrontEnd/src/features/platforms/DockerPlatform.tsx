@@ -10,7 +10,6 @@ import { usePlatformsContext } from './PlatformsContext';
 
 const DockerPlatform = ({ platform }: { platform: PlatformView }) => {
   const { setDialogData } = usePlatformsContext();
-
   const isPlatfomOnline = platform.status === PlatformStatus.Online;
   const LastSnapshotTooltip = () => {
     const lastSnapshot = platform.stats?.at(0)?.created
@@ -43,7 +42,7 @@ const DockerPlatform = ({ platform }: { platform: PlatformView }) => {
           </Tooltip>
         </TooltipProvider>
         <div className="ml-1">
-          {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containersPaused}
+          {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containersPaused ?? '-'}
         </div>
       </div>
     );
@@ -63,7 +62,7 @@ const DockerPlatform = ({ platform }: { platform: PlatformView }) => {
           </TooltipProvider>
         </div>
         <div className="ml-1">
-          {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containersRunning}
+          {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containersRunning ?? '-'}
         </div>
       </div>
     );
@@ -83,7 +82,7 @@ const DockerPlatform = ({ platform }: { platform: PlatformView }) => {
           </TooltipProvider>
         </div>
         <div className="ml-1">
-          {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containersStopped}
+          {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containersStopped ?? '-'}
         </div>
       </div>
     );
@@ -119,20 +118,20 @@ const DockerPlatform = ({ platform }: { platform: PlatformView }) => {
               <div className="flex flex-wrap gap-x-3">
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
                   <Link to={'/platforms/' + platform.id + '/containers'}>
-                    {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containerCount}{' '}
+                    {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containerCount?? '-'}{' '}
                     containers
                   </Link>
                 </div>
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  <Link to={'/platforms/' + platform.id + '/images'}>{platform?.imageCount} images</Link>
+                  <Link to={'/platforms/' + platform.id + '/images'}>{platform?.imageCount?? '-'} images</Link>
                 </div>
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  <Link to={'/platforms/' + platform.id + '/volumes'}>{platform?.volumeCount} volumes</Link>
+                  <Link to={'/platforms/' + platform.id + '/volumes'}>{platform?.volumeCount?? '-'} volumes</Link>
                 </div>
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  <Link to={'/platforms/' + platform.id + '/networks'}>{platform?.networkCount} networks</Link>
+                  <Link to={'/platforms/' + platform.id + '/networks'}>{platform?.networkCount ?? '-'} networks</Link>
                 </div>
-                <div className="truncate text-xs text-muted-foreground">{platform?.cpuCount} CPU</div>
+                <div className="truncate text-xs text-muted-foreground">{platform?.cpuCount?? '-'} CPU</div>
                 <div className="truncate text-xs text-muted-foreground">{byteTransform(platform?.memTotal)} RAM</div>
               </div>
             </div>

@@ -1,8 +1,6 @@
 ﻿using System.ComponentModel;
-using System.Text.Json;
 using Application.Features.Containers.Commands;
 using Application.Features.Containers.Queries;
-using Application.Models;
 using Application.Permissions;
 using Domain;
 using Hosting.Extensions;
@@ -61,17 +59,6 @@ public static class Containers
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
-    }
-
-    public static async Task StreamLogs(IMediator mediator, HttpResponse response, [FromBody] StreamLogsRequest request, CancellationToken cancellationToken)
-    {
-        await foreach (var reply in mediator.CreateStream(request.ToCommand(), cancellationToken))
-        {
-            // yield return reply;
-            var json = JsonSerializer.Serialize(reply, ApplicationJsonContext.Default.ContainerLogInfo);
-            await response.WriteAsync(json + "\n", cancellationToken);
-            await response.Body.FlushAsync(cancellationToken);
-        }
     }
 
     public static async Task<Results<Ok<ContainerStatsView>, ProblemHttpResult>> GetStats(IMediator mediator, [Description("The container id")] string id, CancellationToken cancellationToken)

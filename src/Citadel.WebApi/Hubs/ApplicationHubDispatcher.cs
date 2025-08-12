@@ -17,10 +17,10 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub, ITypedApplic
     #endregion
 
     #region Container Logs
-    public Task SendContainerLog(string containerId, string logLine)
-        => hubContext.Clients.Group(WellKnownSignalRGroups.ContainerLogGroup(containerId)).SendContainerLog(logLine);
+    public Task SendContainerLog(string containerId, ReadOnlyMemory<byte> buffer)
+        => hubContext.Clients.Group(WellKnownSignalRGroups.ContainerLogGroup(containerId)).SendContainerLog(buffer);
 
-    public Task SendContainerLogsBatchToConnection(string connectionId, IEnumerable<string> recentLogs)
+    public Task SendContainerLogsBatchToConnection(string connectionId, byte[] recentLogs)
         => hubContext.Clients.Client(connectionId).SendContainerLogsBatch(recentLogs);
 
     #endregion

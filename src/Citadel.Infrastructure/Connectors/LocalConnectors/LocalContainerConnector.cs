@@ -82,11 +82,11 @@ internal class LocalContainerConnector(IContainerService containerService, IObje
         }
     }
 
-    public async IAsyncEnumerable<ContainerLogInfo> StreamLogsAsync(StreamContainerLogsCommand streamContainerLogsCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<ReadOnlyMemory<byte>> StreamLogsAsync(StreamContainerLogsCommand streamContainerLogsCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await foreach (var log in containerService.StreamLogsAsync(streamContainerLogsCommand.ContainerId, cancellationToken))
+        await foreach (var data in containerService.StreamLogsAsync(streamContainerLogsCommand.ContainerId, cancellationToken))
         {
-            yield return new ContainerLogInfo(log);
+            yield return data;
         }
     }
 }

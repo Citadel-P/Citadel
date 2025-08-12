@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthContext } from '@/features/auth/AuthContext';
 import { SignalRContext } from './SignalRContext';
 import { startConnectionWithRetry } from './lib/startConnectionWithRetry';
+import { MessagePackHubProtocol } from '@microsoft/signalr-protocol-msgpack';
 
 export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   type GroupState = 'joining' | 'joined';
@@ -52,6 +53,7 @@ export const SignalRProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
         transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
       } as IHttpConnectionOptions)
       .withAutomaticReconnect()
+      .withHubProtocol(new MessagePackHubProtocol())
       .build();
 
     conn.onreconnecting(() => setConnectionState(HubConnectionState.Reconnecting));

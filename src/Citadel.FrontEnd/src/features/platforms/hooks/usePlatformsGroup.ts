@@ -59,7 +59,7 @@ export const usePlatformsGroup = () => {
 
         updatedPlatforms[existingIndex].imageCount = platform.imageCount;
         updatedPlatforms[existingIndex].memTotal = platform.memTotal;
-        if (updatedPlatforms[existingIndex].platformDescriptor.$type === 'Docker') {
+        if (updatedPlatforms[existingIndex].type === 'Docker') {
           const descriptor = updatedPlatforms[existingIndex]
             .platformDescriptor as PlatformDescriptorDockerPlatformDescriptor;
           descriptor.containerCount = platform.containerCount;
@@ -73,12 +73,20 @@ export const usePlatformsGroup = () => {
   }, []);
 
   const getPlatformsList = useCallback(async (hubConnection: HubConnection) => {
-    setIsLoading(true);
-    const response = await hubConnection.invoke<PlatformsView>('GetPlatforms');
-    if (response) {
-      setPlatformsMessage(response.platforms);
+    try {
+      setIsLoading(true);
+      const response = await hubConnection.invoke<PlatformsView>('GetPlatforms');
+      if (response) {
+        response.platforms.map((s) => {
+          s.platformDescriptor = (s.platformDescriptor as any)[1]; // message pack derived type
+          s.platformDescriptor.$type = (s.platformDescriptor as any)[0];
+        });
+        console.log(response);
+        setPlatformsMessage(response.platforms);
+      }
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, []);
 
   // Setup event listeners for the hub connection
@@ -89,21 +97,19 @@ export const usePlatformsGroup = () => {
       hubConnection.on('PlatformsDeleted', handlePlatformDeleted);
       hubConnection.on('PlatformStatsUpdated', handlePlatformStatsUpdated);
     },
-    [
-      handlePlatformsUpdated,
-      handlePlatformUpdated,
-      handlePlatformDeleted,
-      handlePlatformStatsUpdated,
-    ],
+    [handlePlatformsUpdated, handlePlatformUpdated, handlePlatformDeleted, handlePlatformStatsUpdated],
   );
 
   // Remove event listeners from the hub connection
-  const removeEventListeners = useCallback((hubConnection: HubConnection) => {
-    hubConnection.off('PlatformsUpdated', handlePlatformsUpdated);
-    hubConnection.off('PlatformUpdated', handlePlatformUpdated);
-    hubConnection.off('PlatformsDeleted', handlePlatformDeleted);
-    hubConnection.off('PlatformStatsUpdated', handlePlatformStatsUpdated);
-  }, [handlePlatformsUpdated, handlePlatformUpdated, handlePlatformDeleted, handlePlatformStatsUpdated]);
+  const removeEventListeners = useCallback(
+    (hubConnection: HubConnection) => {
+      hubConnection.off('PlatformsUpdated', handlePlatformsUpdated);
+      hubConnection.off('PlatformUpdated', handlePlatformUpdated);
+      hubConnection.off('PlatformsDeleted', handlePlatformDeleted);
+      hubConnection.off('PlatformStatsUpdated', handlePlatformStatsUpdated);
+    },
+    [handlePlatformsUpdated, handlePlatformUpdated, handlePlatformDeleted, handlePlatformStatsUpdated],
+  );
 
   const onJoinedGroup = useCallback(
     (hubConnection: HubConnection) => {

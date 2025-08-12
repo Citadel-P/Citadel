@@ -619,9 +619,6 @@ internal static class ContainerMappers
         return optionChain;
     }
 
-    public static ContainerLogInfo Map(this ContainerLogResponse log)
-        => new(Log: log.Log);
-
     public static void Map(this ContainerStatMessage statMessage, DockerContainerStat destination)
     {
         destination.ReInitialize(

@@ -1,6 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
 using Citadel.Agent.Containers.V1;
-using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
@@ -99,14 +98,15 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory, IObject
         }
     }
 
-    public async IAsyncEnumerable<ContainerLogInfo> StreamLogsAsync(StreamContainerLogsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public IAsyncEnumerable<ReadOnlyMemory<byte>> StreamLogsAsync(StreamContainerLogsCommand command, CancellationToken cancellationToken)
     {
-        var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
-        using var streamCall = containerClient.StreamContainerLogs(new ContainerLogRequest() { ContainerId = command .ContainerId}, cancellationToken: cancellationToken);
-        await foreach (var response in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
-        {
-            yield return response.Map();
-        }
+        throw new NotImplementedException();
+        //var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
+        //using var streamCall = containerClient.StreamContainerLogs(new ContainerLogRequest() { ContainerId = command .ContainerId}, cancellationToken: cancellationToken);
+        //await foreach (var response in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
+        //{
+        //    yield return response.Map();
+        //}
     }
 
     public async IAsyncEnumerable<PooledHandle<Dictionary<string, DockerContainerStat>>> StreamContainersStatsAsync(StreamContainersStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)

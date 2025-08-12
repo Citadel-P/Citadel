@@ -28,13 +28,14 @@ internal sealed class ContainerInfoStreamManager(
         }
         if (context.TryStart())
         {
-            Task.Run(async () =>
+            context.StreamTask = Task.Run(async () =>
             {
                 try
                 {
                     await Task.WhenAll(
                         PollDockerStats(containerId, context),
-                        BroadcastStats(context));
+                        BroadcastStats(context)
+                    );
                 }
                 catch (Exception ex)
                 {
@@ -48,27 +49,29 @@ internal sealed class ContainerInfoStreamManager(
     {
         var writer = ctx.Channel.Writer;
         var token = ctx.Cancellation.Token;
-        
+
         if (!platformContainerCache.TryGetPlatformByContainerId(containerId, out var platformInfo))
         {
             logger.LogError("No platform found for container ID {ContainerId}", containerId);
+            writer.TryComplete();
             return;
         }
 
         try
         {
-            while (!token.IsCancellationRequested)
+            await foreach (var container in connectorFactory.GetConnector(platformInfo.ConnectorType).StreamContainerStatsAsync(new StreamContainerStatsCommand(containerId, platformInfo.Address, options.Value.ContainersInfoInterval * 1000), token))
             {
-                await foreach(var container in connectorFactory.GetConnector(platformInfo.ConnectorType).StreamContainerStatsAsync(new StreamContainerStatsCommand(containerId, platformInfo.Address, options.Value.ContainersInfoInterval * 1000), token))
-                {
-                    await writer.WriteAsync(container, token);
-                }
+                await writer.WriteAsync(container, token);
             }
         }
         catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error while polling stats for {ContainerId}", containerId);
+        }
         finally
         {
-            writer.Complete();
+            writer.TryComplete();
         }
     }
 
@@ -76,16 +79,31 @@ internal sealed class ContainerInfoStreamManager(
     {
         var reader = ctx.Channel.Reader;
         var token = ctx.Cancellation.Token;
-        
+
         try
         {
-            await foreach (var container in reader.ReadAllAsync(token))
+            while (await reader.WaitToReadAsync(token).ConfigureAwait(false))
             {
-                using var _ = container;
-                await dispatcher.SendContainerInfo(container.Value, token);
+                while (reader.TryRead(out var container))
+                {
+                    try
+                    {
+                        using (container)
+                        {
+                            await dispatcher.SendContainerInfo(container.Value, token);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "Failed to dispatch container info");
+                    }
+                }
             }
         }
         catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "BroadcastStats error");
+        }
     }
-
 }

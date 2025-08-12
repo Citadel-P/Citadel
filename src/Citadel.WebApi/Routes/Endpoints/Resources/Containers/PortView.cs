@@ -7,8 +7,8 @@ public record struct PortView(
     int PrivatePort,
     int PublicPort)
 {
-    internal static IEnumerable<PortView> Map(IEnumerable<ContainerPort> ports)
-       => ports.Select(Map);
+    internal static List<PortView> Map(IEnumerable<ContainerPort> ports)
+       => [.. ports.Select(Map)];
 
     internal static PortView Map(ContainerPort port)
         => new(

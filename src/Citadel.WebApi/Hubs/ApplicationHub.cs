@@ -20,8 +20,8 @@ public interface ITypedApplicationHub
     #endregion
 
     #region Container Logs
-    Task SendContainerLog(string logLine);
-    Task SendContainerLogsBatch(IEnumerable<string> recentLogs);
+    Task SendContainerLog(ReadOnlyMemory<byte> logLine);
+    Task SendContainerLogsBatch(byte[] recentLogs);
     #endregion
 
     #region Containers
@@ -43,24 +43,35 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
     #region Overrides
     public override Task OnDisconnectedAsync(Exception? exception)
     {
-        var groupId = Context.Items["GroupId"]?.ToString() ?? "";
-        if (!string.IsNullOrEmpty(groupId))
+        if (Context.Items.TryGetValue("GroupIds", out var obj) && obj is HashSet<string> groups)
         {
-            resolver.Resolve(groupId).RemoveSubscriber(groupId, Context.ConnectionId);
+            foreach (var group in groups)
+            {
+                resolver.Resolve(group).RemoveConnection(Context.ConnectionId);
+            }
         }
-
         return base.OnDisconnectedAsync(exception);
     }
 
     public Task JoinGroup(string groupId)
     {
-        Context.Items["GroupId"] = groupId;
+        if (!Context.Items.TryGetValue("GroupIds", out var obj) || obj is not HashSet<string> groups)
+        {
+            groups = [];
+            Context.Items["GroupIds"] = groups;
+        }
+
+        groups.Add(groupId);
         resolver.Resolve(groupId).AddSubscriber(groupId, Context.ConnectionId);
         return Groups.AddToGroupAsync(Context.ConnectionId, groupId);
     }
 
     public Task LeaveGroup(string groupId)
     {
+        if (Context.Items.TryGetValue("GroupIds", out var obj) && obj is HashSet<string> groups)
+        {
+            groups.Remove(groupId);
+        }
         resolver.Resolve(groupId).RemoveSubscriber(groupId, Context.ConnectionId);
         return Groups.RemoveFromGroupAsync(Context.ConnectionId, groupId);
     }
