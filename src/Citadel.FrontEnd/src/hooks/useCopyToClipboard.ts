@@ -1,18 +1,17 @@
-import { useCallback, useState } from 'react';
-import useInterval from './useInterval';
+import { useCallback, useState, useEffect } from 'react';
 
 type CopiedValue = string | null;
 
 type CopyFn = (text: string) => Promise<boolean>;
 
+/**
+ * A React hook that provides a function to copy text to the clipboard.
+ *
+ * @param {number} [clearTimer] - The time in milliseconds after which the copied text state is cleared. If not provided, the state will not be cleared automatically.
+ * @returns {[CopiedValue, CopyFn]} A tuple containing the copied text and the copy function.
+ */
 export function useCopyToClipboard(clearTimer?: number): [CopiedValue, CopyFn] {
   const [copiedText, setCopiedText] = useState<CopiedValue>(null);
-
-  useInterval(() => {
-    if (clearTimer) {
-      setCopiedText(null);
-    }
-  }, clearTimer ?? 10000);
 
   const copy: CopyFn = useCallback(async (text) => {
     if (!navigator?.clipboard) {
@@ -20,7 +19,7 @@ export function useCopyToClipboard(clearTimer?: number): [CopiedValue, CopyFn] {
       return false;
     }
 
-    // Try to save to clipboard then save it in the state if worked
+    // Attempt to write the text to the clipboard.
     try {
       await navigator.clipboard.writeText(text);
       setCopiedText(text);
@@ -31,6 +30,18 @@ export function useCopyToClipboard(clearTimer?: number): [CopiedValue, CopyFn] {
       return false;
     }
   }, []);
+
+  useEffect(() => {
+    if (copiedText && clearTimer) {
+      const timeoutId = setTimeout(() => {
+        setCopiedText(null);
+      }, clearTimer);
+
+      return () => {
+        clearTimeout(timeoutId);
+      };
+    }
+  }, [copiedText, clearTimer]);
 
   return [copiedText, copy];
 }

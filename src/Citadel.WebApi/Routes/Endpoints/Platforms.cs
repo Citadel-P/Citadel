@@ -34,7 +34,7 @@ public static class Platforms
 
     public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> Patch(
         IMediator mediator,
-        [FromRoute][Description("Platform id")] Guid id,
+        [FromRoute][Description("Platform ID")] Guid id,
         PlatformInputPatchDocument patchInput, 
         CancellationToken cancellationToken)
     {

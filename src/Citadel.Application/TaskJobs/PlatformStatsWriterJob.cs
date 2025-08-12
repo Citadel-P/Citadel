@@ -16,7 +16,7 @@ using Microsoft.Extensions.Options;
 namespace Application.TaskJobs;
 
 /// <summary>
-/// Background service that batches and persists platforms statistics received from a channel, periodically flushing them to the database and notifying connected clients 
+/// Background service that batches and persists platform statistics received from a channel, periodically flushing them to the database and notifying connected clients 
 /// with the latest platformStat updates.
 /// </summary>
 internal class PlatformStatsWriterJob(

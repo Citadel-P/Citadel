@@ -77,7 +77,7 @@ public class User
     /// Hash a password
     /// </summary>
     /// <param name="plainTextPassword">The plain text password</param>
-    /// <returns> A secure base64 hashed password</returns>
+    /// <returns>A securely base64-encoded hashed password</returns>
     private static string HashPassword(string plainTextPassword)
     {
         byte[] salt = RandomNumberGenerator.GetBytes(16);

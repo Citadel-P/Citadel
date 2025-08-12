@@ -153,7 +153,7 @@ internal sealed class DockerDaemonEventJob(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to notify clients about containers stats for platform {PlatformId}", container.PlatformId);
+            logger.LogError(ex, "Failed to notify clients about container stats for platform {PlatformId}", container.PlatformId);
         }
     }
 }

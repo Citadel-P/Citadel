@@ -44,7 +44,7 @@ internal sealed class CreatePlatformHandler(
         // Check if the platform already exists
         if (await unitOfWork.Platforms.NameOrAddressExistsAsync(command.Name, command.Address!, cancellationToken: cancellationToken))
         {
-            return Result.Failure<Platform>(new ConflictError("A platform with the same [Name] or [Address] already exists!"));
+            return Result.Failure<Platform>(new ConflictError("A platform with the same name or address already exists."));
         }
 
         if (command.Type == PlatformType.Docker)
@@ -53,7 +53,7 @@ internal sealed class CreatePlatformHandler(
         }
         else
         {
-            return Result.Failure<Platform>(new BadRequestError("Only Docker platform type is supported at the moment."));
+            return Result.Failure<Platform>(new BadRequestError("Currently, only the Docker platform type is supported."));
         }
     }
 

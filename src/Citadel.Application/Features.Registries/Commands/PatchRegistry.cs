@@ -37,7 +37,7 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
 
             When(x => x.Configuration is not DockerHubRegistry && x.Configuration is not GitHubRegistry, () =>
             {
-                When(s => s.Name != null, () => RuleFor(x => x.Url).Matches(Validators.UrlRegex).WithMessage("Please provide a valid url"));
+                When(s => s.Name != null, () => RuleFor(x => x.Url).Matches(Validators.UrlRegex).WithMessage("Please provide a valid URL"));
             });
             When(x => x.Configuration is DockerHubRegistry, () =>
             {
@@ -126,14 +126,14 @@ internal class PatchRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorRe
             var conflict = await unitOfWork.Registries.IsNameUsedByAnotherRegistryAsync(command.Id, patchedRegistry.Name, cancellationToken);
             if (conflict) 
             {
-                return Result.Failure<Registry>(new ConflictError("A registry with the same name already exist"));
+                return Result.Failure<Registry>(new ConflictError("Name already exists"));
             }
         }
 
         var strategy = registryResolver.Resolve(patchedRegistry.Type);
         if (strategy is null)
         {
-            return Result.Failure<Registry>(new BadRequestError("Unsupported registry type"));
+            return Result.Failure<Registry>(new BadRequestError("Unsupported Registry Type"));
         }
 
         var (canConnect, errorMessage) = await strategy.CanConnectAsync(patchedRegistry.Configuration, cancellationToken);

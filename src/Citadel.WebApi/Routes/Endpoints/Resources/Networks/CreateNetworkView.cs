@@ -3,5 +3,5 @@
 /// <summary>
 /// 
 /// </summary>
-/// <param name="Id">Network Id</param>
+/// <param name="Id">Network ID</param>
 public sealed record CreateNetworkView(string Id);

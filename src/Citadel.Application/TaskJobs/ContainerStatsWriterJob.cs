@@ -122,7 +122,7 @@ internal class ContainerStatsWriterJob(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to notify clients about containers stats for platform {PlatformId}", batch.PlatformId);
+            logger.LogError(ex, "Failed to notify clients about container stats for platform {PlatformId}", batch.PlatformId);
         }
     }
 }

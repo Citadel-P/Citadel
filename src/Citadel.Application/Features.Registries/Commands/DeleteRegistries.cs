@@ -16,7 +16,7 @@ internal class DeleteRegistriesHandler(IUnitOfWork unitOfWork) : ICommandHandler
 
         return result > 0
             ? Result.Success()
-            : Result.Failure(new NotFoundError("No registries matching the provided IDs were found for deletion"));
+            : Result.Failure(new NotFoundError("No registries found matching the provided IDs for deletion."));
     }
 }
  

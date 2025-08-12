@@ -14,7 +14,7 @@ internal class GetAllLocalImagesHandler(IPlatformContainerCache platformContaine
     {
         if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
         {
-            return Result.Failure<IReadOnlyList<ImageResult>>(new NotFoundError("The provided platform Id does not exist"));
+            return Result.Failure<IReadOnlyList<ImageResult>>(new NotFoundError("Platform ID not found."));
         }
 
         return await connectorFactory

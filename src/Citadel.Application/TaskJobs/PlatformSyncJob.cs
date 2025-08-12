@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 namespace Application.TaskJobs;
 
 /// <summary>
-/// Syncing platforms state.
+/// Synchronizes platform state.
 /// </summary>
 internal class PlatformSyncJob(
     IServiceScopeFactory scopeFactory,

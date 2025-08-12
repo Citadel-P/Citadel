@@ -67,7 +67,7 @@ internal class PatchPlatformHandler(
                 var conflict = await unitOfWork.Platforms.IsPlatformNameUniqueExceptForIdAsync(command.Id, patchedPlatform.Name, cancellationToken);
                 if (conflict != null)
                 {
-                    return Result.Failure<Platform>(new ConflictError("A platform with the same name already exist"));
+                    return Result.Failure<Platform>(new ConflictError("A platform with the same name already exists."));
                 }
             }
 

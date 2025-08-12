@@ -221,7 +221,7 @@ internal sealed class CreateNetworkHandler(IPlatformContainerCache platformConta
     {
         if (!platformContainerCache.TryGetCacheEntry(request.PlatformId, out var platform))
         {
-            return Result.Failure<CreateDockerNetworkResult>(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure<CreateDockerNetworkResult>(new NotFoundError("Platform ID not found."));
         }
 
         var networkConnector = connectorFactory.GetConnector(platform.ConnectorType);

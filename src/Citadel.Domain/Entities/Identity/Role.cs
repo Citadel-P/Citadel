@@ -3,7 +3,7 @@
 public class Role
 {
     /// <summary>
-    /// Role Id
+    /// Role ID
     /// </summary>
     public Guid Id { get; private set; }
 

@@ -26,7 +26,7 @@ public sealed record CreateRegistry(string Name, string Url, RegistryType Type, 
 
             When(x => x.Configuration is not DockerHubRegistry && x.Configuration is not GitHubRegistry, () =>
             {
-                RuleFor(x => x.Url).Matches(Validators.UrlRegex).WithMessage("Please provide a valid url");
+                RuleFor(x => x.Url).Matches(Validators.UrlRegex).WithMessage("Please provide a valid URL");
             });
             When(x => x.Configuration is DockerHubRegistry, () =>
             {
@@ -106,13 +106,13 @@ internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorR
         var exist = await unitOfWork.Registries.ExistsAsync(command.Name, cancellationToken);
         if (exist)
         {
-            return Result.Failure<Registry>(new ConflictError("The provided name already exist"));
+            return Result.Failure<Registry>(new ConflictError("Name already exists"));
         }
 
         var strategy = registryResolver.Resolve(command.Type);
         if (strategy is null)
         {
-            return Result.Failure<Registry>(new BadRequestError("Unsupported registry type"));
+            return Result.Failure<Registry>(new BadRequestError("Unsupported Registry Type"));
         }
 
         var (canConnect, errorMessage) = await strategy.CanConnectAsync(command.Configuration, cancellationToken);

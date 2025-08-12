@@ -51,7 +51,7 @@ internal class ContainerSyncJob(
 
         if (platformEvent.IsOnLine)
         {
-            logger.LogInformation("Platform {PlatformId} is online. Syncing containers from {Address}...", platformEvent.Id, platformEvent.Address);
+            logger.LogInformation("Platform {PlatformId} is online. Synchronizing containers from {Address}...", platformEvent.Id, platformEvent.Address);
             syncedContainers = await SyncOnlinePlatformContainers(uow, platformEvent, cancellationToken);
             var cacheEntry = new PlatformCacheEntry
             (

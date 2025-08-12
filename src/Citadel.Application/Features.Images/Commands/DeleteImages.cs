@@ -26,7 +26,7 @@ internal sealed class DeleteImagesHandler(IPlatformContainerCache platformContai
     {
         if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform)) 
         {
-            return Result.Failure<DeleteImageResult>(new NotFoundError("The provided platform Id does not exist"));
+            return Result.Failure<DeleteImageResult>(new NotFoundError("Platform ID not found."));
         }
 
         var args = new DeleteImageCommand

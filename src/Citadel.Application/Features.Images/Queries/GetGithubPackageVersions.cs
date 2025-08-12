@@ -29,7 +29,7 @@ internal class GetGithubPackageVersionsHander(IUnitOfWork unitOfWork, IGitHubCrR
         var configuration = await unitOfWork.Registries.GetRegistryConfigurationAsync(query.RegistryName, cancellationToken);
         if (configuration == null) 
         {
-            return Result.Failure<IEnumerable<GitHubCrPackageVersion>>(new NotFoundError("The provided registry name does exist"));
+            return Result.Failure<IEnumerable<GitHubCrPackageVersion>>(new NotFoundError("The provided registry name does not exist"));
         }
 
         if (configuration is not GitHubRegistry cfg)

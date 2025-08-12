@@ -26,7 +26,7 @@ internal sealed class InspectImageHandler(IPlatformContainerCache platformContai
     {
         if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
         {
-            return Result.Failure<InspectImageResult>(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure<InspectImageResult>(new NotFoundError("Platform ID not found."));
         }
 
         var args = new InspectImageCommand

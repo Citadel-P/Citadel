@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 namespace Application.TaskJobs;
 
 /// <summary>
-/// Monitors the external Platforms (gRPC services) by periodically checking their availability and reporting their status.
+/// Monitors external platforms (gRPC services) by periodically checking their availability and reporting their status.
 /// </summary>
 public interface IPlatformHealthMonitorJob : IHostedService
 {

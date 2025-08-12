@@ -1,14 +1,35 @@
 import { InfoIcon, Check, TriangleAlert, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ReactNode } from 'react';
+import { JSX, ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 
-interface IProps {
+/**
+ * Props for the AlertMessage component.
+ */
+interface AlertMessageProps {
+  /**
+   * The type of the alert, which determines the color and icon.
+   */
   type: 'success' | 'info' | 'warning' | 'error';
+  /**
+   * If true, the alert will have a title.
+   * The title is predefined based on the `type`.
+   */
   hasTitle?: boolean;
+  /**
+   * The content of the alert message.
+   * If `hasTitle` is true, this will be the description. Otherwise, it will be the title.
+   */
   children?: string | ReactNode;
 }
 
-export const AlertMessage = ({ type, hasTitle, children }: IProps) => {
+/**
+ * A component to display different types of alert messages (success, info, warning, error).
+ *
+ * @param {AlertMessageProps} props The props for the component.
+ * @returns {JSX.Element} The rendered alert message component.
+ */
+export const AlertMessage = ({ type, hasTitle, children }: AlertMessageProps): JSX.Element => {
   const alertConfig = {
     success: {
       title: 'Success!',
@@ -16,7 +37,7 @@ export const AlertMessage = ({ type, hasTitle, children }: IProps) => {
       className: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-100',
     },
     info: {
-      title: 'Info!',
+      title: 'Info',
       icon: <InfoIcon className="h-4 w-4" />,
       className: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-100',
     },
@@ -41,17 +62,42 @@ export const AlertMessage = ({ type, hasTitle, children }: IProps) => {
   );
 };
 
-interface IBaseMessageProps {
+/**
+ * Props for the BaseMessage component.
+ */
+interface BaseMessageProps {
+  /**
+   * The icon to display in the alert.
+   */
   icon: ReactNode;
+  /**
+   * The title of the alert.
+   */
   title: string;
+  /**
+   * Additional CSS class names to apply to the alert.
+   */
   className: string;
+  /**
+   * If true, the alert will have a title and a description.
+   */
   hasTitle?: boolean;
+  /**
+   * The content of the alert message.
+   */
   children?: string | ReactNode;
 }
 
-const BaseMessage = ({ icon, title, className, hasTitle = false, children }: IBaseMessageProps) => {
+/**
+ * The base component for rendering an alert message.
+ * It is used by the `AlertMessage` component.
+ *
+ * @param {BaseMessageProps} props The props for the component.
+ * @returns {JSX.Element} The rendered base message component.
+ */
+const BaseMessage = ({ icon, title, className, hasTitle = false, children }: BaseMessageProps): JSX.Element => {
   return (
-    <Alert className={`border-0 mt-2 mb-4 ${className}`}>
+    <Alert className={cn('border-0 mt-2 mb-4', className)}>
       {icon}
       {hasTitle ? (
         <>

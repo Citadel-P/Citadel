@@ -8,7 +8,7 @@ public class Permission
     public Guid Id { get; private set; }
 
     /// <summary>
-    /// Role Id
+    /// Role ID
     /// </summary>
     public Guid RoleId { get; private set; }
 

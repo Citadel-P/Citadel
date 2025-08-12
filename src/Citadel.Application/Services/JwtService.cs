@@ -111,7 +111,7 @@ internal sealed class JwtService(IHttpContextAccessor context, IOptions<JwtConfi
         byte[] key = Encoding.UTF8.GetBytes(jwtKey);
         if (key.Length < 32)
         {
-            throw new ArgumentException("Secret key for algorithm: 'HS256' must be at least '256' bit long");
+            throw new ArgumentException("Secret key for algorithm: 'HS256' must be at least '256' bits long");
         }
 
         return new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature);

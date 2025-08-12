@@ -4,7 +4,7 @@
   status: 400,
   errors: {
     0: [
-      Only Docker platform type is supported at the moment.
+      Currently, only the Docker platform type is supported.
     ]
   },
   traceId: {Scrubbed}

@@ -1379,7 +1379,7 @@
           {
             "name": "id",
             "in": "path",
-            "description": "Platform id",
+            "description": "Platform ID",
             "required": true,
             "schema": {
               "type": "string",
@@ -1640,7 +1640,7 @@
         "tags": [
           "Registries"
         ],
-        "summary": "Get all registries",
+        "summary": "Get registry by ID",
         "operationId": "Registries_GetById",
         "parameters": [
           {
@@ -1733,7 +1733,7 @@
           {
             "name": "id",
             "in": "path",
-            "description": "Registry id",
+            "description": "Registry ID",
             "required": true,
             "schema": {
               "type": "string",
@@ -2633,7 +2633,7 @@
         "tags": [
           "Images"
         ],
-        "summary": "Search for DockerHub public images, if imageName is empty a default list of docker images will be returned",
+        "summary": "Search for DockerHub public images. If the image name is empty, a default list of Docker images will be returned.",
         "operationId": "Images_GetDockerHubPublicImages",
         "parameters": [
           {

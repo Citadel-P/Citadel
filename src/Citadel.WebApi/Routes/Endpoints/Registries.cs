@@ -39,7 +39,7 @@ public static class Registries
 
     public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Patch(
         IMediator mediator, 
-        [FromRoute][Description("Registry id")] Guid id,
+        [FromRoute][Description("Registry ID")] Guid id,
         RegistryInputPatchDocument patchInput, 
         CancellationToken cancellationToken)
     {

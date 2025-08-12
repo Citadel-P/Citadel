@@ -7,7 +7,7 @@ using Mediator;
 namespace Application.Features.Platforms.Queries;
 
 /// <summary>
-/// Get all containers from remote agent
+/// Retrieves all containers from remote agents
 /// </summary>
 public sealed record class GetContainers(Guid PlatformId) : IQuery<Result<IEnumerable<Container>>>
 {

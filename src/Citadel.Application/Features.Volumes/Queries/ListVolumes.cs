@@ -15,7 +15,7 @@ internal class ListVolumesHandler(IPlatformContainerCache platformContainerCache
     {
         if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
         {
-            return Result.Failure<IEnumerable<DockerVolumeResult>>(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure<IEnumerable<DockerVolumeResult>>(new NotFoundError("Platform ID not found."));
         }
 
         var args = new ListdDockerVolumesCommand

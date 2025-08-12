@@ -12,7 +12,7 @@ namespace WebApi.Routes.Endpoints.Resources.Images;
 /// <param name="LastUpdated"></param>
 /// <param name="FullSize">Compressed size (sum of all layers) of the tagged image</param>
 /// <param name="Status">Whether a tag has been pushed to or pulled in the past month</param>
-/// <param name="LastPulled">Datetime of last pull</param>
+/// <param name="LastPulled">Date and time of last pull</param>
 /// <param name=""></param>
 public sealed record DockerHubTagView(int Id, string Name, DockerHubImageView? Image, string LastUpdated, int FullSize, DockerHubTagStatus Status, string LastPulled);
 
@@ -24,7 +24,7 @@ public sealed record DockerHubTagView(int Id, string Name, DockerHubImageView? I
 /// <param name="Os">Operating system</param>
 /// <param name="Size">Size of the image</param>
 /// <param name="Status">Status of the image</param>
-/// <param name="LastPulled">Datetime of last pull</param>
+/// <param name="LastPulled">Date and time of last pull</param>
 public sealed record DockerHubImageView(string Architecture, string Digest, string Os, int Size, DockerHubImageStatus Status, string LastPulled);
 
 internal static partial class Mapper

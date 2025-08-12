@@ -122,7 +122,7 @@ internal class ContainerStatsStreamerJob(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error while streaming containers stats for {Address}, retrying in 10s...", address);
+                logger.LogError(ex, "Error while streaming container stats for {Address}, retrying in 10s...", address);
                 await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
             }
             finally

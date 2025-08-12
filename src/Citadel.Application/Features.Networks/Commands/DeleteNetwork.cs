@@ -27,7 +27,7 @@ internal class DeleteNetworksHandler(IPlatformContainerCache platformContainerCa
     {
         if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform))
         {
-            return Result.Failure(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure(new NotFoundError("Platform ID not found."));
         }
 
         var args = new DeleteDockerNetworkCommand

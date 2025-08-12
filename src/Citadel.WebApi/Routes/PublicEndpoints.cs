@@ -228,7 +228,7 @@ public static class PublicEndpoints
             .WithName(RegistriesName + "_" + nameof(Registries.GetAll));
 
         registries.MapGet("/{id}", Registries.GetById)
-            .WithSummary("Get all registries")
+            .WithSummary("Get registry by ID")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -313,7 +313,7 @@ public static class PublicEndpoints
             .WithName(ImagesName + "_" + nameof(Images.GetDockerHubRepositoryTags));
 
         images.MapGet("/dockerhub", Images.GetDockerHubPublicImages)
-            .WithSummary("Search for DockerHub public images, if imageName is empty a default list of docker images will be returned")
+            .WithSummary("Search for DockerHub public images. If the image name is empty, a default list of Docker images will be returned.")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)

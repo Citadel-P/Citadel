@@ -27,7 +27,7 @@ internal sealed class InspectNetworkHandler(IPlatformContainerCache platformCont
     {
         if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
         {
-            return Result.Failure<DockerNetworkDetails>(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure<DockerNetworkDetails>(new NotFoundError("Platform ID not found."));
         }
 
         var args = new InspectNetworkCommand

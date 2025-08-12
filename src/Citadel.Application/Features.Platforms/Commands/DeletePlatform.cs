@@ -1,5 +1,4 @@
-﻿using Application.Services.Abstractions;
-using Application.Services.SignalR;
+﻿using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain.Contracts.Interfaces;
 using FluentValidation;

@@ -25,7 +25,7 @@ internal sealed class InspectVolumeHandler(IPlatformContainerCache platformConta
     {
         if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
         {
-            return Result.Failure<DockerVolumeResult>(new NotFoundError("The provided platform Id doesn't exist"));
+            return Result.Failure<DockerVolumeResult>(new NotFoundError("Platform ID not found."));
         }
 
         var command = new InspectDockerVolumeCommand

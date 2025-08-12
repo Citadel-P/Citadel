@@ -65,8 +65,10 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
       },
       [AppPaths.containerInspect]: () => {
         crumbs.push({ title: 'Platforms', link: '/' });
-        crumbs.push({ title: currentContainer?.platformName ?? '', link: `/platforms/${currentPlatform?.id}` });
-        crumbs.push({ title: 'Containers', link: `/platforms/${currentPlatform?.id}/containers` });
+        crumbs.push({ 
+          title: currentContainer?.platformName ?? '',
+          link: `/platforms/${currentContainer?.platformId}` });
+        crumbs.push({ title: 'Containers', link: `/platforms/${currentContainer?.platformId}/containers` });
         crumbs.push({
           title: currentContainer?.containerName?.slice(1) ?? '',
           isActive: true,

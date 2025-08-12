@@ -12,6 +12,6 @@ internal sealed class GetRegistryHandler(IUnitOfWork unitOfWork) : IQueryHandler
     public async ValueTask<Result<Registry>> Handle(GetRegistry query, CancellationToken cancellationToken)
     {
         var registry = await unitOfWork.Registries.GetAsync(query.Id,  cancellationToken);
-        return registry ?? Result.Failure<Registry>(new NotFoundError($"Registry with id {query.Id} does not exist"));
+        return registry ?? Result.Failure<Registry>(new NotFoundError($"Registry with ID {query.Id} does not exist"));
     }
 }
