@@ -61,11 +61,11 @@ internal static class PlatformMappers
                 OsType: platformInfo.OsType,
                 OsVersion: platformInfo.OsVersion,
                 Architecture: platformInfo.Architecture,
-                ContainerCount: platformInfo.ContainerCount,
                 OperatingSystem: platformInfo.OperatingSystem,
-                ContainersPaused: platformInfo.ContainersPaused,
-                ContainersRunning: platformInfo.ContainersRunning,
-                ContainersStopped: platformInfo.ContainersStopped
+                ContainerCount: platformInfo.PlatformStatistics?.ContainerCount ?? 0,
+                ContainersPaused: platformInfo.PlatformStatistics?.ContainersPaused ?? 0,
+                ContainersRunning: platformInfo.PlatformStatistics?.ContainersRunning ?? 0,
+                ContainersStopped: platformInfo.PlatformStatistics?.ContainersStopped ?? 0
             );
         }
         else
@@ -145,10 +145,10 @@ internal static class PlatformMappers
             imageCount: source.ImageCount, 
             volumeCount: source.VolumeCount, 
             networkCount: source.NetworkCount, 
-            containerCount: source.ContainerCount, 
-            containersPaused: source.ContainersPaused, 
-            containersStopped: source.ContainersStopped, 
-            containersRunning: source.ContainersRunning,
+            containerCount: source.PlatformStatistics?.ContainerCount ?? 0, 
+            containersPaused: source.PlatformStatistics?.ContainersPaused ?? 0, 
+            containersStopped: source.PlatformStatistics?.ContainersStopped ?? 0, 
+            containersRunning: source.PlatformStatistics?.ContainersRunning ?? 0,
             platformStat: destination.PlatformStat);
     }
 
