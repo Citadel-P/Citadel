@@ -11,12 +11,12 @@ import { ContainerView } from '@/api/_generated';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { useNavigate } from 'react-router';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
-import { IDeleteDialogData } from '@/hooks/useDialogState';
 import { DockerContainerView } from '@/api/models';
+import { IDialogData } from '@/hooks/useDialogState';
 
 export const ContainerDropdownActions: React.FC<{
   container: ContainerView | DockerContainerView | undefined;
-  setDialogData: (data: IDeleteDialogData<ContainerView | DockerContainerView>) => void;
+  setDialogData: (data: IDialogData<ContainerView | DockerContainerView>) => void;
   hideDetails?: boolean;
 }> = ({ container, hideDetails, setDialogData }) => {
   const navigate = useNavigate();
@@ -92,7 +92,7 @@ export const ContainerDropdownActions: React.FC<{
           disabled={!availableActions?.canDelete || isPending}
           icon={<Trash className="mr-2 h-3 w-3 text-danger" />}
           label="Delete"
-          className="text-danger"
+          className="text-danger hover:text-danger!"
         />
       </DropdownMenuContent>
     </DropdownMenu>

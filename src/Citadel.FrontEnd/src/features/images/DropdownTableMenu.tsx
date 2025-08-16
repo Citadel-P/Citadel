@@ -39,7 +39,7 @@ const DropdownTableMenu = ({ image }: { image: ImageView }) => {
           onClick={openDialog}
           icon={<Trash className="mr-2 h-3 w-3 text-danger" />}
           label="Delete"
-          className="text-danger"
+          className="text-danger hover:text-danger!"
         />
       </DropdownMenuContent>
     </DropdownMenu>

@@ -70,4 +70,10 @@ public static class Images
         return EndpointHandlers.HandleResult(result, v => v);
     }
 
+    public static async Task<Results<Ok<ImageInfoResult>, ProblemHttpResult>> GetImageInfo(IMediator mediator, Guid platformId, string imageId, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetImageInfo(platformId, imageId), cancellationToken);
+        return EndpointHandlers.HandleResult(result, v => v);
+    }
+
 }

@@ -327,6 +327,14 @@ public static class PublicEndpoints
            .ProducesProblem(StatusCodes.Status404NotFound)
            .WithName(ImagesName + "_" + nameof(Images.Inspect));
 
+        images.MapGet("{platformId}/{imageId}/_info", Images.GetImageInfo)
+           .WithSummary("Get image info")
+           .ProducesValidationProblem()
+           .ProducesProblem(StatusCodes.Status403Forbidden)
+           .ProducesProblem(StatusCodes.Status401Unauthorized)
+           .ProducesProblem(StatusCodes.Status404NotFound)
+           .WithName(ImagesName + "_" + nameof(Images.GetImageInfo));
+
         images.MapPost("/pull", Images.PullImage)
             .WithSummary("Pull an image from a registry and returns logs as a stream")
             .ProducesValidationProblem()

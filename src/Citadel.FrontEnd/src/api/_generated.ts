@@ -819,6 +819,12 @@ export interface ImageHealthCheck {
   startInterval: null | number | string;
 }
 
+export interface ImageInfoResult {
+  volumes: string[];
+  networks: string[];
+  exposedPorts: string[];
+}
+
 export interface ImageManifest {
   id: string;
   kind: string;
@@ -2291,7 +2297,7 @@ export class Api<
      *
      * @tags Registries
      * @name RegistriesGetById
-     * @summary Get all registries
+     * @summary Get registry by ID
      * @request GET:/api/v1/registries/{id}
      * @secure
      * @response `200` `RegistryView` OK
@@ -2547,7 +2553,7 @@ export class Api<
      *
      * @tags Images
      * @name ImagesGetDockerHubPublicImages
-     * @summary Search for DockerHub public images, if imageName is empty a default list of docker images will be returned
+     * @summary Search for DockerHub public images. If the image name is empty, a default list of Docker images will be returned.
      * @request GET:/api/v1/images/dockerhub
      * @secure
      * @response `200` `(DockerHubImageResult)[]` OK
@@ -2599,6 +2605,37 @@ export class Api<
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/images/${platformId}/${imageId}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Images
+     * @name ImagesGetImageInfo
+     * @summary Get image info
+     * @request GET:/api/v1/images/{platformId}/{imageId}/_info
+     * @secure
+     * @response `200` `ImageInfoResult` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    imagesGetImageInfo: (
+      platformId: string,
+      imageId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ImageInfoResult,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/images/${platformId}/${imageId}/_info`,
         method: "GET",
         secure: true,
         format: "json",

@@ -34,18 +34,11 @@ interface ActionMenuItemProps {
  * @param {ActionMenuItemProps} props The props for the component.
  * @returns {JSX.Element} The rendered dropdown menu item.
  */
-export const ActionMenuItem = ({
-  onClick,
-  disabled,
-  icon,
-  label,
-  className,
-}: ActionMenuItemProps): JSX.Element => (
+export const ActionMenuItem = ({ onClick, disabled, icon, label, className }: ActionMenuItemProps): JSX.Element => (
   <DropdownMenuItem
     onClick={onClick}
     disabled={disabled ?? false}
-    className={cn('grow rounded-sm px-3 py-2 text-[12px] font-semibold text-foreground/70', className)}
-  >
+    className={cn('grow rounded-sm px-3 py-2 text-[12px] font-semibold text-foreground/70', className)}>
     {icon}
     <span>{label}</span>
   </DropdownMenuItem>

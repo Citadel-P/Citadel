@@ -1,7 +1,7 @@
 import { createContext } from 'react';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
-import { IDeleteDialogData } from '@/hooks/useDialogState';
 import { DeleteImagesRequest, ImageView, RegistryView } from '@/api/_generated';
+import { IDialogData } from '@/hooks/useDialogState';
 
 interface IContext {
   isLoading: boolean;
@@ -14,13 +14,15 @@ interface IContext {
   setSelectedRows: (images: ImageView[] | undefined) => void;
   setLocalImages: (images: ImageView[]) => void;
   deleteIsPending: boolean;
-  dialogData: IDeleteDialogData<ImageView>;
-  setDialogData: (data: IDeleteDialogData<ImageView>) => void;
+  dialogData: IDialogData<ImageView>;
+  setDialogData: (data: IDialogData<ImageView>) => void;
   onSearch: (searchTerm: string) => void;
   currentImage: ImageView | undefined;
   setCurrentImage: (image: ImageView | undefined) => void;
   sheetOpen: boolean;
   setSheetOpen: (open: boolean) => void;
+  runDialogData: IDialogData<ImageView>;
+  setRunDialogData: (data: IDialogData<ImageView>) => void;
 }
 
 export const ImagesContext = createContext<IContext | undefined>(undefined);

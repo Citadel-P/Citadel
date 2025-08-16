@@ -8,7 +8,7 @@ import DropdownTableMenu from './DropdownTableMenu';
 import { useImagesContext } from './ImagesContext';
 import { truncate } from '@/lib/truncate';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
-import { CheckCheck, Clipboard } from 'lucide-react';
+import { CheckCheck, Play, Clipboard } from 'lucide-react';
 import { useEffect, useCallback, useMemo, memo } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
 import { byteTransform } from '@/lib/bytes.helper';
@@ -16,6 +16,8 @@ import { DeleteLocalImageDialog } from './dialogs/DeleteLocalImageDialog';
 import { useAppContext } from '@/AppContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ImageInspectSheet } from './ImageInspectSheet';
+import { Button } from '@/components/ui/button';
+import { RunImageDialog } from './dialogs/RunImageDialog';
 
 const columns = (handleShowSheet: (network: ImageView) => void): ColumnDef<ImageView>[] => [
   {
@@ -58,7 +60,9 @@ const columns = (handleShowSheet: (network: ImageView) => void): ColumnDef<Image
   {
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{fromNow(new Date(row.original.created * 1000).getTime())}</span>,
+    cell: ({ row }) => (
+      <span className="text-[13px]">{fromNow(new Date((row.original.created as number) * 1000).getTime())}</span>
+    ),
     sortingFn: (rowA, rowB) => (rowA.original.created < rowB.original.created ? 1 : -1),
   },
   {
@@ -69,13 +73,38 @@ const columns = (handleShowSheet: (network: ImageView) => void): ColumnDef<Image
   },
   {
     id: 'actions',
-    cell: ({ row }) => (
-      <div className="text-center">
-        <DropdownTableMenu image={row.original} />
-      </div>
-    ),
+    cell: ({ row }) => <RenderActions image={row.original} />,
   },
 ];
+
+const RenderActions = ({ image }: { image: ImageView }) => {
+  const { setRunDialogData } = useImagesContext();
+
+  return (
+    <div className="flex justify-center">
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 rounded-full"
+              onClick={() => setRunDialogData({ open: true, currentSelection: [image] })}>
+              <Play className="text-blue-500" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <span>Run</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <div className="text-center">
+        <DropdownTableMenu image={image} />
+      </div>
+    </div>
+  );
+};
 
 const ImageNameRow = ({ image, onShowSheet }: { image: ImageView; onShowSheet: (image: ImageView) => void }) => {
   return (
@@ -160,6 +189,7 @@ export default function LocalImagesTable() {
           </span>
         )}
       </div>
+      <RunImageDialog />
       <DeleteLocalImageDialog />
       <ImageInspectSheet />
     </div>

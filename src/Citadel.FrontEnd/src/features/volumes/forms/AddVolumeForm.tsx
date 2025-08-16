@@ -8,7 +8,7 @@ import { useFieldArray } from 'react-hook-form';
 import { LoaderCircle, ChevronDown } from 'lucide-react';
 import KeyValuePairInput from '@/components/ui/KeyValuePairInput';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import React, { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppContext } from '@/AppContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
@@ -24,7 +24,7 @@ const AddVolumeForm = () => {
   const { currentPlatform } = useAppContext();
 
   const { control } = form;
-  const [advancedOpen, setAdvancedOpen] = React.useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // For options
   const {

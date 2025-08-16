@@ -1379,7 +1379,7 @@
           {
             "name": "id",
             "in": "path",
-            "description": "Platform id",
+            "description": "Platform ID",
             "required": true,
             "schema": {
               "type": "string",
@@ -1640,7 +1640,7 @@
         "tags": [
           "Registries"
         ],
-        "summary": "Get all registries",
+        "summary": "Get registry by ID",
         "operationId": "Registries_GetById",
         "parameters": [
           {
@@ -1733,7 +1733,7 @@
           {
             "name": "id",
             "in": "path",
-            "description": "Registry id",
+            "description": "Registry ID",
             "required": true,
             "schema": {
               "type": "string",
@@ -2633,7 +2633,7 @@
         "tags": [
           "Images"
         ],
-        "summary": "Search for DockerHub public images, if imageName is empty a default list of docker images will be returned",
+        "summary": "Search for DockerHub public images. If the image name is empty, a default list of Docker images will be returned.",
         "operationId": "Images_GetDockerHubPublicImages",
         "parameters": [
           {
@@ -2749,6 +2749,101 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InspectImageResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/images/{platformId}/{imageId}/_info": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "summary": "Get image info",
+        "operationId": "Images_GetImageInfo",
+        "parameters": [
+          {
+            "name": "platformId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "imageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageInfoResult"
                 }
               }
             }
@@ -6520,6 +6615,34 @@
               "string"
             ],
             "format": "int64"
+          }
+        }
+      },
+      "ImageInfoResult": {
+        "required": [
+          "volumes",
+          "networks",
+          "exposedPorts"
+        ],
+        "type": "object",
+        "properties": {
+          "volumes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "networks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "exposedPorts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

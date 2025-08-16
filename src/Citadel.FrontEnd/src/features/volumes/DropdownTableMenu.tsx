@@ -32,7 +32,7 @@ const DropdownTableMenu = ({ volume }: { volume: DockerVolumeResult }) => {
           disabled={volume.inUse ?? false}
           icon={<Trash className="mr-2 h-3 w-3 text-danger" />}
           label="Delete"
-          className="text-danger"
+          className="text-danger hover:text-danger!"
         />
       </DropdownMenuContent>
     </DropdownMenu>

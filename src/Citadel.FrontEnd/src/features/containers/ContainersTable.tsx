@@ -133,7 +133,7 @@ const CPUCell = ({ container }: { container: ContainerView }) => {
   }
   return (
     <div className="text-xs">
-      {container.lastStats?.cpuUsage ? toFixedNumber(container.lastStats?.cpuUsage, 'percent') : '0%'}
+      {container.lastStats?.cpuUsage ? toFixedNumber(container.lastStats?.cpuUsage as number, 'percent') : '0%'}
     </div>
   );
 };

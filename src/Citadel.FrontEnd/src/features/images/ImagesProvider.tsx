@@ -27,6 +27,8 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
   const [localImages, setLocalImages] = useState<ImageView[]>([]);
   const [originalLocalImages, setOriginalLocalImages] = useState<ImageView[] | undefined>([]);
   const { dialogData, setDialogData } = useDialogState<ImageView>();
+  const { dialogData: runDialogData, setDialogData: setRunDialogData } = useDialogState<ImageView>();
+  
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
   // Sheet state
   const [currentImage, setCurrentImage] = useState<ImageView>();
@@ -139,6 +141,8 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
       setCurrentImage,
       sheetOpen,
       setSheetOpen,
+      runDialogData,
+      setRunDialogData,
     }),
     [
       isLoading,
@@ -157,6 +161,8 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
       setCurrentImage,
       sheetOpen,
       setSheetOpen,
+      runDialogData,
+      setRunDialogData,
     ],
   );
 
