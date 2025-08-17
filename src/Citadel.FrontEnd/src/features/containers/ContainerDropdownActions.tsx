@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { startTransition, useCallback } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,9 +25,11 @@ export const ContainerDropdownActions: React.FC<{
 
   // Memoized function to open the delete dialog
   const openDialog = useCallback(() => {
-    if (container) {
-      setDialogData({ open: true, currentSelection: [container] });
-    }
+    startTransition(() => {
+      if (container) {
+        setDialogData({ open: true, currentSelection: [container] });
+      }
+    });
   }, [setDialogData, container]);
 
   return (

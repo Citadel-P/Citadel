@@ -6622,7 +6622,9 @@
         "required": [
           "volumes",
           "networks",
-          "exposedPorts"
+          "exposedPorts",
+          "memTotal",
+          "cpuCount"
         ],
         "type": "object",
         "properties": {
@@ -6643,6 +6645,22 @@
             "items": {
               "type": "string"
             }
+          },
+          "memTotal": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "cpuCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
           }
         }
       },

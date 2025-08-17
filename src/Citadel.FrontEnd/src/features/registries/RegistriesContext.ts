@@ -1,6 +1,6 @@
 import { createContext } from 'react';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
-import { IDeleteDialogData } from '@/hooks/useDialogState';
+import { IDialogData } from '@/hooks/useDialogState';
 import { RegistryView } from '@/api/_generated';
 
 interface IContext {
@@ -10,8 +10,8 @@ interface IContext {
   setSelectedRows: (ids: RegistryView[]) => void;
   requestDelete: (ids: string[]) => void;
   deleteIsPending: boolean;
-  dialogData: IDeleteDialogData<RegistryView>;
-  setDialogData: (data: IDeleteDialogData<RegistryView>) => void;
+  dialogData: IDialogData<RegistryView>;
+  setDialogData: (data: IDialogData<RegistryView>) => void;
 }
 
 export const RegistriesContext = createContext<IContext | undefined>(undefined);

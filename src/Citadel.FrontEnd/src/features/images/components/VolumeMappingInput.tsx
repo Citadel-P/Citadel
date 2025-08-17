@@ -27,7 +27,7 @@ interface VolumeMappingInputProps {
 const VolumeMappingInput = ({ control, name, fields, append, remove, containerVolumes }: VolumeMappingInputProps) => {
   return (
     <div className="space-y-2">
-      <Label>Volumes</Label>
+      <Label className='text-xs'>Volumes</Label>
       <div className="space-y-2">
         {fields.map((field, index) => (
           <div key={field.id} className="flex items-start space-x-2">

@@ -1,6 +1,6 @@
 import { createContext } from 'react';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
-import { IDeleteDialogData } from '@/hooks/useDialogState';
+import { IDialogData } from '@/hooks/useDialogState';
 import { DeleteNetworksInput, DockerNetworkResult } from '@/api/_generated';
 
 interface IContext {
@@ -8,8 +8,8 @@ interface IContext {
   networks: DockerNetworkResult[] | undefined;
   setSelectedRows: (networks: DockerNetworkResult[] | undefined) => void;
   setNetworks: (networks: DockerNetworkResult[]) => void;
-  dialogData: IDeleteDialogData<DockerNetworkResult>;
-  setDialogData: (data: IDeleteDialogData<DockerNetworkResult>) => void;
+  dialogData: IDialogData<DockerNetworkResult>;
+  setDialogData: (data: IDialogData<DockerNetworkResult>) => void;
   onSearch: (searchTerm: string) => void;
   requestDelete: (request: DeleteNetworksInput) => void;
   deleteIsPending: boolean;

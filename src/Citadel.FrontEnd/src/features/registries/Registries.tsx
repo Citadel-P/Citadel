@@ -8,7 +8,7 @@ import { RegistriesTable } from './RegistriesTable';
 import { RegistriesActionBar } from './RegistriesActionBar';
 import { DeleteRegistryDialog } from './dialogs/DeleteRegistryDialog';
 
-const Registries = () => {
+export default function Registries() {
   const navigate = useNavigate();
   const { registries, isLoading } = useRegistriesContext();
 
@@ -50,6 +50,4 @@ const Registries = () => {
       <DeleteRegistryDialog />
     </div>
   );
-};
-
-export default Registries;
+}

@@ -9,7 +9,7 @@ import {
 import { useReducer } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { SwitchSection } from '@/components/ui/SwitchSection';
-import { IDeleteDialogData } from '@/hooks/useDialogState';
+import { IDialogData } from '@/hooks/useDialogState';
 import { ContainerView, DeleteContainersRequest } from '@/api/_generated';
 import { DockerContainerView } from '@/api/models';
 
@@ -22,9 +22,9 @@ export const DeleteContainerDialog = ({
   setDialogData,
   dialogData,
 }: {
-  dialogData: IDeleteDialogData<ContainerView | DockerContainerView>;
+  dialogData: IDialogData<ContainerView | DockerContainerView>;
   isPending: boolean;
-  setDialogData: (data: IDeleteDialogData<ContainerView | DockerContainerView>) => void;
+  setDialogData: (data: IDialogData<ContainerView | DockerContainerView>) => void;
   requestDelete: (request: DeleteContainersRequest) => void;
 }) => {
   const [volume, toggleVolume] = useReducer(toggleReducer, true);
@@ -38,17 +38,17 @@ export const DeleteContainerDialog = ({
 
   return (
     <Dialog open={dialogData.open} onOpenChange={(open) => setDialogData({ open })}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Confirm Deletion</DialogTitle>
           <DialogDescription>
             {containerIds.length === 1 ? (
               'Are you sure you want to delete this container? This action cannot be undone.'
             ) : (
-              <>
+              <span>
                 You&apos;re about to delete <span className="font-medium text-foreground">{containerIds.length}</span>{' '}
                 containers. This action is permanent. Do you want to continue?
-              </>
+              </span>
             )}
           </DialogDescription>
         </DialogHeader>

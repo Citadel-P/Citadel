@@ -23,7 +23,7 @@ public sealed record GetImageInfo(Guid PlatformId, string ImageId) : IQuery<Resu
     }
 }
 
-internal sealed class GetImageInfoHandler(IPlatformContainerCache platformContainerCache, 
+internal sealed class GetImageInfoHandler(IUnitOfWork unitOfWork, 
     IConnectorFactory<IImageConnector> imgConnectorFactory, 
     IConnectorFactory<INetworkConnector> networkConnectorFactory,
     IConnectorFactory<IVolumeConnector> volumeConnectorFactory) 
@@ -31,11 +31,12 @@ internal sealed class GetImageInfoHandler(IPlatformContainerCache platformContai
 {
     public async ValueTask<Result<ImageInfoResult>> Handle(GetImageInfo query, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
+        var platform = await unitOfWork.Platforms.GetByIdAsync(query.PlatformId, cancellationToken);
+        if (platform is null)
         {
-            return Result.Failure<ImageInfoResult>(new NotFoundError("Platform ID not found."));
+            return Result.Failure<ImageInfoResult>(new NotFoundError("Platform not found."));
         }
-
+        
         var exposedPortsTask = GetExposedPorts(platform.Address, platform.ConnectorType, query.ImageId, cancellationToken);
         var networksTask = GetNetworks(platform.Address, platform.ConnectorType, cancellationToken);
         var volumesTask = GetVolumes(platform.Address, platform.ConnectorType, cancellationToken);
@@ -52,7 +53,9 @@ internal sealed class GetImageInfoHandler(IPlatformContainerCache platformContai
         (
             Volumes: volumes,
             Networks: networks,
-            ExposedPorts: exposedPorts
+            ExposedPorts: exposedPorts,
+            MemTotal: platform.MemTotal,
+            CpuCount: platform.CpuCount
         ));
     }
 

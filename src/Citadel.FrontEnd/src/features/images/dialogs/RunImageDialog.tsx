@@ -4,17 +4,23 @@ import { useAppContext } from '@/AppContext';
 import { useImagesContext } from '../ImagesContext';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import KeyValuePairInput from '@/components/ui/KeyValuePairInput';
-import { LoaderCircle, ChevronDown } from 'lucide-react';
+import { LoaderCircle, ChevronDown, Info } from 'lucide-react';
 import { useFieldArray } from 'react-hook-form';
 import { DialogFooter } from '@/components/ui/dialog';
 import { useEffect, useState } from 'react';
 import { useRunImageForm } from '../hooks/useRunImageForm';
-import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormMessage, FormLabel } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useGETImageInfo } from '../hooks/useGETImageInfo';
-
 import PortMappingInput from '../components/PortMappingInput';
 import VolumeMappingInput from '../components/VolumeMappingInput';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Slider } from '@/components/ui/slider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Switch } from '@/components/ui/switch';
+import ValueInput from '@/components/ui/ValueInput';
 
 export const RunImageDialog = () => {
   const { currentPlatform } = useAppContext();
@@ -65,12 +71,32 @@ export const RunImageDialog = () => {
     name: 'labels',
   });
 
+  const {
+    fields: entryPointFields,
+    append: appendEntryPoint,
+    remove: removeEntryPoint,
+  } = useFieldArray({
+    control,
+    name: 'entryPoint',
+  });
+
+  const {
+    fields: commandFields,
+    append: appendCommand,
+    remove: removeCommand,
+  } = useFieldArray({
+    control,
+    name: 'command',
+  });
+
   function onSubmit(values: any) {
     const finalValues = {
       ...values,
       volumes: values.volumes
         .filter((v: any) => v.hostPath && v.containerPath)
         .map((v: any) => `${v.hostPath}:${v.containerPath}`),
+      entryPoint: values.entryPoint.map((e: any) => e.value),
+      command: values.command.map((c: any) => c.value),
     };
     console.log(finalValues);
   }
@@ -82,9 +108,18 @@ export const RunImageDialog = () => {
       labelFields.map((_, i) => removeLabel(i));
       envVarsFields.map((_, i) => removeEnvVar(i));
       volumesFields.map((_, i) => removeVolume(i));
+      commandFields.map((_, i) => removeEntryPoint(i));
+      entryPointFields.map((_, i) => removeEntryPoint(i));
     }
     setRunDialogData({ open });
   }
+
+  const RESTART_POLICIES = [
+    { value: 'no', label: 'No' },
+    { value: 'always', label: 'Always' },
+    { value: 'unless-stopped', label: 'Unless Stopped' },
+    { value: 'on-failure', label: 'On Failure' },
+  ];
 
   return (
     <Dialog open={runDialogData.open} onOpenChange={onOpenChange}>
@@ -116,63 +151,309 @@ export const RunImageDialog = () => {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div className="flex flex-col space-y-2 py-2">
-                      <FormField
-                        control={form.control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
-                            <div className="flex-1">
-                              <FormControl>
-                                <Input
-                                  type="text"
-                                  placeholder="Container name"
-                                  className="rounded-sm focus-visible:ring-transparent"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <p className="text-xs text-muted">
-                                A random name is generated if you do not provide one.
-                              </p>
-                              <FormMessage className="text-xs" />
-                            </div>
-                          </FormItem>
-                        )}
-                      />
-                      {imageInfoIsSuccess && imageInfo?.data.exposedPorts && (
-                        <PortMappingInput control={control} name="ports" ports={imageInfo?.data.exposedPorts ?? []} />
-                      )}
-                      {imageInfoIsSuccess && imageInfo?.data.volumes && (
-                        <VolumeMappingInput
-                          name="volumes"
-                          fields={volumesFields}
-                          control={control}
-                          append={appendVolume}
-                          remove={removeVolume}
-                          containerVolumes={imageInfo?.data.volumes ?? []}
-                        />
-                      )}
-                      <KeyValuePairInput
-                        name="envVars"
-                        fields={envVarsFields}
-                        control={control}
-                        append={appendEnvVar}
-                        remove={removeEnvVar}
-                        label="Environement variables"
-                        addButtonLabel="Add environement variable"
-                        keyPlaceHolder="Variable"
-                        valuePlaceHolder="Value"
-                      />
-                      <KeyValuePairInput
-                        name="labels"
-                        fields={labelFields}
-                        control={control}
-                        append={appendLabel}
-                        remove={removeLabel}
-                        label="Labels"
-                        addButtonLabel="Add label"
-                        keyPlaceHolder="com.example.foo"
-                        valuePlaceHolder="bar"
-                      />
+                      <Tabs defaultValue="general">
+                        <TabsList className="w-full justify-start bg-muted/20 rounded-sm">
+                          <TabsTrigger value="general">General</TabsTrigger>
+                          <TabsTrigger value="resources">Resources & Policies</TabsTrigger>
+                          <TabsTrigger value="commands">Commands</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="general" className="flex flex-col space-y-2">
+                          <FormField
+                            control={form.control}
+                            name="name"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
+                                <div className="flex-1">
+                                  <FormControl>
+                                    <Input
+                                      type="text"
+                                      placeholder="Container name"
+                                      className="rounded-sm focus-visible:ring-transparent"
+                                      {...field}
+                                    />
+                                  </FormControl>
+                                  <p className="text-xs text-muted">
+                                    A random name is generated if you do not provide one.
+                                  </p>
+                                  <FormMessage className="text-xs" />
+                                </div>
+                              </FormItem>
+                            )}
+                          />
+                          {imageInfoIsSuccess && imageInfo?.data.exposedPorts && (
+                            <PortMappingInput
+                              control={control}
+                              name="ports"
+                              ports={imageInfo?.data.exposedPorts ?? []}
+                            />
+                          )}
+
+                          {imageInfoIsSuccess && imageInfo?.data.networks && (
+                            <FormField
+                              control={control}
+                              name="networks"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs">Networks</FormLabel>
+                                  <MultiSelect
+                                    popoverClassName="w-[var(--radix-popper-anchor-width)]"
+                                    searchable={false}
+                                    modalPopover={true}
+                                    options={(imageInfo.data.networks ?? []).map((n: string) => ({
+                                      label: n,
+                                      value: n,
+                                    }))}
+                                    onValueChange={field.onChange}
+                                    value={field.value ?? []}
+                                    placeholder="Select networks to connect this container to…"
+                                  />
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          )}
+                          {imageInfoIsSuccess && imageInfo?.data.volumes && (
+                            <VolumeMappingInput
+                              name="volumes"
+                              fields={volumesFields}
+                              control={control}
+                              append={appendVolume}
+                              remove={removeVolume}
+                              containerVolumes={imageInfo?.data.volumes ?? []}
+                            />
+                          )}
+
+                          <KeyValuePairInput
+                            name="envVars"
+                            fields={envVarsFields}
+                            control={control}
+                            append={appendEnvVar}
+                            remove={removeEnvVar}
+                            label="Environement variables"
+                            addButtonLabel="Add environement variable"
+                            keyPlaceHolder="Variable"
+                            valuePlaceHolder="Value"
+                          />
+                          <KeyValuePairInput
+                            name="labels"
+                            fields={labelFields}
+                            control={control}
+                            append={appendLabel}
+                            remove={removeLabel}
+                            label="Labels"
+                            addButtonLabel="Add label"
+                            keyPlaceHolder="com.example.foo"
+                            valuePlaceHolder="bar"
+                          />
+                        </TabsContent>
+                        <TabsContent value="resources" className="flex flex-col space-y-4">
+                          {imageInfoIsSuccess && imageInfo?.data.memTotal && (
+                            <FormField
+                              control={form.control}
+                              name="memoryReservation"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs">Memory Reserveration (MB)</FormLabel>
+                                  <div className="flex items-center space-x-2">
+                                    <FormControl>
+                                      <Slider
+                                        value={[field.value || 0]}
+                                        max={Math.round((imageInfo.data.memTotal as number) / 1024 / 1024)}
+                                        step={1}
+                                        className="w-[90%]"
+                                        onValueChange={(value) => field.onChange(value[0])}
+                                      />
+                                    </FormControl>
+                                    <span className="text-xs">{field.value} MB</span>
+                                  </div>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          )}
+                          {imageInfoIsSuccess && imageInfo?.data.memTotal && (
+                            <FormField
+                              control={form.control}
+                              name="memoryLimit"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs">Memory limit (MB)</FormLabel>
+                                  <div className="flex items-center space-x-2">
+                                    <FormControl>
+                                      <Slider
+                                        value={[field.value || 0]}
+                                        max={Math.round((imageInfo.data.memTotal as number) / 1024 / 1024)}
+                                        step={1}
+                                        className="w-[90%]"
+                                        onValueChange={(value) => field.onChange(value[0])}
+                                      />
+                                    </FormControl>
+                                    <span className="text-xs">{field.value} MB</span>
+                                  </div>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          )}
+                          {imageInfoIsSuccess && imageInfo?.data.cpuCount && (
+                            <FormField
+                              control={form.control}
+                              name="cpu"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs">CPU limit</FormLabel>
+                                  <div className="flex items-center space-x-2">
+                                    <FormControl>
+                                      <Slider
+                                        value={[field.value || 0]}
+                                        max={imageInfo.data.cpuCount as number}
+                                        step={0.1}
+                                        className="w-[90%]"
+                                        onValueChange={(value) => field.onChange(value[0])}
+                                      />
+                                    </FormControl>
+                                    <span className="text-xs">{field.value} CPUs</span>
+                                  </div>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          )}
+                          <FormField
+                            control={form.control}
+                            name="restartPolicy"
+                            render={({ field }) => (
+                              <FormItem>
+                                <div className="flex items-center">
+                                  <FormLabel className="text-xs">Restart Policy</FormLabel>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <Info className="ml-1 h-3 w-3" />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>
+                                          The behavior to apply when the container exits. The default is not to restart
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </div>
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                  <FormControl>
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue placeholder="Select a restart policy" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent className="bg-background">
+                                    {RESTART_POLICIES.map((policy) => (
+                                      <SelectItem key={policy.value} value={policy.value}>
+                                        {policy.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="autoRemove"
+                            render={({ field }) => (
+                              <FormItem className="col-span-2 flex flex-row items-center justify-between">
+                                <div>
+                                  <FormLabel className="text-xs">Auto-remove on exit</FormLabel>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <Info className="ml-1 h-3 w-3" />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>
+                                          Automatically remove the container when the container&apos;s process exits.
+                                          This has no effect if RestartPolicy is set.
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </div>
+                                <FormControl>
+                                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                </FormControl>
+                                <FormMessage className="text-xs" />
+                              </FormItem>
+                            )}
+                          />
+                        </TabsContent>
+                        <TabsContent value="commands" className="flex flex-col space-y-2">
+                          <FormField
+                            control={form.control}
+                            name="workingdir"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
+                                <div className="flex-1">
+                                  <FormLabel className='text-xs'>Working Directory</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="text"
+                                      placeholder="e.g. /myapp"
+                                      className="rounded-sm focus-visible:ring-transparent"
+                                      {...field}
+                                    />
+                                  </FormControl>
+
+                                  <FormMessage className="text-xs" />
+                                </div>
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="user"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
+                                <div className="flex-1">
+                                  <FormLabel className='text-xs'>User</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="text"
+                                      placeholder="e.g. myuser"
+                                      className="rounded-sm focus-visible:ring-transparent"
+                                      {...field}
+                                    />
+                                  </FormControl>
+
+                                  <FormMessage className="text-xs" />
+                                </div>
+                              </FormItem>
+                            )}
+                          />
+                          <ValueInput
+                            name="entryPoint"
+                            fields={entryPointFields}
+                            control={control}
+                            append={appendEntryPoint}
+                            remove={removeEntryPoint}
+                            label="Entry Point"
+                            addButtonLabel="Add entry point"
+                            valuePlaceHolder="e.g. /bin/sh"
+                            helpText="The entry point for the container as a string or an array of strings."
+                          />
+
+                          <ValueInput
+                            name="command"
+                            fields={commandFields}
+                            control={control}
+                            append={appendCommand}
+                            remove={removeCommand}
+                            label="Command"
+                            addButtonLabel="Add command"
+                            valuePlaceHolder="e.g. --housekeeping_interval=5s"
+                            helpText="Command to run specified as a string or an array of strings."
+                          />
+                        </TabsContent>
+                      </Tabs>
                     </div>
                   </CollapsibleContent>
                 </div>

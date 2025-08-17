@@ -823,6 +823,16 @@ export interface ImageInfoResult {
   volumes: string[];
   networks: string[];
   exposedPorts: string[];
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  memTotal: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  cpuCount: number | string;
 }
 
 export interface ImageManifest {

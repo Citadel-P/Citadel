@@ -9,16 +9,17 @@ import { MoreHorizontal, Pencil, Trash } from 'lucide-react';
 import { RegistryView } from '@/api/_generated';
 import { useNavigate } from 'react-router';
 import { useRegistriesContext } from './RegistriesContext';
-import { useCallback } from 'react';
+import { startTransition, useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
 
 const DropdownTableMenu = ({ registry }: { registry: RegistryView }) => {
   const navigate = useNavigate();
   const { setDialogData } = useRegistriesContext();
 
-  // Memoized function to open the delete dialog
   const openDialog = useCallback(() => {
-    setDialogData({ open: true, currentSelection: [registry] });
+    startTransition(() => {
+      setDialogData({ open: true, currentSelection: [registry] });
+    });
   }, [setDialogData, registry]);
 
   return (
@@ -36,9 +37,7 @@ const DropdownTableMenu = ({ registry }: { registry: RegistryView }) => {
           icon={<Pencil className="mr-2 h-3 w-3" />}
           label="Edit"
         />
-
         <DropdownMenuSeparator />
-
         {/* Delete Action */}
         <ActionMenuItem
           onClick={openDialog}

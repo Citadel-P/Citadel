@@ -1,6 +1,6 @@
 import { RegistryView } from '@/api/_generated';
 import { useGETRegistries } from './hooks/useGETRegistries';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDELETERegistries } from './hooks/useDELETERegistries';
 import { toast } from 'sonner';
 import { useDialogState } from '@/hooks/useDialogState';
@@ -35,23 +35,26 @@ export const RegistriesProvider: React.FC<{ children?: React.ReactNode }> = ({ c
     }
   }, [deleteIsSuccess, deletedRegistries, dialogData.currentSelection, setDialogData]);
 
-  const requestDelete = (ids: string[]) => {
-    mutate({ ids });
-  };
-
-  return (
-    <RegistriesContext.Provider
-      value={{
-        isLoading,
-        deleteIsPending,
-        registries,
-        selectedRows,
-        requestDelete,
-        setSelectedRows,
-        dialogData,
-        setDialogData,
-      }}>
-      {children}
-    </RegistriesContext.Provider>
+  const requestDelete = useCallback(
+    (ids: string[]) => {
+      mutate({ ids });
+    },
+    [mutate],
   );
+
+  const contextValue = useMemo(
+    () => ({
+      isLoading,
+      deleteIsPending,
+      registries,
+      selectedRows,
+      requestDelete,
+      setSelectedRows,
+      dialogData,
+      setDialogData,
+    }),
+    [isLoading, deleteIsPending, registries, selectedRows, requestDelete, setSelectedRows, dialogData, setDialogData],
+  );
+
+  return <RegistriesContext.Provider value={contextValue}>{children}</RegistriesContext.Provider>;
 };
