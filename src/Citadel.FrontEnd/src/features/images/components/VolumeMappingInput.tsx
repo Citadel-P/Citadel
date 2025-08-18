@@ -79,6 +79,7 @@ const VolumeMappingInput = ({ control, name, fields, append, remove, containerVo
       </div>
       <Button
         variant="ghost"
+        type='button'
         size="sm"
         className="text-xs text-foreground/70"
         onClick={() => append({ hostPath: '', containerPath: '' })}>

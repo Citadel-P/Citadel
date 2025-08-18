@@ -140,4 +140,9 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory, IObject
             yield return pooledContainer;
         }
     }
+
+    public Task<Result<string>> CreateAsync(CreateContainerCommand createContainerCommand, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
 }

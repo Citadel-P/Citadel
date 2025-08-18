@@ -115,6 +115,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(ContainersName + "_" + nameof(Containers.Inspect));
 
+        containers.MapPost("/", Containers.Create)
+            .WithSummary("Create a container")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName(ContainersName + "_" + nameof(Containers.Create));
+
         containers.MapPatch("start", Containers.StartContainers)
             .WithSummary("Starts the given container(s)")
             .ProducesValidationProblem()

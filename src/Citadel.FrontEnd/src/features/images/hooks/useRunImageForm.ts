@@ -2,12 +2,19 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Constants } from '@/lib/constants';
+import { ContainerRestartPolicy } from '@/api/_generated';
 
 export const useRunImageForm = () => {
   const formSchema = z
     .object({
-      name: z.string().optional(),
-      workingdir: z.string().optional(),
+      name: z
+        .string()
+        .regex(new RegExp(Constants.validNameIdentifier), {
+          message: 'Must be a valid name, no whitespace or special chars are allowed.',
+        })
+        .optional()
+        .or(z.literal('')),
+      workingDir: z.string().optional(),
       user: z.string().optional(),
       labels: z.array(z.object({ key: z.string(), value: z.string() })).optional(),
       envVars: z.array(z.object({ key: z.string(), value: z.string() })).optional(),
@@ -41,8 +48,15 @@ export const useRunImageForm = () => {
       networks: z.array(z.string()).optional(),
       memoryLimit: z.number().optional(),
       memoryReservation: z.number().optional(),
-      cpu: z.number().optional(),
-      restartPolicy: z.enum(['no', 'always', 'unless-stopped', 'on-failure']).optional(),
+      cpuLimit: z.number().optional(),
+      restartPolicy: z
+        .enum([
+          ContainerRestartPolicy.No,
+          ContainerRestartPolicy.Always,
+          ContainerRestartPolicy.UnlessStopped,
+          ContainerRestartPolicy.OnFailure,
+        ])
+        .optional(),
       entryPoint: z.array(z.object({ value: z.string() })).optional(),
       command: z.array(z.object({ value: z.string() })).optional(),
     })
@@ -56,7 +70,7 @@ export const useRunImageForm = () => {
     mode: 'all',
     defaultValues: {
       name: '',
-      workingdir: '',
+      workingDir: '',
       user: '',
       labels: [],
       envVars: [],
@@ -65,8 +79,8 @@ export const useRunImageForm = () => {
       networks: [],
       memoryReservation: 0,
       memoryLimit: 0,
-      cpu: 0,
-      restartPolicy: 'no',
+      cpuLimit: 0,
+      restartPolicy: ContainerRestartPolicy.No,
       autoRemove: false,
       entryPoint: [],
       command: [],

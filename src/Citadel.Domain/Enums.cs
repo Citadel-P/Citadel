@@ -146,3 +146,11 @@ public enum PlatformConnectorType
     Local,
     Agent
 }
+
+public enum ContainerRestartPolicy
+{
+    No = 0,
+    Always,
+    OnFailure,
+    UnlessStopped
+}

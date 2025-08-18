@@ -136,6 +136,7 @@ internal static class WebApiModule
         converters.Add(new JsonStringEnumConverter<GhcrAccountType>());
         converters.Add(new JsonStringEnumConverter<ContainerStateStatus>());
         converters.Add(new JsonStringEnumConverter<PlatformConnectorType>());
+        converters.Add(new JsonStringEnumConverter<ContainerRestartPolicy>());
     }
 }
 

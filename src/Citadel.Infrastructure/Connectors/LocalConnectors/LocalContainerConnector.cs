@@ -1,6 +1,7 @@
 ﻿using System.Runtime.CompilerServices;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Hosting.Common.Extensions;
 using Hosting.Common.ObjectPoolManager;
 using Hosting.DockerClient.Models.Containers;
 using Hosting.DockerClient.Services;
@@ -12,6 +13,30 @@ namespace Infrastructure.Connectors.LocalConnectors;
 
 internal class LocalContainerConnector(IContainerService containerService, IObjectPoolManager objectPoolManager) : IContainerConnector
 {
+    public Task<Result<string>> CreateAsync(CreateContainerCommand createContainerCommand, CancellationToken cancellationToken)
+    {
+        var command = new CreateContainersCommand
+        (
+            ImageId: createContainerCommand.ImageId,
+            Name: createContainerCommand.Name,
+            WorkingDir: createContainerCommand.WorkingDir,
+            User: createContainerCommand.User,
+            MemoryLimit: createContainerCommand.MemoryLimit,
+            CpuQuota: createContainerCommand.CpuQuota,
+            MemoryReservation: createContainerCommand.MemoryReservation,
+            AutoRemove: createContainerCommand.AutoRemove,
+            RestartPolicy: createContainerCommand.RestartPolicy?.Map(),
+            Labels: createContainerCommand.Labels,
+            Networks: createContainerCommand.Networks,
+            EntryPoint: createContainerCommand.EntryPoint,
+            Command: createContainerCommand.Command,
+            EnvVars: createContainerCommand.EnvVars,
+            Ports: createContainerCommand.Ports,
+            Volumes: createContainerCommand.Volumes
+        );
+        return containerService.CreateAsync(command, cancellationToken);
+    }
+
     public Task<Result> DeleteAsync(DeleteContainerCommand deleteContainerCommand, CancellationToken cancellationToken)
         => containerService.DeleteAsync( new DeleteContainersCommand
             (

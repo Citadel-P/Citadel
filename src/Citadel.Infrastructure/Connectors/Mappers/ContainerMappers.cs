@@ -790,4 +790,14 @@ internal static class ContainerMappers
             Domain.ContainerAction.UNPAUSE => Hosting.DockerClient.Models.Containers.ContainerAction.UNPAUSE,
             _ => Hosting.DockerClient.Models.Containers.ContainerAction.STOP
         };
+
+    public static Hosting.DockerClient.RestartPolicyName Map(this ContainerRestartPolicy name)
+        => name switch
+        {
+            ContainerRestartPolicy.No => Hosting.DockerClient.RestartPolicyName.No,
+            ContainerRestartPolicy.Always => Hosting.DockerClient.RestartPolicyName.Always,
+            ContainerRestartPolicy.OnFailure => Hosting.DockerClient.RestartPolicyName.OnFailure,
+            ContainerRestartPolicy.UnlessStopped => Hosting.DockerClient.RestartPolicyName.UnlessStopped,
+            _ => Hosting.DockerClient.RestartPolicyName.No
+        };
 }

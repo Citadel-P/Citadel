@@ -25,5 +25,5 @@ export class Constants {
    * A regular expression for validating a name identifier, which can contain letters, numbers, and hyphens.
    * e.g., 'my-container', 'test1', 'my-app-2'
    */
-  static validNameIdentifier = '^[a-zA-Z0-9-]+$';
+  static validNameIdentifier = '^[a-zA-Z0-9-_]+$';
 }

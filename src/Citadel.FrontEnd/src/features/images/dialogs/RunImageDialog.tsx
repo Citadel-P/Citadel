@@ -21,19 +21,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
 import ValueInput from '@/components/ui/ValueInput';
+import { usePOSTContainer } from '../hooks/usePOSTContainer';
+import { ContainerRestartPolicy, CreateContainerInput } from '@/api/_generated';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router';
+import { AlertMessage } from '@/components/ui/alert-message';
 
 export const RunImageDialog = () => {
+  const navigate = useNavigate();
   const { currentPlatform } = useAppContext();
   const { runDialogData, setRunDialogData } = useImagesContext();
+  const { mutate, isPending, isSuccess, data, validationErrors, reset } = usePOSTContainer();
+  const { form } = useRunImageForm();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const {
     data: imageInfo,
     isLoading: imageInfoIsLoading,
     isSuccess: imageInfoIsSuccess,
   } = useGETImageInfo(currentPlatform?.id, runDialogData.currentSelection?.at(0)?.id);
-  const { form } = useRunImageForm();
   const { control } = form;
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const runIsPending = false;
 
   useEffect(() => {
     if (imageInfoIsSuccess) {
@@ -43,6 +49,14 @@ export const RunImageDialog = () => {
       }
     }
   }, [imageInfo, imageInfoIsSuccess, form]);
+
+  useEffect(() => {
+    if (isSuccess && data?.data) {
+      toast.success('Container started successfully!');
+      navigate(`/containers/${data?.data.id.slice(0, 12)}/logs`);
+    }
+  }, [isSuccess, data, navigate, currentPlatform]);
+
   // For env varaibles
   const {
     fields: envVarsFields,
@@ -89,21 +103,29 @@ export const RunImageDialog = () => {
     name: 'command',
   });
 
-  function onSubmit(values: any) {
+  function onSubmit(values: CreateContainerInput | Partial<CreateContainerInput>) {
     const finalValues = {
       ...values,
       volumes: values.volumes
-        .filter((v: any) => v.hostPath && v.containerPath)
+        ?.filter((v: any) => v.hostPath && v.containerPath)
         .map((v: any) => `${v.hostPath}:${v.containerPath}`),
-      entryPoint: values.entryPoint.map((e: any) => e.value),
-      command: values.command.map((c: any) => c.value),
+      entryPoint: values.entryPoint?.map((e: any) => e.value),
+      command: values.command?.map((c: any) => c.value),
     };
-    console.log(finalValues);
+    const envVarsArr = (values.envVars ?? []).map(({ key, value }) => `${key}=${value}`);
+    const labelsObj = Object.fromEntries((values.labels ?? []).map(({ key, value }) => [key, value]));
+    finalValues.envVars = envVarsArr;
+    finalValues.labels = labelsObj;
+    finalValues.platformId = currentPlatform?.id;
+    finalValues.imageId = runDialogData.currentSelection?.at(0)?.id;
+
+    mutate(finalValues);
   }
 
   function onOpenChange(open: boolean) {
     if (!open) {
       form.reset();
+      reset();
       setAdvancedOpen(false);
       labelFields.map((_, i) => removeLabel(i));
       envVarsFields.map((_, i) => removeEnvVar(i));
@@ -115,10 +137,10 @@ export const RunImageDialog = () => {
   }
 
   const RESTART_POLICIES = [
-    { value: 'no', label: 'No' },
-    { value: 'always', label: 'Always' },
-    { value: 'unless-stopped', label: 'Unless Stopped' },
-    { value: 'on-failure', label: 'On Failure' },
+    { value: ContainerRestartPolicy.No, label: 'No' },
+    { value: ContainerRestartPolicy.Always, label: 'Always' },
+    { value: ContainerRestartPolicy.UnlessStopped, label: 'Unless Stopped' },
+    { value: ContainerRestartPolicy.OnFailure, label: 'On Failure' },
   ];
 
   return (
@@ -139,7 +161,7 @@ export const RunImageDialog = () => {
                     <button
                       type="button"
                       aria-expanded={advancedOpen}
-                      className="flex items-center justify-between w-full px-2 py-4 rounded transition-colors hover:bg-accent group focus:outline-none mb-0">
+                      className="flex items-center justify-between w-full px-2 py-4 rounded transition-colors bg-card/50 hover:bg-accent group focus:outline-none mb-0">
                       <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
                         Optional settings
                       </span>
@@ -151,6 +173,7 @@ export const RunImageDialog = () => {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div className="flex flex-col space-y-2 py-2">
+                      {validationErrors && <AlertMessage type="error">{validationErrors}</AlertMessage>}
                       <Tabs defaultValue="general">
                         <TabsList className="w-full justify-start bg-muted/20 rounded-sm">
                           <TabsTrigger value="general">General</TabsTrigger>
@@ -298,7 +321,7 @@ export const RunImageDialog = () => {
                           {imageInfoIsSuccess && imageInfo?.data.cpuCount && (
                             <FormField
                               control={form.control}
-                              name="cpu"
+                              name="cpuLimit"
                               render={({ field }) => (
                                 <FormItem>
                                   <FormLabel className="text-xs">CPU limit</FormLabel>
@@ -389,11 +412,11 @@ export const RunImageDialog = () => {
                         <TabsContent value="commands" className="flex flex-col space-y-2">
                           <FormField
                             control={form.control}
-                            name="workingdir"
+                            name="workingDir"
                             render={({ field }) => (
                               <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
                                 <div className="flex-1">
-                                  <FormLabel className='text-xs'>Working Directory</FormLabel>
+                                  <FormLabel className="text-xs">Working Directory</FormLabel>
                                   <FormControl>
                                     <Input
                                       type="text"
@@ -414,7 +437,7 @@ export const RunImageDialog = () => {
                             render={({ field }) => (
                               <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
                                 <div className="flex-1">
-                                  <FormLabel className='text-xs'>User</FormLabel>
+                                  <FormLabel className="text-xs">User</FormLabel>
                                   <FormControl>
                                     <Input
                                       type="text"
@@ -440,7 +463,6 @@ export const RunImageDialog = () => {
                             valuePlaceHolder="e.g. /bin/sh"
                             helpText="The entry point for the container as a string or an array of strings."
                           />
-
                           <ValueInput
                             name="command"
                             fields={commandFields}
@@ -469,10 +491,10 @@ export const RunImageDialog = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={runIsPending || imageInfoIsLoading}
+                  disabled={isPending || imageInfoIsLoading}
                   className="ml-2 bg-primary hover:bg-primary/85 text-background font-medium rounded-sm text-sm inline-flex items-center px-2 py-2">
                   Run
-                  {runIsPending && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
+                  {isPending && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
                 </button>
               </div>
             </DialogFooter>

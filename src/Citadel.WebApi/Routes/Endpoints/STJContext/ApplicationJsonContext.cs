@@ -121,6 +121,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(IEnumerable<DockerHubImageResult>))]
 [JsonSerializable(typeof(ContainerInfoView))]
 [JsonSerializable(typeof(ImageInfoResult))]
+[JsonSerializable(typeof(CreateContainerInput))]
+[JsonSerializable(typeof(CreateContainerView))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

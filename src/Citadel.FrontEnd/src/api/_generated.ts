@@ -74,6 +74,13 @@ export enum ContainerStateStatus {
   Offline = "Offline",
 }
 
+export enum ContainerRestartPolicy {
+  No = "No",
+  Always = "Always",
+  OnFailure = "OnFailure",
+  UnlessStopped = "UnlessStopped",
+}
+
 export interface AttestationData {
   for: null | string;
 }
@@ -283,6 +290,43 @@ export interface ContainerView {
 
 export interface ContainersView {
   containers: ContainerView[];
+}
+
+export interface CreateContainerInput {
+  /** @format uuid */
+  platformId: string;
+  imageId: string;
+  name: null | string;
+  workingDir: null | string;
+  user: null | string;
+  /**
+   * @format float
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  memoryLimit: null | number | string;
+  /**
+   * @format float
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  cpuLimit: null | number | string;
+  /**
+   * @format float
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  memoryReservation: null | number | string;
+  autoRemove: null | boolean;
+  restartPolicy: ContainerRestartPolicy;
+  labels: null | object;
+  envVars: null | any[];
+  ports: null | any[];
+  volumes: null | any[];
+  networks: null | any[];
+  entryPoint: null | any[];
+  command: null | any[];
+}
+
+export interface CreateContainerView {
+  id: string;
 }
 
 export interface CreateNetworkInput {
@@ -1953,6 +1997,66 @@ export class Api<
      * No description
      *
      * @tags Containers
+     * @name ContainersCreate
+     * @summary Create a container
+     * @request POST:/api/v1/containers
+     * @secure
+     * @response `200` `CreateContainerView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    containersCreate: (
+      data: CreateContainerInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        CreateContainerView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/containers`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Containers
+     * @name ContainersDeleteContainers
+     * @summary Delete the given container(s)
+     * @request DELETE:/api/v1/containers
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    containersDeleteContainers: (
+      data: DeleteContainersRequest,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/containers`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Containers
      * @name ContainersStartContainers
      * @summary Starts the given container(s)
      * @request PATCH:/api/v1/containers/start
@@ -2068,34 +2172,6 @@ export class Api<
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/unpause`,
         method: "PATCH",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Containers
-     * @name ContainersDeleteContainers
-     * @summary Delete the given container(s)
-     * @request DELETE:/api/v1/containers
-     * @secure
-     * @response `204` `void` No Content
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    containersDeleteContainers: (
-      data: DeleteContainersRequest,
-      params: RequestParams = {},
-    ) =>
-      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/containers`,
-        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
