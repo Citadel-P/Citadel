@@ -4,7 +4,7 @@ using Domain.Contracts.Resources.Volumes;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.Connectors.Mappers;
-using Infrastructure.Services;
+using Infrastructure.Repositories;
 using LightResults;
 
 namespace Infrastructure.Connectors.AgentConnectors;

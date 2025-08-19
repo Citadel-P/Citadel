@@ -1,12 +1,14 @@
 ﻿using System.Collections.Concurrent;
+using Grpc.Core;
 using Grpc.Net.Client;
+using Grpc.Net.Client.Configuration;
 using static Citadel.Agent.Containers.V1.ContainerService;
-using static Citadel.Agent.Platforms.V1.PlatformService;
 using static Citadel.Agent.Images.V1.ImageService;
 using static Citadel.Agent.Networks.V1.NetworkService;
+using static Citadel.Agent.Platforms.V1.PlatformService;
 using static Citadel.Agent.Volumes.V1.VolumeService;
 
-namespace Infrastructure.Services;
+namespace Infrastructure.Repositories;
 
 /// <summary>
 /// Factory to create gRPC clients (native gRPC factory does not support address change at runtime; see https://github.com/grpc/grpc-dotnet/issues/1641)
@@ -43,11 +45,39 @@ internal class GrpcClientFactory : IGrpcClientFactory
     private TClient GetOrCreateClient<TClient>(string address, Func<GrpcChannel, TClient> factory)
     {
         // Cache channel per address
-        var channel = _channelCache.GetOrAdd(address, GrpcChannel.ForAddress);
+        var channel = _channelCache.GetOrAdd(address, CreateChannel);
 
         // Combine client type + address as cache key
         var key = (typeof(TClient), address);
         return (TClient)_clientCache.GetOrAdd(key, _ => factory(channel));
+    }
+
+    private static GrpcChannel CreateChannel(string address)
+    {
+        return GrpcChannel.ForAddress(address, new GrpcChannelOptions
+        {
+            ServiceConfig = new ServiceConfig
+            {
+                MethodConfigs =
+                {
+                    new MethodConfig
+                    {
+                        Names = { MethodName.Default }, // applies to all methods
+                        RetryPolicy = new RetryPolicy
+                        {
+                            MaxAttempts = 3,
+                            InitialBackoff = TimeSpan.FromMilliseconds(200),
+                            MaxBackoff = TimeSpan.FromSeconds(2),
+                            BackoffMultiplier = 2,
+                            RetryableStatusCodes =
+                            {
+                                StatusCode.Unavailable // network/transient failures
+                            }
+                        }
+                    }
+                }
+            }
+        });
     }
 
     private static string NormalizeAddress(string address)
@@ -59,7 +89,6 @@ internal class GrpcClientFactory : IGrpcClientFactory
             address.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             return address;
 
-        // Default to http
         return $"http://{address}";
     }
 }

@@ -2,7 +2,7 @@ import { Play, Pause, RotateCcw, Ban, Trash } from 'lucide-react';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
 import { ContainerView } from '@/api/_generated';
-import { IDeleteDialogData } from '@/hooks/useDialogState';
+import { IDialogData } from '@/hooks/useDialogState';
 import { DockerContainerView } from '@/api/models';
 import { ContainerDropdownActions } from './ContainerDropdownActions';
 
@@ -11,7 +11,7 @@ export const ContainersActionButtons = ({
   setDialogData,
 }: {
   selectedContainers: ContainerView[] | DockerContainerView[] | undefined;
-  setDialogData: (_: IDeleteDialogData<ContainerView | DockerContainerView>) => void;
+  setDialogData: (_: IDialogData<ContainerView | DockerContainerView>) => void;
 }) => {
   const { availableActions, isPending, requestPatch } = useAvailableActions(selectedContainers);
 

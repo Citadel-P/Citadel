@@ -102,6 +102,7 @@ internal sealed class DockerDaemonEventJob(
         if (eventInfo.Container != null)
         {
             var container = eventInfo.Container.Map(platformId);
+            platformContainerCache.TryAddContainer(platformId, container.ContainerId, container.Id);
 
             await using var scope = scopeFactory.CreateAsyncScope();
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -110,7 +111,6 @@ internal sealed class DockerDaemonEventJob(
             await uow.CommitAsync();
 
             await SendContainerEventChanges(container, eventInfo.Action);
-            platformContainerCache.TryAddContainer(platformId, container.ContainerId, container.Id);
         }
     }
 
@@ -137,11 +137,12 @@ internal sealed class DockerDaemonEventJob(
         var existingDestroy = await uow.Containers.GetByIdAsync(eventInfo.ContainerId, cancellationToken);
         if (existingDestroy != null)
         {
+            platformContainerCache.TryRemoveContainer(platformId, existingDestroy.ContainerId);
+
             await uow.Containers.DeleteAsync([existingDestroy.Id], cancellationToken);
             await uow.CommitAsync();
 
             await SendContainerEventChanges(existingDestroy, eventInfo.Action);
-            platformContainerCache.TryRemoveContainer(platformId, existingDestroy.ContainerId);
         }
     }
 

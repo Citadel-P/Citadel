@@ -25,6 +25,6 @@ internal class GetContainerByIdHandler(IUnitOfWork unitOfWork) : IQueryHandler<G
     public async ValueTask<Result<Container>> Handle(GetContainerById query, CancellationToken cancellationToken)
     {
         var container = await unitOfWork.Containers.GetByIdAsync(query.ContainerId, cancellationToken);
-        return container ?? Result.Failure<Container>(new NotFoundError("Platform does not exist"));
+        return container ?? Result.Failure<Container>(new NotFoundError("Container does not exist"));
     }
 }

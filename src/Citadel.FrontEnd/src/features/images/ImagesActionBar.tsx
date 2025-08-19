@@ -1,13 +1,21 @@
-import { SearchCode, Trash } from 'lucide-react';
+import { Play, SearchCode, Trash } from 'lucide-react';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
 import { useImagesContext } from './ImagesContext';
 import { useLayoutContext } from '@/layout/LayoutContext';
 
 export const ImagesActionBar = () => {
-  const { setDialogData, selectedRows, localImages: images, setSheetOpen, setCurrentImage } = useImagesContext();
+  const {
+    setDialogData,
+    selectedRows,
+    localImages: images,
+    setSheetOpen,
+    setCurrentImage,
+    setRunDialogData,
+  } = useImagesContext();
   const { sidebarMinimized } = useLayoutContext();
 
   const actions: ImageActionsState = {
+    canRun: selectedRows?.length === 1,
     canInspect: selectedRows?.length === 1,
     canDelete: (selectedRows?.length ?? 0) > 0,
   };
@@ -31,11 +39,18 @@ export const ImagesActionBar = () => {
       </div>
       <div className="mt-1">
         <ActionBarButton
+          onClick={() => setRunDialogData({ open: true, currentSelection: [selectedRows[0]] })}
+          disabled={!actions.canRun}
+          icon={Play}
+          label="Run"
+          className="rounded-l-lg"
+          ariaLabel="Run selected image"
+        />
+        <ActionBarButton
           onClick={handleInspectClick}
           disabled={!actions.canInspect}
           icon={SearchCode}
           label="Inspect"
-          className="rounded-l-lg"
           ariaLabel="Inspect selected image"
         />
         <ActionBarButton
@@ -52,6 +67,7 @@ export const ImagesActionBar = () => {
 };
 
 type ImageActionsState = {
+  canRun: boolean;
   canInspect: boolean;
   canDelete: boolean;
 };

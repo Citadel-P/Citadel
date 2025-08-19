@@ -1,6 +1,6 @@
 import { ContainerView, DeleteContainersRequest } from '@/api/_generated';
 import { createContext } from 'react';
-import { IDeleteDialogData } from '@/hooks/useDialogState';
+import { IDialogData } from '@/hooks/useDialogState';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { DockerContainerView } from '@/api/models';
 
@@ -8,8 +8,8 @@ interface IContext {
   isLoading: boolean;
   platformId: string | undefined;
   containers: ContainerView[] | undefined;
-  dialogData: IDeleteDialogData<ContainerView | DockerContainerView>;
-  setDialogData: (data: IDeleteDialogData<ContainerView | DockerContainerView>) => void;
+  dialogData: IDialogData<ContainerView | DockerContainerView>;
+  setDialogData: (data: IDialogData<ContainerView | DockerContainerView>) => void;
   selectedRows: ContainerView[] | undefined;
   setSelectedRows: (containers: ContainerView[] | undefined) => void;
   requestDelete: (data: DeleteContainersRequest) => void;

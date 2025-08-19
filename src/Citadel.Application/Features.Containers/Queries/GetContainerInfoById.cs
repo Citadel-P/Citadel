@@ -24,7 +24,21 @@ internal class GetContainerInfoByIdHandler(IUnitOfWork unitOfWork) : IQueryHandl
 {
     public async ValueTask<Result<ContainerInfo>> Handle(GetContainerInfoById query, CancellationToken cancellationToken)
     {
-        var container = await unitOfWork.Containers.GetContainerInfoAsync(query.ContainerId, cancellationToken);
-        return container ?? Result.Failure<ContainerInfo>(new NotFoundError("Container does not exist"));
+        // Retry briefly when the container is not yet in the database. 
+        // This handles the gap between Docker container creation and the daemon job inserting the record.
+        const int maxAttempts = 5;
+        const int delayMs = 200;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            var container = await unitOfWork.Containers.GetContainerInfoAsync(query.ContainerId, cancellationToken);
+            if (container != null)
+                return container;
+
+            if (attempt < maxAttempts)
+                await Task.Delay(delayMs, cancellationToken);
+        }
+
+        return Result.Failure<ContainerInfo>(new NotFoundError("Container does not exist"));
     }
 }

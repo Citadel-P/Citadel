@@ -8,7 +8,7 @@ using Grpc.Core;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.ObjectPoolManager;
 using Infrastructure.Connectors.Mappers;
-using Infrastructure.Services;
+using Infrastructure.Repositories;
 using LightResults;
 using static Citadel.Agent.Containers.V1.ContainerService;
 

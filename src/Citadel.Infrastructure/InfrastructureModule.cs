@@ -16,7 +16,6 @@ using Infrastructure.GithubCr;
 using Infrastructure.HttpClients.Serializer;
 using Infrastructure.Persistence;
 using Infrastructure.Repositories;
-using Infrastructure.Services;
 using Infrastructure.TypeHandlers;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -80,9 +79,11 @@ public static class InfrastructureModule
         => services
             .AddRefitClient<IDockerHubApi>(refitSettings)
                 .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://hub.docker.com"))
+                .AddPolicyHandler(Configuration.GetRetryPolicy())
             .Services
             .AddRefitClient<IGithubCrApi>(refitSettings)
                 .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://api.github.com"))
+                .AddPolicyHandler(Configuration.GetRetryPolicy())
             .Services;
 
     /// <summary>
