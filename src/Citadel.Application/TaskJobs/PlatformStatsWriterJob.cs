@@ -130,9 +130,10 @@ internal class PlatformStatsWriterJob(
             if (existing.PlatformDescriptor is DockerPlatformDescriptor dockerPlatform)
             {
                 descriptor = dockerPlatform.Create(
-                    containersRunning: lastBatch.Value.ContainersRunning,
-                    containersPaused: lastBatch.Value.ContainersPaused,
-                    containersStopped: lastBatch.Value.ContainersStopped);
+                    containerCount: lastBatch.Value.PlatformStat.ContainerCount,
+                    containersRunning: lastBatch.Value.PlatformStat.ContainersRunning,
+                    containersPaused: lastBatch.Value.PlatformStat.ContainersPaused,
+                    containersStopped: lastBatch.Value.PlatformStat.ContainersStopped);
             }
             else if (existing.PlatformDescriptor is DockerSwarmPlatformDescriptor swarmDescriptor)
             {

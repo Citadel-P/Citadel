@@ -800,4 +800,14 @@ internal static class ContainerMappers
             ContainerRestartPolicy.UnlessStopped => Hosting.DockerClient.RestartPolicyName.UnlessStopped,
             _ => Hosting.DockerClient.RestartPolicyName.No
         };
+
+    public static Citadel.Agent.Containers.V1.RestartPolicy Map(this ContainerRestartPolicy? restartPolicy)
+        => restartPolicy switch
+        {
+            ContainerRestartPolicy.No => Citadel.Agent.Containers.V1.RestartPolicy.No,
+            ContainerRestartPolicy.Always => Citadel.Agent.Containers.V1.RestartPolicy.Always,
+            ContainerRestartPolicy.OnFailure => Citadel.Agent.Containers.V1.RestartPolicy.OnFailure,
+            ContainerRestartPolicy.UnlessStopped => Citadel.Agent.Containers.V1.RestartPolicy.UnlessStopped,
+            _ => Citadel.Agent.Containers.V1.RestartPolicy.No
+        };
 }

@@ -1,5 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 using Citadel.Agent.Containers.V1;
+using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
@@ -49,6 +50,40 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory, IObject
         catch (RpcException ex)
         {
             return Result.Failure<ContainerInspectionInfo>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+        }
+    }
+
+    public async Task<Result<string>> CreateAsync(CreateContainerCommand createContainerCommand, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var containerClient = clientFactory.GetContainerClient(createContainerCommand.PlatformAddress);
+            var request = new CreateContainerRequest()
+            {
+                ImageId = createContainerCommand.ImageId,
+                Name = createContainerCommand.Name,
+                WorkingDir = createContainerCommand.WorkingDir,
+                User = createContainerCommand.User,
+                MemoryLimit = createContainerCommand.MemoryLimit,
+                CpuQuota = createContainerCommand.CpuQuota,
+                MemoryReservation = createContainerCommand.MemoryReservation,
+                AutoRemove = createContainerCommand.AutoRemove ?? false,
+                RestartPolicy = createContainerCommand.RestartPolicy.Map(),
+                Labels = { createContainerCommand.Labels ?? [] },
+                EnvVars = { createContainerCommand.EnvVars ?? [] },
+                Ports = { createContainerCommand.Ports ?? [] },
+                Volumes = { createContainerCommand.Volumes ?? [] },
+                Networks = { createContainerCommand.Networks ?? [] },
+                EntryPoint = { createContainerCommand.EntryPoint ?? [] },
+                Command = { createContainerCommand.Command ?? [] }
+            };
+
+            var result = await containerClient.CreateAsync(request, cancellationToken: cancellationToken);
+            return result.ContainerId;
+        }
+        catch (RpcException ex)
+        {
+            return Result.Failure<string>(new ClientRpcException($"An RPC exception occurred: {ex.Message}", ex.StatusCode));
         }
     }
 
@@ -141,8 +176,4 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory, IObject
         }
     }
 
-    public Task<Result<string>> CreateAsync(CreateContainerCommand createContainerCommand, CancellationToken cancellationToken)
-    {
-        throw new NotImplementedException();
-    }
 }

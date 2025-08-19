@@ -21,11 +21,11 @@ public sealed record PlatformStatsBatchView(
             MemTotal: platform.MemTotal,
             ImageCount: platform.ImageCount,
             VolumeCount: platform.VolumeCount,
-            ContainerCount: platform.ContainerCount,
+            ContainerCount: platform.PlatformStat.ContainerCount,
             NetworkCount: platform.NetworkCount,
-            ContainersRunning: platform.ContainersRunning,
-            ContainersPaused: platform.ContainersPaused,
-            ContainersStopped: platform.ContainersStopped,
+            ContainersRunning: platform.PlatformStat.ContainersRunning,
+            ContainersPaused: platform.PlatformStat.ContainersPaused,
+            ContainersStopped: platform.PlatformStat.ContainersStopped,
             Stat: Map(platform.PlatformStat));
     }
 

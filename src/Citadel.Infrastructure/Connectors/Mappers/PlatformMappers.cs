@@ -22,11 +22,11 @@ internal static class PlatformMappers
                 OsType: platformInfo.OsType,
                 OsVersion: platformInfo.OsVersion,
                 Architecture: platformInfo.Architecture,
-                ContainerCount: platformInfo.ContainerCount,
                 OperatingSystem: platformInfo.OperatingSystem,
-                ContainersPaused: platformInfo.ContainersPaused,
-                ContainersRunning: platformInfo.ContainersRunning,
-                ContainersStopped: platformInfo.ContainersStopped
+                ContainerCount: platformInfo?.PlatformStat?.ContainerCount ?? 0,
+                ContainersPaused: platformInfo?.PlatformStat?.ContainersPaused ?? 0,
+                ContainersRunning: platformInfo?.PlatformStat?.ContainersRunning ?? 0,
+                ContainersStopped: platformInfo?.PlatformStat?.ContainersStopped ?? 0
             );
         }
         else
@@ -95,7 +95,11 @@ internal static class PlatformMappers
             memoryUsage: stat.MemoryUsage,
             cpuUsage: stat.CpuUsage,
             rxBytes: stat.RxBytes,
-            txBytes: stat.TxBytes
+            txBytes: stat.TxBytes,
+            containerCount: stat.ContainerCount,
+            containersPaused: stat.ContainersPaused,
+            containersStopped: stat.ContainersStopped,
+            containersRunning: stat.ContainersRunning
         );
 
     public static void Map(this PlatformStatsResponse source, PlatformStatsResult destination)
@@ -105,7 +109,11 @@ internal static class PlatformMappers
             memoryUsage: source.Stat.MemoryUsage,
             cpuUsage: source.Stat.CpuUsage,
             rxBytes: source.Stat.RxBytes,
-            txBytes: source.Stat.TxBytes
+            txBytes: source.Stat.TxBytes,
+            containerCount: source.Stat.ContainerCount,
+            containersPaused: source.Stat.ContainersPaused,
+            containersStopped: source.Stat.ContainersStopped,
+            containersRunning: source.Stat.ContainersRunning
         );
 
         destination.ReInitialize(
@@ -113,10 +121,6 @@ internal static class PlatformMappers
             imageCount: source.ImageCount,
             volumeCount: source.VolumeCount,
             networkCount: source.NetworkCount,
-            containerCount: source.ContainerCount,
-            containersPaused: source.ContainersPaused,
-            containersStopped: source.ContainersStopped,
-            containersRunning: source.ContainersRunning,
             platformStat: destination.PlatformStat);
     }
 
@@ -127,7 +131,11 @@ internal static class PlatformMappers
             memoryUsage: stat?.MemoryUsage ?? 0,
             cpuUsage: stat?.CpuUsage ?? 0,
             rxBytes: stat?.RxBytes ?? 0,
-            txBytes: stat?.TxBytes ?? 0
+            txBytes: stat?.TxBytes ?? 0,
+            containerCount: stat?.ContainerCount ?? 0,
+            containersPaused: stat?.ContainersPaused ?? 0,
+            containersStopped: stat?.ContainersStopped ?? 0,
+            containersRunning: stat?.ContainersRunning ?? 0
         );
 
     public static void Map (this PlatformStreamResult source, PlatformStatsResult destination)
@@ -137,7 +145,11 @@ internal static class PlatformMappers
             memoryUsage: source.PlatformStatistics.MemoryUsage,
             cpuUsage: source.PlatformStatistics.CpuUsage,
             rxBytes: source.PlatformStatistics.RxBytes,
-            txBytes: source.PlatformStatistics.TxBytes
+            txBytes: source.PlatformStatistics.TxBytes,
+            containerCount: source.PlatformStatistics.ContainerCount,
+            containersPaused: source.PlatformStatistics.ContainersPaused,
+            containersStopped: source.PlatformStatistics.ContainersStopped,
+            containersRunning: source.PlatformStatistics.ContainersRunning
         );
 
         destination.ReInitialize(
@@ -145,10 +157,6 @@ internal static class PlatformMappers
             imageCount: source.ImageCount, 
             volumeCount: source.VolumeCount, 
             networkCount: source.NetworkCount, 
-            containerCount: source.PlatformStatistics?.ContainerCount ?? 0, 
-            containersPaused: source.PlatformStatistics?.ContainersPaused ?? 0, 
-            containersStopped: source.PlatformStatistics?.ContainersStopped ?? 0, 
-            containersRunning: source.PlatformStatistics?.ContainersRunning ?? 0,
             platformStat: destination.PlatformStat);
     }
 

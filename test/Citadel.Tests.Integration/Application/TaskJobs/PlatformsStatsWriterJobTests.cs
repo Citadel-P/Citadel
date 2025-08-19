@@ -113,17 +113,17 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
             imageCount: 5,
             volumeCount: 2,
             networkCount: 1,
-            containerCount: 3,
-            containersPaused: 0,
-            containersStopped: 1,
-            containersRunning: 2,
             platformStat: new DockerPlatformStat
             (
                 created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 memoryUsage: 500,
                 cpuUsage: 2,
                 rxBytes: 100,
-                txBytes: 200
+                txBytes: 200,
+                containerCount: 3,
+                containersPaused: 0,
+                containersStopped: 1,
+                containersRunning: 2
             ));
 
 
@@ -153,17 +153,18 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
                 imageCount: 5,
                 volumeCount: 2,
                 networkCount: 1,
-                containerCount: 3,
-                containersPaused: 0,
-                containersStopped: 1,
-                containersRunning: 2,
+               
                 platformStat: new DockerPlatformStat
                 (
                     created: time,
                     memoryUsage: 500,
                     cpuUsage: 2,
                     rxBytes: 100,
-                    txBytes: 200
+                    txBytes: 200,
+                    containerCount: 3,
+                    containersPaused: 0,
+                    containersStopped: 1,
+                    containersRunning: 2
                 )
             );
 
@@ -178,17 +179,17 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
                 imageCount: 6,
                 volumeCount: 3,
                 networkCount: 10,
-                containerCount: 5,
-                containersPaused: 1,
-                containersStopped: 1,
-                containersRunning: 3,
                 platformStat: new DockerPlatformStat
                 (
                     created: time + (60 * 2),
                     memoryUsage: 800,
                     cpuUsage: 2,
                     rxBytes: 300,
-                    txBytes: 400
+                    txBytes: 400,
+                    containerCount: 5,
+                    containersPaused: 1,
+                    containersStopped: 1,
+                    containersRunning: 3
                 )
             );
             yield return stat2;

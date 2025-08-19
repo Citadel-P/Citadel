@@ -122,8 +122,8 @@ internal sealed class DockerDaemonEventJob(
         var existing = await uow.Containers.GetByIdAsync(eventInfo.ContainerId, cancellationToken);
         if (existing != null)
         {
-            existing.PartialUpdate(state: eventInfo.Container?.State);
-            await uow.Containers.UpdateContainersStateAsync([existing.Id], existing.State, cancellationToken);
+            existing.PartialUpdate(state: eventInfo.Container?.State, ports: eventInfo.Container?.Ports);
+            await uow.Containers.UpdateContainerAsync(existing, cancellationToken);
             await uow.CommitAsync();
             await SendContainerEventChanges(existing, eventInfo.Action);
         }
