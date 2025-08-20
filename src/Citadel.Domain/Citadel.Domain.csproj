@@ -6,7 +6,7 @@
   </PropertyGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\Citadel.Contracts\Citadel.Hosting.Common\Citadel.Hosting.Common.csproj" />
+		<ProjectReference Include="..\Citadel.Contracts\src\Citadel.Hosting.Common\Citadel.Hosting.Common.csproj" />
 	</ItemGroup>
 
 </Project>

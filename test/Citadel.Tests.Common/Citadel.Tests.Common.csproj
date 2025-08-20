@@ -21,9 +21,9 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Citadel.Application\Citadel.Application.csproj" />
-		<ProjectReference Include="..\..\src\Citadel.Contracts\Citadel.Hosting.Common\Citadel.Hosting.Common.csproj" />
-		<ProjectReference Include="..\..\src\Citadel.Contracts\Citadel.Hosting\Citadel.Hosting.csproj" />
-		<ProjectReference Include="..\..\src\Citadel.Contracts\Citadel.SourceGen\Citadel.SourceGen.csproj" />
+		<ProjectReference Include="..\..\src\Citadel.Contracts\src\Citadel.Hosting.Common\Citadel.Hosting.Common.csproj" />
+		<ProjectReference Include="..\..\src\Citadel.Contracts\src\Citadel.Hosting\Citadel.Hosting.csproj" />
+		<ProjectReference Include="..\..\src\Citadel.Contracts\src\Citadel.SourceGen\Citadel.SourceGen.csproj" />
 		<ProjectReference Include="..\..\src\Citadel.Infrastructure\Citadel.Infrastructure.csproj" />
 	</ItemGroup>
 
