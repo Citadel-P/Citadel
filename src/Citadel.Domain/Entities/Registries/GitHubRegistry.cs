@@ -3,11 +3,11 @@
 namespace Domain.Entities.Registries;
 
 [method: JsonConstructor]
-public record GitHubRegistry(string Name, string PAT, GhcrAccountType? Type) : RegistryConfigurationBase(RegistryUrl: "https://ghcr.io")
+public record GitHubRegistry(string Name, string PAT, GhcrAccountType? Type) : RegistryConfigurationBase
 {
     public static GitHubRegistry Create(string name, string PAT, GhcrAccountType type) =>
         new (name, PAT, type);
 
-    public override string GetRegistryAuth() => new RegistryAuth(Name, PAT, RegistryUrl).GetAuth();
+    public override string GetRegistryAuth(string registryUrl) => new RegistryAuth(Name, PAT, registryUrl).GetAuth();
 }
 

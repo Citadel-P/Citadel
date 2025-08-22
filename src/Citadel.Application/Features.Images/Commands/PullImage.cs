@@ -25,10 +25,10 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
         }
     }
 
-    internal PullImageCommand ToConnectorCommand(string platformAddress, RegistryConfigurationBase registryCfg)
+    internal PullImageCommand ToConnectorCommand(string platformAddress, Registry registry)
     {
-        string domainName = registryCfg.RegistryUrl.Replace("https://", "");
-        switch (registryCfg)
+        string domainName = registry.Url.Replace("https://", "");
+        switch (registry.Configuration)
         {
             case GitHubRegistry ghCfg:
                 return new PullImageCommand
@@ -37,9 +37,9 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
                         RegistryName: RegistryName,
                         FromImage: $"{domainName}/{ghCfg.Name}/{RepositoryName}@{ImageTag}".ToLower(),
                         Repo: $"{domainName}/{ghCfg.Name}/{RepositoryName}@{ImageTag}".ToLower(),
-                        FromSrc: ghCfg.RegistryUrl,
+                        FromSrc: registry.Url,
                         Tag: ImageTag,
-                        Auth: ghCfg.GetRegistryAuth()
+                        Auth: ghCfg.GetRegistryAuth(registry.Url)
                     );
 
             case DockerHubRegistry dockerCfg:
@@ -49,7 +49,7 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
                         (
                             PlatformAddress: platformAddress,
                             FromImage: $"{domainName}/{ImageTag}:latest".ToLower(),
-                            FromSrc: dockerCfg.RegistryUrl,
+                            FromSrc: registry.Url,
                             Repo: domainName,
                             Auth: string.Empty
                         );
@@ -61,8 +61,8 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
                             PlatformAddress: platformAddress,
                             FromImage: $"{domainName}/{dockerCfg.UserName}/{RepositoryName}:{ImageTag}".ToLower(),
                             Repo: $"{domainName}/{dockerCfg.UserName}/{RepositoryName}".ToLower(),
-                            FromSrc: dockerCfg.RegistryUrl,
-                            Auth: dockerCfg.GetRegistryAuth()
+                            FromSrc: registry.Url,
+                            Auth: dockerCfg.GetRegistryAuth(registry.Url)
                         );
                 }
 
@@ -79,20 +79,24 @@ internal sealed class PullImageHandler(IUnitOfWork unitOfWork, IPlatformContaine
     {
         if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform))
         {
+            var message = $"Platform with ID {command.PlatformId} not found or not available.";
+            yield return new PullImageResult(ErrorMessage: message, Error: new ImagePullError(404, message));
             yield break;
         }
 
-        var registryConfiguration = command.RegistryName == Registry.DefaultRegistryName
-            ? Registry.DefaultRegistry().Configuration // Public Docker registry
-            : await unitOfWork.Registries.GetRegistryConfigurationAsync(command.RegistryName, cancellationToken);
+        var registry = command.RegistryName == Registry.DefaultRegistryName
+            ? Registry.DefaultRegistry() // Public Docker registry
+            : await unitOfWork.Registries.GetByNameAsync(command.RegistryName, cancellationToken);
 
-        if (registryConfiguration == null)
+        if (registry == null)
         {
+            var message = $"Registry configuration for '{command.RegistryName}' not found.";
+            yield return new PullImageResult(ErrorMessage: message, Error: new ImagePullError(404, message));
             yield break;
         }
 
         var connector = connectorFactory.GetConnector(platform.ConnectorType);
-        await foreach (var reply in connector.PullImageProgressStreamAsync(command.ToConnectorCommand(platform.Address, registryConfiguration), cancellationToken))
+        await foreach (var reply in connector.PullImageProgressStreamAsync(command.ToConnectorCommand(platform.Address, registry), cancellationToken))
         {
             yield return reply;
         }

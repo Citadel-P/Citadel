@@ -531,7 +531,7 @@ internal static class ContainerMappers
             HostPort: binding.HostPort
         );
 
-    private static EndpointSettingsInfo Map(this EndpointSettings endpointSettings)
+    private static EndpointSettingsInfo Map(this Citadel.Agent.Common.V1.EndpointSettings endpointSettings)
         => new(
             IpamConfig: endpointSettings.IPAMConfig?.Map(),
             Links: endpointSettings.Links?.ToList() ?? [],
@@ -726,6 +726,62 @@ internal static class ContainerMappers
         );
     }
 
+    public static Hosting.DockerClient.EndpointSettings Map(this Domain.Contracts.Resources.Networks.EndpointSettings endPointsConfig)
+    {
+        return new Hosting.DockerClient.EndpointSettings()
+        {
+            IPAMConfig = endPointsConfig.IPAMConfig?.Map(),
+            Links = endPointsConfig.Links?.ToList() ?? [],
+            NetworkID = endPointsConfig.NetworkID,
+            EndpointID = endPointsConfig.EndpointID,
+            Gateway = endPointsConfig.Gateway,
+            IPAddress = endPointsConfig.IPAddress,
+            IPPrefixLen = endPointsConfig.IPPrefixLen,
+            IPv6Gateway = endPointsConfig.IPv6Gateway,
+            GlobalIPv6Address = endPointsConfig.GlobalIPv6Address,
+            GlobalIPv6PrefixLen = endPointsConfig.GlobalIPv6PrefixLen,
+            MacAddress = endPointsConfig.MacAddress,
+            DNSNames = endPointsConfig.DNSNames?.ToList() ?? [],
+            DriverOpts = endPointsConfig.DriverOpts?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? []
+        };
+    }
+
+    public static EndpointSettings MapAgent(this Domain.Contracts.Resources.Networks.EndpointSettings endPointsConfig)
+    {
+        return new EndpointSettings()
+        {
+            IPAMConfig = endPointsConfig.IPAMConfig?.MapAgent(),
+            Links = { endPointsConfig.Links?.ToList() ?? [] },
+            NetworkID = endPointsConfig.NetworkID,
+            EndpointID = endPointsConfig.EndpointID,
+            Gateway = endPointsConfig.Gateway,
+            IpAddress = endPointsConfig.IPAddress,
+            IpPrefixLen = endPointsConfig.IPPrefixLen,
+            Ipv6Gateway = endPointsConfig.IPv6Gateway,
+            GlobalIPv6Address = endPointsConfig.GlobalIPv6Address,
+            GlobalIPv6PrefixLen = endPointsConfig.GlobalIPv6PrefixLen,
+            MacAddress = endPointsConfig.MacAddress,
+            DNSNames = { endPointsConfig.DNSNames?.ToList() ?? [] },
+            DriverOpts = { endPointsConfig.DriverOpts?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? [] }
+        };
+    }
+
+    public static Hosting.DockerClient.EndpointIPAMConfig Map(this Domain.Contracts.Resources.Networks.EndpointIPAMConfig ipamConfig)
+        => new Hosting.DockerClient.EndpointIPAMConfig
+        {
+            IPv4Address = ipamConfig.IPv4Address,
+            IPv6Address = ipamConfig.IPv6Address,
+            LinkLocalIPs = ipamConfig.LinkLocalIPs?.ToList() ?? []
+        };
+
+    public static EndpointIPAMConfig MapAgent(this Domain.Contracts.Resources.Networks.EndpointIPAMConfig ipamConfig)
+        => new EndpointIPAMConfig
+        {
+            Ipv4Address = ipamConfig.IPv4Address,
+            Ipv6Address = ipamConfig.IPv6Address,
+            LinkLocalIPs = { ipamConfig.LinkLocalIPs?.ToList() ?? [] }
+        };
+
     public static ContainerEventType Map(this EventMessageType type)
         => type switch
         {
@@ -753,6 +809,7 @@ internal static class ContainerMappers
             ContainerStateType.Dead => ContainerStateStatus.Dead,
             ContainerStateType.Exited => ContainerStateStatus.Exited,
             ContainerStateType.Removing => ContainerStateStatus.Removing,
+            ContainerStateType.Created => ContainerStateStatus.Created,
             _ => ContainerStateStatus.Unknown,
         };
 
@@ -765,6 +822,7 @@ internal static class ContainerMappers
             Hosting.DockerClient.ContainerSummaryState.Dead => ContainerStateStatus.Dead,
             Hosting.DockerClient.ContainerSummaryState.Exited => ContainerStateStatus.Exited,
             Hosting.DockerClient.ContainerSummaryState.Removing => ContainerStateStatus.Removing,
+            Hosting.DockerClient.ContainerSummaryState.Created => ContainerStateStatus.Created,
             _ => ContainerStateStatus.Unknown,
         };
 
@@ -777,6 +835,7 @@ internal static class ContainerMappers
             Hosting.DockerClient.ContainerStateStatus.Dead => ContainerStateStatus.Dead,
             Hosting.DockerClient.ContainerStateStatus.Exited => ContainerStateStatus.Exited,
             Hosting.DockerClient.ContainerStateStatus.Removing => ContainerStateStatus.Removing,
+            Hosting.DockerClient.ContainerStateStatus.Created => ContainerStateStatus.Created,
             _ => ContainerStateStatus.Unknown,
         };
 

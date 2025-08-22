@@ -7,8 +7,7 @@
   configuration: {
     $type: GitHub,
     name: dummy-user,
-    pat: dummy-pat123,
-    registryUrl: https://ghcr.io
+    pat: dummy-pat123
   },
   isDefault: false
 }

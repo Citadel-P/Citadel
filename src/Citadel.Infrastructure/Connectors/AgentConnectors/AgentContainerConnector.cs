@@ -1,6 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
 using Citadel.Agent.Containers.V1;
-using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
@@ -58,6 +57,11 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory, IObject
         try
         {
             var containerClient = clientFactory.GetContainerClient(createContainerCommand.PlatformAddress);
+            Dictionary<string, Citadel.Agent.Common.V1.EndpointSettings>? networks = [];
+            foreach (var (k, v) in createContainerCommand.Networks ?? [])
+            {
+                networks[k] = v.MapAgent();
+            }
             var request = new CreateContainerRequest()
             {
                 ImageId = createContainerCommand.ImageId,
@@ -73,12 +77,13 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory, IObject
                 EnvVars = { createContainerCommand.EnvVars ?? [] },
                 Ports = { createContainerCommand.Ports ?? [] },
                 Volumes = { createContainerCommand.Volumes ?? [] },
-                Networks = { createContainerCommand.Networks ?? [] },
+                Networks = { networks },
                 EntryPoint = { createContainerCommand.EntryPoint ?? [] },
                 Command = { createContainerCommand.Command ?? [] }
             };
 
             var result = await containerClient.CreateAsync(request, cancellationToken: cancellationToken);
+            
             return result.ContainerId;
         }
         catch (RpcException ex)

@@ -26,13 +26,13 @@ internal class GetGithubPackageVersionsHander(IUnitOfWork unitOfWork, IGitHubCrR
 {
     public async ValueTask<Result<IEnumerable<GitHubCrPackageVersion>>> Handle(GetGithubPackageVersions query, CancellationToken cancellationToken)
     {
-        var configuration = await unitOfWork.Registries.GetRegistryConfigurationAsync(query.RegistryName, cancellationToken);
-        if (configuration == null) 
+        var registry = await unitOfWork.Registries.GetByNameAsync(query.RegistryName, cancellationToken);
+        if (registry == null) 
         {
             return Result.Failure<IEnumerable<GitHubCrPackageVersion>>(new NotFoundError("The provided registry name does not exist"));
         }
 
-        if (configuration is not GitHubRegistry cfg)
+        if (registry.Configuration is not GitHubRegistry cfg)
         {
             return Result.Failure<IEnumerable<GitHubCrPackageVersion>>(new NotFoundError("The provided registry is not a Github registry instance"));
         }

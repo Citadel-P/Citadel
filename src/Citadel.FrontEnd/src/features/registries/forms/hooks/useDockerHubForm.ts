@@ -32,7 +32,7 @@ export const useDockerHubForm = () => {
     mode: 'all',
     values: {
       name: registry?.name ?? '',
-      url: 'https://hub.docker.com',
+      url: 'https://docker.io',
       type: RegistryType.DockerHub,
       configuration: {
         $type: RegistryType.DockerHub,

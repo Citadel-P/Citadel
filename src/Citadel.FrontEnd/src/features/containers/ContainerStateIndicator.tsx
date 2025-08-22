@@ -5,6 +5,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 export const ContainerStateIndicator = memo(({ stat }: { stat: ContainerStateStatus }) => {
   const getStatusClass = (status: ContainerStateStatus) => {
     switch (status) {
+      case ContainerStateStatus.Created:
+        return 'bg-blue-400';
       case ContainerStateStatus.Exited:
         return 'bg-gray-500';
       case ContainerStateStatus.Paused:

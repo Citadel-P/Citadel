@@ -1,7 +1,7 @@
 ﻿namespace Infrastructure.Persistence.Dtos;
 
 internal sealed record RegistryDto(
-    string Id, //Guid
+    Guid Id,
     string Name,
     string Url,
     string Created, // DateTime
@@ -9,7 +9,7 @@ internal sealed record RegistryDto(
     string Configuration // RegistryConfigurationBase
     )
 {
-    public RegistryDto(): this(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty)
+    public RegistryDto(): this(Guid.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty)
     {
     }
 }

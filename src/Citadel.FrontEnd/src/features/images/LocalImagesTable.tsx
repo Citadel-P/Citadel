@@ -48,7 +48,7 @@ const columns = (handleShowSheet: (network: ImageView) => void): ColumnDef<Image
   {
     accessorKey: 'tag',
     header: ({ column }) => <SortableCell cellName="Tag" column={column} />,
-    cell: ({ row }) => <div>{row.original.tag}</div>,
+    cell: ({ row }) => <div>{truncate(row.original.tag ?? '', 28)}</div>,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.tag?.localeCompare(rowB.original?.tag),
   },
   {
@@ -94,7 +94,7 @@ const RenderActions = ({ image }: { image: ImageView }) => {
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            <span>Run</span>
+            <span>Create</span>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -123,7 +123,7 @@ const ImageNameRow = ({ image, onShowSheet }: { image: ImageView; onShowSheet: (
         tabIndex={0}
         role="button"
         aria-label="Show image details">
-        {truncate(image.name ?? '', 35, 'right')}
+        {truncate(image.name ?? '', 32, 'right')}
       </span>
     </div>
   );

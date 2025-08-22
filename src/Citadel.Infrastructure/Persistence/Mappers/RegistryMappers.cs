@@ -13,7 +13,7 @@ internal static class RegistryMappers
     internal static Registry ToDomain(this RegistryDto dto)
     {
         return Registry.FromPersistence(
-            id: Guid.Parse(dto.Id),
+            id: dto.Id,
             name: dto.Name,
             url: dto.Url,
             created: DateTime.Parse(dto.Created),

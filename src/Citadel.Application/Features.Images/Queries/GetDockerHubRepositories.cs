@@ -25,13 +25,13 @@ internal sealed class GetDockerHubRepositoriesHandler(IUnitOfWork unitOfWork, ID
 {
     public async ValueTask<Result<IEnumerable<DockerHubRepositoryInfo>>> Handle(GetDockerHubRepositories query, CancellationToken cancellationToken)
     {
-        var configuration = await unitOfWork.Registries.GetRegistryConfigurationAsync(query.RegistryName, cancellationToken);
-        if (configuration == null)
+        var registry = await unitOfWork.Registries.GetByNameAsync(query.RegistryName, cancellationToken);
+        if (registry == null)
         {
             return Result.Failure<IEnumerable<DockerHubRepositoryInfo>>(new NotFoundError("The provided registry name does not exist"));
         }
 
-        if (configuration is not DockerHubRegistry cfg)
+        if (registry.Configuration is not DockerHubRegistry cfg)
         {
             return Result.Failure<IEnumerable<DockerHubRepositoryInfo>>(new NotFoundError("The provided registry is not a DockerHub registry instance"));
         }

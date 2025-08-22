@@ -11,6 +11,7 @@ namespace WebApi.Routes;
 public static class PublicEndpoints
 {
     const string ImagesName = nameof(Images);
+    const string ComposeName = nameof(Compose);
     const string VolumesName = nameof(Volumes);
     const string NetworksName = nameof(Networks);
     const string PlatformsName = nameof(Platforms);
@@ -49,6 +50,10 @@ public static class PublicEndpoints
             var volumes = group.MapGroup("/volumes").WithTags(VolumesName).RequireAuthorization();
             {
                 MapVolumeEndpoints(volumes);
+            }
+            var compose = group.MapGroup("/compose").WithTags(ComposeName).RequireAuthorization();
+            {
+                MapComposeEndpoints(compose);
             }
         }
 
@@ -427,5 +432,16 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName(VolumesName + "_" + nameof(Volumes.Create));
+    }
+
+    private static void MapComposeEndpoints(RouteGroupBuilder compose)
+    {
+        compose.MapPost("/up", Compose.Up)
+            .WithSummary("Deploy a stack")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName(ComposeName + "_" + nameof(Compose.Up));
     }
 }

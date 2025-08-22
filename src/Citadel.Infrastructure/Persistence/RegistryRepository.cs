@@ -4,7 +4,6 @@ using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
-using Domain.Entities.Registries;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using Infrastructure.TypeHandlers;
@@ -40,10 +39,17 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         }, transaction: tx());
     }
 
-    public async Task<Registry?> GetAsync(Guid Id, CancellationToken cancellationToken)
+    public async Task<Registry?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM Registries WHERE Id = @Id LIMIT 1";
-        var result = await db.QuerySingleOrDefaultAsync<RegistryDto>(sql, new { Id = Id.Format(), cancellationToken }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<RegistryDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        return result?.ToDomain();
+    }
+
+    public async Task<Registry?> GetByNameAsync(string name, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT * FROM Registries WHERE Name = @Name LIMIT 1";
+        var result = await db.QuerySingleOrDefaultAsync<RegistryDto>(sql, new { Name = name, cancellationToken }, transaction: tx());
         return result?.ToDomain();
     }
 
@@ -58,19 +64,6 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         const string sql = "SELECT * FROM Registries";
         var result = await db.QueryAsync<RegistryDto>(sql, transaction: tx());
         return result.ToDomain();
-    }
-
-    public async Task<RegistryConfigurationBase?> GetRegistryConfigurationAsync(string name, CancellationToken cancellationToken)
-    {
-        const string sql = """
-            SELECT Configuration
-            FROM Registries
-            WHERE name = @Name
-            LIMIT 1
-        """;
-
-        var configuration = await db.QuerySingleOrDefaultAsync<string>(sql, new { Name = name }, transaction: tx());
-        return JsonSerializer.Deserialize(configuration ?? "", RegistryJsonContext.Default.RegistryConfigurationBase);
     }
 
     public Task<int> UpdateAsync(Registry registry, CancellationToken cancellationToken)

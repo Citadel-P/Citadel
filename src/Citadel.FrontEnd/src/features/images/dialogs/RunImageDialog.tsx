@@ -52,8 +52,13 @@ export const RunImageDialog = () => {
 
   useEffect(() => {
     if (isSuccess && data?.data) {
-      toast.success('Container started successfully!');
-      navigate(`/containers/${data?.data.id.slice(0, 12)}/logs`);
+      toast.success('Container created successfully.');
+
+      const timer = setTimeout(() => {
+        navigate(`/containers/${data.data.id.slice(0, 12)}/logs`);
+      }, 1000);
+
+      return () => clearTimeout(timer);
     }
   }, [isSuccess, data, navigate, currentPlatform]);
 
@@ -149,7 +154,7 @@ export const RunImageDialog = () => {
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
-              <DialogTitle>Run a new container</DialogTitle>
+              <DialogTitle>Create a new container</DialogTitle>
               <DialogDescription>
                 {runDialogData.currentSelection?.at(0)?.name ?? '-'}:{runDialogData.currentSelection?.at(0)?.tag ?? '-'}
               </DialogDescription>
@@ -493,7 +498,7 @@ export const RunImageDialog = () => {
                   type="submit"
                   disabled={isPending || imageInfoIsLoading}
                   className="ml-2 bg-primary hover:bg-primary/85 text-background font-medium rounded-sm text-sm inline-flex items-center px-2 py-2">
-                  Run
+                  Create container
                   {isPending && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
                 </button>
               </div>

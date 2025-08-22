@@ -1840,8 +1840,7 @@
                     "Configuration": {
                       "$type": "Azure",
                       "UserName": "johnDoe",
-                      "Password": "myPassword",
-                      "RegistryUrl": ""
+                      "Password": "myPassword"
                     }
                   }
                 },
@@ -1855,8 +1854,7 @@
                       "AccessKey": "",
                       "AuthenticationRequired": true,
                       "SecretAccessKey": "",
-                      "Region": "us-east-2",
-                      "RegistryUrl": ""
+                      "Region": "us-east-2"
                     }
                   }
                 },
@@ -1869,8 +1867,7 @@
                       "$type": "Gitlab",
                       "UserName": "",
                       "PAT": "",
-                      "InstanceUrl": "https://gitlab.com",
-                      "RegistryUrl": ""
+                      "InstanceUrl": "https://gitlab.com"
                     }
                   }
                 },
@@ -1882,8 +1879,7 @@
                     "Configuration": {
                       "$type": "DockerHub",
                       "UserName": "",
-                      "PAT": "",
-                      "RegistryUrl": "https://docker.io"
+                      "PAT": ""
                     }
                   }
                 },
@@ -1896,8 +1892,7 @@
                       "$type": "GitHub",
                       "Name": "organization or user name",
                       "PAT": "",
-                      "Type": "Organization",
-                      "RegistryUrl": "https://ghcr.io"
+                      "Type": "Organization"
                     }
                   }
                 }
@@ -1916,8 +1911,7 @@
                     "Configuration": {
                       "$type": "Azure",
                       "UserName": "johnDoe",
-                      "Password": "myPassword",
-                      "RegistryUrl": ""
+                      "Password": "myPassword"
                     }
                   }
                 },
@@ -1931,8 +1925,7 @@
                       "AccessKey": "",
                       "AuthenticationRequired": true,
                       "SecretAccessKey": "",
-                      "Region": "us-east-2",
-                      "RegistryUrl": ""
+                      "Region": "us-east-2"
                     }
                   }
                 },
@@ -1945,8 +1938,7 @@
                       "$type": "Gitlab",
                       "UserName": "",
                       "PAT": "",
-                      "InstanceUrl": "https://gitlab.com",
-                      "RegistryUrl": ""
+                      "InstanceUrl": "https://gitlab.com"
                     }
                   }
                 },
@@ -1958,8 +1950,7 @@
                     "Configuration": {
                       "$type": "DockerHub",
                       "UserName": "",
-                      "PAT": "",
-                      "RegistryUrl": "https://docker.io"
+                      "PAT": ""
                     }
                   }
                 },
@@ -1972,8 +1963,7 @@
                       "$type": "GitHub",
                       "Name": "organization or user name",
                       "PAT": "",
-                      "Type": "Organization",
-                      "RegistryUrl": "https://ghcr.io"
+                      "Type": "Organization"
                     }
                   }
                 }
@@ -2084,8 +2074,7 @@
                     "Configuration": {
                       "$type": "Azure",
                       "UserName": "johnDoe",
-                      "Password": "myPassword",
-                      "RegistryUrl": ""
+                      "Password": "myPassword"
                     }
                   }
                 },
@@ -2099,8 +2088,7 @@
                       "AccessKey": "",
                       "AuthenticationRequired": true,
                       "SecretAccessKey": "",
-                      "Region": "us-east-2",
-                      "RegistryUrl": ""
+                      "Region": "us-east-2"
                     }
                   }
                 },
@@ -2113,8 +2101,7 @@
                       "$type": "Gitlab",
                       "UserName": "",
                       "PAT": "",
-                      "InstanceUrl": "https://gitlab.com",
-                      "RegistryUrl": ""
+                      "InstanceUrl": "https://gitlab.com"
                     }
                   }
                 },
@@ -2126,8 +2113,7 @@
                     "Configuration": {
                       "$type": "DockerHub",
                       "UserName": "",
-                      "PAT": "",
-                      "RegistryUrl": "https://docker.io"
+                      "PAT": ""
                     }
                   }
                 },
@@ -2140,8 +2126,7 @@
                       "$type": "GitHub",
                       "Name": "organization or user name",
                       "PAT": "",
-                      "Type": "Organization",
-                      "RegistryUrl": "https://ghcr.io"
+                      "Type": "Organization"
                     }
                   }
                 }
@@ -3885,6 +3870,95 @@
           }
         ]
       }
+    },
+    "/api/v1/compose/up": {
+      "post": {
+        "tags": [
+          "Compose"
+        ],
+        "summary": "Deploy a stack",
+        "operationId": "Compose_Up",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComposeUpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ComposeDeploymentEvent"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -4027,6 +4101,41 @@
             "items": {
               "$ref": "#/components/schemas/TopologyEntry"
             }
+          }
+        }
+      },
+      "ComposeDeploymentEvent": {
+        "type": "object",
+        "properties": {
+          "stepId": {
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time"
+          }
+        }
+      },
+      "ComposeUpRequest": {
+        "required": [
+          "platformId",
+          "registryName",
+          "repositoryName",
+          "composeFileAsStr"
+        ],
+        "type": "object",
+        "properties": {
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "registryName": {
+            "type": "string"
+          },
+          "repositoryName": {
+            "type": "string"
+          },
+          "composeFileAsStr": {
+            "type": "string"
           }
         }
       },
@@ -8298,16 +8407,6 @@
         }
       },
       "PullImageResult": {
-        "required": [
-          "id",
-          "from",
-          "stream",
-          "status",
-          "errorMessage",
-          "progressMessage",
-          "progress",
-          "error"
-        ],
         "type": "object",
         "properties": {
           "id": {
@@ -8380,6 +8479,9 @@
         }
       },
       "RegistryConfigurationBase": {
+        "required": [
+          "$type"
+        ],
         "type": "object",
         "anyOf": [
           {
@@ -8396,15 +8498,21 @@
           },
           {
             "$ref": "#/components/schemas/RegistryConfigurationBaseGitHubRegistry"
-          },
-          {
-            "$ref": "#/components/schemas/RegistryConfigurationBaseBase"
           }
-        ]
+        ],
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "AWS": "#/components/schemas/RegistryConfigurationBaseAWSRegistry",
+            "Azure": "#/components/schemas/RegistryConfigurationBaseAzureRegistry",
+            "Gitlab": "#/components/schemas/RegistryConfigurationBaseGitlabRegistry",
+            "DockerHub": "#/components/schemas/RegistryConfigurationBaseDockerHubRegistry",
+            "GitHub": "#/components/schemas/RegistryConfigurationBaseGitHubRegistry"
+          }
+        }
       },
       "RegistryConfigurationBaseAWSRegistry": {
         "required": [
-          "$type",
           "accessKey",
           "authenticationRequired",
           "secretAccessKey",
@@ -8428,15 +8536,11 @@
           },
           "region": {
             "type": "string"
-          },
-          "registryUrl": {
-            "type": "string"
           }
         }
       },
       "RegistryConfigurationBaseAzureRegistry": {
         "required": [
-          "$type",
           "userName",
           "password"
         ],
@@ -8452,26 +8556,10 @@
           },
           "password": {
             "type": "string"
-          },
-          "registryUrl": {
-            "type": "string"
-          }
-        }
-      },
-      "RegistryConfigurationBaseBase": {
-        "required": [
-          "registryUrl"
-        ],
-        "properties": {
-          "registryUrl": {
-            "type": "string"
           }
         }
       },
       "RegistryConfigurationBaseDockerHubRegistry": {
-        "required": [
-          "$type"
-        ],
         "properties": {
           "$type": {
             "enum": [
@@ -8490,15 +8578,11 @@
               "null",
               "string"
             ]
-          },
-          "registryUrl": {
-            "type": "string"
           }
         }
       },
       "RegistryConfigurationBaseGitHubRegistry": {
         "required": [
-          "$type",
           "name",
           "pat",
           "type"
@@ -8518,15 +8602,11 @@
           },
           "type": {
             "$ref": "#/components/schemas/NullableOfGhcrAccountType"
-          },
-          "registryUrl": {
-            "type": "string"
           }
         }
       },
       "RegistryConfigurationBaseGitlabRegistry": {
         "required": [
-          "$type",
           "userName",
           "pat",
           "instanceUrl"
@@ -8545,9 +8625,6 @@
             "type": "string"
           },
           "instanceUrl": {
-            "type": "string"
-          },
-          "registryUrl": {
             "type": "string"
           }
         }
@@ -9025,6 +9102,9 @@
     },
     {
       "name": "Volumes"
+    },
+    {
+      "name": "Compose"
     }
   ]
 }

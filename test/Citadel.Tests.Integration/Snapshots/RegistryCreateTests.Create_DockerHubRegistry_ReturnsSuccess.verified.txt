@@ -7,8 +7,7 @@
   configuration: {
     $type: DockerHub,
     userName: dummy-user,
-    pat: dummy-pat123,
-    registryUrl: https://docker.io
+    pat: dummy-pat123
   },
   isDefault: false
 }

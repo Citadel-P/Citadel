@@ -1,4 +1,6 @@
-﻿namespace Domain.Contracts.Resources.Containers;
+﻿using Domain.Contracts.Resources.Networks;
+
+namespace Domain.Contracts.Resources.Containers;
 
 public sealed record CreateContainerCommand(
     string PlatformAddress,
@@ -15,7 +17,7 @@ public sealed record CreateContainerCommand(
     List<string>? EnvVars,
     List<string>? Ports,
     List<string>? Volumes,
-    List<string>? Networks,
+    Dictionary<string, EndpointSettings>? Networks,
     List<string>? EntryPoint,
     List<string>? Command
     );

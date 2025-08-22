@@ -3,12 +3,12 @@
 namespace Domain.Entities.Registries;
 
 [method: JsonConstructor]
-public record AzureRegistry(string UserName, string Password) : RegistryConfigurationBase(RegistryUrl: string.Empty)
+public record AzureRegistry(string UserName, string Password) : RegistryConfigurationBase
 {
     public static AzureRegistry Create(string userName, string password) => 
         new (userName, password);
 
-    public override string GetRegistryAuth()
+    public override string GetRegistryAuth(string registryUrl)
     {
         throw new NotImplementedException();
     }

@@ -1,5 +1,4 @@
 ﻿{
   UserName: username-1,
-  PAT: patched-pat,
-  RegistryUrl: https://docker.io
+  PAT: patched-pat
 }

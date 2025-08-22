@@ -63,10 +63,13 @@ public static class InfrastructureModule
             .AddSingleton<LocalPlatformConnector>()
             .AddSingleton<AgentContainerConnector>()
             .AddSingleton<LocalContainerConnector>()
+            .AddSingleton<LocalComposeConnector>()
+            .AddSingleton<AgentComposeConnector>()
             .AddSingleton(typeof(IConnectorFactory<>), typeof(ConnectorFactory<>))
             .AddConnectorFactory<IImageConnector, AgentImageConnector, LocalImageConnector>()
             .AddConnectorFactory<IVolumeConnector, AgentVolumeConnector, LocalVolumeConnector>()
             .AddConnectorFactory<INetworkConnector, AgentNetworkConnector, LocalNetworkConnector>()
+            .AddConnectorFactory<IComposeConnector, AgentComposeConnector, LocalComposeConnector>()
             .AddConnectorFactory<IPlatformConnector, AgentPlatformConnector, LocalPlatformConnector>()
             .AddConnectorFactory<IContainerConnector, AgentContainerConnector, LocalContainerConnector>();
 

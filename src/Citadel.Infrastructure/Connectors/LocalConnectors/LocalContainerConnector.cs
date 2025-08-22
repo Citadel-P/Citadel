@@ -1,7 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
-using Hosting.Common.Extensions;
 using Hosting.Common.ObjectPoolManager;
 using Hosting.DockerClient.Models.Containers;
 using Hosting.DockerClient.Services;
@@ -15,6 +14,11 @@ internal class LocalContainerConnector(IContainerService containerService, IObje
 {
     public Task<Result<string>> CreateAsync(CreateContainerCommand createContainerCommand, CancellationToken cancellationToken)
     {
+        Dictionary<string, Hosting.DockerClient.EndpointSettings>? networks = [];
+        foreach (var (k, v) in createContainerCommand.Networks ?? [])
+        {
+            networks[k] = v.Map();
+        }
         var command = new CreateContainersCommand
         (
             ImageId: createContainerCommand.ImageId,
@@ -27,7 +31,7 @@ internal class LocalContainerConnector(IContainerService containerService, IObje
             AutoRemove: createContainerCommand.AutoRemove,
             RestartPolicy: createContainerCommand.RestartPolicy?.Map(),
             Labels: createContainerCommand.Labels,
-            Networks: createContainerCommand.Networks,
+            Networks: networks,
             EntryPoint: createContainerCommand.EntryPoint,
             Command: createContainerCommand.Command,
             EnvVars: createContainerCommand.EnvVars,

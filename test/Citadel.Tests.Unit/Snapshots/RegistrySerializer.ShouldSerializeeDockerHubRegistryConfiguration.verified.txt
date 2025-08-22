@@ -1,0 +1,5 @@
+﻿{
+  $type: DockerHub,
+  UserName: username-1,
+  PAT: fake-pat-1
+}

@@ -6,7 +6,6 @@
   Type: DockerHub,
   Configuration: {
     UserName: username-2,
-    PAT: fake-pat-1,
-    RegistryUrl: https://docker.io
+    PAT: fake-pat-1
   }
 }

@@ -1,6 +1,7 @@
 ﻿using System.Text.Json.Serialization;
 using Application.Features.Auth.Models;
 using Application.Features.Images.Queries;
+using Domain.Contracts.Resources.Compose;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Networks;
@@ -9,9 +10,11 @@ using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
+using Hosting.DockerClient.Compose.Planner;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Auth;
+using WebApi.Routes.Endpoints.Resources.Compose;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Networks;
@@ -123,6 +126,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(ImageInfoResult))]
 [JsonSerializable(typeof(CreateContainerInput))]
 [JsonSerializable(typeof(CreateContainerView))]
+[JsonSerializable(typeof(IAsyncEnumerable<ComposeDeploymentEvent>))]
+[JsonSerializable(typeof(ComposeUpRequest))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

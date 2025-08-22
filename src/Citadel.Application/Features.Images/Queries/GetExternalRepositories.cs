@@ -25,13 +25,13 @@ internal sealed class GetExternalRepositoriesHander(IUnitOfWork unitOfWork, IDoc
 {
     public async ValueTask<Result<IEnumerable<IImageRepository>>> Handle(GetExternalRepositories query, CancellationToken cancellationToken)
     {
-        var configuration = await unitOfWork.Registries.GetRegistryConfigurationAsync(query.Name, cancellationToken);
-        if (configuration == null) 
+        var registry = await unitOfWork.Registries.GetByNameAsync(query.Name, cancellationToken);
+        if (registry == null) 
         {
             return Result.Failure<IEnumerable<IImageRepository>>(new NotFoundError("The provided registry name does not exist"));
         }
 
-        if (configuration is GitHubRegistry ghCfg) 
+        if (registry.Configuration is GitHubRegistry ghCfg) 
         {
             var (packages, errorMessage) = await gitHubCrService.GetPackagesAsync(ghCfg, cancellationToken);
             if (errorMessage != null)
@@ -41,7 +41,7 @@ internal sealed class GetExternalRepositoriesHander(IUnitOfWork unitOfWork, IDoc
             return Result.Success(packages?.Map() ?? []);
         }
 
-        if (configuration is DockerHubRegistry dhCfg)
+        if (registry.Configuration is DockerHubRegistry dhCfg)
         {
             var (repositories, errorMessage) = await dockerHubService.GetRepositoriesAsync(dhCfg, cancellationToken);
             if (errorMessage != null)

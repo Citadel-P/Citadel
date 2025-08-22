@@ -77,10 +77,11 @@ internal class CreateContainerHandler(IUnitOfWork unitOfWork, IConnectorFactory<
             EnvVars: command.EnvVars,
             Ports: command.Ports,
             Volumes: command.Volumes,
-            Networks: command.Networks,
+            Networks: command.Networks?.ToDictionary(s => s, s => new Domain.Contracts.Resources.Networks.EndpointSettings()),
             EntryPoint: command.EntryPoint,
             Command: command.Command
         );
+
         return await connectorFactory.GetConnector(platform.ConnectorType).CreateAsync(args, cancellationToken);
     }
 }
