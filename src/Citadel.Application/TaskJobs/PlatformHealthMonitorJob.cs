@@ -90,7 +90,7 @@ internal class PlatformHealthMonitorJob(
 
         if (removed && platform is not null)
         {
-            await broadcaster.BroadcastAsync(new PlatformHealth(platform.Id, address, platform.Type, false), cancellationToken);
+            await broadcaster.PublishAsync(new PlatformHealth(platform.Id, address, platform.Type, false), cancellationToken);
         }
 
         return removed;
@@ -102,7 +102,7 @@ internal class PlatformHealthMonitorJob(
         if (!trackedPlatforms.TryGetValue(address, out var platform)) return;
 
         status[address] = isOnline;
-        await broadcaster.BroadcastAsync(new PlatformHealth(platform.Id, address, platform.Type, isOnline), cancellationToken);
+        await broadcaster.PublishAsync(new PlatformHealth(platform.Id, address, platform.Type, isOnline), cancellationToken);
     }
 
     private bool ShouldEmitUpdate(string address, bool isOnline, bool wasOnline)

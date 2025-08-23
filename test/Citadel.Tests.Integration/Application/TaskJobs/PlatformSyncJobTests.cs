@@ -81,7 +81,7 @@ public class PlatformSyncJobTests : IntegrationTestBase
                          .ReturnsAsync(Result.Success(Fakes.GetDummyPlatformResult()));
 
         // Act
-        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
 
         await Task.Delay(1000, TestContext.Current.CancellationToken); // wait for job to process
@@ -106,7 +106,7 @@ public class PlatformSyncJobTests : IntegrationTestBase
                          .ReturnsAsync(Result.Success(Fakes.GetDummyPlatformResult()));
 
         // Act
-        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: false),
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: false),
             cancellationToken: TestContext.Current.CancellationToken);
 
         await Task.Delay(1000, TestContext.Current.CancellationToken); // wait for job to process
@@ -131,7 +131,7 @@ public class PlatformSyncJobTests : IntegrationTestBase
         var nonExistentPlatformId = Guid.NewGuid();
 
         // Act
-        await broadcaster.BroadcastAsync(
+        await broadcaster.PublishAsync(
             new PlatformHealth(nonExistentPlatformId, "https://notfound.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
 

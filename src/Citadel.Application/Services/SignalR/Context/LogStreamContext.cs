@@ -6,66 +6,93 @@ namespace Application.Services.SignalR.Context;
 
 internal sealed class LogStreamContext : StreamContext, IDisposable
 {
-    public Channel<ReadOnlyMemory<byte>> Channel { get; } = System.Threading.Channels.Channel.CreateBounded<ReadOnlyMemory<byte>>(ApplicationModule.ChannelDefaultOptions());
+    public Channel<ReadOnlyMemory<byte>> Channel { get; private set; } =
+        System.Threading.Channels.Channel.CreateBounded<ReadOnlyMemory<byte>>(ApplicationModule.ChannelDefaultOptions());
     public CancellationTokenSource Cancellation { get; private set; } = new();
-    private readonly PooledLogBuffer logBuffer = new(1024 * 512); // default 512 KB
+    public CancellationTokenSource WatcherCts { get; private set; } = new();
+
+    private readonly PooledLogBuffer logBuffer = new(1024 * 512);
+    public Task? StreamTask { get; set; }
+    public Task? EventWatcherTask { get; set; }
 
     public override void RemoveSubscriber(string connectionId)
     {
-        Task? toObserve = null;
+        base.RemoveSubscriber(connectionId);
+
+        if (IsEmpty)
+        {
+            ResetInternal();       // stops producer/consumer
+            StopWatcherInternal(); // stops watcher
+        }
+    }
+
+    /// <summary>Force a reset when container restarts (keeps subscribers, keeps watcher).</summary>
+    public void Reset()
+    {
         lock (@lock)
         {
-            subscribers.Remove(connectionId);
-            if (IsEmpty)
-            {
-                logBuffer.Clear();
-
-                try { Cancellation.Cancel(); } catch { }
-                Channel.Writer.TryComplete();
-
-                started = false;
-
-                toObserve = StreamTask;
-                StreamTask = null;
-
-                try { Cancellation.Dispose(); } catch { }
-                Cancellation = new CancellationTokenSource();
-            }
+            ResetInternal();
         }
+    }
 
-        if (toObserve != null)
+    private void ResetInternal()
+    {
+        logBuffer.Clear();
+
+        try { Cancellation.Cancel(); } catch { }
+        try { Cancellation.Dispose(); } catch { }
+        Cancellation = new CancellationTokenSource();
+
+        // complete old channel and create a fresh one
+        Channel.Writer.TryComplete();
+        Channel = System.Threading.Channels.Channel.CreateBounded<ReadOnlyMemory<byte>>(ApplicationModule.ChannelDefaultOptions());
+
+        started = false;
+
+        var t = StreamTask;
+        StreamTask = null;
+        if (t != null)
         {
-            _ = toObserve.ContinueWith(t =>
+            _ = t.ContinueWith(tt =>
             {
-                if (t.IsFaulted)
-                {
-                    // logger?.LogError(t.Exception, "Stream task faulted");
-                    GC.KeepAlive(t.Exception);
-                }
-                t.Dispose();
+                if (tt.IsFaulted) GC.KeepAlive(tt.Exception);
+                tt.Dispose();
+            }, TaskContinuationOptions.ExecuteSynchronously);
+        }
+        // NOTE: we DO NOT touch WatcherCts or EventWatcherTask here
+    }
+
+    private void StopWatcherInternal()
+    {
+        try { WatcherCts.Cancel(); } catch { }
+        try { WatcherCts.Dispose(); } catch { }
+        WatcherCts = new CancellationTokenSource();
+
+        var wt = EventWatcherTask;
+        EventWatcherTask = null;
+        if (wt != null)
+        {
+            _ = wt.ContinueWith(tt =>
+            {
+                if (tt.IsFaulted) GC.KeepAlive(tt.Exception);
+                tt.Dispose();
             }, TaskContinuationOptions.ExecuteSynchronously);
         }
     }
 
-    public void AddToBuffer(ReadOnlySpan<byte> logBytes)
-    {
-        logBuffer.AddLog(logBytes);
-    }
-
-    public string GetBufferedLogsAsString() =>
-        logBuffer.GetRecentLogsString();
-
-    public byte[] GetBufferedLogsAsBytes() =>
-        logBuffer.GetRecentLogsBytes();
+    public void AddToBuffer(ReadOnlySpan<byte> logBytes) => logBuffer.AddLog(logBytes);
+    public string GetBufferedLogsAsString() => logBuffer.GetRecentLogsString();
+    public byte[] GetBufferedLogsAsBytes() => logBuffer.GetRecentLogsBytes();
 
     public void Dispose()
     {
         logBuffer.Dispose();
         Cancellation.Dispose();
+        WatcherCts.Dispose();
     }
 }
 
-public sealed class PooledLogBuffer : IDisposable
+internal sealed class PooledLogBuffer : IDisposable
 {
     private byte[] buffer;
     private int writeIndex;

@@ -219,9 +219,9 @@ internal sealed class CreateNetworkHandler(IPlatformContainerCache platformConta
 {
     public async ValueTask<Result<CreateDockerNetworkResult>> Handle(CreateNetwork request, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(request.PlatformId, out var platform))
+        if (!platformContainerCache.TryGetCacheEntry(request.PlatformId, out var platform, out var error))
         {
-            return Result.Failure<CreateDockerNetworkResult>(new NotFoundError("Platform ID not found."));
+            return Result.Failure<CreateDockerNetworkResult>(error);
         }
 
         var networkConnector = connectorFactory.GetConnector(platform.ConnectorType);

@@ -25,9 +25,9 @@ internal sealed class InspectNetworkHandler(IPlatformContainerCache platformCont
 {
     public async ValueTask<Result<DockerNetworkDetails>> Handle(InspectNetwork query, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
+        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform, out var error))
         {
-            return Result.Failure<DockerNetworkDetails>(new NotFoundError("Platform ID not found."));
+            return Result.Failure<DockerNetworkDetails>(error);
         }
 
         var args = new InspectNetworkCommand

@@ -19,10 +19,11 @@ internal sealed class DockerDaemonEventJob(
     IDockerDaemonStreamManager dockerDaemonHub,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IPlatformConnector> connectorFactory,
-    IPlatformHealthBroadCaster platformHealthBroadCaster) : BackgroundService
+    IPlatformHealthBroadCaster platformHealthBroadCaster,
+    IContainerEventBroadcaster  containerEventBroadcaster) : BackgroundService
 {
     private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
-    private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.Register();
+    private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.AddSubscriber();
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -151,6 +152,7 @@ internal sealed class DockerDaemonEventJob(
         try
         {
             await dockerDaemonHub.SendContainerEvent(container, action);
+            await containerEventBroadcaster.PublishAsync(new ContainerEvent(container.PlatformId, container.ContainerId, action));
         }
         catch (Exception ex)
         {

@@ -25,7 +25,7 @@ internal class ContainerSyncJob(
     IConnectorFactory<IContainerConnector> connectorFactory,
     ILogger<ContainerSyncJob> logger) : BackgroundService
 {
-    private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.Register();
+    private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.AddSubscriber();
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {

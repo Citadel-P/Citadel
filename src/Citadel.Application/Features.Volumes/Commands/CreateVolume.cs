@@ -47,9 +47,9 @@ internal sealed class CreateVolumeHandler(IPlatformContainerCache platformContai
     {
         try
         {
-            if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform))
+            if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform, out var error))
             {
-                return Result.Failure<DockerVolumeResult>(new NotFoundError("Platform ID not found."));
+                return Result.Failure<DockerVolumeResult>(error);
             }
 
             var request = new CreateDockerVolumeCommand

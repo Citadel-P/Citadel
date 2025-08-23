@@ -3,9 +3,9 @@
 public record PullImageCommand(
     string PlatformAddress,
     string FromImage,
-    string FromSrc,
-    string Repo,
-    string Auth,
+    string? FromSrc = null,
+    string? Repo = null,
+    string? Auth = null,
     string? Tag = null,
     string? RegistryName = null
 );

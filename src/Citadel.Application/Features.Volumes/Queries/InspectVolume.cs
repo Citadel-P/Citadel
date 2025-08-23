@@ -23,9 +23,9 @@ internal sealed class InspectVolumeHandler(IPlatformContainerCache platformConta
 {
     public async ValueTask<Result<DockerVolumeResult>> Handle(InspectVolume query, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
+        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform, out var error))
         {
-            return Result.Failure<DockerVolumeResult>(new NotFoundError("Platform ID not found."));
+            return Result.Failure<DockerVolumeResult>(error);
         }
 
         var command = new InspectDockerVolumeCommand

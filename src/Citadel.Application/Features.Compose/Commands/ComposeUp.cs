@@ -11,6 +11,7 @@ using FluentValidation;
 using Hosting.Common;
 using LightResults;
 using Mediator;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Application.Features.Compose.Commands;
 
@@ -33,7 +34,7 @@ internal sealed class ComposeUpHandler(IUnitOfWork unitOfWork, IPlatformContaine
 {
     public async IAsyncEnumerable<ComposeDeploymentEvent> Handle(ComposeUp command, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform))
+        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform, out var _))
         {
             yield return new StepFailedEvent("init", $"Platform with ID {command.PlatformId} not found or not available.") ;
             yield break;

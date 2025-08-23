@@ -5,6 +5,7 @@ using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 using static Google.Rpc.Context.AttributeContext.Types;
 
 namespace Application.Features.Networks.Commands;
@@ -25,9 +26,9 @@ internal class DeleteNetworksHandler(IPlatformContainerCache platformContainerCa
 {
     public async ValueTask<Result> Handle(DeleteNetwork command, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform))
+        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform, out var error))
         {
-            return Result.Failure(new NotFoundError("Platform ID not found."));
+            return Result.Failure(error);
         }
 
         var args = new DeleteDockerNetworkCommand

@@ -80,7 +80,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
             .ReturnsAsync(Result.Success(Fakes.GetDummyContainers().ToDictionary(c => c.ContainerId) as IReadOnlyDictionary<string, DockerContainer>));
 
         // Act
-        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
 
         await Task.Delay(500, TestContext.Current.CancellationToken); // wait for jobs to process
@@ -124,7 +124,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
             .ReturnsAsync(Result.Success(Fakes.GetDummyContainers().ToDictionary(c => c.ContainerId) as IReadOnlyDictionary<string, DockerContainer>));
 
         // Act
-        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
         await Task.Delay(500, TestContext.Current.CancellationToken);
 
@@ -154,7 +154,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
             .ReturnsAsync(Result.Success(new Dictionary<string, DockerContainer> { { "new-id", newDockerContainer } } as IReadOnlyDictionary<string, DockerContainer>));
 
         // Act
-        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
         await Task.Delay(500, TestContext.Current.CancellationToken);
 
@@ -197,7 +197,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
             .ReturnsAsync(Result.Success(new Dictionary<string, DockerContainer> { { containerId, updatedDockerContainer } } as IReadOnlyDictionary<string, DockerContainer>));
 
         // Act
-        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
         await Task.Delay(500, TestContext.Current.CancellationToken);
 
@@ -215,7 +215,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
     public async Task SetsAllContainersOffline_WhenPlatformGoesOffline()
     {
         // Act
-        await broadcaster.BroadcastAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: false),
+        await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: false),
             cancellationToken: TestContext.Current.CancellationToken);
         await Task.Delay(500, TestContext.Current.CancellationToken);
 

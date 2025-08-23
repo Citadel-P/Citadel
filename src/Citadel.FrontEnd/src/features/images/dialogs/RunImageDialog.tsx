@@ -498,7 +498,7 @@ export const RunImageDialog = () => {
                   type="submit"
                   disabled={isPending || imageInfoIsLoading}
                   className="ml-2 bg-primary hover:bg-primary/85 text-background font-medium rounded-sm text-sm inline-flex items-center px-2 py-2">
-                  Create container
+                  Create
                   {isPending && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
                 </button>
               </div>

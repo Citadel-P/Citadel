@@ -13,9 +13,9 @@ internal class ListVolumesHandler(IPlatformContainerCache platformContainerCache
 {
     public async ValueTask<Result<IEnumerable<DockerVolumeResult>>> Handle(ListVolumes query, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
+        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform, out var error))
         {
-            return Result.Failure<IEnumerable<DockerVolumeResult>>(new NotFoundError("Platform ID not found."));
+            return Result.Failure<IEnumerable<DockerVolumeResult>>(error);
         }
 
         var args = new ListdDockerVolumesCommand

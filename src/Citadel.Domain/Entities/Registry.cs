@@ -44,12 +44,12 @@ public class Registry(
     {
         var registry = new Registry(
             name: DefaultRegistryName,
-            url: "https://hub.docker.com/",
+            url: "https://hub.docker.com",
             type: RegistryType.DockerHub,
             configuration: new DockerHubRegistry())
         {
             Id = Guid.Empty,
-            Created = DateTime.MinValue // Set to a default value for the default registry
+            Created = DateTime.MinValue
         };
 
         return registry;

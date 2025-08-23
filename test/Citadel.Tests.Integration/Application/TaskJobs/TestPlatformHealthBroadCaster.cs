@@ -13,10 +13,11 @@ internal sealed class TestPlatformHealthBroadCaster : IPlatformHealthBroadCaster
         _channel = Channel.CreateUnbounded<PlatformHealth>();
     }
 
-    public ChannelReader<PlatformHealth> Register() => _channel.Reader;
-
-    public Task BroadcastAsync(PlatformHealth platformHealth, CancellationToken cancellationToken)
-        => _channel.Writer.WriteAsync(platformHealth, cancellationToken).AsTask();
+    public ChannelReader<PlatformHealth> AddSubscriber() => _channel.Reader;
 
     public void Complete() => _channel.Writer.TryComplete();
+
+    public ValueTask PublishAsync(PlatformHealth platformHealth, CancellationToken cancellationToken)
+        => _channel.Writer.WriteAsync(platformHealth, cancellationToken);
+
 }

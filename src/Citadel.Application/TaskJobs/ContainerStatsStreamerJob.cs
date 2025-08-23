@@ -29,7 +29,7 @@ internal class ContainerStatsStreamerJob(
 {
     private readonly int _fetchIntervalMs = options.Value.ContainersInfoInterval * 1000;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _runningStreams = new();
-    private readonly ChannelReader<PlatformHealth> _platformHealthReader = platformHealthBroadCaster.Register();
+    private readonly ChannelReader<PlatformHealth> _platformHealthReader = platformHealthBroadCaster.AddSubscriber();
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {

@@ -24,9 +24,9 @@ internal class DeleteVolumeHandler(IPlatformContainerCache platformContainerCach
 {
     public async ValueTask<Result> Handle(DeleteVolume command, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform))
+        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform, out var error))
         {
-            return Result.Failure(new NotFoundError("Platform ID not found."));
+            return Result.Failure(error);
         }
 
         var args = new DeleteDockerVolumeCommand

@@ -12,9 +12,9 @@ internal class GetAllLocalImagesHandler(IPlatformContainerCache platformContaine
 {
     public async ValueTask<Result<IReadOnlyList<ImageResult>>> Handle(GetAllLocalImages query, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
+        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform, out var error))
         {
-            return Result.Failure<IReadOnlyList<ImageResult>>(new NotFoundError("Platform ID not found."));
+            return Result.Failure<IReadOnlyList<ImageResult>>(error);
         }
 
         return await connectorFactory

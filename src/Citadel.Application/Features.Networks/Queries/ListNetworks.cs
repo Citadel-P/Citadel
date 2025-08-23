@@ -1,6 +1,5 @@
 ﻿using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Networks;
-using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
@@ -12,9 +11,9 @@ internal class ListNetworksHandler(IPlatformContainerCache platformContainerCach
 {
     public async ValueTask<Result<IEnumerable<DockerNetworkResult>>> Handle(ListNetworks query, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
+        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform, out var error))
         {
-            return Result.Failure<IEnumerable<DockerNetworkResult>>(new NotFoundError("Platform ID not found."));
+            return Result.Failure<IEnumerable<DockerNetworkResult>>(error);
         }
 
         var args = new ListNetworksCommand

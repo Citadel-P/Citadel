@@ -77,7 +77,7 @@ public class ContainerStatsStreamerJobTests : IntegrationTestBase
             .Returns(GetDockerContainerStats(pooledDict));
 
         // Act
-        await _broadcaster.BroadcastAsync(new PlatformHealth(_platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
+        await _broadcaster.PublishAsync(new PlatformHealth(_platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
             cancellationToken: TestContext.Current.CancellationToken);
         await Task.Delay(500, TestContext.Current.CancellationToken);
 

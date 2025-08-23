@@ -3,6 +3,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Networks;
+using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
@@ -23,7 +24,8 @@ public class CreateNetworkTests : IntegrationTestBase
         networkFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(networkConnectorMock.Object);
 
         var cacheEntry = new PlatformCacheEntry("localhost:9000", PlatformConnectorType.Local, []);
-        platformContainerCacheMock.Setup(x => x.TryGetCacheEntry(It.IsAny<Guid>(), out cacheEntry))
+        var error = null as Error;
+        platformContainerCacheMock.Setup(x => x.TryGetCacheEntry(It.IsAny<Guid>(), out cacheEntry, out error))
             .Returns(true);
     }
 

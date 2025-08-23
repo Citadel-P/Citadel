@@ -24,9 +24,9 @@ internal sealed class InspectImageHandler(IPlatformContainerCache platformContai
 {
     public async ValueTask<Result<InspectImageResult>> Handle(InspectImage query, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform))
+        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform, out var error))
         {
-            return Result.Failure<InspectImageResult>(new NotFoundError("Platform ID not found."));
+            return Result.Failure<InspectImageResult>(error);
         }
 
         var args = new InspectImageCommand

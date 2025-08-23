@@ -2,6 +2,8 @@
 using System.Diagnostics.CodeAnalysis;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
+using Hosting.Common.ErrorTypes;
+using LightResults;
 
 namespace Application.Services;
 
@@ -52,14 +54,16 @@ internal class PlatformContainerCache : IPlatformContainerCache
     }
 
     /// <inheritdoc />
-    public bool TryGetCacheEntry(Guid platformId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry)
+    public bool TryGetCacheEntry(Guid platformId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry, [MaybeNullWhen(true)] out Error? error)
     {
         cacheEntry = null;
+        error = null;
         if (cache.TryGetValue(platformId, out var inner))
         {
             cacheEntry = inner;
             return true;
         }
+        error = new NotFoundError("Platform is disconnected or unavailable.");
         return false;
     }
 

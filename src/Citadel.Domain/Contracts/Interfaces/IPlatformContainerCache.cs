@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using Domain.Contracts.Resources;
+using LightResults;
 
 namespace Domain.Contracts.Interfaces;
 
@@ -36,7 +37,7 @@ public interface IPlatformContainerCache
     /// <summary>
     /// Tries to get the cache entry for a specific platform.
     /// </summary>
-    bool TryGetCacheEntry(Guid platformId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry);
+    bool TryGetCacheEntry(Guid platformId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry, [MaybeNullWhen(true)] out Error error);
 
     /// <summary>
     /// Tries to get the cache entry for a specific platform by its container ID.

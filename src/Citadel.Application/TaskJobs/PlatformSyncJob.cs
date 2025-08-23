@@ -20,7 +20,7 @@ internal class PlatformSyncJob(
     IConnectorFactory<IPlatformConnector> connectorFactory,
     ILogger<PlatformSyncJob> logger) : BackgroundService
 {
-    private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.Register();
+    private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.AddSubscriber();
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {

@@ -53,6 +53,7 @@ public static class ApplicationModule
         => services
             .AddSingleton<IJwtService, JwtService>()
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>()
+            .AddSingleton<IContainerEventBroadcaster, ContainerEventBroadcaster>()
             .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>()
             
             .AddScoped<GitHubConnectorStrategy>()

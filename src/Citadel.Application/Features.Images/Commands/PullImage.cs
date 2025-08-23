@@ -48,10 +48,7 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
                     return new PullImageCommand
                         (
                             PlatformAddress: platformAddress,
-                            FromImage: $"{domainName}/{ImageTag}:latest".ToLower(),
-                            FromSrc: registry.Url,
-                            Repo: domainName,
-                            Auth: string.Empty
+                            FromImage: $"{ImageTag}:latest".ToLower()
                         );
                 }
                 else
@@ -77,7 +74,7 @@ internal sealed class PullImageHandler(IUnitOfWork unitOfWork, IPlatformContaine
 {
     public async IAsyncEnumerable<PullImageResult> Handle(PullImage command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform))
+        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform, out var _))
         {
             var message = $"Platform with ID {command.PlatformId} not found or not available.";
             yield return new PullImageResult(ErrorMessage: message, Error: new ImagePullError(404, message));

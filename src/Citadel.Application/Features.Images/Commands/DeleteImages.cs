@@ -24,9 +24,9 @@ internal sealed class DeleteImagesHandler(IPlatformContainerCache platformContai
 {
     public async ValueTask<Result<DeleteImageResult>> Handle(DeleteImages command, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform)) 
+        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform, out var error)) 
         {
-            return Result.Failure<DeleteImageResult>(new NotFoundError("Platform ID not found."));
+            return Result.Failure<DeleteImageResult>(error);
         }
 
         var args = new DeleteImageCommand
