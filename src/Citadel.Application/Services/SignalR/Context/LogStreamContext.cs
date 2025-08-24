@@ -1,18 +1,14 @@
 ﻿using System.Buffers;
 using System.Text;
-using System.Threading.Channels;
 
 namespace Application.Services.SignalR.Context;
 
 internal sealed class LogStreamContext : StreamContext, IDisposable
 {
-    public Channel<ReadOnlyMemory<byte>> Channel { get; private set; } =
-        System.Threading.Channels.Channel.CreateBounded<ReadOnlyMemory<byte>>(ApplicationModule.ChannelDefaultOptions());
     public CancellationTokenSource Cancellation { get; private set; } = new();
     public CancellationTokenSource WatcherCts { get; private set; } = new();
 
     private readonly PooledLogBuffer logBuffer = new(1024 * 512);
-    public Task? StreamTask { get; set; }
     public Task? EventWatcherTask { get; set; }
 
     public override void RemoveSubscriber(string connectionId)
@@ -42,10 +38,6 @@ internal sealed class LogStreamContext : StreamContext, IDisposable
         try { Cancellation.Cancel(); } catch { }
         try { Cancellation.Dispose(); } catch { }
         Cancellation = new CancellationTokenSource();
-
-        // complete old channel and create a fresh one
-        Channel.Writer.TryComplete();
-        Channel = System.Threading.Channels.Channel.CreateBounded<ReadOnlyMemory<byte>>(ApplicationModule.ChannelDefaultOptions());
 
         started = false;
 

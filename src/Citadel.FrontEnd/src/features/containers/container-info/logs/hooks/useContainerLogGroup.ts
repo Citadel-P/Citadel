@@ -3,13 +3,13 @@ import { HubConnection } from '@microsoft/signalr';
 import { useState, useCallback } from 'react';
 const decoder = new TextDecoder('utf-8');
 export const useContainerLogGroup = (containerId?: string) => {
-  const [containerLog, setContainerLog] = useState<string | undefined>();
   const [containerLogs, setContainerLogs] = useState<string[]>([]);
 
   const handleContainerLog = useCallback((log: ArrayBuffer) => {
     const text = decoder.decode(new Uint8Array(log));
-    setContainerLog(text);
+    setContainerLogs((prev) => [...prev, text]);
   }, []);
+
   const handleContainerLogsBatch = useCallback((logs: ArrayBuffer) => {
     const text = decoder.decode(new Uint8Array(logs));
     setContainerLogs((prev) => [...prev, ...text.split('\n')]);
@@ -38,5 +38,5 @@ export const useContainerLogGroup = (containerId?: string) => {
     skip: !containerId,
   });
 
-  return { containerLog, containerLogs };
+  return { containerLogs };
 };

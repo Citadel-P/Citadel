@@ -2,7 +2,6 @@ import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { createContext } from 'react';
 
 interface IContext {
-  isPending: boolean;
   logs: string[];
 }
 
