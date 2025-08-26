@@ -11,6 +11,7 @@ import { Link } from 'react-router';
 import { ContainerDropdownActions } from './ContainerDropdownActions';
 import { fromNow } from '@/lib/dayjs.helper';
 import { ContainerStateIndicator } from './ContainerStateIndicator';
+import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 
 const columns: ColumnDef<ContainerView>[] = [
   {
@@ -36,17 +37,16 @@ const columns: ColumnDef<ContainerView>[] = [
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => (
-      <div className="flex items-center whitespace-nowrap">
+      <div className="flex items-center gap-0.5">
+        {' '}
+        {/* row container */}
         <div className="flex items-center">
           <ContainerStateIndicator stat={row.original.state ?? ContainerStateStatus.Exited} />
         </div>
-        <div>
-          <div className="mb-1 text-[13px] font-semibold text-foreground">
-            <Link to={`../containers/${row.original.containerId?.slice(0, 12)}/logs`} className="hover:underline">
-              {row.original.name ? row.original.name?.slice(1) : ''}
-            </Link>
-          </div>
-          <div className="text-muted-foreground/50 text-xs">{row.original.containerId?.slice(0, 12)}</div>
+        <div className="text-[13px]">
+          <Link to={`../containers/${row.original.containerId?.slice(0, 12)}/logs`} className="table-link">
+            {row.original.name ? row.original.name?.slice(1) : ''}
+          </Link>
         </div>
       </div>
     ),
@@ -55,9 +55,31 @@ const columns: ColumnDef<ContainerView>[] = [
     },
   },
   {
+    accessorKey: 'containerId',
+    header: ({ column }) => <SortableCell cellName="ID" column={column} />,
+    cell: ({ row }) => (
+      <div className="text-xs">
+        <CopyTextToClipboard
+          textToCopy={row.original.containerId}
+          transform={() => row.original.containerId?.slice(0, 12)}
+          groupClassName="rowid"
+        />
+      </div>
+    ),
+  },
+  {
     accessorKey: 'image',
     header: ({ column }) => <SortableCell cellName="Image" column={column} />,
-    cell: ({ row }) => <div className="text-[13px]">{truncate(row.original.image ?? '', 24)}</div>,
+    cell: ({ row }) => (
+      <div className="text-[13px]">
+        {' '}
+        <Link
+          to={`/platforms/${row.original.platformId}/images/${row.original.imageId?.slice(0, 12)}/inspect`}
+          className="table-link">
+          {truncate(row.original.image ?? '', 24)}
+        </Link>
+      </div>
+    ),
   },
   {
     accessorKey: 'CPU',
@@ -93,11 +115,7 @@ const columns: ColumnDef<ContainerView>[] = [
         </div>
       )),
   },
-  {
-    accessorKey: 'status',
-    header: ({ column }) => <SortableCell cellName="Updated" column={column} />,
-    cell: ({ row }) => <div className="text-[12px]">{fromNow(new Date(row.original.updated).getTime())}</div>,
-  },
+
   {
     accessorKey: 'stack',
     header: ({ column }) => <SortableCell cellName="Stack" column={column} />,

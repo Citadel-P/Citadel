@@ -1,3 +1,5 @@
+/// This component has been patched to add:
+// - className='group/rowid' to customize the copytocliboard functionality
 import {
   ColumnDef,
   RowSelectionState,
@@ -68,7 +70,7 @@ export function DataTable<TData extends Identifiable, TValue>({
         <TableBody>
           {table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'} className="group/trow">
+              <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'} className="group/rowid">
                 {row.getVisibleCells().map((cell) => (
                   <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                 ))}

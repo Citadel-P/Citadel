@@ -2,7 +2,6 @@
 using Domain.Contracts.Resources.Images;
 using FluentValidation;
 using Hosting.Common;
-using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
@@ -29,13 +28,8 @@ internal sealed class InspectImageHandler(IPlatformContainerCache platformContai
             return Result.Failure<InspectImageResult>(error);
         }
 
-        var args = new InspectImageCommand
-        (
-            PlatformAddress: platform.Address,
-            ImageId: query.ImageId
-        );
-        return await connectorFactory
-            .GetConnector(platform.ConnectorType)
-            .InspectImageAsync(args, cancellationToken: cancellationToken);
+        var inspectArgs = new InspectImageCommand (PlatformAddress: platform.Address, ImageId: query.ImageId);
+        
+        return await connectorFactory.GetConnector(platform.ConnectorType).InspectImageAsync(inspectArgs, cancellationToken: cancellationToken);
     }
 }

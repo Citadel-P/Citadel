@@ -12,6 +12,7 @@ public sealed record ContainerView(
     string ContainerId,
     string Name,
     string Image,
+    string ImageId,
     DateTimeOffset Created,
     ContainerStateStatus State,
     DateTimeOffset Updated,
@@ -26,12 +27,23 @@ public sealed record ContainerView(
 
     internal static ContainerView Map(Container container)
     {
+        string GetImageId()
+        {
+            if (string.IsNullOrEmpty(container.ImageId)) return string.Empty;
+
+            ReadOnlySpan<char> span = container.ImageId.AsSpan();
+            int idx = container.ImageId.IndexOf(':');
+
+            return idx >= 0 ? span[(idx + 1)..].ToString() : container.ImageId;
+        }
+
         return new (
             Id: container.Id,
             PlatformId: container.PlatformId,
             ContainerId: container.ContainerId,
             Name: container.Name,
             Image: container.Image,
+            ImageId: GetImageId(), // container.ImageId,
             Created: DateTimeOffset.FromUnixTimeSeconds(container.Created),
             State: container.State,
             Updated: DateTimeOffset.FromUnixTimeSeconds(container.Updated),

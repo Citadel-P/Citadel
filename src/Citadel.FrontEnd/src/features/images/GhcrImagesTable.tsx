@@ -8,7 +8,7 @@ import {
   getExpandedRowModel,
   Row,
 } from '@tanstack/react-table';
-import { CheckCheck, ChevronRight, Clipboard } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
@@ -22,9 +22,9 @@ import { Badge } from '@/components/ui/badge';
 import { truncate } from '@/lib/truncate';
 import PullProgressSheetContent from './PullProgressSheetContent';
 import { Sheet } from '@/components/ui/sheet';
-import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { useSheetState } from './hooks/useSheetState';
 import { PullImageBadge } from '@/components/ui/PullImageBadge';
+import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 
 // Column helpers
 const packageColumnHelper = createColumnHelper<IImageRepositoryGitHubPackageResponse>();
@@ -40,7 +40,13 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubP
     () => [
       versionColumnHelper.accessor('name', {
         header: 'Version',
-        cell: (info) => <VersionRow version={info.getValue() ?? ''} />,
+        cell: (info) => (
+          <CopyTextToClipboard
+            textToCopy={info.getValue() ?? ''}
+            transform={(v) => truncate(v, 12, 'right', true)}
+            groupClassName="rowid"
+          />
+        ),
       }),
       versionColumnHelper.accessor('htmlUrl', {
         header: 'Url',
@@ -74,7 +80,7 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubP
       {
         id: 'select',
         cell: ({ row }: { row: Row<GitHubCrPackageVersion> }) => (
-          <PullImageBadge onClick={() => openSheet(row.original)} className="group-hover/versionrow:visible" />
+          <PullImageBadge onClick={() => openSheet(row.original)} className="group-hover/rowid:visible" />
         ),
       },
     ],
@@ -106,7 +112,7 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubP
         <TableBody>
           {versionsTable.getRowModel().rows.length ? (
             versionsTable.getRowModel().rows.map((row) => (
-              <TableRow key={row.id} className="group/versionrow">
+              <TableRow key={row.id} className="group/rowid">
                 {row.getVisibleCells().map((cell, index) => (
                   <TableCell
                     key={cell.id}
@@ -137,22 +143,6 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubP
     </>
   );
 }
-
-// Reusable VersionRow Component
-const VersionRow = ({ version }: { version: string }) => {
-  const [copiedWinCmd, copyWinCmdToClipboard] = useCopyToClipboard(5000);
-  const v = version?.split(':').at(1) ?? '';
-  return (
-    <div className="flex gap-0.5 items-center">
-      <div>{truncate(v, 12, 'right', true)}</div>
-      <button
-        className="rounded-full invisible group-hover/versionrow:visible ml-1 px-1.5 py-1.5 bg-foreground/5 hover:bg-foreground/10 text-sm font-semibold"
-        onClick={() => copyWinCmdToClipboard(version ?? '')}>
-        {copiedWinCmd ? <CheckCheck className="w-3 h-3 text-green-500" /> : <Clipboard className="w-3 h-3 " />}
-      </button>
-    </div>
-  );
-};
 
 export default function GhcrImagesTable({ registryName }: { registryName: string }) {
   const { isLoading, data } = useGETExternalRepositories(registryName);

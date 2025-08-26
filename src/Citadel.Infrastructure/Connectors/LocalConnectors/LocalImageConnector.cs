@@ -43,4 +43,10 @@ internal class LocalImageConnector(IImageService imageService) : IImageConnector
             yield return message.Map();
         }
     }
+
+    public async Task<Result<IEnumerable<HistoryImageResult>>> HistoryImageAsync(HistoryImageCommand command, CancellationToken cancellationToken)
+    {
+        var result = await imageService.HistoryAsync(command.ImageId, cancellationToken);
+        return ServiceResultHandlers.HandleResult(result, ImageMappers.Map);
+    }
 }

@@ -83,4 +83,9 @@ internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageCon
             yield return reply.Map();
         }
     }
+
+    Task<Result<IEnumerable<Domain.Contracts.Resources.Images.HistoryImageResult>>> IImageConnector.HistoryImageAsync(HistoryImageCommand command, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
 }

@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { useContainersContext } from './ContainersContext';
-import { ContainersActionButtons } from './ContainersActionButtons';
 import { useLayoutContext } from '@/layout/LayoutContext';
+import { ContainerActionButtons } from './ContainerActionButtons';
 
-export const ContainersActionBar = () => {
+export const ContainerActionBar = () => {
   const { containers, selectedRows, setDialogData } = useContainersContext();
   const { sidebarMinimized } = useLayoutContext();
 
@@ -22,7 +22,7 @@ export const ContainersActionBar = () => {
       <div className="text-xs text-muted-foreground">
         {selectedCount} of {containerCount} container(s) selected.
       </div>
-      <ContainersActionButtons selectedContainers={selectedRows} setDialogData={setDialogData} />
+      <ContainerActionButtons selectedContainers={selectedRows} setDialogData={setDialogData} />
     </div>
   );
 };

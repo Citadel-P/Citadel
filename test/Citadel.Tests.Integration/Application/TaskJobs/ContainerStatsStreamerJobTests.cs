@@ -54,6 +54,7 @@ public class ContainerStatsStreamerJobTests : IntegrationTestBase
             await uow.Containers.AddAsync(new Container(
                 name: container.Name,
                 image: container.Image,
+                imageId: container.ImageId,
                 platformId: platform.Id,
                 ports: [],
                 containerId: container.ContainerId,

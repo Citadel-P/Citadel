@@ -70,7 +70,7 @@ internal sealed class GetImageInfoHandler(IUnitOfWork unitOfWork,
 
         if (inspectResult.IsSuccess(out var inspect))
         {
-            return inspect.Config?.ExposedPorts.Select(s => s.Key);
+            return inspect.ExposedPorts;
         }
         return null;
     }

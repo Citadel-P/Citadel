@@ -1,5 +1,5 @@
--- Migration: 20250728190451_SeedData.sql
--- Generated: 2025-07-28 19:04:51 UTC
+-- Migration: 20250826180729_SeedData.sql
+-- Generated: 2025-08-26 18:07:29 UTC
 
 INSERT OR IGNORE INTO "Roles" ("Id", "Name", "CreatedAt", "UpdatedAt") VALUES ('bdde9601-3b03-1275-a11b-98533d063a04', 'Admin', '2025-01-01 00:00:00', '2025-01-01 00:00:00')
 ;

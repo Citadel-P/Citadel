@@ -81,10 +81,6 @@ export enum ContainerRestartPolicy {
   UnlessStopped = "UnlessStopped",
 }
 
-export interface AttestationData {
-  for: null | string;
-}
-
 export interface BindOptions {
   propagation: null | string;
   nonRecursive: null | boolean;
@@ -112,6 +108,20 @@ export interface ClusterVolumeInfo {
   volumeContext: Record<string, string>;
   volumeID: string;
   accessibleTopology: TopologyEntry[];
+}
+
+export interface ComposeDeploymentEvent {
+  stepId?: string;
+  /** @format date-time */
+  timestamp?: any;
+}
+
+export interface ComposeUpRequest {
+  /** @format uuid */
+  platformId: string;
+  registryName: string;
+  repositoryName: string;
+  composeFileAsStr: string;
 }
 
 export interface ConfigFromInput {
@@ -276,6 +286,7 @@ export interface ContainerView {
   containerId: string;
   name: string;
   image: string;
+  imageId: string;
   /** @format date-time */
   created: any;
   state: ContainerStateStatus;
@@ -527,8 +538,6 @@ export interface DriverConfiguration {
   options: Record<string, string>;
 }
 
-export type Empty = any;
-
 export interface EndpointIpamConfiguration {
   ipv4Address: null | string;
   ipv6Address: null | string;
@@ -593,6 +602,22 @@ export interface GitHubCrPackageVersionMetadata {
 export interface GraphDriverDataInfo {
   name: null | string;
   data: Record<string, string>;
+}
+
+export interface HistoryImageResult {
+  id: string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  created: number | string;
+  createdBy: string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  size: number | string;
+  comment: string;
 }
 
 export interface HostConfiguration {
@@ -777,92 +802,6 @@ export interface IPAMInput {
   options?: null | object;
 }
 
-export interface ImageConfig {
-  tty: boolean;
-  user: string;
-  image: string;
-  hostname: string;
-  domainname: string;
-  attachStdin: boolean;
-  attachStdout: boolean;
-  attachStderr: boolean;
-  stopSignal: string;
-  openStdin: boolean;
-  stdinOnce: boolean;
-  argsEscaped: boolean;
-  workingDir: string;
-  healthCheck: ImageHealthCheck;
-  shell: string[];
-  env: string[];
-  cmd: string[];
-  onBuild: string[];
-  entryPoint: string[];
-  volumes: Record<string, Empty>;
-  labels: Record<string, string>;
-  exposedPorts: Record<string, Empty>;
-}
-
-export interface ImageData {
-  platform: ImagePlatformDescriptor;
-  containers: string[];
-  size: SizeInfo;
-}
-
-export interface ImageDescriptor {
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  size: number | string;
-  data: null | string;
-  digest: string;
-  mediaType: string;
-  artifactType: string;
-  platform: ImagePlatformDescriptor;
-  urls: any;
-  annotations: any;
-}
-
-export interface ImageGraphDriverData {
-  mergedDir: string;
-  upperDir: string;
-  workDir: string;
-}
-
-export interface ImageGraphicDriver {
-  name: string;
-  data: ImageGraphDriverData;
-}
-
-export interface ImageHealthCheck {
-  test: string[];
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  interval: null | number | string;
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  timeout: null | number | string;
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  retries: null | number | string;
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  startPeriod: null | number | string;
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  startInterval: null | number | string;
-}
-
 export interface ImageInfoResult {
   volumes: string[];
   networks: string[];
@@ -878,22 +817,6 @@ export interface ImageInfoResult {
    */
   cpuCount: number | string;
 }
-
-export interface ImageManifest {
-  id: string;
-  kind: string;
-  available: boolean;
-  size: SizeInfo;
-  imageData: ImageData;
-  descriptor: ImageDescriptor;
-  attestationData: AttestationData;
-}
-
-export interface ImageMetadata {
-  lastTagTime: string;
-}
-
-export type ImagePlatformDescriptor = any;
 
 export interface ImagePullError {
   /**
@@ -921,11 +844,6 @@ export interface ImagePullProgress {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   start: null | number | string;
-}
-
-export interface ImageRootFs {
-  type: string;
-  layers: string[];
 }
 
 export interface ImageView {
@@ -965,33 +883,20 @@ export interface ImagesView {
 
 export interface InspectImageResult {
   id: string;
-  author: string;
-  parent: string;
-  comment: string;
-  created: string;
-  dockerVersion: string;
-  architecture: string;
-  osVersion: string;
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  virtualSize: number | string;
-  variant: string;
-  os: string;
   /**
    * @format int64
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   size: number | string;
-  rootFS: ImageRootFs;
-  metadata: ImageMetadata;
-  config: ImageConfig;
-  descriptor: ImageDescriptor;
-  graphDriver: ImageGraphicDriver;
-  manifests: ImageManifest[];
+  created: string;
+  env: string[];
+  cmd: string[];
   repoTags: string[];
-  repoDigests: string[];
+  volumes: string[];
+  exposedPorts: string[];
+  layers: HistoryImageResult[];
+  labels: Record<string, string>;
+  containers: Record<string, string>;
 }
 
 export type IpAddressInfo = any;
@@ -1338,14 +1243,14 @@ export interface PullImageRequest {
 }
 
 export interface PullImageResult {
-  id: null | string;
-  from: null | string;
-  stream: null | string;
-  status: null | string;
-  errorMessage: null | string;
-  progressMessage: null | string;
-  progress: ImagePullProgress;
-  error: ImagePullError;
+  id?: null | string;
+  from?: null | string;
+  stream?: null | string;
+  status?: null | string;
+  errorMessage?: null | string;
+  progressMessage?: null | string;
+  progress?: ImagePullProgress;
+  error?: ImagePullError;
 }
 
 export interface RefreshTokenResponse {
@@ -1356,55 +1261,62 @@ export interface RegistriesView {
   registries: RegistryView[];
 }
 
-export type RegistryConfigurationBase =
-  | RegistryConfigurationBaseAWSRegistry
-  | RegistryConfigurationBaseAzureRegistry
-  | RegistryConfigurationBaseGitlabRegistry
-  | RegistryConfigurationBaseDockerHubRegistry
-  | RegistryConfigurationBaseGitHubRegistry
-  | RegistryConfigurationBaseBase;
+export type RegistryConfigurationBase = BaseRegistryConfigurationBase &
+  (
+    | BaseRegistryConfigurationBaseTypeMapping<
+        "AWS",
+        RegistryConfigurationBaseAWSRegistry
+      >
+    | BaseRegistryConfigurationBaseTypeMapping<
+        "Azure",
+        RegistryConfigurationBaseAzureRegistry
+      >
+    | BaseRegistryConfigurationBaseTypeMapping<
+        "Gitlab",
+        RegistryConfigurationBaseGitlabRegistry
+      >
+    | BaseRegistryConfigurationBaseTypeMapping<
+        "DockerHub",
+        RegistryConfigurationBaseDockerHubRegistry
+      >
+    | BaseRegistryConfigurationBaseTypeMapping<
+        "GitHub",
+        RegistryConfigurationBaseGitHubRegistry
+      >
+  );
 
 export interface RegistryConfigurationBaseAWSRegistry {
-  $type: "AWS";
+  $type?: "AWS";
   accessKey: string;
   authenticationRequired: boolean;
   secretAccessKey: string;
   region: string;
-  registryUrl?: string;
 }
 
 export interface RegistryConfigurationBaseAzureRegistry {
-  $type: "Azure";
+  $type?: "Azure";
   userName: string;
   password: string;
-  registryUrl?: string;
-}
-
-export interface RegistryConfigurationBaseBase {
-  registryUrl: string;
 }
 
 export interface RegistryConfigurationBaseDockerHubRegistry {
-  $type: "DockerHub";
+  $type?: "DockerHub";
   userName?: null | string;
   pat?: null | string;
-  registryUrl?: string;
 }
 
 export interface RegistryConfigurationBaseGitHubRegistry {
-  $type: "GitHub";
+  $type?: "GitHub";
   name: string;
   pat: string;
   type: NullableOfGhcrAccountType;
-  registryUrl?: string;
 }
 
 export interface RegistryConfigurationBaseGitlabRegistry {
-  $type: "Gitlab";
+  $type?: "Gitlab";
   userName: string;
   pat: string;
   instanceUrl: string;
-  registryUrl?: string;
 }
 
 export interface RegistryInput {
@@ -1433,24 +1345,6 @@ export interface RestartPolicy {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   maximumRetryCount: null | number | string;
-}
-
-export interface SizeInfo {
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  total: null | number | string;
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  content: null | number | string;
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  unpacked: null | number | string;
 }
 
 export interface SwarmPeer {
@@ -1554,6 +1448,12 @@ type BaseIImageRepositoryTypeMapping<Key, Type> = {
 type BasePlatformDescriptor = object;
 
 type BasePlatformDescriptorTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseRegistryConfigurationBase = object;
+
+type BaseRegistryConfigurationBaseTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
@@ -3016,6 +2916,35 @@ export class Api<
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/volumes`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Compose
+     * @name ComposeUp
+     * @summary Deploy a stack
+     * @request POST:/api/v1/compose/up
+     * @secure
+     * @response `200` `(ComposeDeploymentEvent)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    composeUp: (data: ComposeUpRequest, params: RequestParams = {}) =>
+      this.request<
+        ComposeDeploymentEvent[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/compose/up`,
         method: "POST",
         body: data,
         secure: true,

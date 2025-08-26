@@ -567,6 +567,7 @@ internal static class ContainerMappers
         (
             name: container.Name,
             image: container.Image,
+            imageId: container.ImageID,
             stack: container.Stack,
             containerId: container.Id,
             created: container.Created,
@@ -668,6 +669,7 @@ internal static class ContainerMappers
         (
             name: container?.Name,
             image: container?.Image,
+            imageId: container?.ImageID,
             stack: container?.Stack,
             containerId: container?.Id,
             created: container?.Created,

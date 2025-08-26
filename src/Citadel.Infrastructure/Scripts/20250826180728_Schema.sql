@@ -1,5 +1,5 @@
--- Migration: 20250728190450_Schema.sql
--- Generated: 2025-07-28 19:04:51 UTC
+-- Migration: 20250826180728_Schema.sql
+-- Generated: 2025-08-26 18:07:29 UTC
 
 CREATE TABLE IF NOT EXISTS "Platforms" ("Id" TEXT NOT NULL, "Name" TEXT NOT NULL, "Address" TEXT NOT NULL, "Status" TEXT NOT NULL, "ConnectorType" TEXT NOT NULL, "NetworkCount" INTEGER NOT NULL, "VolumeCount" INTEGER NOT NULL, "ImageCount" INTEGER NOT NULL, "CpuCount" INTEGER NOT NULL, "MemTotal" INTEGER NOT NULL, "AgentVersion" TEXT, "ServerVersion" TEXT, "PlatformDescriptor" TEXT NOT NULL, CONSTRAINT "PK_Platforms" PRIMARY KEY ("Id"))
 ;
@@ -39,7 +39,7 @@ CREATE INDEX IF NOT EXISTS "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId" ASC)
 ;
 CREATE INDEX IF NOT EXISTS "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId" ASC)
 ;
-CREATE TABLE IF NOT EXISTS "Containers" ("Id" TEXT NOT NULL, "PlatformId" TEXT NOT NULL, "ContainerId" TEXT NOT NULL, "Name" TEXT NOT NULL, "Image" TEXT NOT NULL, "Created" INTEGER NOT NULL, "Updated" INTEGER NOT NULL, "State" TEXT NOT NULL, "Stack" TEXT, "Ports" TEXT NOT NULL, CONSTRAINT "PK_Containers" PRIMARY KEY ("Id"), CONSTRAINT "FK_Containers_Platforms" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE ON UPDATE CASCADE)
+CREATE TABLE IF NOT EXISTS "Containers" ("Id" TEXT NOT NULL, "PlatformId" TEXT NOT NULL, "ContainerId" TEXT NOT NULL, "Name" TEXT NOT NULL, "Image" TEXT NOT NULL, "ImageId" TEXT NOT NULL, "Created" INTEGER NOT NULL, "Updated" INTEGER NOT NULL, "State" TEXT NOT NULL, "Stack" TEXT, "Ports" TEXT NOT NULL, CONSTRAINT "PK_Containers" PRIMARY KEY ("Id"), CONSTRAINT "FK_Containers_Platforms" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE ON UPDATE CASCADE)
 ;
 CREATE UNIQUE INDEX IF NOT EXISTS "IX_Containers_ContainerId" ON "Containers" ("ContainerId" ASC)
 ;

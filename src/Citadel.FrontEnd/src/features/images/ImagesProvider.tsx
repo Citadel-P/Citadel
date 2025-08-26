@@ -1,24 +1,14 @@
 import { useGETRegistries } from '../registries/hooks/useGETRegistries';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { DeleteImagesRequest, ImageView, RegistryView } from '@/api/_generated';
+import { ImageView, RegistryView } from '@/api/_generated';
 import { useQueryClient } from '@tanstack/react-query';
-import { useDELETEImages } from './hooks/useDELETEImages';
-import { toast } from 'sonner';
 import { useDialogState } from '@/hooks/useDialogState';
-import { use400ErrorToast } from '@/hooks/use400ErrorToast';
 import { ImagesContext } from './ImagesContext';
+import { useDeleteImageDialog } from './hooks/useDeleteImageDialog';
 
 export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const client = useQueryClient();
   const { data, isLoading, isSuccess } = useGETRegistries();
-  const {
-    mutate,
-    isSuccess: deleteIsSuccess,
-    isPending: deleteIsPending,
-    data: deleteData,
-    error: deleteInError,
-  } = useDELETEImages();
-  use400ErrorToast(deleteInError, 'The selected image(s) could not be deleted (status code: 400).', on400ErrorHandled);
 
   // State variables
   const [registries, setRegistries] = useState<RegistryView[]>([]);
@@ -26,9 +16,10 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
   const [selectedRegistry, setSelectedRegistry] = useState<RegistryView | undefined>();
   const [localImages, setLocalImages] = useState<ImageView[]>([]);
   const [originalLocalImages, setOriginalLocalImages] = useState<ImageView[] | undefined>([]);
-  const { dialogData, setDialogData } = useDialogState<ImageView>();
+  const { deleteIsPending, requestDelete, dialogData, setDialogData } = useDeleteImageDialog();
+
   const { dialogData: runDialogData, setDialogData: setRunDialogData } = useDialogState<ImageView>();
-  
+
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
   // Sheet state
   const [currentImage, setCurrentImage] = useState<ImageView>();
@@ -77,25 +68,6 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
     }
   }, [originalLocalImages, currentSearchTerm]);
 
-  // Handle successful image deletion
-  useEffect(() => {
-    if (deleteIsSuccess) {
-      client.invalidateQueries({ queryKey: ['getAllLocalImages'] });
-      setDialogData({ open: false });
-
-      const message =
-        deleteData?.data?.items && deleteData?.data?.items.length > 1
-          ? 'The selected images have been successfully deleted'
-          : 'The selected image has been successfully deleted';
-
-      toast.success(message);
-    }
-  }, [deleteIsSuccess, client, deleteData, setDialogData]);
-
-  function on400ErrorHandled() {
-    setDialogData({ open: false });
-  }
-
   // Handle registry selection change
   const setSelectionChange = useCallback(
     (name: string) => {
@@ -106,14 +78,6 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
       }
     },
     [registries, client],
-  );
-
-  // Handle image deletion request
-  const requestDelete = useCallback(
-    (request: DeleteImagesRequest) => {
-      mutate(request);
-    },
-    [mutate],
   );
 
   // Search function to filter images by name or ID

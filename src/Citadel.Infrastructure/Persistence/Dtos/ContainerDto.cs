@@ -6,6 +6,7 @@ internal sealed record ContainerDto(
     string ContainerId,
     string Name,
     string Image,
+    string ImageId,
     long Created,
     long Updated,
     string State, // ContainerStateStatus
@@ -16,7 +17,7 @@ internal sealed record ContainerDto(
 {
     public ICollection<ContainerStatDto> Stats { get; init; } = [];
 
-    public ContainerDto() : this(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, 0, 0, string.Empty, string.Empty, string.Empty, null)
+    public ContainerDto() : this(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, 0, 0, string.Empty, string.Empty, string.Empty, null)
     {
         
     }

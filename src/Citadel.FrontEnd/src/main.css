@@ -375,3 +375,7 @@ select {
 .action-bar-left-collapsed {
   left: var(--sidebar-minimized-width) - 50;
 }
+
+.table-link {
+  @apply text-foreground/80 group-hover/rowid:text-blue-500 hover:underline
+}

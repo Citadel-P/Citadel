@@ -60,6 +60,7 @@ internal static class Fakes
             yield return new DockerContainer(
                 name: $"c-{i:D2}",
                 image: $"image-{i}:latest",
+                imageId: $"image-id-{i}:latest",
                 state: ContainerStateStatus.Running,
                 containerId: $"container-id-{i}"
             );

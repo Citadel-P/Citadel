@@ -6,7 +6,7 @@ import { IDialogData } from '@/hooks/useDialogState';
 import { DockerContainerView } from '@/api/models';
 import { ContainerDropdownActions } from './ContainerDropdownActions';
 
-export const ContainersActionButtons = ({
+export const ContainerActionButtons = ({
   selectedContainers,
   setDialogData,
 }: {

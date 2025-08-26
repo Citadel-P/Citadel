@@ -1,7 +1,6 @@
 ﻿using System.Threading.Channels;
 using Application.Mappers;
 using Application.Services;
-using Application.Services.Abstractions;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -109,6 +108,7 @@ internal class ContainerSyncJob(
                 existingDbContainer.PartialUpdate(
                     name: freshContainer.Name,
                     image: freshContainer.Image,
+                    imageId: freshContainer.ImageId,
                     state: freshContainer.State,
                     stack: freshContainer.Stack,
                     created: freshContainer.Created,

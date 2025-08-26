@@ -53,7 +53,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
             INSERT INTO Containers (
-                Id, PlatformId, ContainerId, Name, Image, Created, Updated, State, Stack, Ports
+                Id, PlatformId, ContainerId, Name, Image, ImageId, Created, Updated, State, Stack, Ports
             ) VALUES {0}
         """;
 
@@ -64,13 +64,14 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         foreach (var c in containers)
         {
             valueRows.Add(
-                $"(@Id{i}, @PlatformId{i}, @ContainerId{i}, @Name{i}, @Image{i}, @Created{i}, @Updated{i}, @State{i}, @Stack{i}, @Ports{i})"
+                $"(@Id{i}, @PlatformId{i}, @ContainerId{i}, @Name{i}, @Image{i}, @ImageId{i}, @Created{i}, @Updated{i}, @State{i}, @Stack{i}, @Ports{i})"
             );
             parameters.Add($"Id{i}", c.Id.Format());
             parameters.Add($"PlatformId{i}", c.PlatformId.Format());
             parameters.Add($"ContainerId{i}", c.ContainerId);
             parameters.Add($"Name{i}", c.Name);
             parameters.Add($"Image{i}", c.Image);
+            parameters.Add($"ImageId{i}", c.ImageId);
             parameters.Add($"Created{i}", c.Created);
             parameters.Add($"Updated{i}", c.Updated);
             parameters.Add($"State{i}", EnumFormatter<ContainerStateStatus>.GetValue(c.State));
@@ -129,9 +130,9 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
             INSERT INTO Containers (
-                Id, PlatformId, ContainerId, Name, Image, Created, Updated, State, Stack, Ports
+                Id, PlatformId, ContainerId, Name, Image, ImageId, Created, Updated, State, Stack, Ports
             ) VALUES (
-                @Id, @PlatformId, @ContainerId, @Name, @Image, @Created, @Updated, @State, @Stack, @Ports
+                @Id, @PlatformId, @ContainerId, @Name, @Image, @ImageId, @Created, @Updated, @State, @Stack, @Ports
             )
         """;
         return db.ExecuteAsync(sql, new 
@@ -141,6 +142,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             ContainerId = container.ContainerId,
             Name = container.Name,
             Image = container.Image,
+            ImageId = container.ImageId,
             Created = container.Created,
             Updated = container.Updated,
             State = EnumFormatter<ContainerStateStatus>.GetValue(container.State),
@@ -168,7 +170,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
             UPDATE Containers
-            SET Name = @Name, Image = @Image, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports, Created = @Created
+            SET Name = @Name, Image = @Image, ImageId = @ImageId, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports, Created = @Created
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
@@ -179,6 +181,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             ContainerId = container.ContainerId,
             Name = container.Name,
             Image = container.Image,
+            ImageId = container.ImageId,
             Created = container.Created,
             Updated = container.Updated,
             State = EnumFormatter<ContainerStateStatus>.GetValue(container.State),

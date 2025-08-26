@@ -7,9 +7,8 @@ import { useGETAllLocalImages } from './hooks/useGETAllLocalImages';
 import DropdownTableMenu from './DropdownTableMenu';
 import { useImagesContext } from './ImagesContext';
 import { truncate } from '@/lib/truncate';
-import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
-import { CheckCheck, Play, Clipboard } from 'lucide-react';
-import { useEffect, useCallback, useMemo, memo } from 'react';
+import { Play } from 'lucide-react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
 import { byteTransform } from '@/lib/bytes.helper';
 import { DeleteLocalImageDialog } from './dialogs/DeleteLocalImageDialog';
@@ -18,8 +17,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ImageInspectSheet } from './ImageInspectSheet';
 import { Button } from '@/components/ui/button';
 import { RunImageDialog } from './dialogs/RunImageDialog';
+import { ImageSateIndicator } from './ImageStateIndicator';
+import { useNavigate, useParams } from 'react-router';
+import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 
-const columns = (handleShowSheet: (network: ImageView) => void): ColumnDef<ImageView>[] => [
+function getImageId(longId: string) {
+  return truncate(longId?.split(':').at(1) ?? '', 12, 'right', true);
+}
+const columns = (): ColumnDef<ImageView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -42,7 +47,7 @@ const columns = (handleShowSheet: (network: ImageView) => void): ColumnDef<Image
   {
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
-    cell: ({ row }) => <ImageNameRow image={row.original} onShowSheet={handleShowSheet} />,
+    cell: ({ row }) => <ImageNameRow image={row.original} />,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
   {
@@ -54,7 +59,9 @@ const columns = (handleShowSheet: (network: ImageView) => void): ColumnDef<Image
   {
     accessorKey: 'id',
     header: ({ column }) => <SortableCell cellName="Image Id" column={column} />,
-    cell: ({ row }) => <ImageIdRow image={row.original} />,
+    cell: ({ row }) => (
+      <CopyTextToClipboard textToCopy={row.original.id} transform={getImageId} groupClassName="rowid" />
+    ),
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.id?.localeCompare(rowB.original?.id),
   },
   {
@@ -106,18 +113,24 @@ const RenderActions = ({ image }: { image: ImageView }) => {
   );
 };
 
-const ImageNameRow = ({ image, onShowSheet }: { image: ImageView; onShowSheet: (image: ImageView) => void }) => {
+const ImageNameRow = ({ image }: { image: ImageView }) => {
+  const { platformId } = useParams<{ platformId: string }>();
+  const navigate = useNavigate();
+  function onNameClick() {
+    navigate(`/platforms/${platformId}/images/${getImageId(image.id)}/inspect`);
+  }
+
   return (
     <div className="flex items-center whitespace-nowrap">
       <div className="flex items-center">
-        <ImageStatusTooltip inUse={image.isInUse ?? false} />
+        <ImageSateIndicator inUse={image.isInUse ?? false} />
       </div>
       <span
-        className="cursor-pointer hover:underline"
-        onClick={() => onShowSheet(image)}
+        className="cursor-pointer table-link"
+        onClick={onNameClick}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
-            onShowSheet(image);
+            onNameClick();
           }
         }}
         tabIndex={0}
@@ -129,25 +142,11 @@ const ImageNameRow = ({ image, onShowSheet }: { image: ImageView; onShowSheet: (
   );
 };
 
-const ImageIdRow = ({ image }: { image: ImageView }) => {
-  const [copyCmd, setCopyCmd] = useCopyToClipboard(5000);
-
-  return (
-    <div className="flex gap-0.5 items-center">
-      <div>{truncate(image.id?.split(':').at(1) ?? '', 12, 'right', true)}</div>
-      <button
-        className="rounded-full invisible group-hover/trow:visible ml-1 px-1.5 py-1.5 bg-foreground/5 hover:bg-foreground/10 text-sm font-semibold"
-        onClick={() => setCopyCmd(image.id ?? '')}>
-        {copyCmd ? <CheckCheck className="w-3 h-3 text-green-500" /> : <Clipboard className="w-3 h-3 " />}
-      </button>
-    </div>
-  );
-};
-
 export default function LocalImagesTable() {
   const { currentPlatform } = useAppContext();
   const { data, isLoading, isSuccess } = useGETAllLocalImages(currentPlatform?.id);
-  const { setSelectedRows, setLocalImages, localImages, setCurrentImage, setSheetOpen } = useImagesContext();
+  const { setSelectedRows, setLocalImages, localImages, setDialogData, dialogData, requestDelete, deleteIsPending } =
+    useImagesContext();
   // Update local images when data is fetched
   useEffect(() => {
     if (isSuccess && data?.data.images) {
@@ -167,17 +166,13 @@ export default function LocalImagesTable() {
     [localImages, setSelectedRows],
   );
 
-  const handleShowSheet = (image: ImageView) => {
-    setCurrentImage(image);
-    setSheetOpen(true);
-  };
   // Memoized row count
   const rowCount = useMemo(() => localImages?.length ?? 0, [localImages]);
 
   return (
     <div className="flex flex-col gap-3">
       <DataTable
-        columns={columns(handleShowSheet)}
+        columns={columns()}
         data={localImages}
         isLoading={isLoading}
         onSelectionChange={handleSelectionChange}
@@ -190,27 +185,13 @@ export default function LocalImagesTable() {
         )}
       </div>
       <RunImageDialog />
-      <DeleteLocalImageDialog />
+      <DeleteLocalImageDialog
+        dialogData={dialogData}
+        setDialogData={setDialogData}
+        requestDelete={requestDelete}
+        deleteIsPending={deleteIsPending}
+      />
       <ImageInspectSheet />
     </div>
   );
 }
-
-const ImageStatusTooltip = memo(({ inUse }: { inUse: boolean }) => {
-  const getStatusClass = () => (inUse ? 'bg-green-500' : 'bg-gray-500');
-
-  return (
-    <TooltipProvider delayDuration={200}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className={`${getStatusClass()} mr-2 h-2 w-2 rounded-full`} />
-        </TooltipTrigger>
-        <TooltipContent>
-          <span>{inUse ? 'In use' : 'Unused'}</span>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-});
-
-ImageStatusTooltip.displayName = 'ImageStatusTooltip';

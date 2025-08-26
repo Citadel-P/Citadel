@@ -7,6 +7,7 @@ public sealed class DockerContainer
     string name,
     string image,
     string containerId,
+    string imageId,
     ContainerStateStatus state,
     long? created = null,
     string? stack = null,
@@ -16,13 +17,14 @@ public sealed class DockerContainer
 {
     public string Name { get; private set; } = name;
     public string Image { get; private set; } = image;
+    public string? ImageId { get; private set; } = imageId;
     public string ContainerId { get; private set; } = containerId;
     public ContainerStateStatus State { get; private set; } = state;
     public long? Created { get; private set; } = created;
     public string? Stack { get; private set; } = stack;
     public DockerContainerStat? ContainerStat { get; private set; } = containerStat;
     public IReadOnlyList<ContainerPort>? Ports { get; private set; } = ports;
-    internal DockerContainer() : this(string.Empty, string.Empty, string.Empty, ContainerStateStatus.Unknown, containerStat: new DockerContainerStat()) { } // For pooled object usage
+    internal DockerContainer() : this(string.Empty, string.Empty, string.Empty, string.Empty, ContainerStateStatus.Unknown, containerStat: new DockerContainerStat()) { } // For pooled object usage
     public void ReInitialize(
         string name,
         string image,

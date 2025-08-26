@@ -144,6 +144,7 @@ public class Migration0001 : Migration
             .WithColumn("ContainerId").AsString(64).NotNullable()
             .WithColumn("Name").AsString().NotNullable()
             .WithColumn("Image").AsString().NotNullable()
+            .WithColumn("ImageId").AsString().NotNullable()
             .WithColumn("Created").AsInt64().NotNullable()
             .WithColumn("Updated").AsInt64().NotNullable()
             .WithColumn("State").AsString().NotNullable()

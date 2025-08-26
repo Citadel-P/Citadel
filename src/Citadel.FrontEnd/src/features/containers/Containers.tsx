@@ -1,7 +1,7 @@
 import { Container } from 'lucide-react';
 import { SearchField } from '../../components/ui/SearchField';
 import { ContainersTable } from './ContainersTable';
-import { ContainersActionBar } from './ContainersActionBar';
+import { ContainerActionBar } from './ContainerActionBar';
 import { AlertMessage } from '@/components/ui/alert-message';
 import { DeleteContainerDialog } from './dialogs/DeleteContainerDialog';
 import { useMemo } from 'react';
@@ -44,7 +44,7 @@ const Containers = () => {
           <ContainersTable />
         </div>
       </div>
-      <ContainersActionBar />
+      <ContainerActionBar />
       <DeleteContainerDialog
         requestDelete={requestDelete}
         isPending={isPending}

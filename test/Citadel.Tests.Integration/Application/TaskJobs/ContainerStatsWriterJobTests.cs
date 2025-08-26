@@ -51,6 +51,7 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
         var container = new Container(
                 name: "container-1",
                 image: "image-1",
+                imageId: "image-id-1",
                 platformId: platform.Id,
                 ports: [],
                 containerId: "container-id-1",

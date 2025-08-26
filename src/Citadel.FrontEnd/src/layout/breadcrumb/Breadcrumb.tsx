@@ -9,7 +9,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { useNavigate } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { Fragment, useMemo } from 'react';
 
 interface ICrumbs {
@@ -21,6 +21,7 @@ interface ICrumbs {
 
 const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
   const { currentPlatform, currentContainer, route } = useAppContext();
+  const { imageId } = useParams<{ platformId: string; imageId: string }>();
 
   const navigate = useNavigate();
   const generateCrumbs = useMemo((): ICrumbs[] => {
@@ -98,6 +99,18 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
         crumbs.push({ title: 'Platforms', link: '/' });
         crumbs.push({ title: currentPlatform?.name ?? '', link: `/platforms/${currentPlatform?.id}` });
         crumbs.push({ title: 'Images', badge: { title: 'External' }, isActive: true });
+      },
+      [AppPaths.imageInspect]: () => {
+        crumbs.push({ title: 'Platforms', link: '/' });
+        crumbs.push({ 
+          title: currentPlatform?.name ?? '',
+          link: `/platforms/${currentPlatform?.id}` });
+        crumbs.push({ title: 'Images', link: `/platforms/${currentPlatform?.id}/images` });
+        crumbs.push({
+          title: imageId ?? '',
+          isActive: true,
+          badge: { title: 'Inspect' },
+        });
       },
       [AppPaths.networks]: () => {
         crumbs.push({ title: 'Platforms', link: '/' });

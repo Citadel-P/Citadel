@@ -3963,23 +3963,6 @@
   },
   "components": {
     "schemas": {
-      "AttestationData": {
-        "required": [
-          "for"
-        ],
-        "type": [
-          "null",
-          "object"
-        ],
-        "properties": {
-          "for": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      },
       "BindOptions": {
         "required": [
           "propagation",
@@ -4748,6 +4731,7 @@
           "containerId",
           "name",
           "image",
+          "imageId",
           "created",
           "state",
           "updated",
@@ -4771,6 +4755,9 @@
             "type": "string"
           },
           "image": {
+            "type": "string"
+          },
+          "imageId": {
             "type": "string"
           },
           "created": {
@@ -5723,7 +5710,6 @@
           }
         }
       },
-      "Empty": { },
       "EndpointIpamConfiguration": {
         "required": [
           "ipv4Address",
@@ -5996,6 +5982,43 @@
             "additionalProperties": {
               "type": "string"
             }
+          }
+        }
+      },
+      "HistoryImageResult": {
+        "required": [
+          "id",
+          "created",
+          "createdBy",
+          "size",
+          "comment"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "created": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "size": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "comment": {
+            "type": "string"
           }
         }
       },
@@ -6675,310 +6698,6 @@
           }
         }
       },
-      "ImageConfig": {
-        "required": [
-          "tty",
-          "user",
-          "image",
-          "hostname",
-          "domainname",
-          "attachStdin",
-          "attachStdout",
-          "attachStderr",
-          "stopSignal",
-          "openStdin",
-          "stdinOnce",
-          "argsEscaped",
-          "workingDir",
-          "healthCheck",
-          "shell",
-          "env",
-          "cmd",
-          "onBuild",
-          "entryPoint",
-          "volumes",
-          "labels",
-          "exposedPorts"
-        ],
-        "type": [
-          "null",
-          "object"
-        ],
-        "properties": {
-          "tty": {
-            "type": "boolean"
-          },
-          "user": {
-            "type": "string"
-          },
-          "image": {
-            "type": "string"
-          },
-          "hostname": {
-            "type": "string"
-          },
-          "domainname": {
-            "type": "string"
-          },
-          "attachStdin": {
-            "type": "boolean"
-          },
-          "attachStdout": {
-            "type": "boolean"
-          },
-          "attachStderr": {
-            "type": "boolean"
-          },
-          "stopSignal": {
-            "type": "string"
-          },
-          "openStdin": {
-            "type": "boolean"
-          },
-          "stdinOnce": {
-            "type": "boolean"
-          },
-          "argsEscaped": {
-            "type": "boolean"
-          },
-          "workingDir": {
-            "type": "string"
-          },
-          "healthCheck": {
-            "$ref": "#/components/schemas/ImageHealthCheck"
-          },
-          "shell": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "env": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "cmd": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "onBuild": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "entryPoint": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "volumes": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/Empty"
-            }
-          },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "exposedPorts": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/Empty"
-            }
-          }
-        }
-      },
-      "ImageData": {
-        "required": [
-          "platform",
-          "containers",
-          "size"
-        ],
-        "type": [
-          "null",
-          "object"
-        ],
-        "properties": {
-          "platform": {
-            "$ref": "#/components/schemas/ImagePlatformDescriptor"
-          },
-          "containers": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "size": {
-            "$ref": "#/components/schemas/SizeInfo"
-          }
-        }
-      },
-      "ImageDescriptor": {
-        "required": [
-          "size",
-          "data",
-          "digest",
-          "mediaType",
-          "artifactType",
-          "platform",
-          "urls",
-          "annotations"
-        ],
-        "type": [
-          "null",
-          "object"
-        ],
-        "properties": {
-          "size": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int64"
-          },
-          "data": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "digest": {
-            "type": "string"
-          },
-          "mediaType": {
-            "type": "string"
-          },
-          "artifactType": {
-            "type": "string"
-          },
-          "platform": {
-            "$ref": "#/components/schemas/ImagePlatformDescriptor"
-          },
-          "urls": {
-            "$ref": "#/components/schemas/InspectImageResult/properties/descriptor/properties/urls"
-          },
-          "annotations": {
-            "$ref": "#/components/schemas/InspectImageResult/properties/descriptor/properties/annotations"
-          }
-        }
-      },
-      "ImageGraphDriverData": {
-        "required": [
-          "mergedDir",
-          "upperDir",
-          "workDir"
-        ],
-        "type": [
-          "null",
-          "object"
-        ],
-        "properties": {
-          "mergedDir": {
-            "type": "string"
-          },
-          "upperDir": {
-            "type": "string"
-          },
-          "workDir": {
-            "type": "string"
-          }
-        }
-      },
-      "ImageGraphicDriver": {
-        "required": [
-          "name",
-          "data"
-        ],
-        "type": [
-          "null",
-          "object"
-        ],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "data": {
-            "$ref": "#/components/schemas/ImageGraphDriverData"
-          }
-        }
-      },
-      "ImageHealthCheck": {
-        "required": [
-          "test",
-          "interval",
-          "timeout",
-          "retries",
-          "startPeriod",
-          "startInterval"
-        ],
-        "type": [
-          "null",
-          "object"
-        ],
-        "properties": {
-          "test": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "interval": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int64"
-          },
-          "timeout": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int64"
-          },
-          "retries": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int64"
-          },
-          "startPeriod": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int64"
-          },
-          "startInterval": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int64"
-          }
-        }
-      },
       "ImageInfoResult": {
         "required": [
           "volumes",
@@ -7025,56 +6744,6 @@
           }
         }
       },
-      "ImageManifest": {
-        "required": [
-          "id",
-          "kind",
-          "available",
-          "size",
-          "imageData",
-          "descriptor",
-          "attestationData"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string"
-          },
-          "available": {
-            "type": "boolean"
-          },
-          "size": {
-            "$ref": "#/components/schemas/SizeInfo"
-          },
-          "imageData": {
-            "$ref": "#/components/schemas/ImageData"
-          },
-          "descriptor": {
-            "$ref": "#/components/schemas/ImageDescriptor"
-          },
-          "attestationData": {
-            "$ref": "#/components/schemas/AttestationData"
-          }
-        }
-      },
-      "ImageMetadata": {
-        "required": [
-          "lastTagTime"
-        ],
-        "type": [
-          "null",
-          "object"
-        ],
-        "properties": {
-          "lastTagTime": {
-            "type": "string"
-          }
-        }
-      },
-      "ImagePlatformDescriptor": { },
       "ImagePullError": {
         "required": [
           "code",
@@ -7146,27 +6815,6 @@
               "string"
             ],
             "format": "int64"
-          }
-        }
-      },
-      "ImageRootFs": {
-        "required": [
-          "type",
-          "layers"
-        ],
-        "type": [
-          "null",
-          "object"
-        ],
-        "properties": {
-          "type": {
-            "type": "string"
-          },
-          "layers": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         }
       },
@@ -7275,64 +6923,20 @@
       "InspectImageResult": {
         "required": [
           "id",
-          "author",
-          "parent",
-          "comment",
-          "created",
-          "dockerVersion",
-          "architecture",
-          "osVersion",
-          "virtualSize",
-          "variant",
-          "os",
           "size",
-          "rootFS",
-          "metadata",
-          "config",
-          "descriptor",
-          "graphDriver",
-          "manifests",
+          "created",
+          "env",
+          "cmd",
           "repoTags",
-          "repoDigests"
+          "volumes",
+          "exposedPorts",
+          "layers",
+          "labels",
+          "containers"
         ],
         "type": "object",
         "properties": {
           "id": {
-            "type": "string"
-          },
-          "author": {
-            "type": "string"
-          },
-          "parent": {
-            "type": "string"
-          },
-          "comment": {
-            "type": "string"
-          },
-          "created": {
-            "type": "string"
-          },
-          "dockerVersion": {
-            "type": "string"
-          },
-          "architecture": {
-            "type": "string"
-          },
-          "osVersion": {
-            "type": "string"
-          },
-          "virtualSize": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int64"
-          },
-          "variant": {
-            "type": "string"
-          },
-          "os": {
             "type": "string"
           },
           "size": {
@@ -7343,25 +6947,19 @@
             ],
             "format": "int64"
           },
-          "rootFS": {
-            "$ref": "#/components/schemas/ImageRootFs"
+          "created": {
+            "type": "string"
           },
-          "metadata": {
-            "$ref": "#/components/schemas/ImageMetadata"
-          },
-          "config": {
-            "$ref": "#/components/schemas/ImageConfig"
-          },
-          "descriptor": {
-            "$ref": "#/components/schemas/ImageDescriptor"
-          },
-          "graphDriver": {
-            "$ref": "#/components/schemas/ImageGraphicDriver"
-          },
-          "manifests": {
+          "env": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ImageManifest"
+              "type": "string"
+            }
+          },
+          "cmd": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           },
           "repoTags": {
@@ -7370,9 +6968,33 @@
               "type": "string"
             }
           },
-          "repoDigests": {
+          "volumes": {
             "type": "array",
             "items": {
+              "type": "string"
+            }
+          },
+          "exposedPorts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "layers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryImageResult"
+            }
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "containers": {
+            "type": "object",
+            "additionalProperties": {
               "type": "string"
             }
           }
@@ -8727,46 +8349,6 @@
               "string"
             ],
             "format": "int32"
-          }
-        }
-      },
-      "SizeInfo": {
-        "required": [
-          "total",
-          "content",
-          "unpacked"
-        ],
-        "type": [
-          "null",
-          "object"
-        ],
-        "properties": {
-          "total": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int64"
-          },
-          "content": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int64"
-          },
-          "unpacked": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int64"
           }
         }
       },

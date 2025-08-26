@@ -17,6 +17,7 @@ export const AppPaths: Record<string, string> = {
   addRegistry: 'registries/add',
   editRegistry: 'registries/edit/:registryId',
   images: 'platforms/:platformId/images',
+  imageInspect: 'platforms/:platformId/images/:imageId/inspect',
   localImages: 'platforms/:platformId/images/local',
   externalImages: 'platforms/:platformId/images/external',
   networks: 'platforms/:platformId/networks',
@@ -76,6 +77,12 @@ export const AppRoutes = () => {
           path: AppPaths.containerInspect,
           lazy: async () => {
             return { Component: (await import('@/features/containers/container-info/ContainerInfoWrapper')).default };
+          },
+        },
+        {
+          path: AppPaths.imageInspect,
+          lazy: async () => {
+            return { Component: (await import('@/features/images/image-info/ImageInfoWrapper')).default };
           },
         },
         {

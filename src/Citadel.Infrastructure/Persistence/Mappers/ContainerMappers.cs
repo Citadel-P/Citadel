@@ -20,6 +20,7 @@ internal static class ContainerMappers
             containerId: container.ContainerId,
             name: container.Name,
             image: container.Image,
+            imageId: container.ImageId,
             created: container.Created,
             updated: container.Updated,
             state: Enum.Parse<ContainerStateStatus>(container.State),

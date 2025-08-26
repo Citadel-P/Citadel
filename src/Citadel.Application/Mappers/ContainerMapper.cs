@@ -13,6 +13,7 @@ internal static class ContainerMapper
         (
             name: container.Name,
             image: container.Image,
+            imageId: container.ImageId,
             stack: container.Stack,
             platformId: platformId,
             containerId: container.ContainerId,

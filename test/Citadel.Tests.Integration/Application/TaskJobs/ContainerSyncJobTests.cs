@@ -58,6 +58,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
             await uow.Containers.AddAsync(new Container(
                     name: container.Name,
                     image: container.Image,
+                    imageId: container.Image,
                     platformId: platform.Id,
                     ports: [],
                     containerId: container.ContainerId,
@@ -109,6 +110,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
         var staleContainer = new Container(
             name: "stale",
             image: "stale:latest",
+            imageId: "fake-id",
             platformId: platformId,
             ports: [],
             containerId: "stale-id",
@@ -143,6 +145,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
         var newDockerContainer = new DockerContainer(
             name: "new",
             image: "new:latest",
+            imageId: "fake-id",
             containerId: "new-id",
             state: ContainerStateStatus.Running,
             ports: [],
@@ -173,6 +176,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
         var oldContainer = new Container(
             name: "old",
             image: "old:latest",
+            imageId: "fake-id",
             platformId: platformId,
             ports: [],
             containerId: containerId,
@@ -186,6 +190,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
         var updatedDockerContainer = new DockerContainer(
             name: "updated",
             image: "updated:latest",
+            imageId: "fake-id",
             containerId: containerId,
             state: ContainerStateStatus.Running,
             ports: [],

@@ -13,11 +13,11 @@ import { ContainerStatsProvider } from './stats/ContainerStatsProvider';
 import { useContainerInfoGroup } from '../hooks/useContainerInfoGroup';
 import { ContainerStateStatus } from '@/api/_generated';
 import { ContainerStateIndicator } from '../ContainerStateIndicator';
-import { ContainersActionButtons } from '../ContainersActionButtons';
 import { useDeleteContainerDialog } from '../dialogs/useDeleteContainerDialog';
 import { DeleteContainerDialog } from '../dialogs/DeleteContainerDialog';
+import { ContainerActionButtons } from '../ContainerActionButtons';
 
-export const ContainerInfoWrapper = () => {
+const ContainerInfoWrapper = () => {
   const navigate = useNavigate();
   const { route, currentContainer, isLoading } = useAppContext();
   const { containerInfo } = useContainerInfoGroup(currentContainer?.containerId, currentContainer?.platformId);
@@ -86,7 +86,7 @@ export const ContainerInfoWrapper = () => {
               </div>
             </div>
             <div className="flex justify-end">
-              <ContainersActionButtons
+              <ContainerActionButtons
                 selectedContainers={[containerInfo! ?? currentContainer]}
                 setDialogData={setDialogData}
               />

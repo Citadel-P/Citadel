@@ -2,6 +2,20 @@
 
 public record InspectImageResult(
     string Id,
+    long Size,
+    string Created,
+    IEnumerable<string> Env,
+    IEnumerable<string> Cmd,
+    IEnumerable<string> RepoTags,
+    IEnumerable<string> Volumes,
+    IEnumerable<string> ExposedPorts,
+    IEnumerable<HistoryImageResult> Layers,
+    IDictionary<string, string> Labels,
+    IDictionary<string, string> Containers
+    );
+
+public record InspectImageResult2(
+    string Id,
     string Author,
     string Parent,
     string Comment,

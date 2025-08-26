@@ -6,15 +6,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useImagesContext } from '../ImagesContext';
 import { useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { useAppContext } from '@/AppContext';
 import { SwitchSection } from '@/components/ui/SwitchSection';
+import { IDialogData } from '@/hooks/useDialogState';
+import { DeleteImagesRequest, ImageView } from '@/api/_generated';
 
-export const DeleteLocalImageDialog = () => {
+export const DeleteLocalImageDialog = ({
+  dialogData,
+  setDialogData,
+  requestDelete,
+  deleteIsPending,
+}: {
+  dialogData: IDialogData<ImageView>;
+  setDialogData: (data: IDialogData<ImageView>) => void;
+  requestDelete: (request: DeleteImagesRequest) => void;
+  deleteIsPending: boolean;
+}) => {
   const { currentPlatform } = useAppContext();
-  const { dialogData, setDialogData, requestDelete, deleteIsPending } = useImagesContext();
 
   const imagesId = dialogData.currentSelection?.map((c) => c.id!) ?? [];
 

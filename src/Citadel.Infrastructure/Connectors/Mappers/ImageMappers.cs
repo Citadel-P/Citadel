@@ -31,28 +31,18 @@ internal static class ImageMappers
         );
 
     public static InspectImageResult Map(this InspectImageResponse image)
-        => new
-        (
+        => new (
             Id: image.Id,
-            Author: image.Author,
-            Parent: image.Parent,
-            Comment: image.Comment,
-            Created: image.Created,
-            DockerVersion: image.DockerVersion,
-            Architecture: image.Architecture,
-            OSVersion: image.OsVersion,
-            VirtualSize: image.VirtualSize,
-            Variant: image.Variant,
-            OS: image.Os,
             Size: image.Size,
-            RootFS: image.RootFS?.Map(),
-            Metadata: image.Metadata?.Map(),
-            Config: image.Config?.Map(),
-            Descriptor: image.Descriptor_?.Map(),
-            GraphDriver: image.GraphDriver?.Map(),
-            Manifests: image.Manifests?.Select(m => m.Map())?.ToList() ?? [],
+            Created: image.Created,
+            Env: image.Env?.ToList() ?? [],
+            Cmd: image.Cmd?.ToList() ?? [],
             RepoTags: image.RepoTags?.ToList() ?? [],
-            RepoDigests: image.RepoDigests?.ToList() ?? []
+            Containers: image.Containers ?? [],
+            Volumes: image.Volumes?.ToList() ?? [],
+            Labels: image.Labels ?? [],
+            ExposedPorts: image.ExposedPorts?.ToList() ?? [],
+            Layers: image.Layers?.Select(Map)?.ToList() ?? []
         );
 
     public static ImageRootFs Map(this RootFSMessage rootFs) => new(
@@ -203,29 +193,21 @@ internal static class ImageMappers
             Items: [.. response.Items.Select(item => new Domain.Contracts.Resources.Images.DeleteImageResponseItem(item.Result.ToDictionary()))]
         );
 
-    public static InspectImageResult Map(this Hosting.DockerClient.ImageInspect image)
+    public static InspectImageResult Map(this Hosting.DockerClient.Models.Images.ImageInspectResult image)
         => new
         (
             Id: image.Id,
-            Author: image.Author,
-            Parent: image.Parent,
-            Comment: image.Comment,
+            Size: image.Size,
             Created: image.Created,
-            DockerVersion: image.DockerVersion,
-            Architecture: image.Architecture,
-            OSVersion: image.OsVersion,
-            VirtualSize: image.VirtualSize ?? 0,
-            Variant: image.Variant,
-            OS: image.Os,
-            Size: image.Size ?? 0,
-            RootFS: image.RootFS?.Map(),
-            Metadata: image.Metadata?.Map(),
-            Config: image.Config?.Map(),
-            Descriptor: image.Descriptor?.Map(),
-            GraphDriver: image.GraphDriver?.Map(),
-            Manifests: image.Manifests?.Select(m => m.Map())?.ToList() ?? [],
+            Env: image.Env?.ToList() ?? [],
+            Cmd: image.Cmd?.ToList() ?? [],
             RepoTags: image.RepoTags?.ToList() ?? [],
-            RepoDigests: image.RepoDigests?.ToList() ?? []
+            Containers: image.Containers,
+            Volumes: image.Volumes?.ToList() ?? [],
+            Labels: image.Labels,
+            ExposedPorts: image.ExposedPorts?.ToList() ?? [],
+            Layers: image.Layers?.Select(Map)
+
         );
 
     private static ImageRootFs Map(this Hosting.DockerClient.RootFS rootFs) => new(
@@ -356,4 +338,14 @@ internal static class ImageMappers
         Units: jsonProgress.Units,
         Start: jsonProgress.Start
     );
+    public static IEnumerable<Domain.Contracts.Resources.Images.HistoryImageResult> Map(this IEnumerable<Citadel.Agent.Images.V1.HistoryImageResult> items) => items.Select(Map);
+
+    public static IEnumerable<Domain.Contracts.Resources.Images.HistoryImageResult> Map(this IEnumerable<Hosting.DockerClient.HistoryResponseItem> items) => items.Select(Map);
+
+    public static Domain.Contracts.Resources.Images.HistoryImageResult Map(this Hosting.DockerClient.HistoryResponseItem item) => new (
+        Id: item.Id, Created : item.Created, CreatedBy: item.CreatedBy, Size: item.Size, Comment: item.Comment);
+
+    public static Domain.Contracts.Resources.Images.HistoryImageResult Map(this Citadel.Agent.Images.V1.HistoryImageResult item) => new(
+        Id: item.Id, Created: item.Created, CreatedBy: item.CreatedBy, Size: item.Size, Comment: item.Comment);
+
 }

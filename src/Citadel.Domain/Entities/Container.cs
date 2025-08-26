@@ -3,6 +3,7 @@
 public class Container(
     string name,
     string image,
+    string imageId,
     Guid platformId,
     string containerId,
     ContainerStateStatus state,
@@ -21,7 +22,8 @@ public class Container(
     public long Created { get; private set; } = created is not null ? created.Value : (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
     public long Updated { get; private set; } = (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
     public ContainerStateStatus State { get; set; } = state;
-    public string? Stack { get; set; } = stack;
+    public string? Stack { get; private set; } = stack;
+    public string? ImageId { get; private set; } = imageId;
     public IReadOnlyCollection<ContainerPort> Ports => ports;
     public IReadOnlyCollection<ContainerStat>? Stats => stats;
     public Platform? Platform { get; private set; } = null!;
@@ -29,6 +31,7 @@ public class Container(
     public Container PartialUpdate(
         string? name = null,
         string? image = null,
+        string ? imageId = null,
         ContainerStateStatus? state = null,
         string? stack = null,
         long? created = null,
@@ -37,6 +40,7 @@ public class Container(
     {
         if (name != null) Name = name;
         if (image != null) Image = image;
+        if (imageId != null) ImageId = imageId;
         if (state != null) State = state.Value;
         if (stack != null) Stack = stack;
         if (created != null) Created = created.Value;
@@ -64,6 +68,7 @@ public class Container(
         string containerId,
         string name,
         string image,
+        string imageId,
         long created,
         long updated,
         ContainerStateStatus state,
@@ -76,6 +81,7 @@ public class Container(
         var container = new Container(
             name: name,
             image: image,
+            imageId: imageId,
             platformId: platformId,
             containerId: containerId,
             state: state,
