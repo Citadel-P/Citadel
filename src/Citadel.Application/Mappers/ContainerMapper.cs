@@ -19,7 +19,7 @@ internal static class ContainerMapper
             containerId: container.ContainerId,
             created: container.Created,
             state: container.State,
-            ports: container.Ports?.ToList() ?? []
+            ports: container.Ports
         );
 
     public static ContainerStat Map(this DockerContainerStat container, Guid containerId, long? created)

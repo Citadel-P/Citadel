@@ -2,16 +2,16 @@ import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useContainersContext } from './ContainersContext';
-import { ContainerView, ContainerStateStatus, ContainerStatView, PortView } from '@/api/_generated';
+import { ContainerView, ContainerStateStatus, ContainerStatView } from '@/api/_generated';
 import { truncate } from '@/lib/truncate';
 import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
 import SortableCell from '@/components/ui/SortableCell';
 import { Link } from 'react-router';
 import { ContainerDropdownActions } from './ContainerDropdownActions';
-import { fromNow } from '@/lib/dayjs.helper';
 import { ContainerStateIndicator } from './ContainerStateIndicator';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
+import { PortsDisplay } from '@/components/ui/PortsDisplay';
 
 const columns: ColumnDef<ContainerView>[] = [
   {
@@ -71,12 +71,14 @@ const columns: ColumnDef<ContainerView>[] = [
     accessorKey: 'image',
     header: ({ column }) => <SortableCell cellName="Image" column={column} />,
     cell: ({ row }) => (
-      <div className="text-[13px]">
+      <div className="text-[12.5px]">
         {' '}
         <Link
           to={`/platforms/${row.original.platformId}/images/${row.original.imageId?.slice(0, 12)}/inspect`}
           className="table-link">
-          {truncate(row.original.image ?? '', 24)}
+          {row.original.image.startsWith('sha256:')
+            ? truncate(row.original.image.slice(7), 24)
+            : truncate(row.original.image ?? '', 24)}
         </Link>
       </div>
     ),
@@ -104,16 +106,7 @@ const columns: ColumnDef<ContainerView>[] = [
   {
     accessorKey: 'ports',
     header: () => <span>Ports</span>,
-    cell: ({ row }) =>
-      (row.original.ports as PortView[])?.map((port: PortView, i) => (
-        <div key={i} className="text-xs">
-          <span>
-            {port.publicPort !== undefined && port.publicPort !== null && (port.publicPort as number) > 0 && (
-              <span>{port.publicPort + ':' + port.privatePort}</span>
-            )}
-          </span>
-        </div>
-      )),
+    cell: ({ row }) => <PortsDisplay ports={row.original.ports} />,
   },
 
   {
@@ -167,7 +160,6 @@ const ActionsCell = ({ container }: { container: ContainerView }) => {
 
 export const ContainersTable = () => {
   const { containers, isLoading, setSelectedRows } = useContainersContext();
-
   return (
     <div className="flex flex-col gap-3">
       <DataTable

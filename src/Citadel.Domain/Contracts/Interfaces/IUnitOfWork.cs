@@ -41,7 +41,6 @@ public interface IRegistryRepository
 public interface IContainerRepository 
 {
     Task<Container?> GetByIdAsync(string containerId, CancellationToken cancellationToken);
-    Task<ContainerInfo?> GetContainerInfoAsync(string containerId, CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<Container>?> GetAllWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken);
 

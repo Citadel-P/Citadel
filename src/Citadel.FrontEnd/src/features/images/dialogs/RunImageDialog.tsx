@@ -1,7 +1,6 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { useAppContext } from '@/AppContext';
-import { useImagesContext } from '../ImagesContext';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import KeyValuePairInput from '@/components/ui/KeyValuePairInput';
 import { LoaderCircle, ChevronDown, Info } from 'lucide-react';
@@ -22,15 +21,21 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Switch } from '@/components/ui/switch';
 import ValueInput from '@/components/ui/ValueInput';
 import { usePOSTContainer } from '../hooks/usePOSTContainer';
-import { ContainerRestartPolicy, CreateContainerInput } from '@/api/_generated';
+import { ContainerRestartPolicy, CreateContainerInput, ImageView } from '@/api/_generated';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
 import { AlertMessage } from '@/components/ui/alert-message';
+import { IDialogData } from '@/hooks/useDialogState';
 
-export const RunImageDialog = () => {
+export const RunImageDialog = ({
+  runDialogData,
+  setRunDialogData,
+}: {
+  runDialogData: IDialogData<ImageView>;
+  setRunDialogData: (_: IDialogData<ImageView>) => void;
+}) => {
   const navigate = useNavigate();
   const { currentPlatform } = useAppContext();
-  const { runDialogData, setRunDialogData } = useImagesContext();
   const { mutate, isPending, isSuccess, data, validationErrors, reset } = usePOSTContainer();
   const { form } = useRunImageForm();
   const [advancedOpen, setAdvancedOpen] = useState(false);

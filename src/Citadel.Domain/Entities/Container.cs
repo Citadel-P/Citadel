@@ -1,4 +1,5 @@
-﻿namespace Domain.Entities;
+﻿using Domain.Contracts.Resources.Containers;
+namespace Domain.Entities;
 
 public class Container(
     string name,
@@ -9,10 +10,11 @@ public class Container(
     ContainerStateStatus state,
     long? created = null,
     string? stack = null,
-    IEnumerable<ContainerPort>? ports = null)
+    IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null)
 {
     private readonly List<ContainerStat> stats = [];
-    private readonly List<ContainerPort> ports = ports is not null ? [.. ports] : [];
+    private readonly IDictionary<string, IReadOnlyList<HostPortBinding>> ports = ports is not null 
+        ? ports : new Dictionary<string, IReadOnlyList<HostPortBinding>>();
 
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid PlatformId { get; private set; } = platformId;
@@ -24,7 +26,7 @@ public class Container(
     public ContainerStateStatus State { get; set; } = state;
     public string? Stack { get; private set; } = stack;
     public string? ImageId { get; private set; } = imageId;
-    public IReadOnlyCollection<ContainerPort> Ports => ports;
+    public IDictionary<string, IReadOnlyList<HostPortBinding>> Ports => ports;
     public IReadOnlyCollection<ContainerStat>? Stats => stats;
     public Platform? Platform { get; private set; } = null!;
 
@@ -36,7 +38,7 @@ public class Container(
         string? stack = null,
         long? created = null,
         Guid? platformId = null,
-        IEnumerable<ContainerPort>? ports = null)
+        IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null)
     {
         if (name != null) Name = name;
         if (image != null) Image = image;
@@ -48,7 +50,8 @@ public class Container(
         if (ports != null)
         {
             this.ports.Clear();
-            this.ports.AddRange(ports);
+            foreach (var kvp in ports)
+                this.ports[kvp.Key] = kvp.Value;
         }
         Updated = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         return this;
@@ -72,7 +75,7 @@ public class Container(
         long created,
         long updated,
         ContainerStateStatus state,
-        IReadOnlyCollection<ContainerPort> ports,
+        IDictionary<string, IReadOnlyList<HostPortBinding>> ports,
         string? stack = null,
         Platform? platform = null,
         IReadOnlyCollection<ContainerStat>? stats = null
@@ -104,8 +107,4 @@ public class Container(
     }
 }
 
-public record struct ContainerPort(
-    string IP, 
-    int? PrivatePort, 
-    int? PublicPort,
-    string? Type = null);
+public sealed record HostPortBinding(string? HostIP, string? HostPort);

@@ -1,11 +1,12 @@
 ﻿namespace Infrastructure.Persistence.Dtos;
 
 internal sealed record PlatformConnectionInfoDto(
-    string Id, // Guid
+    Guid Id,
+    string Name,
     string Address,
     string ConnectorType) // PlatformConnectorType 
 {
-    public PlatformConnectionInfoDto() : this(string.Empty, string.Empty, string.Empty)
+    public PlatformConnectionInfoDto() : this(Guid.Empty, string.Empty, string.Empty, string.Empty)
     {
         
     }

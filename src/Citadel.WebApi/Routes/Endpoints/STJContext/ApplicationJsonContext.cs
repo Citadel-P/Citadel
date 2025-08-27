@@ -35,7 +35,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(List<PlatformStatView>))]
 [JsonSerializable(typeof(DockerHubRegistry))]
 [JsonSerializable(typeof(List<ContainerView>))]
-[JsonSerializable(typeof(List<PortView>))]
+[JsonSerializable(typeof(IDictionary<string, IReadOnlyList<HostPortBinding>>))]
 [JsonSerializable(typeof(EndpointSettingsView))]
 [JsonSerializable(typeof(LoginRequest))]
 [JsonSerializable(typeof(LoginResponse))]

@@ -46,7 +46,7 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
         });
         crumbs.push({ title: 'Containers', link: `/platforms/${currentContainer?.platformId}/containers` });
         crumbs.push({
-          title: currentContainer?.containerName?.slice(1) ?? '',
+          title: currentContainer?.name?.slice(1) ?? '',
           isActive: true,
           badge: { title: 'Logs' },
         });
@@ -59,7 +59,7 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
         });
         crumbs.push({ title: 'Containers', link: `/platforms/${currentContainer?.platformId}/containers` });
         crumbs.push({
-          title: currentContainer?.containerName?.slice(1) ?? '',
+          title: currentContainer?.name?.slice(1) ?? '',
           isActive: true,
           badge: { title: 'Stats' },
         });
@@ -71,7 +71,7 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
           link: `/platforms/${currentContainer?.platformId}` });
         crumbs.push({ title: 'Containers', link: `/platforms/${currentContainer?.platformId}/containers` });
         crumbs.push({
-          title: currentContainer?.containerName?.slice(1) ?? '',
+          title: currentContainer?.name?.slice(1) ?? '',
           isActive: true,
           badge: { title: 'Inspect' },
         });

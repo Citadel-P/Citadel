@@ -53,7 +53,7 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
                 image: "image-1",
                 imageId: "image-id-1",
                 platformId: platform.Id,
-                ports: [],
+                ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
                 containerId: "container-id-1",
                 state: ContainerStateStatus.Running);
         await uow.Containers.AddAsync(container, TestContext.Current.CancellationToken);

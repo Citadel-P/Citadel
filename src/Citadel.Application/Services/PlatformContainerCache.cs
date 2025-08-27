@@ -25,7 +25,7 @@ internal class PlatformContainerCache : IPlatformContainerCache
             entry.Containers[containerId] = dbId;
             return true;
         }
-        return false; // Platform not yet in cache, full @lock will add it.
+        return false;
     }
 
     /// <inheritdoc />

@@ -1,5 +1,6 @@
 ﻿using Domain;
 using Domain.Contracts.Resources.Containers;
+using Domain.Entities;
 using Domain.Entities.Platforms;
 using Nerdbank.MessagePack;
 using PolyType;
@@ -13,8 +14,6 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<List<ContainerView>>]
 [GenerateShapeFor<List<ContainerStatView>>]
 [GenerateShapeFor<ContainerStatView>]
-[GenerateShapeFor<PortView>]
-[GenerateShapeFor<List<PortView>>]
 [GenerateShapeFor<Dictionary<string, string>>]
 [GenerateShapeFor<IEnumerable<PlatformView>>]
 [GenerateShapeFor<PlatformView>]
@@ -31,6 +30,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<DockerContainerStat>]
 [GenerateShapeFor<byte[]>]
 [GenerateShapeFor<ReadOnlyMemory<byte>>]
+[GenerateShapeFor<IDictionary<string, IReadOnlyList<HostPortBinding>>>]
 partial class SignalRMessagePackContext;
 
 internal static class DerivedTypesMapping

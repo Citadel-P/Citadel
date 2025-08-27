@@ -44,7 +44,7 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
         containerId: containerEvent.container.containerId,
         name: containerEvent.container.name,
         state: containerEvent.container.state,
-        created: containerEvent.container.created,
+        created: containerEvent.container.created as number,
         image: containerEvent.container.image,
         stack: containerEvent.container.stack,
         containerStat: containerEvent.container.lastStats,

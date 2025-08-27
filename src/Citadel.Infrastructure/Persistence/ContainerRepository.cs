@@ -3,7 +3,6 @@ using System.Text.Json;
 using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
@@ -36,18 +35,6 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         return result?.ToDomain();
     }
 
-    public async Task<ContainerInfo?> GetContainerInfoAsync(string containerId, CancellationToken cancellationToken)
-    {
-        const string sql = """
-            SELECT C.Id, C.Name, C.ContainerId, C.State, P.Id as PlatformId, P.Name as PlatformName 
-            FROM Containers C
-            LEFT JOIN Platforms P ON C.PlatformId = P.Id
-            WHERE C.ContainerId LIKE @ContainerIdPrefix
-            LIMIT 1
-            """;
-        var result = await db.QuerySingleOrDefaultAsync<ContainerInfoDto>(sql, new { ContainerIdPrefix = containerId + '%' }, transaction: tx());
-        return result?.Map();
-    }
 
     public Task<int> BulkInsertAsync(IEnumerable<Container> containers, CancellationToken cancellationToken)
     {
@@ -76,7 +63,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             parameters.Add($"Updated{i}", c.Updated);
             parameters.Add($"State{i}", EnumFormatter<ContainerStateStatus>.GetValue(c.State));
             parameters.Add($"Stack{i}", c.Stack);
-            parameters.Add($"Ports{i}", JsonSerializer.Serialize( c.Ports?.ToList() ?? [], ContainerPortsContext.Default.IReadOnlyCollectionContainerPort));
+            parameters.Add($"Ports{i}", JsonSerializer.Serialize( c.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding));
             i++;
         }
 
@@ -147,7 +134,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             Updated = container.Updated,
             State = EnumFormatter<ContainerStateStatus>.GetValue(container.State),
             Stack = container.Stack,
-            Ports = JsonSerializer.Serialize(container.Ports?.ToList() ?? [], ContainerPortsContext.Default.IReadOnlyCollectionContainerPort)
+            Ports = JsonSerializer.Serialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding)
         }, transaction: tx());
     }
 
@@ -186,7 +173,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             Updated = container.Updated,
             State = EnumFormatter<ContainerStateStatus>.GetValue(container.State),
             Stack = container.Stack,
-            Ports = JsonSerializer.Serialize(container.Ports?.ToList() ?? [], ContainerPortsContext.Default.IReadOnlyCollectionContainerPort)
+            Ports = JsonSerializer.Serialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding)
         }, transaction: tx());
     }
 

@@ -31,9 +31,7 @@ public partial class RegistryJsonContext : JsonSerializerContext
 }
 
 [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
-[JsonSerializable(typeof(IReadOnlyCollection<ContainerPort>))]
-[JsonSerializable(typeof(IEnumerable<ContainerPort>))]
-[JsonSerializable(typeof(List<ContainerPort>))]
+[JsonSerializable(typeof(IDictionary<string, IReadOnlyList<HostPortBinding>>))]
 public partial class ContainerPortsContext : JsonSerializerContext
 {
 }

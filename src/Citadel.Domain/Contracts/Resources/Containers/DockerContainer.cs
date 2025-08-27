@@ -12,7 +12,7 @@ public sealed class DockerContainer
     long? created = null,
     string? stack = null,
     DockerContainerStat? containerStat = null,
-    IReadOnlyList<ContainerPort>? ports = null
+    IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null
     )
 {
     public string Name { get; private set; } = name;
@@ -23,7 +23,7 @@ public sealed class DockerContainer
     public long? Created { get; private set; } = created;
     public string? Stack { get; private set; } = stack;
     public DockerContainerStat? ContainerStat { get; private set; } = containerStat;
-    public IReadOnlyList<ContainerPort>? Ports { get; private set; } = ports;
+    public IDictionary<string, IReadOnlyList<HostPortBinding>>? Ports { get; private set; } = ports;
     internal DockerContainer() : this(string.Empty, string.Empty, string.Empty, string.Empty, ContainerStateStatus.Unknown, containerStat: new DockerContainerStat()) { } // For pooled object usage
     public void ReInitialize(
         string name,
@@ -33,7 +33,7 @@ public sealed class DockerContainer
         long? created,
         string? stack,
         DockerContainerStat? containerStat,
-        IReadOnlyList<ContainerPort>? ports)
+        IDictionary<string, IReadOnlyList<HostPortBinding>>? ports)
     {
         Name = name;
         Image = image;
@@ -42,7 +42,7 @@ public sealed class DockerContainer
         Created = created;
         Stack = stack;
         ContainerStat = containerStat;
-        Ports = ports ?? [];
+        Ports = ports;
     }
 }
 

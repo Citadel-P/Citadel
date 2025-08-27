@@ -9,12 +9,16 @@ import { DeleteLocalImageDialog } from '../dialogs/DeleteLocalImageDialog';
 import { useDeleteImageDialog } from '../hooks/useDeleteImageDialog';
 import { useEffect } from 'react';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
+import { useRunImageDialog } from '../hooks/useRunImageDialog';
 
 const ImageInfoWrapper = () => {
   const navigate = useNavigate();
   const { platformId, imageId } = useParams<{ platformId: string; imageId: string }>();
+  const { runDialogData, setRunDialogData } = useRunImageDialog();
   const { setDialogData, dialogData, deleteIsSuccess, deleteIsPending, requestDelete } = useDeleteImageDialog();
   const { data } = useGETInspect(platformId ?? null, imageId ?? null);
+
+  const [name, tag] = data?.data.repoTags?.at(0)?.split(':') ?? [];
 
   useEffect(() => {
     if (deleteIsSuccess) {
@@ -30,7 +34,7 @@ const ImageInfoWrapper = () => {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-1">
               <ImageSateIndicator inUse={Object.keys(data?.data.containers ?? {}).length > 0} />
-              <div className="flex flex-col  gap-1 text-md font-bold text-foreground">
+              <div className="flex flex-col text-md font-bold text-foreground">
                 <span>{data?.data.repoTags?.at(0) ?? '-:-'}</span>
                 <span className="text-xs text-foreground/40">
                   <CopyTextToClipboard textToCopy={data?.data.id ?? '-'} />
@@ -39,9 +43,9 @@ const ImageInfoWrapper = () => {
             </div>
             <div className="flex justify-end">
               <ImageActionButtons
-                selectedImages={[{ id: data?.data.id } as ImageView]}
+                selectedImages={[{ id: data?.data.id, name, tag } as ImageView]}
                 setDialogData={setDialogData}
-                setRunDialogData={() => {}}
+                setRunDialogData={setRunDialogData}
               />
             </div>
           </div>
@@ -66,6 +70,7 @@ const ImageInfoWrapper = () => {
         requestDelete={requestDelete}
         deleteIsPending={deleteIsPending}
       />
+      <RunImageDialog runDialogData={runDialogData} setRunDialogData={setRunDialogData} />
     </div>
   );
 };

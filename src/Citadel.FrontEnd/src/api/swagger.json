@@ -4321,31 +4321,66 @@
       },
       "ContainerInfoView": {
         "required": [
-          "id",
-          "platformId",
+          "name",
           "containerId",
-          "containerName",
+          "platformId",
+          "startedAt",
+          "finishedAt",
           "platformName",
+          "imageName",
+          "imageId",
+          "volumes",
+          "ports",
+          "networks",
           "state"
         ],
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
+          "name": {
+            "type": "string"
+          },
+          "containerId": {
+            "type": "string"
           },
           "platformId": {
             "type": "string",
             "format": "uuid"
           },
-          "containerId": {
+          "startedAt": {
             "type": "string"
           },
-          "containerName": {
+          "finishedAt": {
             "type": "string"
           },
           "platformName": {
             "type": "string"
+          },
+          "imageName": {
+            "type": "string"
+          },
+          "imageId": {
+            "type": "string"
+          },
+          "volumes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ports": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/HostPortBinding"
+              }
+            }
+          },
+          "networks": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           },
           "state": {
             "$ref": "#/components/schemas/ContainerStateStatus"
@@ -4736,7 +4771,8 @@
           "state",
           "updated",
           "stack",
-          "lastStats"
+          "lastStats",
+          "ports"
         ],
         "type": "object",
         "properties": {
@@ -4761,13 +4797,23 @@
             "type": "string"
           },
           "created": {
-            "format": "date-time"
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "state": {
             "$ref": "#/components/schemas/ContainerStateStatus"
           },
           "updated": {
-            "format": "date-time"
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           },
           "stack": {
             "type": [
@@ -4779,12 +4825,12 @@
             "$ref": "#/components/schemas/NullableOfContainerStatView"
           },
           "ports": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "$ref": "#/components/schemas/PortView"
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/HostPortBinding"
+              }
             }
           },
           "platform": {
@@ -6103,14 +6149,11 @@
             ]
           },
           "portBindings": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/HostPortBinding"
-                }
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/HostPortBinding"
               }
             }
           },
@@ -7347,9 +7390,9 @@
             ]
           },
           "ports": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ContainerInspectView/properties/hostConfig/properties/portBindings/items"
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ContainerInspectView/properties/hostConfig/properties/portBindings/additionalProperties"
             }
           },
           "networks": {
@@ -7939,30 +7982,6 @@
             "items": {
               "$ref": "#/components/schemas/PlatformView"
             }
-          }
-        }
-      },
-      "PortView": {
-        "type": "object",
-        "properties": {
-          "ip": {
-            "type": "string"
-          },
-          "privatePort": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
-          "publicPort": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
           }
         }
       },

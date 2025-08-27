@@ -1,9 +1,17 @@
-﻿namespace Domain.Contracts.Resources.Containers;
+﻿using Domain.Entities;
+
+namespace Domain.Contracts.Resources.Containers;
 
 public sealed record ContainerInfo (
-    Guid Id,
     string Name,
     string ContainerId,
     Guid PlatformId,
+    string StartedAt,
+    string FinishedAt,
     string PlatformName,
+    string ImageName,
+    string ImageId,
+    IList<string> Volumes,
+    IDictionary<string, IReadOnlyList<HostPortBinding>> Ports,
+    IDictionary<string, string> Networks,
     ContainerStateStatus State);

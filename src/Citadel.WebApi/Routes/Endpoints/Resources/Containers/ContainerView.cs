@@ -13,12 +13,12 @@ public sealed record ContainerView(
     string Name,
     string Image,
     string ImageId,
-    DateTimeOffset Created,
+    long Created,
     ContainerStateStatus State,
-    DateTimeOffset Updated,
+    long Updated,
     string? Stack,
     ContainerStatView? LastStats,
-    IEnumerable<PortView>? Ports = null,
+    IDictionary<string, IReadOnlyList<HostPortBinding>> Ports,
     PlatformView? Platform = null,
     EndpointMetadata? Metadata = null)
 {
@@ -44,12 +44,12 @@ public sealed record ContainerView(
             Name: container.Name,
             Image: container.Image,
             ImageId: GetImageId(), // container.ImageId,
-            Created: DateTimeOffset.FromUnixTimeSeconds(container.Created),
+            Created: container.Created,
             State: container.State,
-            Updated: DateTimeOffset.FromUnixTimeSeconds(container.Updated),
+            Updated: container.Updated,
             Stack: container.Stack,
             LastStats: container.Stats is not null && container.Stats.Count > 0 ? ContainerStatView.Map(container.Stats.First()) : null,
-            Ports: container.Ports == null ? null : PortView.Map(container.Ports),
+            Ports: container.Ports,
             Platform: container.Platform == null ? null : PlatformView.Map(container.Platform));
     }
 
@@ -64,19 +64,31 @@ public sealed record ContainerView(
 };
 
 public sealed record ContainerInfoView(
-    Guid Id,
-    Guid PlatformId,
+    string Name,
     string ContainerId,
-    string ContainerName,
+    Guid PlatformId,
+    string StartedAt,
+    string FinishedAt,
     string PlatformName,
+    string ImageName,
+    string ImageId,
+    IList<string> Volumes,
+    IDictionary<string, IReadOnlyList<HostPortBinding>> Ports,
+    IDictionary<string, string> Networks,
     ContainerStateStatus State)
 {
     internal static ContainerInfoView Map(ContainerInfo container) => new(
-         Id: container.Id,
-         PlatformId: container.PlatformId,
-         ContainerId: container.ContainerId,
-         PlatformName: container.PlatformName,
-         ContainerName: container.Name,
-         State: container.State
+        Name: container.Name,
+        ContainerId: container.ContainerId,
+        PlatformId: container.PlatformId,
+        StartedAt: container.StartedAt,
+        FinishedAt: container.FinishedAt,
+        PlatformName: container.PlatformName,
+        ImageName: container.ImageName,
+        ImageId: container.ImageId,
+        Volumes: container.Volumes,
+        Ports: container.Ports,
+        Networks: container.Networks,
+        State: container.State
         );
 }

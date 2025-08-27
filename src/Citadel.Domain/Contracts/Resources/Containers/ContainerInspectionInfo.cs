@@ -1,4 +1,6 @@
-﻿namespace Domain.Contracts.Resources.Containers;
+﻿using Domain.Entities;
+
+namespace Domain.Contracts.Resources.Containers;
 
 public record ContainerInspectionInfo(
     string Id,
@@ -47,8 +49,6 @@ public record ContainerRuntimeState(
     ContainerHealthStatus? Health
 );
 
-public record HostPortBinding(string? HostIP, string? HostPort);
-
 public record RestartPolicy(string? Name, int? MaximumRetryCount);
 
 public record BindOptions(
@@ -84,7 +84,7 @@ public record HostConfiguration(
     string? ContainerIDFile,
     LogConfiguration? LogConfig,
     string? NetworkMode,
-    IReadOnlyList<IDictionary<string, IReadOnlyList<HostPortBinding>>> PortBindings,
+    IDictionary<string, IReadOnlyList<HostPortBinding>> PortBindings,
     RestartPolicy? RestartPolicy,
     bool? AutoRemove,
     string? VolumeDriver,
@@ -207,5 +207,5 @@ public record NetworkSettingsInfo(
     long? IpPrefixLen,
     string? Ipv6Gateway,
     string? MacAddress,
-    IReadOnlyList<IDictionary<string, IReadOnlyList<HostPortBinding>>> Ports,
+    IDictionary<string, IReadOnlyList<HostPortBinding>> Ports,
     IReadOnlyDictionary<string, EndpointSettingsInfo> Networks);

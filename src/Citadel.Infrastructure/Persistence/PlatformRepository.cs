@@ -215,6 +215,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         const string sql = """
             SELECT 
                 Platforms.Id,
+                Platforms.Name,
                 Platforms.Address,
                 Platforms.ConnectorType
             FROM Containers

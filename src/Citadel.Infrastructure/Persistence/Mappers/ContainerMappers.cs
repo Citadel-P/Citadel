@@ -1,6 +1,5 @@
 ﻿using System.Text.Json;
 using Domain;
-using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Infrastructure.Persistence.Dtos;
 
@@ -24,7 +23,7 @@ internal static class ContainerMappers
             created: container.Created,
             updated: container.Updated,
             state: Enum.Parse<ContainerStateStatus>(container.State),
-            ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IReadOnlyCollectionContainerPort) ?? [],
+            ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             stack: container.Stack,
             platform: container.Platform?.ToDomain(),
             stats: container.Stats?.Select(ToDomain).ToList());
@@ -48,15 +47,5 @@ internal static class ContainerMappers
             txBytes: stat.TxBytes);
     }
 
-    internal static ContainerInfo Map(this ContainerInfoDto container)
-    {
-        return new ContainerInfo(
-            Id: container.Id,
-            Name: container.Name,
-            PlatformId: container.PlatformId,
-            ContainerId: container.ContainerId,
-            PlatformName: container.PlatformName,
-            State: Enum.Parse<ContainerStateStatus>(container.State));
-    }
 }
 

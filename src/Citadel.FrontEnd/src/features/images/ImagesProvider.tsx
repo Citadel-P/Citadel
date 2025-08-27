@@ -2,9 +2,9 @@ import { useGETRegistries } from '../registries/hooks/useGETRegistries';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { ImageView, RegistryView } from '@/api/_generated';
 import { useQueryClient } from '@tanstack/react-query';
-import { useDialogState } from '@/hooks/useDialogState';
 import { ImagesContext } from './ImagesContext';
 import { useDeleteImageDialog } from './hooks/useDeleteImageDialog';
+import { useRunImageDialog } from './hooks/useRunImageDialog';
 
 export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const client = useQueryClient();
@@ -17,8 +17,7 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
   const [localImages, setLocalImages] = useState<ImageView[]>([]);
   const [originalLocalImages, setOriginalLocalImages] = useState<ImageView[] | undefined>([]);
   const { deleteIsPending, requestDelete, dialogData, setDialogData } = useDeleteImageDialog();
-
-  const { dialogData: runDialogData, setDialogData: setRunDialogData } = useDialogState<ImageView>();
+  const { runDialogData, setRunDialogData } = useRunImageDialog();
 
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
   // Sheet state

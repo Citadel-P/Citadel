@@ -50,7 +50,8 @@ internal static class PlatformMappers
 
     internal static PlatformConnectionInfo ToDomain(this PlatformConnectionInfoDto dto)
         => new (
-            Id: Guid.Parse(dto.Id),
+            Id: dto.Id,
+            Name: dto.Name,
             Address: dto.Address,
             ConnectorType: Enum.Parse<PlatformConnectorType>(dto.ConnectorType)
             );

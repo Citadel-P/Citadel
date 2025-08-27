@@ -143,13 +143,8 @@ public static class InfrastructureModule
         SqlMapper.AddTypeHandler(new NullableGuidStringHandler());
 
         // Json Converters
-        SqlMapper.AddTypeHandler(new JsonTypeHandler<List<ContainerPort>>(
-            ContainerPortsContext.Default.ListContainerPort));
-        SqlMapper.AddTypeHandler(new JsonTypeHandler<IEnumerable<ContainerPort>>(
-            ContainerPortsContext.Default.IEnumerableContainerPort));
-        SqlMapper.AddTypeHandler(new JsonTypeHandler<IReadOnlyCollection<ContainerPort>>(
-            ContainerPortsContext.Default.IReadOnlyCollectionContainerPort));
-        
+        SqlMapper.AddTypeHandler(new JsonTypeHandler<IDictionary<string, IReadOnlyList<HostPortBinding>>>(
+            ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding));
         SqlMapper.AddTypeHandler(new JsonTypeHandler<PlatformDescriptor>(
            PlatformJsonContext.Default.PlatformDescriptor));
         SqlMapper.AddTypeHandler(new JsonTypeHandler<RegistryConfigurationBase>(

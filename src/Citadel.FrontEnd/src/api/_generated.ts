@@ -161,13 +161,18 @@ export interface ContainerHealthStatus {
 }
 
 export interface ContainerInfoView {
-  /** @format uuid */
-  id: string;
+  name: string;
+  containerId: string;
   /** @format uuid */
   platformId: string;
-  containerId: string;
-  containerName: string;
+  startedAt: string;
+  finishedAt: string;
   platformName: string;
+  imageName: string;
+  imageId: string;
+  volumes: string[];
+  ports: Record<string, HostPortBinding[]>;
+  networks: Record<string, string>;
   state: ContainerStateStatus;
 }
 
@@ -287,14 +292,20 @@ export interface ContainerView {
   name: string;
   image: string;
   imageId: string;
-  /** @format date-time */
-  created: any;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  created: number | string;
   state: ContainerStateStatus;
-  /** @format date-time */
-  updated: any;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  updated: number | string;
   stack: null | string;
   lastStats: NullableOfContainerStatView;
-  ports?: null | any[];
+  ports: Record<string, HostPortBinding[]>;
   platform?: PlatformView;
   metadata?: EndpointMetadata;
 }
@@ -625,7 +636,7 @@ export interface HostConfiguration {
   containerIDFile: null | string;
   logConfig: LogConfiguration;
   networkMode: null | string;
-  portBindings: Record<string, HostPortBinding[]>[];
+  portBindings: Record<string, HostPortBinding[]>;
   restartPolicy: RestartPolicy;
   autoRemove: null | boolean;
   volumeDriver: null | string;
@@ -980,7 +991,7 @@ export interface NetworkSettingsInfo {
   ipPrefixLen: null | number | string;
   ipv6Gateway: null | string;
   macAddress: null | string;
-  ports: any[];
+  ports: Record<string, any>;
   networks: Record<string, EndpointSettingsInfo>;
 }
 
@@ -1206,20 +1217,6 @@ export interface PlatformView {
 
 export interface PlatformsView {
   platforms: PlatformView[];
-}
-
-export interface PortView {
-  ip?: string;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  privatePort?: number | string;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  publicPort?: number | string;
 }
 
 export interface ProblemDetails {

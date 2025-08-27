@@ -19,7 +19,7 @@ export const CopyTextToClipboard = ({
         className={`rounded-full ml-1 px-1.5 py-1.5 hover:bg-foreground/10 text-sm font-semibold
           ${copyCmd ? 'visible' : `invisible group-hover${groupClassName ? '/' + groupClassName : ''}:visible`}`}
         onClick={() => setCopyCmd(textToCopy ?? '')}>
-        {copyCmd ? <CheckCheck className="w-3 h-3 text-green-500" /> : <Clipboard className="w-3 h-3 text-blue-500" />}
+        {copyCmd ? <CheckCheck className="w-3 h-3 text-green-500" /> : <Clipboard className="w-3 h-3 text-primary" />}
       </button>
     </div>
   );

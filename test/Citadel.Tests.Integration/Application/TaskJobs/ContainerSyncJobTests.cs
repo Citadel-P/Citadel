@@ -60,7 +60,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
                     image: container.Image,
                     imageId: container.Image,
                     platformId: platform.Id,
-                    ports: [],
+                    ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
                     containerId: container.ContainerId,
                     state: ContainerStateStatus.Offline)
                 , TestContext.Current.CancellationToken);
@@ -112,7 +112,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
             image: "stale:latest",
             imageId: "fake-id",
             platformId: platformId,
-            ports: [],
+            ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             containerId: "stale-id",
             state: ContainerStateStatus.Running);
         await using var scope = Services.CreateAsyncScope();
@@ -148,7 +148,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
             imageId: "fake-id",
             containerId: "new-id",
             state: ContainerStateStatus.Running,
-            ports: [],
+            ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             created: 123456,
             stack: null
         );
@@ -178,7 +178,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
             image: "old:latest",
             imageId: "fake-id",
             platformId: platformId,
-            ports: [],
+            ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             containerId: containerId,
             state: ContainerStateStatus.Paused);
         await using (var uow = Services.GetRequiredService<IUnitOfWork>())
@@ -193,7 +193,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
             imageId: "fake-id",
             containerId: containerId,
             state: ContainerStateStatus.Running,
-            ports: [],
+            ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             created: 123456,
             stack: null
         );

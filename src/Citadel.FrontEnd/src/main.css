@@ -377,5 +377,5 @@ select {
 }
 
 .table-link {
-  @apply text-foreground/80 group-hover/rowid:text-blue-500 hover:underline
+  @apply text-foreground/80  hover:underline;
 }

@@ -145,8 +145,17 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
 export default function LocalImagesTable() {
   const { currentPlatform } = useAppContext();
   const { data, isLoading, isSuccess } = useGETAllLocalImages(currentPlatform?.id);
-  const { setSelectedRows, setLocalImages, localImages, setDialogData, dialogData, requestDelete, deleteIsPending } =
-    useImagesContext();
+  const {
+    setSelectedRows,
+    setLocalImages,
+    localImages,
+    setDialogData,
+    dialogData,
+    requestDelete,
+    deleteIsPending,
+    setRunDialogData,
+    runDialogData,
+  } = useImagesContext();
   // Update local images when data is fetched
   useEffect(() => {
     if (isSuccess && data?.data.images) {
@@ -184,7 +193,7 @@ export default function LocalImagesTable() {
           </span>
         )}
       </div>
-      <RunImageDialog />
+      <RunImageDialog runDialogData={runDialogData} setRunDialogData={setRunDialogData} />
       <DeleteLocalImageDialog
         dialogData={dialogData}
         setDialogData={setDialogData}

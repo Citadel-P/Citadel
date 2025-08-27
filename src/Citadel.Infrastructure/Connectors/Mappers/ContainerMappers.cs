@@ -274,19 +274,17 @@ internal static class ContainerMappers
            Data: graphDriver.Data?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? []
        );
 
-    private static IReadOnlyList<IDictionary<string, IReadOnlyList<HostPortBinding>>> Map(this Hosting.DockerClient.PortMap portMap)
+    private static Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>> Map(this Hosting.DockerClient.PortMap portMap)
     {
         if (portMap is null || portMap.Count == 0)
             return [];
 
-        var result = new List<IDictionary<string, IReadOnlyList<HostPortBinding>>>(portMap.Count);
+        var result = new Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>>(portMap.Count);
 
         foreach (var mapField in portMap)
         {
-            var dict = new Dictionary<string, IReadOnlyList<HostPortBinding>>(1);
-            var bindings = mapField.Value?.Select(s => new HostPortBinding(s.HostIp, s.HostPort)).ToList() ?? [];
-            dict[mapField.Key] = bindings;
-            result.Add(dict);
+            var bindings = mapField.Value?.Select(s => new Domain.Entities.HostPortBinding(s.HostIp, s.HostPort)).ToList() ?? [];
+            result[mapField.Key] = bindings;
         }
 
         return result;
@@ -351,7 +349,7 @@ internal static class ContainerMappers
             LogConfig: new LogConfiguration(config.LogConfig.Type, config.LogConfig.Config),
             Binds: config.Binds,
             ContainerIDFile: config.ContainerIDFile,
-            PortBindings: config.PortBindings.Map(),
+            PortBindings: config.PortBindings?.Map(),
             VolumeDriver: config.VolumeDriver,
             Mounts: config.Mounts?.Map() ?? [],
             ConsoleSize: config.ConsoleSize,
@@ -508,28 +506,29 @@ internal static class ContainerMappers
                 PrefixLen: address.PrefixLen
         );
 
-    private static IReadOnlyList<IDictionary<string, IReadOnlyList<HostPortBinding>>> Map(this RepeatedField<MapFieldPortBinding> bindings)
+    private static Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>> Map(this MapField<string, HostPortBindingList> bindings)
     {
         if (bindings is null || bindings.Count == 0)
             return [];
 
-        var result = new List<IDictionary<string, IReadOnlyList<HostPortBinding>>>(bindings.Count);
+        var result = new Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>>(bindings.Count);
 
         foreach (var mapField in bindings)
         {
-            var dict = new Dictionary<string, IReadOnlyList<HostPortBinding>>(1);
-            dict[mapField.Key] = mapField.Value?.Select(Map).ToList() ?? [];
-            result.Add(dict);
+            result[mapField.Key] = mapField.Value?.Map() ?? [];
         }
-
         return result;
     }
 
-    private static HostPortBinding Map(this PortBinding binding)
-        => new(
-            HostIP: binding.HostIP,
-            HostPort: binding.HostPort
-        );
+    private static List<Domain.Entities.HostPortBinding> Map(this HostPortBindingList items)
+    {
+        var result = new List<Domain.Entities.HostPortBinding>();
+        foreach (var binding in items.HostPortBinding)
+        {
+            result.Add(new Domain.Entities.HostPortBinding(binding.HostIP, binding.HostPort));
+        }
+        return result;
+    }
 
     private static EndpointSettingsInfo Map(this Citadel.Agent.Common.V1.EndpointSettings endpointSettings)
         => new(
@@ -573,7 +572,7 @@ internal static class ContainerMappers
             created: container.Created,
             state: container.State.Map(),
             containerStat: container.ContainerStatMessage?.Map(),
-            ports: container.Ports?.Map()?.ToList() ?? []
+            ports: container.Ports?.Map()
         );
     
     public static DockerContainerStat Map(this ContainerStatMessage statMessage)
@@ -584,17 +583,6 @@ internal static class ContainerMappers
             cpuUsage: statMessage.CpuUsage,
             rxBytes: statMessage.RxBytes,
             txBytes: statMessage.TxBytes
-        );
-
-    public static IEnumerable<ContainerPort> Map(this IEnumerable<PortMessage> ports)
-        => ports.Select(Map);
-
-    private static ContainerPort Map(this PortMessage port) 
-        => new (
-            IP: port.IP,
-            PrivatePort: port.PrivatePort,
-            PublicPort: port.PublicPort,
-            Type: port.Type
         );
 
     public static MapField<string, OptionChain> Map(this IDictionary<string, IDictionary<string, bool>> filters)
@@ -657,7 +645,7 @@ internal static class ContainerMappers
             created: container.Created,
             state: container.State.Map(),
             containerStat: destination.ContainerStat,
-            ports: container.Ports?.Map()?.ToList() ?? []
+            ports: container.Ports?.Map()
         );
     }
 
@@ -674,9 +662,33 @@ internal static class ContainerMappers
             containerId: container?.Id,
             created: container?.Created,
             containerStat: container.ContainerStat?.Map(),
-            ports: container.Ports?.Select(Map).ToList() ?? [],
+            ports: container.Ports?.Map(),
             state: container?.State?.Map() ?? ContainerStateStatus.Unknown
         );
+
+    private static Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>> Map(this IDictionary<string, IReadOnlyList<Hosting.DockerClient.PortBinding>> bindings)
+    {
+        if (bindings is null || bindings.Count == 0)
+            return [];
+
+        var result = new Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>>(bindings.Count);
+
+        foreach (var mapField in bindings)
+        {
+            result[mapField.Key] = mapField.Value?.Map() ?? [];
+        }
+        return result;
+    }
+
+    private static List<Domain.Entities.HostPortBinding> Map(this IReadOnlyList<Hosting.DockerClient.PortBinding> items)
+    {
+        var result = new List<Domain.Entities.HostPortBinding>();
+        foreach (var binding in items)
+        {
+            result.Add(new Domain.Entities.HostPortBinding(binding.HostIp, binding.HostPort));
+        }
+        return result;
+    }
 
     public static void Map(ContainerResult container, DockerContainer destination)
     {
@@ -691,7 +703,7 @@ internal static class ContainerMappers
           containerId: container?.Id,
           created: container?.Created,
           containerStat: destination.ContainerStat,
-          ports: container?.Ports?.Select(Map).ToList() ?? [],
+          ports: container?.Ports?.Map(),
           state: container?.State?.Map() ?? ContainerStateStatus.Unknown
           );
     }
@@ -705,15 +717,6 @@ internal static class ContainerMappers
             memoryLimit: stats.MemoryLimit,
             rxBytes: stats.RxBytes,
             txBytes: stats.TxBytes
-        );
-
-    public static ContainerPort Map(this Hosting.DockerClient.Port port)
-        => new
-        (
-            IP: port.IP,
-            PrivatePort: port.PrivatePort,
-            PublicPort: port.PublicPort,
-            Type: port?.Type.ToString()
         );
 
     public static void Map(this ContainerStatResult stat, DockerContainerStat destination)

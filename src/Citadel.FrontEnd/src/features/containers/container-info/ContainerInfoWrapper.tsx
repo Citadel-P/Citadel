@@ -16,6 +16,8 @@ import { ContainerStateIndicator } from '../ContainerStateIndicator';
 import { useDeleteContainerDialog } from '../dialogs/useDeleteContainerDialog';
 import { DeleteContainerDialog } from '../dialogs/DeleteContainerDialog';
 import { ContainerActionButtons } from '../ContainerActionButtons';
+import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
+import { fromNow } from '@/lib/dayjs.helper';
 
 const ContainerInfoWrapper = () => {
   const navigate = useNavigate();
@@ -32,11 +34,21 @@ const ContainerInfoWrapper = () => {
   const [containerId, setContainerId] = useState<string | undefined>();
   const [containerName, setContainerName] = useState<string | undefined>();
   const [containerState, setContainerState] = useState<ContainerStateStatus | undefined>();
+  const [statusSnapshot, setStatusSnapshot] = useState<string | undefined>();
 
   useEffect(() => {
-    setContainerName(containerInfo?.name ?? currentContainer?.containerName);
+    setContainerName(containerInfo?.name ?? currentContainer?.name);
     setContainerId(containerInfo?.containerId ?? currentContainer?.containerId);
     setContainerState(containerInfo?.state ?? currentContainer?.state);
+    if (containerInfo?.state === currentContainer?.state) {
+      const d =
+        currentContainer?.state === ContainerStateStatus.Running
+          ? new Date(currentContainer.startedAt)
+          : new Date(currentContainer?.finishedAt ?? new Date(Date.now()));
+      setStatusSnapshot(fromNow(d));
+    } else {
+      setStatusSnapshot(undefined);
+    }
   }, [currentContainer, containerInfo]);
 
   useEffect(() => {
@@ -67,11 +79,10 @@ const ContainerInfoWrapper = () => {
   if (!containerId) {
     return (
       <div className="flex justify-center items-center h-full">
-        <p className="text-muted-foreground">No container selected. Please select a container to view details.</p>
+        <p className="text-muted-foreground">Nothing to show yet, pick a container to see its details.</p>
       </div>
     );
   }
-
   return (
     <div className="flex-col justify-between">
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
@@ -80,16 +91,26 @@ const ContainerInfoWrapper = () => {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-1">
               <ContainerStateIndicator stat={containerState ?? ContainerStateStatus.Exited} />
-              <div className="text-md font-bold text-foreground">
+              <div className="flex flex-col text-md font-bold text-foreground">
                 <span>{containerName?.slice(1)}</span>
-                <span className="text-sm text-foreground/40 ml-2">({containerId?.slice(0, 12)})</span>
+                <span className="text-xs text-foreground/40">
+                  <CopyTextToClipboard textToCopy={containerId ?? '-'} />
+                </span>
               </div>
             </div>
             <div className="flex justify-end">
-              <ContainerActionButtons
-                selectedContainers={[containerInfo! ?? currentContainer]}
-                setDialogData={setDialogData}
-              />
+              <div className="flex flex-row gap-5">
+                <div className="flex flex-col gap-1">
+                  <p className="text-[12px] text-foreground font-medium">Status</p>
+                  <p className="text-[11px] text-muted-foreground font-medium">
+                    {containerState} ({statusSnapshot ?? '-'})
+                  </p>
+                </div>
+                <ContainerActionButtons
+                  selectedContainers={[containerInfo! ?? currentContainer]}
+                  setDialogData={setDialogData}
+                />
+              </div>
             </div>
           </div>
 
