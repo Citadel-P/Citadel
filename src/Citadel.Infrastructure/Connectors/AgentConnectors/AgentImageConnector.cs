@@ -84,8 +84,45 @@ internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageCon
         }
     }
 
-    Task<Result<IEnumerable<Domain.Contracts.Resources.Images.HistoryImageResult>>> IImageConnector.HistoryImageAsync(HistoryImageCommand command, CancellationToken cancellationToken)
+    public async Task<Result<IEnumerable<Domain.Contracts.Resources.Images.HistoryImageResult>>> HistoryImageAsync(HistoryImageCommand command, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        try
+        {
+            var client = clientFactory.GetImageClient(command.PlatformAddress);
+            var request = new HistoryImageRequest
+            {
+                Id = command.ImageId
+            };
+
+            var response = await client.HistoryAsync(request, cancellationToken: cancellationToken);
+            return response.Map();
+        }
+        catch (RpcException ex)
+        {
+            return Result.Failure<IEnumerable<Domain.Contracts.Resources.Images.HistoryImageResult>> (new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+        }
+    }
+
+    public async Task<Result<RunImageInfoResult>> GetRunImageInfoAsync(RunImageInfoCommand command, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var client = clientFactory.GetImageClient(command.PlatformAddress);
+            var request = new GetRunImageInfoRequest
+            {
+                Id = command.ImageId
+            };
+
+            var response = await client.GetRunImageInfoAsyncAsync(request, cancellationToken: cancellationToken);
+            return new RunImageInfoResult(
+                Volumes: response.Volumes,
+                Networks: response.Networks,
+                ExposedPorts: response.ExposedPorts, 
+                0, 0);
+        }
+        catch (RpcException ex)
+        {
+            return Result.Failure<RunImageInfoResult>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+        }
     }
 }

@@ -2912,7 +2912,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ImageInfoResult"
+                  "$ref": "#/components/schemas/RunImageInfoResult"
                 }
               }
             }
@@ -6741,52 +6741,6 @@
           }
         }
       },
-      "ImageInfoResult": {
-        "required": [
-          "volumes",
-          "networks",
-          "exposedPorts",
-          "memTotal",
-          "cpuCount"
-        ],
-        "type": "object",
-        "properties": {
-          "volumes": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "networks": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "exposedPorts": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "memTotal": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
-            "format": "double"
-          },
-          "cpuCount": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
-            "format": "double"
-          }
-        }
-      },
       "ImagePullError": {
         "required": [
           "code",
@@ -8368,6 +8322,52 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "RunImageInfoResult": {
+        "required": [
+          "volumes",
+          "networks",
+          "exposedPorts",
+          "memTotal",
+          "cpuCount"
+        ],
+        "type": "object",
+        "properties": {
+          "volumes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "networks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "exposedPorts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "memTotal": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "cpuCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
           }
         }
       },

@@ -1,4 +1,4 @@
 ﻿namespace Domain.Contracts.Resources.Images;
 
-public record InspectImageCommand(string PlatformAddress, string ImageId);
+public sealed record InspectImageCommand(string PlatformAddress, string ImageId);
 

@@ -49,4 +49,10 @@ internal class LocalImageConnector(IImageService imageService) : IImageConnector
         var result = await imageService.HistoryAsync(command.ImageId, cancellationToken);
         return ServiceResultHandlers.HandleResult(result, ImageMappers.Map);
     }
+
+    public async Task<Result<RunImageInfoResult>> GetRunImageInfoAsync(RunImageInfoCommand command, CancellationToken cancellationToken)
+    {
+        var result = await imageService.GetRunInfoAsync(command.ImageId, cancellationToken);
+        return ServiceResultHandlers.HandleResult(result, ImageMappers.Map);
+    }
 }

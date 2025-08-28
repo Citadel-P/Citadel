@@ -122,7 +122,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(IAsyncEnumerable<PullImageResult>))]
 [JsonSerializable(typeof(IEnumerable<DockerHubImageResult>))]
 [JsonSerializable(typeof(ContainerInfoView))]
-[JsonSerializable(typeof(ImageInfoResult))]
+[JsonSerializable(typeof(RunImageInfoResult))]
 [JsonSerializable(typeof(CreateContainerInput))]
 [JsonSerializable(typeof(CreateContainerView))]
 [JsonSerializable(typeof(IAsyncEnumerable<ComposeDeploymentEvent>))]

@@ -1,5 +1,6 @@
 import { RequestParams } from '@/api/_generated';
 import { useApiClientContext } from '@/api/ApiClientContext';
+import { use400ErrorToast } from '@/hooks/use400ErrorToast';
 import { useMutation } from '@tanstack/react-query';
 
 export type actionType = 'start' | 'stop' | 'pause' | 'restart';
@@ -10,7 +11,7 @@ interface IArgs {
 }
 export const usePATCHContainers = () => {
   const { apiClient } = useApiClientContext();
-  const { mutate, isPending, isSuccess, data } = useMutation({
+  const { mutate, isPending, isSuccess, data, error } = useMutation({
     mutationFn: ({ action, containersId: data, params }: IArgs) => {
       switch (action) {
         case 'start':
@@ -26,6 +27,8 @@ export const usePATCHContainers = () => {
       }
     },
   });
+
+  use400ErrorToast(error);
 
   return { mutate, isPending, isSuccess, data };
 };

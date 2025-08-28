@@ -26,7 +26,7 @@ export const ContainerStateIndicator = memo(({ stat }: { stat: ContainerStateSta
     <TooltipProvider delayDuration={200}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className={`${getStatusClass(stat)} mr-2 h-2 w-2 rounded-full`} />
+          <div className={`${getStatusClass(stat)} p-1 mr-1 h-2 w-2 rounded-full`} />
         </TooltipTrigger>
         <TooltipContent>
           <span>{statusText}</span>

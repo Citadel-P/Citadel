@@ -31,8 +31,8 @@ const ImageInfoWrapper = () => {
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
         <div className="max-w-full rounded-lg border-border bg-background p-4">
           {/* Header */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-1">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-3">
+            <div className="flex items-center gap-1 mb-4 md:mb-0">
               <ImageSateIndicator inUse={Object.keys(data?.data.containers ?? {}).length > 0} />
               <div className="flex flex-col text-md font-bold text-foreground">
                 <span>{data?.data.repoTags?.at(0) ?? '-:-'}</span>
@@ -41,7 +41,7 @@ const ImageInfoWrapper = () => {
                 </span>
               </div>
             </div>
-            <div className="flex justify-end">
+            <div className="flex justify-start md:justify-end w-full">
               <ImageActionButtons
                 selectedImages={[{ id: data?.data.id, name, tag } as ImageView]}
                 setDialogData={setDialogData}

@@ -14,7 +14,7 @@ export const CopyTextToClipboard = ({
 
   return (
     <div className={`flex gap-0.5 items-center ${groupClassName ? groupClassName : 'group'}`}>
-      <div>{transform ? transform(textToCopy) : textToCopy}</div>
+      <div className="break-all md:break-normal">{transform ? transform(textToCopy) : textToCopy}</div>
       <button
         className={`rounded-full ml-1 px-1.5 py-1.5 hover:bg-foreground/10 text-sm font-semibold
           ${copyCmd ? 'visible' : `invisible group-hover${groupClassName ? '/' + groupClassName : ''}:visible`}`}

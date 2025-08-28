@@ -40,14 +40,16 @@ const ContainerInfoWrapper = () => {
     setContainerName(containerInfo?.name ?? currentContainer?.name);
     setContainerId(containerInfo?.containerId ?? currentContainer?.containerId);
     setContainerState(containerInfo?.state ?? currentContainer?.state);
-    if (containerInfo?.state === currentContainer?.state) {
+    if (containerInfo?.state === ContainerStateStatus.Created) {
+      setStatusSnapshot(undefined);
+    } else if (containerInfo && currentContainer && containerInfo.state === currentContainer.state) {
       const d =
-        currentContainer?.state === ContainerStateStatus.Running
+        containerInfo.state === ContainerStateStatus.Running
           ? new Date(currentContainer.startedAt)
-          : new Date(currentContainer?.finishedAt ?? new Date(Date.now()));
+          : new Date(currentContainer.finishedAt ?? new Date(Date.now()));
       setStatusSnapshot(fromNow(d));
     } else {
-      setStatusSnapshot(undefined);
+      setStatusSnapshot(fromNow(new Date(Date.now())));
     }
   }, [currentContainer, containerInfo]);
 
@@ -88,8 +90,8 @@ const ContainerInfoWrapper = () => {
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
         <div className="max-w-full rounded-lg border-border bg-background p-4">
           {/* Header */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-1">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-3">
+            <div className="flex items-center gap-1 mb-4 md:mb-0">
               <ContainerStateIndicator stat={containerState ?? ContainerStateStatus.Exited} />
               <div className="flex flex-col text-md font-bold text-foreground">
                 <span>{containerName?.slice(1)}</span>
@@ -98,12 +100,12 @@ const ContainerInfoWrapper = () => {
                 </span>
               </div>
             </div>
-            <div className="flex justify-end">
-              <div className="flex flex-row gap-5">
+            <div className="flex justify-start md:justify-end w-full">
+              <div className="flex flex-row items-center gap-5">
                 <div className="flex flex-col gap-1">
                   <p className="text-[12px] text-foreground font-medium">Status</p>
                   <p className="text-[11px] text-muted-foreground font-medium">
-                    {containerState} ({statusSnapshot ?? '-'})
+                    {containerState} {statusSnapshot && `(${statusSnapshot})`}
                   </p>
                 </div>
                 <ContainerActionButtons
@@ -116,7 +118,7 @@ const ContainerInfoWrapper = () => {
 
           {/* Tabs */}
           <Tabs value={currentTab} onValueChange={onValueChange}>
-            <TabsList className="w-full justify-start bg-muted/20 rounded-sm">
+            <TabsList className="w-full justify-start bg-muted/20 rounded-sm flex-wrap h-auto">
               <TabsTrigger value="logs">Logs</TabsTrigger>
               <TabsTrigger value="inspect">Inspect</TabsTrigger>
               <TabsTrigger value="stats">Stats</TabsTrigger>
