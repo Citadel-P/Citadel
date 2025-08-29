@@ -1,5 +1,6 @@
 ﻿using Citadel.Agent.Images.V1;
 using Domain.Contracts.Resources.Images;
+using Google.Protobuf.Collections;
 using static Citadel.Agent.Images.V1.ConfigMessage.Types;
 
 namespace Infrastructure.Connectors.Mappers;
@@ -38,11 +39,24 @@ internal static class ImageMappers
             Env: image.Env?.ToList() ?? [],
             Cmd: image.Cmd?.ToList() ?? [],
             RepoTags: image.RepoTags?.ToList() ?? [],
-            Containers: null, //image.Containers ?? [],
+            Containers: image.Containers?.Map() ?? [],
             Volumes: image.Volumes?.ToList() ?? [],
             Labels: image.Labels ?? [],
             ExposedPorts: image.ExposedPorts?.ToList() ?? [],
             Layers: image.Layers?.Select(Map)?.ToList() ?? []
+        );
+
+    private static IEnumerable<Domain.Contracts.Resources.Images.ContainerImageResult> Map(this RepeatedField<global::Citadel.Agent.Images.V1.ContainerImageResult> containers)
+        => containers.Select(Map);
+
+    private static Domain.Contracts.Resources.Images.ContainerImageResult Map(this global::Citadel.Agent.Images.V1.ContainerImageResult container)
+        => new (
+            Id: container.Id,
+            Name: container.Name,
+            State: container.State.Map(),
+            Volumes: container.Volumes?.ToList() ?? [],
+            Networks: container.Networks?.ToList() ?? [],
+            Ports: container.Ports?.Map() ?? []
         );
 
     public static ImageRootFs Map(this RootFSMessage rootFs) => new(
@@ -210,10 +224,10 @@ internal static class ImageMappers
 
         );
 
-    private static IEnumerable<ContainerImageResult> Map(this IEnumerable<Hosting.DockerClient.Models.Images.ContainerImage> containers)
+    private static IEnumerable<Domain.Contracts.Resources.Images.ContainerImageResult> Map(this IEnumerable<Hosting.DockerClient.Models.Images.ContainerImage> containers)
     => containers.Select(Map);
 
-    private static ContainerImageResult Map(this Hosting.DockerClient.Models.Images.ContainerImage container)
+    private static Domain.Contracts.Resources.Images.ContainerImageResult Map(this Hosting.DockerClient.Models.Images.ContainerImage container)
     => new(
         Id: container.Id,
         Name: container.Name,
