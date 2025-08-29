@@ -171,8 +171,8 @@ export const RunImageDialog = ({
                     <button
                       type="button"
                       aria-expanded={advancedOpen}
-                      className="flex items-center justify-between w-full px-2 py-4 rounded transition-colors bg-card/50 hover:bg-accent group focus:outline-none mb-0">
-                      <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                      className="flex items-center justify-between w-full px-2 py-4 rounded transition-colors bg-accent/60 hover:bg-accent/80 group focus:outline-none mb-0">
+                      <span className="text-sm font-semibold text-foreground">
                         Optional settings
                       </span>
                       <ChevronDown
@@ -185,7 +185,7 @@ export const RunImageDialog = ({
                     <div className="flex flex-col space-y-2 py-2">
                       {validationErrors && <AlertMessage type="error">{validationErrors}</AlertMessage>}
                       <Tabs defaultValue="general">
-                        <TabsList className="w-full justify-start bg-muted/20 rounded-sm">
+                        <TabsList className="w-full">
                           <TabsTrigger value="general">General</TabsTrigger>
                           <TabsTrigger value="resources">Resources & Policies</TabsTrigger>
                           <TabsTrigger value="commands">Commands</TabsTrigger>
@@ -264,8 +264,8 @@ export const RunImageDialog = ({
                             remove={removeEnvVar}
                             label="Environement variables"
                             addButtonLabel="Add environement variable"
-                            keyPlaceHolder="Variable"
-                            valuePlaceHolder="Value"
+                            keyPlaceHolder="key"
+                            valuePlaceHolder="value"
                           />
                           <KeyValuePairInput
                             name="labels"

@@ -60,13 +60,15 @@ const Images = () => {
           </div>
           {/* Tabs */}
           <Tabs value={currentTab} onValueChange={onValueChange}>
-            <TabsList className="w-full justify-start bg-muted/20 rounded-sm">
+            <TabsList className="w-full">
               <TabsTrigger value="local">Local</TabsTrigger>
               <TabsTrigger value="external">External</TabsTrigger>
             </TabsList>
 
             <TabsContent value="local">
-              <LocalImagesTable />
+              <div className="space-y-1 rounded-sm border p-1 shadow-xs">
+                <LocalImagesTable />
+              </div>
             </TabsContent>
             <TabsContent value="external">
               <div className="flex flex-col gap-3">

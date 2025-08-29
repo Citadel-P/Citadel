@@ -506,7 +506,7 @@ internal static class ContainerMappers
                 PrefixLen: address.PrefixLen
         );
 
-    private static Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>> Map(this MapField<string, HostPortBindingList> bindings)
+    public static Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>> Map(this MapField<string, HostPortBindingList> bindings)
     {
         if (bindings is null || bindings.Count == 0)
             return [];
@@ -666,7 +666,7 @@ internal static class ContainerMappers
             state: container?.State?.Map() ?? ContainerStateStatus.Unknown
         );
 
-    private static Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>> Map(this IDictionary<string, IReadOnlyList<Hosting.DockerClient.PortBinding>> bindings)
+    public static Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>> Map(this IDictionary<string, IReadOnlyList<Hosting.DockerClient.PortBinding>> bindings)
     {
         if (bindings is null || bindings.Count == 0)
             return [];

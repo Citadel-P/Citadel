@@ -93,7 +93,7 @@ const DockerPlatform = ({ platform }: { platform: PlatformView }) => {
   };
 
   return (
-    <div className="flow-root mb-1">
+    <div className="flow-root gap-1">
       <ul className="divide-y divide-foreground">
         <li className="group/platform py-3 bg-card/40 hover:bg-card/90 sm:py-4">
           <div className="flex flex-row flex-wrap items-center space-x-4">

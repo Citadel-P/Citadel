@@ -1,3 +1,6 @@
+// This component has been patched:
+// - remove the borders from row, add zebra style
+// - add bg-accent/60 to table head
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
@@ -14,14 +17,14 @@ function TableHeader({ className, ...props }: React.ComponentProps<'thead'>) {
   return (
     <thead
       data-slot="table-header"
-      className={cn('[&_tr]:border-1 uppercase border-1 text-foreground bg-card', className)}
+      className={cn('[&_tr]:border-1 uppercase border-1 text-foreground bg-accent/60', className)}
       {...props}
     />
   );
 }
 
 function TableBody({ className, ...props }: React.ComponentProps<'tbody'>) {
-  return <tbody data-slot="table-body" className={cn('[&_tr:last-child]:border-b-1', className)} {...props} />;
+  return <tbody data-slot="table-body" className={cn('[&_tr:last-child]:border-b-0', className)} {...props} />;
 }
 
 function TableFooter({ className, ...props }: React.ComponentProps<'tfoot'>) {
@@ -39,7 +42,8 @@ function TableRow({ className, ...props }: React.ComponentProps<'tr'>) {
     <tr
       data-slot="table-row"
       className={cn(
-        "'text-left  border-muted text-sm hover:bg-card/30 data-[state=selected]:bg-card/30 border-b transition-colors",
+        'text-left border-0 text-sm hover:bg-card/30 data-[state=selected]:bg-card/30 border-b-0 transition-colors',
+        'even:bg-muted/10',
         className,
       )}
       {...props}
@@ -65,7 +69,7 @@ function TableCell({ className, ...props }: React.ComponentProps<'td'>) {
     <td
       data-slot="table-cell"
       className={cn(
-        'p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]',
+        'h-12 px-2 whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]',
         className,
       )}
       {...props}

@@ -31,14 +31,14 @@ internal static class ImageMappers
         );
 
     public static InspectImageResult Map(this InspectImageResponse image)
-        => new (
+        => new(
             Id: image.Id,
             Size: image.Size,
             Created: image.Created,
             Env: image.Env?.ToList() ?? [],
             Cmd: image.Cmd?.ToList() ?? [],
             RepoTags: image.RepoTags?.ToList() ?? [],
-            Containers: image.Containers ?? [],
+            Containers: null, //image.Containers ?? [],
             Volumes: image.Volumes?.ToList() ?? [],
             Labels: image.Labels ?? [],
             ExposedPorts: image.ExposedPorts?.ToList() ?? [],
@@ -202,13 +202,27 @@ internal static class ImageMappers
             Env: image.Env?.ToList() ?? [],
             Cmd: image.Cmd?.ToList() ?? [],
             RepoTags: image.RepoTags?.ToList() ?? [],
-            Containers: image.Containers,
+            Containers: image.Containers?.Map(),
             Volumes: image.Volumes?.ToList() ?? [],
             Labels: image.Labels,
             ExposedPorts: image.ExposedPorts?.ToList() ?? [],
             Layers: image.Layers?.Select(Map)
 
         );
+
+    private static IEnumerable<ContainerImageResult> Map(this IEnumerable<Hosting.DockerClient.Models.Images.ContainerImage> containers)
+    => containers.Select(Map);
+
+    private static ContainerImageResult Map(this Hosting.DockerClient.Models.Images.ContainerImage container)
+    => new(
+        Id: container.Id,
+        Name: container.Name,
+        State: container.State.Map(),
+        Volumes: container.Volumes?.ToList() ?? [],
+        Networks: container.Networks?.ToList() ?? [],
+        Ports: container.Ports?.Map() ?? []
+    );
+
 
     private static ImageRootFs Map(this Hosting.DockerClient.RootFS rootFs) => new(
         Type: rootFs.Type,

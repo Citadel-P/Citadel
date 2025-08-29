@@ -10,6 +10,7 @@ export const AppPaths: Record<string, string> = {
   platforms: 'platforms',
   addPlatform: 'platforms/add',
   platformContainers: 'platforms/:platformId/containers',
+  container: 'containers/:containerId',
   containerLogs: 'containers/:containerId/logs',
   containerStats: 'containers/:containerId/stats',
   containerInspect: 'containers/:containerId/inspect',
@@ -17,6 +18,7 @@ export const AppPaths: Record<string, string> = {
   addRegistry: 'registries/add',
   editRegistry: 'registries/edit/:registryId',
   images: 'platforms/:platformId/images',
+  image: 'platforms/:platformId/images/:imageId',
   imageInspect: 'platforms/:platformId/images/:imageId/inspect',
   localImages: 'platforms/:platformId/images/local',
   externalImages: 'platforms/:platformId/images/external',
@@ -62,6 +64,12 @@ export const AppRoutes = () => {
           },
         },
         {
+          path: AppPaths.container,
+          lazy: async () => {
+            return { Component: (await import('@/features/containers/container-info/ContainerInfoWrapper')).default };
+          },
+        },
+        {
           path: AppPaths.containerLogs,
           lazy: async () => {
             return { Component: (await import('@/features/containers/container-info/ContainerInfoWrapper')).default };
@@ -77,6 +85,12 @@ export const AppRoutes = () => {
           path: AppPaths.containerInspect,
           lazy: async () => {
             return { Component: (await import('@/features/containers/container-info/ContainerInfoWrapper')).default };
+          },
+        },
+        {
+          path: AppPaths.image,
+          lazy: async () => {
+            return { Component: (await import('@/features/images/image-info/ImageInfoWrapper')).default };
           },
         },
         {

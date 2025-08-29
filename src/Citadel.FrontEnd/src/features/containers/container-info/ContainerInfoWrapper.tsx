@@ -18,6 +18,7 @@ import { DeleteContainerDialog } from '../dialogs/DeleteContainerDialog';
 import { ContainerActionButtons } from '../ContainerActionButtons';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { fromNow } from '@/lib/dayjs.helper';
+import { ContainerInfoTable } from './ContainerInfoTable';
 
 const ContainerInfoWrapper = () => {
   const navigate = useNavigate();
@@ -63,7 +64,7 @@ const ContainerInfoWrapper = () => {
   const currentTab = useMemo(() => {
     const matches = route?.path.match('[^/]+$');
     const tab = matches && matches[0];
-    return tab && ['logs', 'stats', 'inspect'].includes(tab) ? tab : 'logs';
+    return tab && ['logs', 'stats', 'inspect', 'activity'].includes(tab) ? tab : 'logs';
   }, [route]);
 
   // Handle tab change
@@ -88,9 +89,9 @@ const ContainerInfoWrapper = () => {
   return (
     <div className="flex-col justify-between">
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
-        <div className="max-w-full rounded-lg border-border bg-background p-4">
+        <div className="flex flex-col gap-4 w-full rounded-lg border-border bg-background p-4">
           {/* Header */}
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-3">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between">
             <div className="flex items-center gap-1 mb-4 md:mb-0">
               <ContainerStateIndicator stat={containerState ?? ContainerStateStatus.Exited} />
               <div className="flex flex-col text-md font-bold text-foreground">
@@ -101,13 +102,7 @@ const ContainerInfoWrapper = () => {
               </div>
             </div>
             <div className="flex justify-start md:justify-end w-full">
-              <div className="flex flex-row items-center gap-5">
-                <div className="flex flex-col gap-1">
-                  <p className="text-[12px] text-foreground font-medium">Status</p>
-                  <p className="text-[11px] text-muted-foreground font-medium">
-                    {containerState} {statusSnapshot && `(${statusSnapshot})`}
-                  </p>
-                </div>
+              <div className="flex flex-row items-center ">
                 <ContainerActionButtons
                   selectedContainers={[containerInfo! ?? currentContainer]}
                   setDialogData={setDialogData}
@@ -115,13 +110,17 @@ const ContainerInfoWrapper = () => {
               </div>
             </div>
           </div>
-
+          {/* Summary Table */}
+          <div className="space-y-1 rounded-sm border p-1 shadow-xs">
+            <ContainerInfoTable statusSnapshot={containerState + ' ' + (statusSnapshot ? `(${statusSnapshot})` : '')} />
+          </div>
           {/* Tabs */}
           <Tabs value={currentTab} onValueChange={onValueChange}>
-            <TabsList className="w-full justify-start bg-muted/20 rounded-sm flex-wrap h-auto">
+            <TabsList className="w-full">
               <TabsTrigger value="logs">Logs</TabsTrigger>
               <TabsTrigger value="inspect">Inspect</TabsTrigger>
               <TabsTrigger value="stats">Stats</TabsTrigger>
+              <TabsTrigger value="activity">Activity</TabsTrigger>
             </TabsList>
 
             <TabsContent value="logs">
@@ -129,7 +128,7 @@ const ContainerInfoWrapper = () => {
                 <ContainerLogs />
               </ContainerLogsProvider>
             </TabsContent>
-            <TabsContent value="inspect">
+            <TabsContent value="inspect" className="flex flex-col gap-4">
               <ContainerInspect />
             </TabsContent>
             <TabsContent value="stats">
@@ -141,6 +140,7 @@ const ContainerInfoWrapper = () => {
                 </div>
               </ContainerStatsProvider>
             </TabsContent>
+            <TabsContent value="activity" className="flex flex-col gap-4"></TabsContent>
           </Tabs>
         </div>
       </div>

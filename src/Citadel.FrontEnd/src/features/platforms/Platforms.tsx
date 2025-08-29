@@ -37,11 +37,14 @@ const Platforms = () => {
             .
           </AlertMessage>
         )}
-        {(platforms ?? []).map((platform) => {
-          if (platform.type === PlatformType.Docker) {
-            return <DockerPlatform key={`${platform.id}`} platform={platform} />;
-          }
-        })}
+        {(platforms ?? []).map(
+          (platform) =>
+            platform.type === PlatformType.Docker && (
+              <div key={`${platform.id}`} className="space-y-1 rounded-sm border p-1 shadow-xs">
+                <DockerPlatform platform={platform} />
+              </div>
+            ),
+        )}
       </div>
       <DeletePlatformDialog />
     </div>

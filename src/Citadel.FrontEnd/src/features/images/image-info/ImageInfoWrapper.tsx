@@ -7,16 +7,23 @@ import { useNavigate, useParams } from 'react-router';
 import { RunImageDialog } from '../dialogs/RunImageDialog';
 import { DeleteLocalImageDialog } from '../dialogs/DeleteLocalImageDialog';
 import { useDeleteImageDialog } from '../hooks/useDeleteImageDialog';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { useRunImageDialog } from '../hooks/useRunImageDialog';
+import { useAppContext } from '@/AppContext';
+import { ContainerInfoTable } from './ContainerInfoTable';
+import { Box, Info, Layers } from 'lucide-react';
+import { ImageInfoTable } from './ImageInfoTable';
+import { ImageLayerTable } from './ImageLayerTable';
+import Loader from '@/components/ui/loader';
 
 const ImageInfoWrapper = () => {
   const navigate = useNavigate();
+  const { route } = useAppContext();
   const { platformId, imageId } = useParams<{ platformId: string; imageId: string }>();
   const { runDialogData, setRunDialogData } = useRunImageDialog();
   const { setDialogData, dialogData, deleteIsSuccess, deleteIsPending, requestDelete } = useDeleteImageDialog();
-  const { data } = useGETInspect(platformId ?? null, imageId ?? null);
+  const { data, isLoading } = useGETInspect(platformId ?? null, imageId ?? null);
 
   const [name, tag] = data?.data.repoTags?.at(0)?.split(':') ?? [];
 
@@ -25,6 +32,23 @@ const ImageInfoWrapper = () => {
       navigate(`/platforms/${platformId}/images`);
     }
   }, [deleteIsSuccess, platformId, navigate]);
+
+  // Memoize the current tab based on the route
+  const currentTab = useMemo(() => {
+    const matches = route?.path.match('[^/]+$');
+    const tab = matches && matches[0];
+    return tab && ['inspect', 'activity'].includes(tab) ? tab : 'inspect';
+  }, [route]);
+
+  // Handle tab change
+  const onValueChange = useCallback(
+    (tabName: string) => {
+      if (imageId) {
+        navigate(`/platforms/${platformId}/images/${imageId}/${tabName}`);
+      }
+    },
+    [navigate, imageId, platformId],
+  );
 
   return (
     <div className="flex-col justify-between">
@@ -46,22 +70,54 @@ const ImageInfoWrapper = () => {
                 selectedImages={[{ id: data?.data.id, name, tag } as ImageView]}
                 setDialogData={setDialogData}
                 setRunDialogData={setRunDialogData}
+                showInspectButton={false}
               />
             </div>
           </div>
 
-          {/* Tabs */}
-          <Tabs>
-            <TabsList className="w-full justify-start bg-muted/20 rounded-sm">
-              <TabsTrigger value="logs">Logs</TabsTrigger>
-              <TabsTrigger value="inspect">Inspect</TabsTrigger>
-              <TabsTrigger value="stats">Stats</TabsTrigger>
-            </TabsList>
+          {isLoading ? (
+            <Loader />
+          ) : (
+            <Tabs value={currentTab} onValueChange={onValueChange}>
+              <TabsList className="w-full">
+                <TabsTrigger value="inspect">Inspect</TabsTrigger>
+                <TabsTrigger value="activity">Activity</TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="logs">logs</TabsContent>
-            <TabsContent value="inspect">inspect</TabsContent>
-            <TabsContent value="stats">stats</TabsContent>
-          </Tabs>
+              <TabsContent value="inspect" className="flex flex-col gap-5">
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-row items-center gap-2">
+                    <Box width={14} height={14} className="text-muted-foreground" />
+                    <div className="text-sm font-semibold text-muted-foreground leading-none">Containers</div>
+                  </div>
+                  <div className="space-y-1 rounded-sm border p-1 shadow-xs">
+                    <ContainerInfoTable image={data?.data} />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-row items-center gap-2">
+                    <Info width={14} height={14} className="text-muted-foreground" />
+                    <div className="text-sm font-semibold text-muted-foreground leading-none">Details</div>
+                  </div>
+                  <div className="space-y-1 rounded-sm border p-1 shadow-xs">
+                    <ImageInfoTable image={data?.data} />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-row items-center gap-2">
+                    <Layers width={14} height={14} className="text-muted-foreground" />
+                    <div className="text-sm font-semibold text-muted-foreground leading-none">Layers</div>
+                  </div>
+                  <div className="space-y-1 rounded-sm border p-1 shadow-xs">
+                    <ImageLayerTable image={data?.data} />
+                  </div>
+                </div>
+              </TabsContent>
+              <TabsContent value="activity">activity</TabsContent>
+            </Tabs>
+          )}
         </div>
       </div>
       <DeleteLocalImageDialog

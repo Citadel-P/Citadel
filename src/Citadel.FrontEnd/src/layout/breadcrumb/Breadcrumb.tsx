@@ -38,6 +38,19 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
         crumbs.push({ title: currentPlatform?.name ?? '', link: `/platforms/${currentPlatform?.id}` });
         crumbs.push({ title: 'Containers', isActive: true });
       },
+      [AppPaths.container]: () => {
+        crumbs.push({ title: 'Platforms', link: '/' });
+        crumbs.push({
+          title: currentContainer?.platformName ?? '',
+          link: `/platforms/${currentContainer?.platformId}`,
+        });
+        crumbs.push({ title: 'Containers', link: `/platforms/${currentContainer?.platformId}/containers` });
+        crumbs.push({
+          title: currentContainer?.name?.slice(1) ?? '',
+          isActive: true,
+          badge: { title: 'Logs' },
+        });
+      },
       [AppPaths.containerLogs]: () => {
         crumbs.push({ title: 'Platforms', link: '/' });
         crumbs.push({
@@ -66,9 +79,10 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
       },
       [AppPaths.containerInspect]: () => {
         crumbs.push({ title: 'Platforms', link: '/' });
-        crumbs.push({ 
+        crumbs.push({
           title: currentContainer?.platformName ?? '',
-          link: `/platforms/${currentContainer?.platformId}` });
+          link: `/platforms/${currentContainer?.platformId}`,
+        });
         crumbs.push({ title: 'Containers', link: `/platforms/${currentContainer?.platformId}/containers` });
         crumbs.push({
           title: currentContainer?.name?.slice(1) ?? '',
@@ -102,9 +116,23 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
       },
       [AppPaths.imageInspect]: () => {
         crumbs.push({ title: 'Platforms', link: '/' });
-        crumbs.push({ 
+        crumbs.push({
           title: currentPlatform?.name ?? '',
-          link: `/platforms/${currentPlatform?.id}` });
+          link: `/platforms/${currentPlatform?.id}`,
+        });
+        crumbs.push({ title: 'Images', link: `/platforms/${currentPlatform?.id}/images` });
+        crumbs.push({
+          title: imageId ?? '',
+          isActive: true,
+          badge: { title: 'Inspect' },
+        });
+      },
+      [AppPaths.image]: () => {
+        crumbs.push({ title: 'Platforms', link: '/' });
+        crumbs.push({
+          title: currentPlatform?.name ?? '',
+          link: `/platforms/${currentPlatform?.id}`,
+        });
         crumbs.push({ title: 'Images', link: `/platforms/${currentPlatform?.id}/images` });
         crumbs.push({
           title: imageId ?? '',

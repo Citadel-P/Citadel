@@ -64,11 +64,11 @@ export function PublicDockerHubImages() {
         <div className="flex justify-between items-center mt-4 text-sm text-foreground/70">
           <div className="flex items-center space-x-1">
             <Star className="h-4 w-4 text-yellow-500" />
-            <span>{formatNumber(image.starCount ?? 0)} Stars</span>
+            <span>{formatNumber((image.starCount as number) ?? 0)} Stars</span>
           </div>
           <div className="flex items-center space-x-1">
             <Package className="h-4 w-4 text-blue-500" />
-            <span>{formatNumber(image.pullCount ?? 0)} Downloads</span>
+            <span>{formatNumber((image.pullCount as number) ?? 0)} Downloads</span>
           </div>
         </div>
       )}

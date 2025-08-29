@@ -96,19 +96,19 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
   {
     accessorKey: 'driver',
     header: ({ column }) => <SortableCell cellName="Driver" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{row.original.driver}</span>,
+    cell: ({ row }) => <span className="text-xs">{row.original.driver}</span>,
     sortingFn: (rowA, rowB) => (rowA.original.driver! < rowB.original.driver! ? 1 : -1),
   },
   {
     accessorKey: 'attachable',
     header: ({ column }) => <SortableCell cellName="Attachable" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{row.original.attachable ? 'true' : 'false'}</span>,
+    cell: ({ row }) => <span className="text-xs">{row.original.attachable ? 'true' : 'false'}</span>,
     sortingFn: (rowA, rowB) => (rowA.original.attachable! < rowB.original.attachable! ? 1 : -1),
   },
   {
     accessorKey: 'ipam.driver',
     header: ({ column }) => <SortableCell cellName="IPAM Driver" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{row.original.ipam?.driver}</span>,
+    cell: ({ row }) => <span className="text-xs">{row.original.ipam?.driver}</span>,
     sortingFn: (rowA, rowB) => ((rowA.original.ipam?.driver ?? '') < (rowB.original.ipam?.driver ?? '') ? 1 : -1),
   },
   {
@@ -117,7 +117,7 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
     cell: ({ row }) => {
       const configs = row.original.ipam?.config ?? [];
       const ipv4 = configs.find((cfg) => cfg.gateway && /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/.test(cfg.gateway));
-      return <span className="text-[13px]">{ipv4?.subnet ?? '-'}</span>;
+      return <span className="text-xs">{ipv4?.subnet ?? '-'}</span>;
     },
   },
   {
@@ -126,7 +126,7 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
     cell: ({ row }) => {
       const configs = row.original.ipam?.config ?? [];
       const ipv4 = configs.find((cfg) => cfg.gateway && /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/.test(cfg.gateway));
-      return <span className="text-[13px]">{ipv4?.gateway ?? '-'}</span>;
+      return <span className="text-xs">{ipv4?.gateway ?? '-'}</span>;
     },
   },
   {
@@ -135,7 +135,7 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
     cell: ({ row }) => {
       const configs = row.original.ipam?.config ?? [];
       const ipv4 = configs.find((cfg) => cfg.gateway && /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/.test(cfg.gateway));
-      return <span className="text-[13px]">{ipv4?.ipRange ?? '-'}</span>;
+      return <span className="text-xs">{ipv4?.ipRange ?? '-'}</span>;
     },
   },
   {
@@ -144,7 +144,7 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
     cell: ({ row }) => {
       const configs = row.original.ipam?.config ?? [];
       const ipv6 = configs.find((cfg) => cfg.gateway && cfg.gateway.includes(':'));
-      return <span className="text-[13px]">{ipv6?.subnet ?? '-'}</span>;
+      return <span className="text-xs">{ipv6?.subnet ?? '-'}</span>;
     },
   },
   {
@@ -153,7 +153,7 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
     cell: ({ row }) => {
       const configs = row.original.ipam?.config ?? [];
       const ipv6 = configs.find((cfg) => cfg.gateway && cfg.gateway.includes(':'));
-      return <span className="text-[13px]">{ipv6?.gateway ?? '-'}</span>;
+      return <span className="text-xs">{ipv6?.gateway ?? '-'}</span>;
     },
   },
   {
@@ -162,7 +162,7 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
     cell: ({ row }) => {
       const configs = row.original.ipam?.config ?? [];
       const ipv6 = configs.find((cfg) => cfg.gateway && cfg.gateway.includes(':'));
-      return <span className="text-[13px]">{ipv6?.ipRange ?? '-'}</span>;
+      return <span className="text-xs">{ipv6?.ipRange ?? '-'}</span>;
     },
   },
   {
@@ -188,7 +188,7 @@ const NetworkNameRow = ({
         <NetworkStatusTooltip inUse={network.inUse ?? false} />
       </div>
       <span
-        className="cursor-pointer hover:underline"
+        className="cursor-pointer hover:underline text-[13px]"
         onClick={() => onShowSheet(network)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {

@@ -58,13 +58,12 @@ const columns: ColumnDef<ContainerView>[] = [
     accessorKey: 'containerId',
     header: ({ column }) => <SortableCell cellName="ID" column={column} />,
     cell: ({ row }) => (
-      <div className="text-xs">
-        <CopyTextToClipboard
-          textToCopy={row.original.containerId}
-          transform={() => row.original.containerId?.slice(0, 12)}
-          groupClassName="rowid"
-        />
-      </div>
+      <CopyTextToClipboard
+        textToCopy={row.original.containerId}
+        transform={() => row.original.containerId?.slice(0, 12)}
+        groupClassName="rowid"
+        textClassName="text-xs"
+      />
     ),
   },
   {
@@ -74,7 +73,7 @@ const columns: ColumnDef<ContainerView>[] = [
       <div className="text-[12.5px]">
         {' '}
         <Link
-          to={`/platforms/${row.original.platformId}/images/${row.original.imageId?.slice(0, 12)}/inspect`}
+          to={`/platforms/${row.original.platformId}/images/${row.original.imageId?.slice(0, 12)}`}
           className="table-link">
           {row.original.image.startsWith('sha256:')
             ? truncate(row.original.image.slice(7), 24)
@@ -129,11 +128,9 @@ const MemoryUsageCell = ({ container }: { container: ContainerView }) => {
   }
   return (
     <div className="text-xs">
-      <span>
-        {byteTransform(container.lastStats?.memoryActive ?? 0, 2) +
-          ' / ' +
-          byteTransform(container.lastStats?.memoryLimit ?? 0, 2)}
-      </span>
+      {byteTransform(container.lastStats?.memoryActive ?? 0, 2) +
+        ' / ' +
+        byteTransform(container.lastStats?.memoryLimit ?? 0, 2)}
     </div>
   );
 };

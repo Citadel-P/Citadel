@@ -2912,7 +2912,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ImageInfoResult"
+                  "$ref": "#/components/schemas/RunImageInfoResult"
                 }
               }
             }
@@ -4316,6 +4316,49 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "ContainerImageResult": {
+        "required": [
+          "id",
+          "name",
+          "state",
+          "volumes",
+          "networks",
+          "ports"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ContainerStateStatus"
+          },
+          "volumes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "networks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ports": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/HostPortBinding"
+              }
+            }
           }
         }
       },
@@ -6741,52 +6784,6 @@
           }
         }
       },
-      "ImageInfoResult": {
-        "required": [
-          "volumes",
-          "networks",
-          "exposedPorts",
-          "memTotal",
-          "cpuCount"
-        ],
-        "type": "object",
-        "properties": {
-          "volumes": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "networks": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "exposedPorts": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "memTotal": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
-            "format": "double"
-          },
-          "cpuCount": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
-            "format": "double"
-          }
-        }
-      },
       "ImagePullError": {
         "required": [
           "code",
@@ -7036,9 +7033,9 @@
             }
           },
           "containers": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerImageResult"
             }
           }
         }
@@ -8368,6 +8365,52 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "RunImageInfoResult": {
+        "required": [
+          "volumes",
+          "networks",
+          "exposedPorts",
+          "memTotal",
+          "cpuCount"
+        ],
+        "type": "object",
+        "properties": {
+          "volumes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "networks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "exposedPorts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "memTotal": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "cpuCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
           }
         }
       },

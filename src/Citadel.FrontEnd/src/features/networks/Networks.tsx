@@ -33,7 +33,9 @@ const Networks = () => {
               </Button>
             </div>
           </div>
-          <NetworksTable />
+          <div className="space-y-1 rounded-sm border p-1 shadow-xs">
+            <NetworksTable />
+          </div>
         </div>
       </div>
       <NetworksActionBar />

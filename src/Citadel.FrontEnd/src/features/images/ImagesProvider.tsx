@@ -22,7 +22,6 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
   // Sheet state
   const [currentImage, setCurrentImage] = useState<ImageView>();
-  const [sheetOpen, setSheetOpen] = useState(false);
 
   // Update registries and selected registry when data is fetched
   useEffect(() => {
@@ -102,8 +101,6 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
       onSearch,
       currentImage,
       setCurrentImage,
-      sheetOpen,
-      setSheetOpen,
       runDialogData,
       setRunDialogData,
     }),
@@ -122,8 +119,6 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
       onSearch,
       currentImage,
       setCurrentImage,
-      sheetOpen,
-      setSheetOpen,
       runDialogData,
       setRunDialogData,
     ],

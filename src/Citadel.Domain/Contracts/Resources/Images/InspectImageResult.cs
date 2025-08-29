@@ -1,4 +1,6 @@
-﻿namespace Domain.Contracts.Resources.Images;
+﻿using Domain.Entities;
+
+namespace Domain.Contracts.Resources.Images;
 
 public record InspectImageResult(
     string Id,
@@ -11,7 +13,16 @@ public record InspectImageResult(
     IEnumerable<string> ExposedPorts,
     IEnumerable<HistoryImageResult> Layers,
     IDictionary<string, string> Labels,
-    IDictionary<string, string> Containers
+    IEnumerable<ContainerImageResult> Containers
+    );
+
+public record ContainerImageResult(
+    string Id, 
+    string Name,
+    ContainerStateStatus State, 
+    IEnumerable<string> Volumes,
+    IEnumerable<string> Networks,
+    Dictionary<string, IReadOnlyList<HostPortBinding>> Ports
     );
 
 public record InspectImageResult2(

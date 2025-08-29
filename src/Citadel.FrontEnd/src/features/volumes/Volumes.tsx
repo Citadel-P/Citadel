@@ -33,7 +33,9 @@ const Volumes = () => {
               </Button>
             </div>
           </div>
-          <VolumesTable />
+          <div className="space-y-1 rounded-sm border p-1 shadow-xs">
+            <VolumesTable />
+          </div>
         </div>
       </div>
       <VolumesActionBar />

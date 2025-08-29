@@ -1,0 +1,72 @@
+import { ContainerImageResult, ContainerStateStatus, InspectImageResult, PlatformView } from '@/api/_generated';
+import { useAppContext } from '@/AppContext';
+import { DataTable } from '@/components/ui/data-table';
+import { PortsDisplay } from '@/components/ui/PortsDisplay';
+import { ContainerStateIndicator } from '@/features/containers/ContainerStateIndicator';
+import { truncate } from '@/lib/truncate';
+import { ColumnDef } from '@tanstack/react-table';
+import { Database, Network } from 'lucide-react';
+import { Link } from 'react-router';
+
+const columns = (currentPlatform: PlatformView | undefined): ColumnDef<ContainerImageResult>[] => [
+  {
+    accessorKey: 'name',
+    header: () => <span>Name</span>,
+    cell: ({ row }) => (
+      <div className="flex flex-wrap gap-2 text-[13px] items-center">
+        <ContainerStateIndicator stat={row.original.state ?? ContainerStateStatus.Exited} />
+        <Link to={`/containers/${row.original.id?.slice(0, 12)}`} className="table-link">
+          {row.original.name?.slice(1)}
+        </Link>
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'networks',
+    header: () => <span>Networks</span>,
+    cell: ({ row }) => (
+      <div className="text-xs text-foreground gap-2 flex flex-wrap items-center">
+        <Network width={13} height={13} className="text-primary" />
+        {row.original.networks.map((network) => (
+          <Link to={`/platforms/${currentPlatform?.id}/networks/${network}`} key={network} className="table-link">
+            {network}
+          </Link>
+        ))}
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'volumes',
+    header: () => <span>Volumes</span>,
+    cell: ({ row }) => (
+      <div className="text-xs text-foreground gap-2 flex flex-wrap items-center">
+        {row.original.volumes.length > 0 && <Database width={13} height={13} className="text-primary" />}
+        {row.original.volumes.map((volume) => (
+          <Link to={`/platforms/${currentPlatform?.id}/volumes/${volume}`} key={volume} className="table-link">
+            {truncate(volume, 12)}
+          </Link>
+        ))}
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'ports',
+    header: () => <span>Ports</span>,
+    cell: ({ row }) => <PortsDisplay ports={row.original.ports} />,
+  },
+];
+
+export const ContainerInfoTable = ({ image }: { image: InspectImageResult | undefined }) => {
+  const { currentPlatform } = useAppContext();
+  if (!image) return <></>;
+  return (
+    <div className="flex flex-col gap-3">
+      <DataTable
+        columns={columns(currentPlatform)}
+        data={image.containers}
+        isLoading={false}
+        onSelectionChange={() => {}}
+      />
+    </div>
+  );
+};

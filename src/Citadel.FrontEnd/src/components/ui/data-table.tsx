@@ -1,5 +1,5 @@
-/// This component has been patched to add:
-// - className='group/rowid' to customize the copytocliboard functionality
+// This component has been patched:
+// - Add className='group/rowid' to customize the copyToCliboard functionality
 import {
   ColumnDef,
   RowSelectionState,

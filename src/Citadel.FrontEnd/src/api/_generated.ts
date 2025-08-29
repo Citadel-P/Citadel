@@ -160,6 +160,15 @@ export interface ContainerHealthStatus {
   failingStreak: null | number | string;
 }
 
+export interface ContainerImageResult {
+  id: string;
+  name: string;
+  state: ContainerStateStatus;
+  volumes: string[];
+  networks: string[];
+  ports: Record<string, HostPortBinding[]>;
+}
+
 export interface ContainerInfoView {
   name: string;
   containerId: string;
@@ -813,22 +822,6 @@ export interface IPAMInput {
   options?: null | object;
 }
 
-export interface ImageInfoResult {
-  volumes: string[];
-  networks: string[];
-  exposedPorts: string[];
-  /**
-   * @format double
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  memTotal: number | string;
-  /**
-   * @format double
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  cpuCount: number | string;
-}
-
 export interface ImagePullError {
   /**
    * @format int64
@@ -907,7 +900,7 @@ export interface InspectImageResult {
   exposedPorts: string[];
   layers: HistoryImageResult[];
   labels: Record<string, string>;
-  containers: Record<string, string>;
+  containers: ContainerImageResult[];
 }
 
 export type IpAddressInfo = any;
@@ -1342,6 +1335,22 @@ export interface RestartPolicy {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   maximumRetryCount: null | number | string;
+}
+
+export interface RunImageInfoResult {
+  volumes: string[];
+  networks: string[];
+  exposedPorts: string[];
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  memTotal: number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  cpuCount: number | string;
 }
 
 export interface SwarmPeer {
@@ -2602,7 +2611,7 @@ export class Api<
      * @summary Get image info
      * @request GET:/api/v1/images/{platformId}/{imageId}/_info
      * @secure
-     * @response `200` `ImageInfoResult` OK
+     * @response `200` `RunImageInfoResult` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2615,7 +2624,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<
-        ImageInfoResult,
+        RunImageInfoResult,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/images/${platformId}/${imageId}/_info`,

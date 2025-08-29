@@ -10,19 +10,18 @@ import { ImageView } from '@/api/_generated';
 import { useImagesContext } from './ImagesContext';
 import { useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
+import { useNavigate } from 'react-router';
+import { formatImageId } from '@/lib/utils';
 
 const DropdownTableMenu = ({ image }: { image: ImageView }) => {
-  const { setDialogData, setSheetOpen, setCurrentImage } = useImagesContext();
+  const navigate = useNavigate();
+  const { setDialogData } = useImagesContext();
 
   // Memoized function to open the delete dialog
   const openDialog = useCallback(() => {
     setDialogData({ open: true, currentSelection: [image] });
   }, [setDialogData, image]);
 
-  const openSheet = useCallback(() => {
-    setSheetOpen(true);
-    setCurrentImage(image);
-  }, [setSheetOpen, setCurrentImage, image]);
 
   return (
     <DropdownMenu>
@@ -33,7 +32,7 @@ const DropdownTableMenu = ({ image }: { image: ImageView }) => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-38 drop-shadow-md shadow-custom bg-background pt-2 pb-2">
-        <ActionMenuItem onClick={openSheet} icon={<SearchCode className="mr-2 h-3 w-3" />} label="Inspect" />
+        <ActionMenuItem onClick={() => navigate(`${formatImageId(image.id)}`)} icon={<SearchCode className="mr-2 h-3 w-3" />} label="Inspect" />
         <DropdownMenuSeparator />
         <ActionMenuItem
           onClick={openDialog}

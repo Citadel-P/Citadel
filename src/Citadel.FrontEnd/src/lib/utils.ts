@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { truncate } from './truncate';
 
 /**
  * A utility function to conditionally join CSS class names together.
@@ -86,4 +87,14 @@ export function formatNumber(value: number): string {
     return `${(value / 1_000).toFixed(1)}k`;
   }
   return value.toString();
+}
+
+export function formatImageId(id?: string): string {
+  if (!id) return '';
+
+  const normalized = id.startsWith('sha256:')
+    ? id.slice(7)
+    : id;
+
+  return truncate(normalized, 12, 'right', true);
 }

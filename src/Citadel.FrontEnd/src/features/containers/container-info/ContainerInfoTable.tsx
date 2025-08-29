@@ -1,0 +1,96 @@
+import { ContainerInfoView } from '@/api/_generated';
+import { useAppContext } from '@/AppContext';
+import { DataTable } from '@/components/ui/data-table';
+import { PortsDisplay } from '@/components/ui/PortsDisplay';
+import { truncate } from '@/lib/truncate';
+import { formatImageId } from '@/lib/utils';
+import { ColumnDef } from '@tanstack/react-table';
+import { Clock, Database, HardDrive, Network, Server } from 'lucide-react';
+import { Link } from 'react-router';
+
+const columns: ColumnDef<ContainerInfoView & { id: string | null } & { statusSnapshot: string | undefined }>[] = [
+  {
+    accessorKey: 'platformName',
+    header: () => <span>Platform</span>,
+    cell: ({ row }) => (
+      <div className="flex flex-wrap gap-2 text-xs items-center">
+        <Server width={12} height={12} className="text-primary" />
+        <Link to={`/platforms/${row.original.platformId}`} className="table-link">
+          {row.original.platformName}
+        </Link>
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'image',
+    header: () => <span>Image</span>,
+    cell: ({ row }) => (
+      <div className="text-xs gap-2 flex flex-wrap items-center">
+        <HardDrive width={13} height={13} className="text-primary" />
+        <Link
+          to={`/platforms/${row.original.platformId}/images/${formatImageId(row.original.imageId)}`}
+          className="table-link">
+          {truncate(row.original.imageName.replace('sha256:', ''), 24)}
+        </Link>
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'networks',
+    header: () => <span>Networks</span>,
+    cell: ({ row }) => (
+      <div className="text-xs text-foreground gap-2 flex flex-wrap items-center">
+        <Network width={13} height={13} className="text-primary" />
+        {Object.keys(row.original.networks).map((network) => (
+          <Link to={`/platforms/${row.original.platformId}/networks/${network}`} key={network} className="table-link">
+            {network}
+          </Link>
+        ))}
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'volumes',
+    header: () => <span>Volumes</span>,
+    cell: ({ row }) => (
+      <div className="text-xs text-foreground gap-2 flex flex-wrap items-center">
+        {row.original.volumes.length > 0 && <Database width={13} height={13} className="text-primary" />}
+        {row.original.volumes.map((volume) => (
+          <Link to={`/platforms/${row.original.platformId}/volumes/${volume}`} key={volume} className="table-link">
+            {truncate(volume, 12)}
+          </Link>
+        ))}
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'ports',
+    header: () => <span>Ports</span>,
+    cell: ({ row }) => <PortsDisplay ports={row.original.ports} />,
+  },
+  {
+    accessorKey: 'status',
+    header: () => <span>Status</span>,
+    cell: ({ row }) => (
+      <div className="text-xs text-foreground gap-2 flex flex-wrap items-center">
+        <Clock width={13} height={13} className="text-primary" />
+        {row.original.statusSnapshot}
+      </div>
+    ),
+  },
+];
+
+export const ContainerInfoTable = ({ statusSnapshot }: { statusSnapshot: string | undefined }) => {
+  const { currentContainer } = useAppContext();
+  if (!currentContainer) return <></>;
+  return (
+    <div className="flex flex-col gap-3">
+      <DataTable
+        columns={columns}
+        data={currentContainer ? [{ id: '1', statusSnapshot, ...currentContainer }] : []}
+        isLoading={false}
+        onSelectionChange={() => {}}
+      />
+    </div>
+  );
+};

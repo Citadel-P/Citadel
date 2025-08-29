@@ -3,17 +3,25 @@ import { ActionBarButton } from '@/components/ui/ActionBarButton';
 import { ImageView } from '@/api/_generated';
 import { IDialogData } from '@/hooks/useDialogState';
 import { useAvailableActions } from './hooks/useAvailableActions';
+import { useMemo } from 'react';
+import { useNavigate } from 'react-router';
+import { formatImageId } from '@/lib/utils';
 
 export const ImageActionButtons = ({
   selectedImages,
   setDialogData,
   setRunDialogData,
+  showInspectButton = true,
 }: {
   selectedImages: ImageView[] | undefined;
+  showInspectButton?: boolean;
   setDialogData: (_: IDialogData<ImageView>) => void;
   setRunDialogData: (data: IDialogData<ImageView>) => void;
 }) => {
+  const navigate = useNavigate();
   const { actions } = useAvailableActions(selectedImages);
+
+  const imageId = useMemo(() => formatImageId(selectedImages?.at(0)?.id), [selectedImages]);
 
   return (
     <div className="mt-1">
@@ -25,13 +33,15 @@ export const ImageActionButtons = ({
         className="rounded-l-lg"
         ariaLabel="Run selected image"
       />
-      <ActionBarButton
-        onClick={() => {}}
-        disabled={!actions.canInspect}
-        icon={SearchCode}
-        label="Inspect"
-        ariaLabel="Inspect selected image"
-      />
+      {showInspectButton && (
+        <ActionBarButton
+          onClick={() => navigate(`${imageId}`)}
+          disabled={!actions.canInspect}
+          icon={SearchCode}
+          label="Inspect"
+          ariaLabel="Inspect selected image"
+        />
+      )}
       <ActionBarButton
         onClick={() => setDialogData({ open: true, currentSelection: selectedImages })}
         disabled={!actions.canDelete}

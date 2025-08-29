@@ -19,8 +19,6 @@ interface IContext {
   onSearch: (searchTerm: string) => void;
   currentImage: ImageView | undefined;
   setCurrentImage: (image: ImageView | undefined) => void;
-  sheetOpen: boolean;
-  setSheetOpen: (open: boolean) => void;
   runDialogData: IDialogData<ImageView>;
   setRunDialogData: (data: IDialogData<ImageView>) => void;
 }

@@ -99,14 +99,14 @@ const columns = (handleShowSheet: (volume: DockerVolumeResult) => void): ColumnD
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
     cell: ({ row }) => (
-      <span className="text-[13px]">{fromNow(new Date(row.original.createdAt as any).getTime())}</span>
+      <span className="text-xs">{fromNow(new Date(row.original.createdAt as any).getTime())}</span>
     ),
     sortingFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
   },
   {
     accessorKey: 'size',
     header: ({ column }) => <SortableCell cellName="Size" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{byteTransform(row.original.usageData.size, 2)}</span>,
+    cell: ({ row }) => <span className="text-xs">{byteTransform(row.original.usageData.size, 2)}</span>,
     sortingFn: (rowA, rowB) => (rowA.original.usageData.size! < rowB.original.usageData.size! ? 1 : -1),
   },
   {
@@ -132,7 +132,7 @@ const VolumeNameRow = ({
         <VolumeStatusTooltip inUse={volume.inUse ?? false} />
       </div>
       <span
-        className="cursor-pointer hover:underline"
+        className="cursor-pointer hover:underline text-[13px]"
         onClick={() => onShowSheet(volume)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {

@@ -47,7 +47,7 @@ const PortMappingInput = ({ control, name, ports, label }: PortMappingInputProps
                             }
                           }}
                         />
-                        <span className="flex z-10 items-center px-6 bg-accent-foreground/5 border-r rounded-r-sm border-y border-border text-xs h-full">
+                        <span className="flex z-10 items-center justify-center w-[90px] flex-shrink-0 bg-accent/60 border-r rounded-r-sm border-y border-border text-xs h-full">
                           {':'}
                           {port}
                         </span>

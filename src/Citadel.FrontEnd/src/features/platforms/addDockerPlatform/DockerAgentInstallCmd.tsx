@@ -39,7 +39,7 @@ const DockerAgentInstallCmd = () => {
 
   return (
     <Tabs defaultValue="linuxCommand">
-      <TabsList className="w-full justify-start bg-muted/20 rounded-sm">
+      <TabsList className="w-full">
         <TabsTrigger value="linuxCommand">Linux and Windows WSL</TabsTrigger>
         <TabsTrigger value="windowsCommand">Windows WCS</TabsTrigger>
       </TabsList>

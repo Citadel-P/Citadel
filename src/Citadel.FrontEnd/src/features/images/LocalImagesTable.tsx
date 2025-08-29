@@ -14,16 +14,13 @@ import { byteTransform } from '@/lib/bytes.helper';
 import { DeleteLocalImageDialog } from './dialogs/DeleteLocalImageDialog';
 import { useAppContext } from '@/AppContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ImageInspectSheet } from './ImageInspectSheet';
 import { Button } from '@/components/ui/button';
 import { RunImageDialog } from './dialogs/RunImageDialog';
 import { ImageSateIndicator } from './ImageStateIndicator';
 import { useNavigate, useParams } from 'react-router';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
+import { formatImageId } from '@/lib/utils';
 
-function getImageId(longId: string) {
-  return truncate(longId?.split(':').at(1) ?? '', 12, 'right', true);
-}
 const columns = (): ColumnDef<ImageView>[] => [
   {
     id: 'select',
@@ -53,14 +50,19 @@ const columns = (): ColumnDef<ImageView>[] => [
   {
     accessorKey: 'tag',
     header: ({ column }) => <SortableCell cellName="Tag" column={column} />,
-    cell: ({ row }) => <div>{truncate(row.original.tag ?? '', 28)}</div>,
+    cell: ({ row }) => <div className="text-xs">{truncate(row.original.tag ?? '', 28)}</div>,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.tag?.localeCompare(rowB.original?.tag),
   },
   {
     accessorKey: 'id',
     header: ({ column }) => <SortableCell cellName="Image Id" column={column} />,
     cell: ({ row }) => (
-      <CopyTextToClipboard textToCopy={row.original.id} transform={getImageId} groupClassName="rowid" />
+      <CopyTextToClipboard
+        textToCopy={row.original.id}
+        transform={formatImageId}
+        groupClassName="rowid"
+        textClassName="text-xs"
+      />
     ),
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.id?.localeCompare(rowB.original?.id),
   },
@@ -68,14 +70,14 @@ const columns = (): ColumnDef<ImageView>[] => [
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
     cell: ({ row }) => (
-      <span className="text-[13px]">{fromNow(new Date((row.original.created as number) * 1000).getTime())}</span>
+      <span className="text-xs">{fromNow(new Date((row.original.created as number) * 1000).getTime())}</span>
     ),
     sortingFn: (rowA, rowB) => (rowA.original.created < rowB.original.created ? 1 : -1),
   },
   {
     accessorKey: 'size',
     header: ({ column }) => <SortableCell cellName="Size" column={column} />,
-    cell: ({ row }) => <span className="text-[13px]">{byteTransform(row.original.size, 2)}</span>,
+    cell: ({ row }) => <span className="text-xs">{byteTransform(row.original.size, 2)}</span>,
     sortingFn: (rowA, rowB) => (rowA.original.size < rowB.original.size ? 1 : -1),
   },
   {
@@ -117,7 +119,7 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
   const { platformId } = useParams<{ platformId: string }>();
   const navigate = useNavigate();
   function onNameClick() {
-    navigate(`/platforms/${platformId}/images/${getImageId(image.id)}/inspect`);
+    navigate(`/platforms/${platformId}/images/${formatImageId(image.id)}/`);
   }
 
   return (
@@ -126,7 +128,7 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
         <ImageSateIndicator inUse={image.isInUse ?? false} />
       </div>
       <span
-        className="cursor-pointer table-link"
+        className="cursor-pointer text-[13px] table-link"
         onClick={onNameClick}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -200,7 +202,6 @@ export default function LocalImagesTable() {
         requestDelete={requestDelete}
         deleteIsPending={deleteIsPending}
       />
-      <ImageInspectSheet />
     </div>
   );
 }

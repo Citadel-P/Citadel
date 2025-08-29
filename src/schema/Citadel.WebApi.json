@@ -4319,6 +4319,49 @@
           }
         }
       },
+      "ContainerImageResult": {
+        "required": [
+          "id",
+          "name",
+          "state",
+          "volumes",
+          "networks",
+          "ports"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ContainerStateStatus"
+          },
+          "volumes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "networks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ports": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/HostPortBinding"
+              }
+            }
+          }
+        }
+      },
       "ContainerInfoView": {
         "required": [
           "name",
@@ -6990,9 +7033,9 @@
             }
           },
           "containers": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerImageResult"
             }
           }
         }
