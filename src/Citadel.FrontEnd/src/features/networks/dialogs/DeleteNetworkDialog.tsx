@@ -8,11 +8,20 @@ import {
 } from '@/components/ui/dialog';
 import { LoaderCircle } from 'lucide-react';
 import { useAppContext } from '@/AppContext';
-import { useNetworksContext } from '../NetworksContext';
+import { DeleteNetworksInput, DockerNetworkResult } from '@/api/_generated';
+import { IDialogData } from '@/hooks/useDialogState';
 
-export const DeleteNetworkDialog = () => {
-  const { dialogData, setDialogData, requestDelete, deleteIsPending } = useNetworksContext();
-
+export const DeleteNetworkDialog = ({
+  dialogData,
+  setDialogData,
+  requestDelete,
+  deleteIsPending,
+}: {
+  dialogData: IDialogData<DockerNetworkResult>;
+  setDialogData: (data: IDialogData<DockerNetworkResult>) => void;
+  requestDelete: (request: DeleteNetworksInput) => void;
+  deleteIsPending: boolean;
+}) => {
   const { currentPlatform } = useAppContext();
 
   const networksId = dialogData.currentSelection?.map((c) => c.id!) ?? [];

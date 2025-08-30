@@ -55,7 +55,7 @@ internal static class ImageMappers
             Name: container.Name,
             State: container.State.Map(),
             Volumes: container.Volumes?.ToList() ?? [],
-            Networks: container.Networks?.ToList() ?? [],
+            Networks: container.Networks?.ToDictionary() ?? [],
             Ports: container.Ports?.Map() ?? []
         );
 
@@ -233,7 +233,7 @@ internal static class ImageMappers
         Name: container.Name,
         State: container.State.Map(),
         Volumes: container.Volumes?.ToList() ?? [],
-        Networks: container.Networks?.ToList() ?? [],
+        Networks: container.Networks ?? [],
         Ports: container.Ports?.Map() ?? []
     );
 

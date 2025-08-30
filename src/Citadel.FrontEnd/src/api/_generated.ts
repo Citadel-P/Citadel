@@ -165,7 +165,7 @@ export interface ContainerImageResult {
   name: string;
   state: ContainerStateStatus;
   volumes: string[];
-  networks: string[];
+  networks: Record<string, string>;
   ports: Record<string, HostPortBinding[]>;
 }
 

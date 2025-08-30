@@ -21,7 +21,7 @@ public record ContainerImageResult(
     string Name,
     ContainerStateStatus State, 
     IEnumerable<string> Volumes,
-    IEnumerable<string> Networks,
+    Dictionary<string, string> Networks,
     Dictionary<string, IReadOnlyList<HostPortBinding>> Ports
     );
 

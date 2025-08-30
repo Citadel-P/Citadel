@@ -62,10 +62,7 @@ export function getEditedFields(dirtyFields: object | boolean, allValues: object
   return Object.fromEntries(
     Object.keys(dirtyFields).map((key) => [
       key,
-      getEditedFields(
-        dirtyFields[key as keyof typeof dirtyFields],
-        allValues[key as keyof typeof allValues],
-      ),
+      getEditedFields(dirtyFields[key as keyof typeof dirtyFields], allValues[key as keyof typeof allValues]),
     ]),
   );
 }
@@ -89,12 +86,10 @@ export function formatNumber(value: number): string {
   return value.toString();
 }
 
-export function formatImageId(id?: string): string {
+export function formatId(id?: string): string {
   if (!id) return '';
 
-  const normalized = id.startsWith('sha256:')
-    ? id.slice(7)
-    : id;
+  const normalized = id.startsWith('sha256:') ? id.slice(7) : id;
 
   return truncate(normalized, 12, 'right', true);
 }

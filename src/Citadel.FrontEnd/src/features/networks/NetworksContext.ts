@@ -13,8 +13,6 @@ interface IContext {
   onSearch: (searchTerm: string) => void;
   requestDelete: (request: DeleteNetworksInput) => void;
   deleteIsPending: boolean;
-  sheetOpen: boolean;
-  setSheetOpen: (open: boolean) => void;
   currentNetwork: DockerNetworkResult | undefined;
   setCurrentNetwork: (network: DockerNetworkResult | undefined) => void;
 }

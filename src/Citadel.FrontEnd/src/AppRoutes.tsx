@@ -18,11 +18,13 @@ export const AppPaths: Record<string, string> = {
   addRegistry: 'registries/add',
   editRegistry: 'registries/edit/:registryId',
   images: 'platforms/:platformId/images',
-  image: 'platforms/:platformId/images/:imageId',
-  imageInspect: 'platforms/:platformId/images/:imageId/inspect',
+  image: 'platforms/:platformId/images/:resourceId',
+  imageInspect: 'platforms/:platformId/images/:resourceId/inspect',
   localImages: 'platforms/:platformId/images/local',
   externalImages: 'platforms/:platformId/images/external',
   networks: 'platforms/:platformId/networks',
+  network: 'platforms/:platformId/networks/:resourceId',
+  networkInspect: 'platforms/:platformId/networks/:resourceId/inspect',
   addNetwork: 'platforms/:platformId/networks/add',
   volumes: 'platforms/:platformId/volumes',
   addVolume: 'platforms/:platformId/volumes/add',
@@ -133,6 +135,18 @@ export const AppRoutes = () => {
           path: AppPaths.externalImages,
           lazy: async () => {
             return { Component: (await import('@/pages/images-page')).default };
+          },
+        },
+        {
+          path: AppPaths.network,
+          lazy: async () => {
+            return { Component: (await import('@/features/networks/network-info/NetworkInfoWrapper')).default };
+          },
+        },
+        {
+          path: AppPaths.networkInspect,
+          lazy: async () => {
+            return { Component: (await import('@/features/networks/network-info/NetworkInfoWrapper')).default };
           },
         },
         {

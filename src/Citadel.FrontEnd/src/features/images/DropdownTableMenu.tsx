@@ -11,7 +11,7 @@ import { useImagesContext } from './ImagesContext';
 import { useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
 import { useNavigate } from 'react-router';
-import { formatImageId } from '@/lib/utils';
+import { formatId } from '@/lib/utils';
 
 const DropdownTableMenu = ({ image }: { image: ImageView }) => {
   const navigate = useNavigate();
@@ -22,7 +22,6 @@ const DropdownTableMenu = ({ image }: { image: ImageView }) => {
     setDialogData({ open: true, currentSelection: [image] });
   }, [setDialogData, image]);
 
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -32,7 +31,11 @@ const DropdownTableMenu = ({ image }: { image: ImageView }) => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-38 drop-shadow-md shadow-custom bg-background pt-2 pb-2">
-        <ActionMenuItem onClick={() => navigate(`${formatImageId(image.id)}`)} icon={<SearchCode className="mr-2 h-3 w-3" />} label="Inspect" />
+        <ActionMenuItem
+          onClick={() => navigate(`${formatId(image.id)}`)}
+          icon={<SearchCode className="mr-2 h-3 w-3" />}
+          label="Inspect"
+        />
         <DropdownMenuSeparator />
         <ActionMenuItem
           onClick={openDialog}

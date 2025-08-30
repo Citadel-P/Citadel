@@ -129,7 +129,7 @@ export const RunImageDialog = ({
     finalValues.platformId = currentPlatform?.id;
     finalValues.imageId = runDialogData.currentSelection?.at(0)?.id;
 
-    mutate(finalValues);
+    mutate(finalValues as any);
   }
 
   function onOpenChange(open: boolean) {

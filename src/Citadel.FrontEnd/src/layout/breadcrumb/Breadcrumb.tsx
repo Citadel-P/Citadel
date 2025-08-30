@@ -21,7 +21,7 @@ interface ICrumbs {
 
 const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
   const { currentPlatform, currentContainer, route } = useAppContext();
-  const { imageId } = useParams<{ platformId: string; imageId: string }>();
+  const { resourceId } = useParams<{ platformId: string; resourceId: string }>();
 
   const navigate = useNavigate();
   const generateCrumbs = useMemo((): ICrumbs[] => {
@@ -120,9 +120,9 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
           title: currentPlatform?.name ?? '',
           link: `/platforms/${currentPlatform?.id}`,
         });
-        crumbs.push({ title: 'Images', link: `/platforms/${currentPlatform?.id}/images` });
+        crumbs.push({ title: 'Images', link: `/platforms/${currentPlatform?.id}/images/inspect` });
         crumbs.push({
-          title: imageId ?? '',
+          title: resourceId ?? '',
           isActive: true,
           badge: { title: 'Inspect' },
         });
@@ -135,7 +135,33 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
         });
         crumbs.push({ title: 'Images', link: `/platforms/${currentPlatform?.id}/images` });
         crumbs.push({
-          title: imageId ?? '',
+          title: resourceId ?? '',
+          isActive: true,
+          badge: { title: 'Inspect' },
+        });
+      },
+      [AppPaths.network]: () => {
+        crumbs.push({ title: 'Platforms', link: '/' });
+        crumbs.push({
+          title: currentPlatform?.name ?? '',
+          link: `/platforms/${currentPlatform?.id}`,
+        });
+        crumbs.push({ title: 'Networks', link: `/platforms/${currentPlatform?.id}/networks` });
+        crumbs.push({
+          title: resourceId ?? '',
+          isActive: true,
+          badge: { title: 'Inspect' },
+        });
+      },
+      [AppPaths.networkInspect]: () => {
+        crumbs.push({ title: 'Platforms', link: '/' });
+        crumbs.push({
+          title: currentPlatform?.name ?? '',
+          link: `/platforms/${currentPlatform?.id}`,
+        });
+        crumbs.push({ title: 'Networks', link: `/platforms/${currentPlatform?.id}/networks/inspect` });
+        crumbs.push({
+          title: resourceId ?? '',
           isActive: true,
           badge: { title: 'Inspect' },
         });
@@ -167,7 +193,7 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
     routeMap[route?.path ?? '']?.();
 
     return crumbs;
-  }, [route, currentPlatform, currentContainer]);
+  }, [route, currentPlatform, resourceId, currentContainer]);
 
   return (
     <div className={`sticky top-0 z-40 mx-auto px-4 lg:container sm:px-6 ${isSticky ? 'pt-0' : 'pt-3'}`}>
@@ -179,20 +205,20 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
                 <BreadcrumbItem>
                   {!crumb.isActive ? (
                     <BreadcrumbLink
-                      className="hover:text-primary text-sm cursor-pointer"
+                      className="hover:text-primary text-[13px] cursor-pointer"
                       onClick={() => navigate(crumb.link ?? '/')}>
                       {crumb.title}
                     </BreadcrumbLink>
                   ) : (
-                    <BreadcrumbPage className="text-muted-foreground">{crumb.title}</BreadcrumbPage>
+                    <BreadcrumbPage className="text-muted-foreground text-[13px]">{crumb.title}</BreadcrumbPage>
                   )}
                 </BreadcrumbItem>
                 {crumb.badge && (
-                  <Badge variant="secondary" className="px-1.5 font-normal">
+                  <Badge variant="secondary" className="px-1.5 font-normal text-[12px]">
                     {crumb.badge.title}
                   </Badge>
                 )}
-                {i < generateCrumbs.length - 1 && <BreadcrumbSeparator />}
+                {i < generateCrumbs.length - 1 && <BreadcrumbSeparator className='text-[1px]' />}
               </Fragment>
             ))}
           </BreadcrumbList>

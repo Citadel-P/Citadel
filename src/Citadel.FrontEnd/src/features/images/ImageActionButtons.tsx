@@ -5,7 +5,7 @@ import { IDialogData } from '@/hooks/useDialogState';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import { formatImageId } from '@/lib/utils';
+import { formatId } from '@/lib/utils';
 
 export const ImageActionButtons = ({
   selectedImages,
@@ -21,7 +21,7 @@ export const ImageActionButtons = ({
   const navigate = useNavigate();
   const { actions } = useAvailableActions(selectedImages);
 
-  const imageId = useMemo(() => formatImageId(selectedImages?.at(0)?.id), [selectedImages]);
+  const imageId = useMemo(() => formatId(selectedImages?.at(0)?.id), [selectedImages]);
 
   return (
     <div className="mt-1">

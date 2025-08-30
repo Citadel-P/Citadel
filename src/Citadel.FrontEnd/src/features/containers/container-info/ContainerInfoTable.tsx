@@ -3,7 +3,7 @@ import { useAppContext } from '@/AppContext';
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/ui/PortsDisplay';
 import { truncate } from '@/lib/truncate';
-import { formatImageId } from '@/lib/utils';
+import { formatId } from '@/lib/utils';
 import { ColumnDef } from '@tanstack/react-table';
 import { Clock, Database, HardDrive, Network, Server } from 'lucide-react';
 import { Link } from 'react-router';
@@ -28,7 +28,7 @@ const columns: ColumnDef<ContainerInfoView & { id: string | null } & { statusSna
       <div className=" gap-2 flex flex-wrap items-center">
         <HardDrive width={13} height={13} className="text-primary" />
         <Link
-          to={`/platforms/${row.original.platformId}/images/${formatImageId(row.original.imageId)}`}
+          to={`/platforms/${row.original.platformId}/images/${formatId(row.original.imageId)}`}
           className="table-link">
           {truncate(row.original.imageName.replace('sha256:', ''), 24)}
         </Link>
@@ -41,9 +41,9 @@ const columns: ColumnDef<ContainerInfoView & { id: string | null } & { statusSna
     cell: ({ row }) => (
       <div className=" text-foreground gap-2 flex flex-wrap items-center">
         <Network width={13} height={13} className="text-primary" />
-        {Object.keys(row.original.networks).map((network) => (
-          <Link to={`/platforms/${row.original.platformId}/networks/${network}`} key={network} className="table-link">
-            {network}
+        {Object.entries(row.original.networks).map(([key, value]) => (
+          <Link to={`/platforms/${row.original.platformId}/networks/${formatId(value)}`} key={value} className="table-link">
+            {key}
           </Link>
         ))}
       </div>

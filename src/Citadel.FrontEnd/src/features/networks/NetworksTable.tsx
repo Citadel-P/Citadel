@@ -4,19 +4,22 @@ import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { truncate } from '@/lib/truncate';
-import { useEffect, useCallback, useMemo, memo } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { useNetworksContext } from './NetworksContext';
 import { useAppContext } from '@/AppContext';
 import { useGETNetworks } from './hooks/useGETNetworks';
 import DropdownTableMenu from './DropdownTableMenu';
 import { DeleteNetworkDialog } from './dialogs/DeleteNetworkDialog';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { NetworkInspectSheet } from './NetworkInspectSheet';
+import { NetworkStateIndicator } from './NetworkSateIndicator';
+import { useNavigate, useParams } from 'react-router';
+import { formatId } from '@/lib/utils';
 
 export default function NetworksTable() {
   const { currentPlatform } = useAppContext();
   const { data, isLoading, isSuccess } = useGETNetworks(currentPlatform?.id);
-  const { setSelectedRows, setNetworks, networks, setSheetOpen, setCurrentNetwork } = useNetworksContext();
+  const { setSelectedRows, setNetworks, networks, dialogData, setDialogData, requestDelete, deleteIsPending } =
+    useNetworksContext();
+
   // Update networks when data is fetched
   useEffect(() => {
     if (isSuccess && data?.data.networks) {
@@ -39,35 +42,32 @@ export default function NetworksTable() {
   // Memoized row count
   const rowCount = useMemo(() => networks?.length ?? 0, [networks]);
 
-  const handleShowSheet = (network: DockerNetworkResult) => {
-    setCurrentNetwork(network);
-    setSheetOpen(true);
-  };
-
   return (
-    <>
-      <div className="flex flex-col gap-3">
-        <DataTable
-          columns={columns(handleShowSheet)}
-          data={networks ?? []}
-          isLoading={isLoading}
-          onSelectionChange={handleSelectionChange}
-        />
-        <div className="text-muted-foreground text-xs p-2 font-normal">
-          {rowCount > 0 && (
-            <span>
-              Showing {rowCount} of {rowCount} network(s)
-            </span>
-          )}
-        </div>
+    <div className="flex flex-col gap-3">
+      <DataTable
+        columns={columns}
+        data={networks ?? []}
+        isLoading={isLoading}
+        onSelectionChange={handleSelectionChange}
+      />
+      <div className="text-muted-foreground text-xs p-2 font-normal">
+        {rowCount > 0 && (
+          <span>
+            Showing {rowCount} of {rowCount} network(s)
+          </span>
+        )}
       </div>
-      <DeleteNetworkDialog />
-      <NetworkInspectSheet />
-    </>
+      <DeleteNetworkDialog
+        dialogData={dialogData}
+        setDialogData={setDialogData}
+        requestDelete={requestDelete}
+        deleteIsPending={deleteIsPending}
+      />
+    </div>
   );
 }
 
-const columns = (handleShowSheet: (network: DockerNetworkResult) => void): ColumnDef<DockerNetworkResult>[] => [
+const columns: ColumnDef<DockerNetworkResult>[] = [
   {
     id: 'select',
     header: ({ table }) => (
@@ -90,7 +90,7 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
   {
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
-    cell: ({ row }) => <NetworkNameRow network={row.original} onShowSheet={handleShowSheet} />,
+    cell: ({ row }) => <NetworkNameRow network={row.original} />,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
   {
@@ -175,24 +175,24 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
   },
 ];
 
-const NetworkNameRow = ({
-  network,
-  onShowSheet,
-}: {
-  network: DockerNetworkResult;
-  onShowSheet: (network: DockerNetworkResult) => void;
-}) => {
+const NetworkNameRow = ({ network }: { network: DockerNetworkResult }) => {
+  const { platformId } = useParams<{ platformId: string }>();
+  const navigate = useNavigate();
+  function onClick() {
+    navigate(`/platforms/${platformId}/networks/${formatId(network.id)}/`);
+  }
+
   return (
     <div className="flex items-center whitespace-nowrap">
       <div className="flex items-center">
-        <NetworkStatusTooltip inUse={network.inUse ?? false} />
+        <NetworkStateIndicator inUse={network.inUse ?? false} />
       </div>
       <span
         className="cursor-pointer hover:underline text-[13px]"
-        onClick={() => onShowSheet(network)}
+        onClick={onClick}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
-            onShowSheet(network);
+            onClick();
           }
         }}
         tabIndex={0}
@@ -203,22 +203,3 @@ const NetworkNameRow = ({
     </div>
   );
 };
-
-const NetworkStatusTooltip = memo(({ inUse }: { inUse: boolean }) => {
-  const getStatusClass = () => (inUse ? 'bg-green-500' : 'bg-gray-500');
-
-  return (
-    <TooltipProvider delayDuration={200}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className={`${getStatusClass()} mr-2 h-2 w-2 rounded-full`} />
-        </TooltipTrigger>
-        <TooltipContent>
-          <span>{inUse ? 'In use' : 'Unused'}</span>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-});
-
-NetworkStatusTooltip.displayName = 'NetworkStatusTooltip';

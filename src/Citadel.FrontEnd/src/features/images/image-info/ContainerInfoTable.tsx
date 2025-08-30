@@ -4,6 +4,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/ui/PortsDisplay';
 import { ContainerStateIndicator } from '@/features/containers/ContainerStateIndicator';
 import { truncate } from '@/lib/truncate';
+import { formatId } from '@/lib/utils';
 import { ColumnDef } from '@tanstack/react-table';
 import { Database, Network } from 'lucide-react';
 import { Link } from 'react-router';
@@ -27,9 +28,9 @@ const columns = (currentPlatform: PlatformView | undefined): ColumnDef<Container
     cell: ({ row }) => (
       <div className="text-foreground gap-2 flex flex-wrap items-center">
         <Network width={13} height={13} className="text-primary" />
-        {row.original.networks.map((network) => (
-          <Link to={`/platforms/${currentPlatform?.id}/networks/${network}`} key={network} className="table-link">
-            {network}
+        {Object.entries(row.original.networks).map(([name, id]) => (
+          <Link to={`/platforms/${currentPlatform?.id}/networks/${formatId(id)}`} key={id} className="table-link">
+            {name}
           </Link>
         ))}
       </div>

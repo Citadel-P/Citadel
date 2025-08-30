@@ -51,7 +51,7 @@ internal class GetContainerInfoByIdHandler(IConnectorFactory<IContainerConnector
               ImageName: inspect.Config?.Image,
               ImageId: inspect.Image,
               Volumes: inspect.Mounts?.Where(s => s.Name != null).Select(s => s.Name).ToList() ?? [],
-              Networks: inspect.NetworkSettings?.Networks?.ToDictionary(n => n.Key, n => n.Value.NetworkID) ?? [],
+              Networks: inspect.NetworkSettings?.Networks?.ToDictionary(n => n.Key, n => string.IsNullOrEmpty(n.Value.NetworkID) ? n.Key : n.Value.NetworkID ) ?? [],
               Ports: inspect.HostConfig?.PortBindings,
               State: inspect.State.Status
             );

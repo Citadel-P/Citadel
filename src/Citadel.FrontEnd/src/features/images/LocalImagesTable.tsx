@@ -19,7 +19,7 @@ import { RunImageDialog } from './dialogs/RunImageDialog';
 import { ImageSateIndicator } from './ImageStateIndicator';
 import { useNavigate, useParams } from 'react-router';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
-import { formatImageId } from '@/lib/utils';
+import { formatId } from '@/lib/utils';
 
 const columns = (): ColumnDef<ImageView>[] => [
   {
@@ -57,21 +57,14 @@ const columns = (): ColumnDef<ImageView>[] => [
     accessorKey: 'id',
     header: ({ column }) => <SortableCell cellName="Image Id" column={column} />,
     cell: ({ row }) => (
-      <CopyTextToClipboard
-        textToCopy={row.original.id}
-        transform={formatImageId}
-        groupClassName="rowid"
-        textClassName=""
-      />
+      <CopyTextToClipboard textToCopy={row.original.id} transform={formatId} groupClassName="rowid" textClassName="" />
     ),
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.id?.localeCompare(rowB.original?.id),
   },
   {
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
-    cell: ({ row }) => (
-      <span className="">{fromNow(new Date((row.original.created as number) * 1000).getTime())}</span>
-    ),
+    cell: ({ row }) => <span className="">{fromNow(new Date((row.original.created as number) * 1000).getTime())}</span>,
     sortingFn: (rowA, rowB) => (rowA.original.created < rowB.original.created ? 1 : -1),
   },
   {
@@ -119,7 +112,7 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
   const { platformId } = useParams<{ platformId: string }>();
   const navigate = useNavigate();
   function onNameClick() {
-    navigate(`/platforms/${platformId}/images/${formatImageId(image.id)}/`);
+    navigate(`/platforms/${platformId}/images/${formatId(image.id)}/`);
   }
 
   return (
