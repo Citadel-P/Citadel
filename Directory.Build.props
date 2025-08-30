@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <Authors>Hammou Arras</Authors>
-    <Copyright>Citadel ©, 2024 onwards</Copyright>
+    <Copyright>Citadel ©, 2025 onwards</Copyright>
     <Description>Citadel API for managing platforms, containers, registries, images, networks, and volumes.</Description>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

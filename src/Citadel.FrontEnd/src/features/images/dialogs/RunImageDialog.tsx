@@ -155,7 +155,7 @@ export const RunImageDialog = ({
 
   return (
     <Dialog open={runDialogData.open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px]" onOpenAutoFocus={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-[700px]">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
@@ -172,9 +172,7 @@ export const RunImageDialog = ({
                       type="button"
                       aria-expanded={advancedOpen}
                       className="flex items-center justify-between w-full px-2 py-4 rounded transition-colors bg-accent/60 hover:bg-accent/80 group focus:outline-none mb-0">
-                      <span className="text-sm font-semibold text-foreground">
-                        Optional settings
-                      </span>
+                      <span className="text-sm font-semibold text-foreground">Optional settings</span>
                       <ChevronDown
                         className={`transition-transform ml-2 ${advancedOpen ? 'rotate-180' : ''} group-hover:text-primary`}
                         size={18}

@@ -1,5 +1,6 @@
 // This component has been patched:
 // - Add className='group/rowid' to customize the copyToCliboard functionality
+// - Expose getRowId & onSelectionChange
 import {
   ColumnDef,
   RowSelectionState,
@@ -18,7 +19,8 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   isLoading: boolean;
-  onSelectionChange: (selectedRows: string[]) => void;
+  getRowId?: (row: TData) => string;
+  onSelectionChange?: (selectedRows: string[]) => void;
 }
 interface Identifiable {
   id?: string | null;
@@ -27,6 +29,7 @@ export function DataTable<TData extends Identifiable, TValue>({
   columns,
   data,
   isLoading,
+  getRowId,
   onSelectionChange,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -35,7 +38,7 @@ export function DataTable<TData extends Identifiable, TValue>({
   const table = useReactTable({
     data,
     columns,
-    getRowId: (row) => row.id!,
+    getRowId: (row) => (getRowId ? getRowId(row) : row.id!),
     getCoreRowModel: getCoreRowModel(),
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
@@ -47,8 +50,10 @@ export function DataTable<TData extends Identifiable, TValue>({
   });
 
   useEffect(() => {
-    const rowIds = Object.keys(table.getSelectedRowModel().rowsById);
-    onSelectionChange(rowIds);
+    if (onSelectionChange) {
+      const rowIds = Object.keys(table.getSelectedRowModel().rowsById);
+      onSelectionChange(rowIds);
+    }
   }, [rowSelection, data]);
 
   return (

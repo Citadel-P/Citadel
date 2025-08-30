@@ -50,7 +50,7 @@ const columns = (): ColumnDef<ImageView>[] => [
   {
     accessorKey: 'tag',
     header: ({ column }) => <SortableCell cellName="Tag" column={column} />,
-    cell: ({ row }) => <div className="text-xs">{truncate(row.original.tag ?? '', 28)}</div>,
+    cell: ({ row }) => <div className="">{truncate(row.original.tag ?? '', 28)}</div>,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.tag?.localeCompare(rowB.original?.tag),
   },
   {
@@ -61,7 +61,7 @@ const columns = (): ColumnDef<ImageView>[] => [
         textToCopy={row.original.id}
         transform={formatImageId}
         groupClassName="rowid"
-        textClassName="text-xs"
+        textClassName=""
       />
     ),
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.id?.localeCompare(rowB.original?.id),
@@ -70,14 +70,14 @@ const columns = (): ColumnDef<ImageView>[] => [
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
     cell: ({ row }) => (
-      <span className="text-xs">{fromNow(new Date((row.original.created as number) * 1000).getTime())}</span>
+      <span className="">{fromNow(new Date((row.original.created as number) * 1000).getTime())}</span>
     ),
     sortingFn: (rowA, rowB) => (rowA.original.created < rowB.original.created ? 1 : -1),
   },
   {
     accessorKey: 'size',
     header: ({ column }) => <SortableCell cellName="Size" column={column} />,
-    cell: ({ row }) => <span className="text-xs">{byteTransform(row.original.size, 2)}</span>,
+    cell: ({ row }) => <span className="">{byteTransform(row.original.size, 2)}</span>,
     sortingFn: (rowA, rowB) => (rowA.original.size < rowB.original.size ? 1 : -1),
   },
   {
@@ -128,7 +128,7 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
         <ImageSateIndicator inUse={image.isInUse ?? false} />
       </div>
       <span
-        className="cursor-pointer text-[13px] table-link"
+        className="cursor-pointer table-link"
         onClick={onNameClick}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -188,7 +188,7 @@ export default function LocalImagesTable() {
         isLoading={isLoading}
         onSelectionChange={handleSelectionChange}
       />
-      <div className="text-muted-foreground text-xs font-normal">
+      <div className="text-muted-foreground text-xs p-2 font-normal">
         {rowCount > 0 && (
           <span>
             Showing {rowCount} of {rowCount} image(s)

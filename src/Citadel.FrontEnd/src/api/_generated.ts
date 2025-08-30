@@ -1324,8 +1324,18 @@ export interface RegistryView {
   type: RegistryType;
   /** @format date-time */
   created: any;
-  configuration: RegistryConfigurationBase;
   isDefault?: boolean;
+}
+
+export interface RegistryWithConfigView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  url: string;
+  type: RegistryType;
+  /** @format date-time */
+  created: any;
+  configuration: RegistryConfigurationBase;
 }
 
 export interface RestartPolicy {
@@ -2342,6 +2352,33 @@ export class Api<
           ...params,
         },
       ),
+
+    /**
+     * No description
+     *
+     * @tags Registries
+     * @name RegistriesGetWithConfig
+     * @summary Get registry and it's configuration
+     * @request GET:/api/v1/registries/{id}/_cfg
+     * @secure
+     * @response `200` `RegistryWithConfigView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    registriesGetWithConfig: (id: string, params: RequestParams = {}) =>
+      this.request<
+        RegistryWithConfigView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/registries/${id}/_cfg`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
 
     /**
      * @description A discriminator should be provided in the request, this discriminator is based on RegistryType enum

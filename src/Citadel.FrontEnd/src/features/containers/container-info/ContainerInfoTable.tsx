@@ -13,7 +13,7 @@ const columns: ColumnDef<ContainerInfoView & { id: string | null } & { statusSna
     accessorKey: 'platformName',
     header: () => <span>Platform</span>,
     cell: ({ row }) => (
-      <div className="flex flex-wrap gap-2 text-xs items-center">
+      <div className="flex flex-wrap gap-2  items-center">
         <Server width={12} height={12} className="text-primary" />
         <Link to={`/platforms/${row.original.platformId}`} className="table-link">
           {row.original.platformName}
@@ -25,7 +25,7 @@ const columns: ColumnDef<ContainerInfoView & { id: string | null } & { statusSna
     accessorKey: 'image',
     header: () => <span>Image</span>,
     cell: ({ row }) => (
-      <div className="text-xs gap-2 flex flex-wrap items-center">
+      <div className=" gap-2 flex flex-wrap items-center">
         <HardDrive width={13} height={13} className="text-primary" />
         <Link
           to={`/platforms/${row.original.platformId}/images/${formatImageId(row.original.imageId)}`}
@@ -39,7 +39,7 @@ const columns: ColumnDef<ContainerInfoView & { id: string | null } & { statusSna
     accessorKey: 'networks',
     header: () => <span>Networks</span>,
     cell: ({ row }) => (
-      <div className="text-xs text-foreground gap-2 flex flex-wrap items-center">
+      <div className=" text-foreground gap-2 flex flex-wrap items-center">
         <Network width={13} height={13} className="text-primary" />
         {Object.keys(row.original.networks).map((network) => (
           <Link to={`/platforms/${row.original.platformId}/networks/${network}`} key={network} className="table-link">
@@ -53,7 +53,7 @@ const columns: ColumnDef<ContainerInfoView & { id: string | null } & { statusSna
     accessorKey: 'volumes',
     header: () => <span>Volumes</span>,
     cell: ({ row }) => (
-      <div className="text-xs text-foreground gap-2 flex flex-wrap items-center">
+      <div className=" text-foreground gap-2 flex flex-wrap items-center">
         {row.original.volumes.length > 0 && <Database width={13} height={13} className="text-primary" />}
         {row.original.volumes.map((volume) => (
           <Link to={`/platforms/${row.original.platformId}/volumes/${volume}`} key={volume} className="table-link">
@@ -72,7 +72,7 @@ const columns: ColumnDef<ContainerInfoView & { id: string | null } & { statusSna
     accessorKey: 'status',
     header: () => <span>Status</span>,
     cell: ({ row }) => (
-      <div className="text-xs text-foreground gap-2 flex flex-wrap items-center">
+      <div className=" text-foreground gap-2 flex flex-wrap items-center">
         <Clock width={13} height={13} className="text-primary" />
         {row.original.statusSnapshot}
       </div>
@@ -89,7 +89,6 @@ export const ContainerInfoTable = ({ statusSnapshot }: { statusSnapshot: string 
         columns={columns}
         data={currentContainer ? [{ id: '1', statusSnapshot, ...currentContainer }] : []}
         isLoading={false}
-        onSelectionChange={() => {}}
       />
     </div>
   );

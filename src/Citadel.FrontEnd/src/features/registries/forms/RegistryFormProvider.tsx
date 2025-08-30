@@ -1,13 +1,13 @@
-import { RegistryInput, RegistryType, RegistryView } from '@/api/_generated';
+import { RegistryInput, RegistryType, RegistryWithConfigView } from '@/api/_generated';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import DockerHubConfiguration from './DockerHubConfiguration';
 import GhcrConfiguration from './GhcrConfiguration';
 import { useNavigate, useParams } from 'react-router';
-import { useGetRegistry } from './hooks/useGetRegistry';
 import { usePOSTRegistry } from './hooks/usePOSTRegistry';
 import { usePATCHRegistry } from './hooks/usePATCHRegistry';
 import { FormMode, IRegistryProvider, RegistryFormContext } from './RegistryFormContext';
+import { useGetRegistryWithConfig } from './hooks/useGETRegitryWithConfig';
 
 export const RegistryFormProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const defaultProviders: IRegistryProvider[] = [
@@ -44,7 +44,7 @@ export const RegistryFormProvider: React.FC<{ children?: React.ReactNode }> = ({
   const navigate = useNavigate();
   const { registryId } = useParams();
   const mode: FormMode = registryId ? 'edit' : 'add';
-  const { data, isLoading } = useGetRegistry(registryId);
+  const { data, isLoading } = useGetRegistryWithConfig(registryId);
   const {
     mutate: requestCreate,
     validationErrors: createErrors,
@@ -60,7 +60,7 @@ export const RegistryFormProvider: React.FC<{ children?: React.ReactNode }> = ({
     data: patchData,
   } = usePATCHRegistry();
   const [currentProvider, setCurrentProvider] = useState<string>(RegistryType.DockerHub);
-  const [registry, setRegistry] = useState<RegistryView | undefined>(undefined);
+  const [registry, setRegistry] = useState<RegistryWithConfigView | undefined>(undefined);
   let providers = [...defaultProviders];
   let formTitle = 'Create registry';
   let saveButtonTitle = 'Add registry';
@@ -83,7 +83,6 @@ export const RegistryFormProvider: React.FC<{ children?: React.ReactNode }> = ({
   useEffect(() => {
     if (createIsSuccess && createData?.data) {
       toast.success(`The ${createData?.data.name} registry has been added`);
-      setRegistry(createData?.data);
       navigate('/registries');
     }
   }, [createIsSuccess, createData, navigate]);
@@ -91,7 +90,6 @@ export const RegistryFormProvider: React.FC<{ children?: React.ReactNode }> = ({
   useEffect(() => {
     if (patchIsSuccess && patchData?.data) {
       toast.success(`The ${patchData?.data.name} registry has been updated successfully`);
-      setRegistry(patchData?.data);
       navigate('/registries');
     }
   }, [patchIsSuccess, patchData, navigate]);

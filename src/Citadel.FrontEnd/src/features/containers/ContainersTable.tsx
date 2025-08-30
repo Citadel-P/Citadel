@@ -43,11 +43,9 @@ const columns: ColumnDef<ContainerView>[] = [
         <div className="flex items-center">
           <ContainerStateIndicator stat={row.original.state ?? ContainerStateStatus.Exited} />
         </div>
-        <div className="text-[13px]">
-          <Link to={`../containers/${row.original.containerId?.slice(0, 12)}/logs`} className="table-link">
-            {row.original.name ? row.original.name?.slice(1) : ''}
-          </Link>
-        </div>
+        <Link to={`../containers/${row.original.containerId?.slice(0, 12)}/logs`} className="table-link">
+          {row.original.name ? row.original.name?.slice(1) : ''}
+        </Link>
       </div>
     ),
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
@@ -62,7 +60,6 @@ const columns: ColumnDef<ContainerView>[] = [
         textToCopy={row.original.containerId}
         transform={() => row.original.containerId?.slice(0, 12)}
         groupClassName="rowid"
-        textClassName="text-xs"
       />
     ),
   },
@@ -70,16 +67,13 @@ const columns: ColumnDef<ContainerView>[] = [
     accessorKey: 'image',
     header: ({ column }) => <SortableCell cellName="Image" column={column} />,
     cell: ({ row }) => (
-      <div className="text-[12.5px]">
-        {' '}
-        <Link
-          to={`/platforms/${row.original.platformId}/images/${row.original.imageId?.slice(0, 12)}`}
-          className="table-link">
-          {row.original.image.startsWith('sha256:')
-            ? truncate(row.original.image.slice(7), 24)
-            : truncate(row.original.image ?? '', 24)}
-        </Link>
-      </div>
+      <Link
+        to={`/platforms/${row.original.platformId}/images/${row.original.imageId?.slice(0, 12)}`}
+        className="table-link">
+        {row.original.image.startsWith('sha256:')
+          ? truncate(row.original.image.slice(7), 24)
+          : truncate(row.original.image ?? '', 24)}
+      </Link>
     ),
   },
   {
@@ -111,7 +105,7 @@ const columns: ColumnDef<ContainerView>[] = [
   {
     accessorKey: 'stack',
     header: ({ column }) => <SortableCell cellName="Stack" column={column} />,
-    cell: ({ row }) => <div className="text-xs">{row.original.stack && truncate(row.original.stack, 10, 'left')}</div>,
+    cell: ({ row }) => <div>{row.original.stack && truncate(row.original.stack, 10, 'left')}</div>,
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
       return rowA.original.stack < rowB.original.stack ? 1 : -1;
     },
@@ -124,26 +118,20 @@ const columns: ColumnDef<ContainerView>[] = [
 
 const MemoryUsageCell = ({ container }: { container: ContainerView }) => {
   if (container.state !== ContainerStateStatus.Running) {
-    return <div className="text-xs text-muted">0B / 0B</div>;
+    return <div className="text-muted">0B / 0B</div>;
   }
   return (
-    <div className="text-xs">
-      {byteTransform(container.lastStats?.memoryActive ?? 0, 2) +
-        ' / ' +
-        byteTransform(container.lastStats?.memoryLimit ?? 0, 2)}
-    </div>
+    byteTransform(container.lastStats?.memoryActive ?? 0, 2) +
+    ' / ' +
+    byteTransform(container.lastStats?.memoryLimit ?? 0, 2)
   );
 };
 
 const CPUCell = ({ container }: { container: ContainerView }) => {
   if (container.state !== ContainerStateStatus.Running) {
-    return <div className="text-xs text-muted">0%</div>;
+    return <div className="text-muted">0%</div>;
   }
-  return (
-    <div className="text-xs">
-      {container.lastStats?.cpuUsage ? toFixedNumber(container.lastStats?.cpuUsage as number, 'percent') : '0%'}
-    </div>
-  );
+  return container.lastStats?.cpuUsage ? toFixedNumber(container.lastStats?.cpuUsage as number, 'percent') : '0%';
 };
 
 const ActionsCell = ({ container }: { container: ContainerView }) => {
@@ -165,7 +153,7 @@ export const ContainersTable = () => {
         isLoading={isLoading}
         onSelectionChange={(ids: string[]) => setSelectedRows(containers?.filter((c) => ids.includes(c.id!)))}
       />
-      <div className="text-muted-foreground text-xs font-normal ">
+      <div className="text-muted-foreground text-xs p-2 font-normal">
         {containers && containers.length > 0 && (
           <span>
             Showing {containers?.length} of {containers?.length} container(s)

@@ -25,7 +25,7 @@ const columns = (currentPlatform: PlatformView | undefined): ColumnDef<Container
     accessorKey: 'networks',
     header: () => <span>Networks</span>,
     cell: ({ row }) => (
-      <div className="text-xs text-foreground gap-2 flex flex-wrap items-center">
+      <div className="text-foreground gap-2 flex flex-wrap items-center">
         <Network width={13} height={13} className="text-primary" />
         {row.original.networks.map((network) => (
           <Link to={`/platforms/${currentPlatform?.id}/networks/${network}`} key={network} className="table-link">
@@ -39,7 +39,7 @@ const columns = (currentPlatform: PlatformView | undefined): ColumnDef<Container
     accessorKey: 'volumes',
     header: () => <span>Volumes</span>,
     cell: ({ row }) => (
-      <div className="text-xs text-foreground gap-2 flex flex-wrap items-center">
+      <div className="text-foreground gap-2 flex flex-wrap items-center">
         {row.original.volumes.length > 0 && <Database width={13} height={13} className="text-primary" />}
         {row.original.volumes.map((volume) => (
           <Link to={`/platforms/${currentPlatform?.id}/volumes/${volume}`} key={volume} className="table-link">
@@ -61,12 +61,7 @@ export const ContainerInfoTable = ({ image }: { image: InspectImageResult | unde
   if (!image) return <></>;
   return (
     <div className="flex flex-col gap-3">
-      <DataTable
-        columns={columns(currentPlatform)}
-        data={image.containers}
-        isLoading={false}
-        onSelectionChange={() => {}}
-      />
+      <DataTable columns={columns(currentPlatform)} data={image.containers} isLoading={false} />
     </div>
   );
 };

@@ -9,7 +9,7 @@ import { MoreHorizontal, Pencil, Trash } from 'lucide-react';
 import { RegistryView } from '@/api/_generated';
 import { useNavigate } from 'react-router';
 import { useRegistriesContext } from './RegistriesContext';
-import { startTransition, useCallback } from 'react';
+import { useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
 
 const DropdownTableMenu = ({ registry }: { registry: RegistryView }) => {
@@ -17,9 +17,7 @@ const DropdownTableMenu = ({ registry }: { registry: RegistryView }) => {
   const { setDialogData } = useRegistriesContext();
 
   const openDialog = useCallback(() => {
-    startTransition(() => {
-      setDialogData({ open: true, currentSelection: [registry] });
-    });
+    setDialogData({ open: true, currentSelection: [registry] });
   }, [setDialogData, registry]);
 
   return (

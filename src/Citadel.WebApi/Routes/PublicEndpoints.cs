@@ -248,6 +248,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName(RegistriesName + "_" + nameof(Registries.GetById));
 
+        registries.MapGet("/{id}/_cfg", Registries.GetWithConfig)
+            .WithSummary("Get registry and it's configuration")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName(RegistriesName + "_" + nameof(Registries.GetWithConfig));
+
         registries.MapPost("/", Registries.Create)
             .WithSummary("Create a registry")
             .WithDescription($"A discriminator should be provided in the request, this discriminator is based on {nameof(RegistryType)} enum ")

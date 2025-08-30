@@ -19,7 +19,7 @@ export function PortsDisplay({ ports }: Props) {
           return (
             <HoverCard key={containerPort} openDelay={150} closeDelay={150}>
               <HoverCardTrigger>
-                <div className="flex flex-row items-center justify-center cursor-pointer text-xs gap-2 hover:underline">
+                <div className="flex flex-row items-center justify-center cursor-pointer text-[13px] gap-2 hover:underline">
                   <EthernetPort width={14} height={14} className="text-primary" />{' '}
                   <span onClick={() => window.open(url, '_blank')}>{hostPort}</span>
                 </div>

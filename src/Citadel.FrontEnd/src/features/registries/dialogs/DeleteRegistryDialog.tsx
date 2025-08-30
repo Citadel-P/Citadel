@@ -19,7 +19,7 @@ export const DeleteRegistryDialog = () => {
 
   return (
     <Dialog open={dialogData.open} onOpenChange={(open) => setDialogData({ open })}>
-      <DialogContent className="sm:max-w-[500px]" onOpenAutoFocus={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Confirm Deletion</DialogTitle>
           <DialogDescription></DialogDescription>

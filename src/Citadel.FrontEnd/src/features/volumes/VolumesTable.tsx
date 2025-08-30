@@ -55,7 +55,7 @@ export default function VolumesTable() {
           isLoading={isLoading}
           onSelectionChange={handleSelectionChange}
         />
-        <div className="text-muted-foreground text-xs font-normal">
+        <div className="text-muted-foreground text-xs p-2 font-normal">
           {rowCount > 0 && (
             <span>
               Showing {rowCount} of {rowCount} volume(s)
@@ -99,14 +99,14 @@ const columns = (handleShowSheet: (volume: DockerVolumeResult) => void): ColumnD
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
     cell: ({ row }) => (
-      <span className="text-xs">{fromNow(new Date(row.original.createdAt as any).getTime())}</span>
+      <span className="">{fromNow(new Date(row.original.createdAt as any).getTime())}</span>
     ),
     sortingFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
   },
   {
     accessorKey: 'size',
     header: ({ column }) => <SortableCell cellName="Size" column={column} />,
-    cell: ({ row }) => <span className="text-xs">{byteTransform(row.original.usageData.size, 2)}</span>,
+    cell: ({ row }) => <span className="">{byteTransform(row.original.usageData.size, 2)}</span>,
     sortingFn: (rowA, rowB) => (rowA.original.usageData.size! < rowB.original.usageData.size! ? 1 : -1),
   },
   {

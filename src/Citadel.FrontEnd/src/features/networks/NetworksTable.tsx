@@ -53,7 +53,7 @@ export default function NetworksTable() {
           isLoading={isLoading}
           onSelectionChange={handleSelectionChange}
         />
-        <div className="text-muted-foreground text-xs font-normal">
+        <div className="text-muted-foreground text-xs p-2 font-normal">
           {rowCount > 0 && (
             <span>
               Showing {rowCount} of {rowCount} network(s)
@@ -96,19 +96,19 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
   {
     accessorKey: 'driver',
     header: ({ column }) => <SortableCell cellName="Driver" column={column} />,
-    cell: ({ row }) => <span className="text-xs">{row.original.driver}</span>,
+    cell: ({ row }) => <span className="">{row.original.driver}</span>,
     sortingFn: (rowA, rowB) => (rowA.original.driver! < rowB.original.driver! ? 1 : -1),
   },
   {
     accessorKey: 'attachable',
     header: ({ column }) => <SortableCell cellName="Attachable" column={column} />,
-    cell: ({ row }) => <span className="text-xs">{row.original.attachable ? 'true' : 'false'}</span>,
+    cell: ({ row }) => <span className="">{row.original.attachable ? 'true' : 'false'}</span>,
     sortingFn: (rowA, rowB) => (rowA.original.attachable! < rowB.original.attachable! ? 1 : -1),
   },
   {
     accessorKey: 'ipam.driver',
     header: ({ column }) => <SortableCell cellName="IPAM Driver" column={column} />,
-    cell: ({ row }) => <span className="text-xs">{row.original.ipam?.driver}</span>,
+    cell: ({ row }) => <span className="">{row.original.ipam?.driver}</span>,
     sortingFn: (rowA, rowB) => ((rowA.original.ipam?.driver ?? '') < (rowB.original.ipam?.driver ?? '') ? 1 : -1),
   },
   {
@@ -117,7 +117,7 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
     cell: ({ row }) => {
       const configs = row.original.ipam?.config ?? [];
       const ipv4 = configs.find((cfg) => cfg.gateway && /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/.test(cfg.gateway));
-      return <span className="text-xs">{ipv4?.subnet ?? '-'}</span>;
+      return <span className="">{ipv4?.subnet ?? '-'}</span>;
     },
   },
   {
@@ -126,7 +126,7 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
     cell: ({ row }) => {
       const configs = row.original.ipam?.config ?? [];
       const ipv4 = configs.find((cfg) => cfg.gateway && /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/.test(cfg.gateway));
-      return <span className="text-xs">{ipv4?.gateway ?? '-'}</span>;
+      return <span className="">{ipv4?.gateway ?? '-'}</span>;
     },
   },
   {
@@ -135,7 +135,7 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
     cell: ({ row }) => {
       const configs = row.original.ipam?.config ?? [];
       const ipv4 = configs.find((cfg) => cfg.gateway && /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/.test(cfg.gateway));
-      return <span className="text-xs">{ipv4?.ipRange ?? '-'}</span>;
+      return <span className="">{ipv4?.ipRange ?? '-'}</span>;
     },
   },
   {
@@ -144,7 +144,7 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
     cell: ({ row }) => {
       const configs = row.original.ipam?.config ?? [];
       const ipv6 = configs.find((cfg) => cfg.gateway && cfg.gateway.includes(':'));
-      return <span className="text-xs">{ipv6?.subnet ?? '-'}</span>;
+      return <span className="">{ipv6?.subnet ?? '-'}</span>;
     },
   },
   {
@@ -153,7 +153,7 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
     cell: ({ row }) => {
       const configs = row.original.ipam?.config ?? [];
       const ipv6 = configs.find((cfg) => cfg.gateway && cfg.gateway.includes(':'));
-      return <span className="text-xs">{ipv6?.gateway ?? '-'}</span>;
+      return <span className="">{ipv6?.gateway ?? '-'}</span>;
     },
   },
   {
@@ -162,7 +162,7 @@ const columns = (handleShowSheet: (network: DockerNetworkResult) => void): Colum
     cell: ({ row }) => {
       const configs = row.original.ipam?.config ?? [];
       const ipv6 = configs.find((cfg) => cfg.gateway && cfg.gateway.includes(':'));
-      return <span className="text-xs">{ipv6?.ipRange ?? '-'}</span>;
+      return <span className="">{ipv6?.ipRange ?? '-'}</span>;
     },
   },
   {

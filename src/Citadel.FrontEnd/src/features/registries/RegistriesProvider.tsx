@@ -5,14 +5,11 @@ import { useDELETERegistries } from './hooks/useDELETERegistries';
 import { toast } from 'sonner';
 import { useDialogState } from '@/hooks/useDialogState';
 import { RegistriesContext } from './RegistriesContext';
+import { useQueryClient } from '@tanstack/react-query';
 
 export const RegistriesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
-  const {
-    mutate,
-    isPending: deleteIsPending,
-    data: deletedRegistries,
-    isSuccess: deleteIsSuccess,
-  } = useDELETERegistries();
+  const client = useQueryClient();
+  const { mutate, isPending: deleteIsPending, isSuccess: deleteIsSuccess } = useDELETERegistries();
   const { data, isLoading, isSuccess } = useGETRegistries();
   const [selectedRows, setSelectedRows] = useState<RegistryView[] | undefined>([]);
   const [registries, setRegistries] = useState<RegistryView[] | undefined>([]);
@@ -25,15 +22,14 @@ export const RegistriesProvider: React.FC<{ children?: React.ReactNode }> = ({ c
   }, [isSuccess, data]);
 
   useEffect(() => {
-    if (deleteIsSuccess && dialogData.currentSelection) {
-      const ids = dialogData.currentSelection?.map((s) => s.id);
-      setRegistries((r) => r?.filter((s) => !ids?.includes(s.id)));
-      setDialogData({ open: false, currentSelection: undefined });
+    if (deleteIsSuccess) {
+      client.invalidateQueries({ queryKey: ['useGETRegistries'] });
+      setDialogData({ open: false });
       setSelectedRows([]);
 
       toast.success('The selected registry(s) has been successfully deleted');
     }
-  }, [deleteIsSuccess, deletedRegistries, dialogData.currentSelection, setDialogData]);
+  }, [deleteIsSuccess, client, setDialogData]);
 
   const requestDelete = useCallback(
     (ids: string[]) => {

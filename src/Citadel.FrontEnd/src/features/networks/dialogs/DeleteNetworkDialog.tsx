@@ -23,7 +23,7 @@ export const DeleteNetworkDialog = () => {
 
   return (
     <Dialog open={dialogData.open} onOpenChange={(open) => setDialogData({ open })}>
-      <DialogContent className="sm:max-w-[600px]" onOpenAutoFocus={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Confirm Deletion</DialogTitle>
           <DialogDescription>

@@ -1,6 +1,6 @@
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { createContext, JSX } from 'react';
-import { RegistryInput, RegistryView } from '@/api/_generated';
+import { RegistryInput, RegistryWithConfigView } from '@/api/_generated';
 
 export interface IContext {
   mode: FormMode;
@@ -9,7 +9,7 @@ export interface IContext {
   isLoadingForm: boolean;
   saveButtonTitle: string;
   validationErrors: string | undefined | null;
-  registry: RegistryView | undefined;
+  registry: RegistryWithConfigView | undefined;
   providers: IRegistryProvider[];
   currentProvider: string;
   setCurrentProvider: (value: string) => void;
