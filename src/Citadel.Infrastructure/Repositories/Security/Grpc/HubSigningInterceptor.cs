@@ -19,11 +19,18 @@ namespace Infrastructure.Repositories.Security.Grpc;
 /// - Relies on deterministic serialization: protobuf maps may still produce slightly different byte orders if versions differ, so both client and server must use the same .NET/Protobuf version.
 /// - Does not sign streamed responses: only signs the request, not the server’s stream.
 /// </remarks>
-public class HubSigningInterceptor(Key hubPrivateKey) : Interceptor
+public class HubSigningInterceptor : Interceptor
 {
-    private readonly SignatureAlgorithm algo = SignatureAlgorithm.Ed25519;
+    private readonly SignatureAlgorithm algo;
+    private readonly Key hubPrivateKey;
     private const int NonceSize = 8;
 
+    public HubSigningInterceptor()
+    {
+        hubPrivateKey = Helpers.GetOrCreatePrivateKey();
+        algo = SignatureAlgorithm.Ed25519;
+    }
+     
     public override AsyncUnaryCall<TResponse> AsyncUnaryCall<TRequest, TResponse>(
         TRequest request,
         ClientInterceptorContext<TRequest, TResponse> context,
@@ -61,16 +68,19 @@ public class HubSigningInterceptor(Key hubPrivateKey) : Interceptor
             var nonceSpan = span[..NonceSize];
             var messageSpan = span.Slice(NonceSize, messageSize);
 
+            // Fill nonce with current Unix timestamp
             BinaryPrimitives.WriteInt64LittleEndian(nonceSpan, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+
+            // Serialize protobuf directly into the buffer
             protoMessage.WriteTo(messageSpan);
 
+            // Sign nonce + message
             byte[] signature = algo.Sign(hubPrivateKey, span);
 
-            var headers = new Metadata
-            {
-                { Constants.NonceHeaderKey, nonceSpan.ToArray() },
-                { Constants.SignatureHeaderKey, signature }
-            };
+            // Ensure headers exist and add signature + nonce
+            var headers = context.Options.Headers ?? [];
+            headers.Add(Constants.NonceHeaderKey, nonceSpan.ToArray());
+            headers.Add(Constants.SignatureHeaderKey, signature);
 
             var newOptions = context.Options.WithHeaders(headers);
             return new ClientInterceptorContext<TRequest, TResponse>(context.Method, context.Host, newOptions);

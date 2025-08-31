@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using Grpc.Core;
+using Grpc.Core.Interceptors;
 using Grpc.Net.Client;
 using Grpc.Net.Client.Configuration;
 using static Citadel.Agent.Containers.V1.ContainerService;
@@ -22,34 +23,40 @@ internal interface IGrpcClientFactory
     VolumeServiceClient GetVolumeClient(string address);
 }
 
-internal class GrpcClientFactory : IGrpcClientFactory
+internal class GrpcClientFactory(params Interceptor[] interceptors) : IGrpcClientFactory
 {
     private readonly ConcurrentDictionary<string, GrpcChannel> _channelCache = new();
     private readonly ConcurrentDictionary<(Type, string), object> _clientCache = new();
+    private readonly Interceptor[] _interceptors = interceptors ?? [];
 
     public PlatformServiceClient GetPlatformClient(string address) =>
-        GetOrCreateClient(NormalizeAddress(address), channel => new PlatformServiceClient(channel));
+        GetOrCreateClient(NormalizeAddress(address), invoker => new PlatformServiceClient(invoker));
 
     public ContainerServiceClient GetContainerClient(string address) =>
-        GetOrCreateClient(NormalizeAddress(address), channel => new ContainerServiceClient(channel));
+        GetOrCreateClient(NormalizeAddress(address), invoker => new ContainerServiceClient(invoker));
 
     public ImageServiceClient GetImageClient(string address) =>
-        GetOrCreateClient(NormalizeAddress(address), channel => new ImageServiceClient(channel));
+        GetOrCreateClient(NormalizeAddress(address), invoker => new ImageServiceClient(invoker));
 
     public NetworkServiceClient GetNetworkClient(string address) =>
-        GetOrCreateClient(NormalizeAddress(address), channel => new NetworkServiceClient(channel));
+        GetOrCreateClient(NormalizeAddress(address), invoker => new NetworkServiceClient(invoker));
 
     public VolumeServiceClient GetVolumeClient(string address) =>
-        GetOrCreateClient(NormalizeAddress(address), channel => new VolumeServiceClient(channel));
+        GetOrCreateClient(NormalizeAddress(address), invoker => new VolumeServiceClient(invoker));
 
-    private TClient GetOrCreateClient<TClient>(string address, Func<GrpcChannel, TClient> factory)
+    private TClient GetOrCreateClient<TClient>(string address, Func<CallInvoker, TClient> factory)
     {
         // Cache channel per address
         var channel = _channelCache.GetOrAdd(address, CreateChannel);
 
+        // Wrap channel in CallInvoker with interceptors
+        CallInvoker invoker = channel.CreateCallInvoker();
+        if (_interceptors.Length > 0)
+            invoker = invoker.Intercept(_interceptors);
+
         // Combine client type + address as cache key
         var key = (typeof(TClient), address);
-        return (TClient)_clientCache.GetOrAdd(key, _ => factory(channel));
+        return (TClient)_clientCache.GetOrAdd(key, _ => factory(invoker));
     }
 
     private static GrpcChannel CreateChannel(string address)
@@ -69,10 +76,7 @@ internal class GrpcClientFactory : IGrpcClientFactory
                             InitialBackoff = TimeSpan.FromMilliseconds(200),
                             MaxBackoff = TimeSpan.FromSeconds(2),
                             BackoffMultiplier = 2,
-                            RetryableStatusCodes =
-                            {
-                                StatusCode.Unavailable // network/transient failures
-                            }
+                            RetryableStatusCodes = { StatusCode.Unavailable }
                         }
                     }
                 }

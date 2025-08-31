@@ -48,12 +48,13 @@ public static class InfrastructureModule
     private static IServiceCollection AddGrpcClients(this IServiceCollection services)
     {
         services
-            .AddSingleton<IGrpcClientFactory, GrpcClientFactory>()
-            .AddSingleton(new HubSigningInterceptor(Helpers.GetOrCreatePrivateKey()))
-            .AddGrpc(options =>
+            .AddSingleton<HubSigningInterceptor>()
+            .AddSingleton<IGrpcClientFactory>(sp =>
             {
-                options.Interceptors.Add<HubSigningInterceptor>();
-            });
+                var interceptor = sp.GetRequiredService<HubSigningInterceptor>();
+                return new GrpcClientFactory(interceptor);
+            })
+            .AddGrpc();
 
         return services;
     }
