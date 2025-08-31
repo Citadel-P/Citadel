@@ -36,12 +36,10 @@ internal static class WebApiModule
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
-                var key = string.IsNullOrEmpty(configuration["Jwt:Key"])
+                var key = (string.IsNullOrEmpty(configuration["Jwt:Key"])
                                         ? Hosting.Common.Helpers.GetJwtSecretFromFile()
-                                        : configuration["Jwt:Key"];
-
-                if (key is null) throw new ArgumentNullException("Jwt:Key is missing from configuration");
-
+                                        : configuration["Jwt:Key"]) 
+                                        ?? throw new ArgumentNullException("Jwt:Key is missing from configuration");
                 options.TokenValidationParameters = new TokenValidationParameters()
                 {
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),

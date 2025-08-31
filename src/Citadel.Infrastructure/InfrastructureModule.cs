@@ -16,6 +16,7 @@ using Infrastructure.GithubCr;
 using Infrastructure.HttpClients.Serializer;
 using Infrastructure.Persistence;
 using Infrastructure.Repositories;
+using Infrastructure.Repositories.Security.Grpc;
 using Infrastructure.TypeHandlers;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,9 +46,17 @@ public static class InfrastructureModule
             .RegisterDockerClient();
 
     private static IServiceCollection AddGrpcClients(this IServiceCollection services)
-        => services
+    {
+        services
             .AddSingleton<IGrpcClientFactory, GrpcClientFactory>()
-            .AddGrpc().Services;
+            .AddSingleton(new HubSigningInterceptor(Helpers.GetOrCreatePrivateKey()))
+            .AddGrpc(options =>
+            {
+                options.Interceptors.Add<HubSigningInterceptor>();
+            });
+
+        return services;
+    }
 
     private static IServiceCollection AddServices(this IServiceCollection services)
         => services

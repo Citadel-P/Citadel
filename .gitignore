@@ -233,4 +233,6 @@ _Pvt_Extensions
 # Verify
 *.received.*
 *.received/
-/Citadel.Infrastructure.MigrationTool/temp.db
+
+# Data folder
+src/Citadel.WebApi/data/
