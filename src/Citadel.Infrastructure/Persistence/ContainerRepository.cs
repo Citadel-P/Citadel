@@ -71,11 +71,17 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         return db.ExecuteAsync(finalSql, parameters, transaction: tx());
     }
 
-    [DapperAot(false)]
     public async Task<IEnumerable<Container>?> GetAllWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken)
     {
         const string sql = """
-        SELECT c.*, s.*
+        SELECT c.*, 
+            s.Created as Stat_Created,
+            s.MemoryActive as Stat_MemoryActive,
+            s.MemoryCache as Stat_MemoryCache, 
+            s.CpuUsage as Stat_CpuUsage, 
+            s.MemoryLimit as Stat_MemoryLimit, 
+            s.RxBytes as Stat_RxBytes, 
+            s.TxBytes as Stat_TxBytes
         FROM Containers c
         LEFT JOIN ContainerStats s ON s.ContainerId = c.Id
           AND s.Id = (
@@ -88,29 +94,8 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         ORDER BY c.Created DESC;
         """;
 
-        var lookup = new Dictionary<string, ContainerDto>();
-        var result = await db.QueryAsync<ContainerDto, ContainerStatDto, ContainerDto>(
-            sql,
-            (container, stat) =>
-            {
-                if (!lookup.TryGetValue(container.Id, out var existing))
-                {
-                    existing = container;
-                    lookup[container.Id] = existing;
-                }
-
-                if (stat != null)
-                {
-                    existing.Stats?.Add(stat);
-                }
-
-                return existing;
-            },
-            param: new { PlatformId = platformId.Format() },
-            splitOn: "Id"
-        );
-
-        return [.. lookup.Values.ToDomain()];
+        var result = await db.QueryAsync<ContainerWithLastStatDto>(sql, new { PlatformId = platformId.Format() }, transaction: tx());
+        return result.ToDomain();
     }
 
     public Task<int> AddAsync(Container container, CancellationToken cancellationToken)
@@ -138,7 +123,6 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         }, transaction: tx());
     }
 
-    [DapperAot(false)]
     public Task<int> UpdateContainersStateAsync(IEnumerable<Guid> ids, ContainerStateStatus state, CancellationToken cancellationToken)
     {
         var (clause, parameters) = SqliteInClauseBuilder.BuildInClauseForGuids("Id", ids);
@@ -177,7 +161,6 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         }, transaction: tx());
     }
 
-    [DapperAot(false)]
     public Task<int> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         var (clause, parameters) = SqliteInClauseBuilder.BuildInClauseForGuids("Id", ids);

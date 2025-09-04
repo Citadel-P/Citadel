@@ -1,8 +1,8 @@
 ﻿namespace Infrastructure.Persistence.Dtos;
 
-internal sealed record PlatformDto(
-    string Id, //Guid
-    string Name, //Guid
+internal record PlatformDto(
+    Guid Id,
+    string Name,
     string Address,
     int NetworkCount,
     int VolumeCount,
@@ -16,23 +16,17 @@ internal sealed record PlatformDto(
     string? AgentVersion)
 {
     public ICollection<PlatformStatDto> Stats { get; init; } = [];
-    public PlatformDto() : this(string.Empty, string.Empty, string.Empty, 0, 0, 0, 0, 0, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty)
+    public PlatformDto() : this(Guid.Empty, string.Empty, string.Empty, 0, 0, 0, 0, 0, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty)
     {
         
     }
 }
 
 internal sealed record PlatformStatDto(
-    string Id,//Guid
-    string PlatformId,//Guid
+    Guid Id,
+    Guid PlatformId,
     long Created,
     double? CpuUsage,
     double? MemoryUsage,
     double? RxBytes,
-    double? TxBytes)
-{
-    public PlatformStatDto() : this (string.Empty, string.Empty, 0, 0, 0, 0, 0)
-    {
-        
-    }
-}
+    double? TxBytes);

@@ -114,7 +114,7 @@ internal static class WebApiModule
         services
             .AddSingleton<IApplicationHubDispatcher>(provider =>
             {
-                var context = provider.GetRequiredService<IHubContext<ApplicationHub, ITypedApplicationHub>>();
+                var context = provider.GetRequiredService<IHubContext<ApplicationHub>>();
                 return new ApplicationHubDispatcher(context);
             });
 

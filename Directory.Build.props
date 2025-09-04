@@ -6,8 +6,12 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <PublishTrimmed>true</PublishTrimmed>
-    <UseAppHost>true</UseAppHost>
+	<PublishAot>true</PublishAot>
+	<PublishTrimmed>true</PublishTrimmed>
+	<PublishSingleFile>true</PublishSingleFile>
+	<IlcGenerateCompleteTypeMetadata>false</IlcGenerateCompleteTypeMetadata>
+	<IlcOptimizationPreference>Speed</IlcOptimizationPreference>
+	<UseAppHost>true</UseAppHost>
     <InvariantGlobalization>true</InvariantGlobalization>
     <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>

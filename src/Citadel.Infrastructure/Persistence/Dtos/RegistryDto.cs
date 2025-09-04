@@ -7,9 +7,4 @@ internal sealed record RegistryDto(
     string Created, // DateTime
     string Type, // RegistryType
     string Configuration // RegistryConfigurationBase
-    )
-{
-    public RegistryDto(): this(Guid.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty)
-    {
-    }
-}
+    );

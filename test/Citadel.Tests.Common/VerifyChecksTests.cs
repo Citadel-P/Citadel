@@ -1,5 +1,4 @@
 ﻿using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
 using Argon;
 using DiffEngine;
 
@@ -24,7 +23,10 @@ public static class VerifyModuleInitializer
         DiffTools.UseOrder(DiffTool.VisualStudio, DiffTool.VisualStudioCode, DiffTool.Rider);
 
         // Configure the snapshot serializer settings
-        VerifierSettings.AddExtraSettings(settings => settings.DefaultValueHandling = DefaultValueHandling.Include);
+        VerifierSettings.AddExtraSettings(settings => 
+        {
+            settings.DefaultValueHandling = DefaultValueHandling.Include;
+        });
 
         // Scrub traceId from the snapshots, as it's not needed for verification
         VerifierSettings.ScrubMembers("traceId");

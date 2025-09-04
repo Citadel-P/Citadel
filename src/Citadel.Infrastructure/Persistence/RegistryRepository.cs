@@ -84,7 +84,6 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         }, transaction: tx());
     }
 
-    [DapperAot(false)]
     public Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         var (clause, parameters) = SqliteInClauseBuilder.BuildInClauseForGuids("Id", ids);

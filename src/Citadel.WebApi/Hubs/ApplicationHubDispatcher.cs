@@ -9,47 +9,65 @@ using static Hosting.Common.Constants;
 
 namespace WebApi.Hubs;
 
-internal class ApplicationHubDispatcher(IHubContext<ApplicationHub, ITypedApplicationHub> hubContext) : IApplicationHubDispatcher
+internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) : IApplicationHubDispatcher
 {
     #region Container Info
-    public Task SendContainerInfo(DockerContainer container, CancellationToken cancellationToken)
-        => hubContext.Clients.Group(WellKnownSignalRGroups.ContainerInfoGroup(container.ContainerId)).ReceiveContainerInfo(container);
+    public Task SendContainerInfo(DockerContainer container, CancellationToken cancellationToken) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.ContainerInfoGroup(container.ContainerId))
+            .SendAsync("ReceiveContainerInfo", container, cancellationToken);
     #endregion
 
     #region Container Logs
-    public Task SendContainerLog(string containerId, ReadOnlyMemory<byte> buffer)
-        => hubContext.Clients.Group(WellKnownSignalRGroups.ContainerLogGroup(containerId)).SendContainerLog(buffer);
+    public Task SendContainerLog(string containerId, ReadOnlyMemory<byte> buffer) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.ContainerLogGroup(containerId))
+            .SendAsync("SendContainerLog", buffer);
 
-    public Task SendContainerLogsBatchToConnection(string connectionId, byte[] recentLogs)
-        => hubContext.Clients.Client(connectionId).SendContainerLogsBatch(recentLogs);
-
+    public Task SendContainerLogsBatchToConnection(string connectionId, byte[] recentLogs) =>
+        hubContext.Clients
+            .Client(connectionId)
+            .SendAsync("SendContainerLogsBatch", recentLogs);
     #endregion
 
     #region Containers
-    public Task SendContainersStats(Guid platformId, IEnumerable<ContainerStat> containers)
-        => hubContext.Clients.Group(WellKnownSignalRGroups.ContainersGroup(platformId)).ContainersStatsUpdated(ContainerStatView.Map(containers));
+    public Task SendContainersStats(Guid platformId, IEnumerable<ContainerStat> containers) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.ContainersGroup(platformId))
+            .SendAsync("ContainersStatsUpdated", ContainerStatView.Map(containers));
 
-    public Task SendContainersInfo(Guid platformId, IEnumerable<Container> containers)
-        => hubContext.Clients.Group(WellKnownSignalRGroups.ContainersGroup(platformId)).ContainersInfoUpdated(ContainersView.Map(containers));
+    public Task SendContainersInfo(Guid platformId, IEnumerable<Container> containers) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.ContainersGroup(platformId))
+            .SendAsync("ContainersInfoUpdated", ContainersView.Map(containers));
     #endregion
 
     #region Platforms
-    public Task PushPlatformUpdate(Platform platform)
-        => hubContext.Clients.Group(WellKnownSignalRGroups.PlatformsGroup).PlatformUpdated(platform.Map());
+    public Task PushPlatformUpdate(Platform platform) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.PlatformsGroup)
+            .SendAsync("PlatformUpdated", platform.Map());
 
-    public Task PushPlatformsUpdates(IEnumerable<Platform> platforms)
-        => hubContext.Clients.Group(WellKnownSignalRGroups.PlatformsGroup).PlatformsUpdated(PlatformsView.Map(platforms).Platforms);
+    public Task PushPlatformsUpdates(IEnumerable<Platform> platforms) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.PlatformsGroup)
+            .SendAsync("PlatformsUpdated", PlatformsView.Map(platforms).Platforms);
 
-    public Task PlatformDeleted(Guid platformId)
-        => hubContext.Clients.Group(WellKnownSignalRGroups.PlatformsGroup).PlatformsDeleted(platformId);
+    public Task PlatformDeleted(Guid platformId) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.PlatformsGroup)
+            .SendAsync("PlatformsDeleted", platformId);
 
-    public Task PushPlatformStats(Guid platformId, PlatformStatsResult platform)
-        => hubContext.Clients.Group(WellKnownSignalRGroups.PlatformsGroup).PlatformStatsUpdated(PlatformStatsBatchView.Map(platformId, platform));
-
+    public Task PushPlatformStats(Guid platformId, PlatformStatsResult platform) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.PlatformsGroup)
+            .SendAsync("PlatformStatsUpdated", PlatformStatsBatchView.Map(platformId, platform));
     #endregion
 
     #region Docker Daemon Events
-    public Task SendContainerEvent(Container container, string @event)
-        => hubContext.Clients.Group(WellKnownSignalRGroups.DockerDaemonGroup(container.PlatformId)).ContainerEventReceived(ContainerView.Map(container), @event);
+    public Task SendContainerEvent(Container container, string @event) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.DockerDaemonGroup(container.PlatformId))
+            .SendAsync("ContainerEventReceived", ContainerView.Map(container), @event);
     #endregion
 }

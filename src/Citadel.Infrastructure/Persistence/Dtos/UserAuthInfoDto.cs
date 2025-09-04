@@ -1,7 +1,7 @@
 ﻿namespace Infrastructure.Persistence.Dtos;
 
 internal sealed record UserAuthInfoDto(
-    string Id, // Guid
+    Guid Id,
     string Name, 
     string Email,
     string Password, 

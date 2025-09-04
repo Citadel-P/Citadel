@@ -40,7 +40,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return result
             .GroupBy(r => new { r.Id, r.Name, r.Email, r.Password })
             .Select(g => new UserAuthInfo(
-                Guid.Parse(g.Key.Id),
+                g.Key.Id,
                 g.Key.Name,
                 g.Key.Email,
                 g.Key.Password,

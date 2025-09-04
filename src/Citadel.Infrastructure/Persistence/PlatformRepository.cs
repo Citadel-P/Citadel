@@ -137,46 +137,38 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     public async Task<Platform?> GetPlatformWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT p.*, s.*
+            SELECT p.*,
+                s.Id as Stat_Id,
+                s.Created as Stat_Created,
+                s.CpuUsage as Stat_CpuUsage,
+                s.MemoryUsage as Stat_MemoryUsage,
+                s.RxBytes as Stat_RxBytes,
+                s.TxBytes as Stat_TxBytes
             FROM Platforms p
             LEFT JOIN PlatformStats s ON s.Id = (
-                SELECT Id FROM PlatformStats 
-                WHERE PlatformId = p.Id 
-                ORDER BY Created DESC 
+                SELECT Id FROM PlatformStats
+                WHERE PlatformId = p.Id
+                ORDER BY Created DESC
                 LIMIT 1
             )
             WHERE p.Id = @Id
             LIMIT 1;
         """;
 
-        var lookup = new Dictionary<string, PlatformDto>();
-        
-        var result = await db.QueryAsync<PlatformDto, PlatformStatDto, PlatformDto>(
-            sql,
-            (platform, stat) =>
-            {
-                if (!lookup.TryGetValue(platform.Id, out var existing))
-                {
-                    existing = platform;
-                    lookup[platform.Id] = existing;
-                }
-
-                if (stat != null)
-                    existing.Stats?.Add(stat);
-
-                return existing;
-            },
-            param: new { Id = platformId.Format() },
-            splitOn: "Id"
-        );
-
-        return lookup.Values.SingleOrDefault()?.ToDomain();
+        var result = await db.QuerySingleAsync<PlatformWithSingleStatDto>(sql, new { Id = platformId.Format() }, tx());
+        return result?.ToDomain();
     }
 
     public async Task<IEnumerable<Platform>?> GetPlatformsWithLatestStatAsync(CancellationToken cancellationToken)
     {
         const string sql = @"
-            SELECT p.*, s.*
+            SELECT p.*,
+                s.Id as Stat_Id,
+                s.Created as Stat_Created,
+                s.CpuUsage as Stat_CpuUsage,
+                s.MemoryUsage as Stat_MemoryUsage,
+                s.RxBytes as Stat_RxBytes,
+                s.TxBytes as Stat_TxBytes
             FROM Platforms p
             LEFT JOIN PlatformStats s ON s.Id = (
                 SELECT Id FROM PlatformStats
@@ -187,28 +179,10 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             ORDER BY p.Name;
         ";
 
-        var lookup = new Dictionary<string, PlatformDto>();
-
-        var result = await db.QueryAsync<PlatformDto, PlatformStatDto, PlatformDto>(
-            sql,
-            (platform, stat) =>
-            {
-                if (!lookup.TryGetValue(platform.Id, out var existing))
-                {
-                    existing = platform;
-                    lookup[platform.Id] = existing;
-                }
-
-                if (stat != null)
-                    existing.Stats?.Add(stat);
-
-                return existing;
-            },
-            splitOn: "Id"
-        );
-
-        return [.. lookup.Values.ToDomain()];
+        var result = await db.QueryAsync<PlatformWithSingleStatDto>(sql, transaction: tx());
+        return result.ToDomain();
     }
+
 
     public async Task<PlatformConnectionInfo?> GetPlatformDetailsByContainerIdAsync(string containerId, CancellationToken cancellationToken)
     {

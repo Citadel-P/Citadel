@@ -8,14 +8,11 @@ namespace Infrastructure.Persistence.Mappers;
 
 internal static class PlatformMappers
 {
-    internal static IEnumerable<Platform> ToDomain(this IEnumerable<PlatformDto> platforms)
-        => platforms.Select(ToDomain);
-    
     internal static Platform ToDomain(this PlatformDto platform)
     {
         return
         Platform.FromPersistence(
-            id: Guid.Parse(platform.Id),
+            id: platform.Id,
             name: platform.Name,
             address: platform.Address,
             networkCount: platform.NetworkCount,
@@ -32,6 +29,37 @@ internal static class PlatformMappers
             );
     }
 
+    internal static IEnumerable<Platform> ToDomain(this IEnumerable<PlatformWithSingleStatDto> platforms)
+        => platforms.Select(ToDomain);
+
+    internal static Platform ToDomain(this PlatformWithSingleStatDto platform)
+    {
+        return
+        Platform.FromPersistence(
+            id: platform.Id,
+            name: platform.Name,
+            address: platform.Address,
+            networkCount: platform.NetworkCount,
+            volumeCount: platform.VolumeCount,
+            imageCount: platform.ImageCount,
+            cpuCount: platform.CpuCount,
+            memTotal: platform.MemTotal,
+            status: Enum.Parse<PlatformStatus>(platform.Status),
+            connectorType: Enum.Parse<PlatformConnectorType>(platform.ConnectorType),
+            platformDescriptor: JsonSerializer.Deserialize(platform.PlatformDescriptor, PlatformJsonContext.Default.PlatformDescriptor),
+            serverVersion: platform.ServerVersion,
+            agentVersion: platform.AgentVersion,
+            stats: [new PlatformStat(
+                created: platform.Stat_Created,
+                memoryUsage: platform.Stat_MemoryUsage ?? 0,
+                cpuUsage: platform.Stat_CpuUsage ?? 0,
+                rxBytes: platform.Stat_RxBytes ?? 0,
+                txBytes: platform.Stat_TxBytes ?? 0,
+                platformId: platform.Id
+                )]
+            );
+    }
+
     internal static IEnumerable<PlatformStat> ToDomain(this IEnumerable<PlatformStatDto> stats)
         => stats.Select(ToDomain);
 
@@ -39,8 +67,8 @@ internal static class PlatformMappers
     {
         return
         PlatformStat.FromPersistence(
-            id: stat.Id != null ? Guid.Parse(stat.Id) : Guid.Empty,
-            platformId: stat.PlatformId != null ? Guid.Parse(stat.PlatformId) : Guid.Empty,
+            id: stat.Id != null ? stat.Id : Guid.Empty,
+            platformId: stat.PlatformId != null ?stat.PlatformId : Guid.Empty,
             created: stat.Created,
             cpuUsage: stat.CpuUsage ?? 0,
             memoryUsage: stat.MemoryUsage ?? 0,

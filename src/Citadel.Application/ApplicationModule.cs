@@ -15,7 +15,6 @@ using Hosting.Common.ObjectPoolManager;
 using Hosting.Common.ObjectPoolManager.Policies;
 using Hosting.Common.Pipelines;
 using Hosting.Common.Pipelines.Interfaces;
-using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.ObjectPool;
@@ -37,13 +36,16 @@ public static class ApplicationModule
             .AddMediator(options =>
             {
                 options.ServiceLifetime = ServiceLifetime.Scoped;
+                options.PipelineBehaviors = 
+                [
+                    typeof(PermissionBehavior<,>),
+                    typeof(ValidatorBehavior<,>)
+                ];
             })
             .AddPermissions()
             .AddSingleton<IErrorFactoryProvider, ErrorFactoryProvider>()
             .AddSingleton<IValidatorMetadataProvider, ValidatorMetadataProvider>()
-            .AddSingleton<IPermissionMetadataProvider, PermissionMetadataProvider>()
-            .AddSingleton(typeof(IPipelineBehavior<,>), typeof(PermissionBehavior<,>))
-            .AddSingleton(typeof(IPipelineBehavior<,>), typeof(ValidatorBehavior<,>));
+            .AddSingleton<IPermissionMetadataProvider, PermissionMetadataProvider>();
 
         EnsureDefaultImagesDefinitionsExists();
         return services;

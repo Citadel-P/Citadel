@@ -53,7 +53,6 @@ internal class PatchPlatformHandler(
     {
         try
         {
-            var r = await unitOfWork.Platforms.GetPlatformsWithLatestStatAsync(cancellationToken);
             var platform = await unitOfWork.Platforms.GetByIdAsync(command.Id, cancellationToken);
             if (platform == null)
             {

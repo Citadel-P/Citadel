@@ -1,16 +1,9 @@
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview-alpine AS base
-WORKDIR /app
-EXPOSE 8000
-EXPOSE 8001
+FROM mcr.microsoft.com/dotnet/sdk:10.0-preview-alpine-aot AS build
+RUN apk add --no-cache clang lld musl-dev libc6-compat
 
 ENV \
-    DOTNET_RUNNING_IN_CONTAINER=true \
     DOTNET_GCServer=1 \
-    DOTNET_System_GC_RetainVM=0 \
-    DOTNET_TC_OptimizeForContainer=1
-
-FROM mcr.microsoft.com/dotnet/sdk:10.0-preview-alpine AS build
-RUN apk add --no-cache libc6-compat
+    DOTNET_System_GC_RetainVM=0
 
 WORKDIR /src
 
@@ -26,26 +19,32 @@ COPY ["src/Citadel.Infrastructure/Citadel.Infrastructure.csproj", "Citadel.Infra
 COPY ["src/Citadel.Contracts/Directory.Build.props", "Citadel.Contracts/"]
 COPY ["src/Citadel.Contracts/Directory.Packages.props", "Citadel.Contracts/"]
 
-COPY ["src/Citadel.Contracts/Citadel.Hosting/Citadel.Hosting.csproj", "Citadel.Contracts/Citadel.Hosting/"]
-COPY ["src/Citadel.Contracts/Citadel.SourceGen/Citadel.SourceGen.csproj", "Citadel.Contracts/Citadel.SourceGen/"]
-COPY ["src/Citadel.Contracts/Citadel.Hosting.Common/Citadel.Hosting.Common.csproj", "Citadel.Contracts/Citadel.Hosting.Common/"]
-COPY ["src/Citadel.Contracts/Citadel.Hosting.DockerClient/Citadel.Hosting.DockerClient.csproj", "Citadel.Contracts/Citadel.Hosting.DockerClient/"]
+COPY ["src/Citadel.Contracts/src/Citadel.Hosting/Citadel.Hosting.csproj", "Citadel.Contracts/Citadel.Hosting/"]
+COPY ["src/Citadel.Contracts/src/Citadel.SourceGen/Citadel.SourceGen.csproj", "Citadel.Contracts/Citadel.SourceGen/"]
+COPY ["src/Citadel.Contracts/src/Citadel.Hosting.Common/Citadel.Hosting.Common.csproj", "Citadel.Contracts/Citadel.Hosting.Common/"]
+COPY ["src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Citadel.Hosting.DockerClient.csproj", "Citadel.Contracts/Citadel.Hosting.DockerClient/"]
 
-RUN dotnet restore "./Citadel.WebApi/Citadel.WebApi.csproj"
+# Restore
+RUN dotnet restore "Citadel.WebApi/Citadel.WebApi.csproj"
 
+# Copy full source
 COPY src/ .
-WORKDIR "/src/Citadel.WebApi"
-RUN dotnet build "./Citadel.WebApi.csproj" -c Release -o /app/build
 
-FROM build AS publish
-RUN dotnet publish "./Citadel.WebApi.csproj" -c Release -o /app/publish
+WORKDIR /src/Citadel.WebApi
 
-FROM base AS final
+# Publish
+RUN dotnet publish Citadel.WebApi.csproj -c Release -o /app/publish \
+    -r linux-musl-x64 --self-contained true /p:StripSymbols=true \
+     && rm /app/publish/*.dbg
+
+# Final stage
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-preview-alpine AS final
 WORKDIR /app
 
-COPY --from=publish /app/publish .
+# Copy the published self-contained binary
+COPY --from=build /app/publish .
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+EXPOSE 8000
+EXPOSE 8001
 
-ENTRYPOINT ["dotnet", "Citadel.WebApi.dll"]
+ENTRYPOINT ["./Citadel.WebApi"]
