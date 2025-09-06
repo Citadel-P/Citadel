@@ -50,12 +50,12 @@ internal static class PlatformMappers
             serverVersion: platform.ServerVersion,
             agentVersion: platform.AgentVersion,
             stats: [new PlatformStat(
-                created: platform.Stat_Created,
-                memoryUsage: platform.Stat_MemoryUsage ?? 0,
-                cpuUsage: platform.Stat_CpuUsage ?? 0,
-                rxBytes: platform.Stat_RxBytes ?? 0,
-                txBytes: platform.Stat_TxBytes ?? 0,
-                platformId: platform.Id
+                Created: platform?.Stat_Created ?? 0,
+                MemoryUsage: platform?.Stat_MemoryUsage ?? 0,
+                CpuUsage: platform?.Stat_CpuUsage ?? 0,
+                RxBytes: platform?.Stat_RxBytes ?? 0,
+                TxBytes: platform?.Stat_TxBytes ?? 0,
+                PlatformId: platform?.Id ?? Guid.Empty
                 )]
             );
     }
@@ -64,17 +64,13 @@ internal static class PlatformMappers
         => stats.Select(ToDomain);
 
     internal static PlatformStat ToDomain(this PlatformStatDto stat)
-    {
-        return
-        PlatformStat.FromPersistence(
-            id: stat.Id != null ? stat.Id : Guid.Empty,
-            platformId: stat.PlatformId != null ?stat.PlatformId : Guid.Empty,
-            created: stat.Created,
-            cpuUsage: stat.CpuUsage ?? 0,
-            memoryUsage: stat.MemoryUsage ?? 0,
-            rxBytes: stat.RxBytes ?? 0,
-            txBytes: stat.TxBytes ?? 0);
-    }
+        => new (
+            PlatformId: stat.PlatformId != Guid.Empty ?stat.PlatformId : Guid.Empty,
+            Created: stat.Created,
+            CpuUsage: stat.CpuUsage ?? 0,
+            MemoryUsage: stat.MemoryUsage ?? 0,
+            RxBytes: stat.RxBytes ?? 0,
+            TxBytes: stat.TxBytes ?? 0);
 
     internal static PlatformConnectionInfo ToDomain(this PlatformConnectionInfoDto dto)
         => new (

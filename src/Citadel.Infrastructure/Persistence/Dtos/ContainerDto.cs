@@ -23,7 +23,7 @@ internal record ContainerDto(
     }
 }
 
-internal sealed record ContainerStatDto(
+internal record struct ContainerStatDto(
      Guid Id,
      Guid ContainerId,
      long Created,
@@ -44,9 +44,3 @@ internal sealed record ContainerWithLastStatDto(
      double? Stat_RxBytes,
      double? Stat_TxBytes
     ) : ContainerDto; 
-
-internal sealed record PlatformContainerInfoDto(
-    string Address,
-    string ContainerId,
-    string ConnectorType // PlatformConnectorType
-);

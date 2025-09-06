@@ -58,11 +58,11 @@ internal static class Fakes
         for (int i = 0; i < total; i++)
         {
             yield return new DockerContainer(
-                name: $"c-{i:D2}",
-                image: $"image-{i}:latest",
-                imageId: $"image-id-{i}:latest",
-                state: ContainerStateStatus.Running,
-                containerId: $"container-id-{i}"
+                Name: $"c-{i:D2}",
+                Image: $"image-{i}:latest",
+                ImageId: $"image-id-{i}:latest",
+                State: ContainerStateStatus.Running,
+                ContainerId: $"container-id-{i}"
             );
         }
     }

@@ -143,14 +143,14 @@ public class ContainerSyncJobTests : IntegrationTestBase
     {
         // Arrange: DB has no containers, but fresh list has one
         var newDockerContainer = new DockerContainer(
-            name: "new",
-            image: "new:latest",
-            imageId: "fake-id",
-            containerId: "new-id",
-            state: ContainerStateStatus.Running,
-            ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
-            created: 123456,
-            stack: null
+            Name: "new",
+            Image: "new:latest",
+            ImageId: "fake-id",
+            ContainerId: "new-id",
+            State: ContainerStateStatus.Running,
+            Ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
+            Created: 123456,
+            Stack: null
         );
         containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(containerConnector.Object);
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
@@ -188,14 +188,14 @@ public class ContainerSyncJobTests : IntegrationTestBase
         }
 
         var updatedDockerContainer = new DockerContainer(
-            name: "updated",
-            image: "updated:latest",
-            imageId: "fake-id",
-            containerId: containerId,
-            state: ContainerStateStatus.Running,
-            ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
-            created: 123456,
-            stack: null
+            Name: "updated",
+            Image: "updated:latest",
+            ImageId: "fake-id",
+            ContainerId: containerId,
+            State: ContainerStateStatus.Running,
+            Ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
+            Created: 123456,
+            Stack: null
         );
         containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(containerConnector.Object);
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))

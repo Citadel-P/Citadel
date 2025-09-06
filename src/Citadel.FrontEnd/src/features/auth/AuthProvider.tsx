@@ -5,6 +5,7 @@ import { useHTTPErrorHandler } from './hooks/useHTTPErrorHandler';
 import { usePOSTLogout } from './hooks/usePOSTLogout';
 import { useTokenRefresh } from './hooks/useTokenRefresh';
 import { AuthContext } from './AuthContext';
+import { toast } from 'sonner';
 
 const accessTokenKey = 'access_token';
 const storedJwt = sessionStorage.getItem(accessTokenKey);
@@ -16,7 +17,7 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
   const { mutate: logout } = usePOSTLogout();
   const [accessToken, setAccessToken] = useState<string | undefined>(storedJwt ?? undefined);
   const isAuthenticated = useMemo(() => accessToken != null, [accessToken]);
-  useTokenRefresh(accessToken, isAuthenticated);
+  const { error: refreshError } = useTokenRefresh(accessToken, isAuthenticated);
 
   const handleSetAccessToken = useCallback(
     (token: string | undefined) => {
@@ -32,6 +33,14 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
     },
     [apiClient],
   );
+
+  useEffect(() => {
+    if (refreshError) {
+      toast.error('Session expired', {
+        description: 'Please login again',
+      });
+    }
+  }, [refreshError])
 
   // Handle access token updates from the API
   useEffect(() => {

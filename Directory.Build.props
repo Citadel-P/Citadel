@@ -22,4 +22,7 @@
 	<ItemGroup Condition="'$(DOTNET_RUNNING_IN_CONTAINER)' != 'true'">
 		<PackageReference Include="Nerdbank.GitVersioning" PrivateAssets="all" />
 	</ItemGroup>
+	<ItemGroup>
+		<RuntimeHostConfigurationOption Include="System.GC.RetainVM" Value="false" />
+	</ItemGroup>
 </Project>

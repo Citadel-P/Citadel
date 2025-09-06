@@ -166,10 +166,8 @@ public class PlatformPatchTests : IntegrationTestBase
                 ContainersStopped: 1)
         );
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var r = await uow.Platforms.GetPlatformsWithLatestStatAsync(TestContext.Current.CancellationToken);
         await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
         await uow.CommitAsync();
-        var r2 = await uow.Platforms.GetPlatformsWithLatestStatAsync(TestContext.Current.CancellationToken);
 
         var patchJson = """
         {
@@ -180,7 +178,7 @@ public class PlatformPatchTests : IntegrationTestBase
 
         // Act
         var response = await Client.PatchAsync($"/api/v1/platforms/{platformId}", content, cancellationToken: TestContext.Current.CancellationToken);
-
+        
         // Assert
         Assert.Equal(System.Net.HttpStatusCode.Conflict, response.StatusCode);
         var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);

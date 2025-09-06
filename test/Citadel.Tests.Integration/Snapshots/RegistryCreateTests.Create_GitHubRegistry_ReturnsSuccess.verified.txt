@@ -4,10 +4,5 @@
   url: https://registry123:9999,
   type: GitHub,
   created: DateTimeOffset_1,
-  configuration: {
-    $type: GitHub,
-    name: dummy-user,
-    pat: dummy-pat123
-  },
   isDefault: false
 }

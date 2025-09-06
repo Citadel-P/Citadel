@@ -6,7 +6,6 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Grpc.Core;
-using Hosting.Common.ObjectPoolManager;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -22,7 +21,7 @@ internal class PlatformStatsStreamerJob(
     IOptions<JobConfiguration> options,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IConnectorFactory<IPlatformConnector> connectorFactory,
-    ChannelWriter<(Guid Id, PooledHandle<PlatformStatsResult> Stats)> platformStatsWriter,
+    ChannelWriter<(Guid Id, PlatformStatsResult Stats)> platformStatsWriter,
     ILogger<PlatformStatsStreamerJob> logger) : BackgroundService
 {
     private readonly int _fetchIntervalMs = options.Value.SystemInfoInterval * 1000;

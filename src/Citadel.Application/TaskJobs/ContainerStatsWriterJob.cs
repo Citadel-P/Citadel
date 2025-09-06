@@ -3,7 +3,6 @@ using Application.Configs;
 using Application.Services.SignalR;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
-using Hosting.Common.ObjectPoolManager;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -14,7 +13,6 @@ namespace Application.TaskJobs;
 internal class ContainerStatsWriterJob(
     IServiceScopeFactory scopeFactory,
     IOptions<JobConfiguration> options,
-    IObjectPoolManager objectPoolManager,
     ChannelReader<ContainersStatBatch> reader,
     IContainersStreamManager containersStreamManager,
     ILogger<ContainerStatsWriterJob> logger) : BackgroundService
@@ -28,31 +26,24 @@ internal class ContainerStatsWriterJob(
         {
             await foreach (var batch in reader.ReadAllAsync(cancellationToken))
             {
-                try
-                {
-                    AccumulateBatchStats(batch);
-                    await NotifyClients(batch);
+                AccumulateBatchStats(batch);
+                await NotifyClients(batch);
 
-                    if (ShouldFlush())
-                    {
-                        await FlushToDatabase(cancellationToken);
-                    }
-                }
-                finally
+                if (ShouldFlush())
                 {
-                    batch.Stats.Dispose();
+                    await FlushToDatabase(cancellationToken);
                 }
             }
         }
         catch (OperationCanceledException)
         {
-            // Nope, this is expected when the service is stopping
+            // Expected when service stops
         }
         catch (Exception ex)
         {
             logger.LogError(ex, $"Error in {nameof(ContainerStatsWriterJob)}");
         }
-        
+
         // Final flush if needed
         if (buffer.Count > 0)
         {
@@ -64,40 +55,20 @@ internal class ContainerStatsWriterJob(
     {
         if (!buffer.TryGetValue(batch.PlatformId, out var list))
         {
-            buffer.TryAdd(batch.PlatformId, list = objectPoolManager.Get<List<ContainerStat>>());
+            buffer.TryAdd(batch.PlatformId, list = []);
         }
 
-        list.AddRange(batch.Stats.Value); // NOTE: only references copied, not the list
+        list.AddRange(batch.Stats);
     }
 
     private bool ShouldFlush()
     {
-        int totalCount = 0;
-        foreach (var kvp in buffer)
-        {
-            totalCount += kvp.Value.Count;
-        }
-        return totalCount >= options.Value?.BatchSize || 
-            (DateTime.UtcNow - _lastFlush) >= TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60);
+        int totalCount = buffer.Sum(kvp => kvp.Value.Count);
+        return totalCount >= options.Value?.BatchSize ||
+               (DateTime.UtcNow - _lastFlush) >= TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60);
     }
 
     private async Task FlushToDatabase(CancellationToken cancellationToken)
-    {
-        // Save and then clean up buffer
-        await SaveBatchToDb(cancellationToken);
-        foreach (var (_, stats) in buffer)
-        {
-            foreach (var stat in stats)
-            {
-                objectPoolManager.Return(stat);
-            }
-        }
-
-        buffer.Clear();
-        _lastFlush = DateTime.UtcNow;
-    }
-
-    private async Task SaveBatchToDb(CancellationToken cancellationToken)
     {
         try
         {
@@ -109,8 +80,13 @@ internal class ContainerStatsWriterJob(
             await uow.CommitAsync();
         }
         catch (Exception ex)
-        { 
+        {
             logger.LogError(ex, "Failed to save container stats to the database.");
+        }
+        finally
+        {
+            buffer.Clear();
+            _lastFlush = DateTime.UtcNow;
         }
     }
 
@@ -118,7 +94,7 @@ internal class ContainerStatsWriterJob(
     {
         try
         {
-            await containersStreamManager.SendContainersStats(batch.PlatformId, batch.Stats.Value);
+            await containersStreamManager.SendContainersStats(batch.PlatformId, batch.Stats);
         }
         catch (Exception ex)
         {

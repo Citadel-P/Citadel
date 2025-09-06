@@ -7,10 +7,10 @@ namespace Infrastructure.Connectors.Mappers;
 
 internal static class ImageMappers
 {
-    public static List<ImageResult> Map(this IEnumerable<ImageReply> images)
+    internal static List<ImageResult> Map(this IEnumerable<ImageReply> images)
         => [.. images.Select(Map)];
 
-    public static ImageResult Map(this ImageReply image)
+    internal static ImageResult Map(this ImageReply image)
         => new 
         (
             Id: image.Id,
@@ -25,13 +25,13 @@ internal static class ImageMappers
             Labels: image.Labels?.ToDictionary() ?? []
         );
 
-    public static DeleteImageResult Map(this DeleteImageResponse response) 
+    internal static DeleteImageResult Map(this DeleteImageResponse response) 
         => new
         (
             Items: [.. response.Items.Select(item => new Domain.Contracts.Resources.Images.DeleteImageResponseItem(item.Result.ToDictionary()))]
         );
 
-    public static InspectImageResult Map(this InspectImageResponse image)
+    internal static InspectImageResult Map(this InspectImageResponse image)
         => new(
             Id: image.Id,
             Size: image.Size,
@@ -59,18 +59,18 @@ internal static class ImageMappers
             Ports: container.Ports?.Map() ?? []
         );
 
-    public static ImageRootFs Map(this RootFSMessage rootFs) => new(
+    internal static ImageRootFs Map(this RootFSMessage rootFs) => new(
         Type: rootFs.Type,
         Layers: rootFs.Layers?.ToList() ?? []
     );
 
-    public static ImageMetadata Map(this MetadataMessage metadata) 
+    internal static ImageMetadata Map(this MetadataMessage metadata) 
         => new
         (
             LastTagTime: metadata.LastTagTime
         );
 
-    public static ImageConfig Map(this ConfigMessage config) 
+    internal static ImageConfig Map(this ConfigMessage config) 
         => new(
             Tty: config.Tty,
             User: config.User,
@@ -96,7 +96,7 @@ internal static class ImageMappers
             ExposedPorts: config.ExposedPorts?.ToDictionary(x => x.Key, x => new Domain.Contracts.Resources.Images.Empty()) ?? []
         );
 
-    public static ImageDescriptor Map(this DescriptorMessage descriptor)
+    internal static ImageDescriptor Map(this DescriptorMessage descriptor)
         => new(
             Size: descriptor.Size,
             Data: descriptor.Data,
@@ -108,19 +108,19 @@ internal static class ImageMappers
             Annotations: descriptor.Annotations?.ToDictionary() ?? []
         );
 
-    public static ImageGraphicDriver Map(this GraphDriverMessage graphDriver) 
+    internal static ImageGraphicDriver Map(this GraphDriverMessage graphDriver) 
         => new(
             Name: graphDriver.Name,
             Data: graphDriver.Data?.Map()
         );
 
-    public static ImageGraphDriverData Map(this GraphDriverDataMessage graphDriverData) => new(
+    internal static ImageGraphDriverData Map(this GraphDriverDataMessage graphDriverData) => new(
         MergedDir: graphDriverData.MergedDir,
         UpperDir: graphDriverData.UpperDir,
         WorkDir: graphDriverData.WorkDir
     );
 
-    public static ImageManifest Map(this ManifestMessage manifest) => new(
+    internal static ImageManifest Map(this ManifestMessage manifest) => new(
         Id: manifest.Id,
         Kind: manifest.Kind,
         Available: manifest.Available,
@@ -130,19 +130,19 @@ internal static class ImageMappers
         AttestationData: manifest.AttestationData?.Map()
     );
 
-    public static SizeInfo Map(this SizeMessage size) => new(
+    internal static SizeInfo Map(this SizeMessage size) => new(
         Total: size.Total,
         Content: size.Content,
         Unpacked: size.Unpacked
     );
 
-    public static ImageData Map(this ImageDataMessage imageData) => new(
+    internal static ImageData Map(this ImageDataMessage imageData) => new(
         Size: imageData.Size?.Map(),
         Platform: imageData.Platform?.Map(),
         Containers: imageData.Containers?.ToList() ?? []
     );
 
-    public static ImagePlatformDescriptor Map(this PlatformDescriptorMessage descriptor) => new(
+    internal static ImagePlatformDescriptor Map(this PlatformDescriptorMessage descriptor) => new(
         OS: descriptor.Os,
         Variant: descriptor.Variant,
         OSVersion: descriptor.OsVersion,
@@ -150,11 +150,11 @@ internal static class ImageMappers
         OSFeatures: descriptor.OsFeatures?.ToList() ?? []
     );
 
-    public static AttestationData Map(this AttestationDataMessage attestation) => new(
+    internal static AttestationData Map(this AttestationDataMessage attestation) => new(
         For: attestation.For
     );
 
-    public static ImageHealthCheck Map(this HealthcheckMessage healthCheck) => new(
+    internal static ImageHealthCheck Map(this HealthcheckMessage healthCheck) => new(
         Test: healthCheck.Test?.ToList() ?? [],
         Interval: healthCheck.Interval,
         Timeout: healthCheck.Timeout,
@@ -163,7 +163,7 @@ internal static class ImageMappers
         StartInterval: healthCheck.StartInterval
     );
 
-    public static PullImageResult Map(this PullImageResponse pullResponse) => new
+    internal static PullImageResult Map(this PullImageResponse pullResponse) => new
     (
         Id: pullResponse.Id,
         From: pullResponse.From,
@@ -175,7 +175,7 @@ internal static class ImageMappers
         Error: pullResponse.Error is not null ? new ImagePullError(pullResponse.Error.Code, pullResponse.Error.Message) : null
     );
 
-    public static ImagePullProgress Map(this JSONProgressReply jsonProgress) => new
+    internal static ImagePullProgress Map(this JSONProgressReply jsonProgress) => new
     (
         Current: jsonProgress.Current,
         Total: jsonProgress.Total,
@@ -183,10 +183,10 @@ internal static class ImageMappers
         Start: jsonProgress.Start
     );
 
-    public static IReadOnlyList<ImageResult> Map(this IEnumerable<Hosting.DockerClient.ImageSummary> images) 
+    internal static IReadOnlyList<ImageResult> Map(this IEnumerable<Hosting.DockerClient.ImageSummary> images) 
         => [.. images.Select(Map)];
 
-    public static ImageResult Map(this Hosting.DockerClient.ImageSummary image)
+    internal static ImageResult Map(this Hosting.DockerClient.ImageSummary image)
         => new
         (
             Id: image.Id,
@@ -201,13 +201,13 @@ internal static class ImageMappers
             Labels: image.Labels?.ToDictionary() ?? []
         );
 
-    public static DeleteImageResult Map(this Hosting.DockerClient.Models.Images.DeleteImageResult response) 
+    internal static DeleteImageResult Map(this Hosting.DockerClient.Models.Images.DeleteImageResult response) 
         => new
         (
             Items: [.. response.Items.Select(item => new Domain.Contracts.Resources.Images.DeleteImageResponseItem(item.Result.ToDictionary()))]
         );
 
-    public static InspectImageResult Map(this Hosting.DockerClient.Models.Images.ImageInspectResult image)
+    internal static InspectImageResult Map(this Hosting.DockerClient.Models.Images.ImageInspectResult image)
         => new
         (
             Id: image.Id,
@@ -347,7 +347,7 @@ internal static class ImageMappers
         StartInterval: healthConfig.StartInterval
     );
 
-    public static PullImageResult Map(this Hosting.DockerClient.HttpClient.JSONMessage jsonMessage) => new
+    internal static PullImageResult Map(this Hosting.DockerClient.HttpClient.JSONMessage jsonMessage) => new
     (
         Id: jsonMessage.ID,
         From: jsonMessage.From,
@@ -359,30 +359,30 @@ internal static class ImageMappers
         Error: jsonMessage.Error is not null ? new ImagePullError(jsonMessage.Error.Code, jsonMessage.Error.Message) : null
     );
 
-    public static ImagePullProgress Map(this Hosting.DockerClient.HttpClient.JSONProgress jsonProgress) => new
+    internal static ImagePullProgress Map(this Hosting.DockerClient.HttpClient.JSONProgress jsonProgress) => new
     (
         Current: jsonProgress.Current,
         Total: jsonProgress.Total,
         Units: jsonProgress.Units,
         Start: jsonProgress.Start
     );
-    public static IEnumerable<Domain.Contracts.Resources.Images.HistoryImageResult> Map(this IEnumerable<Citadel.Agent.Images.V1.HistoryImageResult> items) => items.Select(Map);
+    internal static IEnumerable<Domain.Contracts.Resources.Images.HistoryImageResult> Map(this IEnumerable<Citadel.Agent.Images.V1.HistoryImageResult> items) => items.Select(Map);
 
-    public static IEnumerable<Domain.Contracts.Resources.Images.HistoryImageResult> Map(this IEnumerable<Hosting.DockerClient.HistoryResponseItem> items) => items.Select(Map);
+    internal static IEnumerable<Domain.Contracts.Resources.Images.HistoryImageResult> Map(this IEnumerable<Hosting.DockerClient.HistoryResponseItem> items) => items.Select(Map);
 
-    public static Domain.Contracts.Resources.Images.HistoryImageResult Map(this Hosting.DockerClient.HistoryResponseItem item) => new (
+    internal static Domain.Contracts.Resources.Images.HistoryImageResult Map(this Hosting.DockerClient.HistoryResponseItem item) => new (
         Id: item.Id, Created : item.Created, CreatedBy: item.CreatedBy, Size: item.Size, Comment: item.Comment);
 
-    public static Domain.Contracts.Resources.Images.HistoryImageResult Map(this Citadel.Agent.Images.V1.HistoryImageResult item) => new(
+    internal static Domain.Contracts.Resources.Images.HistoryImageResult Map(this Citadel.Agent.Images.V1.HistoryImageResult item) => new(
         Id: item.Id, Created: item.Created, CreatedBy: item.CreatedBy, Size: item.Size, Comment: item.Comment);
 
-    public static RunImageInfoResult Map(this Hosting.DockerClient.Models.Images.RunImageInfoResult info) =>
+    internal static RunImageInfoResult Map(this Hosting.DockerClient.Models.Images.RunImageInfoResult info) =>
         new(Volumes: info.Volumes, Networks: info.Networks, ExposedPorts: info.ExposedPorts, 0, 0);
 
-    public static List<Domain.Contracts.Resources.Images.HistoryImageResult> Map(this HistoryImageResponse histories) 
+    internal static List<Domain.Contracts.Resources.Images.HistoryImageResult> Map(this HistoryImageResponse histories) 
         => [.. histories.Items.Select(Map)];
 
-    public static Domain.Contracts.Resources.Images.HistoryImageResult Map(this HistoryImageItemResponse item) 
+    internal static Domain.Contracts.Resources.Images.HistoryImageResult Map(this HistoryImageItemResponse item) 
         => new (
             Id: item.Id,
             Created: item.Created,

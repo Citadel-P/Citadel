@@ -3,7 +3,6 @@ using Citadel.Agent.Containers.V1;
 using Citadel.Agent.Platforms.V1;
 using Domain;
 using Domain.Contracts.Resources.Containers;
-using Domain.Entities;
 using Google.Protobuf.Collections;
 using Hosting.DockerClient.Models.Containers;
 
@@ -11,7 +10,7 @@ namespace Infrastructure.Connectors.Mappers;
 
 internal static class ContainerMappers
 {
-    public static ContainerInspectionInfo Map(this InspectContainerResponse container) 
+    internal static ContainerInspectionInfo Map(this InspectContainerResponse container) 
         => new 
         (
             Id: container.Id,
@@ -41,7 +40,7 @@ internal static class ContainerMappers
             NetworkSettings: container.NetworkSettings?.Map()
         );
 
-    public static ContainerInspectionInfo Map(this Hosting.DockerClient.ContainerInspectResponse container)
+    internal static ContainerInspectionInfo Map(this Hosting.DockerClient.ContainerInspectResponse container)
         => new
         (
             Id: container.Id,
@@ -499,14 +498,14 @@ internal static class ContainerMappers
             SecondaryIPv6Addresses: settings.SecondaryIPv6Addresses?.Select(ip => ip.Map()).ToList() ?? []
         );
 
-    public static IpAddressInfo Map(this Address address)
+    internal static IpAddressInfo Map(this Address address)
         => new
         (
                 Addr: address.Addr,
                 PrefixLen: address.PrefixLen
         );
 
-    public static Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>> Map(this MapField<string, HostPortBindingList> bindings)
+    internal static Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>> Map(this MapField<string, HostPortBindingList> bindings)
     {
         if (bindings is null || bindings.Count == 0)
             return [];
@@ -556,36 +555,36 @@ internal static class ContainerMappers
             LinkLocalIPs: endpointIPAMConfig.LinkLocalIPs
         );
 
-    public static Dictionary<string, DockerContainer> Map(this ListContainersResponse response)
+    internal static Dictionary<string, DockerContainer> Map(this ListContainersResponse response)
         => response.Containers.ToDictionary(
             pair => pair.Key,
             pair => pair.Value.Map());
 
-    private static DockerContainer Map(this ContainerMessage container)
+    internal static DockerContainer Map(this ContainerMessage container)
         => new
         (
-            name: container.Name,
-            image: container.Image,
-            imageId: container.ImageID,
-            stack: container.Stack,
-            containerId: container.Id,
-            created: container.Created,
-            state: container.State.Map(),
-            containerStat: container.ContainerStatMessage?.Map(),
-            ports: container.Ports?.Map()
-        );
-    
-    public static DockerContainerStat Map(this ContainerStatMessage statMessage)
-        => new (
-            memoryActive: statMessage.MemoryActive,
-            memoryCache: statMessage.MemoryCache,
-            memoryLimit: statMessage.MemoryLimit,
-            cpuUsage: statMessage.CpuUsage,
-            rxBytes: statMessage.RxBytes,
-            txBytes: statMessage.TxBytes
+            Name: container.Name,
+            Image: container.Image,
+            ImageId: container.ImageID,
+            Stack: container.Stack,
+            ContainerId: container.Id,
+            Created: container.Created,
+            State: container.State.Map(),
+            ContainerStat: container.ContainerStatMessage?.Map(),
+            Ports: container.Ports?.Map()
         );
 
-    public static MapField<string, OptionChain> Map(this IDictionary<string, IDictionary<string, bool>> filters)
+    internal static DockerContainerStat Map(this ContainerStatMessage statMessage)
+        => new (
+            MemoryActive: statMessage.MemoryActive,
+            MemoryCache: statMessage.MemoryCache,
+            MemoryLimit: statMessage.MemoryLimit,
+            CpuUsage: statMessage.CpuUsage,
+            RxBytes: statMessage.RxBytes,
+            TxBytes: statMessage.TxBytes
+        );
+
+    internal static MapField<string, OptionChain> Map(this IDictionary<string, IDictionary<string, bool>> filters)
     {
         var map = new MapField<string, OptionChain>();
         foreach (var pair in filters)
@@ -608,19 +607,7 @@ internal static class ContainerMappers
         return optionChain;
     }
 
-    public static void Map(this ContainerStatMessage statMessage, DockerContainerStat destination)
-    {
-        destination.ReInitialize(
-            statMessage.MemoryActive,
-            statMessage.MemoryCache,
-            statMessage.CpuUsage,
-            statMessage.MemoryLimit,
-            statMessage.RxBytes,
-            statMessage.TxBytes
-        );
-    }
-
-    public static DaemonEventInfo Map(this DaemonEventResponse @event)
+    internal static DaemonEventInfo Map(this DaemonEventResponse @event)
         => new
         (
             Id: @event.Id,
@@ -630,43 +617,25 @@ internal static class ContainerMappers
             Container: @event.Container?.Map()
         );
 
-    public static void Map(ContainerMessage container, DockerContainer destination)
-    {
-        if (destination.ContainerStat is not null)
-        {
-            Map(container.ContainerStatMessage, destination.ContainerStat);
-        }
-        
-        destination.ReInitialize(
-            name: container.Name,
-            image: container.Image,
-            stack: container.Stack,
-            containerId: container.Id,
-            created: container.Created,
-            state: container.State.Map(),
-            containerStat: destination.ContainerStat,
-            ports: container.Ports?.Map()
-        );
-    }
 
-    public static IReadOnlyDictionary<string, DockerContainer> Map(this IReadOnlyDictionary<string, ContainerResult> containers) 
+    internal static IReadOnlyDictionary<string, DockerContainer> Map(this IReadOnlyDictionary<string, ContainerResult> containers) 
         => containers.ToDictionary(c => c.Key, c => c.Value.Map());
 
-    public static DockerContainer Map(this ContainerResult container)
+    internal static DockerContainer Map(this ContainerResult container)
         => new
         (
-            name: container?.Name,
-            image: container?.Image,
-            imageId: container?.ImageID,
-            stack: container?.Stack,
-            containerId: container?.Id,
-            created: container?.Created,
-            containerStat: container.ContainerStat?.Map(),
-            ports: container.Ports?.Map(),
-            state: container?.State?.Map() ?? ContainerStateStatus.Unknown
+            Name: container?.Name,
+            Image: container?.Image,
+            ImageId: container?.ImageID,
+            Stack: container?.Stack,
+            ContainerId: container?.Id,
+            Created: container?.Created,
+            ContainerStat: container.ContainerStat?.Map(),
+            Ports: container.Ports?.Map(),
+            State: container?.State?.Map() ?? ContainerStateStatus.Unknown
         );
 
-    public static Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>> Map(this IDictionary<string, IReadOnlyList<Hosting.DockerClient.PortBinding>> bindings)
+    internal static Dictionary<string, IReadOnlyList<Domain.Entities.HostPortBinding>> Map(this IDictionary<string, IReadOnlyList<Hosting.DockerClient.PortBinding>> bindings)
     {
         if (bindings is null || bindings.Count == 0)
             return [];
@@ -690,48 +659,24 @@ internal static class ContainerMappers
         return result;
     }
 
-    public static void Map(ContainerResult container, DockerContainer destination)
-    {
-        if (container.ContainerStat != null)
-        {
-            Map(container.ContainerStat, destination.ContainerStat);
-        }
-        destination.ReInitialize(
-          name: container?.Name,
-          image: container?.Image,
-          stack: container?.Stack,
-          containerId: container?.Id,
-          created: container?.Created,
-          containerStat: destination.ContainerStat,
-          ports: container?.Ports?.Map(),
-          state: container?.State?.Map() ?? ContainerStateStatus.Unknown
-          );
-    }
-
     private static DockerContainerStat Map(this ContainerStatResult stats)
         => new
         (
-            memoryActive: stats.MemoryActive,
-            memoryCache: stats.MemoryCache,
-            cpuUsage: stats.CpuUsage,
-            memoryLimit: stats.MemoryLimit,
-            rxBytes: stats.RxBytes,
-            txBytes: stats.TxBytes
+            MemoryActive: stats.MemoryActive,
+            MemoryCache: stats.MemoryCache,
+            CpuUsage: stats.CpuUsage,
+            MemoryLimit: stats.MemoryLimit,
+            RxBytes: stats.RxBytes,
+            TxBytes: stats.TxBytes
         );
 
-    public static void Map(this ContainerStatResult stat, DockerContainerStat destination)
-    {
-        destination.ReInitialize(
-            stat.MemoryActive,
-            stat.MemoryCache,
-            stat.CpuUsage,
-            stat.MemoryLimit,
-            stat.RxBytes,
-            stat.TxBytes
-        );
-    }
+    internal static Dictionary<string, DockerContainerStat> Map(this Dictionary<string, ContainerStatResult> result)
+        => result.ToDictionary(kv => kv.Key, kv => kv.Value.Map());
 
-    public static Hosting.DockerClient.EndpointSettings Map(this Domain.Contracts.Resources.Networks.EndpointSettings endPointsConfig)
+    internal static Dictionary<string, DockerContainerStat> Map(this MapField<string, ContainerStatMessage> result)
+        => result.ToDictionary(kv => kv.Key, kv => kv.Value.Map());
+
+    internal static Hosting.DockerClient.EndpointSettings Map(this Domain.Contracts.Resources.Networks.EndpointSettings endPointsConfig)
     {
         return new Hosting.DockerClient.EndpointSettings()
         {
@@ -751,7 +696,7 @@ internal static class ContainerMappers
         };
     }
 
-    public static EndpointSettings MapAgent(this Domain.Contracts.Resources.Networks.EndpointSettings endPointsConfig)
+    internal static EndpointSettings MapAgent(this Domain.Contracts.Resources.Networks.EndpointSettings endPointsConfig)
     {
         return new EndpointSettings()
         {
@@ -771,7 +716,7 @@ internal static class ContainerMappers
         };
     }
 
-    public static Hosting.DockerClient.EndpointIPAMConfig Map(this Domain.Contracts.Resources.Networks.EndpointIPAMConfig ipamConfig)
+    internal static Hosting.DockerClient.EndpointIPAMConfig Map(this Domain.Contracts.Resources.Networks.EndpointIPAMConfig ipamConfig)
         => new Hosting.DockerClient.EndpointIPAMConfig
         {
             IPv4Address = ipamConfig.IPv4Address,
@@ -779,7 +724,7 @@ internal static class ContainerMappers
             LinkLocalIPs = ipamConfig.LinkLocalIPs?.ToList() ?? []
         };
 
-    public static EndpointIPAMConfig MapAgent(this Domain.Contracts.Resources.Networks.EndpointIPAMConfig ipamConfig)
+    internal static EndpointIPAMConfig MapAgent(this Domain.Contracts.Resources.Networks.EndpointIPAMConfig ipamConfig)
         => new EndpointIPAMConfig
         {
             Ipv4Address = ipamConfig.IPv4Address,
@@ -787,7 +732,7 @@ internal static class ContainerMappers
             LinkLocalIPs = { ipamConfig.LinkLocalIPs?.ToList() ?? [] }
         };
 
-    public static ContainerEventType Map(this EventMessageType type)
+    internal static ContainerEventType Map(this EventMessageType type)
         => type switch
         {
             EventMessageType.Builder => ContainerEventType.Builder,
@@ -804,7 +749,7 @@ internal static class ContainerMappers
             _ => ContainerEventType.Unknown
         };
 
-    public static ContainerStateStatus Map(this ContainerStateType state)
+    internal static ContainerStateStatus Map(this ContainerStateType state)
         => state switch
         {
             ContainerStateType.Unknown => ContainerStateStatus.Unknown,
@@ -818,7 +763,7 @@ internal static class ContainerMappers
             _ => ContainerStateStatus.Unknown,
         };
 
-    public static ContainerStateStatus Map(this Hosting.DockerClient.ContainerSummaryState state)
+    internal static ContainerStateStatus Map(this Hosting.DockerClient.ContainerSummaryState state)
         => state switch
         {
             Hosting.DockerClient.ContainerSummaryState.Running => ContainerStateStatus.Running,
@@ -831,7 +776,7 @@ internal static class ContainerMappers
             _ => ContainerStateStatus.Unknown,
         };
 
-    public static ContainerStateStatus Map(this Hosting.DockerClient.ContainerStateStatus? state)
+    internal static ContainerStateStatus Map(this Hosting.DockerClient.ContainerStateStatus? state)
         => state switch
         {
             Hosting.DockerClient.ContainerStateStatus.Running => ContainerStateStatus.Running,
@@ -844,7 +789,7 @@ internal static class ContainerMappers
             _ => ContainerStateStatus.Unknown,
         };
 
-    public static Hosting.DockerClient.Models.Containers.ContainerAction Map(this Domain.ContainerAction action)
+    internal static Hosting.DockerClient.Models.Containers.ContainerAction Map(this Domain.ContainerAction action)
         => action switch
         {
             Domain.ContainerAction.START => Hosting.DockerClient.Models.Containers.ContainerAction.START,
@@ -855,7 +800,7 @@ internal static class ContainerMappers
             _ => Hosting.DockerClient.Models.Containers.ContainerAction.STOP
         };
 
-    public static Hosting.DockerClient.RestartPolicyName Map(this ContainerRestartPolicy name)
+    internal static Hosting.DockerClient.RestartPolicyName Map(this ContainerRestartPolicy name)
         => name switch
         {
             ContainerRestartPolicy.No => Hosting.DockerClient.RestartPolicyName.No,
@@ -865,7 +810,7 @@ internal static class ContainerMappers
             _ => Hosting.DockerClient.RestartPolicyName.No
         };
 
-    public static Citadel.Agent.Containers.V1.RestartPolicy Map(this ContainerRestartPolicy? restartPolicy)
+    internal static Citadel.Agent.Containers.V1.RestartPolicy Map(this ContainerRestartPolicy? restartPolicy)
         => restartPolicy switch
         {
             ContainerRestartPolicy.No => Citadel.Agent.Containers.V1.RestartPolicy.No,

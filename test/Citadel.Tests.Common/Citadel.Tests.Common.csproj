@@ -5,6 +5,7 @@
 		<Nullable>enable</Nullable>
 		<RootNamespace>Tests.Common</RootNamespace>
 		<PublishTrimmed>false</PublishTrimmed>
+		<PublishAot>false</PublishAot>
 	</PropertyGroup>
 
 	<ItemGroup>

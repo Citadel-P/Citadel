@@ -25,27 +25,14 @@ internal static class ContainerMapper
     public static ContainerStat Map(this DockerContainerStat container, Guid containerId, long? created)
         => new
         (
-            containerId: containerId,
-            memoryActive: container.MemoryActive,
-            memoryCache: container.MemoryCache,
-            cpuUsage: container.CpuUsage,
-            memoryLimit: container.MemoryLimit,
-            rxBytes: container.RxBytes,
-            txBytes: container.TxBytes,
-            created: created ?? (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds
+            ContainerId: containerId,
+            MemoryActive: container.MemoryActive,
+            MemoryCache: container.MemoryCache,
+            CpuUsage: container.CpuUsage,
+            MemoryLimit: container.MemoryLimit,
+            RxBytes: container.RxBytes,
+            TxBytes: container.TxBytes,
+            Created: created ?? (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds
         );
 
-    public static void Map(this DockerContainerStat container, ContainerStat destination, Guid containerId, long? created)
-    {
-        destination.ReInitialize(
-            containerId: containerId,
-            created: created ?? (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds,
-            memoryActive: container.MemoryActive,
-            memoryCache: container.MemoryCache,
-            cpuUsage: container.CpuUsage,
-            memoryLimit: container.MemoryLimit,
-            rxBytes: container.RxBytes,
-            txBytes: container.TxBytes
-        );
-    }
 }

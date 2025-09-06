@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Application;
 using Application.Configs;
 using Application.Models;
@@ -32,16 +31,6 @@ void WithServices(WebApplicationBuilder builder)
 // Configures the HTTP request pipeline.
 void Configure(WebApplication app)
 {
-    app.Use(async (context, next) =>
-    {
-        var sw = Stopwatch.StartNew();
-        await next.Invoke();
-        sw.Stop();
-        if (context.Request.Path.StartsWithSegments("/hubs/container-log"))
-        {
-            Console.WriteLine($"[MIDDLEWARE] {context.Request.Path} took {sw.ElapsedMilliseconds}ms");
-        }
-    });
     if (app.Environment.IsDevelopment())
     {
         app.MapOpenApi();

@@ -4,7 +4,7 @@ import { jwtDecode } from 'jwt-decode';
 import { useEffect, useRef } from 'react';
 
 export const useTokenRefresh = (accessToken: string | undefined, isAuthenticated: boolean) => {
-  const { refetch: refetchAccessToken } = useGETAccessToken();
+  const { refetch: refetchAccessToken, error } = useGETAccessToken();
   const isRefreshing = useRef(false);
 
   const parseJwt = (token: string) => {
@@ -62,4 +62,6 @@ export const useTokenRefresh = (accessToken: string | undefined, isAuthenticated
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [accessToken, isAuthenticated, refetchAccessToken]);
+
+  return { error };
 };

@@ -10,7 +10,7 @@ namespace Infrastructure.Connectors.Mappers;
 
 internal static class PlatformMappers
 {
-    public static PlatformResult Map(this PlatformInfoResponse platformInfo, string platformName, string platformAddress)
+    internal static PlatformResult Map(this PlatformInfoResponse platformInfo, string platformName, string platformAddress)
     {
         PlatformDescriptor? descriptor = null;
         if (string.IsNullOrEmpty(platformInfo.SwarmInfo?.NodeID))
@@ -49,7 +49,7 @@ internal static class PlatformMappers
             );
     }
 
-    public static PlatformResult Map(this PlatformInfoResult platformInfo, string platformName, string platformAddress)
+    internal static PlatformResult Map(this PlatformInfoResult platformInfo, string platformName, string platformAddress)
     {
         PlatformDescriptor? descriptor = null;
         if (string.IsNullOrEmpty(platformInfo.SwarmInfo?.NodeAddress))
@@ -88,7 +88,7 @@ internal static class PlatformMappers
         );
     }
 
-    public static DockerPlatformStat Map(this PlatformStatResult stat)
+    internal static DockerPlatformStat Map(this PlatformStatResult stat)
         => new 
         (
             created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
@@ -102,9 +102,9 @@ internal static class PlatformMappers
             containersRunning: stat.ContainersRunning
         );
 
-    public static void Map(this PlatformStatsResponse source, PlatformStatsResult destination)
+    internal static PlatformStatsResult Map(this PlatformStatsResponse source)
     {
-        destination.PlatformStat.ReInitialize(
+        var platformStat = new DockerPlatformStat(
             created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             memoryUsage: source.Stat.MemoryUsage,
             cpuUsage: source.Stat.CpuUsage,
@@ -116,12 +116,12 @@ internal static class PlatformMappers
             containersRunning: source.Stat.ContainersRunning
         );
 
-        destination.ReInitialize(
-            memTotal: source.MemTotal,
-            imageCount: source.ImageCount,
-            volumeCount: source.VolumeCount,
-            networkCount: source.NetworkCount,
-            platformStat: destination.PlatformStat);
+        return new (
+            MemTotal: source.MemTotal,
+            ImageCount: source.ImageCount,
+            VolumeCount: source.VolumeCount,
+            NetworkCount: source.NetworkCount,
+            PlatformStat: platformStat);
     }
 
     internal static DockerPlatformStat Map(this PlatformStatMessage stat)
@@ -138,29 +138,29 @@ internal static class PlatformMappers
             containersRunning: stat?.ContainersRunning ?? 0
         );
 
-    public static void Map (this PlatformStreamResult source, PlatformStatsResult destination)
+    internal static PlatformStatsResult Map (this PlatformStreamResult source)
     {
-        destination.PlatformStat.ReInitialize(
+        DockerPlatformStat platformStat = new (
             created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            memoryUsage: source.PlatformStatistics.MemoryUsage,
-            cpuUsage: source.PlatformStatistics.CpuUsage,
-            rxBytes: source.PlatformStatistics.RxBytes,
-            txBytes: source.PlatformStatistics.TxBytes,
-            containerCount: source.PlatformStatistics.ContainerCount,
-            containersPaused: source.PlatformStatistics.ContainersPaused,
-            containersStopped: source.PlatformStatistics.ContainersStopped,
-            containersRunning: source.PlatformStatistics.ContainersRunning
+            memoryUsage: source.PlatformStatistics?.MemoryUsage ?? 0,
+            cpuUsage: source.PlatformStatistics?.CpuUsage ?? 0,
+            rxBytes: source.PlatformStatistics?.RxBytes ?? 0,
+            txBytes: source.PlatformStatistics?.TxBytes ?? 0,
+            containerCount: source.PlatformStatistics?.ContainerCount ?? 0,
+            containersPaused: source.PlatformStatistics?.ContainersPaused ?? 0,
+            containersStopped: source.PlatformStatistics?.ContainersStopped ?? 0,
+            containersRunning: source.PlatformStatistics?.ContainersRunning ?? 0
         );
 
-        destination.ReInitialize(
-            memTotal: source.MemoryTotal, 
-            imageCount: source.ImageCount, 
-            volumeCount: source.VolumeCount, 
-            networkCount: source.NetworkCount, 
-            platformStat: destination.PlatformStat);
+        return new PlatformStatsResult(
+            MemTotal: source.MemoryTotal, 
+            ImageCount: source.ImageCount, 
+            VolumeCount: source.VolumeCount, 
+            NetworkCount: source.NetworkCount, 
+            PlatformStat: platformStat);
     }
 
-    public static DaemonEventInfo Map(this DaemonEventResult @event)
+    internal static DaemonEventInfo Map(this DaemonEventResult @event)
     {
         return new DaemonEventInfo
         (
@@ -172,7 +172,7 @@ internal static class PlatformMappers
         );
     }
 
-    public static ContainerEventType Map(this Hosting.DockerClient.EventMessageType type)
+    internal static ContainerEventType Map(this Hosting.DockerClient.EventMessageType type)
     {
         return type switch
         {

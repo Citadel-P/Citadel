@@ -18,13 +18,13 @@ public record struct ContainerStatView(
     internal static ContainerStatView Map(ContainerStat stats)
         => new (
             ContainerId: stats.ContainerId,
-            MemoryActive: stats?.MemoryActive ?? 0,
-            MemoryCache: stats?.MemoryCache ?? 0,
-            CpuUsage: stats?.CpuUsage ?? 0,
-            MemoryLimit: stats?.MemoryLimit ?? 0,
-            RxBytes: stats?.RxBytes ?? 0,
-            TxBytes: stats?.TxBytes ?? 0,
-            Created: stats?.Created ?? 0);
+            MemoryActive: stats.MemoryActive ?? 0,
+            MemoryCache: stats.MemoryCache ?? 0,
+            CpuUsage: stats.CpuUsage ?? 0,
+            MemoryLimit: stats.MemoryLimit ?? 0,
+            RxBytes: stats.RxBytes ?? 0,
+            TxBytes: stats.TxBytes ?? 0,
+            Created: stats.Created ?? 0);
 }
 
 public sealed record ContainerStatsView(IEnumerable<ContainerStatView> Stats)

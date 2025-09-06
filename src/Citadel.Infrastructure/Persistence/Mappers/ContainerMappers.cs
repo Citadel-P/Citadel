@@ -49,14 +49,14 @@ internal static class ContainerMappers
             stack: container.Stack,
             platform: container.Platform?.ToDomain(),
             stats: [new ContainerStat(
-                containerId: container.Id,
-                memoryActive: container.Stat_MemoryActive,
-                memoryCache: container.Stat_MemoryCache,
-                cpuUsage: container.Stat_CpuUsage,
-                memoryLimit: container.Stat_MemoryLimit,
-                rxBytes: container.Stat_RxBytes,
-                txBytes: container.Stat_TxBytes,
-                created: container.Stat_Created
+                ContainerId: container.Id,
+                MemoryActive: container.Stat_MemoryActive,
+                MemoryCache: container.Stat_MemoryCache,
+                CpuUsage: container.Stat_CpuUsage,
+                MemoryLimit: container.Stat_MemoryLimit,
+                RxBytes: container.Stat_RxBytes,
+                TxBytes: container.Stat_TxBytes,
+                Created: container.Stat_Created
                 )]);
     }
 
@@ -64,19 +64,15 @@ internal static class ContainerMappers
         => stats.Select(ToDomain);
 
     internal static ContainerStat ToDomain(this ContainerStatDto stat)
-    {
-        return
-        ContainerStat.FromPersistence(
-            id: stat.Id != null ? stat.Id : Guid.Empty,
-            containerId: stat.ContainerId != null ? stat.ContainerId : Guid.Empty,
-            created: stat.Created,
-            memoryActive: stat.MemoryActive,
-            memoryCache: stat.MemoryCache,
-            cpuUsage: stat.CpuUsage,
-            memoryLimit: stat.MemoryLimit,
-            rxBytes: stat.RxBytes,
-            txBytes: stat.TxBytes);
-    }
+        => new (
+            ContainerId: stat.ContainerId != Guid.Empty ? stat.ContainerId : Guid.Empty,
+            Created: stat.Created,
+            MemoryActive: stat.MemoryActive,
+            MemoryCache: stat.MemoryCache,
+            CpuUsage: stat.CpuUsage,
+            MemoryLimit: stat.MemoryLimit,
+            RxBytes: stat.RxBytes,
+            TxBytes: stat.TxBytes);
 
 }
 

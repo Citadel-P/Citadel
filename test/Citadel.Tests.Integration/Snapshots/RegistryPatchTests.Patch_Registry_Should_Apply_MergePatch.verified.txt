@@ -4,10 +4,5 @@
   url: https://original.url,
   type: DockerHub,
   created: DateTimeOffset_1,
-  configuration: {
-    $type: DockerHub,
-    userName: patched-user,
-    pat: pat123
-  },
   isDefault: false
 }

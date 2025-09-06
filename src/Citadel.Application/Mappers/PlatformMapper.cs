@@ -24,13 +24,27 @@ internal static class PlatformMapper
             platformDescriptor: platformInfo.Descriptor);
     }
 
-    public static void Map(this PlatformStatsResult stat, PlatformStat destination, Guid platformId)
-       => destination.ReInitialize(
-           platformId: platformId,
-           rxBytes: stat?.PlatformStat.RxBytes ?? 0,
-           txBytes: stat?.PlatformStat.TxBytes ?? 0,
-           cpuUsage: stat?.PlatformStat.CpuUsage ?? 0,
-           memoryUsage: stat?.PlatformStat.MemoryUsage ?? 0,
-           created: stat?.PlatformStat.Created ?? (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds
+    internal static List<PlatformStat> Map(this Dictionary<Guid, List<PlatformStatsResult>> stats)
+    {
+        var result = new List<PlatformStat>();
+        foreach (var (platformId, statList) in stats)
+        {
+            foreach (var stat in statList)
+            {
+                var platformStat = stat.Map(platformId);
+                result.Add(platformStat);
+            }
+        }
+        return result;
+    }
+
+    internal static PlatformStat Map(this PlatformStatsResult stat, Guid platformId)
+       => new(
+           PlatformId: platformId,
+           RxBytes: stat?.PlatformStat.RxBytes ?? 0,
+           TxBytes: stat?.PlatformStat.TxBytes ?? 0,
+           CpuUsage: stat?.PlatformStat.CpuUsage ?? 0,
+           MemoryUsage: stat?.PlatformStat.MemoryUsage ?? 0,
+           Created: stat?.PlatformStat.Created ?? (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds
        );
 }

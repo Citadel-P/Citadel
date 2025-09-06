@@ -1,10 +1,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0-preview-alpine-aot AS build
 RUN apk add --no-cache clang lld musl-dev libc6-compat
 
-ENV \
-    DOTNET_GCServer=1 \
-    DOTNET_System_GC_RetainVM=0
-
 WORKDIR /src
 
 COPY ["nuget.config", "."]

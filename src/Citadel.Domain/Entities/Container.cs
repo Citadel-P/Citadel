@@ -1,5 +1,4 @@
-﻿using Domain.Contracts.Resources.Containers;
-namespace Domain.Entities;
+﻿namespace Domain.Entities;
 
 public class Container(
     string name,
@@ -59,7 +58,6 @@ public class Container(
 
     public Container AppendStat(ContainerStat stat)
     {
-        if (stat is null) throw new ArgumentNullException(nameof(stat), "Stat cannot be null.");
         stats.Add(stat);
         return this;
     }
@@ -107,4 +105,4 @@ public class Container(
     }
 }
 
-public sealed record HostPortBinding(string? HostIP, string? HostPort);
+public record struct HostPortBinding(string? HostIP, string? HostPort);

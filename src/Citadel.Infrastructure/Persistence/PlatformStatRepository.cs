@@ -47,7 +47,7 @@ internal class PlatformStatRepository(IDbConnection db, Func<IDbTransaction> tx)
         {
             valueRows.Add($"(@Id{i}, @PlatformId{i}, @Created{i}, @CpuUsage{i}, @MemoryUsage{i}, @RxBytes{i}, @TxBytes{i})");
             parameters.Add($"Id{i}", stat.Id.Format());
-            parameters.Add($"PlatformId{i}", stat.PlatformId.Format());
+            parameters.Add($"PlatformId{i}", stat.PlatformId?.Format());
             parameters.Add($"Created{i}", stat.Created);
             parameters.Add($"CpuUsage{i}", stat.CpuUsage);
             parameters.Add($"MemoryUsage{i}", stat.MemoryUsage);

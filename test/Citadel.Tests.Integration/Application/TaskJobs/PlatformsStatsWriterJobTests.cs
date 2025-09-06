@@ -1,13 +1,11 @@
 ﻿using System.Threading.Channels;
 using Application.Configs;
 using Application.Services;
-using Application.Services.Abstractions;
 using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
-using Hosting.Common.ObjectPoolManager;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -24,7 +22,7 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
     private readonly Mock<IPlatformConnector> _platformConnector = new();
     private readonly TestPlatformHealthBroadCaster _broadcaster = new();
     private readonly Mock<IPlatformsStreamManager> _streamManagerMock = new();
-    private readonly Channel<(Guid Id, PooledHandle<PlatformStatsResult> Stats)> _channel = Channel.CreateUnbounded<(Guid Id, PooledHandle<PlatformStatsResult> Stats)>();
+    private readonly Channel<(Guid Id, PlatformStatsResult Stats)> _channel = Channel.CreateUnbounded<(Guid Id, PlatformStatsResult Stats)>();
 
 
     private Guid _platformId;
@@ -103,58 +101,17 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
         Assert.Equal(2, stats.Count());
     }
 
-    [Fact]
-    public async Task PooledObjects_ShouldBeReturnedToPool()
+    private async IAsyncEnumerable<PlatformStatsResult> GetStatsAsync()
     {
-        // Arrange
-        var objectPoolManager = Services.GetRequiredService<IObjectPoolManager>();
-        var pooledStat = objectPoolManager.GetPooled<PlatformStatsResult>();
-        pooledStat.Value.ReInitialize(memTotal: 123456,
-            imageCount: 5,
-            volumeCount: 2,
-            networkCount: 1,
-            platformStat: new DockerPlatformStat
-            (
-                created: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                memoryUsage: 500,
-                cpuUsage: 2,
-                rxBytes: 100,
-                txBytes: 200,
-                containerCount: 3,
-                containersPaused: 0,
-                containersStopped: 1,
-                containersRunning: 2
-            ));
-
-
-        _configMock.Setup(x => x.Value).Returns(new JobConfiguration { BatchSize = 1, FlashInterval = 1 });
-        _platformFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(_platformConnector.Object);
-        
-        // Act
-        await _channel.Writer.WriteAsync((_platformId, pooledStat), TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
-
-        // Assert
-        var pooledStat2 = objectPoolManager.GetPooled<PlatformStatsResult>();
-        Assert.Same(pooledStat2.Value, pooledStat.Value);
-        pooledStat2.Dispose();
-    }
-
-    private async IAsyncEnumerable<PooledHandle<PlatformStatsResult>> GetStatsAsync()
-    {
-        var objectPoolManager = Services.GetRequiredService<IObjectPoolManager>();
-
         var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         {
-            var stat1 = objectPoolManager.GetPooled<PlatformStatsResult>();
-            stat1.Value.ReInitialize
+            var stat1 = new PlatformStatsResult
             (
-                memTotal: 123456,
-                imageCount: 5,
-                volumeCount: 2,
-                networkCount: 1,
-               
-                platformStat: new DockerPlatformStat
+                MemTotal: 123456,
+                ImageCount: 5,
+                VolumeCount: 2,
+                NetworkCount: 1,
+                PlatformStat: new DockerPlatformStat
                 (
                     created: time,
                     memoryUsage: 500,
@@ -172,14 +129,13 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
         }
         await Task.Delay(100);
         {
-            var stat2 = objectPoolManager.GetPooled<PlatformStatsResult>();
-            stat2.Value.ReInitialize
+            var stat2 = new PlatformStatsResult
             (
-                memTotal: 123456,
-                imageCount: 6,
-                volumeCount: 3,
-                networkCount: 10,
-                platformStat: new DockerPlatformStat
+                MemTotal: 123456,
+                ImageCount: 6,
+                VolumeCount: 3,
+                NetworkCount: 10,
+                PlatformStat: new DockerPlatformStat
                 (
                     created: time + (60 * 2),
                     memoryUsage: 800,

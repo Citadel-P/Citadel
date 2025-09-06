@@ -7,13 +7,13 @@ namespace Infrastructure.Connectors.Mappers;
 
 internal static class VolumeMappers
 {
-    public static IEnumerable<DockerVolumeResult> Map(this ListVolumesResponse volumesResponse) 
+    internal static IEnumerable<DockerVolumeResult> Map(this ListVolumesResponse volumesResponse) 
         => volumesResponse.Volumes.Select(Map);
 
-    public static IEnumerable<DockerVolumeResult> Map(this ListVolumesResult volumesResult)
+    internal static IEnumerable<DockerVolumeResult> Map(this ListVolumesResult volumesResult)
         => volumesResult.Volumes.Select(Map);
 
-    public static DockerVolumeResult Map(this VolumeResponse volume)
+    internal static DockerVolumeResult Map(this VolumeResponse volume)
     {
         return new DockerVolumeResult(
             Id: volume.Name,
@@ -29,7 +29,7 @@ internal static class VolumeMappers
             InUse: volume.InUse);
     }
 
-    public static DockerVolumeResult Map(this VolumeResult volume)
+    internal static DockerVolumeResult Map(this VolumeResult volume)
     {
         return new DockerVolumeResult
         (
@@ -47,7 +47,7 @@ internal static class VolumeMappers
         );
     }
 
-    public static VolumeUsageData? Map(this UsageDataMessage usageData) 
+    internal static VolumeUsageData? Map(this UsageDataMessage usageData) 
         => new 
         (
             Size: usageData.Size,
@@ -61,7 +61,7 @@ internal static class VolumeMappers
             RefCount: usageData.RefCount
         );
 
-    public static ClusterVolume? Map(this ClusterVolumeMessage? clusterVolume)
+    internal static ClusterVolume? Map(this ClusterVolumeMessage? clusterVolume)
     {
         return clusterVolume == null ? null : new ClusterVolume(
             Id: clusterVolume.Id,
@@ -85,7 +85,7 @@ internal static class VolumeMappers
             PublishStatus: clusterVolume.PublishStatus?.Select(Map).ToList() ?? []);
     }
 
-    public static VolumePublishStatus Map(this PublishStatusMessage status)
+    internal static VolumePublishStatus Map(this PublishStatusMessage status)
     {
         return new VolumePublishStatus
         (
@@ -105,7 +105,7 @@ internal static class VolumeMappers
         );
     }
 
-    public static ClusterVolumeInfo? Map(this ClusterVolumeInfoMessage info)
+    internal static ClusterVolumeInfo? Map(this ClusterVolumeInfoMessage info)
     {
         return new ClusterVolumeInfo
         (
@@ -127,13 +127,13 @@ internal static class VolumeMappers
         );
     }
 
-    public static VolumeVersionInfo? Map(this VolumVersionMessage versionInfo)
+    internal static VolumeVersionInfo? Map(this VolumVersionMessage versionInfo)
         => new (Index: versionInfo.Index);
 
-    public static VolumeVersionInfo? Map(this Hosting.DockerClient.ObjectVersion versionInfo)
+    internal static VolumeVersionInfo? Map(this Hosting.DockerClient.ObjectVersion versionInfo)
        => new(Index: versionInfo.Index != null ? (long)versionInfo.Index.Value : 0);
 
-    public static VolumeSpecification? Map(this VolumeSpecMessage spec) 
+    internal static VolumeSpecification? Map(this VolumeSpecMessage spec) 
         => new (Group: spec.Group, AccessMode: spec.AccessMode?.Map());
 
     private static VolumeSpecification? Map(this Hosting.DockerClient.ClusterVolumeSpec spec)
@@ -159,7 +159,7 @@ internal static class VolumeMappers
             Secrets: accessMode.Secrets?.Select(Map)?.ToList() ?? []
         );
 
-    public static Domain.Contracts.Resources.Volumes.VolumeCapacityRange? Map(this Citadel.Agent.Volumes.V1.VolumeCapacityRange capacityRange)
+    internal static Domain.Contracts.Resources.Volumes.VolumeCapacityRange? Map(this Citadel.Agent.Volumes.V1.VolumeCapacityRange capacityRange)
         => new
         (
             RequiredBytes: capacityRange.RequiredBytes,
@@ -180,7 +180,7 @@ internal static class VolumeMappers
             Secret: secret.Secret
         );
 
-    public static VolumeSecret Map(this VolumeSecretMessage secret)
+    internal static VolumeSecret Map(this VolumeSecretMessage secret)
         => new
         (
             Key: secret.Key,
@@ -205,7 +205,7 @@ internal static class VolumeMappers
            _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
        };
 
-    public static VolumeScope Map(this VolumeScopeType scope)
+    internal static VolumeScope Map(this VolumeScopeType scope)
         => scope switch
         {
             VolumeScopeType.Multi => VolumeScope.Multi,
@@ -213,7 +213,7 @@ internal static class VolumeMappers
             _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, null)
         };
 
-    public static VolumeSharing Map(this VolumeSharingType type)
+    internal static VolumeSharing Map(this VolumeSharingType type)
         => type switch
         {
             VolumeSharingType.All => VolumeSharing.All,

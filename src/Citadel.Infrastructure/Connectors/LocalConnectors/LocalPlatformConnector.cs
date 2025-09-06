@@ -2,7 +2,6 @@
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
-using Hosting.Common.ObjectPoolManager;
 using Hosting.DockerClient.Services;
 using Hosting.Extensions;
 using Infrastructure.Connectors.Mappers;
@@ -10,7 +9,7 @@ using LightResults;
 
 namespace Infrastructure.Connectors.LocalConnectors;
 
-internal class LocalPlatformConnector(IPlatformService platformService, IMonitorEventsService monitorEventsService, IObjectPoolManager objectPoolManager) : IPlatformConnector
+internal class LocalPlatformConnector(IPlatformService platformService, IMonitorEventsService monitorEventsService) : IPlatformConnector
 {
     public async Task<PlatformHealthResult> CheckHealthAsync(string platformAddress, CancellationToken cancellationToken)
     {
@@ -34,13 +33,11 @@ internal class LocalPlatformConnector(IPlatformService platformService, IMonitor
         }
     }
 
-    public async IAsyncEnumerable<PooledHandle<PlatformStatsResult>> StreamStatsAsync(StreamPlatformStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<PlatformStatsResult> StreamStatsAsync(StreamPlatformStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await foreach (var result in platformService.StreamPlatformStatsAsync(command.FetchIntervalMs, cancellationToken))
         {
-            var pooledStat = objectPoolManager.GetPooled<PlatformStatsResult>();
-            result.Map(pooledStat.Value);
-            yield return pooledStat;
+            yield return result.Map();
         }
     }
 }

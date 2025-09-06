@@ -4,10 +4,5 @@
   url: https://registry123:9999,
   type: DockerHub,
   created: DateTimeOffset_1,
-  configuration: {
-    $type: DockerHub,
-    userName: dummy-user,
-    pat: dummy-pat123
-  },
   isDefault: false
 }

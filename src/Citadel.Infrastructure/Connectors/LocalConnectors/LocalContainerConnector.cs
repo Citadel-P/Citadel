@@ -1,7 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
-using Hosting.Common.ObjectPoolManager;
 using Hosting.DockerClient.Models.Containers;
 using Hosting.DockerClient.Services;
 using Hosting.Extensions;
@@ -10,7 +9,7 @@ using LightResults;
 
 namespace Infrastructure.Connectors.LocalConnectors;
 
-internal class LocalContainerConnector(IContainerService containerService, IObjectPoolManager objectPoolManager) : IContainerConnector
+internal class LocalContainerConnector(IContainerService containerService) : IContainerConnector
 {
     public Task<Result<string>> CreateAsync(CreateContainerCommand createContainerCommand, CancellationToken cancellationToken)
     {
@@ -80,34 +79,19 @@ internal class LocalContainerConnector(IContainerService containerService, IObje
         return containerService.PatchAsync(command, cancellationToken);
     }
 
-    public async IAsyncEnumerable<PooledHandle<Dictionary<string, DockerContainerStat>>> StreamContainersStatsAsync(StreamContainersStatsCommand streamStatsCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<Dictionary<string, DockerContainerStat>> StreamContainersStatsAsync(StreamContainersStatsCommand streamStatsCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await foreach (var result in containerService.StreamContainersStatsAsync(streamStatsCommand.FetchIntervalMs, cancellationToken))
         {
-            using var _ = result;
-            var pooledDictionary = objectPoolManager.GetPooled<Dictionary<string, DockerContainerStat>>();
-            var dictionary = pooledDictionary.Value;
-            dictionary.Clear();
-
-            foreach (var kvp in result.Value)
-            {
-                var stat = objectPoolManager.Get<DockerContainerStat>();
-                kvp.Value.Map(stat);
-                dictionary.Add(kvp.Key, stat);
-            }
-
-            yield return pooledDictionary;
+            yield return result.Map();
         }
     }
 
-    public async IAsyncEnumerable<PooledHandle<DockerContainer>> StreamContainerStatsAsync(StreamContainerStatsCommand streamStatsCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<DockerContainer> StreamContainerStatsAsync(StreamContainerStatsCommand streamStatsCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await foreach (var result in containerService.StreamContainerStatsAsync(streamStatsCommand.ContainerId, streamStatsCommand.FetchIntervalMs, cancellationToken))
         {
-            using var _ = result;
-            var pooledContainer = objectPoolManager.GetPooled<DockerContainer>();
-            ContainerMappers.Map(result.Value, pooledContainer.Value);
-            yield return pooledContainer;
+            yield return result.Map();
         }
     }
 

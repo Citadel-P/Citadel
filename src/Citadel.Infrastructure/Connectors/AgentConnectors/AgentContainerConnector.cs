@@ -5,7 +5,6 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.ObjectPoolManager;
 using Infrastructure.Connectors.Mappers;
 using Infrastructure.Repositories;
 using LightResults;
@@ -13,7 +12,7 @@ using static Citadel.Agent.Containers.V1.ContainerService;
 
 namespace Infrastructure.Connectors.AgentConnectors;
 
-internal class AgentContainerConnector(IGrpcClientFactory clientFactory, IObjectPoolManager objectPoolManager) : IContainerConnector
+internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : IContainerConnector
 {
     public async Task<Result<IReadOnlyDictionary<string, DockerContainer>>> ListContainersAsync(ContainerFilterCommand command, CancellationToken cancellationToken)
     {
@@ -148,36 +147,23 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory, IObject
         }
     }
 
-    public async IAsyncEnumerable<PooledHandle<Dictionary<string, DockerContainerStat>>> StreamContainersStatsAsync(StreamContainersStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<Dictionary<string, DockerContainerStat>> StreamContainersStatsAsync(StreamContainersStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
         using var streamCall = containerClient.StreamContainersStats(new StreamContainersStatsRequest() { FetchIntervalMs = command.FetchIntervalMs }, cancellationToken: cancellationToken);
         await foreach (var result in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
         {
-            var pooledDictionary = objectPoolManager.GetPooled<Dictionary<string, DockerContainerStat>>();
-            var dictionary = pooledDictionary.Value;
-            dictionary.Clear();
-
-            foreach (var kvp in result.Containers)
-            {
-                var stat = objectPoolManager.Get<DockerContainerStat>();
-                kvp.Value.Map(stat);
-                dictionary.Add(kvp.Key, stat);
-            }
-
-            yield return pooledDictionary;
+            yield return result.Containers.Map();
         }
     }
 
-    public async IAsyncEnumerable<PooledHandle<DockerContainer>> StreamContainerStatsAsync(StreamContainerStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<DockerContainer> StreamContainerStatsAsync(StreamContainerStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var containerClient = clientFactory.GetContainerClient(command.PlatformAddress);
         using var streamCall = containerClient.StreamContainerStats(new StreamContainerStatsRequest() { ContainerId = command.ContainerId, FetchIntervalMs = command.FetchIntervalMs }, cancellationToken: cancellationToken);
         await foreach (var result in streamCall.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
         {
-            var pooledContainer = objectPoolManager.GetPooled<DockerContainer>();
-            ContainerMappers.Map(result, pooledContainer.Value);
-            yield return pooledContainer;
+            yield return result.Map();
         }
     }
 

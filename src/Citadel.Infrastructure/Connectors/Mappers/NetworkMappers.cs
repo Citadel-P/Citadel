@@ -7,13 +7,13 @@ namespace Infrastructure.Connectors.Mappers;
 
 internal static class NetworkMappers
 {
-    public static IEnumerable<DockerNetworkResult> Map(this ListNetworksResponse networks)
+    internal static IEnumerable<DockerNetworkResult> Map(this ListNetworksResponse networks)
         => networks.Networks.Select(Map);
 
-    public static IEnumerable<DockerNetworkResult> Map(this RepeatedField<Network> networks)
+    internal static IEnumerable<DockerNetworkResult> Map(this RepeatedField<Network> networks)
         => networks.Select(Map);
 
-    public static DockerNetworkResult Map(this Network network)
+    internal static DockerNetworkResult Map(this Network network)
         => new 
         (
             Name: network.Name,
@@ -34,10 +34,10 @@ internal static class NetworkMappers
             Labels: network.Labels
         );
 
-    public static IEnumerable<DockerNetworkResult> Map(this IEnumerable<NetworkResult> networks)
+    internal static IEnumerable<DockerNetworkResult> Map(this IEnumerable<NetworkResult> networks)
         => networks.Select(Map);
 
-    public static DockerNetworkResult Map(this NetworkResult network)
+    internal static DockerNetworkResult Map(this NetworkResult network)
         => new
         (
             Name: network.Name,
@@ -58,7 +58,7 @@ internal static class NetworkMappers
             Labels: network.Labels?.ToDictionary() ?? []
         );
 
-    public static IpAddressManagementConfig Map(this Hosting.DockerClient.IPAM Ipam)
+    internal static IpAddressManagementConfig Map(this Hosting.DockerClient.IPAM Ipam)
         => new
         (
             Driver: Ipam?.Driver,
@@ -69,7 +69,7 @@ internal static class NetworkMappers
             Options: Ipam?.Options?.ToDictionary() ?? []
         );
 
-    public static DockerNetworkDetails Map(this InspectNetworkResult network)
+    internal static DockerNetworkDetails Map(this InspectNetworkResult network)
         => new
         (
             Name: network.Name,
@@ -91,7 +91,7 @@ internal static class NetworkMappers
             Peers: network.Peers?.Select(p => new NetworkPeerInfo(Name: p.Name, Ip: p.IP))?.ToList() ?? []
         );
 
-    public static IpAddressManagementConfig Map(this IPAMMessage Ipam)
+    internal static IpAddressManagementConfig Map(this IPAMMessage Ipam)
         => new
         (
             Driver: Ipam?.Driver,
@@ -102,7 +102,7 @@ internal static class NetworkMappers
             Options: Ipam?.Options ?? []
         );
 
-    public static DockerNetworkDetails Map(this InspectNetworkResponse network)
+    internal static DockerNetworkDetails Map(this InspectNetworkResponse network)
         => new
         (
             Name: network.Name,
@@ -144,10 +144,10 @@ internal static class NetworkMappers
             IpV4Address: networkContainer.IpPv4Address
         );
 
-    public static CreateDockerNetworkResult Map(this CreateNetworkResult network)
+    internal static CreateDockerNetworkResult Map(this CreateNetworkResult network)
         => new (NetworkId: network.Id);
 
-    public static Hosting.DockerClient.IPAM Map(this IpAddressManagementConfig ipam) 
+    internal static Hosting.DockerClient.IPAM Map(this IpAddressManagementConfig ipam) 
         => new()
         {
             Driver = ipam.Driver,

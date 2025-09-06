@@ -5,7 +5,7 @@
   errors: {
     ContainerIds[0]: [
       'Container Ids' must not be empty.,
-      'Container Ids' must be between 12 and 71 characters. You entered 0 characters.,
+      'Container Ids' must be between 4 and 71 characters. You entered 0 characters.,
       Must be a valid container id
     ]
   },

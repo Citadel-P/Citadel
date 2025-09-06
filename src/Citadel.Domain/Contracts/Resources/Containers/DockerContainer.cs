@@ -2,74 +2,22 @@
 
 namespace Domain.Contracts.Resources.Containers;
 
-public sealed class DockerContainer
-    (
-    string name,
-    string image,
-    string containerId,
-    string imageId,
-    ContainerStateStatus state,
-    long? created = null,
-    string? stack = null,
-    DockerContainerStat? containerStat = null,
-    IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null
-    )
-{
-    public string Name { get; private set; } = name;
-    public string Image { get; private set; } = image;
-    public string? ImageId { get; private set; } = imageId;
-    public string ContainerId { get; private set; } = containerId;
-    public ContainerStateStatus State { get; private set; } = state;
-    public long? Created { get; private set; } = created;
-    public string? Stack { get; private set; } = stack;
-    public DockerContainerStat? ContainerStat { get; private set; } = containerStat;
-    public IDictionary<string, IReadOnlyList<HostPortBinding>>? Ports { get; private set; } = ports;
-    internal DockerContainer() : this(string.Empty, string.Empty, string.Empty, string.Empty, ContainerStateStatus.Unknown, containerStat: new DockerContainerStat()) { } // For pooled object usage
-    public void ReInitialize(
-        string name,
-        string image,
-        string containerId,
-        ContainerStateStatus state,
-        long? created,
-        string? stack,
-        DockerContainerStat? containerStat,
-        IDictionary<string, IReadOnlyList<HostPortBinding>>? ports)
-    {
-        Name = name;
-        Image = image;
-        ContainerId = containerId;
-        State = state;
-        Created = created;
-        Stack = stack;
-        ContainerStat = containerStat;
-        Ports = ports;
-    }
-}
+public sealed record DockerContainer(
+    string Name,
+    string Image,
+    string ContainerId,
+    string ImageId,
+    ContainerStateStatus State,
+    long? Created = null,
+    string? Stack = null,
+    DockerContainerStat? ContainerStat = null,
+    IDictionary<string, IReadOnlyList<HostPortBinding>>? Ports = null
+    );
 
-public class DockerContainerStat(double? memoryActive, double? memoryCache, double? cpuUsage, double? memoryLimit, double? rxBytes, double? txBytes)
-{
-    public double? MemoryActive { get; private set; } = memoryActive;
-    public double? MemoryCache { get; private set; } = memoryCache;
-    public double? CpuUsage { get; private set; } = cpuUsage;
-    public double? MemoryLimit { get; private set; } = memoryLimit;
-    public double? RxBytes { get; private set; } = rxBytes;
-    public double? TxBytes { get; private set; } = txBytes;
-
-    internal DockerContainerStat() : this(0, 0, 0, 0, 0, 0) { }
-
-    public void ReInitialize(
-        double? memoryActive,
-        double? memoryCache,
-        double? cpuUsage,
-        double? memoryLimit,
-        double? rxBytes,
-        double? txBytes)
-    {
-        MemoryActive = memoryActive;
-        MemoryCache = memoryCache;
-        CpuUsage = cpuUsage;
-        MemoryLimit = memoryLimit;
-        RxBytes = rxBytes;
-        TxBytes = txBytes;
-    }
-}
+public record struct DockerContainerStat(
+    double? MemoryActive,
+    double? MemoryCache, 
+    double? CpuUsage, 
+    double? MemoryLimit, 
+    double? RxBytes, 
+    double? TxBytes);

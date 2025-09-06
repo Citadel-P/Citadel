@@ -6,7 +6,6 @@ using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
-using Hosting.Common.ObjectPoolManager;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -68,16 +67,14 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
     {
         // Arrange
         var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var objectPoolManager = Services.GetRequiredService<IObjectPoolManager>();
-        var pooledStats = objectPoolManager.GetPooled<List<ContainerStat>>();
-        var stats = pooledStats.Value;
+        var stats = new List<ContainerStat>();
         stats.AddRange(
         [
             new(_containerId, 100, 200, 5, 300, 100, 200, time),
             new(_containerId, 200, 150, 2, 600, 200, 400, time - 60),
         ]);
 
-        var batch = new ContainersStatBatch(_platformId, pooledStats);
+        var batch = new ContainersStatBatch(_platformId, stats);
 
         // Act
         await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);
@@ -98,9 +95,7 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
         // Arrange
         _configMock.Setup(c => c.Value).Returns(new JobConfiguration { BatchSize = 100, FlashInterval = 0 });
         var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var objectPoolManager = Services.GetRequiredService<IObjectPoolManager>();
-        var pooledStats = objectPoolManager.GetPooled<List<ContainerStat>>();
-        var stats = pooledStats.Value;
+        var stats = new List<ContainerStat>();
         stats.AddRange(
         [
             new(_containerId, 100, 200, 5, 300, 100, 200, time),
@@ -108,7 +103,7 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
         ]);
 
 
-        var batch = new ContainersStatBatch(_platformId, pooledStats);
+        var batch = new ContainersStatBatch(_platformId, stats);
 
         // Act
         await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);
@@ -122,30 +117,5 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
         var containers = await db.ContainerStats.GetStatsAggregatedLast24HoursAsync("container-id-1", TestContext.Current.CancellationToken);
         Assert.Equal(2, containers.Count());
     }
-
-    [Fact]
-    public async Task ProcessesStats_And_ReturnsToPool()
-    {
-        // Arrange
-        var time = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var objectPoolManager = Services.GetRequiredService<IObjectPoolManager>();
-        var pooledStats = objectPoolManager.GetPooled<List<ContainerStat>>();
-        var stats = pooledStats.Value;
-        stats.AddRange(
-        [
-            new(_containerId, 100, 200, 5, 300, 100, 200, time),
-            new(_containerId, 200, 150, 2, 600, 200, 400, time - 60),
-        ]);
-        var batch = new ContainersStatBatch(_platformId, pooledStats);
-
-        // Act
-        await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
-
-        // Assert
-        var pool = objectPoolManager.GetPooled<List<ContainerStat>>();
-        Assert.Same(stats, pool.Value);
-        Assert.Empty(pool.Value);
-        pool.Dispose();
-    }
+    
 }

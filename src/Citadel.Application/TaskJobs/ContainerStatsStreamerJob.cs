@@ -8,7 +8,6 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Grpc.Core;
-using Hosting.Common.ObjectPoolManager;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -17,10 +16,9 @@ namespace Application.TaskJobs;
 
 /// <summary>
 /// Collects containers stats from remote agents and pushes into the shared Channel <see cref="ContainerStatsWriterJob"/>.
-/// </summary>
+/// </summary>  
 internal class ContainerStatsStreamerJob(
     IOptions<JobConfiguration> options,
-    IObjectPoolManager objectPoolManager,
     ChannelWriter<ContainersStatBatch> channel,
     IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
@@ -48,7 +46,6 @@ internal class ContainerStatsStreamerJob(
 
     public void StartStreamStatsForPlatform(PlatformHealth platform, CancellationToken cancellationToken)
     {
-        
         if (!_runningStreams.TryAdd(platform.Address, CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)))
         {
             logger.LogWarning("Streaming platform stats for {Address} is already running.", platform.Address);
@@ -65,6 +62,7 @@ internal class ContainerStatsStreamerJob(
         {
             logger.LogInformation("Aborting streaming containers stats for {Address}", address);
             cts.Cancel();
+            cts.Dispose();
         }
     }
 
@@ -75,43 +73,29 @@ internal class ContainerStatsStreamerJob(
             try
             {
                 var command = new StreamContainersStatsCommand(
-                    PlatformAddress: address, 
+                    PlatformAddress: address,
                     FetchIntervalMs: _fetchIntervalMs);
 
-                await foreach (var pooledStats in connectorFactory.GetConnector(connectorType).StreamContainersStatsAsync(command, cancellationToken))
+                await foreach (var containers in connectorFactory.GetConnector(connectorType)
+                    .StreamContainersStatsAsync(command, cancellationToken))
                 {
-                    using var _ = pooledStats;
-                    var containers = pooledStats.Value;
-                    try
+                    if (containers.Count > 0 &&
+                        platformContainerCache.TryGetContainers(platformId, out var ids))
                     {
-                        if (containers.Count > 0)
+                        var stats = new List<ContainerStat>(containers.Count);
+                        var snapshotTime = (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
+
+                        foreach (var kvp in containers)
                         {
-                            if (platformContainerCache.TryGetContainers(platformId, out var ids))
+                            if (ids.TryGetValue(kvp.Key, out var containerId))
                             {
-                                var pooledStatsList = objectPoolManager.GetPooled<List<ContainerStat>>();
-                                var stats = pooledStatsList.Value;
-                                stats.Clear();
-
-                                var snapshotTime = (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
-                                foreach (var kvp in containers)
-                                {
-                                    if (ids.TryGetValue(kvp.Key, out var containerId))
-                                    {
-                                        var containerStat = objectPoolManager.Get<ContainerStat>();
-                                        kvp.Value.Map(containerStat, containerId, snapshotTime);
-                                        stats.Add(containerStat);
-                                    }
-                                }
-
-                                await channel.WriteAsync(new ContainersStatBatch(platformId, pooledStatsList), cancellationToken);
+                                stats.Add(kvp.Value.Map(containerId, snapshotTime));
                             }
                         }
-                    }
-                    finally
-                    {
-                        foreach (var s in pooledStats.Value.Values)
+
+                        if (stats.Count > 0)
                         {
-                            objectPoolManager.Return(s);
+                            await channel.WriteAsync(new ContainersStatBatch(platformId, stats), cancellationToken);
                         }
                     }
                 }
@@ -133,4 +117,4 @@ internal class ContainerStatsStreamerJob(
     }
 }
 
-internal sealed record ContainersStatBatch(Guid PlatformId, PooledHandle<List<ContainerStat>> Stats);
+internal sealed record ContainersStatBatch(Guid PlatformId, List<ContainerStat> Stats);

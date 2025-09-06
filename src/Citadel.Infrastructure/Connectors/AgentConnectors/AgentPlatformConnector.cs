@@ -5,14 +5,13 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
-using Hosting.Common.ObjectPoolManager;
 using Infrastructure.Connectors.Mappers;
 using Infrastructure.Repositories;
 using LightResults;
 
 namespace Infrastructure.Connectors.AgentConnectors;
 
-internal class AgentPlatformConnector(IGrpcClientFactory clientFactory, IObjectPoolManager objectPoolManager) : IPlatformConnector
+internal class AgentPlatformConnector(IGrpcClientFactory clientFactory) : IPlatformConnector
 {
     public async Task<PlatformHealthResult> CheckHealthAsync(string platformAddress, CancellationToken cancellationToken)
     {
@@ -43,15 +42,13 @@ internal class AgentPlatformConnector(IGrpcClientFactory clientFactory, IObjectP
         }
     }
 
-    public async IAsyncEnumerable<PooledHandle<PlatformStatsResult>> StreamStatsAsync(StreamPlatformStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<PlatformStatsResult> StreamStatsAsync(StreamPlatformStatsCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var client = clientFactory.GetPlatformClient(command.PlatformAddress);
         using var stream = client.StreamPlatformStats(new PlatformStatsRequest { FetchIntervalMs = command.FetchIntervalMs }, cancellationToken: cancellationToken);
         await foreach (var response in stream.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
         {
-            var statPooled = objectPoolManager.GetPooled<PlatformStatsResult>();
-            response.Map(statPooled.Value);
-            yield return statPooled;
+            yield return response.Map();
         }
     }
 

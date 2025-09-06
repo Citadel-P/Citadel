@@ -18,11 +18,11 @@ internal record PlatformDto(
     public ICollection<PlatformStatDto> Stats { get; init; } = [];
     public PlatformDto() : this(Guid.Empty, string.Empty, string.Empty, 0, 0, 0, 0, 0, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty)
     {
-        
+
     }
 }
 
-internal sealed record PlatformStatDto(
+internal record struct PlatformStatDto(
     Guid Id,
     Guid PlatformId,
     long Created,

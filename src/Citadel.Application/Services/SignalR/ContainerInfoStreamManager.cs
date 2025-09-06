@@ -88,10 +88,7 @@ internal sealed class ContainerInfoStreamManager(
                 {
                     try
                     {
-                        using (container)
-                        {
-                            await dispatcher.SendContainerInfo(container.Value, token);
-                        }
+                        await dispatcher.SendContainerInfo(container, token);
                     }
                     catch (Exception ex)
                     {

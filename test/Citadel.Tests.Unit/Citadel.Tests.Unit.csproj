@@ -6,6 +6,7 @@
 	<RootNamespace>Tests.Unit</RootNamespace>
 	<PublishTrimmed>false</PublishTrimmed>
 	<OutputType>exe</OutputType>
+	<PublishAot>false</PublishAot>
   </PropertyGroup>
 
   <ItemGroup>

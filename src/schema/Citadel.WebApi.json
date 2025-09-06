@@ -6657,10 +6657,6 @@
         }
       },
       "HostPortBinding": {
-        "required": [
-          "hostIP",
-          "hostPort"
-        ],
         "type": "object",
         "properties": {
           "hostIP": {
