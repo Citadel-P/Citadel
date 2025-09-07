@@ -6,6 +6,16 @@ import { ColumnDef } from '@tanstack/react-table';
 
 const columns: ColumnDef<InspectImageResult>[] = [
   {
+    accessorKey: 'os',
+    header: () => <span>Os</span>,
+    cell: ({ row }) => <span>{row.original.os}</span>,
+  },
+  {
+    accessorKey: 'architecture',
+    header: () => <span>Architecture</span>,
+    cell: ({ row }) => <span>{row.original.architecture}</span>,
+  },
+  {
     accessorKey: 'created',
     header: () => <span>Created</span>,
     cell: ({ row }) => <span>{fromNow(new Date(row.original.created).getTime())} </span>,
@@ -14,17 +24,6 @@ const columns: ColumnDef<InspectImageResult>[] = [
     accessorKey: 'size',
     header: () => <span>Size</span>,
     cell: ({ row }) => <span>{byteTransform(row.original.size, 2)}</span>,
-  },
-  {
-    accessorKey: 'cmd',
-    header: () => <span>Cmd</span>,
-    cell: ({ row }) => (
-      <div className="text-foreground gap-2 flex flex-wrap items-center">
-        {row.original.cmd.map((c) => (
-          <span key={c}>{c}</span>
-        ))}
-      </div>
-    ),
   },
   {
     accessorKey: 'expose',

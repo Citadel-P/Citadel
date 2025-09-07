@@ -159,7 +159,7 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
           title: currentPlatform?.name ?? '',
           link: `/platforms/${currentPlatform?.id}`,
         });
-        crumbs.push({ title: 'Networks', link: `/platforms/${currentPlatform?.id}/networks/inspect` });
+        crumbs.push({ title: 'Networks', link: `/platforms/${currentPlatform?.id}/networks` });
         crumbs.push({
           title: resourceId ?? '',
           isActive: true,
@@ -176,6 +176,32 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
         crumbs.push({ title: currentPlatform?.name ?? '', link: `/platforms/${currentPlatform?.id}` });
         crumbs.push({ title: 'Networks', link: `/platforms/${currentPlatform?.id}/networks` });
         crumbs.push({ title: 'Add Network', isActive: true });
+      },
+      [AppPaths.volume]: () => {
+        crumbs.push({ title: 'Platforms', link: '/' });
+        crumbs.push({
+          title: currentPlatform?.name ?? '',
+          link: `/platforms/${currentPlatform?.id}`,
+        });
+        crumbs.push({ title: 'Volumes', link: `/platforms/${currentPlatform?.id}/volumes` });
+        crumbs.push({
+          title: resourceId ?? '',
+          isActive: true,
+          badge: { title: 'Inspect' },
+        });
+      },
+      [AppPaths.volumeInspect]: () => {
+        crumbs.push({ title: 'Platforms', link: '/' });
+        crumbs.push({
+          title: currentPlatform?.name ?? '',
+          link: `/platforms/${currentPlatform?.id}`,
+        });
+        crumbs.push({ title: 'Volumes', link: `/platforms/${currentPlatform?.id}/volumes` });
+        crumbs.push({
+          title: resourceId ?? '',
+          isActive: true,
+          badge: { title: 'Inspect' },
+        });
       },
       [AppPaths.volumes]: () => {
         crumbs.push({ title: 'Platforms', link: '/' });

@@ -4972,6 +4972,50 @@
           }
         }
       },
+      "ContainerVolumeResult": {
+        "required": [
+          "id",
+          "name",
+          "image",
+          "imageId",
+          "state",
+          "networks",
+          "ports"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "image": {
+            "type": "string"
+          },
+          "imageId": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ContainerStateStatus"
+          },
+          "networks": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "ports": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/HostPortBinding"
+              }
+            }
+          }
+        }
+      },
       "ContainersView": {
         "required": [
           "containers"
@@ -5813,6 +5857,7 @@
           "createdAt",
           "clusterVolume",
           "usageData",
+          "containers",
           "status",
           "labels",
           "options"
@@ -5842,6 +5887,12 @@
           },
           "usageData": {
             "$ref": "#/components/schemas/VolumeUsageData"
+          },
+          "containers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerVolumeResult"
+            }
           },
           "status": {
             "type": "object",
@@ -7048,7 +7099,9 @@
         "required": [
           "id",
           "size",
+          "os",
           "created",
+          "architecture",
           "env",
           "cmd",
           "repoTags",
@@ -7071,7 +7124,13 @@
             ],
             "format": "int64"
           },
+          "os": {
+            "type": "string"
+          },
           "created": {
+            "type": "string"
+          },
+          "architecture": {
             "type": "string"
           },
           "env": {

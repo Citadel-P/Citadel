@@ -1,4 +1,6 @@
-﻿namespace Domain.Contracts.Resources.Volumes;
+﻿using Domain.Entities;
+
+namespace Domain.Contracts.Resources.Volumes;
 
 public record DockerVolumeResult (
     string Id,
@@ -9,9 +11,20 @@ public record DockerVolumeResult (
     string CreatedAt,
     ClusterVolume? ClusterVolume,
     VolumeUsageData? UsageData,
+    IEnumerable<ContainerVolumeResult> Containers,
     IReadOnlyDictionary<string, string> Status,
     IReadOnlyDictionary<string, string> Labels,
     IReadOnlyDictionary<string, string> Options);
+
+public record ContainerVolumeResult(
+    string Id,
+    string Name,
+    string Image,
+    string ImageId,
+    ContainerStateStatus State,
+    Dictionary<string, string> Networks,
+    Dictionary<string, IReadOnlyList<HostPortBinding>> Ports
+    );
 
 public record TopologyEntry(IReadOnlyDictionary<string, string> Labels);
 

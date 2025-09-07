@@ -3,21 +3,22 @@ import { DockerVolumeResult } from '@/api/_generated';
 import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useEffect, useCallback, useMemo, memo } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { useAppContext } from '@/AppContext';
 import { useGETVolumes } from './hooks/useGETVolumes';
 import { useVolumesContext } from './VolumesContext';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import DropdownTableMenu from './DropdownTableMenu';
-import { VolumeInspectSheet } from './VolumeInspectSheet';
 import { DeleteVolumeDialog } from './dialogs/DeleteVolumeDialog';
 import { byteTransform } from '@/lib/bytes.helper';
 import { fromNow } from '@/lib/dayjs.helper';
+import { VolumeStateIndicator } from './VolumeStateIndicator';
+import { useNavigate, useParams } from 'react-router';
 
 export default function VolumesTable() {
   const { currentPlatform } = useAppContext();
   const { data, isLoading, isSuccess } = useGETVolumes(currentPlatform?.id);
-  const { setSelectedRows, setVolumes, volumes, setSheetOpen, setCurrentVolume } = useVolumesContext();
+  const { setSelectedRows, setVolumes, volumes, dialogData, setDialogData, requestDelete, deleteIsPending } =
+    useVolumesContext();
 
   // Update volumes when data is fetched
   useEffect(() => {
@@ -41,16 +42,11 @@ export default function VolumesTable() {
   // Memoized row count
   const rowCount = useMemo(() => volumes?.length ?? 0, [volumes]);
 
-  const handleShowSheet = (volume: DockerVolumeResult) => {
-    setCurrentVolume(volume);
-    setSheetOpen(true);
-  };
-
   return (
     <>
       <div className="flex flex-col gap-3">
         <DataTable
-          columns={columns(handleShowSheet)}
+          columns={columns}
           data={volumes ?? []}
           isLoading={isLoading}
           onSelectionChange={handleSelectionChange}
@@ -63,13 +59,17 @@ export default function VolumesTable() {
           )}
         </div>
       </div>
-      <DeleteVolumeDialog />
-      <VolumeInspectSheet />
+      <DeleteVolumeDialog
+        dialogData={dialogData}
+        setDialogData={setDialogData}
+        requestDelete={requestDelete}
+        deleteIsPending={deleteIsPending}
+      />
     </>
   );
 }
 
-const columns = (handleShowSheet: (volume: DockerVolumeResult) => void): ColumnDef<DockerVolumeResult>[] => [
+const columns: ColumnDef<DockerVolumeResult>[] = [
   {
     id: 'select',
     header: ({ table }) => (
@@ -92,15 +92,25 @@ const columns = (handleShowSheet: (volume: DockerVolumeResult) => void): ColumnD
   {
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
-    cell: ({ row }) => <VolumeNameRow volume={row.original} onShowSheet={handleShowSheet} />,
+    cell: ({ row }) => <VolumeNameRow volume={row.original} />,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
   {
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
-    cell: ({ row }) => (
-      <span className="">{fromNow(new Date(row.original.createdAt as any).getTime())}</span>
-    ),
+    cell: ({ row }) => <span className="">{fromNow(new Date(row.original.createdAt as any).getTime())}</span>,
+    sortingFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
+  },
+  {
+    accessorKey: 'driver',
+    header: ({ column }) => <SortableCell cellName="Driver" column={column} />,
+    cell: ({ row }) => <span className="">{row.original.driver}</span>,
+    sortingFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
+  },
+  {
+    accessorKey: 'scope',
+    header: ({ column }) => <SortableCell cellName="Scope" column={column} />,
+    cell: ({ row }) => <span className="">{row.original.scope}</span>,
     sortingFn: (rowA, rowB) => (rowA.original.createdAt! < rowB.original.createdAt! ? 1 : -1),
   },
   {
@@ -119,24 +129,23 @@ const columns = (handleShowSheet: (volume: DockerVolumeResult) => void): ColumnD
   },
 ];
 
-const VolumeNameRow = ({
-  volume,
-  onShowSheet,
-}: {
-  volume: DockerVolumeResult;
-  onShowSheet: (volume: DockerVolumeResult) => void;
-}) => {
+const VolumeNameRow = ({ volume }: { volume: DockerVolumeResult }) => {
+  const { platformId } = useParams<{ platformId: string }>();
+  const navigate = useNavigate();
+  function onClick() {
+    navigate(`/platforms/${platformId}/volumes/${volume.id}/`);
+  }
   return (
     <div className="flex items-center whitespace-nowrap">
       <div className="flex items-center">
-        <VolumeStatusTooltip inUse={volume.inUse ?? false} />
+        <VolumeStateIndicator inUse={volume.inUse ?? false} />
       </div>
       <span
         className="cursor-pointer hover:underline text-[13px]"
-        onClick={() => onShowSheet(volume)}
+        onClick={onClick}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
-            onShowSheet(volume);
+            onClick();
           }
         }}
         tabIndex={0}
@@ -147,22 +156,3 @@ const VolumeNameRow = ({
     </div>
   );
 };
-
-const VolumeStatusTooltip = memo(({ inUse }: { inUse: boolean }) => {
-  const getStatusClass = () => (inUse ? 'bg-green-500' : 'bg-gray-500');
-
-  return (
-    <TooltipProvider delayDuration={200}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className={`${getStatusClass()} mr-2 h-2 w-2 rounded-full`} />
-        </TooltipTrigger>
-        <TooltipContent>
-          <span>{inUse ? 'In use' : 'Unused'}</span>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-});
-
-VolumeStatusTooltip.displayName = 'VolumeStatusTooltip';

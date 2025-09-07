@@ -13,8 +13,6 @@ interface IContext {
   onSearch: (searchTerm: string) => void;
   requestDelete: (request: DeleteVolumesInput) => void;
   deleteIsPending: boolean;
-  sheetOpen: boolean;
-  setSheetOpen: (open: boolean) => void;
   currentVolume: DockerVolumeResult | undefined;
   setCurrentVolume: (volume: DockerVolumeResult | undefined) => void;
 }

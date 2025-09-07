@@ -319,6 +319,16 @@ export interface ContainerView {
   metadata?: EndpointMetadata;
 }
 
+export interface ContainerVolumeResult {
+  id: string;
+  name: string;
+  image: string;
+  imageId: string;
+  state: ContainerStateStatus;
+  networks: Record<string, string>;
+  ports: Record<string, HostPortBinding[]>;
+}
+
 export interface ContainersView {
   containers: ContainerView[];
 }
@@ -548,6 +558,7 @@ export interface DockerVolumeResult {
   createdAt: string;
   clusterVolume: ClusterVolume;
   usageData: VolumeUsageData;
+  containers: ContainerVolumeResult[];
   status: Record<string, string>;
   labels: Record<string, string>;
   options: Record<string, string>;
@@ -757,8 +768,8 @@ export interface HostMount {
 }
 
 export interface HostPortBinding {
-  hostIP: null | string;
-  hostPort: null | string;
+  hostIP?: null | string;
+  hostPort?: null | string;
 }
 
 export interface HttpValidationProblemDetails {
@@ -892,7 +903,9 @@ export interface InspectImageResult {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   size: number | string;
+  os: string;
   created: string;
+  architecture: string;
   env: string[];
   cmd: string[];
   repoTags: string[];

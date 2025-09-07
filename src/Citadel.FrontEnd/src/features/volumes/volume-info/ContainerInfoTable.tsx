@@ -1,0 +1,67 @@
+import { ContainerVolumeResult, ContainerStateStatus, DockerVolumeResult, PlatformView } from '@/api/_generated';
+import { useAppContext } from '@/AppContext';
+import { DataTable } from '@/components/ui/data-table';
+import { PortsDisplay } from '@/components/ui/PortsDisplay';
+import { ContainerStateIndicator } from '@/features/containers/ContainerStateIndicator';
+import { truncate } from '@/lib/truncate';
+import { formatId } from '@/lib/utils';
+import { ColumnDef } from '@tanstack/react-table';
+import { HardDrive, Network } from 'lucide-react';
+import { Link } from 'react-router';
+
+const columns = (currentPlatform: PlatformView | undefined): ColumnDef<ContainerVolumeResult>[] => [
+  {
+    accessorKey: 'name',
+    header: () => <span>Name</span>,
+    cell: ({ row }) => (
+      <div className="flex flex-wrap gap-2 text-[13px] items-center">
+        <ContainerStateIndicator stat={row.original.state ?? ContainerStateStatus.Exited} />
+        <Link to={`/containers/${row.original.id?.slice(0, 12)}`} className="table-link">
+          {row.original.name?.slice(1)}
+        </Link>
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'image',
+    header: () => <span>Image</span>,
+    cell: ({ row }) => (
+      <div className=" gap-2 flex flex-wrap items-center">
+        <HardDrive width={13} height={13} className="text-primary" />
+        <Link to={`/platforms/${currentPlatform?.id}/images/${formatId(row.original.imageId)}`} className="table-link">
+          {truncate(row.original.image.replace('sha256:', ''), 24)}
+        </Link>
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'networks',
+    header: () => <span>Networks</span>,
+    cell: ({ row }) => (
+      <div className="text-foreground gap-2 flex flex-wrap items-center">
+        <Network width={13} height={13} className="text-primary" />
+        {Object.entries(row.original.networks).map(([name, id]) => (
+          <Link to={`/platforms/${currentPlatform?.id}/networks/${formatId(id)}`} key={id} className="table-link">
+            {name}
+          </Link>
+        ))}
+      </div>
+    ),
+  },
+
+  {
+    accessorKey: 'ports',
+    header: () => <span>Ports</span>,
+    cell: ({ row }) => <PortsDisplay ports={row.original.ports} />,
+  },
+];
+
+export const ContainerInfoTable = ({ volume }: { volume: DockerVolumeResult | undefined }) => {
+  const { currentPlatform } = useAppContext();
+  if (!volume) return <></>;
+  return (
+    <div className="flex flex-col gap-3">
+      <DataTable columns={columns(currentPlatform)} data={volume.containers} isLoading={false} />
+    </div>
+  );
+};

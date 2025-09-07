@@ -1,7 +1,6 @@
 ﻿using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Volumes;
 using FluentValidation;
-using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 

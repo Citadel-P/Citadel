@@ -1,6 +1,7 @@
 ﻿using Citadel.Agent.Volumes.V1;
 using Domain;
 using Domain.Contracts.Resources.Volumes;
+using Google.Protobuf.Collections;
 using Hosting.DockerClient.Models.Volumes;
 
 namespace Infrastructure.Connectors.Mappers;
@@ -26,8 +27,23 @@ internal static class VolumeMappers
             Scope: volume.Scope,
             ClusterVolume: volume.ClusterVolume?.Map(),
             UsageData: volume.UsageData?.Map(),
+            Containers: volume.Containers?.Map() ?? [],
             InUse: volume.InUse);
     }
+    internal static IEnumerable<Domain.Contracts.Resources.Volumes.ContainerVolumeResult> Map(this RepeatedField<Citadel.Agent.Volumes.V1.ContainerVolumeResult>? containers)
+        => containers?.Select(Map) ?? [];
+
+    internal static Domain.Contracts.Resources.Volumes.ContainerVolumeResult Map(this Citadel.Agent.Volumes.V1.ContainerVolumeResult container)
+        => new
+        (
+            Id: container.Id,
+            Name: container.Name,
+            Image: container.Image,
+            ImageId: container.ImageId,
+            State: container.State.Map(),
+            Networks: container.Networks?.ToDictionary() ?? [],
+            Ports: container.Ports?.Map() ?? []
+        );
 
     internal static DockerVolumeResult Map(this VolumeResult volume)
     {
@@ -39,6 +55,7 @@ internal static class VolumeMappers
             Driver: volume.Driver,
             Mountpoint: volume.Mountpoint,
             CreatedAt: volume.CreatedAt,
+            Containers: volume.Containers?.Map() ?? [],
             ClusterVolume: volume.ClusterVolume?.Map(),
             UsageData: volume.UsageData?.Map(),
             Status: volume.Status.ToDictionary(kv => kv.Key, kv => kv.Value),
@@ -46,6 +63,21 @@ internal static class VolumeMappers
             Options: volume.Options.ToDictionary(kv => kv.Key, kv => kv.Value)
         );
     }
+
+    internal static IEnumerable<Domain.Contracts.Resources.Volumes.ContainerVolumeResult> Map(this IEnumerable<ContainerVolume>? containers)
+        => containers?.Select(Map) ?? [];
+
+    internal static Domain.Contracts.Resources.Volumes.ContainerVolumeResult Map(this ContainerVolume container)
+        => new
+        (
+            Id: container.Id,
+            Name: container.Name,
+            Image: container.Image,
+            ImageId: container.ImageId,
+            State: container.State.Map(),
+            Networks: container.Networks ?? [],
+            Ports: container.Ports?.Map() ?? []
+        );
 
     internal static VolumeUsageData? Map(this UsageDataMessage usageData) 
         => new 

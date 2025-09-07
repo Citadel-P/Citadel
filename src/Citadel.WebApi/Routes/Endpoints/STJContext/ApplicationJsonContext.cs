@@ -128,6 +128,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(IAsyncEnumerable<ComposeDeploymentEvent>))]
 [JsonSerializable(typeof(ComposeUpRequest))]
 [JsonSerializable(typeof(RegistryWithConfigView))]
+[JsonSerializable(typeof(IEnumerable<ContainerVolumeResult>))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

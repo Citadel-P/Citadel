@@ -8,12 +8,22 @@ import {
 } from '@/components/ui/dialog';
 import { LoaderCircle } from 'lucide-react';
 import { useAppContext } from '@/AppContext';
-import { useVolumesContext } from '../VolumesContext';
 import { useState } from 'react';
 import { SwitchSection } from '@/components/ui/SwitchSection';
+import { IDialogData } from '@/hooks/useDialogState';
+import { DeleteVolumesInput, DockerVolumeResult } from '@/api/_generated';
 
-export const DeleteVolumeDialog = () => {
-  const { dialogData, setDialogData, requestDelete, deleteIsPending } = useVolumesContext();
+export const DeleteVolumeDialog = ({
+  dialogData,
+  setDialogData,
+  requestDelete,
+  deleteIsPending,
+}: {
+  dialogData: IDialogData<DockerVolumeResult>;
+  setDialogData: (data: IDialogData<DockerVolumeResult>) => void;
+  requestDelete: (request: DeleteVolumesInput) => void;
+  deleteIsPending: boolean;
+}) => {
   const { currentPlatform } = useAppContext();
   const [forceDelete, setForceDelete] = useState(false);
 

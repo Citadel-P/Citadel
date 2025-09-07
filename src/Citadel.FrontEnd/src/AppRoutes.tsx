@@ -27,6 +27,8 @@ export const AppPaths: Record<string, string> = {
   networkInspect: 'platforms/:platformId/networks/:resourceId/inspect',
   addNetwork: 'platforms/:platformId/networks/add',
   volumes: 'platforms/:platformId/volumes',
+  volume: 'platforms/:platformId/volumes/:resourceId',
+  volumeInspect: 'platforms/:platformId/volumes/:resourceId/inspect',
   addVolume: 'platforms/:platformId/volumes/add',
 };
 
@@ -159,6 +161,18 @@ export const AppRoutes = () => {
           path: AppPaths.addNetwork,
           lazy: async () => {
             return { Component: (await import('@/features/networks/forms/AddNetworkForm')).default };
+          },
+        },
+        {
+          path: AppPaths.volume,
+          lazy: async () => {
+            return { Component: (await import('@/features/volumes/volume-info/VolumeInfoWrapper')).default };
+          },
+        },
+        {
+          path: AppPaths.volumeInspect,
+          lazy: async () => {
+            return { Component: (await import('@/features/volumes/volume-info/VolumeInfoWrapper')).default };
           },
         },
         {

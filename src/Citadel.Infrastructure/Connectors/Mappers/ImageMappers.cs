@@ -35,6 +35,8 @@ internal static class ImageMappers
         => new(
             Id: image.Id,
             Size: image.Size,
+            Os: image.Os,
+            Architecture: image.Architecture,
             Created: image.Created,
             Env: image.Env?.ToList() ?? [],
             Cmd: image.Cmd?.ToList() ?? [],
@@ -211,16 +213,18 @@ internal static class ImageMappers
         => new
         (
             Id: image.Id,
+            Os: image.Os,
             Size: image.Size,
+            Architecture: image.Architecture,
             Created: image.Created,
             Env: image.Env?.ToList() ?? [],
             Cmd: image.Cmd?.ToList() ?? [],
             RepoTags: image.RepoTags?.ToList() ?? [],
-            Containers: image.Containers?.Map(),
+            Containers: image.Containers?.Map() ?? [],
             Volumes: image.Volumes?.ToList() ?? [],
             Labels: image.Labels,
             ExposedPorts: image.ExposedPorts?.ToList() ?? [],
-            Layers: image.Layers?.Select(Map)
+            Layers: image.Layers?.Select(Map) ?? []
 
         );
 

@@ -1,32 +1,15 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { DeleteVolumesInput, DockerVolumeResult } from '@/api/_generated';
-import { useDialogState } from '@/hooks/useDialogState';
-import { useDELETEVolumes } from './hooks/useDELETEVolumes';
-import { useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
-import { use400ErrorToast } from '@/hooks/use400ErrorToast';
+import { DockerVolumeResult } from '@/api/_generated';
 import { VolumesContext } from './VolumesContext';
+import { useDeleteVolumeDialog } from './hooks/useDeleteVolumeDialog';
 
 export const VolumesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
-  const client = useQueryClient();
-  // State variables
   const [selectedRows, setSelectedRows] = useState<DockerVolumeResult[] | undefined>();
   const [volumes, setVolumes] = useState<DockerVolumeResult[] | undefined>([]);
   const [originalVolumes, setOriginalVolumes] = useState<DockerVolumeResult[] | undefined>([]);
-  // Sheet state
+  const { setDialogData, dialogData, requestDelete, deleteIsPending } = useDeleteVolumeDialog();
   const [currentVolume, setCurrentVolume] = useState<DockerVolumeResult>();
-  const [sheetOpen, setSheetOpen] = useState(false);
-
-  const { dialogData, setDialogData } = useDialogState<DockerVolumeResult>();
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
-
-  const {
-    mutate: deleteVolumes,
-    isSuccess: deleteIsSuccess,
-    isPending: deleteIsPending,
-    error: deleteInError,
-  } = useDELETEVolumes();
-  use400ErrorToast(deleteInError, 'The selected volume(s) could not be deleted (status code: 400).', on400ErrorHandled);
 
   // Wrapper function that handles both original and filtered Volumes
   const handleVolumesUpdate = useCallback((Volumes: DockerVolumeResult[]) => {
@@ -61,27 +44,6 @@ export const VolumesProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
     }
   }, [originalVolumes, currentSearchTerm]);
 
-  // Handle successful volume deletion
-  useEffect(() => {
-    if (deleteIsSuccess) {
-      client.invalidateQueries({ queryKey: ['useGETVolumes'] });
-      setDialogData({ open: false });
-      toast.success('The selected volume(s) has been successfully deleted');
-    }
-  }, [deleteIsSuccess, client, setDialogData]);
-
-  function on400ErrorHandled() {
-    setDialogData({ open: false });
-  }
-
-  // Handle volume deletion request
-  const requestDelete = useCallback(
-    (request: DeleteVolumesInput) => {
-      deleteVolumes(request);
-    },
-    [deleteVolumes],
-  );
-
   // Memoized context value
   const contextValue = useMemo(
     () => ({
@@ -94,8 +56,6 @@ export const VolumesProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
       onSearch,
       requestDelete,
       deleteIsPending,
-      sheetOpen,
-      setSheetOpen,
       currentVolume,
       setCurrentVolume,
     }),
@@ -109,8 +69,6 @@ export const VolumesProvider: React.FC<{ children?: React.ReactNode }> = ({ chil
       onSearch,
       handleVolumesUpdate,
       requestDelete,
-      sheetOpen,
-      setSheetOpen,
       currentVolume,
       setCurrentVolume,
     ],

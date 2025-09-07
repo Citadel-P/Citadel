@@ -10,7 +10,10 @@ import { NetworkActionButtons } from '../NetworkActionButtons';
 import { useDeleteNetworkDialog } from '../hooks/useDeleteNetworkDialog';
 import { DockerNetworkResult } from '@/api/_generated';
 import { DeleteNetworkDialog } from '../dialogs/DeleteNetworkDialog';
-import { Box } from 'lucide-react';
+import { Box, Info, Share2 } from 'lucide-react';
+import { ContainerInfoTable } from './ContainerInfoTable';
+import { NetworkInfoTable } from './NetworkInfoTable';
+import { IPAMInfoTable } from './IPAMInfoTable';
 
 const NetworkInfoWrapper = () => {
   const navigate = useNavigate();
@@ -46,54 +49,80 @@ const NetworkInfoWrapper = () => {
     <div className="flex-col justify-between">
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
         <div className="max-w-full rounded-lg border-border bg-background p-4">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-3">
-            <div className="flex items-center gap-1 mb-4 md:mb-0">
-              <NetworkStateIndicator inUse={Object.keys(data?.data.containers ?? {}).length > 0} />
-              <div className="flex flex-col text-md font-bold text-foreground">
-                <span>{data?.data.name}</span>
-                <span className="text-xs text-foreground/40">
-                  <CopyTextToClipboard textToCopy={data?.data.id ?? '-'} />
-                </span>
-              </div>
-            </div>
-            <div className="flex justify-start md:justify-end w-full">
-              <NetworkActionButtons
-                selectedNetworks={[
-                  {
-                    id: data?.data.id,
-                    name: data?.data.name,
-                    inUse: Object.keys(data?.data.containers ?? {}).length > 0,
-                  } as DockerNetworkResult,
-                ]}
-                setDialogData={setDialogData}
-                showInspectButton={false}
-              />
-            </div>
-          </div>
-
           {isLoading ? (
             <Loader />
           ) : (
-            <Tabs value={currentTab} onValueChange={onValueChange} className="gap-4">
-              <TabsList className="w-full">
-                <TabsTrigger value="inspect">Inspect</TabsTrigger>
-                <TabsTrigger value="activity">Activity</TabsTrigger>
-              </TabsList>
+            <div>
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-3">
+                <div className="flex items-center gap-1 mb-4 md:mb-0">
+                  <NetworkStateIndicator inUse={Object.keys(data?.data.containers ?? {}).length > 0} />
+                  <div className="flex flex-col text-md font-bold text-foreground">
+                    <span>{data?.data.name}</span>
+                    <span className="text-xs text-foreground/40">
+                      <CopyTextToClipboard textToCopy={data?.data.id ?? '-'} />
+                    </span>
+                  </div>
+                </div>
+                <div className="flex justify-start md:justify-end w-full">
+                  <NetworkActionButtons
+                    selectedNetworks={[
+                      {
+                        id: data?.data.id,
+                        name: data?.data.name,
+                        inUse: Object.keys(data?.data.containers ?? {}).length > 0,
+                      } as DockerNetworkResult,
+                    ]}
+                    setDialogData={setDialogData}
+                    showInspectButton={false}
+                  />
+                </div>
+              </div>
 
-              <TabsContent value="inspect" className="flex flex-col gap-8">
-                <div className="flex flex-col gap-2">
-                  <div className="flex flex-row items-center gap-2">
-                    <Box width={14} height={14} className="text-muted-foreground" />
-                    <div className="text-sm font-semibold text-muted-foreground leading-none">
-                      Containers in this network
+              <Tabs value={currentTab} onValueChange={onValueChange} className="gap-4">
+                <TabsList className="w-full">
+                  <TabsTrigger value="inspect">Inspect</TabsTrigger>
+                  <TabsTrigger value="activity">Activity</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="inspect" className="flex flex-col gap-8">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex flex-row items-center gap-2">
+                      <Info width={14} height={14} className="text-muted-foreground" />
+                      <div className="text-sm font-semibold text-muted-foreground leading-none">Details</div>
+                    </div>
+                    <div className="space-y-1 rounded-sm border p-1 shadow-xs">
+                      <NetworkInfoTable network={data?.data} />
                     </div>
                   </div>
-                  <div className="space-y-1 rounded-sm border p-1 shadow-xs"></div>
-                </div>
-              </TabsContent>
-              <TabsContent value="activity">activity</TabsContent>
-            </Tabs>
+                  {Object.keys(data?.data?.containers ?? {}).length !== 0 && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-row items-center gap-2">
+                        <Box width={14} height={14} className="text-muted-foreground" />
+                        <div className="text-sm font-semibold text-muted-foreground leading-none">
+                          Containers in this network
+                        </div>
+                      </div>
+                      <div className="space-y-1 rounded-sm border p-1 shadow-xs">
+                        <ContainerInfoTable network={data?.data} />
+                      </div>
+                    </div>
+                  )}
+
+                  {data?.data?.ipam?.config?.length !== 0 && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-row items-center gap-2">
+                        <Share2 width={14} height={14} className="text-muted-foreground" />
+                        <div className="text-sm font-semibold text-muted-foreground leading-none">IPAM</div>
+                      </div>
+                      <div className="space-y-1 rounded-sm border p-1 shadow-xs">
+                        <IPAMInfoTable ipam={data?.data?.ipam} />
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
+                <TabsContent value="activity">activity</TabsContent>
+              </Tabs>
+            </div>
           )}
         </div>
       </div>

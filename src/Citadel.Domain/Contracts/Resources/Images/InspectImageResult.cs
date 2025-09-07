@@ -5,7 +5,9 @@ namespace Domain.Contracts.Resources.Images;
 public record InspectImageResult(
     string Id,
     long Size,
+    string Os,
     string Created,
+    string Architecture,
     IEnumerable<string> Env,
     IEnumerable<string> Cmd,
     IEnumerable<string> RepoTags,

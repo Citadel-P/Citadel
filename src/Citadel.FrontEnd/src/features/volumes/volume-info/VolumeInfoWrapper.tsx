@@ -1,35 +1,29 @@
-import { ImageView } from '@/api/_generated';
 import { useGETInspect } from '../hooks/useGETInspect';
-import { ImageActionButtons } from '../ImageActionButtons';
-import { ImageSateIndicator } from '../ImageStateIndicator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useNavigate, useParams } from 'react-router';
-import { RunImageDialog } from '../dialogs/RunImageDialog';
-import { DeleteLocalImageDialog } from '../dialogs/DeleteLocalImageDialog';
-import { useDeleteImageDialog } from '../hooks/useDeleteImageDialog';
 import { useCallback, useEffect, useMemo } from 'react';
-import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
-import { useRunImageDialog } from '../hooks/useRunImageDialog';
 import { useAppContext } from '@/AppContext';
-import { ContainerInfoTable } from './ContainerInfoTable';
-import { Box, Info, Layers } from 'lucide-react';
-import { ImageInfoTable } from './ImageInfoTable';
-import { ImageLayerTable } from './ImageLayerTable';
 import Loader from '@/components/ui/loader';
+import { VolumeStateIndicator } from '../VolumeStateIndicator';
+import { useDeleteVolumeDialog } from '../hooks/useDeleteVolumeDialog';
+import { DockerVolumeResult } from '@/api/_generated';
+import { Box, Info } from 'lucide-react';
 
-const ImageInfoWrapper = () => {
+import { DeleteVolumeDialog } from '../dialogs/DeleteVolumeDialog';
+import { VolumeActionButtons } from '../VolumeActionButtons';
+import { ContainerInfoTable } from './ContainerInfoTable';
+import { VolumeInfoTable } from './VolumeInfoTable';
+
+const VolumeInfoWrapper = () => {
   const navigate = useNavigate();
   const { route } = useAppContext();
+  const { setDialogData, dialogData, deleteIsSuccess, deleteIsPending, requestDelete } = useDeleteVolumeDialog();
   const { platformId, resourceId } = useParams<{ platformId: string; resourceId: string }>();
-  const { runDialogData, setRunDialogData } = useRunImageDialog();
-  const { setDialogData, dialogData, deleteIsSuccess, deleteIsPending, requestDelete } = useDeleteImageDialog();
   const { data, isLoading } = useGETInspect(platformId ?? null, resourceId ?? null);
-
-  const [name, tag] = data?.data.repoTags?.at(0)?.split(':') ?? [];
 
   useEffect(() => {
     if (deleteIsSuccess) {
-      navigate(`/platforms/${platformId}/images`);
+      navigate(`/platforms/${platformId}/volumes`);
     }
   }, [deleteIsSuccess, platformId, navigate]);
 
@@ -44,7 +38,7 @@ const ImageInfoWrapper = () => {
   const onValueChange = useCallback(
     (tabName: string) => {
       if (resourceId) {
-        navigate(`/platforms/${platformId}/images/${resourceId}/${tabName}`);
+        navigate(`/platforms/${platformId}/volumes/${resourceId}/${tabName}`);
       }
     },
     [navigate, resourceId, platformId],
@@ -60,19 +54,20 @@ const ImageInfoWrapper = () => {
             <div>
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-3">
                 <div className="flex items-center gap-1 mb-4 md:mb-0">
-                  <ImageSateIndicator inUse={Object.keys(data?.data.containers ?? {}).length > 0} />
+                  <VolumeStateIndicator inUse={data?.data.inUse ?? false} />
                   <div className="flex flex-col text-md font-bold text-foreground">
-                    <span>{data?.data.repoTags?.at(0) ?? '-:-'}</span>
-                    <span className="text-xs text-foreground/40">
-                      <CopyTextToClipboard textToCopy={data?.data.id ?? '-'} />
-                    </span>
+                    <span>{data?.data.id}</span>
                   </div>
                 </div>
                 <div className="flex justify-start md:justify-end w-full">
-                  <ImageActionButtons
-                    selectedImages={[{ id: data?.data.id, name, tag } as ImageView]}
+                  <VolumeActionButtons
+                    selectedVolumes={[
+                      {
+                        id: data?.data.id,
+                        inUse: data?.data?.containers?.length !== 0,
+                      } as DockerVolumeResult,
+                    ]}
                     setDialogData={setDialogData}
-                    setRunDialogData={setRunDialogData}
                     showInspectButton={false}
                   />
                 </div>
@@ -91,32 +86,22 @@ const ImageInfoWrapper = () => {
                       <div className="text-sm font-semibold text-muted-foreground leading-none">Details</div>
                     </div>
                     <div className="space-y-1 rounded-sm border p-1 shadow-xs">
-                      <ImageInfoTable image={data?.data} />
+                      <VolumeInfoTable volume={data?.data} />
                     </div>
                   </div>
-                  {data?.data.containers.length !== 0 && (
+                  {Object.keys(data?.data?.containers ?? {}).length !== 0 && (
                     <div className="flex flex-col gap-2">
                       <div className="flex flex-row items-center gap-2">
                         <Box width={14} height={14} className="text-muted-foreground" />
                         <div className="text-sm font-semibold text-muted-foreground leading-none">
-                          Containers from this image
+                          Containers using this volume
                         </div>
                       </div>
                       <div className="space-y-1 rounded-sm border p-1 shadow-xs">
-                        <ContainerInfoTable image={data?.data} />
+                        <ContainerInfoTable volume={data?.data} />
                       </div>
                     </div>
                   )}
-
-                  <div className="flex flex-col gap-2">
-                    <div className="flex flex-row items-center gap-2">
-                      <Layers width={14} height={14} className="text-muted-foreground" />
-                      <div className="text-sm font-semibold text-muted-foreground leading-none">Layers</div>
-                    </div>
-                    <div className="space-y-1 rounded-sm border p-1 shadow-xs">
-                      <ImageLayerTable image={data?.data} />
-                    </div>
-                  </div>
                 </TabsContent>
                 <TabsContent value="activity">activity</TabsContent>
               </Tabs>
@@ -124,15 +109,14 @@ const ImageInfoWrapper = () => {
           )}
         </div>
       </div>
-      <DeleteLocalImageDialog
+      <DeleteVolumeDialog
         dialogData={dialogData}
         setDialogData={setDialogData}
         requestDelete={requestDelete}
         deleteIsPending={deleteIsPending}
       />
-      <RunImageDialog runDialogData={runDialogData} setRunDialogData={setRunDialogData} />
     </div>
   );
 };
 
-export default ImageInfoWrapper;
+export default VolumeInfoWrapper;
