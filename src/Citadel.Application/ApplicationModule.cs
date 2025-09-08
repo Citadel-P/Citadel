@@ -81,10 +81,10 @@ public static class ApplicationModule
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services
             .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()
-            .AddSingleton(Channel.CreateBounded<ContainersStatBatch>(ChannelDefaultOptions()))
+            .AddSingleton(Channel.CreateBounded<ContainersStatBatch>(Helpers.ChannelDefaultOptions()))
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader)
-            .AddSingleton(Channel.CreateBounded<(Guid Id, PlatformStatsResult Stats)>(ChannelDefaultOptions()))
+            .AddSingleton(Channel.CreateBounded<(Guid Id, PlatformStatsResult Stats)>(Helpers.ChannelDefaultOptions()))
             .AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Reader);
 
@@ -116,11 +116,4 @@ public static class ApplicationModule
             .AddScoped<IAuthorizationHandler, DeleteContainerHandler>();
     }
 
-    internal static BoundedChannelOptions ChannelDefaultOptions() => new(1_000)
-    {
-        SingleWriter = true,
-        SingleReader = true,
-        AllowSynchronousContinuations = false,
-        FullMode = BoundedChannelFullMode.DropOldest
-    };
 }

@@ -1,4 +1,5 @@
 ﻿using System.Threading.Channels;
+using Hosting.Common;
 
 namespace Application.Services;
 
@@ -11,7 +12,7 @@ internal class MulticastChannel<T>
     {
         lock (@lock)
         {
-            var channel = Channel.CreateBounded<T>(ApplicationModule.ChannelDefaultOptions());
+            var channel = Channel.CreateBounded<T>(Helpers.ChannelDefaultOptions());
             subscribers.Add(channel);
             return channel.Reader;
         }
