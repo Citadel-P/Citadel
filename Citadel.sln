@@ -31,8 +31,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Citadel.Domain", "src\Citad
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Citadel.Infrastructure", "src\Citadel.Infrastructure\Citadel.Infrastructure.csproj", "{BEAF7E92-CE0E-3A49-CD9F-311488299CF3}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Citadel.Infrastructure.MigrationTool", "src\Citadel.Infrastructure.MigrationTool\Citadel.Infrastructure.MigrationTool.csproj", "{41B02864-BEDF-D242-3117-554086AEBBD0}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Citadel.WebApi", "src\Citadel.WebApi\Citadel.WebApi.csproj", "{A6E35079-15EA-8142-E3A8-76152CC97ED5}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Citadel.Hosting", "src\Citadel.Contracts\src\Citadel.Hosting\Citadel.Hosting.csproj", "{FC7D69D6-F0C7-5F64-4D82-E670A99904C5}"
@@ -42,6 +40,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Citadel.Hosting.DockerClient", "src\Citadel.Contracts\src\Citadel.Hosting.DockerClient\Citadel.Hosting.DockerClient.csproj", "{CE52BD19-4810-C870-2276-81410C29554D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Citadel.SourceGen", "src\Citadel.Contracts\src\Citadel.SourceGen\Citadel.SourceGen.csproj", "{792AEDE4-0F29-08C6-7D16-486AF0135838}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Citadel.Infrastructure.Migrations", "src\Citadel.Infrastructure.Migrations\Citadel.Infrastructure.Migrations.csproj", "{80D9ED34-9AAD-95D0-5125-91317ABD971C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -73,10 +73,6 @@ Global
 		{BEAF7E92-CE0E-3A49-CD9F-311488299CF3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BEAF7E92-CE0E-3A49-CD9F-311488299CF3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BEAF7E92-CE0E-3A49-CD9F-311488299CF3}.Release|Any CPU.Build.0 = Release|Any CPU
-		{41B02864-BEDF-D242-3117-554086AEBBD0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{41B02864-BEDF-D242-3117-554086AEBBD0}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{41B02864-BEDF-D242-3117-554086AEBBD0}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{41B02864-BEDF-D242-3117-554086AEBBD0}.Release|Any CPU.Build.0 = Release|Any CPU
 		{A6E35079-15EA-8142-E3A8-76152CC97ED5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{A6E35079-15EA-8142-E3A8-76152CC97ED5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A6E35079-15EA-8142-E3A8-76152CC97ED5}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -97,6 +93,10 @@ Global
 		{792AEDE4-0F29-08C6-7D16-486AF0135838}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{792AEDE4-0F29-08C6-7D16-486AF0135838}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{792AEDE4-0F29-08C6-7D16-486AF0135838}.Release|Any CPU.Build.0 = Release|Any CPU
+		{80D9ED34-9AAD-95D0-5125-91317ABD971C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{80D9ED34-9AAD-95D0-5125-91317ABD971C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{80D9ED34-9AAD-95D0-5125-91317ABD971C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{80D9ED34-9AAD-95D0-5125-91317ABD971C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -109,12 +109,12 @@ Global
 		{A923E7C2-A16C-7308-5CC3-B018F6827E92} = {13D59AD0-FAEA-42EC-AB30-BCECA32AEA9A}
 		{ABAF3A7A-2266-FF12-F84C-47526B01D5C1} = {13D59AD0-FAEA-42EC-AB30-BCECA32AEA9A}
 		{BEAF7E92-CE0E-3A49-CD9F-311488299CF3} = {13D59AD0-FAEA-42EC-AB30-BCECA32AEA9A}
-		{41B02864-BEDF-D242-3117-554086AEBBD0} = {13D59AD0-FAEA-42EC-AB30-BCECA32AEA9A}
 		{A6E35079-15EA-8142-E3A8-76152CC97ED5} = {13D59AD0-FAEA-42EC-AB30-BCECA32AEA9A}
 		{FC7D69D6-F0C7-5F64-4D82-E670A99904C5} = {9731B61B-C938-4004-8B9B-B0217DAF3841}
 		{3246DB37-28F1-9C69-2E47-F8D1F52FB22F} = {9731B61B-C938-4004-8B9B-B0217DAF3841}
 		{CE52BD19-4810-C870-2276-81410C29554D} = {9731B61B-C938-4004-8B9B-B0217DAF3841}
 		{792AEDE4-0F29-08C6-7D16-486AF0135838} = {9731B61B-C938-4004-8B9B-B0217DAF3841}
+		{80D9ED34-9AAD-95D0-5125-91317ABD971C} = {13D59AD0-FAEA-42EC-AB30-BCECA32AEA9A}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {48DA8492-726C-427E-AD61-C830928C5938}

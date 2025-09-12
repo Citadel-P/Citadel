@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0-preview-alpine-aot AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot AS build
 RUN apk add --no-cache clang lld musl-dev libc6-compat
 
 WORKDIR /src
@@ -34,7 +34,7 @@ RUN dotnet publish Citadel.WebApi.csproj -c Release -o /app/publish \
      && rm /app/publish/*.dbg
 
 # Final stage
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-preview-alpine AS final
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-alpine AS final
 WORKDIR /app
 
 # Copy the published self-contained binary

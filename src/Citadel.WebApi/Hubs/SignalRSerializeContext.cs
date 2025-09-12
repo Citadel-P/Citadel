@@ -35,7 +35,7 @@ partial class SignalRMessagePackContext;
 
 internal static class DerivedTypesMapping
 {
-    internal static DerivedTypeMapping<PlatformDescriptor> PlatformDescriptorMappings = new(SignalRMessagePackContext.ShapeProvider)
+    internal static DerivedTypeMapping<PlatformDescriptor> PlatformDescriptorMappings = new(SignalRMessagePackContext.GeneratedTypeShapeProvider)
     {
         [nameof(PlatformType.Docker)] = typeof(DockerPlatformDescriptor),
         [nameof(PlatformType.Kubernetes)] = typeof(KubernetesPlatformDescriptor),

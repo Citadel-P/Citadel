@@ -118,12 +118,12 @@ internal static class WebApiModule
                 return new ApplicationHubDispatcher(context);
             });
 
-        services.AddSignalR().AddMessagePackProtocol(SignalRMessagePackContext.ShapeProvider, new MessagePackSerializer
+        services.AddSignalR().AddMessagePackProtocol(SignalRMessagePackContext.GeneratedTypeShapeProvider, new MessagePackSerializer
         {
             SerializeEnumValuesByName = true,
             PropertyNamingPolicy = MessagePackNamingPolicy.CamelCase,
             DerivedTypeMappings = [DerivedTypesMapping.PlatformDescriptorMappings],
-        }.WithGuidConverter(GuidFormat.StringD));
+        }.WithGuidConverter(GuidStringFormat.StringD));
     }
 
     internal static void AddGenericEnumConverters(this IList<JsonConverter> converters)
