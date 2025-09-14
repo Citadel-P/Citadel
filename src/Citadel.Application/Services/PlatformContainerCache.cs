@@ -120,9 +120,10 @@ internal class PlatformContainerCache : IPlatformContainerCache
                         if (!found)
                         {
                             cacheEntry = new PlatformCacheEntry(
-                             Address: platformCacheEntry.Address,
-                             ConnectorType: platformCacheEntry.ConnectorType,
-                             Containers: []);
+                                Id: platformCacheEntry.Id,
+                                Address: platformCacheEntry.Address,
+                                ConnectorType: platformCacheEntry.ConnectorType,
+                                Containers: []);
                         }
                         if (cacheEntry != null)
                         {

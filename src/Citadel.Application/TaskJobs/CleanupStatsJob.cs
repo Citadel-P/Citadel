@@ -1,4 +1,5 @@
 ﻿using Domain.Contracts.Interfaces;
+using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -7,13 +8,18 @@ namespace Application.TaskJobs;
 
 internal class CleanupStatsJob(IServiceScopeFactory scopeFactory, ILogger<CleanupStatsJob> logger) : BackgroundService
 {
-    private const int purgeDays = 2;
-    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+    private const int purgeDays = 3;
+    private const int checkIntervalInHours = 12;
+
+    protected override Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        // Run cleanup every 3 hours
+        return Helpers.DelayWithJitterFor(RunPeriodicPurge, cancellationToken: cancellationToken);
+    }
+
+    private async Task RunPeriodicPurge(CancellationToken cancellationToken)
+    {
         while (!cancellationToken.IsCancellationRequested)
         {
-            await Task.Delay(TimeSpan.FromHours(3), cancellationToken);
             try
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
@@ -23,13 +29,18 @@ internal class CleanupStatsJob(IServiceScopeFactory scopeFactory, ILogger<Cleanu
                 var thresholdEpochSeconds = thresholdDate.ToUnixTimeSeconds();
 
                 await uow.ContainerStats.RemoveOlderThanAsync(thresholdEpochSeconds, cancellationToken);
+                await uow.PlatformStats.RemoveOlderThanAsync(thresholdEpochSeconds, cancellationToken);
                 await uow.CommitAsync();
 
-                logger.LogInformation("Removed container statistics entries older than {PurgeDays} days.", purgeDays);
+                logger.LogInformation("Removed statistics entries older than {PurgeDays} days.", purgeDays);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error occurred while removing container statistics.");
+                logger.LogError(ex, "Error occurred while removing statistics.");
+            }
+            finally
+            {
+                await Task.Delay(TimeSpan.FromHours(checkIntervalInHours), cancellationToken);
             }
         }
     }

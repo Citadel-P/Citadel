@@ -71,6 +71,7 @@ public interface IPlatformStatRepository
 {
     Task<IEnumerable<PlatformStat>> GetStatsAggregatedLast24HoursAsync(Guid platformId, CancellationToken cancellationToken);
     Task<int> BulkInsertAsync(IEnumerable<PlatformStat> stats, CancellationToken cancellationToken);
+    Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken);
 }
 public interface ITeamRepository { }
 public interface IPlatformRepository 

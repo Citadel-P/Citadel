@@ -40,6 +40,10 @@ public interface IPlatformContainerCache
     bool TryGetCacheEntry(Guid platformId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry, [MaybeNullWhen(true)] out Error error);
 
     /// <summary>
+    /// Tries to get all cache entries.
+    /// </summary>
+    bool TryGetCacheEntries([MaybeNullWhen(false)] out IEnumerable<PlatformCacheEntry> cacheEntries, [MaybeNullWhen(true)] out Error error);
+    /// <summary>
     /// Tries to get the cache entry for a specific platform by its container ID.
     /// </summary>
     bool TryGetPlatformByContainerId(string containerId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry);

@@ -23,7 +23,7 @@ public class CreateNetworkTests : IntegrationTestBase
 
         networkFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(networkConnectorMock.Object);
 
-        var cacheEntry = new PlatformCacheEntry("localhost:9000", PlatformConnectorType.Local, []);
+        var cacheEntry = new PlatformCacheEntry(new Guid("0198740b-a501-7ae8-8afc-1e6ce659ee02"), "localhost:9000", PlatformConnectorType.Local, []);
         var error = null as Error;
         platformContainerCacheMock.Setup(x => x.TryGetCacheEntry(It.IsAny<Guid>(), out cacheEntry, out error))
             .Returns(true);

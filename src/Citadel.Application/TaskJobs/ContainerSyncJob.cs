@@ -1,4 +1,5 @@
-﻿using System.Threading.Channels;
+﻿using System.ComponentModel.DataAnnotations;
+using System.Threading.Channels;
 using Application.Mappers;
 using Application.Services;
 using Application.Services.SignalR;
@@ -88,31 +89,29 @@ internal class ContainerSyncJob(
     /// </summary>
     private async Task SyncAllPlatforms(CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var platforms = await uow.Platforms.GetPlatformsInfoAsync(cancellationToken);
-
-        foreach (var platform in platforms)
+        if (platformContainerCache.TryGetCacheEntries( out var platforms, out var _))
         {
-            if (cancellationToken.IsCancellationRequested) break;
-
-            try
+            foreach (var platform in platforms)
             {
-                var platformEvent = new PlatformHealth(
-                    Id: platform.Id,
-                    Type: platform.ConnectorType,
-                    Address: platform.Address,
-                    IsOnLine: platformContainerCache.TryGetCacheEntry(platform.Id, out var _, out var _)
-                );
+                if (cancellationToken.IsCancellationRequested) break;
 
-                await SyncContainersForPlatform(platformEvent, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error syncing containers for platform {PlatformId}", platform.Id);
+                try
+                {
+                    var platformEvent = new PlatformHealth(
+                        Id: platform.Id,
+                        Type: platform.ConnectorType,
+                        Address: platform.Address,
+                        IsOnLine: true
+                    );
+
+                    await SyncContainersForPlatform(platformEvent, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error syncing containers for platform {PlatformId}", platform.Id);
+                }
             }
         }
-
     }
 
     /// <summary>
@@ -131,6 +130,7 @@ internal class ContainerSyncJob(
             syncedContainers = await SyncOnlinePlatformContainers(uow, platformEvent, cancellationToken);
             var cacheEntry = new PlatformCacheEntry
             (
+                Id: platformEvent.Id,
                 Address: platformEvent.Address,
                 ConnectorType: platformEvent.Type,
                 Containers: syncedContainers.ToDictionary(c => c.ContainerId, c => c.Id)

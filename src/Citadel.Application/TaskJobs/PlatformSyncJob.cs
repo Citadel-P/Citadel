@@ -4,6 +4,7 @@ using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
+using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -16,13 +17,31 @@ namespace Application.TaskJobs;
 internal class PlatformSyncJob(
     IServiceScopeFactory scopeFactory,
     IPlatformStreamManager platformStreamManager,
+    IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IConnectorFactory<IPlatformConnector> connectorFactory,
     ILogger<PlatformSyncJob> logger) : BackgroundService
 {
     private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.AddSubscriber();
-
+    private static readonly TimeSpan SyncInterval = TimeSpan.FromHours(12);
+    
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+    {
+        logger.LogInformation("{ContainerSyncJob} started. Running every {Hours} hours.", nameof(ContainerSyncJob), SyncInterval.TotalHours);
+
+        // Event-driven sync starts immediately
+        var eventDrivenTask = RunEventDrivenSync(cancellationToken);
+
+        // Periodic sync starts with jitter
+        var periodicTask = Helpers.DelayWithJitterFor(RunPeriodicSync, cancellationToken: cancellationToken);
+
+        await Task.WhenAll(eventDrivenTask, periodicTask);
+    }
+
+    /// <summary>
+    /// Reacts to platform health events and syncs platforms as they change state.
+    /// </summary>
+    private async Task RunEventDrivenSync(CancellationToken cancellationToken)
     {
         await foreach (var evt in platformHealthReader.ReadAllAsync(cancellationToken))
         {
@@ -30,6 +49,59 @@ internal class PlatformSyncJob(
         }
     }
 
+    /// <summary>
+    /// Periodically syncs all platforms every x hours.
+    /// </summary>
+    private async Task RunPeriodicSync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await SyncAllPlatforms(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error during periodic container synchronization.");
+            }
+
+            await Task.Delay(SyncInterval, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Fetches all platforms from the database and syncs them.
+    /// </summary>
+    private async Task SyncAllPlatforms(CancellationToken cancellationToken)
+    {
+        if (platformContainerCache.TryGetCacheEntries(out var platforms, out var _))
+        {
+            foreach (var platform in platforms)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+
+                try
+                {
+                    var platformEvent = new PlatformHealth(
+                        Id: platform.Id,
+                        Type: platform.ConnectorType,
+                        Address: platform.Address,
+                        IsOnLine: true
+                    );
+
+                    await SyncPlatform(platformEvent, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error syncing containers for platform {PlatformId}", platform.Id);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Core logic to synchronize containers for a single platform.
+    /// </summary>
     private async Task SyncPlatform(PlatformHealth evt, CancellationToken cancellationToken)
     {
         try

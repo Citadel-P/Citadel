@@ -58,4 +58,11 @@ internal class PlatformStatRepository(IDbConnection db, Func<IDbTransaction> tx)
         var finalSql = string.Format(sql, string.Join(", ", valueRows));
         return db.ExecuteAsync(finalSql, parameters, transaction: tx());
     }
+
+
+    public Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken)
+    {
+        const string sql = "DELETE FROM PlatformStats WHERE Created < @CreatedBefore";
+        return db.ExecuteAsync(sql, new { CreatedBefore = createdBeforeEpochSeconds }, transaction: tx());
+    }
 }

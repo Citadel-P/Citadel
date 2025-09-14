@@ -86,31 +86,29 @@ internal class ImageSyncJob(
     /// </summary>
     private async Task SyncAllPlatforms(CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var platforms = await uow.Platforms.GetPlatformsInfoAsync(cancellationToken);
-
-        foreach (var platform in platforms)
+        if (platformContainerCache.TryGetCacheEntries(out var platforms, out var _))
         {
-            if (cancellationToken.IsCancellationRequested) break;
-
-            try
+            foreach (var platform in platforms)
             {
-                var platformEvent = new PlatformHealth(
-                    Id: platform.Id,
-                    Type: platform.ConnectorType,
-                    Address: platform.Address,
-                    IsOnLine: platformContainerCache.TryGetCacheEntry(platform.Id, out var _, out var _)
-                );
+                if (cancellationToken.IsCancellationRequested) break;
 
-                await SyncImagesForPlatform(platformEvent, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error syncing images for platform {PlatformId}", platform.Id);
+                try
+                {
+                    var platformEvent = new PlatformHealth(
+                        Id: platform.Id,
+                        Type: platform.ConnectorType,
+                        Address: platform.Address,
+                        IsOnLine: true
+                    );
+
+                    await SyncImagesForPlatform(platformEvent, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error syncing images for platform {PlatformId}", platform.Id);
+                }
             }
         }
-        
     }
 
     /// <summary>
