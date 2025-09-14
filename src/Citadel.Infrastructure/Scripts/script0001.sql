@@ -45,26 +45,11 @@ CREATE TABLE "Users" (
     "UpdatedAt" TEXT NOT NULL DEFAULT '2000-01-01 00:00:00'
 );
 
-CREATE TABLE "Containers" (
-    "Id" TEXT NOT NULL CONSTRAINT "PK_Containers" PRIMARY KEY,
-    "ContainerId" TEXT NOT NULL,
-    "Created" REAL NOT NULL,
-    "Image" TEXT NOT NULL,
-    "ImageId" TEXT NOT NULL,
-    "Name" TEXT NOT NULL,
-    "PlatformId" TEXT NOT NULL,
-    "Ports" TEXT NOT NULL,
-    "Stack" TEXT NULL,
-    "State" TEXT NOT NULL,
-    "Updated" TEXT NOT NULL,
-    CONSTRAINT "FK_Containers_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
-);
-
 CREATE TABLE "Deployments" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Deployments" PRIMARY KEY,
     "ConfigJson" TEXT NOT NULL,
-    "ContainerName" TEXT NOT NULL,
     "Created" TEXT NOT NULL,
+    "Name" TEXT NOT NULL,
     "PlatformId" TEXT NOT NULL,
     "Updated" TEXT NOT NULL,
     "Version" INTEGER NOT NULL,
@@ -80,6 +65,22 @@ CREATE TABLE "PlatformStats" (
     "RxBytes" REAL NOT NULL,
     "TxBytes" REAL NOT NULL,
     CONSTRAINT "FK_PlatformStats_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "Images" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_Images" PRIMARY KEY,
+    "CreatedAt" TEXT NOT NULL,
+    "ImageId" TEXT NOT NULL,
+    "IsInUse" INTEGER NOT NULL DEFAULT 0,
+    "IsUpToDate" INTEGER NULL,
+    "Name" TEXT NOT NULL,
+    "PlatformId" TEXT NOT NULL,
+    "RegistryId" TEXT NULL,
+    "Size" REAL NOT NULL DEFAULT 0.0,
+    "Tag" TEXT NOT NULL,
+    "UpdatedAt" TEXT NULL,
+    CONSTRAINT "FK_Images_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_Images_Registries_RegistryId" FOREIGN KEY ("RegistryId") REFERENCES "Registries" ("Id") ON DELETE SET NULL
 );
 
 CREATE TABLE "Permissions" (
@@ -103,6 +104,31 @@ CREATE TABLE "RefreshTokens" (
     CONSTRAINT "FK_RefreshTokens_Users_UserId" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE
 );
 
+CREATE TABLE "Containers" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_Containers" PRIMARY KEY,
+    "ContainerId" TEXT NOT NULL,
+    "Created" REAL NOT NULL,
+    "DeploymentId" TEXT NULL,
+    "Image" TEXT NOT NULL,
+    "ImageId" TEXT NOT NULL,
+    "Name" TEXT NOT NULL,
+    "PlatformId" TEXT NOT NULL,
+    "Ports" TEXT NOT NULL,
+    "Stack" TEXT NULL,
+    "State" TEXT NOT NULL,
+    "Updated" TEXT NOT NULL,
+    CONSTRAINT "FK_Containers_Deployments_DeploymentId" FOREIGN KEY ("DeploymentId") REFERENCES "Deployments" ("Id") ON DELETE SET NULL,
+    CONSTRAINT "FK_Containers_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "UsersTeams" (
+    "UserId" TEXT NOT NULL,
+    "TeamId" TEXT NOT NULL,
+    CONSTRAINT "PK_UsersTeams" PRIMARY KEY ("UserId", "TeamId"),
+    CONSTRAINT "FK_UsersTeams_Teams_TeamId" FOREIGN KEY ("TeamId") REFERENCES "Teams" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_UsersTeams_Users_UserId" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE
+);
+
 CREATE TABLE "ContainerStats" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_ContainerStats" PRIMARY KEY,
     "ContainerId" TEXT NOT NULL,
@@ -114,14 +140,6 @@ CREATE TABLE "ContainerStats" (
     "RxBytes" REAL NOT NULL,
     "TxBytes" REAL NOT NULL,
     CONSTRAINT "FK_ContainerStats_Containers_ContainerId" FOREIGN KEY ("ContainerId") REFERENCES "Containers" ("Id") ON DELETE CASCADE
-);
-
-CREATE TABLE "UsersTeams" (
-    "UserId" TEXT NOT NULL,
-    "TeamId" TEXT NOT NULL,
-    CONSTRAINT "PK_UsersTeams" PRIMARY KEY ("UserId", "TeamId"),
-    CONSTRAINT "FK_UsersTeams_Teams_TeamId" FOREIGN KEY ("TeamId") REFERENCES "Teams" ("Id") ON DELETE CASCADE,
-    CONSTRAINT "FK_UsersTeams_Users_UserId" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE
 );
 
 INSERT INTO "Roles" ("Id", "CreatedAt", "Name", "UpdatedAt")
@@ -146,13 +164,19 @@ SELECT changes();
 
 CREATE INDEX "IX_ContainerStats_ContainerId" ON "ContainerStats" ("ContainerId");
 
+CREATE INDEX "IX_Containers_DeploymentId" ON "Containers" ("DeploymentId");
+
 CREATE INDEX "IX_Containers_PlatformId" ON "Containers" ("PlatformId");
 
 CREATE UNIQUE INDEX "IX__Containers_ContainerId" ON "Containers" ("ContainerId");
 
-CREATE INDEX "IX_Deployments_ContainerName" ON "Deployments" ("ContainerName");
-
 CREATE INDEX "IX_Deployments_PlatformId" ON "Deployments" ("PlatformId");
+
+CREATE INDEX "IX_Images_ImageId" ON "Images" ("ImageId");
+
+CREATE INDEX "IX_Images_PlatformId" ON "Images" ("PlatformId");
+
+CREATE INDEX "IX_Images_RegistryId" ON "Images" ("RegistryId");
 
 CREATE INDEX "IX_Permissions_RoleId" ON "Permissions" ("RoleId");
 
@@ -175,7 +199,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20250912161720_migration0001', '10.0.0-rc.1.25451.107');
+VALUES ('20250914085356_migration0001', '10.0.0-rc.1.25451.107');
 
 COMMIT;
 

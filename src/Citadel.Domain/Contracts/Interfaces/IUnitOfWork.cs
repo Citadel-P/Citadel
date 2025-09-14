@@ -3,7 +3,6 @@ using Domain.Contracts.Resources.Identity;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Identity;
-using Domain.Entities.Registries;
 
 namespace Domain.Contracts.Interfaces;
 
@@ -11,6 +10,7 @@ public interface IUnitOfWork : IAsyncDisposable
 {
     IUserRepository Users { get; }
     ITeamRepository Teams { get; }
+    IImageRepository Images { get; }
     IPlatformRepository Platforms { get; }
     IContainerRepository Containers { get; }
     IRegistryRepository Registries { get; }
@@ -45,9 +45,9 @@ public interface IContainerRepository
     Task<IEnumerable<Container>?> GetAllWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken);
 
     Task<int> AddAsync(Container container, CancellationToken cancellationToken);
-    Task<int> BulkInsertAsync(IEnumerable<Container> containers, CancellationToken cancellationToken);
+    Task<int> BulkUpsertAsync(IEnumerable<Container> containers, CancellationToken cancellationToken);
 
-    Task<int> UpdateContainerAsync(Container container, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(Container container, CancellationToken cancellationToken);
     Task<int> UpdateContainersStateAsync(IEnumerable<Guid> ids, ContainerStateStatus state, CancellationToken cancellationToken);
 
     Task<int> DeleteAsync(IEnumerable<Guid> containersId, CancellationToken cancellationToken);
@@ -90,4 +90,14 @@ public interface IPlatformRepository
     Task<int> UpdatePlatformAsync(Platform platform, CancellationToken cancellationToken);
 
     Task<int> DeleteAsync(Guid platformId, CancellationToken cancellationToken);
+}
+
+public interface IImageRepository
+{
+    Task<int> AddAsync(Image image, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(Image image, CancellationToken cancellationToken);
+    Task<int> BulkUpsertAsync(IEnumerable<Image> images, CancellationToken cancellationToken);
+
+    Task<int> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<IEnumerable<Image>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
 }

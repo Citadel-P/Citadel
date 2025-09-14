@@ -624,14 +624,14 @@ internal static class ContainerMappers
     internal static DockerContainer Map(this ContainerResult container)
         => new
         (
-            Name: container?.Name,
-            Image: container?.Image,
-            ImageId: container?.ImageID,
+            Name: container?.Name ?? "",
+            Image: container?.Image ?? "",
+            ImageId: container?.ImageID ?? "",
             Stack: container?.Stack,
-            ContainerId: container?.Id,
+            ContainerId: container?.Id ?? "",
             Created: container?.Created,
-            ContainerStat: container.ContainerStat?.Map(),
-            Ports: container.Ports?.Map(),
+            ContainerStat: container?.ContainerStat?.Map(),
+            Ports: container?.Ports?.Map(),
             State: container?.State?.Map() ?? ContainerStateStatus.Unknown
         );
 

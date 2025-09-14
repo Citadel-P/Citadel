@@ -128,13 +128,10 @@ internal static class WebApiModule
 
     internal static void AddGenericEnumConverters(this IList<JsonConverter> converters)
     {
-        converters.Add(new JsonStringEnumConverter<PlatformStatus>());
-        converters.Add(new JsonStringEnumConverter<RegistryType>());
-        converters.Add(new JsonStringEnumConverter<PlatformType>());
-        converters.Add(new JsonStringEnumConverter<GhcrAccountType>());
-        converters.Add(new JsonStringEnumConverter<ContainerStateStatus>());
-        converters.Add(new JsonStringEnumConverter<PlatformConnectorType>());
-        converters.Add(new JsonStringEnumConverter<ContainerRestartPolicy>());
+        foreach (var converter in Citadel.SourceGen.GeneratedJsonConverters.All)
+        {
+            converters.Add(converter);
+        }
     }
 }
 

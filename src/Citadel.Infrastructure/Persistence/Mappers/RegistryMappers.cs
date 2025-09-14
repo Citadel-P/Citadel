@@ -18,6 +18,7 @@ internal static class RegistryMappers
             url: dto.Url,
             created: DateTime.Parse(dto.Created),
             type: Enum.Parse<RegistryType>(dto.Type),
-            configuration: JsonSerializer.Deserialize(dto.Configuration, RegistryJsonContext.Default.RegistryConfigurationBase));
+            configuration: JsonSerializer.Deserialize(dto.Configuration, RegistryJsonContext.Default.RegistryConfigurationBase)
+                ?? throw new NotImplementedException($"Registry configuration is missing for registry id {dto.Id}"));
     }
 }

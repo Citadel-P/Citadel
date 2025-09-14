@@ -9,6 +9,7 @@ public class Container(
     ContainerStateStatus state,
     long? created = null,
     string? stack = null,
+    Guid? deploymentId = null,
     IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null)
 {
     private readonly List<ContainerStat> stats = [];
@@ -17,6 +18,7 @@ public class Container(
 
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid PlatformId { get; private set; } = platformId;
+    public Guid? DeploymentId { get; private set; } = deploymentId;
     public string ContainerId { get; private set; } = containerId;
     public string Name { get; private set; } = name;
     public string Image { get; private set; } = image;

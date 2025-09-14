@@ -20,7 +20,7 @@ namespace Application.TaskJobs;
 internal class PlatformStatsWriterJob(
     IServiceScopeFactory scopeFactory,
     IOptions<JobConfiguration> options,
-    IPlatformsStreamManager platformStreamManager,
+    IPlatformStreamManager platformStreamManager,
     ChannelReader<(Guid Id, PlatformStatsResult Stats)> reader,
     ILogger<PlatformStatsWriterJob> logger) : BackgroundService
 {

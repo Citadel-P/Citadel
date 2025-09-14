@@ -63,7 +63,7 @@ internal sealed class ContainerLogStreamManager(
 
         try
         {
-            await foreach (var data in connectorFactory.GetConnector(platform.ConnectorType).StreamLogsAsync(new(platform.Address, containerId), token))
+            await foreach (var data in connectorFactory.GetConnector(platform!.ConnectorType).StreamLogsAsync(new(platform.Address, containerId), token))
             {
                 ctx.AddToBuffer(data.Span);
                 ctx.AddToBuffer("\n"u8);

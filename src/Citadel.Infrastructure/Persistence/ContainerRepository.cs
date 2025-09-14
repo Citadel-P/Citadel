@@ -1,4 +1,5 @@
 ﻿using System.Data;
+using System.Text;
 using System.Text.Json;
 using Dapper;
 using Domain;
@@ -18,10 +19,12 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         const string sql = """
             SELECT * FROM Containers
             WHERE PlatformId = @PlatformId
-            ORDER BY Created DESC
+            ORDER BY 
+                Created DESC,
+                Name ASC
             """;
         var result = await db.QueryAsync<ContainerDto>(sql, new { PlatformId = platformId.Format() }, tx());
-        return result.ToDomain();
+        return result?.ToDomain() ?? [];
     }
 
     public async Task<Container?> GetByIdAsync(string containerId, CancellationToken cancellationToken)
@@ -33,42 +36,6 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             """;
         var result = await db.QuerySingleOrDefaultAsync<ContainerDto>(sql, new { ContainerIdPrefix = containerId }, transaction: tx());
         return result?.ToDomain();
-    }
-
-
-    public Task<int> BulkInsertAsync(IEnumerable<Container> containers, CancellationToken cancellationToken)
-    {
-        const string sql = """
-            INSERT INTO Containers (
-                Id, PlatformId, ContainerId, Name, Image, ImageId, Created, Updated, State, Stack, Ports
-            ) VALUES {0}
-        """;
-
-        var valueRows = new List<string>();
-        var parameters = new DynamicParameters();
-        int i = 0;
-
-        foreach (var c in containers)
-        {
-            valueRows.Add(
-                $"(@Id{i}, @PlatformId{i}, @ContainerId{i}, @Name{i}, @Image{i}, @ImageId{i}, @Created{i}, @Updated{i}, @State{i}, @Stack{i}, @Ports{i})"
-            );
-            parameters.Add($"Id{i}", c.Id.Format());
-            parameters.Add($"PlatformId{i}", c.PlatformId.Format());
-            parameters.Add($"ContainerId{i}", c.ContainerId);
-            parameters.Add($"Name{i}", c.Name);
-            parameters.Add($"Image{i}", c.Image);
-            parameters.Add($"ImageId{i}", c.ImageId);
-            parameters.Add($"Created{i}", c.Created);
-            parameters.Add($"Updated{i}", c.Updated);
-            parameters.Add($"State{i}", EnumFormatter<ContainerStateStatus>.GetValue(c.State));
-            parameters.Add($"Stack{i}", c.Stack);
-            parameters.Add($"Ports{i}", JsonSerializer.Serialize( c.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding));
-            i++;
-        }
-
-        var finalSql = string.Format(sql, string.Join(", ", valueRows));
-        return db.ExecuteAsync(finalSql, parameters, transaction: tx());
     }
 
     public async Task<IEnumerable<Container>?> GetAllWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken)
@@ -123,21 +90,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         }, transaction: tx());
     }
 
-    public Task<int> UpdateContainersStateAsync(IEnumerable<Guid> ids, ContainerStateStatus state, CancellationToken cancellationToken)
-    {
-        var (clause, parameters) = SqliteInClauseBuilder.BuildInClauseForGuids("Id", ids);
-        string sql = $"""
-            UPDATE Containers
-            SET State = @State, Updated = @Updated
-            WHERE Id IN ({clause})
-        """;
-
-        parameters.Add("State", state);
-        parameters.Add("Updated", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-        return db.ExecuteAsync(sql, parameters, transaction: tx());
-    }
-
-    public Task<int> UpdateContainerAsync(Container container, CancellationToken cancellationToken)
+    public Task<int> UpdateAsync(Container container, CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE Containers
@@ -146,7 +99,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         """;
         return db.ExecuteAsync(sql, new
         {
-        
+
             Id = container.Id.Format(),
             PlatformId = container.PlatformId.Format(),
             ContainerId = container.ContainerId,
@@ -161,11 +114,58 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         }, transaction: tx());
     }
 
+    public Task<int> BulkUpsertAsync(IEnumerable<Container> containers, CancellationToken cancellationToken)
+    {
+        const string sql = """
+        INSERT INTO Containers (Id, PlatformId, ContainerId, Name, Image, ImageId, Created, Updated, State, Stack, Ports)
+        VALUES (@Id, @PlatformId, @ContainerId, @Name, @Image, @ImageId, @Created, @Updated, @State, @Stack, @Ports)
+        ON CONFLICT(Id) DO UPDATE SET
+            Name = excluded.Name,
+            Image = excluded.Image,
+            ImageId = excluded.ImageId,
+            Created = excluded.Created,
+            Updated = excluded.Updated,
+            State = excluded.State,
+            Stack = excluded.Stack,
+            Ports = excluded.Ports;
+    """;
+
+        return db.ExecuteAsync(sql, containers.Select(c => new
+        {
+            Id = c.Id.Format(),
+            PlatformId = c.PlatformId.Format(),
+            ContainerId = c.ContainerId,
+            Name = c.Name,
+            Image = c.Image,
+            ImageId = c.ImageId,
+            Created = c.Created,
+            Updated = c.Updated,
+            State = EnumFormatter<ContainerStateStatus>.GetValue(c.State),
+            Stack = c.Stack,
+            Ports = JsonSerializer.Serialize(
+                c.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding
+            )
+        }), transaction: tx());
+    }
+
+    public Task<int> UpdateContainersStateAsync(IEnumerable<Guid> ids, ContainerStateStatus state, CancellationToken cancellationToken)
+    {
+        var (clause, parameters) = SqliteInClauseBuilder.BuildInClauseForGuids("Id", ids);
+        string sql = $"""
+            UPDATE Containers
+            SET State = @State, Updated = @Updated
+            WHERE Id IN ({clause})
+        """;
+
+        parameters.Add("State", state);
+        parameters.Add("Updated", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        return db.ExecuteAsync(sql, parameters, transaction: tx());
+    }
+
     public Task<int> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         var (clause, parameters) = SqliteInClauseBuilder.BuildInClauseForGuids("Id", ids);
         string sql = $"DELETE FROM Containers WHERE Id IN ({clause})";
         return db.ExecuteAsync(sql, parameters, transaction: tx());
     }
-
 }

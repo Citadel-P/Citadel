@@ -1,5 +1,6 @@
 ﻿using Domain;
 using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Platforms;
@@ -66,4 +67,27 @@ internal static class Fakes
             );
         }
     }
+
+    internal static IReadOnlyList<ImageResult> GetDummyImages(int total = 3)
+    {
+        var result = new List<ImageResult>();
+        for (int i = 0; i < total; i++)
+        {
+            result.Add(new ImageResult(
+                Id: $"c-{i:D2}",
+                RepoTags: [$"image-{i}:latest"],
+                Size: 123456,
+                Containers: i,
+                Created: 9999999,
+                SharedSize: 999,
+                VirtualSize: 123456,
+                ParentId: "p-012",
+                RepoDigests: [],
+                Labels: new Dictionary<string, string>()
+            ));
+        }
+
+        return result;
+    }
+    
 }

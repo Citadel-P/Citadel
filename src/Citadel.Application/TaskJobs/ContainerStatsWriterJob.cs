@@ -14,7 +14,7 @@ internal class ContainerStatsWriterJob(
     IServiceScopeFactory scopeFactory,
     IOptions<JobConfiguration> options,
     ChannelReader<ContainersStatBatch> reader,
-    IContainersStreamManager containersStreamManager,
+    IContainerStreamManager containersStreamManager,
     ILogger<ContainerStatsWriterJob> logger) : BackgroundService
 {
     private readonly Dictionary<Guid, List<ContainerStat>> buffer = [];  // Key: PlatformId

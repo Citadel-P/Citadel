@@ -54,7 +54,7 @@ internal class PlatformContainerCache : IPlatformContainerCache
     }
 
     /// <inheritdoc />
-    public bool TryGetCacheEntry(Guid platformId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry, [MaybeNullWhen(true)] out Error? error)
+    public bool TryGetCacheEntry(Guid platformId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry, [MaybeNullWhen(true)] out Error error)
     {
         cacheEntry = null;
         error = null;
@@ -64,6 +64,21 @@ internal class PlatformContainerCache : IPlatformContainerCache
             return true;
         }
         error = new NotFoundError("Platform is disconnected or unavailable.");
+        return false;
+    }
+
+    /// <inheritdoc />
+    public bool TryGetCacheEntries([MaybeNullWhen(false)] out IEnumerable<PlatformCacheEntry> cacheEntries, [MaybeNullWhen(true)] out Error error)
+    {
+        cacheEntries = null;
+        error = null;
+        
+        if (cache.Keys.Count != 0)
+        {
+            cacheEntries = cache.Values.AsEnumerable();
+            return true;
+        }
+        error = new NotFoundError("No platform is currently connected.");
         return false;
     }
 

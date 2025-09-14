@@ -5,7 +5,7 @@ using Domain.Entities;
 
 namespace Application.Services.SignalR;
 
-internal interface IPlatformsStreamManager : IStreamGroupManager
+internal interface IPlatformStreamManager : IStreamGroupManager
 {
     Task PushPlatformUpdate(Platform platform);
     Task PlatformDeleted(Guid platformId);
@@ -13,7 +13,7 @@ internal interface IPlatformsStreamManager : IStreamGroupManager
     Task PushPlatformStats(Guid platformId, PlatformStatsResult platform);
 }
 
-internal class PlatformsStreamManager(IApplicationHubDispatcher dispatcher) : BaseStreamManager<StreamContext>, IPlatformsStreamManager
+internal class PlatformStreamManager(IApplicationHubDispatcher dispatcher) : BaseStreamManager<StreamContext>, IPlatformStreamManager
 {
     public Task PushPlatformUpdate(Platform platform)
     {

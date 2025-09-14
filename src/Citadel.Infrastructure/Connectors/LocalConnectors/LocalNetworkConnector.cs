@@ -36,7 +36,7 @@ internal class LocalNetworkConnector(INetworkService networkService) : INetworkC
             EnableIPv4: createNetworkCommand.EnableIPv4,
             ConfigOnly: createNetworkCommand.ConfigOnly,
             ConfigFrom: !string.IsNullOrEmpty(createNetworkCommand.ConfigFrom?.Network) 
-                            ? new Hosting.DockerClient.Models.Networks.ConfigFrom(createNetworkCommand.ConfigFrom?.Network)
+                            ? new Hosting.DockerClient.Models.Networks.ConfigFrom(createNetworkCommand.ConfigFrom?.Network ?? "")
                             : null,
             Ipam: createNetworkCommand.Ipam?.Map(),
             Options: createNetworkCommand.Options?.ToDictionary() ?? [],

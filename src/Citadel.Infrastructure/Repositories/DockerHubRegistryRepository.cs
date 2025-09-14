@@ -13,7 +13,7 @@ internal class DockerHubRegistryRepository(IDockerHubApi dockerHub) : IDockerHub
     {
         try
         {
-            var authResponse = await dockerHub.AuthCreateAccessToken(new Body() { Identifier = dockerHubRegistry?.UserName, Secret = dockerHubRegistry?.PAT }, cancellationToken);
+            var authResponse = await dockerHub.AuthCreateAccessToken(new Body() { Identifier = dockerHubRegistry?.UserName ?? "", Secret = dockerHubRegistry?.PAT ?? ""}, cancellationToken);
             return (true, null);
         }
         catch (ApiException ex)
@@ -29,8 +29,8 @@ internal class DockerHubRegistryRepository(IDockerHubApi dockerHub) : IDockerHub
     {
         try
         {
-            var authResponse = await dockerHub.AuthCreateAccessToken(new Body() { Identifier = dockerHubRegistry?.UserName, Secret = dockerHubRegistry?.PAT }, cancellationToken);
-            var repositories = await dockerHub.GetRepositories(dockerHubRegistry.UserName, authResponse.Access_token, 1, 100, cancellationToken: cancellationToken);
+            var authResponse = await dockerHub.AuthCreateAccessToken(new Body() { Identifier = dockerHubRegistry?.UserName ?? "", Secret = dockerHubRegistry?.PAT ?? ""}, cancellationToken);
+            var repositories = await dockerHub.GetRepositories(dockerHubRegistry?.UserName ?? "", authResponse.Access_token, 1, 100, cancellationToken: cancellationToken);
             return (repositories?.Results?.Map(), null);
         }
         catch (ApiException ex)
@@ -46,8 +46,8 @@ internal class DockerHubRegistryRepository(IDockerHubApi dockerHub) : IDockerHub
     {
         try
         {
-            var authResponse = await dockerHub.AuthCreateAccessToken(new Body() { Identifier = dockerHubRegistry.UserName, Secret = dockerHubRegistry.PAT }, cancellationToken);
-            var repositories = await dockerHub.TagsGET(dockerHubRegistry.UserName, repositoryName, authResponse.Access_token, 1, 100, cancellationToken: cancellationToken);
+            var authResponse = await dockerHub.AuthCreateAccessToken(new Body() { Identifier = dockerHubRegistry.UserName ?? "", Secret = dockerHubRegistry.PAT  ?? ""}, cancellationToken);
+            var repositories = await dockerHub.TagsGET(dockerHubRegistry.UserName ?? "", repositoryName, authResponse.Access_token, 1, 100, cancellationToken: cancellationToken);
             return (repositories.Results.Map(), null);
         }
         catch (ApiException ex)

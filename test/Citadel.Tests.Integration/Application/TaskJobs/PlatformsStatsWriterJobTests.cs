@@ -21,7 +21,7 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
     private readonly Mock<IOptions<JobConfiguration>> _configMock = new();
     private readonly Mock<IPlatformConnector> _platformConnector = new();
     private readonly TestPlatformHealthBroadCaster _broadcaster = new();
-    private readonly Mock<IPlatformsStreamManager> _streamManagerMock = new();
+    private readonly Mock<IPlatformStreamManager> _streamManagerMock = new();
     private readonly Channel<(Guid Id, PlatformStatsResult Stats)> _channel = Channel.CreateUnbounded<(Guid Id, PlatformStatsResult Stats)>();
 
 

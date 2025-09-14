@@ -32,7 +32,7 @@ internal sealed class LoginCommandHandler(IUnitOfWork unitOfWork, IJwtService jw
             return Result.Failure<LoginResponse>(new NotFoundError("User does not exist"));
         }
 
-        if (!User.IsValidPassword(query.Password, userAuthInfo.Password))
+        if (!User.IsValidPassword(query.Password, userAuthInfo.Password ?? string.Empty))
         {
             return Result.Failure<LoginResponse>(new BadRequestError("Invalid credentials"));
         }

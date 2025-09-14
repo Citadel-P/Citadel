@@ -4,13 +4,13 @@ using Domain.Entities;
 
 namespace Application.Services.SignalR;
 
-internal interface IContainersStreamManager : IStreamGroupManager
+internal interface IContainerStreamManager : IStreamGroupManager
 {
     Task SendContainersInfo(Guid platformId, IEnumerable<Container> containers);
     Task SendContainersStats(Guid platformId, IEnumerable<ContainerStat> containers);
 }
 
-internal class ContainersStreamManager(IApplicationHubDispatcher dispatcher) : BaseStreamManager<StreamContext>, IContainersStreamManager
+internal class ContainerStreamManager(IApplicationHubDispatcher dispatcher) : BaseStreamManager<StreamContext>, IContainerStreamManager
 {
     public Task SendContainersInfo(Guid platformId, IEnumerable<Container> containers)
     {

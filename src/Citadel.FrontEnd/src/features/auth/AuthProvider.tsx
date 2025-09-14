@@ -6,6 +6,7 @@ import { usePOSTLogout } from './hooks/usePOSTLogout';
 import { useTokenRefresh } from './hooks/useTokenRefresh';
 import { AuthContext } from './AuthContext';
 import { toast } from 'sonner';
+import { ProblemDetails } from '@/api/_generated';
 
 const accessTokenKey = 'access_token';
 const storedJwt = sessionStorage.getItem(accessTokenKey);
@@ -35,12 +36,12 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
   );
 
   useEffect(() => {
-    if (refreshError) {
+    if ((refreshError as ProblemDetails)?.status === 401) {
       toast.error('Session expired', {
         description: 'Please login again',
       });
     }
-  }, [refreshError])
+  }, [refreshError]);
 
   // Handle access token updates from the API
   useEffect(() => {
@@ -51,7 +52,8 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
 
   // Handle 401 errors by logging out
   useEffect(() => {
-    if (error && (error as any)?.error?.status === 401) {
+    if (error && ((error as any)?.error?.status === 401 || (error as any)?.error?.status === 400)) {
+      setAccessToken(undefined);
       logout({});
     }
   }, [error, logout]);

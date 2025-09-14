@@ -94,7 +94,6 @@ public class User
 
     private static byte[] ComputeHash(string plainTextPassword, byte[] salt)
     {
-        using Rfc2898DeriveBytes pbkdf2 = new(plainTextPassword, salt, 10000, HashAlgorithmName.SHA256);
-        return pbkdf2.GetBytes(20);
+        return Rfc2898DeriveBytes.Pbkdf2(plainTextPassword, salt, 10000, HashAlgorithmName.SHA256, 20);
     }
 }

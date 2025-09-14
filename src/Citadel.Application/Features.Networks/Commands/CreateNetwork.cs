@@ -2,7 +2,6 @@
 using Domain.Contracts.Resources.Networks;
 using FluentValidation;
 using Hosting.Common;
-using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 using static Hosting.Common.Validators;
@@ -60,7 +59,7 @@ public sealed record CreateNetwork(
             });
             When(s => s.IPAM is not null, () =>
             {
-                RuleFor(s => s.IPAM).SetValidator(new IPAMValidator());
+                RuleFor(s => s.IPAM!).SetValidator(new IPAMValidator());
             });
             When(s => s.Options is not null, () =>
             {
@@ -73,7 +72,7 @@ public sealed record CreateNetwork(
             When(s => s.EnableIPv4 is not null || s.EnableIPv6 is not null, () =>
             {
                 RuleFor(s => s)
-                .Must(s => s.EnableIPv4.Value || s.EnableIPv6.Value)
+                .Must(s => (s.EnableIPv4 != null && s.EnableIPv4.Value) || (s.EnableIPv6 != null && s.EnableIPv6.Value))
                 .WithMessage("At least one of EnableIPv4 or EnableIPv6 must be enabled.");
             });
         }
@@ -88,12 +87,12 @@ public sealed record CreateNetwork(
                 });
 
                 RuleFor(x => x.Config)
-                    .Must(configs => configs.Count == 2)
+                    .Must(configs => configs?.Count == 2)
                     .WithMessage("Config must contain exactly two entries: IPv4 at index 0 and IPv6 at index 1.");
 
                 RuleFor(x => x.Config).Custom((configs, context) =>
                 {
-                    if (configs.Count != 2)
+                    if (configs?.Count != 2)
                         return;
 
                     var ipv4Result = new IPv4ConfigValidator().Validate(configs[0]);

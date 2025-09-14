@@ -1,4 +1,6 @@
-﻿namespace Domain;
+﻿using System.Text.Json.Serialization;
+
+namespace Domain;
 
 public enum PlatformType
 {
@@ -15,6 +17,7 @@ public enum PlatformStatus
 
 public enum RegistryType
 {
+    Custom,
     DockerHub,
     Azure,
     AWS,
@@ -153,4 +156,28 @@ public enum ContainerRestartPolicy
     Always,
     OnFailure,
     UnlessStopped
+}
+
+public enum LoggingDriverType
+{
+    [JsonStringEnumMemberName("none")]
+    None = 0,
+    [JsonStringEnumMemberName("local")]
+    Local,
+    [JsonStringEnumMemberName("json-file")]
+    JsonFile,
+    [JsonStringEnumMemberName("syslog")]
+    Syslog,
+    [JsonStringEnumMemberName("journald")]
+    Journald,
+    [JsonStringEnumMemberName("gelf")]
+    Gelf,
+    [JsonStringEnumMemberName("fluentd")]
+    Fluentd,
+    [JsonStringEnumMemberName("awslogs")]
+    Awslogs,
+    [JsonStringEnumMemberName("splunk")]
+    Splunk,
+    [JsonStringEnumMemberName("etwlogs")]
+    Etwlogs
 }

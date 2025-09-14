@@ -24,7 +24,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
 
     private readonly Mock<IOptions<JobConfiguration>> configMock = new();
     private readonly TestPlatformHealthBroadCaster broadcaster = new();
-    private readonly Mock<IContainersStreamManager> streamManagerMock = new();
+    private readonly Mock<IContainerStreamManager> streamManagerMock = new();
 
     private Guid platformId;
     private const int batchSize = 2;
@@ -99,7 +99,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
                 $"Container {s.ContainerId} is not running. Actual state: {s.State}"
             ));
         Assert.True(cache.TryGetContainers(platformId, out var cacheContainers));
-        Assert.Equal(3, cacheContainers.Count);
+        Assert.Equal(3, cacheContainers?.Count);
         streamManagerMock.Verify(x => x.SendContainersInfo(It.IsAny<Guid>(), It.IsAny<IEnumerable<Container>>()), Times.Once);
     }
 
@@ -120,7 +120,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
         await uow.Containers.AddAsync(staleContainer, TestContext.Current.CancellationToken);
         await uow.CommitAsync();
 
-        // Only return fresh containers that do NOT include the stale one
+        // Return fresh containers
         containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(containerConnector.Object);
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success(Fakes.GetDummyContainers().ToDictionary(c => c.ContainerId) as IReadOnlyDictionary<string, DockerContainer>));
@@ -163,8 +163,8 @@ public class ContainerSyncJobTests : IntegrationTestBase
 
         // Assert: New container should be added
         await using var scope = Services.CreateAsyncScope();
-        var uow2 = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var dbContainers = await uow2.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var dbContainers = await uow.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);
         Assert.Contains(dbContainers, c => c.ContainerId == "new-id");
     }
 

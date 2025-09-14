@@ -23,7 +23,7 @@ public sealed record CreatePlatform(string Name, string? Address, PlatformType T
         public Validator()
         {
             RuleFor(x => x.Name).ValidNameIdentifier();
-            When(x => x.ConnectorType != PlatformConnectorType.Local, () => RuleFor(x => x.Address).ValidHostOrIP());
+            When(x => x.ConnectorType != PlatformConnectorType.Local, () => RuleFor(x => x.Address!).ValidHostOrIP());
         }
     }
 }
@@ -61,7 +61,7 @@ internal sealed class CreatePlatformHandler(
     {
         var param = new GetPlatformCommand
         (
-            PlatformAddress: command.Address!,
+            PlatformAddress: command.Address ?? "",
             PlatformName: command.Name
         );
         var platformConnector = platformConnectorFactory.GetConnector(command.ConnectorType);
@@ -72,13 +72,13 @@ internal sealed class CreatePlatformHandler(
         }
 
         // Add the new platform
-        var platform = platformResult.Map(command.Address, command.Name, command.ConnectorType);
+        var platform = platformResult.Map(command.Address ?? "", command.Name, command.ConnectorType);
         await unitOfWork.Platforms.AddPlatformAsync(platform, cancellationToken);
         // Add it's containers
         var containers = await GetContainers(platform, cancellationToken);
         if (containers != null && containers.Any())
         {
-            await unitOfWork.Containers.BulkInsertAsync(containers, cancellationToken);
+            await unitOfWork.Containers.BulkUpsertAsync(containers, cancellationToken);
         }
         // Commit
         await unitOfWork.CommitAsync();

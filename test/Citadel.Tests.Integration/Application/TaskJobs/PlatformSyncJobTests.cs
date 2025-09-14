@@ -22,7 +22,7 @@ public class PlatformSyncJobTests : IntegrationTestBase
 {
     private readonly Mock<IConnectorFactory<IPlatformConnector>> connectorMock = new();
     private readonly Mock<IPlatformHealthMonitorJob> healthMonitorMock = new();
-    private readonly Mock<IPlatformsStreamManager> hubManagerMock = new();
+    private readonly Mock<IPlatformStreamManager> hubManagerMock = new();
     private readonly Mock<IPlatformConnector> platformConnector = new();
     private readonly TestPlatformHealthBroadCaster broadcaster = new();
     private string? platformName;
@@ -89,7 +89,7 @@ public class PlatformSyncJobTests : IntegrationTestBase
         // Assert
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var platform = await uow.Platforms.GetByNameAsync(platformName, TestContext.Current.CancellationToken);
+        var platform = await uow.Platforms.GetByNameAsync(platformName ?? "", TestContext.Current.CancellationToken);
 
         hubManagerMock.Verify(x => x.PushPlatformUpdate(It.IsAny<Platform>()), Times.Once);
         await Verify(platform);
@@ -114,7 +114,7 @@ public class PlatformSyncJobTests : IntegrationTestBase
         // Assert
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var platform = await uow.Platforms.GetByNameAsync(platformName, TestContext.Current.CancellationToken);
+        var platform = await uow.Platforms.GetByNameAsync(platformName ?? "", TestContext.Current.CancellationToken);
 
         var options = new JsonSerializerOptions
         {

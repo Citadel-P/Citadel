@@ -1,14 +1,17 @@
-﻿using Application.Features.Registries.Commands;
+﻿using System.Text.Json.Serialization;
+using Application.Features.Registries.Commands;
 using Domain;
 using Domain.Entities.Registries;
 
 namespace WebApi.Routes.Endpoints.Resources.Registries;
 
 public sealed record RegistryInput(
-    string? Name, 
-    string? Url,
-    RegistryType? Type,
-    RegistryConfigurationBase? Configuration)
+    string Name, 
+    string Url,
+    [property: JsonConverter(typeof(Citadel.GeneratedConverters.SafeRegistryTypeConverter))]
+    RegistryType Type,
+    RegistryConfigurationBase Configuration
+    )
 {
-    internal CreateRegistry ToCreateRegistryCommand() => new(Name, Url, Type.Value, Configuration);
+    internal CreateRegistry ToCreateRegistryCommand() => new(Name, Url, Type, Configuration);
 }

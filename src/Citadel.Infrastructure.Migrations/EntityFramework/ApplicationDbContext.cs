@@ -22,7 +22,8 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .PermissionConfiguration()
             .RoleConfiguration()
             .UserTeamConfiguration()
-            .DeploymentConfiguration();
+            .DeploymentConfiguration()
+            .ImageConfiguration();
 
         SeedDb(modelBuilder);
     }
@@ -69,11 +70,6 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
 
 internal static class Configuration
 {
-    static ValueConverter<Guid, string> guidConverter = new (
-        g => g.ToString("D").ToLowerInvariant(), // write to DB
-        s => Guid.Parse(s)                       // read from DB
-    );
-
     public static ModelBuilder ContainerConfiguration(this ModelBuilder builder)
     {
         var tableName = "Containers";
@@ -81,10 +77,11 @@ internal static class Configuration
 
         container.ToTable(tableName);
 
-        container.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        container.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         container.HasKey("Id");
 
-        container.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        container.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        container.Property<Guid?>("DeploymentId").HasColumnType("TEXT").HasConversion(GuidConverter);
         container.Property<string>("ContainerId").HasColumnType("TEXT").IsRequired().HasMaxLength(64);
         container.Property<string>("Name").HasColumnType("TEXT").IsRequired();
         container.Property<string>("Image").HasColumnType("TEXT").IsRequired();
@@ -101,6 +98,12 @@ internal static class Configuration
             .HasForeignKey("PlatformId")
             .OnDelete(DeleteBehavior.Cascade);
 
+        container
+            .HasOne("Deployment")
+            .WithMany()
+            .HasForeignKey("DeploymentId")
+            .OnDelete(DeleteBehavior.SetNull);
+
         container.HasIndex("ContainerId").IsUnique().HasDatabaseName($"IX__{tableName}_ContainerId");
         container.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
 
@@ -114,7 +117,7 @@ internal static class Configuration
 
         platform.ToTable(tableName);
 
-        platform.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        platform.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         platform.HasKey("Id");
 
         platform.Property<string>("Name").HasColumnType("TEXT").IsRequired();
@@ -144,10 +147,10 @@ internal static class Configuration
 
         stat.ToTable(tableName);
 
-        stat.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        stat.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         stat.HasKey("Id");
 
-        stat.Property<Guid>("ContainerId").HasConversion(guidConverter).HasColumnType("TEXT").IsRequired();
+        stat.Property<Guid>("ContainerId").HasConversion(GuidConverter).HasColumnType("TEXT").IsRequired();
         stat.Property<long>("Created").HasColumnType("REAL").IsRequired();
         stat.Property<double>("MemoryActive").HasColumnType("REAL");
         stat.Property<double>("MemoryCache").HasColumnType("REAL");
@@ -174,10 +177,10 @@ internal static class Configuration
 
         stat.ToTable(tableName);
 
-        stat.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        stat.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         stat.HasKey("Id");
 
-        stat.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        stat.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         stat.Property<long>("Created").HasColumnType("REAL").IsRequired();
         stat.Property<double>("MemoryUsage").HasColumnType("REAL").IsRequired();
         stat.Property<double>("CpuUsage").HasColumnType("REAL").IsRequired();
@@ -203,7 +206,7 @@ internal static class Configuration
 
         registry.ToTable(tableName);
 
-        registry.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        registry.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         registry.HasKey("Id");
 
         registry.Property<string>("Name").HasColumnType("TEXT").IsRequired();
@@ -223,10 +226,10 @@ internal static class Configuration
 
         refreshToken.ToTable(tableName);
 
-        refreshToken.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        refreshToken.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         refreshToken.HasKey("Id");
 
-        refreshToken.Property<Guid>("UserId").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        refreshToken.Property<Guid>("UserId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         refreshToken.Property<string>("CreatedAt").HasColumnType("TEXT").IsRequired();
 
         refreshToken
@@ -247,7 +250,7 @@ internal static class Configuration
 
         user.ToTable(tableName);
 
-        user.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        user.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         user.HasKey("Id");
 
         user.Property<string>("Name").HasColumnType("TEXT").IsRequired();
@@ -267,10 +270,10 @@ internal static class Configuration
 
         team.ToTable(tableName);
 
-        team.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        team.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         team.HasKey("Id");
 
-        team.Property<Guid>("RoleId").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        team.Property<Guid>("RoleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         team.Property<string>("Name").HasColumnType("TEXT").IsRequired();
         team
             .HasOne("Role")
@@ -290,10 +293,10 @@ internal static class Configuration
 
         permission.ToTable(tableName);
         
-        permission.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        permission.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         permission.HasKey("Id");
         
-        permission.Property<Guid>("RoleId").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        permission.Property<Guid>("RoleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         permission.Property<string>("PermissionCode").HasColumnType("TEXT").IsRequired();
 
         permission
@@ -314,7 +317,7 @@ internal static class Configuration
 
         role.ToTable(tableName);
         
-        role.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        role.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         role.HasKey("Id");
 
         role.Property<string>("Name").HasColumnType("TEXT").IsRequired();
@@ -357,11 +360,11 @@ internal static class Configuration
 
         deployment.ToTable(tableName);
 
-        deployment.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
+        deployment.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         deployment.HasKey("Id");
 
-        deployment.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(guidConverter).IsRequired();
-        deployment.Property<string>("ContainerName").HasColumnType("TEXT").IsRequired();
+        deployment.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        deployment.Property<string>("Name").HasColumnType("TEXT").IsRequired();
         deployment.Property<string>("ConfigJson").HasColumnType("TEXT").IsRequired();
         deployment.Property<int>("Version").HasColumnType("INTEGER").IsRequired();
         deployment.Property<string>("Created").HasColumnType("TEXT").IsRequired();
@@ -374,9 +377,52 @@ internal static class Configuration
             .OnDelete(DeleteBehavior.Cascade);
 
         deployment.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
-        deployment.HasIndex("ContainerName").HasDatabaseName($"IX_{tableName}_ContainerName");
 
         return builder;
     }
+
+    public static ModelBuilder ImageConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "Images";
+        var image = builder.Entity("Image");
+
+        image.ToTable(tableName);
+
+        image.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        image.HasKey("Id");
+
+        image.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        image.Property<Guid?>("RegistryId").HasColumnType("TEXT").HasConversion(GuidConverter);
+        image.Property<string>("Name").HasColumnType("TEXT").IsRequired();
+        image.Property<string>("Tag").HasColumnType("TEXT").IsRequired();
+        image.Property<string>("ImageId").HasColumnType("TEXT").IsRequired();
+        image.Property<string>("CreatedAt").HasColumnType("TEXT").IsRequired();
+        image.Property<string?>("UpdatedAt").HasColumnType("TEXT").HasDefaultValue(null);
+        image.Property<bool>("IsInUse").HasColumnType("INTEGER").HasDefaultValue(0);
+        image.Property<bool?>("IsUpToDate").HasColumnType("INTEGER").HasDefaultValue(null);
+        image.Property<double>("Size").HasColumnType("REAL").HasDefaultValue(0);
+
+        image
+            .HasOne("Platform")
+            .WithMany()
+            .HasForeignKey("PlatformId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        image
+            .HasOne("Registry")
+            .WithMany()
+            .HasForeignKey("RegistryId")
+            .OnDelete(DeleteBehavior.SetNull);
+
+        image.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
+        image.HasIndex("ImageId").HasDatabaseName($"IX_{tableName}_ImageId");
+
+        return builder;
+    }
+
+    private static readonly ValueConverter<Guid, string> GuidConverter = new(
+       g => g.ToString("D").ToLowerInvariant(),
+       s => Guid.Parse(s)
+    );
 }
 

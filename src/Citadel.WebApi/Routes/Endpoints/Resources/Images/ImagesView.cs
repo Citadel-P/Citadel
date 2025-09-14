@@ -1,9 +1,12 @@
-﻿using Domain.Contracts.Resources.Images;
+﻿using Application.Mappers;
+using Domain.Contracts.Resources.Images;
 
 namespace WebApi.Routes.Endpoints.Resources.Images;
 
 public sealed record ImageView(
     string Id,
+    string Tag,
+    string? Name,
     long Created,
     string ParentId,
     IEnumerable<string> RepoDigests,
@@ -12,22 +15,7 @@ public sealed record ImageView(
     double Size,
     double VirtualSize,
     bool IsInUse,
-    IDictionary<string, string> Labels)
-{
-    public string? Name => GetImageName();
-    public string Tag => GetTag();
-
-    private string? GetImageName()
-    {
-        if (RepoTags.Any()) return RepoTags.First().Split(":").FirstOrDefault();
-        else if (RepoDigests.Any()) return RepoDigests.FirstOrDefault()?.Split("@").FirstOrDefault();
-        else if (Labels.Any()) return Labels.TryGetValue("org.opencontainers.image.title", out var label) ? label : null;
-        else return Id;
-    }
-
-    private string GetTag()
-        => RepoTags.FirstOrDefault()?.Split(":").LastOrDefault() ?? "none";
-}
+    IDictionary<string, string> Labels);
 
 public sealed record ImagesView(IEnumerable<ImageView> Images)
 {
@@ -35,6 +23,8 @@ public sealed record ImagesView(IEnumerable<ImageView> Images)
     internal static ImageView Map(ImageResult image) 
         => new (
             Id: image.Id,
+            Tag: image.GetTag(),
+            Name: image.GetName(),
             Size: image.Size,
             Created: image.Created,
             ParentId: image.ParentId,

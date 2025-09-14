@@ -13,6 +13,7 @@ public sealed record CreateContainerInput(
     float? CpuLimit,
     float? MemoryReservation,
     bool? AutoRemove,
+    int? StopTimeout,
     ContainerRestartPolicy RestartPolicy,
     Dictionary<string, string>? Labels,
     List<string>? EnvVars,
@@ -20,7 +21,12 @@ public sealed record CreateContainerInput(
     List<string>? Volumes,
     List<string>? Networks,
     List<string>? EntryPoint,
-    List<string>? Command
+    List<string>? Command,
+    string? Hostname = null,
+    List<string>? Dns = null,
+    SecurityConfig? Security = null,
+    LoggingConfig? LoggingConfig = null,
+    HealthCheckConfig? HealthCheck = null
     )
 {
     internal CreateContainer ToCommand()
@@ -46,3 +52,24 @@ public sealed record CreateContainerInput(
         );
     }
 }
+
+public sealed record HealthCheckConfig(
+    IEnumerable<string> Test,
+    string Interval = "30s",
+    string Timeout = "5s",
+    int Retries = 3,
+    string StartPeriod = "0s"
+    );
+
+public sealed record LoggingConfig(
+    LoggingDriverType Driver,
+    Dictionary<string, string> Options
+    );
+
+public sealed record SecurityConfig(
+    bool Privileged,
+    List<string> CapAdd,
+    List<string> CapDrop,
+    bool ReadOnlyRootFs,
+    List<string> SecurityOpt
+    );

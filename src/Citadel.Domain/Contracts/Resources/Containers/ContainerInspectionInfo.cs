@@ -7,7 +7,7 @@ public record ContainerInspectionInfo(
     string Created,
     string? Path,
     IReadOnlyList<string> Args,
-    ContainerRuntimeState State,
+    ContainerRuntimeState? State,
     string? Image,
     string? ResolvConfPath,
     string? HostnamePath,

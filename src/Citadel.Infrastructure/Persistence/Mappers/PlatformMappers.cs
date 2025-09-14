@@ -22,7 +22,8 @@ internal static class PlatformMappers
             memTotal: platform.MemTotal,
             status: Enum.Parse<PlatformStatus>(platform.Status),
             connectorType: Enum.Parse<PlatformConnectorType>(platform.ConnectorType),
-            platformDescriptor: JsonSerializer.Deserialize(platform.PlatformDescriptor, PlatformJsonContext.Default.PlatformDescriptor),
+            platformDescriptor: JsonSerializer.Deserialize(platform.PlatformDescriptor, PlatformJsonContext.Default.PlatformDescriptor)
+                ?? throw new NotImplementedException($"PlatformDescriptor is missing for platform id {platform.Id}"),
             serverVersion: platform.ServerVersion,
             agentVersion: platform.AgentVersion,
             stats: platform.Stats?.Select(ToDomain).ToList()
@@ -46,7 +47,8 @@ internal static class PlatformMappers
             memTotal: platform.MemTotal,
             status: Enum.Parse<PlatformStatus>(platform.Status),
             connectorType: Enum.Parse<PlatformConnectorType>(platform.ConnectorType),
-            platformDescriptor: JsonSerializer.Deserialize(platform.PlatformDescriptor, PlatformJsonContext.Default.PlatformDescriptor),
+            platformDescriptor: JsonSerializer.Deserialize(platform.PlatformDescriptor, PlatformJsonContext.Default.PlatformDescriptor)
+              ?? throw new NotImplementedException($"PlatformDescriptor is missing for platform id {platform.Id}"),
             serverVersion: platform.ServerVersion,
             agentVersion: platform.AgentVersion,
             stats: [new PlatformStat(

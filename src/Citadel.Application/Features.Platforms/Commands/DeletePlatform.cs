@@ -20,7 +20,7 @@ public sealed record DeletePlatform(Guid Id) : ICommand<Result>
 
 internal class DeletePlatformHandler(
     IUnitOfWork unitOfWork,
-    IPlatformsStreamManager platformStreamManager,
+    IPlatformStreamManager platformStreamManager,
     IPlatformHealthMonitorJob platformHealthMonitorJob,
     ILogger<DeletePlatformHandler> logger) : ICommandHandler<DeletePlatform, Result>
 {

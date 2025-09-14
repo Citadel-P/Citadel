@@ -132,7 +132,7 @@ internal static class VolumeMappers
         return new VolumePublishStatus
         (
             NodeID: status.NodeID,
-            State: status.State?.ToString(),
+            State: status.State?.ToString() ?? "unknown",
             PublishContext: status.PublishContext?.ToDictionary() ?? []
         );
     }

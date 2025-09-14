@@ -17,7 +17,7 @@ namespace Tests.Integration.Application.TaskJobs;
 
 public class ContainerStatsWriterJobTests : IntegrationTestBase
 {
-    private readonly Mock<IContainersStreamManager> _containerStreamManagerMock = new();
+    private readonly Mock<IContainerStreamManager> _containerStreamManagerMock = new();
     private readonly Channel<ContainersStatBatch> _channel = Channel.CreateUnbounded<ContainersStatBatch>();
 
     private readonly Mock<IConnectorFactory<IContainerConnector>> _containerFactoryMock = new();

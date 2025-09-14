@@ -15,7 +15,7 @@ namespace Application.TaskJobs;
 /// </summary>
 internal class PlatformSyncJob(
     IServiceScopeFactory scopeFactory,
-    IPlatformsStreamManager platformStreamManager,
+    IPlatformStreamManager platformStreamManager,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IConnectorFactory<IPlatformConnector> connectorFactory,
     ILogger<PlatformSyncJob> logger) : BackgroundService

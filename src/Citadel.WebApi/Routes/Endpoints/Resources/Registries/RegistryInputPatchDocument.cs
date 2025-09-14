@@ -6,7 +6,7 @@ namespace WebApi.Routes.Endpoints.Resources.Registries;
 
 public class RegistryInputPatchDocument : JsonMergePatchDocument<RegistryInput>
 {
-    public static async ValueTask<RegistryInputPatchDocument?> BindAsync(HttpContext context, ParameterInfo parameter)
+    public static async ValueTask<RegistryInputPatchDocument?> BindAsync(HttpContext context, ParameterInfo _)
     {
         using var doc = await JsonDocument.ParseAsync(context.Request.Body);
         return new RegistryInputPatchDocument { Patch = doc.RootElement.Clone() };

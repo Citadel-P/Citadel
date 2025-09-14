@@ -60,11 +60,13 @@ public static class ApplicationModule
             .AddSingleton<IStreamSubscriptionResolver, StreamSubscriptionResolver>()
             .AddSingleton<ContainerInfoStreamManager>()
             .AddSingleton<ContainerLogStreamManager>()
-            .AddSingleton<PlatformsStreamManager>()
-            .AddSingleton<ContainersStreamManager>()
+            .AddSingleton<ImageStreamManager>()
+            .AddSingleton<PlatformStreamManager>()
+            .AddSingleton<ContainerStreamManager>()
             .AddSingleton<DockerDaemonStreamManager>()
-            .AddSingleton<IPlatformsStreamManager>(s => s.GetRequiredService<PlatformsStreamManager>())
-            .AddSingleton<IContainersStreamManager>(s => s.GetRequiredService<ContainersStreamManager>())
+            .AddSingleton<IImageStreamManager>(s => s.GetRequiredService<ImageStreamManager>())
+            .AddSingleton<IPlatformStreamManager>(s => s.GetRequiredService<PlatformStreamManager>())
+            .AddSingleton<IContainerStreamManager>(s => s.GetRequiredService<ContainerStreamManager>())
             .AddSingleton<IDockerDaemonStreamManager>(s => s.GetRequiredService<DockerDaemonStreamManager>());
 
     private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)
@@ -78,6 +80,7 @@ public static class ApplicationModule
             .AddHostedService<PlatformStatsWriterJob>()
             .AddHostedService<ContainerStatsWriterJob>()
             .AddHostedService<ContainerSyncJob>()
+            .AddHostedService<ImageSyncJob>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services
             .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()

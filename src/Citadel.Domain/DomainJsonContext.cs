@@ -5,7 +5,13 @@ using Domain.Entities.Registries;
 
 namespace Domain;
 
-[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default, PropertyNameCaseInsensitive = true)]
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default, PropertyNameCaseInsensitive = true, 
+    Converters = new[]
+    {
+        typeof(JsonStringEnumConverter<PlatformType>),
+        typeof(JsonStringEnumConverter<PlatformStatus>),
+        typeof(JsonStringEnumConverter<PlatformConnectorType>),
+    })]
 [JsonSerializable(typeof(Platform))]
 [JsonSerializable(typeof(PlatformStat))]
 [JsonSerializable(typeof(ICollection<PlatformStat>))]
@@ -18,7 +24,14 @@ public partial class PlatformJsonContext : JsonSerializerContext
 {
 }
 
-[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default, PropertyNameCaseInsensitive = true, Converters = new[] { typeof(JsonStringEnumConverter) })]
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Default, 
+    PropertyNameCaseInsensitive = true,
+    Converters = new[]
+    {
+        typeof(JsonStringEnumConverter<RegistryType>),
+        typeof(JsonStringEnumConverter<GhcrAccountType>)
+    })]
 [JsonSerializable(typeof(Registry))]
 [JsonSerializable(typeof(AWSRegistry))]
 [JsonSerializable(typeof(AzureRegistry))]

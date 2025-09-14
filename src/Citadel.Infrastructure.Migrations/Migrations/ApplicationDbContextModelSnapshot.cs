@@ -30,6 +30,9 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<long>("Created")
                         .HasColumnType("REAL");
 
+                    b.Property<string>("DeploymentId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Image")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -66,6 +69,8 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("ContainerId")
                         .IsUnique()
                         .HasDatabaseName("IX__Containers_ContainerId");
+
+                    b.HasIndex("DeploymentId");
 
                     b.HasIndex("PlatformId")
                         .HasDatabaseName("IX_Containers_PlatformId");
@@ -122,11 +127,11 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ContainerName")
+                    b.Property<string>("Created")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Created")
+                    b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -143,13 +148,68 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ContainerName")
-                        .HasDatabaseName("IX_Deployments_ContainerName");
-
                     b.HasIndex("PlatformId")
                         .HasDatabaseName("IX_Deployments_PlatformId");
 
                     b.ToTable("Deployments", (string)null);
+                });
+
+            modelBuilder.Entity("Image", b =>
+                {
+                    b.Property<string>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImageId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsInUse")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool?>("IsUpToDate")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PlatformId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RegistryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("Size")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("REAL")
+                        .HasDefaultValue(0.0);
+
+                    b.Property<string>("Tag")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ImageId")
+                        .HasDatabaseName("IX_Images_ImageId");
+
+                    b.HasIndex("PlatformId")
+                        .HasDatabaseName("IX_Images_PlatformId");
+
+                    b.HasIndex("RegistryId");
+
+                    b.ToTable("Images", (string)null);
                 });
 
             modelBuilder.Entity("Permission", b =>
@@ -467,6 +527,11 @@ namespace Infrastructure.Migrations.Migrations
 
             modelBuilder.Entity("Container", b =>
                 {
+                    b.HasOne("Deployment", null)
+                        .WithMany()
+                        .HasForeignKey("DeploymentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Platform", null)
                         .WithMany()
                         .HasForeignKey("PlatformId")
@@ -490,6 +555,20 @@ namespace Infrastructure.Migrations.Migrations
                         .HasForeignKey("PlatformId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Image", b =>
+                {
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Registry", null)
+                        .WithMany()
+                        .HasForeignKey("RegistryId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("Permission", b =>

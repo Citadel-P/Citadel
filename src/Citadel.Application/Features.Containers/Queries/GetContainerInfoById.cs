@@ -1,6 +1,7 @@
 ﻿using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Domain.Entities;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
@@ -42,18 +43,18 @@ internal class GetContainerInfoByIdHandler(IConnectorFactory<IContainerConnector
         }
 
         return new ContainerInfo(
-              Name: inspect.Name,
-              ContainerId: inspect.Id,
+              Name: inspect?.Name ?? string.Empty,
+              ContainerId: inspect?.Id ?? string.Empty,
               PlatformId: platform.Id,
               PlatformName: platform.Name,
-              StartedAt: inspect.State.StartedAt,
-              FinishedAt: inspect.State.FinishedAt,
-              ImageName: inspect.Config?.Image,
-              ImageId: inspect.Image,
-              Volumes: inspect.Mounts?.Where(s => s.Name != null).Select(s => s.Name).ToList() ?? [],
-              Networks: inspect.NetworkSettings?.Networks?.ToDictionary(n => n.Key, n => string.IsNullOrEmpty(n.Value.NetworkID) ? n.Key : n.Value.NetworkID ) ?? [],
-              Ports: inspect.HostConfig?.PortBindings,
-              State: inspect.State.Status
+              StartedAt: inspect?.State?.StartedAt ?? string.Empty,
+              FinishedAt: inspect?.State?.FinishedAt ?? string.Empty,
+              ImageName: inspect?.Config?.Image ?? string.Empty,
+              ImageId: inspect?.Image ?? string.Empty,
+              Volumes: inspect?.Mounts?.Where(s => s.Name != null)?.Select(s => s.Name!)?.ToList() ?? [],
+              Networks: inspect?.NetworkSettings?.Networks?.ToDictionary(n => n.Key, n => string.IsNullOrEmpty(n.Value.NetworkID) ? n.Key : n.Value.NetworkID ) ?? [],
+              Ports: inspect?.HostConfig?.PortBindings ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
+              State: inspect?.State?.Status ?? ContainerStateStatus.Unknown
             );
     }
 }

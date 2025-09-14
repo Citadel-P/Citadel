@@ -80,40 +80,13 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Containers",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "TEXT", nullable: false),
-                    ContainerId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Created = table.Column<long>(type: "REAL", nullable: false),
-                    Image = table.Column<string>(type: "TEXT", nullable: false),
-                    ImageId = table.Column<string>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", nullable: false),
-                    PlatformId = table.Column<string>(type: "TEXT", nullable: false),
-                    Ports = table.Column<string>(type: "TEXT", nullable: false),
-                    Stack = table.Column<string>(type: "TEXT", nullable: true),
-                    State = table.Column<string>(type: "TEXT", nullable: false),
-                    Updated = table.Column<string>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Containers", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Containers_Platforms_PlatformId",
-                        column: x => x.PlatformId,
-                        principalTable: "Platforms",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Deployments",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
                     ConfigJson = table.Column<string>(type: "TEXT", nullable: false),
-                    ContainerName = table.Column<string>(type: "TEXT", nullable: false),
                     Created = table.Column<string>(type: "TEXT", nullable: false),
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
                     PlatformId = table.Column<string>(type: "TEXT", nullable: false),
                     Updated = table.Column<string>(type: "TEXT", nullable: false),
                     Version = table.Column<int>(type: "INTEGER", nullable: false)
@@ -150,6 +123,39 @@ namespace Infrastructure.Migrations.Migrations
                         principalTable: "Platforms",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Images",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
+                    ImageId = table.Column<string>(type: "TEXT", nullable: false),
+                    IsInUse = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: false),
+                    IsUpToDate = table.Column<bool>(type: "INTEGER", nullable: true),
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    PlatformId = table.Column<string>(type: "TEXT", nullable: false),
+                    RegistryId = table.Column<string>(type: "TEXT", nullable: true),
+                    Size = table.Column<double>(type: "REAL", nullable: false, defaultValue: 0.0),
+                    Tag = table.Column<string>(type: "TEXT", nullable: false),
+                    UpdatedAt = table.Column<string>(type: "TEXT", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Images", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Images_Platforms_PlatformId",
+                        column: x => x.PlatformId,
+                        principalTable: "Platforms",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Images_Registries_RegistryId",
+                        column: x => x.RegistryId,
+                        principalTable: "Registries",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
@@ -210,26 +216,35 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "ContainerStats",
+                name: "Containers",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
-                    ContainerId = table.Column<string>(type: "TEXT", nullable: false),
-                    CpuUsage = table.Column<double>(type: "REAL", nullable: false),
+                    ContainerId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     Created = table.Column<long>(type: "REAL", nullable: false),
-                    MemoryActive = table.Column<double>(type: "REAL", nullable: false),
-                    MemoryCache = table.Column<double>(type: "REAL", nullable: false),
-                    MemoryLimit = table.Column<double>(type: "REAL", nullable: false),
-                    RxBytes = table.Column<double>(type: "REAL", nullable: false),
-                    TxBytes = table.Column<double>(type: "REAL", nullable: false)
+                    DeploymentId = table.Column<string>(type: "TEXT", nullable: true),
+                    Image = table.Column<string>(type: "TEXT", nullable: false),
+                    ImageId = table.Column<string>(type: "TEXT", nullable: false),
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    PlatformId = table.Column<string>(type: "TEXT", nullable: false),
+                    Ports = table.Column<string>(type: "TEXT", nullable: false),
+                    Stack = table.Column<string>(type: "TEXT", nullable: true),
+                    State = table.Column<string>(type: "TEXT", nullable: false),
+                    Updated = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_ContainerStats", x => x.Id);
+                    table.PrimaryKey("PK_Containers", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_ContainerStats_Containers_ContainerId",
-                        column: x => x.ContainerId,
-                        principalTable: "Containers",
+                        name: "FK_Containers_Deployments_DeploymentId",
+                        column: x => x.DeploymentId,
+                        principalTable: "Deployments",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_Containers_Platforms_PlatformId",
+                        column: x => x.PlatformId,
+                        principalTable: "Platforms",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -254,6 +269,31 @@ namespace Infrastructure.Migrations.Migrations
                         name: "FK_UsersTeams_Users_UserId",
                         column: x => x.UserId,
                         principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ContainerStats",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    ContainerId = table.Column<string>(type: "TEXT", nullable: false),
+                    CpuUsage = table.Column<double>(type: "REAL", nullable: false),
+                    Created = table.Column<long>(type: "REAL", nullable: false),
+                    MemoryActive = table.Column<double>(type: "REAL", nullable: false),
+                    MemoryCache = table.Column<double>(type: "REAL", nullable: false),
+                    MemoryLimit = table.Column<double>(type: "REAL", nullable: false),
+                    RxBytes = table.Column<double>(type: "REAL", nullable: false),
+                    TxBytes = table.Column<double>(type: "REAL", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ContainerStats", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ContainerStats_Containers_ContainerId",
+                        column: x => x.ContainerId,
+                        principalTable: "Containers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -284,6 +324,11 @@ namespace Infrastructure.Migrations.Migrations
                 column: "ContainerId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Containers_DeploymentId",
+                table: "Containers",
+                column: "DeploymentId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Containers_PlatformId",
                 table: "Containers",
                 column: "PlatformId");
@@ -295,14 +340,24 @@ namespace Infrastructure.Migrations.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_Deployments_ContainerName",
-                table: "Deployments",
-                column: "ContainerName");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Deployments_PlatformId",
                 table: "Deployments",
                 column: "PlatformId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Images_ImageId",
+                table: "Images",
+                column: "ImageId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Images_PlatformId",
+                table: "Images",
+                column: "PlatformId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Images_RegistryId",
+                table: "Images",
+                column: "RegistryId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Permissions_RoleId",
@@ -366,7 +421,7 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ContainerStats");
 
             migrationBuilder.DropTable(
-                name: "Deployments");
+                name: "Images");
 
             migrationBuilder.DropTable(
                 name: "Permissions");
@@ -378,13 +433,13 @@ namespace Infrastructure.Migrations.Migrations
                 name: "RefreshTokens");
 
             migrationBuilder.DropTable(
-                name: "Registries");
-
-            migrationBuilder.DropTable(
                 name: "UsersTeams");
 
             migrationBuilder.DropTable(
                 name: "Containers");
+
+            migrationBuilder.DropTable(
+                name: "Registries");
 
             migrationBuilder.DropTable(
                 name: "Teams");
@@ -393,10 +448,13 @@ namespace Infrastructure.Migrations.Migrations
                 name: "Users");
 
             migrationBuilder.DropTable(
-                name: "Platforms");
+                name: "Deployments");
 
             migrationBuilder.DropTable(
                 name: "Roles");
+
+            migrationBuilder.DropTable(
+                name: "Platforms");
         }
     }
 }

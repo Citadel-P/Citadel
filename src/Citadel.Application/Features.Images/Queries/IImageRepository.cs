@@ -23,7 +23,7 @@ public class GitHubPackageResponse : IImageRepository
 
 public class DockerHubRepositoryResponse : IImageRepository
 {
-    public string? Name { get; init; }
+    public string Name { get; init; } = null!;
     public string? Namespace { get; set; }
     public DateTime LastUpdated { get; set; }
     public bool IsPrivate { get; set; }

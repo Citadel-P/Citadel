@@ -13,7 +13,11 @@ using Mediator;
 namespace Application.Features.Registries.Commands;
 
 [RequirePermission(nameof(AppPermission.Registry_Create))]
-public sealed record CreateRegistry(string Name, string Url, RegistryType Type, RegistryConfigurationBase Configuration) : ICommand<Result<Registry>>
+public sealed record CreateRegistry(
+    string Name, 
+    string Url, 
+    RegistryType Type, 
+    RegistryConfigurationBase Configuration) : ICommand<Result<Registry>>
 {
     internal sealed class Validator : AbstractValidator<CreateRegistry>
     {

@@ -105,7 +105,6 @@ public class Platform(
 
     public Platform AppendStat(PlatformStat stat)
     {
-        if (stat == null) throw new ArgumentNullException(nameof(stat), "Stat cannot be null.");
         stats.Add(stat);
         return this;
     }   
