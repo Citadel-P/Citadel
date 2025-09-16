@@ -21,7 +21,7 @@ export const ImageActionButtons = ({
   const navigate = useNavigate();
   const { actions } = useAvailableActions(selectedImages);
 
-  const imageId = useMemo(() => formatId(selectedImages?.at(0)?.id), [selectedImages]);
+  const imageId = useMemo(() => formatId(selectedImages?.at(0)?.imageId), [selectedImages]);
 
   return (
     <div className="mt-1">

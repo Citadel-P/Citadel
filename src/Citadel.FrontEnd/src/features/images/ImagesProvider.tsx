@@ -5,10 +5,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ImagesContext } from './ImagesContext';
 import { useDeleteImageDialog } from './hooks/useDeleteImageDialog';
 import { useRunImageDialog } from './hooks/useRunImageDialog';
+import { useImagesGroup } from './hooks/useImagesGroup';
+import { useParams } from 'react-router';
 
 export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const client = useQueryClient();
+  const { platformId } = useParams<{ platformId: string }>();
   const { data, isLoading, isSuccess } = useGETRegistries();
+
+  const { imagesInfo, isLoading: imagesLoading } = useImagesGroup(platformId);
 
   // State variables
   const [registries, setRegistries] = useState<RegistryView[]>([]);
@@ -32,11 +37,12 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
     }
   }, [isSuccess, data]);
 
-  // Wrapper function that handles both original and filtered images
-  const handleLocalImagesUpdate = useCallback((images: ImageView[]) => {
-    setOriginalLocalImages(images);
-    setLocalImages(images);
-  }, []);
+  // Update containers when hub info changes
+  useEffect(() => {
+    if (imagesInfo?.images) {
+      setOriginalLocalImages(imagesInfo.images);
+    }
+  }, [imagesInfo]);
 
   // Filter images whenever search term changes
   useEffect(() => {
@@ -54,9 +60,9 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
           image.name?.toLowerCase().includes(searchLower) || image.tag?.toLowerCase().includes(searchLower) || false;
         const idMatches =
           // Short ID format (first 12 characters)
-          (image.id && image.id.substring(0, 12).toLowerCase().includes(searchLower)) ||
+          (image.imageId && image.imageId.substring(0, 12).toLowerCase().includes(searchLower)) ||
           // Full ID format
-          (image.id && image.id.toLowerCase().includes(searchLower)) ||
+          (image.imageId && image.imageId.toLowerCase().includes(searchLower)) ||
           false;
 
         return nameMatches || idMatches;
@@ -86,7 +92,7 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
   // Memoized context value
   const contextValue = useMemo(
     () => ({
-      isLoading,
+      isLoading: imagesLoading || isLoading,
       registries,
       selectedRegistry,
       selectedRows,
@@ -94,7 +100,6 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
       setSelectionChange,
       requestDelete,
       localImages,
-      setLocalImages: handleLocalImagesUpdate,
       deleteIsPending,
       dialogData,
       setDialogData,
@@ -112,7 +117,6 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
       setSelectionChange,
       requestDelete,
       localImages,
-      handleLocalImagesUpdate,
       deleteIsPending,
       dialogData,
       setDialogData,
@@ -121,6 +125,7 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
       setCurrentImage,
       runDialogData,
       setRunDialogData,
+      imagesLoading,
     ],
   );
 

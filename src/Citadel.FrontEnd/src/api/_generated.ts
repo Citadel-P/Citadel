@@ -23,6 +23,7 @@ export enum VolumeScope {
 }
 
 export enum RegistryType {
+  Custom = "Custom",
   DockerHub = "DockerHub",
   Azure = "Azure",
   AWS = "AWS",
@@ -47,7 +48,20 @@ export enum PlatformConnectorType {
   Agent = "Agent",
 }
 
-export enum NullableOfGhcrAccountType {
+export enum LoggingDriverType {
+  None = "none",
+  Local = "local",
+  JsonFile = "json-file",
+  Syslog = "syslog",
+  Journald = "journald",
+  Gelf = "gelf",
+  Fluentd = "fluentd",
+  Awslogs = "awslogs",
+  Splunk = "splunk",
+  Etwlogs = "etwlogs",
+}
+
+export enum GhcrAccountType {
   Organization = "Organization",
   User = "User",
 }
@@ -91,11 +105,11 @@ export interface BindOptions {
 
 export interface ClusterVolume {
   id: string;
-  version: VolumeVersionInfo;
+  version: null | VolumeVersionInfo;
   createdAt: string;
   updatedAt: string;
-  spec: VolumeSpecification;
-  info: ClusterVolumeInfo;
+  spec: null | VolumeSpecification;
+  info: null | ClusterVolumeInfo;
   publishStatus: VolumePublishStatus[];
 }
 
@@ -189,7 +203,7 @@ export interface ContainerInspectView {
   id: string;
   created: string;
   path: null | string;
-  state: ContainerRuntimeState;
+  state: null | ContainerRuntimeState;
   image: null | string;
   resolvConfPath: null | string;
   hostnamePath: null | string;
@@ -219,10 +233,10 @@ export interface ContainerInspectView {
   args: null | any[];
   execIDs: string[];
   mounts: null | any[];
-  hostConfig: HostConfiguration;
-  graphDriver: GraphDriverDataInfo;
-  config: ContainerConfiguration;
-  networkSettings: NetworkSettingsInfo;
+  hostConfig: null | HostConfiguration;
+  graphDriver: null | GraphDriverDataInfo;
+  config: null | ContainerConfiguration;
+  networkSettings: null | NetworkSettingsInfo;
 }
 
 export interface ContainerRuntimeState {
@@ -245,7 +259,7 @@ export interface ContainerRuntimeState {
   error: null | string;
   startedAt: null | string;
   finishedAt: null | string;
-  health: ContainerHealthStatus;
+  health: null | ContainerHealthStatus;
 }
 
 export interface ContainerStatView {
@@ -313,10 +327,10 @@ export interface ContainerView {
    */
   updated: number | string;
   stack: null | string;
-  lastStats: NullableOfContainerStatView;
+  lastStats: null | ContainerStatView;
   ports: Record<string, HostPortBinding[]>;
-  platform?: PlatformView;
-  metadata?: EndpointMetadata;
+  platform?: null | PlatformView;
+  metadata?: null | EndpointMetadata;
 }
 
 export interface ContainerVolumeResult {
@@ -356,6 +370,11 @@ export interface CreateContainerInput {
    */
   memoryReservation: null | number | string;
   autoRemove: null | boolean;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  stopTimeout: null | number | string;
   restartPolicy: ContainerRestartPolicy;
   labels: null | object;
   envVars: null | any[];
@@ -364,6 +383,11 @@ export interface CreateContainerInput {
   networks: null | any[];
   entryPoint: null | any[];
   command: null | any[];
+  hostname?: null | string;
+  dns?: null | any[];
+  security?: null | SecurityConfig;
+  loggingConfig?: null | LoggingConfig;
+  healthCheck?: null | HealthCheckConfig;
 }
 
 export interface CreateContainerView {
@@ -382,8 +406,8 @@ export interface CreateNetworkInput {
   enableIPv6: null | boolean;
   enableIPv4: null | boolean;
   configOnly: null | boolean;
-  ipam?: IPAMInput;
-  configFrom?: ConfigFromInput;
+  ipam?: null | IPAMInput;
+  configFrom?: null | ConfigFromInput;
   labels?: null | object;
   options?: null | object;
 }
@@ -499,7 +523,7 @@ export interface DockerHubTagView {
    */
   id: number | string;
   name: string;
-  image: DockerHubImageView;
+  image: null | DockerHubImageView;
   lastUpdated: string;
   /**
    * @format int32
@@ -523,7 +547,7 @@ export interface DockerNetworkDetails {
   ingress: boolean;
   configOnly: boolean;
   configFrom: null | string;
-  ipam: IpAddressManagementConfig;
+  ipam: null | IpAddressManagementConfig;
   options: Record<string, string>;
   labels: Record<string, string>;
   containers: Record<string, NetworkConnectedContainer>;
@@ -544,7 +568,7 @@ export interface DockerNetworkResult {
   configOnly: boolean;
   inUse: boolean;
   configFrom: null | string;
-  ipam: IpAddressManagementConfig;
+  ipam: null | IpAddressManagementConfig;
   options: Record<string, string>;
   labels: Record<string, string>;
 }
@@ -556,8 +580,8 @@ export interface DockerVolumeResult {
   driver: string;
   mountpoint: string;
   createdAt: string;
-  clusterVolume: ClusterVolume;
-  usageData: VolumeUsageData;
+  clusterVolume: null | ClusterVolume;
+  usageData: null | VolumeUsageData;
   containers: ContainerVolumeResult[];
   status: Record<string, string>;
   labels: Record<string, string>;
@@ -583,7 +607,7 @@ export interface EndpointMetadata {
 }
 
 export interface EndpointSettingsInfo {
-  ipamConfig: EndpointIpamConfiguration;
+  ipamConfig: null | EndpointIpamConfiguration;
   links: string[];
   macAddress: null | string;
   aliases: string[];
@@ -619,7 +643,7 @@ export interface GitHubCrPackageVersion {
   createdAt: null | string;
   updatedAt: null | string;
   packageHtmlUrl: null | string;
-  metadata: GitHubCrPackageVersionMetadata;
+  metadata: null | GitHubCrPackageVersionMetadata;
 }
 
 export interface GitHubCrPackageVersionContainerMetadata {
@@ -627,12 +651,28 @@ export interface GitHubCrPackageVersionContainerMetadata {
 }
 
 export interface GitHubCrPackageVersionMetadata {
-  container: GitHubCrPackageVersionContainerMetadata;
+  container: null | GitHubCrPackageVersionContainerMetadata;
 }
 
 export interface GraphDriverDataInfo {
   name: null | string;
   data: Record<string, string>;
+}
+
+export interface HealthCheckConfig {
+  test: string[];
+  /** @default "30s" */
+  interval?: string;
+  /** @default "5s" */
+  timeout?: string;
+  /**
+   * @format int32
+   * @default 3
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  retries?: number | string;
+  /** @default "0s" */
+  startPeriod?: string;
 }
 
 export interface HistoryImageResult {
@@ -654,10 +694,10 @@ export interface HistoryImageResult {
 export interface HostConfiguration {
   binds: string[];
   containerIDFile: null | string;
-  logConfig: LogConfiguration;
+  logConfig: null | LogConfiguration;
   networkMode: null | string;
   portBindings: Record<string, HostPortBinding[]>;
-  restartPolicy: RestartPolicy;
+  restartPolicy: null | RestartPolicy;
   autoRemove: null | boolean;
   volumeDriver: null | string;
   volumesFrom: string[];
@@ -763,8 +803,8 @@ export interface HostMount {
   type: null | string;
   readOnly: null | boolean;
   consistency: null | string;
-  bindOptions: BindOptions;
-  volumeOptions: VolumeOptions;
+  bindOptions: null | BindOptions;
+  volumeOptions: null | VolumeOptions;
 }
 
 export interface HostPortBinding {
@@ -799,7 +839,7 @@ export type IImageRepository = BaseIImageRepository &
 
 export interface IImageRepositoryDockerHubRepositoryResponse {
   $type?: "DockerHub";
-  name?: null | string;
+  name?: string;
   namespace?: null | string;
   /** @format date-time */
   lastUpdated?: any;
@@ -862,34 +902,25 @@ export interface ImagePullProgress {
 }
 
 export interface ImageView {
+  /** @format uuid */
   id: string;
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  created: number | string;
-  parentId: string;
-  repoDigests: string[];
-  repoTags: string[];
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  sharedSize: number | string;
+  tag: string;
+  name: string;
+  imageId: string;
   /**
    * @format double
    * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
    */
   size: number | string;
-  /**
-   * @format double
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  virtualSize: number | string;
   isInUse: boolean;
-  labels: Record<string, string>;
-  name?: null | string;
-  tag?: null | string;
+  /** @format uuid */
+  platformId: string;
+  /** @format date-time */
+  createdAt: any;
+  isUpToDate?: null | boolean;
+  updatedAt?: any;
+  /** @format uuid */
+  registryId?: null | string;
 }
 
 export interface ImagesView {
@@ -916,7 +947,14 @@ export interface InspectImageResult {
   containers: ContainerImageResult[];
 }
 
-export type IpAddressInfo = any;
+export interface IpAddressInfo {
+  addr: null | string;
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  prefixLen: null | number | string;
+}
 
 export interface IpAddressManagementConfig {
   driver: null | string;
@@ -933,6 +971,11 @@ export interface IpamSubnetConfiguration {
 export interface LogConfiguration {
   type: null | string;
   config: Record<string, string>;
+}
+
+export interface LoggingConfig {
+  driver: LoggingDriverType;
+  options: Record<string, string>;
 }
 
 export interface LoginRequest {
@@ -997,55 +1040,13 @@ export interface NetworkSettingsInfo {
   ipPrefixLen: null | number | string;
   ipv6Gateway: null | string;
   macAddress: null | string;
-  ports: Record<string, any>;
+  ports: Record<string, HostPortBinding[]>;
   networks: Record<string, EndpointSettingsInfo>;
 }
 
 export interface NetworksView {
   networks: DockerNetworkResult[];
 }
-
-export interface NullableOfContainerStatView {
-  /** @format uuid */
-  containerId?: string;
-  /**
-   * @format double
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  memoryActive?: number | string;
-  /**
-   * @format double
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  memoryCache?: number | string;
-  /**
-   * @format double
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  cpuUsage?: number | string;
-  /**
-   * @format double
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  memoryLimit?: number | string;
-  /**
-   * @format double
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  rxBytes?: number | string;
-  /**
-   * @format double
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  txBytes?: number | string;
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  created?: number | string;
-}
-
-export type NullableOfRegistryType = any;
 
 export type PlatformDescriptor = BasePlatformDescriptor &
   (
@@ -1218,7 +1219,7 @@ export interface PlatformView {
   status: PlatformStatus;
   connectorType: PlatformConnectorType;
   stats: null | any[];
-  platformDescriptor: PlatformDescriptor;
+  platformDescriptor: null | PlatformDescriptor;
 }
 
 export interface PlatformsView {
@@ -1252,8 +1253,8 @@ export interface PullImageResult {
   status?: null | string;
   errorMessage?: null | string;
   progressMessage?: null | string;
-  progress?: ImagePullProgress;
-  error?: ImagePullError;
+  progress?: null | ImagePullProgress;
+  error?: null | ImagePullError;
 }
 
 export interface RefreshTokenResponse {
@@ -1312,7 +1313,7 @@ export interface RegistryConfigurationBaseGitHubRegistry {
   $type?: "GitHub";
   name: string;
   pat: string;
-  type: NullableOfGhcrAccountType;
+  type: GhcrAccountType;
 }
 
 export interface RegistryConfigurationBaseGitlabRegistry {
@@ -1323,9 +1324,9 @@ export interface RegistryConfigurationBaseGitlabRegistry {
 }
 
 export interface RegistryInput {
-  name: null | string;
-  url: null | string;
-  type: NullableOfRegistryType;
+  name: string;
+  url: string;
+  type: RegistryType;
   configuration: RegistryConfigurationBase;
 }
 
@@ -1348,7 +1349,7 @@ export interface RegistryWithConfigView {
   type: RegistryType;
   /** @format date-time */
   created: any;
-  configuration: RegistryConfigurationBase;
+  configuration: null | RegistryConfigurationBase;
 }
 
 export interface RestartPolicy {
@@ -1374,6 +1375,14 @@ export interface RunImageInfoResult {
    * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
    */
   cpuCount: number | string;
+}
+
+export interface SecurityConfig {
+  privileged: boolean;
+  capAdd: string[];
+  capDrop: string[];
+  readOnlyRootFs: boolean;
+  securityOpt: string[];
 }
 
 export interface SwarmPeer {
@@ -1403,7 +1412,7 @@ export interface VolumeAccessMode {
   scope: VolumeScope;
   sharing: VolumeSharing;
   secrets: VolumeSecret[];
-  capacityRange: VolumeCapacityRange;
+  capacityRange: null | VolumeCapacityRange;
   availability: string;
 }
 
@@ -1423,7 +1432,7 @@ export interface VolumeCapacityRange {
 export interface VolumeOptions {
   noCopy: null | boolean;
   labels: Record<string, string>;
-  driverConfig: DriverConfiguration;
+  driverConfig: null | DriverConfiguration;
   subpath: null | string;
 }
 
@@ -1440,7 +1449,7 @@ export interface VolumeSecret {
 
 export interface VolumeSpecification {
   group: string;
-  accessMode: VolumeAccessMode;
+  accessMode: null | VolumeAccessMode;
 }
 
 export interface VolumeUsageData {

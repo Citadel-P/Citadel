@@ -1,6 +1,8 @@
 ﻿using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
+using Microsoft.AspNetCore.SignalR;
+using static Hosting.Common.Constants;
 
 namespace Application.Services.Abstractions;
 
@@ -22,6 +24,10 @@ public interface IApplicationHubDispatcher
     #region Containers
     Task SendContainersInfo(Guid platformId, IEnumerable<Container> containers);
     Task SendContainersStats(Guid platformId, IEnumerable<ContainerStat> containers);
+    #endregion
+
+    #region Images
+    Task SendImagesInfo(Guid platformId, IEnumerable<Image> images);
     #endregion
 
     #region Platforms

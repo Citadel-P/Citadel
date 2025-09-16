@@ -26,13 +26,13 @@ export const DeleteLocalImageDialog = ({
 }) => {
   const { currentPlatform } = useAppContext();
 
-  const imagesId = dialogData.currentSelection?.map((c) => c.id!) ?? [];
+  const imagesId = dialogData.currentSelection?.map((c) => c.imageId!) ?? [];
 
   const [noPrune, setNoPrune] = useState(false);
   const [force, setForce] = useState(false);
 
   const handleDelete = () => {
-    requestDelete({ platformId: currentPlatform?.id ?? '', ids: imagesId, force, noPrune });
+    requestDelete({ platformId: currentPlatform?.imageId ?? '', ids: imagesId, force, noPrune });
   };
 
   return (

@@ -12,7 +12,6 @@ interface IContext {
   localImages: ImageView[];
   requestDelete: (request: DeleteImagesRequest) => void;
   setSelectedRows: (images: ImageView[] | undefined) => void;
-  setLocalImages: (images: ImageView[]) => void;
   deleteIsPending: boolean;
   dialogData: IDialogData<ImageView>;
   setDialogData: (data: IDialogData<ImageView>) => void;

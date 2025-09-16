@@ -4,7 +4,7 @@ using Domain.Entities;
 
 namespace Application.Services.SignalR;
 
-internal interface IImageStreamManager
+internal interface IImageStreamManager : IStreamGroupManager
 {
     Task SendImagesInfo(Guid platformId, IEnumerable<Image> images);
 }
@@ -13,8 +13,12 @@ internal class ImageStreamManager(IApplicationHubDispatcher dispatcher) : BaseSt
 {
     public Task SendImagesInfo(Guid platformId, IEnumerable<Image> images)
     {
-        //throw new NotImplementedException();
-        return Task.CompletedTask;
+        if (streams.IsEmpty)
+        {
+            return Task.CompletedTask;
+        }
+
+        return dispatcher.SendImagesInfo(platformId, images);
     }
 }
 

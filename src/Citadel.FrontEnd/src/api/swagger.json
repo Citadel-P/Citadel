@@ -4059,10 +4059,7 @@
           "readOnlyNonRecursive",
           "readOnlyForceRecursive"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "propagation": {
             "type": [
@@ -4106,16 +4103,20 @@
           "info",
           "publishStatus"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "id": {
             "type": "string"
           },
           "version": {
-            "$ref": "#/components/schemas/VolumeVersionInfo"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/VolumeVersionInfo"
+              }
+            ]
           },
           "createdAt": {
             "type": "string"
@@ -4124,10 +4125,24 @@
             "type": "string"
           },
           "spec": {
-            "$ref": "#/components/schemas/VolumeSpecification"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/VolumeSpecification"
+              }
+            ]
           },
           "info": {
-            "$ref": "#/components/schemas/ClusterVolumeInfo"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ClusterVolumeInfo"
+              }
+            ]
           },
           "publishStatus": {
             "type": "array",
@@ -4144,10 +4159,7 @@
           "volumeID",
           "accessibleTopology"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "capacityBytes": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -4214,10 +4226,7 @@
         "required": [
           "network"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "network": {
             "type": "string"
@@ -4247,10 +4256,7 @@
           "onBuild",
           "labels"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "hostname": {
             "type": [
@@ -4385,10 +4391,7 @@
           "status",
           "failingStreak"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "status": {
             "type": [
@@ -4561,7 +4564,14 @@
             ]
           },
           "state": {
-            "$ref": "#/components/schemas/ContainerRuntimeState"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ContainerRuntimeState"
+              }
+            ]
           },
           "image": {
             "type": [
@@ -4681,16 +4691,44 @@
             }
           },
           "hostConfig": {
-            "$ref": "#/components/schemas/HostConfiguration"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HostConfiguration"
+              }
+            ]
           },
           "graphDriver": {
-            "$ref": "#/components/schemas/GraphDriverDataInfo"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GraphDriverDataInfo"
+              }
+            ]
           },
           "config": {
-            "$ref": "#/components/schemas/ContainerConfiguration"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ContainerConfiguration"
+              }
+            ]
           },
           "networkSettings": {
-            "$ref": "#/components/schemas/NetworkSettingsInfo"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NetworkSettingsInfo"
+              }
+            ]
           }
         }
       },
@@ -4718,10 +4756,7 @@
           "finishedAt",
           "health"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "status": {
             "$ref": "#/components/schemas/ContainerStateStatus"
@@ -4793,7 +4828,14 @@
             ]
           },
           "health": {
-            "$ref": "#/components/schemas/ContainerHealthStatus"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ContainerHealthStatus"
+              }
+            ]
           }
         }
       },
@@ -4953,7 +4995,14 @@
             ]
           },
           "lastStats": {
-            "$ref": "#/components/schemas/NullableOfContainerStatView"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ContainerStatView"
+              }
+            ]
           },
           "ports": {
             "type": "object",
@@ -4965,10 +5014,24 @@
             }
           },
           "platform": {
-            "$ref": "#/components/schemas/PlatformView"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PlatformView"
+              }
+            ]
           },
           "metadata": {
-            "$ref": "#/components/schemas/EndpointMetadata"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EndpointMetadata"
+              }
+            ]
           }
         }
       },
@@ -5041,6 +5104,7 @@
           "cpuLimit",
           "memoryReservation",
           "autoRemove",
+          "stopTimeout",
           "restartPolicy",
           "labels",
           "envVars",
@@ -5110,6 +5174,15 @@
               "boolean"
             ]
           },
+          "stopTimeout": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
           "restartPolicy": {
             "$ref": "#/components/schemas/ContainerRestartPolicy"
           },
@@ -5175,6 +5248,51 @@
             "items": {
               "type": "string"
             }
+          },
+          "hostname": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dns": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "security": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SecurityConfig"
+              }
+            ]
+          },
+          "loggingConfig": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LoggingConfig"
+              }
+            ]
+          },
+          "healthCheck": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HealthCheckConfig"
+              }
+            ]
           }
         }
       },
@@ -5254,10 +5372,24 @@
             ]
           },
           "ipam": {
-            "$ref": "#/components/schemas/IPAMInput"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/IPAMInput"
+              }
+            ]
           },
           "configFrom": {
-            "$ref": "#/components/schemas/ConfigFromInput"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConfigFromInput"
+              }
+            ]
           },
           "labels": {
             "type": [
@@ -5549,10 +5681,7 @@
           "status",
           "lastPulled"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "architecture": {
             "type": "string"
@@ -5656,7 +5785,14 @@
             "type": "string"
           },
           "image": {
-            "$ref": "#/components/schemas/DockerHubImageView"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DockerHubImageView"
+              }
+            ]
           },
           "lastUpdated": {
             "type": "string"
@@ -5739,7 +5875,14 @@
             ]
           },
           "ipam": {
-            "$ref": "#/components/schemas/IpAddressManagementConfig"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/IpAddressManagementConfig"
+              }
+            ]
           },
           "options": {
             "type": "object",
@@ -5831,7 +5974,14 @@
             ]
           },
           "ipam": {
-            "$ref": "#/components/schemas/IpAddressManagementConfig"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/IpAddressManagementConfig"
+              }
+            ]
           },
           "options": {
             "type": "object",
@@ -5883,10 +6033,24 @@
             "type": "string"
           },
           "clusterVolume": {
-            "$ref": "#/components/schemas/ClusterVolume"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ClusterVolume"
+              }
+            ]
           },
           "usageData": {
-            "$ref": "#/components/schemas/VolumeUsageData"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/VolumeUsageData"
+              }
+            ]
           },
           "containers": {
             "type": "array",
@@ -5919,10 +6083,7 @@
           "name",
           "options"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "name": {
             "type": [
@@ -5944,10 +6105,7 @@
           "ipv6Address",
           "linkLocalIPs"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "ipv4Address": {
             "type": [
@@ -5970,10 +6128,7 @@
         }
       },
       "EndpointMetadata": {
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "canEdit": {
             "type": [
@@ -6011,7 +6166,14 @@
         "type": "object",
         "properties": {
           "ipamConfig": {
-            "$ref": "#/components/schemas/EndpointIpamConfiguration"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EndpointIpamConfiguration"
+              }
+            ]
           },
           "links": {
             "type": "array",
@@ -6099,6 +6261,13 @@
           }
         }
       },
+      "GhcrAccountType": {
+        "enum": [
+          "Organization",
+          "User"
+        ],
+        "type": "string"
+      },
       "GitHubCrPackageVersion": {
         "required": [
           "id",
@@ -6151,7 +6320,14 @@
             ]
           },
           "metadata": {
-            "$ref": "#/components/schemas/GitHubCrPackageVersionMetadata"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GitHubCrPackageVersionMetadata"
+              }
+            ]
           }
         }
       },
@@ -6159,10 +6335,7 @@
         "required": [
           "tags"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "tags": {
             "type": [
@@ -6179,13 +6352,17 @@
         "required": [
           "container"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "container": {
-            "$ref": "#/components/schemas/GitHubCrPackageVersionContainerMetadata"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GitHubCrPackageVersionContainerMetadata"
+              }
+            ]
           }
         }
       },
@@ -6194,10 +6371,7 @@
           "name",
           "data"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "name": {
             "type": [
@@ -6210,6 +6384,41 @@
             "additionalProperties": {
               "type": "string"
             }
+          }
+        }
+      },
+      "HealthCheckConfig": {
+        "required": [
+          "test"
+        ],
+        "type": "object",
+        "properties": {
+          "test": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "interval": {
+            "type": "string",
+            "default": "30s"
+          },
+          "timeout": {
+            "type": "string",
+            "default": "5s"
+          },
+          "retries": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32",
+            "default": 3
+          },
+          "startPeriod": {
+            "type": "string",
+            "default": "0s"
           }
         }
       },
@@ -6304,10 +6513,7 @@
           "ulimits",
           "kernelMemoryTCP"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "binds": {
             "type": "array",
@@ -6322,7 +6528,14 @@
             ]
           },
           "logConfig": {
-            "$ref": "#/components/schemas/LogConfiguration"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LogConfiguration"
+              }
+            ]
           },
           "networkMode": {
             "type": [
@@ -6340,7 +6553,14 @@
             }
           },
           "restartPolicy": {
-            "$ref": "#/components/schemas/RestartPolicy"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RestartPolicy"
+              }
+            ]
           },
           "autoRemove": {
             "type": [
@@ -6700,10 +6920,24 @@
             ]
           },
           "bindOptions": {
-            "$ref": "#/components/schemas/BindOptions"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BindOptions"
+              }
+            ]
           },
           "volumeOptions": {
-            "$ref": "#/components/schemas/VolumeOptions"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/VolumeOptions"
+              }
+            ]
           }
         }
       },
@@ -6801,10 +7035,7 @@
             "type": "string"
           },
           "name": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "namespace": {
             "type": [
@@ -6891,10 +7122,7 @@
         "required": [
           "driver"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "driver": {
             "type": "string"
@@ -6924,10 +7152,7 @@
           "code",
           "message"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "code": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -6953,10 +7178,7 @@
           "total",
           "start"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "units": {
             "type": [
@@ -6996,61 +7218,30 @@
       "ImageView": {
         "required": [
           "id",
-          "created",
-          "parentId",
-          "repoDigests",
-          "repoTags",
-          "sharedSize",
+          "tag",
+          "name",
+          "imageId",
           "size",
-          "virtualSize",
           "isInUse",
-          "labels"
+          "platformId",
+          "createdAt"
         ],
         "type": "object",
         "properties": {
           "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tag": {
             "type": "string"
           },
-          "created": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int64"
-          },
-          "parentId": {
+          "name": {
             "type": "string"
           },
-          "repoDigests": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "repoTags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "sharedSize": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int64"
+          "imageId": {
+            "type": "string"
           },
           "size": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
-            "format": "double"
-          },
-          "virtualSize": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
@@ -7061,23 +7252,26 @@
           "isInUse": {
             "type": "boolean"
           },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
           },
-          "name": {
+          "createdAt": {
+            "format": "date-time"
+          },
+          "isUpToDate": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "updatedAt": { },
+          "registryId": {
             "type": [
               "null",
               "string"
-            ]
-          },
-          "tag": {
-            "type": [
-              "null",
-              "string"
-            ]
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -7183,17 +7377,37 @@
           }
         }
       },
-      "IpAddressInfo": { },
+      "IpAddressInfo": {
+        "required": [
+          "addr",
+          "prefixLen"
+        ],
+        "type": "object",
+        "properties": {
+          "addr": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "prefixLen": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
       "IpAddressManagementConfig": {
         "required": [
           "driver",
           "config",
           "options"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "driver": {
             "type": [
@@ -7248,10 +7462,7 @@
           "type",
           "config"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "type": {
             "type": [
@@ -7266,6 +7477,39 @@
             }
           }
         }
+      },
+      "LoggingConfig": {
+        "required": [
+          "driver",
+          "options"
+        ],
+        "type": "object",
+        "properties": {
+          "driver": {
+            "$ref": "#/components/schemas/LoggingDriverType"
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "LoggingDriverType": {
+        "enum": [
+          "none",
+          "local",
+          "json-file",
+          "syslog",
+          "journald",
+          "gelf",
+          "fluentd",
+          "awslogs",
+          "splunk",
+          "etwlogs"
+        ],
+        "type": "string"
       },
       "LoginRequest": {
         "required": [
@@ -7419,10 +7663,7 @@
           "ports",
           "networks"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "bridge": {
             "type": [
@@ -7532,7 +7773,10 @@
           "ports": {
             "type": "object",
             "additionalProperties": {
-              "$ref": "#/components/schemas/ContainerInspectView/properties/hostConfig/properties/portBindings/additionalProperties"
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/HostPortBinding"
+              }
             }
           },
           "networks": {
@@ -7557,82 +7801,6 @@
           }
         }
       },
-      "NullableOfContainerStatView": {
-        "type": [
-          "null",
-          "object"
-        ],
-        "properties": {
-          "containerId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "memoryActive": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
-            "format": "double"
-          },
-          "memoryCache": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
-            "format": "double"
-          },
-          "cpuUsage": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
-            "format": "double"
-          },
-          "memoryLimit": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
-            "format": "double"
-          },
-          "rxBytes": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
-            "format": "double"
-          },
-          "txBytes": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
-            "format": "double"
-          },
-          "created": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int64"
-          }
-        }
-      },
-      "NullableOfGhcrAccountType": {
-        "enum": [
-          "Organization",
-          "User",
-          null
-        ]
-      },
-      "NullableOfRegistryType": { },
       "PlatformConnectorType": {
         "enum": [
           "Unknown",
@@ -8021,10 +8189,7 @@
           "stats",
           "platformDescriptor"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "id": {
             "type": "string",
@@ -8107,7 +8272,14 @@
             }
           },
           "platformDescriptor": {
-            "$ref": "#/components/schemas/PlatformDescriptor"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PlatformDescriptor"
+              }
+            ]
           }
         }
       },
@@ -8227,10 +8399,24 @@
             ]
           },
           "progress": {
-            "$ref": "#/components/schemas/ImagePullProgress"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImagePullProgress"
+              }
+            ]
           },
           "error": {
-            "$ref": "#/components/schemas/ImagePullError"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImagePullError"
+              }
+            ]
           }
         }
       },
@@ -8382,7 +8568,7 @@
             "type": "string"
           },
           "type": {
-            "$ref": "#/components/schemas/NullableOfGhcrAccountType"
+            "$ref": "#/components/schemas/GhcrAccountType"
           }
         }
       },
@@ -8420,19 +8606,13 @@
         "type": "object",
         "properties": {
           "name": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "url": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "type": {
-            "$ref": "#/components/schemas/NullableOfRegistryType"
+            "$ref": "#/components/schemas/RegistryType"
           },
           "configuration": {
             "$ref": "#/components/schemas/RegistryConfigurationBase"
@@ -8441,6 +8621,7 @@
       },
       "RegistryType": {
         "enum": [
+          "Custom",
           "DockerHub",
           "Azure",
           "AWS",
@@ -8508,7 +8689,14 @@
             "format": "date-time"
           },
           "configuration": {
-            "$ref": "#/components/schemas/RegistryConfigurationBase"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegistryConfigurationBase"
+              }
+            ]
           }
         }
       },
@@ -8517,10 +8705,7 @@
           "name",
           "maximumRetryCount"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "name": {
             "type": [
@@ -8582,6 +8767,42 @@
               "string"
             ],
             "format": "double"
+          }
+        }
+      },
+      "SecurityConfig": {
+        "required": [
+          "privileged",
+          "capAdd",
+          "capDrop",
+          "readOnlyRootFs",
+          "securityOpt"
+        ],
+        "type": "object",
+        "properties": {
+          "privileged": {
+            "type": "boolean"
+          },
+          "capAdd": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "capDrop": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "readOnlyRootFs": {
+            "type": "boolean"
+          },
+          "securityOpt": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -8662,10 +8883,7 @@
           "capacityRange",
           "availability"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "scope": {
             "$ref": "#/components/schemas/VolumeScope"
@@ -8680,7 +8898,14 @@
             }
           },
           "capacityRange": {
-            "$ref": "#/components/schemas/VolumeCapacityRange"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/VolumeCapacityRange"
+              }
+            ]
           },
           "availability": {
             "type": "string"
@@ -8692,10 +8917,7 @@
           "requiredBytes",
           "limitBytes"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "requiredBytes": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -8724,10 +8946,7 @@
           "driverConfig",
           "subpath"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "noCopy": {
             "type": [
@@ -8742,7 +8961,14 @@
             }
           },
           "driverConfig": {
-            "$ref": "#/components/schemas/DriverConfiguration"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DriverConfiguration"
+              }
+            ]
           },
           "subpath": {
             "type": [
@@ -8810,16 +9036,20 @@
           "group",
           "accessMode"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "group": {
             "type": "string"
           },
           "accessMode": {
-            "$ref": "#/components/schemas/VolumeAccessMode"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/VolumeAccessMode"
+              }
+            ]
           }
         }
       },
@@ -8828,10 +9058,7 @@
           "size",
           "refCount"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "size": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -8857,10 +9084,7 @@
         "required": [
           "index"
         ],
-        "type": [
-          "null",
-          "object"
-        ],
+        "type": "object",
         "properties": {
           "index": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",

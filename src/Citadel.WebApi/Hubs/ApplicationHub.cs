@@ -1,10 +1,12 @@
-﻿using Application.Features.Platforms.Queries;
+﻿using Application.Features.Images.Queries;
+using Application.Features.Platforms.Queries;
 using Application.Services.SignalR;
 using Domain.Contracts.Resources.Containers;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using WebApi.Routes.Endpoints.Resources.Containers;
+using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 
 namespace WebApi.Hubs;
@@ -69,6 +71,16 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
             return ContainersView.Map(containers);
         }
         else return new ContainersView([]);
+    }
+
+    public async Task<ImagesView> GetImages(Guid id)
+    {
+        var response = await mediator.Send(new GetAllLocalImages(id));
+        if (response.IsSuccess(out var images))
+        {
+            return ImagesView.Map(images);
+        }
+        else return new ImagesView([]);
     }
     #endregion
 }

@@ -7220,70 +7220,28 @@
           "id",
           "tag",
           "name",
-          "created",
-          "parentId",
-          "repoDigests",
-          "repoTags",
-          "sharedSize",
+          "imageId",
           "size",
-          "virtualSize",
           "isInUse",
-          "labels"
+          "platformId",
+          "createdAt"
         ],
         "type": "object",
         "properties": {
           "id": {
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           "tag": {
             "type": "string"
           },
           "name": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "created": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int64"
-          },
-          "parentId": {
             "type": "string"
           },
-          "repoDigests": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "repoTags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "sharedSize": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int64"
+          "imageId": {
+            "type": "string"
           },
           "size": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
-            "format": "double"
-          },
-          "virtualSize": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "number",
@@ -7294,11 +7252,26 @@
           "isInUse": {
             "type": "boolean"
           },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "format": "date-time"
+          },
+          "isUpToDate": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "updatedAt": { },
+          "registryId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },

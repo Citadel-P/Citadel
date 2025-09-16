@@ -5,6 +5,7 @@ using Domain.Entities.Platforms;
 using Nerdbank.MessagePack;
 using PolyType;
 using WebApi.Routes.Endpoints.Resources.Containers;
+using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 
 namespace WebApi.Hubs;
@@ -31,6 +32,9 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<byte[]>]
 [GenerateShapeFor<ReadOnlyMemory<byte>>]
 [GenerateShapeFor<IDictionary<string, IReadOnlyList<HostPortBinding>>>]
+[GenerateShapeFor<ImagesView>]
+[GenerateShapeFor<ImageView>]
+[GenerateShapeFor<IEnumerable<ImageView>>]
 partial class SignalRMessagePackContext;
 
 internal static class DerivedTypesMapping

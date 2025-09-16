@@ -1,24 +1,18 @@
 ﻿using Domain.Contracts.Interfaces;
-using Domain.Contracts.Resources.Images;
-using Hosting.Common.ErrorTypes;
+using Domain.Entities;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Images.Queries;
 
-public sealed record GetAllLocalImages(Guid PlatformId): IQuery<Result<IReadOnlyList<ImageResult>>>;
+public sealed record GetAllLocalImages(Guid PlatformId): IQuery<Result<IEnumerable<Image>>>;
 
-internal class GetAllLocalImagesHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IImageConnector> connectorFactory) : IQueryHandler<GetAllLocalImages, Result<IReadOnlyList<ImageResult>>>
+internal class GetAllLocalImagesHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetAllLocalImages, Result<IEnumerable<Image>>>
 {
-    public async ValueTask<Result<IReadOnlyList<ImageResult>>> Handle(GetAllLocalImages query, CancellationToken cancellationToken)
+    public async ValueTask<Result<IEnumerable<Image>>> Handle(GetAllLocalImages query, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(query.PlatformId, out var platform, out var error))
-        {
-            return Result.Failure<IReadOnlyList<ImageResult>>(error);
-        }
+        var result = await unitOfWork.Images.GetByPlatformIdAsync(query.PlatformId, cancellationToken);
 
-        return await connectorFactory
-            .GetConnector(platform.ConnectorType)
-            .ListImagesAsync(platform.Address, cancellationToken: cancellationToken);
+        return Result.Success<IEnumerable<Image>>(result);
     }
 }

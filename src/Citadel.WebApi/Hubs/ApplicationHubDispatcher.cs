@@ -4,6 +4,7 @@ using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Microsoft.AspNetCore.SignalR;
 using WebApi.Routes.Endpoints.Resources.Containers;
+using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using static Hosting.Common.Constants;
 
@@ -40,6 +41,15 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
         hubContext.Clients
             .Group(WellKnownSignalRGroups.ContainersGroup(platformId))
             .SendAsync("ContainersInfoUpdated", ContainersView.Map(containers));
+    #endregion
+
+    #region Images
+
+    public Task SendImagesInfo(Guid platformId, IEnumerable<Image> images) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.ImagesGroup(platformId))
+            .SendAsync("ImagesInfoUpdated", ImagesView.Map(images));
+
     #endregion
 
     #region Platforms

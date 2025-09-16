@@ -32,7 +32,7 @@ const DropdownTableMenu = ({ image }: { image: ImageView }) => {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-38 drop-shadow-md shadow-custom bg-background pt-2 pb-2">
         <ActionMenuItem
-          onClick={() => navigate(`${formatId(image.id)}`)}
+          onClick={() => navigate(`${formatId(image.imageId)}`)}
           icon={<SearchCode className="mr-2 h-3 w-3" />}
           label="Inspect"
         />

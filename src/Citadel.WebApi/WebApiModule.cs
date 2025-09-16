@@ -123,7 +123,9 @@ internal static class WebApiModule
             SerializeEnumValuesByName = true,
             PropertyNamingPolicy = MessagePackNamingPolicy.CamelCase,
             DerivedTypeMappings = [DerivedTypesMapping.PlatformDescriptorMappings],
-        }.WithGuidConverter(GuidStringFormat.StringD));
+        }
+        .WithGuidConverter(GuidStringFormat.StringD)
+        .WithAssumedDateTimeKind(DateTimeKind.Utc));
     }
 
     internal static void AddGenericEnumConverters(this IList<JsonConverter> converters)

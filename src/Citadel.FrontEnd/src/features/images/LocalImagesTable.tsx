@@ -3,16 +3,14 @@ import { ImageView } from '@/api/_generated';
 import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useGETAllLocalImages } from './hooks/useGETAllLocalImages';
 import DropdownTableMenu from './DropdownTableMenu';
 import { useImagesContext } from './ImagesContext';
 import { truncate } from '@/lib/truncate';
 import { Play } from 'lucide-react';
-import { useEffect, useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
 import { byteTransform } from '@/lib/bytes.helper';
 import { DeleteLocalImageDialog } from './dialogs/DeleteLocalImageDialog';
-import { useAppContext } from '@/AppContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { RunImageDialog } from './dialogs/RunImageDialog';
@@ -57,15 +55,20 @@ const columns = (): ColumnDef<ImageView>[] => [
     accessorKey: 'id',
     header: ({ column }) => <SortableCell cellName="Image Id" column={column} />,
     cell: ({ row }) => (
-      <CopyTextToClipboard textToCopy={row.original.id} transform={formatId} groupClassName="rowid" textClassName="" />
+      <CopyTextToClipboard
+        textToCopy={row.original.imageId}
+        transform={formatId}
+        groupClassName="rowid"
+        textClassName=""
+      />
     ),
-    sortingFn: (rowA: any, rowB: any): number => rowA.original?.id?.localeCompare(rowB.original?.id),
+    sortingFn: (rowA: any, rowB: any): number => rowA.original?.imageId?.localeCompare(rowB.original?.imageId),
   },
   {
     accessorKey: 'created',
     header: ({ column }) => <SortableCell cellName="Created" column={column} />,
-    cell: ({ row }) => <span className="">{fromNow(new Date((row.original.created as number) * 1000).getTime())}</span>,
-    sortingFn: (rowA, rowB) => (rowA.original.created < rowB.original.created ? 1 : -1),
+    cell: ({ row }) => <span className="">{fromNow(new Date(row.original.createdAt).getTime())}</span>,
+    sortingFn: (rowA, rowB) => (rowA.original.createdAt < rowB.original.createdAt ? 1 : -1),
   },
   {
     accessorKey: 'size',
@@ -112,7 +115,7 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
   const { platformId } = useParams<{ platformId: string }>();
   const navigate = useNavigate();
   function onNameClick() {
-    navigate(`/platforms/${platformId}/images/${formatId(image.id)}/`);
+    navigate(`/platforms/${platformId}/images/${formatId(image.imageId)}/`);
   }
 
   return (
@@ -138,11 +141,8 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
 };
 
 export default function LocalImagesTable() {
-  const { currentPlatform } = useAppContext();
-  const { data, isLoading, isSuccess } = useGETAllLocalImages(currentPlatform?.id);
   const {
     setSelectedRows,
-    setLocalImages,
     localImages,
     setDialogData,
     dialogData,
@@ -150,22 +150,13 @@ export default function LocalImagesTable() {
     deleteIsPending,
     setRunDialogData,
     runDialogData,
+    isLoading,
   } = useImagesContext();
-  // Update local images when data is fetched
-  useEffect(() => {
-    if (isSuccess && data?.data.images) {
-      setLocalImages(data.data.images);
-    }
-    return () => {
-      setLocalImages([]);
-      setSelectedRows([]);
-    };
-  }, [data, isSuccess, setLocalImages, setSelectedRows]);
 
   // Memoized selection change handler
   const handleSelectionChange = useCallback(
     (ids: string[]) => {
-      setSelectedRows(localImages.filter((c) => ids.includes(c.id!)));
+      setSelectedRows(localImages.filter((c) => ids.includes(c.imageId!)));
     },
     [localImages, setSelectedRows],
   );

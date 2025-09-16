@@ -43,7 +43,7 @@ export const RunImageDialog = ({
     data: imageInfo,
     isLoading: imageInfoIsLoading,
     isSuccess: imageInfoIsSuccess,
-  } = useGETImageInfo(currentPlatform?.id, runDialogData.currentSelection?.at(0)?.id);
+  } = useGETImageInfo(currentPlatform?.id, runDialogData.currentSelection?.at(0)?.imageId);
   const { control } = form;
 
   useEffect(() => {
@@ -127,7 +127,7 @@ export const RunImageDialog = ({
     finalValues.envVars = envVarsArr;
     finalValues.labels = labelsObj;
     finalValues.platformId = currentPlatform?.id;
-    finalValues.imageId = runDialogData.currentSelection?.at(0)?.id;
+    finalValues.imageId = runDialogData.currentSelection?.at(0)?.imageId;
 
     mutate(finalValues as any);
   }
