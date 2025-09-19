@@ -1,6 +1,5 @@
 ﻿using System.Threading.Channels;
 using Application.TaskJobs;
-using Mediator;
 
 namespace Application.Services;
 

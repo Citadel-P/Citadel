@@ -79,5 +79,10 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
         hubContext.Clients
             .Group(WellKnownSignalRGroups.DockerDaemonGroup(container.PlatformId))
             .SendAsync("ContainerEventReceived", ContainerView.Map(container), @event);
+
+    public Task SendImageEvent(Image image, string @event) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.DockerDaemonGroup(image.PlatformId))
+            .SendAsync("ImageEventReceived", ImagesView.Map(image), @event);
     #endregion
 }

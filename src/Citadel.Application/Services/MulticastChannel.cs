@@ -1,38 +1,84 @@
-﻿using System.Threading.Channels;
-using Hosting.Common;
+﻿using Hosting.Common;
+using System.Threading.Channels;
 
 namespace Application.Services;
 
 internal class MulticastChannel<T>
 {
-    protected readonly List<Channel<T>> subscribers = [];
+    private readonly List<Channel<T>> subscribers = [];
     private readonly Lock @lock = new();
 
+    // Add a subscriber
     public ChannelReader<T> AddSubscriber()
+    {
+        var channel = Channel.CreateBounded<T>(Helpers.ChannelDefaultOptions());
+        lock (@lock)
+        {
+            subscribers.Add(channel);
+        }
+        return channel.Reader;
+    }
+
+    // Remove a subscriber by Channel
+    public void RemoveSubscriber(Channel<T> channel)
     {
         lock (@lock)
         {
-            var channel = Channel.CreateBounded<T>(Helpers.ChannelDefaultOptions());
-            subscribers.Add(channel);
-            return channel.Reader;
+            subscribers.Remove(channel);
+            channel.Writer.TryComplete();
         }
     }
 
-    public async ValueTask PublishAsync(T @event, CancellationToken cancellationToken)
-    {
-            foreach (var sub in subscribers)
-                await sub.Writer.WriteAsync(@event, cancellationToken);
-    }
-
-    public void Complete()
+    // Remove a subscriber by ChannelReader
+    public void RemoveSubscriber(ChannelReader<T> reader)
     {
         lock (@lock)
-            foreach (var sub in subscribers)
-                sub.Writer.TryComplete();
+        {
+            var channel = subscribers.FirstOrDefault(c => c.Reader == reader);
+            if (channel != null)
+            {
+                subscribers.Remove(channel);
+                channel.Writer.TryComplete();
+            }
+        }
     }
 
-    public void RemoveSubscriber(Channel<T> channel)
+    // Publish an event to all subscribers
+    public async ValueTask PublishAsync(T @event, CancellationToken cancellationToken = default)
     {
-        lock (@lock) subscribers.Remove(channel);
+        Channel<T>[] snapshot;
+
+        // Take a snapshot under lock to avoid holding the lock during async operations
+        lock (@lock)
+        {
+            snapshot = [.. subscribers];
+        }
+
+        // Publish outside the lock
+        foreach (var sub in snapshot)
+        {
+            try
+            {
+                await sub.Writer.WriteAsync(@event, cancellationToken).ConfigureAwait(false);
+            }
+            catch (ChannelClosedException)
+            {
+                // Already removed → ignore
+            }
+        }
+    }
+
+    // Complete all subscribers
+    public void Complete()
+    {
+        Channel<T>[] snapshot;
+        lock (@lock)
+        {
+            snapshot = [.. subscribers];
+            subscribers.Clear();
+        }
+
+        foreach (var sub in snapshot)
+            sub.Writer.TryComplete();
     }
 }

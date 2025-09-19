@@ -608,15 +608,38 @@ internal static class ContainerMappers
     }
 
     internal static DaemonEventInfo Map(this DaemonEventResponse @event)
-        => new
-        (
-            Id: @event.Id,
-            Action: @event.Action,
-            ContainerId: @event.ContainerId,
-            Type: @event.EventMessageType.Map(),
-            Container: @event.Container?.Map()
-        );
+    {
+        return @event.KindCase switch
+        {
+            DaemonEventResponse.KindOneofCase.DaemonContainerEventResponse
+                => MapContainer(@event.DaemonContainerEventResponse),
 
+            DaemonEventResponse.KindOneofCase.DaemonImageEventResponse
+                => MapImage(@event.DaemonImageEventResponse),
+
+            _ => throw new InvalidOperationException("Unknown event kind")
+        };
+    }
+
+    private static DaemonContainerEventInfo MapContainer(DaemonContainerEventResponse evt)
+    {
+        return new DaemonContainerEventInfo
+        (
+            Action: evt.Action,
+            ContainerId: evt.ContainerId,
+            Container: evt.Container?.Map()
+        );
+    }
+
+    private static DaemonImageEventInfo MapImage(DaemonImageEventResponse evt)
+    {
+        return new DaemonImageEventInfo
+        (
+            Action: evt.Action,
+            ImageId: evt.ImageId,
+            Image: null
+        );
+    }
 
     internal static IReadOnlyDictionary<string, DockerContainer> Map(this IReadOnlyDictionary<string, ContainerResult> containers) 
         => containers.ToDictionary(c => c.Key, c => c.Value.Map());

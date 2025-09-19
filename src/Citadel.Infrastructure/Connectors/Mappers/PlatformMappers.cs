@@ -162,13 +162,31 @@ internal static class PlatformMappers
 
     internal static DaemonEventInfo Map(this DaemonEventResult @event)
     {
-        return new DaemonEventInfo
+        return @event switch
+        {
+            DaemonContainerResult containerEvent => containerEvent.Map(),
+            DaemonImageResult imageEvent => imageEvent.Map(),
+            _ => throw new NotSupportedException($"Event type {@event.GetType().Name} is not supported")
+        };
+    }
+
+    internal static DaemonEventInfo Map(this DaemonContainerResult result)
+    {
+        return new DaemonContainerEventInfo
         (
-            Id: @event.Id,
-            Action: @event.Action,
-            ContainerId: @event.ContainerId,
-            Container: @event.Container?.Map(),
-            Type: @event.Type.Map()
+            Action: result.Action,
+            ContainerId: result.ContainerId,
+            Container: result.Container?.Map()
+        );
+    }
+
+    internal static DaemonEventInfo Map(this DaemonImageResult result)
+    {
+        return new DaemonImageEventInfo
+        (
+            Action: result.Action,
+            ImageId: result.ImageId,
+            Image: result.Image.Map()
         );
     }
 

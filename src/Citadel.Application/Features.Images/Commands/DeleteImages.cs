@@ -2,7 +2,6 @@
 using Domain.Contracts.Resources.Images;
 using FluentValidation;
 using Hosting.Common;
-using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 

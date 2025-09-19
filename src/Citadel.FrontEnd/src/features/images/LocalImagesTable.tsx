@@ -156,7 +156,7 @@ export default function LocalImagesTable() {
   // Memoized selection change handler
   const handleSelectionChange = useCallback(
     (ids: string[]) => {
-      setSelectedRows(localImages.filter((c) => ids.includes(c.imageId!)));
+      setSelectedRows(localImages.filter((c) => ids.includes(c.id!)));
     },
     [localImages, setSelectedRows],
   );

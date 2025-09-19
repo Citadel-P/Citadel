@@ -5,6 +5,7 @@ namespace Application.Services;
 internal interface IContainerEventBroadcaster
 {
     ChannelReader<ContainerEvent> AddSubscriber();
+    void RemoveSubscriber(ChannelReader<ContainerEvent> reader);
     ValueTask PublishAsync(ContainerEvent ev, CancellationToken cancellationToken = default);
 }
 

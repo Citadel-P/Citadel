@@ -394,4 +394,20 @@ internal static class ImageMappers
             Size: item.Size,
             Comment: item.Comment
         );
+
+    internal static ImageResult Map(this Hosting.DockerClient.Models.Images.ImageResult image)
+    {
+        return new ImageResult(
+            Id: image?.Id,
+            Size: image?.Size ?? 0,
+            Containers: image?.Containers ?? 0,
+            ParentId: image?.ParentId ?? "",
+            SharedSize: image?.SharedSize ?? 0,
+            Created: image?.Created ?? 0,
+            VirtualSize: image?.VirtualSize ?? 0,
+            RepoTags: image?.RepoTags,
+            RepoDigests: image?.RepoDigests,
+            Labels: image?.Labels ?? new Dictionary<string, string>()
+        );
+    }
 }

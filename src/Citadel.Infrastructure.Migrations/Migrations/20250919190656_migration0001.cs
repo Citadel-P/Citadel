@@ -347,7 +347,8 @@ namespace Infrastructure.Migrations.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_Images_ImageId",
                 table: "Images",
-                column: "ImageId");
+                column: "ImageId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Images_PlatformId",

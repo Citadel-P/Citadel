@@ -415,7 +415,7 @@ internal static class Configuration
             .OnDelete(DeleteBehavior.SetNull);
 
         image.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
-        image.HasIndex("ImageId").HasDatabaseName($"IX_{tableName}_ImageId");
+        image.HasIndex("ImageId").IsUnique().HasDatabaseName($"IX_{tableName}_ImageId");
 
         return builder;
     }

@@ -10,6 +10,7 @@ public interface IApplicationHubDispatcher
 {
     #region Daemon events
     Task SendContainerEvent(Container container, string @event);
+    Task SendImageEvent(Image image, string @event);
     #endregion
 
     #region Container Info

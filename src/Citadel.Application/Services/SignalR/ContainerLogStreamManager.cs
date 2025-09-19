@@ -115,6 +115,10 @@ internal sealed class ContainerLogStreamManager(
         {
             logger.LogError(ex, "Watcher failed for {ContainerId}", containerId);
         }
+        finally
+        {
+            containerEventBroadcaster.RemoveSubscriber(reader);
+        }
     }
 
     private void Run(LogStreamContext context, string containerId)

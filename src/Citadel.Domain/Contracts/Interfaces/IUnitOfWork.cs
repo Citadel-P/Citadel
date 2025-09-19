@@ -1,5 +1,4 @@
-﻿using Domain.Contracts.Resources.Containers;
-using Domain.Contracts.Resources.Identity;
+﻿using Domain.Contracts.Resources.Identity;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Identity;
@@ -95,8 +94,11 @@ public interface IPlatformRepository
 
 public interface IImageRepository
 {
+    Task<Image?> GetByImageIdAsync(string imageId, CancellationToken cancellationToken);
+
     Task<int> AddAsync(Image image, CancellationToken cancellationToken);
     Task<int> UpdateAsync(Image image, CancellationToken cancellationToken);
+    Task<int> AddOrUpdateAsync(Image image, CancellationToken cancellationToken);
     Task<int> BulkUpsertAsync(IEnumerable<Image> images, CancellationToken cancellationToken);
 
     Task<int> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);

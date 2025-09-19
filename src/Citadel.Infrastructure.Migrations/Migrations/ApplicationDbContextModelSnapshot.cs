@@ -202,6 +202,7 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ImageId")
+                        .IsUnique()
                         .HasDatabaseName("IX_Images_ImageId");
 
                     b.HasIndex("PlatformId")

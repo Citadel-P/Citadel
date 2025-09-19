@@ -116,12 +116,10 @@ internal class ImageSyncJob(
     /// </summary>
     private async Task SyncImagesForPlatform(PlatformHealth platformEvent, CancellationToken cancellationToken)
     {
-        var syncedImages = new List<Image>();
-
         if (platformEvent.IsOnLine)
         {
             logger.LogInformation("Synchronizing images for platform {PlatformId} at {Address}...", platformEvent.Id, platformEvent.Address);
-            syncedImages = await SyncOnlinePlatformImages(platformEvent, cancellationToken);
+            var syncedImages = await SyncOnlinePlatformImages(platformEvent, cancellationToken);
             
             await imageStreamManager.SendImagesInfo(platformEvent.Id, syncedImages);
             logger.LogInformation("Synchronized {Count} images for platform {PlatformId}.", syncedImages.Count, platformEvent.Id);
@@ -154,7 +152,7 @@ internal class ImageSyncJob(
                 existingDbImage.PartialUpdate(
                     imageId: freshImage.Id,
                     isInUse: freshImage.Containers > 0,
-                    tag: freshImage.RepoTags?.FirstOrDefault(),
+                    tag: freshImage.RepoTags?.Count > 0 ?  freshImage.RepoTags[0] : "",
                     size: freshImage.Size
                 );
                 currentActiveImages.Add(existingDbImage);

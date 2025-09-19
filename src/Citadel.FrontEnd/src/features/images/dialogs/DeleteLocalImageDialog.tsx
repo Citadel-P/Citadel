@@ -32,7 +32,7 @@ export const DeleteLocalImageDialog = ({
   const [force, setForce] = useState(false);
 
   const handleDelete = () => {
-    requestDelete({ platformId: currentPlatform?.imageId ?? '', ids: imagesId, force, noPrune });
+    requestDelete({ platformId: currentPlatform?.id ?? '', ids: imagesId, force, noPrune });
   };
 
   return (

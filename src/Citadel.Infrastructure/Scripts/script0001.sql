@@ -172,7 +172,7 @@ CREATE UNIQUE INDEX "IX__Containers_ContainerId" ON "Containers" ("ContainerId")
 
 CREATE INDEX "IX_Deployments_PlatformId" ON "Deployments" ("PlatformId");
 
-CREATE INDEX "IX_Images_ImageId" ON "Images" ("ImageId");
+CREATE UNIQUE INDEX "IX_Images_ImageId" ON "Images" ("ImageId");
 
 CREATE INDEX "IX_Images_PlatformId" ON "Images" ("PlatformId");
 
@@ -199,7 +199,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20250914085356_migration0001', '10.0.0-rc.1.25451.107');
+VALUES ('20250919190656_migration0001', '10.0.0-rc.1.25451.107');
 
 COMMIT;
 

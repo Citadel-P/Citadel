@@ -1,15 +1,14 @@
-﻿using System.Collections.Concurrent;
-using System.Threading.Channels;
-using Application.Mappers;
+﻿using Application.Mappers;
 using Application.Services;
 using Application.Services.SignalR;
-using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
+using System.Threading.Channels;
 
 namespace Application.TaskJobs;
 
@@ -72,22 +71,35 @@ internal sealed class DockerDaemonEventJob(
                 var command = new StreamDaemonEventCommand(platform.Address);
                 await foreach (var reply in connectorFactory.GetConnector(platform.Type).StreamDaemonEventAsync(command, cancellationToken))
                 {
-                    if (reply.Type != ContainerEventType.Container)
-                        continue;
-
-
-                    switch (reply.Action)
+                    if (reply is DaemonContainerEventInfo containerEvent)
                     {
-                        case "create":
-                            await HandleContainerCreateEvent(reply, platform.Id, cancellationToken);
-                            break;
-                        case "destroy":
-                            await HandleContainerDestroyEvent(reply, platform.Id, cancellationToken);
-                            break;
-                        default:
-                            await HandleContainerUpdateEvent(reply, cancellationToken);
-                            break;
+                        switch (reply.Action)
+                        {
+                            case "create":
+                                await OnContainerCreated(containerEvent, platform.Id, cancellationToken);
+                                break;
+                            case "destroy":
+                                await OnContainerDestroyed(containerEvent, platform.Id, cancellationToken);
+                                break;
+                            default:
+                                await OnContainerUpdated(containerEvent, cancellationToken);
+                                break;
+                        }
                     }
+                    else if (reply is DaemonImageEventInfo imageEvent)
+                    {
+                        switch (reply.Action)
+                        {
+                            case "pull":
+                            case "create":
+                                await OnImageAddOrUpdate(imageEvent, platform.Id, cancellationToken);
+                                break;
+                            case "delete":
+                                await OnImageDeleted(imageEvent, platform.Id, cancellationToken);
+                                break;
+                        }
+                    }
+
                 }
             }
             catch (Exception ex)
@@ -98,7 +110,7 @@ internal sealed class DockerDaemonEventJob(
         }
     }
 
-    private async Task HandleContainerCreateEvent(DaemonEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
+    private async Task OnContainerCreated(DaemonContainerEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
     {
         if (eventInfo.Container != null)
         {
@@ -115,7 +127,7 @@ internal sealed class DockerDaemonEventJob(
         }
     }
 
-    private async Task HandleContainerUpdateEvent(DaemonEventInfo eventInfo, CancellationToken cancellationToken)
+    private async Task OnContainerUpdated(DaemonContainerEventInfo eventInfo, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -130,7 +142,7 @@ internal sealed class DockerDaemonEventJob(
         }
     }
 
-    private async Task HandleContainerDestroyEvent(DaemonEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
+    private async Task OnContainerDestroyed(DaemonContainerEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -147,6 +159,37 @@ internal sealed class DockerDaemonEventJob(
         }
     }
 
+    private async Task OnImageAddOrUpdate(DaemonImageEventInfo imageEvent, Guid id, CancellationToken cancellationToken)
+    {
+        if (imageEvent.Image != null)
+        {
+            var image = imageEvent.Image.Map(id);
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+            await uow.Images.AddOrUpdateAsync(image, cancellationToken);
+            await uow.CommitAsync();
+
+            await SendImageEventChanges(image, imageEvent.Action);
+        }
+    }
+
+
+    private async Task OnImageDeleted(DaemonImageEventInfo eventInfo, Guid id, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var existing = await uow.Images.GetByImageIdAsync(eventInfo.ImageId, cancellationToken);
+        if (existing != null)
+        {
+            await uow.Images.DeleteAsync([existing.Id], cancellationToken);
+            await uow.CommitAsync();
+
+            await SendImageEventChanges(existing, eventInfo.Action);
+        }
+    }
+
     private async Task SendContainerEventChanges(Container container, string action)
     {
         try
@@ -157,6 +200,18 @@ internal sealed class DockerDaemonEventJob(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to notify clients about container stats for platform {PlatformId}", container.PlatformId);
+        }
+    }
+
+    private async Task SendImageEventChanges(Image image, string action)
+    {
+        try
+        {
+            await dockerDaemonHub.SendImageEvent(image, action);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to notify clients about image event for platform {PlatformId}", image.PlatformId);
         }
     }
 }

@@ -1,8 +1,15 @@
-﻿namespace Domain.Contracts.Resources.Containers;
+﻿using Domain.Contracts.Resources.Images;
 
-public sealed record DaemonEventInfo(
-    string Id,
+namespace Domain.Contracts.Resources.Containers;
+
+public abstract record DaemonEventInfo(string Action);
+
+public record DaemonContainerEventInfo(
     string Action,
     string ContainerId,
-    DockerContainer? Container,
-    ContainerEventType Type);
+    DockerContainer? Container) : DaemonEventInfo (Action);
+
+public record DaemonImageEventInfo(
+    string Action,
+    string ImageId,
+    ImageResult Image) : DaemonEventInfo(Action);
