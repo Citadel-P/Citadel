@@ -7272,6 +7272,16 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "registry": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegistryView"
+              }
+            ]
           }
         }
       },

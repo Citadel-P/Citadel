@@ -94,7 +94,8 @@ public interface IPlatformRepository
 
 public interface IImageRepository
 {
-    Task<Image?> GetByImageIdAsync(string imageId, CancellationToken cancellationToken);
+    Task<Image?> GetByImageIdAsync(string imageId, Guid platformId, CancellationToken cancellationToken);
+    Task<IEnumerable<Image>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
 
     Task<int> AddAsync(Image image, CancellationToken cancellationToken);
     Task<int> UpdateAsync(Image image, CancellationToken cancellationToken);
@@ -102,5 +103,4 @@ public interface IImageRepository
     Task<int> BulkUpsertAsync(IEnumerable<Image> images, CancellationToken cancellationToken);
 
     Task<int> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
-    Task<IEnumerable<Image>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
 }

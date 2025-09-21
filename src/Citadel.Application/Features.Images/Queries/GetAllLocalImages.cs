@@ -13,6 +13,6 @@ internal class GetAllLocalImagesHandler(IUnitOfWork unitOfWork) : IQueryHandler<
     {
         var result = await unitOfWork.Images.GetByPlatformIdAsync(query.PlatformId, cancellationToken);
 
-        return Result.Success<IEnumerable<Image>>(result);
+        return Result.Success(result);
     }
 }

@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+﻿using Application.Services;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Images;
 using Domain.Entities;
@@ -6,6 +6,7 @@ using Domain.Entities.Registries;
 using FluentValidation;
 using Hosting.Common;
 using Mediator;
+using System.Runtime.CompilerServices;
 
 namespace Application.Features.Images.Commands;
 
@@ -69,7 +70,7 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
     }
 }
 
-internal sealed class PullImageHandler(IUnitOfWork unitOfWork, IPlatformContainerCache platformContainerCache, IConnectorFactory<IImageConnector> connectorFactory) 
+internal sealed class PullImageHandler(IUnitOfWork unitOfWork, IPlatformContainerCache platformContainerCache, IRegistryCache registryCache, IConnectorFactory<IImageConnector> connectorFactory) 
     : IStreamCommandHandler<PullImage, PullImageResult>
 {
     public async IAsyncEnumerable<PullImageResult> Handle(PullImage command, [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -93,8 +94,17 @@ internal sealed class PullImageHandler(IUnitOfWork unitOfWork, IPlatformContaine
         }
 
         var connector = connectorFactory.GetConnector(platform.ConnectorType);
+
         await foreach (var reply in connector.PullImageProgressStreamAsync(command.ToConnectorCommand(platform.Address, registry), cancellationToken))
         {
+            if (reply?.Status?.StartsWith("Digest: ") == true)
+            {
+                ReadOnlySpan<char> status = reply.Status.AsSpan();
+                ReadOnlySpan<char> digestSpan = status[8..];
+                var imageId = new string(digestSpan);
+
+                registryCache.Set(command.PlatformId, imageId, registry.Id);
+            }
             yield return reply;
         }
     }

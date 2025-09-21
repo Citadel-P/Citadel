@@ -104,7 +104,7 @@ internal static class Configuration
             .HasForeignKey("DeploymentId")
             .OnDelete(DeleteBehavior.SetNull);
 
-        container.HasIndex("ContainerId").IsUnique().HasDatabaseName($"IX__{tableName}_ContainerId");
+        container.HasIndex("ContainerId", "PlatformId").IsUnique().HasDatabaseName($"IX__{tableName}_ContainerId_PlatformId");
         container.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
 
         return builder;
@@ -165,7 +165,8 @@ internal static class Configuration
             .HasForeignKey("ContainerId")
             .OnDelete(DeleteBehavior.Cascade);
 
-        stat.HasIndex("ContainerId").HasDatabaseName($"IX_{tableName}_ContainerId");
+        stat.HasIndex("ContainerId", "Created").IsUnique()
+            .HasDatabaseName($"IX_{tableName}_ContainerId_Created");
 
         return builder;
     }
@@ -193,8 +194,8 @@ internal static class Configuration
             .HasForeignKey("PlatformId")
             .OnDelete(DeleteBehavior.Cascade);
 
-        stat.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
-        stat.HasIndex("Created").IsUnique().HasDatabaseName($"IX_{tableName}_Created");
+        stat.HasIndex("PlatformId", "Created").IsUnique()
+            .HasDatabaseName($"IX_{tableName}_PlatformId_Created");
 
         return builder;
     }
@@ -398,7 +399,7 @@ internal static class Configuration
         image.Property<string>("ImageId").HasColumnType("TEXT").IsRequired();
         image.Property<string>("CreatedAt").HasColumnType("TEXT").IsRequired();
         image.Property<string?>("UpdatedAt").HasColumnType("TEXT").HasDefaultValue(null);
-        image.Property<bool>("IsInUse").HasColumnType("INTEGER").HasDefaultValue(0);
+        image.Property<int>("Containers").HasColumnType("INTEGER").HasDefaultValue(0);
         image.Property<bool?>("IsUpToDate").HasColumnType("INTEGER").HasDefaultValue(null);
         image.Property<double>("Size").HasColumnType("REAL").HasDefaultValue(0);
 
@@ -415,7 +416,8 @@ internal static class Configuration
             .OnDelete(DeleteBehavior.SetNull);
 
         image.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
-        image.HasIndex("ImageId").IsUnique().HasDatabaseName($"IX_{tableName}_ImageId");
+        image.HasIndex("ImageId", "PlatformId").IsUnique()
+            .HasDatabaseName($"IX_{tableName}_ImageId_PlatformId");
 
         return builder;
     }

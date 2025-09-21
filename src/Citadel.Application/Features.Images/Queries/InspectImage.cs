@@ -19,7 +19,7 @@ public sealed record InspectImage(Guid PlatformId, string ImageId) : IQuery<Resu
     }
 }
 
-internal sealed class InspectImageHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IImageConnector> connectorFactory) : IQueryHandler<InspectImage, Result<InspectImageResult>>
+internal sealed class InspectImageHandler(IPlatformContainerCache platformContainerCache, IUnitOfWork unitOfWork, IConnectorFactory<IImageConnector> connectorFactory) : IQueryHandler<InspectImage, Result<InspectImageResult>>
 {
     public async ValueTask<Result<InspectImageResult>> Handle(InspectImage query, CancellationToken cancellationToken)
     {
@@ -30,6 +30,18 @@ internal sealed class InspectImageHandler(IPlatformContainerCache platformContai
 
         var inspectArgs = new InspectImageCommand (PlatformAddress: platform.Address, ImageId: query.ImageId);
         
-        return await connectorFactory.GetConnector(platform.ConnectorType).InspectImageAsync(inspectArgs, cancellationToken: cancellationToken);
+        var result = await connectorFactory.GetConnector(platform.ConnectorType).InspectImageAsync(inspectArgs, cancellationToken: cancellationToken);
+        
+        if (result.IsSuccess(out var inspectResult))
+        {
+            var image = await unitOfWork.Images.GetByImageIdAsync(inspectResult.Id, query.PlatformId, cancellationToken);
+            if (image != null)
+            {
+                inspectResult.Registry = image.Registry;
+            }
+
+            return inspectResult;
+        }
+        return result;
     }
 }

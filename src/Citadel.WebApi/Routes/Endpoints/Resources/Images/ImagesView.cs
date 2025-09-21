@@ -1,4 +1,5 @@
 ﻿using Domain.Entities;
+using WebApi.Routes.Endpoints.Resources.Registries;
 
 namespace WebApi.Routes.Endpoints.Resources.Images;
 
@@ -13,7 +14,8 @@ public sealed record ImageView(
     DateTime CreatedAt,
     bool? IsUpToDate = null,
     DateTime? UpdatedAt = null,
-    Guid? RegistryId = null);
+    Guid? RegistryId = null,
+    RegistryView? Registry = null);
 
 public sealed record ImagesView(IEnumerable<ImageView> Images)
 {
@@ -25,28 +27,12 @@ public sealed record ImagesView(IEnumerable<ImageView> Images)
             Name: image.Name,
             ImageId: image.ImageId,
             Size: image.Size,
-            IsInUse: image.IsInUse,
+            IsInUse: image.Containers > 0,
             PlatformId: image.PlatformId,
             CreatedAt: image.CreatedAt,
             IsUpToDate: image.IsUpToDate,
             UpdatedAt: image.UpdatedAt,
-            RegistryId: image.RegistryId
+            RegistryId: image.RegistryId,
+            Registry: image.Registry is not null ? RegistryView.Map(image.Registry) : null
         );
-
-    //internal static ImagesView Map(IEnumerable<ImageResult> images) => new (images.Select(Map));
-    //internal static ImageView Map(ImageResult image) 
-    //    => new (
-    //        Id: image.Id,
-    //        Tag: image.GetTag(),
-    //        Name: image.GetName(),
-    //        Size: image.Size,
-    //        Created: image.Created,
-    //        ParentId: image.ParentId,
-    //        SharedSize: image.SharedSize,
-    //        VirtualSize: image.VirtualSize,
-    //        IsInUse: image.Containers > 0,
-    //        RepoTags: image.RepoTags ?? [],
-    //        RepoDigests: image.RepoDigests ?? [],
-    //        Labels: image.Labels?.ToDictionary() ?? []
-    //    );
 }

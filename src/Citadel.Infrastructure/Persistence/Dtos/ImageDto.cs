@@ -6,10 +6,14 @@ internal sealed record ImageDto(
     string Tag,
     string ImageId,
     double Size,
-    bool IsInUse,
+    int Containers,
     Guid PlatformId,
     DateTime CreatedAt,
     bool? IsUpToDate = null,
     DateTime? UpdatedAt = null,
-    Guid? RegistryId = null
+    Guid? RegistryId = null,
+    string? RegistryName = null,
+    string? RegistryType = null,
+    string? RegistryUrl = null,
+    DateTime? RegistryCreated = null
     );

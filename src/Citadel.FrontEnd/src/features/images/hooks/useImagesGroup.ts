@@ -7,55 +7,57 @@ import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 export const useImagesGroup = (platformId?: string) => {
   const [isLoading, setIsLoading] = useState(false);
   const [imagesInfo, setimagesInfo] = useState<ImagesView | undefined>();
-  const { containerEvent } = useDockerDaemonGroup(platformId);
+  const { imageEvent } = useDockerDaemonGroup(platformId);
 
   const handleimagesInfoUpdated = useCallback((images: ImagesView) => {
     setimagesInfo(images);
   }, []);
 
-  //   useEffect(() => {
-  //     setimagesInfo((currentInfo) => {
-  //       if (!currentInfo) {
-  //         return currentInfo;
-  //       }
+  useEffect(() => {
+    setimagesInfo((currentInfo) => {
+      if (!currentInfo) {
+        return currentInfo;
+      }
 
-  //       const updatedImages = [...(currentInfo.images ?? [])];
-  //       const existingIndex = updatedImages.findIndex((c) => c.containerId === containerEvent?.container.containerId);
+      const updatedImages = [...(currentInfo.images ?? [])];
+      const existingIndex = updatedImages.findIndex((c) => c.imageId === imageEvent?.image.imageId);
 
-  //       switch (containerEvent?.eventType) {
-  //         case 'create':
-  //           if (existingIndex === -1) {
-  //             return { ...currentInfo, images: [containerEvent.container, ...updatedImages] };
-  //           }
-  //           if (JSON.stringify(updatedImages[existingIndex]) !== JSON.stringify(containerEvent.container)) {
-  //             updatedImages[existingIndex] = containerEvent.container;
-  //             return { ...currentInfo, images: updatedImages };
-  //           }
-  //           break;
+      switch (imageEvent?.eventType) {
+        case 'create':
+        case 'pull':
+        case 'update': // <- custom Citadel event
+          if (existingIndex === -1) {
+            return { ...currentInfo, images: [imageEvent?.image, ...updatedImages] };
+          }
+          if (JSON.stringify(updatedImages[existingIndex]) !== JSON.stringify(imageEvent?.image)) {
+            updatedImages[existingIndex] = imageEvent?.image;
+            return { ...currentInfo, images: updatedImages };
+          }
+          break;
 
-  //         case 'destroy':
-  //           if (existingIndex !== -1) {
-  //             updatedImages.splice(existingIndex, 1);
-  //             return { ...currentInfo, images: updatedImages };
-  //           }
-  //           break;
+        case 'delete':
+          if (existingIndex !== -1) {
+            updatedImages.splice(existingIndex, 1);
+            return { ...currentInfo, images: updatedImages };
+          }
+          break;
 
-  //         default:
-  //           if (
-  //             existingIndex !== -1 &&
-  //             JSON.stringify(updatedImages[existingIndex]) !== JSON.stringify(containerEvent?.container)
-  //           ) {
-  //             if (containerEvent?.container) {
-  //               updatedImages[existingIndex] = containerEvent?.container;
-  //             }
-  //             return { ...currentInfo, images: updatedImages };
-  //           }
-  //           break;
-  //       }
+        default:
+          if (
+            existingIndex !== -1 &&
+            JSON.stringify(updatedImages[existingIndex]) !== JSON.stringify(imageEvent?.image)
+          ) {
+            if (imageEvent?.image) {
+              updatedImages[existingIndex] = imageEvent?.image;
+            }
+            return { ...currentInfo, images: updatedImages };
+          }
+          break;
+      }
 
-  //       return currentInfo;
-  //     });
-  //   }, [containerEvent]);
+      return currentInfo;
+    });
+  }, [imageEvent]);
 
   const getImagesList = useCallback(
     async (hubConnection: HubConnection) => {

@@ -151,7 +151,7 @@ internal class ImageSyncJob(
             {
                 existingDbImage.PartialUpdate(
                     imageId: freshImage.Id,
-                    isInUse: freshImage.Containers > 0,
+                    containers: freshImage.Containers,
                     tag: freshImage.RepoTags?.Count > 0 ?  freshImage.RepoTags[0] : "",
                     size: freshImage.Size
                 );

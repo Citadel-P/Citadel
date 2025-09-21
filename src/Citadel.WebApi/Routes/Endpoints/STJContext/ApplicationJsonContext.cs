@@ -129,6 +129,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(ComposeUpRequest))]
 [JsonSerializable(typeof(RegistryWithConfigView))]
 [JsonSerializable(typeof(IEnumerable<ContainerVolumeResult>))]
+[JsonSerializable(typeof(InspectImageView))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

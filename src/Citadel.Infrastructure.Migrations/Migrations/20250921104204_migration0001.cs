@@ -130,9 +130,9 @@ namespace Infrastructure.Migrations.Migrations
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
+                    Containers = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 0),
                     CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
                     ImageId = table.Column<string>(type: "TEXT", nullable: false),
-                    IsInUse = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: false),
                     IsUpToDate = table.Column<bool>(type: "INTEGER", nullable: true),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
                     PlatformId = table.Column<string>(type: "TEXT", nullable: false),
@@ -319,9 +319,10 @@ namespace Infrastructure.Migrations.Migrations
                 values: new object[] { "cede9601-67e9-507d-832c-0ca0155465a1", "d1de9601-f113-ce77-884e-3cb636ec09a8" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_ContainerStats_ContainerId",
+                name: "IX_ContainerStats_ContainerId_Created",
                 table: "ContainerStats",
-                column: "ContainerId");
+                columns: new[] { "ContainerId", "Created" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Containers_DeploymentId",
@@ -334,9 +335,9 @@ namespace Infrastructure.Migrations.Migrations
                 column: "PlatformId");
 
             migrationBuilder.CreateIndex(
-                name: "IX__Containers_ContainerId",
+                name: "IX__Containers_ContainerId_PlatformId",
                 table: "Containers",
-                column: "ContainerId",
+                columns: new[] { "ContainerId", "PlatformId" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -345,9 +346,9 @@ namespace Infrastructure.Migrations.Migrations
                 column: "PlatformId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Images_ImageId",
+                name: "IX_Images_ImageId_PlatformId",
                 table: "Images",
-                column: "ImageId",
+                columns: new[] { "ImageId", "PlatformId" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -366,15 +367,10 @@ namespace Infrastructure.Migrations.Migrations
                 column: "RoleId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_PlatformStats_Created",
+                name: "IX_PlatformStats_PlatformId_Created",
                 table: "PlatformStats",
-                column: "Created",
+                columns: new[] { "PlatformId", "Created" },
                 unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PlatformStats_PlatformId",
-                table: "PlatformStats",
-                column: "PlatformId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Platforms_Address",

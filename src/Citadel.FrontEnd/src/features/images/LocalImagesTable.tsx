@@ -18,6 +18,7 @@ import { ImageSateIndicator } from './ImageStateIndicator';
 import { useNavigate, useParams } from 'react-router';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { formatId } from '@/lib/utils';
+import { RegistryDisplay } from '@/components/ui/RegistryDisplay';
 
 const columns = (): ColumnDef<ImageView>[] => [
   {
@@ -50,6 +51,13 @@ const columns = (): ColumnDef<ImageView>[] => [
     header: ({ column }) => <SortableCell cellName="Tag" column={column} />,
     cell: ({ row }) => <div className="">{truncate(row.original.tag ?? '', 28)}</div>,
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.tag?.localeCompare(rowB.original?.tag),
+  },
+  {
+    accessorKey: 'registry',
+    header: ({ column }) => <SortableCell cellName="Registry" column={column} />,
+    cell: ({ row }) => <RegistryDisplay registry={row.original.registry ?? undefined} />,
+    sortingFn: (rowA: any, rowB: any): number =>
+      rowA.original.registry?.name?.localeCompare(rowB.original.registry?.name),
   },
   {
     accessorKey: 'id',

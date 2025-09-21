@@ -15,7 +15,25 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
     public async Task<IEnumerable<Image>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT * FROM Images
+            SELECT 
+                i.Id,
+                i.Name AS Name,
+                i.Tag,
+                i.ImageId,
+                i.Size,
+                i.Containers,
+                i.PlatformId,
+                i.CreatedAt,
+                i.IsUpToDate,
+                i.UpdatedAt,
+                i.RegistryId,
+                r.Name AS RegistryName,
+                r.Type AS RegistryType,
+                r.Url AS RegistryUrl,
+                r.Created As RegistryCreated
+            FROM Images i
+            LEFT JOIN Registries r
+            ON i.RegistryId = r.Id
             WHERE PlatformId = @PlatformId
             ORDER BY 
                 CreatedAt DESC,
@@ -25,14 +43,32 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
         return images?.ToDomain() ?? [];
     }
 
-    public async Task<Image?> GetByImageIdAsync(string imageId, CancellationToken cancellationToken)
+    public async Task<Image?> GetByImageIdAsync(string imageId, Guid platformId, CancellationToken cancellationToken)
     {
         var sql = """
-            SELECT * FROM Images
-            WHERE ImageId LIKE @imageIdPrefix || '%'
+            SELECT 
+                i.Id,
+                i.Name AS Name,
+                i.Tag,
+                i.ImageId,
+                i.Size,
+                i.Containers,
+                i.PlatformId,
+                i.CreatedAt,
+                i.IsUpToDate,
+                i.UpdatedAt,
+                i.RegistryId,
+                r.Name AS RegistryName,
+                r.Type AS RegistryType,
+                r.Url AS RegistryUrl,
+                r.Created As RegistryCreated
+            FROM Images i
+            LEFT JOIN Registries r
+            ON i.RegistryId = r.Id
+            WHERE PlatformId = @PlatformId AND ImageId LIKE @imageIdPrefix || '%'
             LIMIT 1
             """;
-        var result = await db.QuerySingleOrDefaultAsync<ImageDto>(sql, new { imageIdPrefix = imageId }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<ImageDto>(sql, new { imageIdPrefix = imageId, PlatformId = platformId.Format() }, transaction: tx());
         return result?.ToDomain();
     }
 
@@ -40,9 +76,9 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
     {
         const string sql = """
             INSERT INTO Images (
-                Id, PlatformId, ImageId, Name, IsInUse, IsUpToDate, Tag, Size, RegistryId, CreatedAt, UpdatedAt
+                Id, PlatformId, ImageId, Name, Containers, IsUpToDate, Tag, Size, RegistryId, CreatedAt, UpdatedAt
             ) VALUES (
-                @Id, @PlatformId, @ImageId, @Name, @IsInUse, @IsUpToDate, @Tag, @Size, @RegistryId, @CreatedAt, @UpdatedAt
+                @Id, @PlatformId, @ImageId, @Name, @Containers, @IsUpToDate, @Tag, @Size, @RegistryId, @CreatedAt, @UpdatedAt
             )
         """;
         return db.ExecuteAsync(sql, new
@@ -51,7 +87,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
             PlatformId = image.PlatformId.Format(),
             ImageId = image.ImageId,
             Name = image.Name,
-            IsInUse = image.IsInUse,
+            Containers = image.Containers,
             IsUpToDate = image.IsUpToDate,
             Tag = image.Tag,
             Size = image.Size,
@@ -65,13 +101,13 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
     {
         const string sql = """
             INSERT INTO Images (
-                Id, PlatformId, ImageId, Name, IsInUse, IsUpToDate, Tag, Size, RegistryId, CreatedAt, UpdatedAt
+                Id, PlatformId, ImageId, Name, Containers, IsUpToDate, Tag, Size, RegistryId, CreatedAt, UpdatedAt
             ) VALUES (
-                @Id, @PlatformId, @ImageId, @Name, @IsInUse, @IsUpToDate, @Tag, @Size, @RegistryId, @CreatedAt, @UpdatedAt
+                @Id, @PlatformId, @ImageId, @Name, @Containers, @IsUpToDate, @Tag, @Size, @RegistryId, @CreatedAt, @UpdatedAt
             )
-            ON CONFLICT(PlatformId, ImageId) DO UPDATE SET
+            ON CONFLICT(ImageId, PlatformId) DO UPDATE SET
                 Name = excluded.Name,
-                IsInUse = excluded.IsInUse,
+                Containers = excluded.Containers,
                 IsUpToDate = excluded.IsUpToDate,
                 Tag = excluded.Tag,
                 Size = excluded.Size,
@@ -85,7 +121,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
             PlatformId = image.PlatformId.Format(),
             ImageId = image.ImageId,
             Name = image.Name,
-            IsInUse = image.IsInUse,
+            Containers = image.Containers,
             IsUpToDate = image.IsUpToDate,
             Tag = image.Tag,
             Size = image.Size,
@@ -100,7 +136,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
         const string sql = """
             UPDATE Images
                 SET PlatformId = @PlatformId, ImageId = @ImageId, Name = @Name, 
-                    IsInUse = @IsInUse, IsUpToDate = @IsUpToDate, Tag = @Tag, Size = @Size, RegistryId = @RegistryId, CreatedAt = @CreatedAt, UpdatedAt = @UpdatedAt
+                    Containers = @Containers, IsUpToDate = @IsUpToDate, Tag = @Tag, Size = @Size, RegistryId = @RegistryId, CreatedAt = @CreatedAt, UpdatedAt = @UpdatedAt
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
@@ -109,7 +145,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
             PlatformId = image.PlatformId.Format(),
             ImageId = image.ImageId,
             Name = image.Name,
-            IsInUse = image.IsInUse,
+            Containers = image.Containers,
             IsUpToDate = image.IsUpToDate,
             Tag = image.Tag,
             Size = image.Size,
@@ -123,16 +159,16 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
     {
         const string sql = """
             INSERT INTO Images (
-                Id, PlatformId, ImageId, Name, IsInUse, IsUpToDate, Tag, Size, RegistryId, CreatedAt, UpdatedAt
+                Id, PlatformId, ImageId, Name, Containers, IsUpToDate, Tag, Size, RegistryId, CreatedAt, UpdatedAt
             )
             VALUES (
-                @Id, @PlatformId, @ImageId, @Name, @IsInUse, @IsUpToDate, @Tag, @Size, @RegistryId, @CreatedAt, @UpdatedAt
+                @Id, @PlatformId, @ImageId, @Name, @Containers, @IsUpToDate, @Tag, @Size, @RegistryId, @CreatedAt, @UpdatedAt
             )
             ON CONFLICT(Id) DO UPDATE SET
                 PlatformId  = excluded.PlatformId,
                 ImageId     = excluded.ImageId,
                 Name        = excluded.Name,
-                IsInUse     = excluded.IsInUse,
+                Containers  = excluded.Containers,
                 IsUpToDate  = excluded.IsUpToDate,
                 Tag         = excluded.Tag,
                 Size        = excluded.Size,
@@ -148,7 +184,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
             PlatformId = img.PlatformId.Format(),
             ImageId = img.ImageId,
             Name = img.Name,
-            IsInUse = img.IsInUse,
+            Containers = img.Containers,
             IsUpToDate = img.IsUpToDate,
             Tag = img.Tag,
             Size = img.Size,

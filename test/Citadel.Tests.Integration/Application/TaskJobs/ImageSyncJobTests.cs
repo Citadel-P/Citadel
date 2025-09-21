@@ -63,7 +63,7 @@ public class ImageSyncJobTests : IntegrationTestBase
                 tag: image.GetTag(),
                 imageId: image.Id,
                 size: image.Size,
-                isInUse : image.Containers % 2 == 0,
+                containers : image.Containers,
                 isUpToDate: false,
                 platformId: platform.Id,
                 createdAt: DateTimeOffset.FromUnixTimeSeconds(image.Created).DateTime
@@ -112,7 +112,7 @@ public class ImageSyncJobTests : IntegrationTestBase
             tag: "stale:01",
             imageId: staleImageId,
             size: 900000,
-            isInUse: false,
+            containers: 0,
             isUpToDate: false,
             platformId: platformId,
             createdAt: DateTime.UtcNow);
@@ -181,7 +181,7 @@ public class ImageSyncJobTests : IntegrationTestBase
             tag: "old:latest",
             imageId: "fake-id",
             size: 100000,
-            isInUse: true,
+            containers: 2,
             platformId: platformId,
             createdAt: DateTime.UtcNow,
             isUpToDate: true,

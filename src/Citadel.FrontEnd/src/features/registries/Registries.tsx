@@ -1,7 +1,7 @@
 import { AlertMessage } from '@/components/ui/alert-message';
 import { Button } from '@/components/ui/button';
 import Loader from '@/components/ui/loader';
-import { Boxes, Plus } from 'lucide-react';
+import { Cable, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useRegistriesContext } from './RegistriesContext';
 import { RegistriesTable } from './RegistriesTable';
@@ -19,7 +19,7 @@ export default function Registries() {
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-baseline gap-1">
               <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Boxes className="h-4 w-4" />
+                <Cable className="h-4 w-4" />
                 <span className="sr-only">Registries</span>
               </div>
               <div className="text-md font-bold text-foreground">Registries</div>

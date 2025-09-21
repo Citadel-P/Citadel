@@ -921,6 +921,7 @@ export interface ImageView {
   updatedAt?: any;
   /** @format uuid */
   registryId?: null | string;
+  registry?: null | RegistryView;
 }
 
 export interface ImagesView {

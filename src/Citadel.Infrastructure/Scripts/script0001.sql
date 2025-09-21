@@ -69,9 +69,9 @@ CREATE TABLE "PlatformStats" (
 
 CREATE TABLE "Images" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Images" PRIMARY KEY,
+    "Containers" INTEGER NOT NULL DEFAULT 0,
     "CreatedAt" TEXT NOT NULL,
     "ImageId" TEXT NOT NULL,
-    "IsInUse" INTEGER NOT NULL DEFAULT 0,
     "IsUpToDate" INTEGER NULL,
     "Name" TEXT NOT NULL,
     "PlatformId" TEXT NOT NULL,
@@ -162,17 +162,17 @@ VALUES ('cede9601-67e9-507d-832c-0ca0155465a1', 'd1de9601-f113-ce77-884e-3cb636e
 SELECT changes();
 
 
-CREATE INDEX "IX_ContainerStats_ContainerId" ON "ContainerStats" ("ContainerId");
+CREATE UNIQUE INDEX "IX_ContainerStats_ContainerId_Created" ON "ContainerStats" ("ContainerId", "Created");
 
 CREATE INDEX "IX_Containers_DeploymentId" ON "Containers" ("DeploymentId");
 
 CREATE INDEX "IX_Containers_PlatformId" ON "Containers" ("PlatformId");
 
-CREATE UNIQUE INDEX "IX__Containers_ContainerId" ON "Containers" ("ContainerId");
+CREATE UNIQUE INDEX "IX__Containers_ContainerId_PlatformId" ON "Containers" ("ContainerId", "PlatformId");
 
 CREATE INDEX "IX_Deployments_PlatformId" ON "Deployments" ("PlatformId");
 
-CREATE UNIQUE INDEX "IX_Images_ImageId" ON "Images" ("ImageId");
+CREATE UNIQUE INDEX "IX_Images_ImageId_PlatformId" ON "Images" ("ImageId", "PlatformId");
 
 CREATE INDEX "IX_Images_PlatformId" ON "Images" ("PlatformId");
 
@@ -180,9 +180,7 @@ CREATE INDEX "IX_Images_RegistryId" ON "Images" ("RegistryId");
 
 CREATE INDEX "IX_Permissions_RoleId" ON "Permissions" ("RoleId");
 
-CREATE UNIQUE INDEX "IX_PlatformStats_Created" ON "PlatformStats" ("Created");
-
-CREATE INDEX "IX_PlatformStats_PlatformId" ON "PlatformStats" ("PlatformId");
+CREATE UNIQUE INDEX "IX_PlatformStats_PlatformId_Created" ON "PlatformStats" ("PlatformId", "Created");
 
 CREATE UNIQUE INDEX "IX_Platforms_Address" ON "Platforms" ("Address");
 
@@ -199,7 +197,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20250919190656_migration0001', '10.0.0-rc.1.25451.107');
+VALUES ('20250921104204_migration0001', '10.0.0-rc.1.25451.107');
 
 COMMIT;
 

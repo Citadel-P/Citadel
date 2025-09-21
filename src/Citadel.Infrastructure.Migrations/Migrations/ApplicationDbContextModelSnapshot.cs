@@ -66,14 +66,14 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ContainerId")
-                        .IsUnique()
-                        .HasDatabaseName("IX__Containers_ContainerId");
-
                     b.HasIndex("DeploymentId");
 
                     b.HasIndex("PlatformId")
                         .HasDatabaseName("IX_Containers_PlatformId");
+
+                    b.HasIndex("ContainerId", "PlatformId")
+                        .IsUnique()
+                        .HasDatabaseName("IX__Containers_ContainerId_PlatformId");
 
                     b.ToTable("Containers", (string)null);
                 });
@@ -111,8 +111,9 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ContainerId")
-                        .HasDatabaseName("IX_ContainerStats_ContainerId");
+                    b.HasIndex("ContainerId", "Created")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ContainerStats_ContainerId_Created");
 
                     b.ToTable("ContainerStats", (string)null);
                 });
@@ -160,6 +161,11 @@ namespace Infrastructure.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Containers")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0);
+
                     b.Property<string>("CreatedAt")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -167,11 +173,6 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<string>("ImageId")
                         .IsRequired()
                         .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsInUse")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(false);
 
                     b.Property<bool?>("IsUpToDate")
                         .HasColumnType("INTEGER");
@@ -201,14 +202,14 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ImageId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Images_ImageId");
-
                     b.HasIndex("PlatformId")
                         .HasDatabaseName("IX_Images_PlatformId");
 
                     b.HasIndex("RegistryId");
+
+                    b.HasIndex("ImageId", "PlatformId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Images_ImageId_PlatformId");
 
                     b.ToTable("Images", (string)null);
                 });
@@ -318,12 +319,9 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Created")
+                    b.HasIndex("PlatformId", "Created")
                         .IsUnique()
-                        .HasDatabaseName("IX_PlatformStats_Created");
-
-                    b.HasIndex("PlatformId")
-                        .HasDatabaseName("IX_PlatformStats_PlatformId");
+                        .HasDatabaseName("IX_PlatformStats_PlatformId_Created");
 
                     b.ToTable("PlatformStats", (string)null);
                 });

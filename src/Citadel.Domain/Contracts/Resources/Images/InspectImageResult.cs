@@ -16,7 +16,10 @@ public record InspectImageResult(
     IEnumerable<HistoryImageResult> Layers,
     IDictionary<string, string> Labels,
     IEnumerable<ContainerImageResult> Containers
-    );
+    )
+{
+    public Registry? Registry { get; set; }
+};
 
 public record ContainerImageResult(
     string Id, 

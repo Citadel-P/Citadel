@@ -16,6 +16,7 @@ import { Box, Info, Layers } from 'lucide-react';
 import { ImageInfoTable } from './ImageInfoTable';
 import { ImageLayerTable } from './ImageLayerTable';
 import Loader from '@/components/ui/loader';
+import { truncate } from '@/lib/truncate';
 
 const ImageInfoWrapper = () => {
   const navigate = useNavigate();
@@ -62,7 +63,7 @@ const ImageInfoWrapper = () => {
                 <div className="flex items-center gap-1 mb-4 md:mb-0">
                   <ImageSateIndicator inUse={Object.keys(data?.data.containers ?? {}).length > 0} />
                   <div className="flex flex-col text-md font-bold text-foreground">
-                    <span>{data?.data.repoTags?.at(0) ?? '-:-'}</span>
+                    <span>{truncate(data?.data.repoTags?.at(0) ?? '-:-', 42)}</span>
                     <span className="text-xs text-foreground/40">
                       <CopyTextToClipboard textToCopy={data?.data.id ?? '-'} />
                     </span>
