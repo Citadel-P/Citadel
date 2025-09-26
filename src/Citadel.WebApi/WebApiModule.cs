@@ -1,7 +1,6 @@
 ﻿using System.Text;
 using System.Text.Json.Serialization;
 using Application.Services.Abstractions;
-using Domain;
 using Hosting.OpenApi;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -122,7 +121,7 @@ internal static class WebApiModule
         {
             SerializeEnumValuesByName = true,
             PropertyNamingPolicy = MessagePackNamingPolicy.CamelCase,
-            DerivedTypeMappings = [DerivedTypesMapping.PlatformDescriptorMappings],
+            DerivedTypeUnions = [DerivedTypesMapping.PlatformDescriptorMappings],
         }
         .WithGuidConverter(GuidStringFormat.StringD)
         .WithAssumedDateTimeKind(DateTimeKind.Utc));

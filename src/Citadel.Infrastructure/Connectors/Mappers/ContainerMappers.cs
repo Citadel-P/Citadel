@@ -637,7 +637,7 @@ internal static class ContainerMappers
         (
             Action: evt.Action,
             ImageId: evt.ImageId,
-            Image: null
+            Image: evt.Image?.Map()
         );
     }
 

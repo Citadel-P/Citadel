@@ -1,6 +1,6 @@
 import { RegistryView } from '@/api/_generated';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { Cable, Link } from 'lucide-react';
+import { Link } from 'lucide-react';
 
 export function RegistryDisplay({ registry }: { registry: RegistryView | undefined }) {
   if (!registry) return <></>;

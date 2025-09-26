@@ -1,4 +1,5 @@
-﻿using Citadel.Agent.Images.V1;
+﻿using Citadel.Agent.Common.V1;
+using Citadel.Agent.Images.V1;
 using Domain.Contracts.Resources.Images;
 using Google.Protobuf.Collections;
 using static Citadel.Agent.Images.V1.ConfigMessage.Types;

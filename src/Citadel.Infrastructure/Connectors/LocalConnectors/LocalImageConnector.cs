@@ -10,11 +10,18 @@ namespace Infrastructure.Connectors.LocalConnectors;
 
 internal class LocalImageConnector(IImageService imageService) : IImageConnector
 {
+    public async Task<Result<ImageResult>> GetAsync(string platformAddress, string imageId, CancellationToken cancellationToken)
+    {
+        var result = await imageService.GetAsync(imageId, cancellationToken);
+        return ServiceResultHandlers.HandleResult(result, ImageMappers.Map);
+    }
+
     public async Task<Result<IReadOnlyList<ImageResult>>> ListImagesAsync(string platformAddress, CancellationToken cancellationToken)
     {
         var result = await imageService.ListAsync(cancellationToken);
         return ServiceResultHandlers.HandleResult(result, ImageMappers.Map);
     }
+
     public async Task<Result<InspectImageResult>> InspectImageAsync(InspectImageCommand inspectImageCommand, CancellationToken cancellationToken)
     {
         var result = await imageService.InspectAsync(inspectImageCommand.ImageId, cancellationToken);

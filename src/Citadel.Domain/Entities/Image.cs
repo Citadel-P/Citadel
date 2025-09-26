@@ -10,7 +10,8 @@ public sealed class Image(
     DateTime createdAt,
     bool? isUpToDate = null,
     DateTime? updatedAt = null,
-    Guid? registryId = null)
+    Guid? registryId = null,
+    Registry? registry = null)
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid PlatformId { get; private set; } = platformId;
@@ -23,7 +24,7 @@ public sealed class Image(
     public string Name { get; private set; } = name;
     public DateTime CreatedAt { get; private set; } = createdAt;
     public DateTime? UpdatedAt { get; private set; } = updatedAt;
-    public Registry? Registry { get; private set; }
+    public Registry? Registry { get; private set; } = registry;
 
     public void PartialUpdate(
         string? name = null,

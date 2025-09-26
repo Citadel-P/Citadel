@@ -28,6 +28,7 @@ public interface IApplicationHubDispatcher
     #endregion
 
     #region Images
+    Task SendImageInfo(Guid platformId, Image image);
     Task SendImagesInfo(Guid platformId, IEnumerable<Image> images);
     #endregion
 

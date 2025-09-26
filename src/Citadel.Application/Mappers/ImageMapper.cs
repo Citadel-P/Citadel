@@ -20,15 +20,16 @@ public static class ImageMapper
         return image.RepoTags?.FirstOrDefault()?.Split(":").LastOrDefault() ?? "none";
     }
 
-    public static Image Map(this ImageResult image, Guid platformId, Guid? registryId = null)
+    public static Image Map(this ImageResult image, Guid platformId, Registry? registry = null)
         => new (
             name: image.GetName() ?? string.Empty,
             tag: image.GetTag(),
             imageId: image.Id,
             size: image.Size,
             platformId: platformId,
-            registryId: registryId == Guid.Empty ? null : registryId,
+            registryId: registry?.Id == Guid.Empty ? null : registry?.Id,
             containers: image.Containers,
-            createdAt: DateTimeOffset.FromUnixTimeSeconds(image.Created).UtcDateTime
+            createdAt: DateTimeOffset.FromUnixTimeSeconds(image.Created).UtcDateTime,
+            registry: registry
             );
 }

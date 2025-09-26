@@ -1,11 +1,15 @@
-﻿using Application.Services;
+﻿using Application.Mappers;
+using Application.Services.SignalR;
+using Application.TaskJobs;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Images;
 using Domain.Entities;
 using Domain.Entities.Registries;
 using FluentValidation;
 using Hosting.Common;
 using Mediator;
+using Microsoft.Extensions.DependencyInjection;
 using System.Runtime.CompilerServices;
 
 namespace Application.Features.Images.Commands;
@@ -70,8 +74,8 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
     }
 }
 
-internal sealed class PullImageHandler(IUnitOfWork unitOfWork, IPlatformContainerCache platformContainerCache, IRegistryCache registryCache, IConnectorFactory<IImageConnector> connectorFactory) 
-    : IStreamCommandHandler<PullImage, PullImageResult>
+internal sealed class PullImageHandler(IConnectorFactory<IImageConnector> connectorFactory, IImageStreamManager imageStream, IUnitOfWork unitOfWork, 
+    IPlatformContainerCache platformContainerCache, IBackgroundTaskQueue backgroundTaskQueue, IServiceScopeFactory scopeFactory) : IStreamCommandHandler<PullImage, PullImageResult>
 {
     public async IAsyncEnumerable<PullImageResult> Handle(PullImage command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -94,18 +98,27 @@ internal sealed class PullImageHandler(IUnitOfWork unitOfWork, IPlatformContaine
         }
 
         var connector = connectorFactory.GetConnector(platform.ConnectorType);
-
         await foreach (var reply in connector.PullImageProgressStreamAsync(command.ToConnectorCommand(platform.Address, registry), cancellationToken))
         {
-            if (reply?.Status?.StartsWith("Digest: ") == true)
-            {
-                ReadOnlySpan<char> status = reply.Status.AsSpan();
-                ReadOnlySpan<char> digestSpan = status[8..];
-                var imageId = new string(digestSpan);
-
-                registryCache.Set(command.PlatformId, imageId, registry.Id);
-            }
             yield return reply;
+        }
+
+        backgroundTaskQueue.Enqueue(ct => PersistPulledImage(connector, scopeFactory, platform, registry, command.ImageTag, ct));
+    }
+
+    private async Task PersistPulledImage(IImageConnector connector, IServiceScopeFactory scopeFactory, PlatformCacheEntry paltform, Registry registry, string imageName, CancellationToken cancellationToken)
+    {
+        var imageResult = await connector.GetAsync(paltform.Address, imageName, cancellationToken);
+        if (imageResult.IsSuccess(out var image))
+        {
+            var imageEntity = image.Map(paltform.Id, registry);
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+            await uow.Images.AddOrUpdateAsync(imageEntity, cancellationToken);
+            await uow.CommitAsync();
+
+            await imageStream.SendImageInfo(paltform.Id, imageEntity);
         }
     }
 }

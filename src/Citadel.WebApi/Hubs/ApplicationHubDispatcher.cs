@@ -45,6 +45,11 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
 
     #region Images
 
+    public Task SendImageInfo(Guid platformId, Image image) =>
+       hubContext.Clients
+           .Group(WellKnownSignalRGroups.ImagesGroup(platformId))
+           .SendAsync("ImageInfoUpdated", ImagesView.Map(image));
+
     public Task SendImagesInfo(Guid platformId, IEnumerable<Image> images) =>
         hubContext.Clients
             .Group(WellKnownSignalRGroups.ImagesGroup(platformId))

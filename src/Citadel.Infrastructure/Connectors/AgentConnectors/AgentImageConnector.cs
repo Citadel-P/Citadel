@@ -12,6 +12,20 @@ namespace Infrastructure.Connectors.AgentConnectors;
 
 internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageConnector
 {
+    public async Task<Result<ImageResult>> GetAsync(string platformAddress, string imageId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var client = clientFactory.GetImageClient(platformAddress);
+            var image = await client.GetAsync(new GetImageRequest() { Id = imageId }, cancellationToken: cancellationToken);
+            return image.Map();
+        }
+        catch (RpcException ex)
+        {
+            return Result.Failure<ImageResult>(new ClientRpcException($"An RPC exception occurred: {ex.Message}", ex.StatusCode));
+        }
+    }
+
     public async Task<Result<IReadOnlyList<ImageResult>>> ListImagesAsync(string platformAddress, CancellationToken cancellationToken)
     {
         try

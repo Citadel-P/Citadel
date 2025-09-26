@@ -12,4 +12,4 @@ public record DaemonContainerEventInfo(
 public record DaemonImageEventInfo(
     string Action,
     string ImageId,
-    ImageResult Image) : DaemonEventInfo(Action);
+    ImageResult? Image) : DaemonEventInfo(Action);

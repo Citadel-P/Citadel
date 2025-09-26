@@ -13,7 +13,6 @@ using System.Threading.Channels;
 namespace Application.TaskJobs;
 
 internal sealed class DockerDaemonEventJob(
-    IRegistryCache registryCache,
     IServiceScopeFactory scopeFactory,
     ILogger<DockerDaemonEventJob> logger,
     IDockerDaemonStreamManager dockerDaemonHub,
@@ -91,10 +90,6 @@ internal sealed class DockerDaemonEventJob(
                     {
                         switch (reply.Action)
                         {
-                            case "pull":
-                            case "create":
-                                await OnImageAddOrUpdate(imageEvent, platform.Id, cancellationToken);
-                                break;
                             case "delete":
                                 await OnImageDeleted(imageEvent, platform.Id, cancellationToken);
                                 break;
@@ -113,21 +108,20 @@ internal sealed class DockerDaemonEventJob(
 
     private async Task OnContainerCreated(DaemonContainerEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
     {
-        if (eventInfo.Container != null)
-        {
-            var container = eventInfo.Container.Map(platformId);
-            platformContainerCache.TryAddContainer(platformId, container.ContainerId, container.Id);
+        if (eventInfo.Container is null) return;
 
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var container = eventInfo.Container.Map(platformId);
+        platformContainerCache.TryAddContainer(platformId, container.ContainerId, container.Id);
 
-            await uow.Containers.AddAsync(container, cancellationToken);
-            await uow.CommitAsync();
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-            await SendContainerEventChanges(container, eventInfo.Action);
+        await uow.Containers.AddAsync(container, cancellationToken);
+        await uow.CommitAsync();
 
-            await UpdateImageStatus(uow, platformId, container?.ImageId, eventInfo.Action, cancellationToken);
-        }
+        await SendContainerEventChanges(container, eventInfo.Action);
+
+        await UpdateImageStatus(uow, platformId, container?.ImageId, eventInfo.Action, cancellationToken);
     }
 
     private async Task OnContainerUpdated(DaemonContainerEventInfo eventInfo, CancellationToken cancellationToken)
@@ -163,25 +157,6 @@ internal sealed class DockerDaemonEventJob(
             await UpdateImageStatus(uow, platformId, existingDestroy?.ImageId, eventInfo.Action, cancellationToken);
         }
     }
-
-    private async Task OnImageAddOrUpdate(DaemonImageEventInfo imageEvent, Guid platformId, CancellationToken cancellationToken)
-    {
-        if (imageEvent.Image != null)
-        {
-            // If pull handler cached a registry, enrich the image
-            registryCache.TryGet(platformId, imageEvent.Image.Id, out var registryId);
-            var image = imageEvent.Image.Map(platformId, registryId);
-            
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-            await uow.Images.AddOrUpdateAsync(image, cancellationToken);
-            await uow.CommitAsync();
-
-            await SendImageEventChanges(image, imageEvent.Action);
-        }
-    }
-
 
     private async Task OnImageDeleted(DaemonImageEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
     {

@@ -47,11 +47,10 @@ public static class ApplicationModule
     private static IServiceCollection AddServices(this IServiceCollection services)
         => services
             .AddSingleton<IJwtService, JwtService>()
-            .AddSingleton<IRegistryCache, RegistryCache>()
+            .AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>()
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>()
             .AddSingleton<IContainerEventBroadcaster, ContainerEventBroadcaster>()
             .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>()
-            
             .AddScoped<GitHubConnectorStrategy>()
             .AddScoped<DockerHubConnectorStrategy>()
             .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>();
@@ -82,6 +81,7 @@ public static class ApplicationModule
             .AddHostedService<ContainerStatsWriterJob>()
             .AddHostedService<ContainerSyncJob>()
             .AddHostedService<ImageSyncJob>()
+            .AddHostedService<QueuedHostedService>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services
             .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()

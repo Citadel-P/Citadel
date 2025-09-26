@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { HubConnection } from '@microsoft/signalr';
-import { ImagesView } from '@/api/_generated';
+import { ImagesView, ImageView } from '@/api/_generated';
 import { useDockerDaemonGroup } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 
@@ -9,8 +9,29 @@ export const useImagesGroup = (platformId?: string) => {
   const [imagesInfo, setimagesInfo] = useState<ImagesView | undefined>();
   const { imageEvent } = useDockerDaemonGroup(platformId);
 
-  const handleimagesInfoUpdated = useCallback((images: ImagesView) => {
+  const handleImagesInfoUpdated = useCallback((images: ImagesView) => {
     setimagesInfo(images);
+  }, []);
+
+  const handleImageInfoUpdated = useCallback((image: ImageView) => {
+    setimagesInfo((currentInfo) => {
+      if (!currentInfo) {
+        return currentInfo;
+      }
+
+      const updatedImages = [...(currentInfo.images ?? [])];
+      const existingIndex = updatedImages.findIndex((c) => c.imageId === image.imageId);
+
+      if (existingIndex === -1) {
+        return { ...currentInfo, images: [image, ...updatedImages] };
+      }
+      if (JSON.stringify(updatedImages[existingIndex]) !== JSON.stringify(image)) {
+        updatedImages[existingIndex] = image;
+        return { ...currentInfo, images: updatedImages };
+      }
+
+      return currentInfo;
+    });
   }, []);
 
   useEffect(() => {
@@ -23,18 +44,6 @@ export const useImagesGroup = (platformId?: string) => {
       const existingIndex = updatedImages.findIndex((c) => c.imageId === imageEvent?.image.imageId);
 
       switch (imageEvent?.eventType) {
-        case 'create':
-        case 'pull':
-        case 'update': // <- custom Citadel event
-          if (existingIndex === -1) {
-            return { ...currentInfo, images: [imageEvent?.image, ...updatedImages] };
-          }
-          if (JSON.stringify(updatedImages[existingIndex]) !== JSON.stringify(imageEvent?.image)) {
-            updatedImages[existingIndex] = imageEvent?.image;
-            return { ...currentInfo, images: updatedImages };
-          }
-          break;
-
         case 'delete':
           if (existingIndex !== -1) {
             updatedImages.splice(existingIndex, 1);
@@ -43,15 +52,6 @@ export const useImagesGroup = (platformId?: string) => {
           break;
 
         default:
-          if (
-            existingIndex !== -1 &&
-            JSON.stringify(updatedImages[existingIndex]) !== JSON.stringify(imageEvent?.image)
-          ) {
-            if (imageEvent?.image) {
-              updatedImages[existingIndex] = imageEvent?.image;
-            }
-            return { ...currentInfo, images: updatedImages };
-          }
           break;
       }
 
@@ -76,16 +76,18 @@ export const useImagesGroup = (platformId?: string) => {
 
   const setupEventListeners = useCallback(
     (hubConnection: HubConnection) => {
-      hubConnection.on('ImagesInfoUpdated', handleimagesInfoUpdated);
+      hubConnection.on('ImageInfoUpdated', handleImageInfoUpdated);
+      hubConnection.on('ImagesInfoUpdated', handleImagesInfoUpdated);
     },
-    [handleimagesInfoUpdated],
+    [handleImagesInfoUpdated, handleImageInfoUpdated],
   );
 
   const removeEventListeners = useCallback(
     (hubConnection: HubConnection) => {
-      hubConnection.off('ImagesInfoUpdated', handleimagesInfoUpdated);
+      hubConnection.off('ImagesInfoUpdated', handleImagesInfoUpdated);
+      hubConnection.off('ImageInfoUpdated', handleImageInfoUpdated);
     },
-    [handleimagesInfoUpdated],
+    [handleImagesInfoUpdated, handleImageInfoUpdated],
   );
 
   const onJoinedGroup = useCallback(
