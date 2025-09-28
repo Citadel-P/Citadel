@@ -13,7 +13,7 @@ internal sealed class ContainerInfoStreamManager(
     IApplicationHubDispatcher dispatcher,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IContainerConnector> connectorFactory,
-    ILogger<ContainerInfoStreamManager> logger) : BaseStreamManager<PooledStreamContext<DockerContainer>>, IStreamGroupManager
+    ILogger<ContainerInfoStreamManager> logger) : BaseStreamManager<ChannelStreamContext<DockerContainer>>, IStreamGroupManager
 {
     protected override void OnSubscriberAdded(string groupId, string connectionId)
     {
@@ -45,7 +45,7 @@ internal sealed class ContainerInfoStreamManager(
         }
     }
 
-    private async Task PollDockerStats(string containerId, PooledStreamContext<DockerContainer> ctx)
+    private async Task PollDockerStats(string containerId, ChannelStreamContext<DockerContainer> ctx)
     {
         var writer = ctx.Channel.Writer;
         var token = ctx.Cancellation.Token;
@@ -75,7 +75,7 @@ internal sealed class ContainerInfoStreamManager(
         }
     }
 
-    private async Task BroadcastStats(PooledStreamContext<DockerContainer> ctx)
+    private async Task BroadcastStats(ChannelStreamContext<DockerContainer> ctx)
     {
         var reader = ctx.Channel.Reader;
         var token = ctx.Cancellation.Token;

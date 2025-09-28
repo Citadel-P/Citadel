@@ -5,10 +5,16 @@ namespace Application.Mappers;
 
 internal static class ContainerMapper
 {
-    public static IEnumerable<Container> Map(this IEnumerable<DockerContainer> containers, Guid platformId)
-        => containers.Select(s => s.Map(platformId));
+    internal static IEnumerable<Container> Map(this IEnumerable<DockerContainer> containers, IEnumerable<Image> images, Guid platformId)
+    {
+        foreach (var container in containers)
+        {
+            var imageEntity = images.FirstOrDefault(i => i.ImageId == container.ImageId && i.PlatformId == platformId);
+            yield return container.Map(platformId, imageEntity?.Id);
+        }
+    }
 
-    public static Container Map(this DockerContainer container, Guid platformId)
+    internal static Container Map(this DockerContainer container, Guid platformId, Guid? imageEntityId)
         => new
         (
             name: container.Name,
@@ -19,10 +25,11 @@ internal static class ContainerMapper
             containerId: container.ContainerId,
             created: container.Created,
             state: container.State,
-            ports: container.Ports
+            ports: container.Ports,
+            imageEntityId: imageEntityId
         );
 
-    public static ContainerStat Map(this DockerContainerStat container, Guid containerId, long? created)
+    internal static ContainerStat Map(this DockerContainerStat container, Guid containerId, long? created)
         => new
         (
             ContainerId: containerId,

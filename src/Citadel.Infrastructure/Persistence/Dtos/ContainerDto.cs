@@ -12,6 +12,7 @@ internal record ContainerDto(
     string State, // ContainerStateStatus
     string Ports, // List<ContainerPort> 
     string? Stack,
+    Guid? ImageEntityId = null,
     PlatformDto? Platform = null
 )
 {

@@ -2905,7 +2905,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InspectImageResult"
+                  "$ref": "#/components/schemas/InspectImageView"
                 }
               }
             }
@@ -7299,7 +7299,7 @@
           }
         }
       },
-      "InspectImageResult": {
+      "InspectImageView": {
         "required": [
           "id",
           "size",
@@ -7313,7 +7313,8 @@
           "exposedPorts",
           "layers",
           "labels",
-          "containers"
+          "containers",
+          "registry"
         ],
         "type": "object",
         "properties": {
@@ -7384,6 +7385,16 @@
             "items": {
               "$ref": "#/components/schemas/ContainerImageResult"
             }
+          },
+          "registry": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegistryView"
+              }
+            ]
           }
         }
       },

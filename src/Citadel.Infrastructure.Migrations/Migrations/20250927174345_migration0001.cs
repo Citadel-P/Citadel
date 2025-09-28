@@ -224,6 +224,7 @@ namespace Infrastructure.Migrations.Migrations
                     Created = table.Column<long>(type: "REAL", nullable: false),
                     DeploymentId = table.Column<string>(type: "TEXT", nullable: true),
                     Image = table.Column<string>(type: "TEXT", nullable: false),
+                    ImageEntityId = table.Column<string>(type: "TEXT", nullable: true),
                     ImageId = table.Column<string>(type: "TEXT", nullable: false),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
                     PlatformId = table.Column<string>(type: "TEXT", nullable: false),
@@ -239,6 +240,12 @@ namespace Infrastructure.Migrations.Migrations
                         name: "FK_Containers_Deployments_DeploymentId",
                         column: x => x.DeploymentId,
                         principalTable: "Deployments",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_Containers_Images_ImageEntityId",
+                        column: x => x.ImageEntityId,
+                        principalTable: "Images",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
@@ -330,6 +337,16 @@ namespace Infrastructure.Migrations.Migrations
                 column: "DeploymentId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Containers_ImageEntityId",
+                table: "Containers",
+                column: "ImageEntityId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Containers_ImageId",
+                table: "Containers",
+                column: "ImageId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Containers_PlatformId",
                 table: "Containers",
                 column: "PlatformId");
@@ -418,9 +435,6 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ContainerStats");
 
             migrationBuilder.DropTable(
-                name: "Images");
-
-            migrationBuilder.DropTable(
                 name: "Permissions");
 
             migrationBuilder.DropTable(
@@ -436,9 +450,6 @@ namespace Infrastructure.Migrations.Migrations
                 name: "Containers");
 
             migrationBuilder.DropTable(
-                name: "Registries");
-
-            migrationBuilder.DropTable(
                 name: "Teams");
 
             migrationBuilder.DropTable(
@@ -448,10 +459,16 @@ namespace Infrastructure.Migrations.Migrations
                 name: "Deployments");
 
             migrationBuilder.DropTable(
+                name: "Images");
+
+            migrationBuilder.DropTable(
                 name: "Roles");
 
             migrationBuilder.DropTable(
                 name: "Platforms");
+
+            migrationBuilder.DropTable(
+                name: "Registries");
         }
     }
 }

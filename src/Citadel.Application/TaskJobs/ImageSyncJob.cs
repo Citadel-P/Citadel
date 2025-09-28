@@ -19,6 +19,7 @@ namespace Application.TaskJobs;
 /// 2. Periodically, every 12 hours, to ensure the local image state remains consistent with the platform state.
 /// </summary>
 internal class ImageSyncJob(
+    ISyncBarrier syncBarrier,
     IServiceScopeFactory scopeFactory,
     IImageStreamManager imageStreamManager,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
@@ -175,6 +176,10 @@ internal class ImageSyncJob(
         }
 
         await uow.CommitAsync();
+
+        // Signal that the job has completed its first run
+        syncBarrier.MarkSynced<ImageSyncJob>();
+
         return currentActiveImages;
     }
 }

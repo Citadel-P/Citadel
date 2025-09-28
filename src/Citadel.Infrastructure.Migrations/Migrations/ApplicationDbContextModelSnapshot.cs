@@ -37,6 +37,9 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ImageEntityId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ImageId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -67,6 +70,12 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DeploymentId");
+
+                    b.HasIndex("ImageEntityId")
+                        .HasDatabaseName("IX_Containers_ImageEntityId");
+
+                    b.HasIndex("ImageId")
+                        .HasDatabaseName("IX_Containers_ImageId");
 
                     b.HasIndex("PlatformId")
                         .HasDatabaseName("IX_Containers_PlatformId");
@@ -529,6 +538,11 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasOne("Deployment", null)
                         .WithMany()
                         .HasForeignKey("DeploymentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Image", null)
+                        .WithMany()
+                        .HasForeignKey("ImageEntityId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("Platform", null)

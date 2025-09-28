@@ -928,7 +928,7 @@ export interface ImagesView {
   images: ImageView[];
 }
 
-export interface InspectImageResult {
+export interface InspectImageView {
   id: string;
   /**
    * @format int64
@@ -946,6 +946,7 @@ export interface InspectImageResult {
   layers: HistoryImageResult[];
   labels: Record<string, string>;
   containers: ContainerImageResult[];
+  registry: null | RegistryView;
 }
 
 export interface IpAddressInfo {
@@ -2640,7 +2641,7 @@ export class Api<
      * @summary Inspect an image
      * @request GET:/api/v1/images/{platformId}/{imageId}
      * @secure
-     * @response `200` `InspectImageResult` OK
+     * @response `200` `InspectImageView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
@@ -2653,7 +2654,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<
-        InspectImageResult,
+        InspectImageView,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/images/${platformId}/${imageId}`,

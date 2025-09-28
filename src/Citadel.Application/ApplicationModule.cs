@@ -47,6 +47,7 @@ public static class ApplicationModule
     private static IServiceCollection AddServices(this IServiceCollection services)
         => services
             .AddSingleton<IJwtService, JwtService>()
+            .AddSingleton<ISyncBarrier, SyncBarrier>()
             .AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>()
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>()
             .AddSingleton<IContainerEventBroadcaster, ContainerEventBroadcaster>()

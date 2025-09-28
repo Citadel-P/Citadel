@@ -3,7 +3,7 @@ using Hosting.Common;
 
 namespace Application.Services.SignalR.Context;
 
-internal sealed class PooledStreamContext<T> : StreamContext where T : class
+internal sealed class ChannelStreamContext<T> : StreamContext where T : class
 {
     public Channel<T> Channel { get; } = System.Threading.Channels.Channel.CreateBounded<T>(Helpers.ChannelDefaultOptions());
     public CancellationTokenSource Cancellation { get; private set; } = new();

@@ -3,9 +3,9 @@ using Domain.Entities;
 
 namespace Application.Mappers;
 
-public static class ImageMapper
+internal static class ImageMapper
 {
-    public static string? GetName(this ImageResult image)
+    internal static string? GetName(this ImageResult image)
     {
         if (image == null) return null;
 
@@ -15,12 +15,15 @@ public static class ImageMapper
         else return image.Id;
     }
 
-    public static string GetTag(this ImageResult image)
+    internal static string GetTag(this ImageResult image)
     {
         return image.RepoTags?.FirstOrDefault()?.Split(":").LastOrDefault() ?? "none";
     }
 
-    public static Image Map(this ImageResult image, Guid platformId, Registry? registry = null)
+    internal static IEnumerable<Image> Map(this IEnumerable<ImageResult> images, Guid platformId, Registry? registry = null)
+        => images.Select(s => s.Map(platformId, registry));
+
+    internal static Image Map(this ImageResult image, Guid platformId, Registry? registry = null)
         => new (
             name: image.GetName() ?? string.Empty,
             tag: image.GetTag(),

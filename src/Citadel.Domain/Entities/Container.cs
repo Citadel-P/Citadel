@@ -10,6 +10,7 @@ public class Container(
     long? created = null,
     string? stack = null,
     Guid? deploymentId = null,
+    Guid? imageEntityId = null,
     IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null)
 {
     private readonly List<ContainerStat> stats = [];
@@ -27,6 +28,7 @@ public class Container(
     public ContainerStateStatus State { get; set; } = state;
     public string? Stack { get; private set; } = stack;
     public string? ImageId { get; private set; } = imageId;
+    public Guid? ImageEntityId { get; private set; } = imageEntityId;
     public IDictionary<string, IReadOnlyList<HostPortBinding>> Ports => ports;
     public IReadOnlyCollection<ContainerStat>? Stats => stats;
     public Platform? Platform { get; private set; } = null!;
@@ -39,6 +41,7 @@ public class Container(
         string? stack = null,
         long? created = null,
         Guid? platformId = null,
+        Guid? imageEntityId = null,
         IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null)
     {
         if (name != null) Name = name;
@@ -48,6 +51,7 @@ public class Container(
         if (stack != null) Stack = stack;
         if (created != null) Created = created.Value;
         if (platformId != null) PlatformId = platformId.Value;
+        if (imageEntityId is not null) ImageEntityId = imageEntityId;
         if (ports != null)
         {
             this.ports.Clear();
@@ -78,6 +82,7 @@ public class Container(
         IDictionary<string, IReadOnlyList<HostPortBinding>> ports,
         string? stack = null,
         Platform? platform = null,
+        Guid? imageEntityId = null,
         IReadOnlyCollection<ContainerStat>? stats = null
         )
     {
@@ -90,7 +95,8 @@ public class Container(
             state: state,
             created: created,
             stack: stack,
-            ports: ports)
+            ports: ports,
+            imageEntityId: imageEntityId)
         {
             Id = id,
             Updated = updated,

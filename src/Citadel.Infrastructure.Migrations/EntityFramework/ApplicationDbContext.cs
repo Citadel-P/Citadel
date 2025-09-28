@@ -81,7 +81,8 @@ internal static class Configuration
         container.HasKey("Id");
 
         container.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        container.Property<Guid?>("DeploymentId").HasColumnType("TEXT").HasConversion(GuidConverter);
+        container.Property<Guid?>("DeploymentId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
+        container.Property<Guid?>("ImageEntityId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
         container.Property<string>("ContainerId").HasColumnType("TEXT").IsRequired().HasMaxLength(64);
         container.Property<string>("Name").HasColumnType("TEXT").IsRequired();
         container.Property<string>("Image").HasColumnType("TEXT").IsRequired();
@@ -99,12 +100,22 @@ internal static class Configuration
             .OnDelete(DeleteBehavior.Cascade);
 
         container
+            .HasOne("Image")
+            .WithMany()
+            .IsRequired(false)
+            .HasForeignKey("ImageEntityId")
+            .OnDelete(DeleteBehavior.SetNull);
+
+        container
             .HasOne("Deployment")
             .WithMany()
+            .IsRequired(false)
             .HasForeignKey("DeploymentId")
             .OnDelete(DeleteBehavior.SetNull);
 
         container.HasIndex("ContainerId", "PlatformId").IsUnique().HasDatabaseName($"IX__{tableName}_ContainerId_PlatformId");
+        container.HasIndex("ImageEntityId").HasDatabaseName($"IX_{tableName}_ImageEntityId");
+        container.HasIndex("ImageId").HasDatabaseName($"IX_{tableName}_ImageId");
         container.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
 
         return builder;

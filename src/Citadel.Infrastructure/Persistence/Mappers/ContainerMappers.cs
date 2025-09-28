@@ -25,6 +25,7 @@ internal static class ContainerMappers
             state: Enum.Parse<ContainerStateStatus>(container.State),
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             stack: container.Stack,
+            imageEntityId: container.ImageEntityId,
             platform: container.Platform?.ToDomain(),
             stats: container.Stats?.Select(ToDomain).ToList());
     }
@@ -48,6 +49,7 @@ internal static class ContainerMappers
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             stack: container.Stack,
             platform: container.Platform?.ToDomain(),
+            imageEntityId: container.ImageEntityId,
             stats: [new ContainerStat(
                 ContainerId: container.Id,
                 MemoryActive: container.Stat_MemoryActive,

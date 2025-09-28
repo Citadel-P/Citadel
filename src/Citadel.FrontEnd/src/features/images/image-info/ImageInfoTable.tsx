@@ -1,10 +1,11 @@
-import { InspectImageResult } from '@/api/_generated';
+import { InspectImageView } from '@/api/_generated';
 import { DataTable } from '@/components/ui/data-table';
+import { RegistryDisplay } from '@/components/ui/RegistryDisplay';
 import { byteTransform } from '@/lib/bytes.helper';
 import { fromNow } from '@/lib/dayjs.helper';
 import { ColumnDef } from '@tanstack/react-table';
 
-const columns: ColumnDef<InspectImageResult>[] = [
+const columns: ColumnDef<InspectImageView>[] = [
   {
     accessorKey: 'os',
     header: () => <span>Os</span>,
@@ -14,6 +15,11 @@ const columns: ColumnDef<InspectImageResult>[] = [
     accessorKey: 'architecture',
     header: () => <span>Architecture</span>,
     cell: ({ row }) => <span>{row.original.architecture}</span>,
+  },
+  {
+    accessorKey: 'registry',
+    header: () => <span>Registry</span>,
+    cell: ({ row }) => <RegistryDisplay registry={row.original.registry ?? undefined} />,
   },
   {
     accessorKey: 'created',
@@ -38,7 +44,7 @@ const columns: ColumnDef<InspectImageResult>[] = [
   },
 ];
 
-export const ImageInfoTable = ({ image }: { image: InspectImageResult | undefined }) => {
+export const ImageInfoTable = ({ image }: { image: InspectImageView | undefined }) => {
   if (!image) return <></>;
   return (
     <div className="flex flex-col gap-3">

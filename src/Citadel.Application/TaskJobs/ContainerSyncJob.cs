@@ -1,5 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.Threading.Channels;
+﻿using System.Threading.Channels;
 using Application.Mappers;
 using Application.Services;
 using Application.Services.SignalR;
@@ -23,6 +22,7 @@ namespace Application.TaskJobs;
 /// 2. Periodically, every 12 hours, to ensure the local container state remains consistent with the platform state.
 /// </summary>
 internal class ContainerSyncJob(
+    ISyncBarrier syncBarrier,
     IServiceScopeFactory scopeFactory,
     IPlatformContainerCache platformContainerCache,
     IContainerStreamManager containerStreamManager,
@@ -36,6 +36,9 @@ internal class ContainerSyncJob(
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation("{ContainerSyncJob} started. Running every {Hours} hours.", nameof(ContainerSyncJob), SyncInterval.TotalHours);
+
+        // Wait until ImageSyncJob has synced images at least once
+        await syncBarrier.WaitForAsync<ImageSyncJob>(cancellationToken);
 
         // Event-driven sync starts immediately
         var eventDrivenTask = RunEventDrivenSync(cancellationToken);
@@ -173,6 +176,7 @@ internal class ContainerSyncJob(
             return [];
         }
 
+        var images = await unitOfWork.Images.GetByPlatformIdAsync(platformEvent.Id, cancellationToken);
         var containers = await unitOfWork.Containers.GetByPlatformIdAsync(platformEvent.Id, cancellationToken);
         var existingContainersInDb = containers.ToDictionary(c => c.ContainerId, c => c, StringComparer.OrdinalIgnoreCase);
 
@@ -180,12 +184,14 @@ internal class ContainerSyncJob(
 
         foreach (var freshContainer in freshContainers.Values)
         {
+            var imageEntityId = images.FirstOrDefault(i => i.ImageId == freshContainer.ImageId)?.Id;
             if (existingContainersInDb.TryGetValue(freshContainer.ContainerId, out var existingDbContainer))
             {
                 existingDbContainer.PartialUpdate(
                     name: freshContainer.Name,
                     image: freshContainer.Image,
                     imageId: freshContainer.ImageId,
+                    imageEntityId: imageEntityId,
                     state: freshContainer.State,
                     stack: freshContainer.Stack,
                     created: freshContainer.Created,
@@ -195,7 +201,7 @@ internal class ContainerSyncJob(
             }
             else
             {
-                var container = freshContainer.Map(platformEvent.Id);
+                var container = freshContainer.Map(platformEvent.Id, imageEntityId);
                 currentActiveContainers.Add(container);
             }
         }

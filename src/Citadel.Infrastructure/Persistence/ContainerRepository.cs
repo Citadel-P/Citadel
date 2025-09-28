@@ -1,5 +1,4 @@
 ﻿using System.Data;
-using System.Text;
 using System.Text.Json;
 using Dapper;
 using Domain;
@@ -69,9 +68,9 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
             INSERT INTO Containers (
-                Id, PlatformId, ContainerId, Name, Image, ImageId, Created, Updated, State, Stack, Ports
+                Id, PlatformId, ContainerId, Name, Image, ImageId, Created, Updated, State, Stack, Ports, ImageEntityId
             ) VALUES (
-                @Id, @PlatformId, @ContainerId, @Name, @Image, @ImageId, @Created, @Updated, @State, @Stack, @Ports
+                @Id, @PlatformId, @ContainerId, @Name, @Image, @ImageId, @Created, @Updated, @State, @Stack, @Ports, @ImageEntityId
             )
         """;
         return db.ExecuteAsync(sql, new 
@@ -86,6 +85,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             Updated = container.Updated,
             State = EnumFormatter<ContainerStateStatus>.GetValue(container.State),
             Stack = container.Stack,
+            ImageEntityId = container.ImageEntityId == null ? null : container.ImageEntityId.Value.Format(),
             Ports = JsonSerializer.Serialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding)
         }, transaction: tx());
     }
@@ -94,7 +94,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
             UPDATE Containers
-            SET Name = @Name, Image = @Image, ImageId = @ImageId, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports, Created = @Created
+            SET Name = @Name, Image = @Image, ImageId = @ImageId, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports, Created = @Created, ImageEntityId = @ImageEntityId
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
@@ -117,12 +117,13 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     public Task<int> BulkUpsertAsync(IEnumerable<Container> containers, CancellationToken cancellationToken)
     {
         const string sql = """
-        INSERT INTO Containers (Id, PlatformId, ContainerId, Name, Image, ImageId, Created, Updated, State, Stack, Ports)
-        VALUES (@Id, @PlatformId, @ContainerId, @Name, @Image, @ImageId, @Created, @Updated, @State, @Stack, @Ports)
+        INSERT INTO Containers (Id, PlatformId, ContainerId, Name, Image, ImageId, Created, Updated, State, Stack, Ports, ImageEntityId)
+        VALUES (@Id, @PlatformId, @ContainerId, @Name, @Image, @ImageId, @Created, @Updated, @State, @Stack, @Ports, @ImageEntityId)
         ON CONFLICT(Id) DO UPDATE SET
             Name = excluded.Name,
             Image = excluded.Image,
             ImageId = excluded.ImageId,
+            ImageEntityId = excluded.ImageEntityId,
             Created = excluded.Created,
             Updated = excluded.Updated,
             State = excluded.State,
@@ -142,6 +143,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             Updated = c.Updated,
             State = EnumFormatter<ContainerStateStatus>.GetValue(c.State),
             Stack = c.Stack,
+            ImageEntityId = c.ImageEntityId != null ? c.ImageEntityId.Value.Format() : null,
             Ports = JsonSerializer.Serialize(
                 c.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding
             )

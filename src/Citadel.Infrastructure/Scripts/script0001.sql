@@ -110,6 +110,7 @@ CREATE TABLE "Containers" (
     "Created" REAL NOT NULL,
     "DeploymentId" TEXT NULL,
     "Image" TEXT NOT NULL,
+    "ImageEntityId" TEXT NULL,
     "ImageId" TEXT NOT NULL,
     "Name" TEXT NOT NULL,
     "PlatformId" TEXT NOT NULL,
@@ -118,6 +119,7 @@ CREATE TABLE "Containers" (
     "State" TEXT NOT NULL,
     "Updated" TEXT NOT NULL,
     CONSTRAINT "FK_Containers_Deployments_DeploymentId" FOREIGN KEY ("DeploymentId") REFERENCES "Deployments" ("Id") ON DELETE SET NULL,
+    CONSTRAINT "FK_Containers_Images_ImageEntityId" FOREIGN KEY ("ImageEntityId") REFERENCES "Images" ("Id") ON DELETE SET NULL,
     CONSTRAINT "FK_Containers_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
 );
 
@@ -166,6 +168,10 @@ CREATE UNIQUE INDEX "IX_ContainerStats_ContainerId_Created" ON "ContainerStats" 
 
 CREATE INDEX "IX_Containers_DeploymentId" ON "Containers" ("DeploymentId");
 
+CREATE INDEX "IX_Containers_ImageEntityId" ON "Containers" ("ImageEntityId");
+
+CREATE INDEX "IX_Containers_ImageId" ON "Containers" ("ImageId");
+
 CREATE INDEX "IX_Containers_PlatformId" ON "Containers" ("PlatformId");
 
 CREATE UNIQUE INDEX "IX__Containers_ContainerId_PlatformId" ON "Containers" ("ContainerId", "PlatformId");
@@ -197,7 +203,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20250921104204_migration0001', '10.0.0-rc.1.25451.107');
+VALUES ('20250927174345_migration0001', '10.0.0-rc.1.25451.107');
 
 COMMIT;
 

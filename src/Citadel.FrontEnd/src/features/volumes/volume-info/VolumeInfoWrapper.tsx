@@ -13,6 +13,7 @@ import { DeleteVolumeDialog } from '../dialogs/DeleteVolumeDialog';
 import { VolumeActionButtons } from '../VolumeActionButtons';
 import { ContainerInfoTable } from './ContainerInfoTable';
 import { VolumeInfoTable } from './VolumeInfoTable';
+import { truncate } from '@/lib/truncate';
 
 const VolumeInfoWrapper = () => {
   const navigate = useNavigate();
@@ -55,11 +56,11 @@ const VolumeInfoWrapper = () => {
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-3">
                 <div className="flex items-center gap-1 mb-4 md:mb-0">
                   <VolumeStateIndicator inUse={data?.data.inUse ?? false} />
-                  <div className="flex flex-col text-md font-bold text-foreground">
-                    <span>{data?.data.id}</span>
+                  <div className="flex text-wrap text-md font-bold text-foreground">
+                    <span>{truncate(data?.data.id ?? '', 42)}</span>
                   </div>
                 </div>
-                <div className="flex justify-start md:justify-end w-full">
+                <div className="flex justify-start md:justify-end ">
                   <VolumeActionButtons
                     selectedVolumes={[
                       {

@@ -110,11 +110,14 @@ internal sealed class DockerDaemonEventJob(
     {
         if (eventInfo.Container is null) return;
 
-        var container = eventInfo.Container.Map(platformId);
-        platformContainerCache.TryAddContainer(platformId, container.ContainerId, container.Id);
-
+        
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var image = await uow.Images.GetByImageIdAsync(eventInfo.Container.ImageId, platformId, cancellationToken);
+        var container = eventInfo.Container.Map(platformId, image?.Id);
+        platformContainerCache.TryAddContainer(platformId, container.ContainerId, container.Id);
+
 
         await uow.Containers.AddAsync(container, cancellationToken);
         await uow.CommitAsync();

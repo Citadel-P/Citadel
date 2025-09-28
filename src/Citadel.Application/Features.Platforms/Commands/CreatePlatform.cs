@@ -1,4 +1,5 @@
-﻿using Application.Mappers;
+﻿using Application.Features.Images.Queries;
+using Application.Mappers;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -31,6 +32,7 @@ public sealed record CreatePlatform(string Name, string? Address, PlatformType T
 internal sealed class CreatePlatformHandler(
     IUnitOfWork unitOfWork,
     IPlatformHealthMonitorJob platformHealthMonitorJob,
+    IConnectorFactory<IImageConnector> imageConnectorFactory,
     IConnectorFactory<IPlatformConnector> platformConnectorFactory,
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
     ILogger<PatchPlatformHandler> logger) : ICommandHandler<CreatePlatform, Result<Platform>>
@@ -74,8 +76,16 @@ internal sealed class CreatePlatformHandler(
         // Add the new platform
         var platform = platformResult.Map(command.Address ?? "", command.Name, command.ConnectorType);
         await unitOfWork.Platforms.AddPlatformAsync(platform, cancellationToken);
+
+        // Add it's images
+        var images = await GetImages(platform, cancellationToken);
+        if (images != null && images.Any())
+        {
+            await unitOfWork.Images.BulkUpsertAsync(images, cancellationToken);
+        }
+
         // Add it's containers
-        var containers = await GetContainers(platform, cancellationToken);
+        var containers = await GetContainers(images, platform, cancellationToken);
         if (containers != null && containers.Any())
         {
             await unitOfWork.Containers.BulkUpsertAsync(containers, cancellationToken);
@@ -90,7 +100,21 @@ internal sealed class CreatePlatformHandler(
         return Result.Success(platform);
     }
 
-    private async Task<IEnumerable<Container>> GetContainers(Platform platform, CancellationToken cancellationToken)
+    private async Task<IEnumerable<Image>> GetImages(Platform platform, CancellationToken cancellationToken)
+    {
+        var imageConnector = imageConnectorFactory.GetConnector(platform.ConnectorType);
+        var imagesResult = await imageConnector.ListImagesAsync(platform.Address, cancellationToken: cancellationToken);
+        if (!imagesResult.IsSuccess(out var images))
+        {
+            imagesResult.IsFailure(out var error);
+            logger.LogError("Failed to list images for platform {Address}: {Error}", platform.Address, error?.Message);
+            return [];
+        }
+        
+        return images.Map(platform.Id);
+    }
+
+    private async Task<IEnumerable<Container>> GetContainers(IEnumerable<Image> images, Platform platform, CancellationToken cancellationToken)
     {
         var command = new ContainerFilterCommand
             (
@@ -108,6 +132,6 @@ internal sealed class CreatePlatformHandler(
             return [];
         }
 
-        return containers.Values.Map(platform.Id);
+        return containers.Values.Map(images, platform.Id);
     }
 }

@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20250921104204_migration0001")]
+    [Migration("20250927174345_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -38,6 +38,9 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.Property<string>("Image")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImageEntityId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ImageId")
@@ -70,6 +73,12 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DeploymentId");
+
+                    b.HasIndex("ImageEntityId")
+                        .HasDatabaseName("IX_Containers_ImageEntityId");
+
+                    b.HasIndex("ImageId")
+                        .HasDatabaseName("IX_Containers_ImageId");
 
                     b.HasIndex("PlatformId")
                         .HasDatabaseName("IX_Containers_PlatformId");
@@ -532,6 +541,11 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasOne("Deployment", null)
                         .WithMany()
                         .HasForeignKey("DeploymentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Image", null)
+                        .WithMany()
+                        .HasForeignKey("ImageEntityId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("Platform", null)

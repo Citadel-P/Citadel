@@ -1,4 +1,4 @@
-import { ContainerImageResult, ContainerStateStatus, InspectImageResult, PlatformView } from '@/api/_generated';
+import { ContainerImageResult, ContainerStateStatus, InspectImageView, PlatformView } from '@/api/_generated';
 import { useAppContext } from '@/AppContext';
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/ui/PortsDisplay';
@@ -57,7 +57,7 @@ const columns = (currentPlatform: PlatformView | undefined): ColumnDef<Container
   },
 ];
 
-export const ContainerInfoTable = ({ image }: { image: InspectImageResult | undefined }) => {
+export const ContainerInfoTable = ({ image }: { image: InspectImageView | undefined }) => {
   const { currentPlatform } = useAppContext();
   if (!image) return <></>;
   return (

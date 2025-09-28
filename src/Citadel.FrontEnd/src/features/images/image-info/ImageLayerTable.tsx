@@ -1,4 +1,4 @@
-import { HistoryImageResult, InspectImageResult } from '@/api/_generated';
+import { HistoryImageResult, InspectImageView } from '@/api/_generated';
 import { DataTable } from '@/components/ui/data-table';
 import { byteTransform } from '@/lib/bytes.helper';
 import { truncate } from '@/lib/truncate';
@@ -17,7 +17,7 @@ const columns: ColumnDef<HistoryImageResult & { rowId: string }>[] = [
   },
 ];
 
-export const ImageLayerTable = ({ image }: { image: InspectImageResult | undefined }) => {
+export const ImageLayerTable = ({ image }: { image: InspectImageView | undefined }) => {
   if (!image) return <></>;
   const layersWithId = (image.layers ?? []).map((layer, index) => ({
     ...layer,
@@ -25,7 +25,7 @@ export const ImageLayerTable = ({ image }: { image: InspectImageResult | undefin
   }));
   return (
     <div className="flex flex-col gap-3">
-      <DataTable columns={columns} data={layersWithId} isLoading={false} getRowId={(row) => row.rowId}  />
+      <DataTable columns={columns} data={layersWithId} isLoading={false} getRowId={(row) => row.rowId} />
     </div>
   );
 };
