@@ -103,6 +103,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             Id = container.Id.Format(),
             PlatformId = container.PlatformId.Format(),
             ContainerId = container.ContainerId,
+            ImageEntityId = container.ImageEntityId != null ? container.ImageEntityId.Value.Format() : null,
             Name = container.Name,
             Image = container.Image,
             ImageId = container.ImageId,
