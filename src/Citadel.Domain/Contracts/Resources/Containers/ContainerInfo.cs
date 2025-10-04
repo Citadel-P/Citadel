@@ -9,9 +9,8 @@ public sealed record ContainerInfo (
     string StartedAt,
     string FinishedAt,
     string PlatformName,
-    string ImageName,
-    string ImageId,
     IList<string> Volumes,
     IDictionary<string, IReadOnlyList<HostPortBinding>> Ports,
     IDictionary<string, string> Networks,
-    ContainerStateStatus State);
+    ContainerStateStatus State,
+    Image? Image = null);

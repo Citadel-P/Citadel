@@ -4461,12 +4461,11 @@
           "startedAt",
           "finishedAt",
           "platformName",
-          "imageName",
-          "imageId",
           "volumes",
           "ports",
           "networks",
-          "state"
+          "state",
+          "imageView"
         ],
         "type": "object",
         "properties": {
@@ -4487,12 +4486,6 @@
             "type": "string"
           },
           "platformName": {
-            "type": "string"
-          },
-          "imageName": {
-            "type": "string"
-          },
-          "imageId": {
             "type": "string"
           },
           "volumes": {
@@ -4518,6 +4511,16 @@
           },
           "state": {
             "$ref": "#/components/schemas/ContainerStateStatus"
+          },
+          "imageView": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImageView"
+              }
+            ]
           }
         }
       },
@@ -4938,7 +4941,6 @@
           "platformId",
           "containerId",
           "name",
-          "image",
           "imageId",
           "created",
           "state",
@@ -4961,9 +4963,6 @@
             "type": "string"
           },
           "name": {
-            "type": "string"
-          },
-          "image": {
             "type": "string"
           },
           "imageId": {
@@ -5020,6 +5019,16 @@
               },
               {
                 "$ref": "#/components/schemas/PlatformView"
+              }
+            ]
+          },
+          "imageView": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImageView"
               }
             ]
           },

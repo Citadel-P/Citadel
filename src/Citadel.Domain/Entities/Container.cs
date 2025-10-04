@@ -2,7 +2,6 @@
 
 public class Container(
     string name,
-    string image,
     string imageId,
     Guid platformId,
     string containerId,
@@ -22,7 +21,6 @@ public class Container(
     public Guid? DeploymentId { get; private set; } = deploymentId;
     public string ContainerId { get; private set; } = containerId;
     public string Name { get; private set; } = name;
-    public string Image { get; private set; } = image;
     public long Created { get; private set; } = created is not null ? created.Value : (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
     public long Updated { get; private set; } = (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
     public ContainerStateStatus State { get; set; } = state;
@@ -32,6 +30,7 @@ public class Container(
     public IDictionary<string, IReadOnlyList<HostPortBinding>> Ports => ports;
     public IReadOnlyCollection<ContainerStat>? Stats => stats;
     public Platform? Platform { get; private set; } = null!;
+    public Image? Image { get; private set; } = null!;
 
     public Container PartialUpdate(
         string? name = null,
@@ -45,7 +44,6 @@ public class Container(
         IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null)
     {
         if (name != null) Name = name;
-        if (image != null) Image = image;
         if (imageId != null) ImageId = imageId;
         if (state != null) State = state.Value;
         if (stack != null) Stack = stack;
@@ -74,21 +72,19 @@ public class Container(
         Guid platformId,
         string containerId,
         string name,
-        string image,
         string imageId,
         long created,
         long updated,
         ContainerStateStatus state,
         IDictionary<string, IReadOnlyList<HostPortBinding>> ports,
         string? stack = null,
-        Platform? platform = null,
         Guid? imageEntityId = null,
+        Image? imageEntity = null,
         IReadOnlyCollection<ContainerStat>? stats = null
         )
     {
         var container = new Container(
             name: name,
-            image: image,
             imageId: imageId,
             platformId: platformId,
             containerId: containerId,
@@ -100,7 +96,7 @@ public class Container(
         {
             Id = id,
             Updated = updated,
-            Platform = platform,
+            Image = imageEntity,
         };
 
         if (stats is not null)

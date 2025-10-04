@@ -74,7 +74,7 @@ internal static class Fakes
         for (int i = 0; i < total; i++)
         {
             result.Add(new ImageResult(
-                Id: $"c-{i:D2}",
+                Id: $"image-id-{i}:latest",
                 RepoTags: [$"image-{i}:latest"],
                 Size: 123456,
                 Containers: i,

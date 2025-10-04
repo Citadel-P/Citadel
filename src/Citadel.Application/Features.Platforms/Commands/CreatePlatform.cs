@@ -85,7 +85,7 @@ internal sealed class CreatePlatformHandler(
         }
 
         // Add it's containers
-        var containers = await GetContainers(images, platform, cancellationToken);
+        var containers = await GetContainers(images ?? [], platform, cancellationToken);
         if (containers != null && containers.Any())
         {
             await unitOfWork.Containers.BulkUpsertAsync(containers, cancellationToken);
@@ -111,7 +111,7 @@ internal sealed class CreatePlatformHandler(
             return [];
         }
         
-        return images.Map(platform.Id);
+        return [.. images.Map(platform.Id)];
     }
 
     private async Task<IEnumerable<Container>> GetContainers(IEnumerable<Image> images, Platform platform, CancellationToken cancellationToken)
@@ -132,6 +132,6 @@ internal sealed class CreatePlatformHandler(
             return [];
         }
 
-        return containers.Values.Map(images, platform.Id);
+        return [.. containers.Values.Map(images, platform.Id)];
     }
 }

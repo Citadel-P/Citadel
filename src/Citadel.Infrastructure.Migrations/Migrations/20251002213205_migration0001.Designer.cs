@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20250927174345_migration0001")]
+    [Migration("20251002213205_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -34,10 +34,6 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("REAL");
 
                     b.Property<string>("DeploymentId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Image")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ImageEntityId")

@@ -166,7 +166,6 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
             )
             ON CONFLICT(Id) DO UPDATE SET
                 PlatformId  = excluded.PlatformId,
-                ImageId     = excluded.ImageId,
                 Name        = excluded.Name,
                 Containers  = excluded.Containers,
                 IsUpToDate  = excluded.IsUpToDate,

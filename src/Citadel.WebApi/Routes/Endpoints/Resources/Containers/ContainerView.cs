@@ -2,6 +2,7 @@
 using Domain;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 
 namespace WebApi.Routes.Endpoints.Resources.Containers;
@@ -11,7 +12,6 @@ public sealed record ContainerView(
     Guid PlatformId,
     string ContainerId,
     string Name,
-    string Image,
     string ImageId,
     long Created,
     ContainerStateStatus State,
@@ -20,6 +20,7 @@ public sealed record ContainerView(
     ContainerStatView? LastStats,
     IDictionary<string, IReadOnlyList<HostPortBinding>> Ports,
     PlatformView? Platform = null,
+    ImageView? ImageView = null,
     EndpointMetadata? Metadata = null)
 {
     internal static IEnumerable<ContainerView> Map(IEnumerable<Container> containersInfo)
@@ -42,7 +43,6 @@ public sealed record ContainerView(
             PlatformId: container.PlatformId,
             ContainerId: container.ContainerId,
             Name: container.Name,
-            Image: container.Image,
             ImageId: GetImageId(), // container.ImageId,
             Created: container.Created,
             State: container.State,
@@ -50,6 +50,7 @@ public sealed record ContainerView(
             Stack: container.Stack,
             LastStats: container.Stats is not null && container.Stats.Count > 0 ? ContainerStatView.Map(container.Stats.First()) : null,
             Ports: container.Ports,
+            ImageView: container.Image is not null ? ImagesView.Map(container.Image) : null,
             Platform: container.Platform == null ? null : PlatformView.Map(container.Platform));
     }
 
@@ -70,12 +71,11 @@ public sealed record ContainerInfoView(
     string StartedAt,
     string FinishedAt,
     string PlatformName,
-    string ImageName,
-    string ImageId,
     IList<string> Volumes,
     IDictionary<string, IReadOnlyList<HostPortBinding>> Ports,
     IDictionary<string, string> Networks,
-    ContainerStateStatus State)
+    ContainerStateStatus State,
+    ImageView? ImageView)
 {
     internal static ContainerInfoView Map(ContainerInfo container) => new(
         Name: container.Name,
@@ -84,11 +84,10 @@ public sealed record ContainerInfoView(
         StartedAt: container.StartedAt,
         FinishedAt: container.FinishedAt,
         PlatformName: container.PlatformName,
-        ImageName: container.ImageName,
-        ImageId: container.ImageId,
         Volumes: container.Volumes,
         Ports: container.Ports,
         Networks: container.Networks,
-        State: container.State
+        State: container.State,
+        ImageView: container.Image is not null ? ImagesView.Map(container.Image) : null
         );
 }

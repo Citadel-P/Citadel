@@ -85,7 +85,6 @@ internal static class Configuration
         container.Property<Guid?>("ImageEntityId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
         container.Property<string>("ContainerId").HasColumnType("TEXT").IsRequired().HasMaxLength(64);
         container.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        container.Property<string>("Image").HasColumnType("TEXT").IsRequired();
         container.Property<string>("ImageId").HasColumnType("TEXT").IsRequired();
         container.Property<long>("Created").HasColumnType("REAL").IsRequired();
         container.Property<string>("Updated").HasColumnType("TEXT").IsRequired();

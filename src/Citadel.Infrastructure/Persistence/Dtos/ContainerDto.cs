@@ -5,20 +5,18 @@ internal record ContainerDto(
     Guid PlatformId,
     string ContainerId,
     string Name,
-    string Image,
     string ImageId,
     long Created,
     long Updated,
     string State, // ContainerStateStatus
     string Ports, // List<ContainerPort> 
     string? Stack,
-    Guid? ImageEntityId = null,
-    PlatformDto? Platform = null
+    Guid? ImageEntityId = null
 )
 {
     public ICollection<ContainerStatDto> Stats { get; init; } = [];
 
-    public ContainerDto() : this(Guid.Empty, Guid.Empty, string.Empty, string.Empty, string.Empty, string.Empty, 0, 0, string.Empty, string.Empty, string.Empty, null)
+    public ContainerDto() : this(Guid.Empty, Guid.Empty, string.Empty, string.Empty, string.Empty, 0, 0, string.Empty, string.Empty, string.Empty, null)
     {
         
     }
@@ -36,7 +34,21 @@ internal record struct ContainerStatDto(
      double? TxBytes
 );
 
-internal sealed record ContainerWithLastStatDto(
+internal record ContainerWithImageDto(
+     string? Image_Id = null,
+     Guid? Image_platformId = null,
+     Guid? Image_RegistryId = null,
+     string? Image_Name = null,
+     string? Image_Tag = null,
+     string? Image_ImageId = null,
+     double? Image_Size = null,
+     int? Image_Containers = null,
+     DateTime? Image_CreatedAt = null,
+     bool? Image_IsUpToDate = null,
+     DateTime? Image_UpdatedAt = null
+    ) : ContainerDto;
+
+internal record ContainerWithLastStatDto(
      long? Stat_Created,
      double? Stat_MemoryActive,
      double? Stat_MemoryCache,
@@ -44,4 +56,4 @@ internal sealed record ContainerWithLastStatDto(
      double? Stat_MemoryLimit,
      double? Stat_RxBytes,
      double? Stat_TxBytes
-    ) : ContainerDto; 
+    ) : ContainerWithImageDto; 

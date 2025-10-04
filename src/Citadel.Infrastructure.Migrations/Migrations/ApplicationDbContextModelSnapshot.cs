@@ -33,10 +33,6 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<string>("DeploymentId")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Image")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("ImageEntityId")
                         .HasColumnType("TEXT");
 

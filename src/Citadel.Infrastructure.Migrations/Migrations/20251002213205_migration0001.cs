@@ -223,7 +223,6 @@ namespace Infrastructure.Migrations.Migrations
                     ContainerId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     Created = table.Column<long>(type: "REAL", nullable: false),
                     DeploymentId = table.Column<string>(type: "TEXT", nullable: true),
-                    Image = table.Column<string>(type: "TEXT", nullable: false),
                     ImageEntityId = table.Column<string>(type: "TEXT", nullable: true),
                     ImageId = table.Column<string>(type: "TEXT", nullable: false),
                     Name = table.Column<string>(type: "TEXT", nullable: false),

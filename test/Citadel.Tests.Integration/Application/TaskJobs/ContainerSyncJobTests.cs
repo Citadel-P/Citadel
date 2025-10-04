@@ -58,7 +58,6 @@ public class ContainerSyncJobTests : IntegrationTestBase
         {
             await uow.Containers.AddAsync(new Container(
                     name: container.Name,
-                    image: container.Image,
                     imageId: container.Image,
                     platformId: platform.Id,
                     ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
@@ -110,7 +109,6 @@ public class ContainerSyncJobTests : IntegrationTestBase
         // Arrange: Seed DB with a container that will be missing from the fresh list
         var staleContainer = new Container(
             name: "stale",
-            image: "stale:latest",
             imageId: "fake-id",
             platformId: platformId,
             ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
@@ -179,7 +177,6 @@ public class ContainerSyncJobTests : IntegrationTestBase
         var containerId = "update-id";
         var oldContainer = new Container(
             name: "old",
-            image: "old:latest",
             imageId: "fake-id",
             platformId: platformId,
             ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
@@ -218,7 +215,6 @@ public class ContainerSyncJobTests : IntegrationTestBase
         var dbContainers = await uow2.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);
         var updated = dbContainers.First(c => c.ContainerId == containerId);
         Assert.Equal("updated", updated.Name);
-        Assert.Equal("updated:latest", updated.Image);
         Assert.Equal(ContainerStateStatus.Running, updated.State);
     }
 

@@ -109,7 +109,6 @@ CREATE TABLE "Containers" (
     "ContainerId" TEXT NOT NULL,
     "Created" REAL NOT NULL,
     "DeploymentId" TEXT NULL,
-    "Image" TEXT NOT NULL,
     "ImageEntityId" TEXT NULL,
     "ImageId" TEXT NOT NULL,
     "Name" TEXT NOT NULL,
@@ -203,7 +202,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20250927174345_migration0001', '10.0.0-rc.1.25451.107');
+VALUES ('20251002213205_migration0001', '10.0.0-rc.1.25451.107');
 
 COMMIT;
 

@@ -7,6 +7,7 @@ import { formatId } from '@/lib/utils';
 import { ColumnDef } from '@tanstack/react-table';
 import { Clock, Database, HardDrive, Network, Server } from 'lucide-react';
 import { Link } from 'react-router';
+import { ImageName } from './ImageName';
 
 const columns: ColumnDef<ContainerInfoView & { id: string | null } & { statusSnapshot: string | undefined }>[] = [
   {
@@ -27,11 +28,7 @@ const columns: ColumnDef<ContainerInfoView & { id: string | null } & { statusSna
     cell: ({ row }) => (
       <div className=" gap-2 flex flex-wrap items-center">
         <HardDrive width={13} height={13} className="text-primary" />
-        <Link
-          to={`/platforms/${row.original.platformId}/images/${formatId(row.original.imageId)}`}
-          className="table-link">
-          {truncate(row.original.imageName.replace('sha256:', ''), 24)}
-        </Link>
+        <ImageName image={row.original.imageView ?? undefined} />
       </div>
     ),
   },

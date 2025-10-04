@@ -191,12 +191,11 @@ export interface ContainerInfoView {
   startedAt: string;
   finishedAt: string;
   platformName: string;
-  imageName: string;
-  imageId: string;
   volumes: string[];
   ports: Record<string, HostPortBinding[]>;
   networks: Record<string, string>;
   state: ContainerStateStatus;
+  imageView: null | ImageView;
 }
 
 export interface ContainerInspectView {
@@ -313,7 +312,6 @@ export interface ContainerView {
   platformId: string;
   containerId: string;
   name: string;
-  image: string;
   imageId: string;
   /**
    * @format int64
@@ -330,6 +328,7 @@ export interface ContainerView {
   lastStats: null | ContainerStatView;
   ports: Record<string, HostPortBinding[]>;
   platform?: null | PlatformView;
+  imageView?: null | ImageView;
   metadata?: null | EndpointMetadata;
 }
 

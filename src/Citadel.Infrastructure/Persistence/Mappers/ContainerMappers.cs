@@ -18,7 +18,6 @@ internal static class ContainerMappers
             platformId: container.PlatformId,
             containerId: container.ContainerId,
             name: container.Name,
-            image: container.Image,
             imageId: container.ImageId,
             created: container.Created,
             updated: container.Updated,
@@ -26,8 +25,37 @@ internal static class ContainerMappers
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             stack: container.Stack,
             imageEntityId: container.ImageEntityId,
-            platform: container.Platform?.ToDomain(),
             stats: container.Stats?.Select(ToDomain).ToList());
+    }
+
+    internal static Container? ToDomain(this ContainerWithImageDto? container)
+    {
+        return
+        Container.FromPersistence(
+            id: container.Id,
+            platformId: container.PlatformId,
+            containerId: container.ContainerId,
+            name: container.Name,
+            imageId: container.ImageId,
+            created: container.Created,
+            updated: container.Updated,
+            state: Enum.Parse<ContainerStateStatus>(container.State),
+            ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
+            stack: container.Stack,
+            imageEntityId: container.ImageEntityId,
+            imageEntity: container.Image_Id != null ? Image.FromPersistence(
+                id: container.Image_Id == null ? Guid.Empty : Guid.Parse(container.Image_Id),
+                name: container.Image_Name,
+                tag: container.Image_Tag,
+                imageId: container.Image_ImageId,
+                size: container.Image_Size ?? 0,
+                containers: container.Image_Containers ?? 0,
+                platformId: container.Image_platformId ?? Guid.Empty,
+                createdAt: container.Image_CreatedAt ?? DateTime.MinValue,
+                isUpToDate: container.Image_IsUpToDate,
+                updatedAt: container.Image_UpdatedAt,
+                registryId: container.Image_RegistryId
+                ) : null);
     }
 
     internal static IEnumerable<Container> ToDomain(this IEnumerable<ContainerWithLastStatDto> containers)
@@ -41,15 +69,27 @@ internal static class ContainerMappers
             platformId: container.PlatformId,
             containerId: container.ContainerId,
             name: container.Name,
-            image: container.Image,
             imageId: container.ImageId,
             created: container.Created,
             updated: container.Updated,
             state: Enum.Parse<ContainerStateStatus>(container.State),
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             stack: container.Stack,
-            platform: container.Platform?.ToDomain(),
             imageEntityId: container.ImageEntityId,
+            imageEntity: container.Image_Id == null ? null : Image.FromPersistence
+            (
+                id: Guid.Parse(container.Image_Id),
+                name: container.Image_Name,
+                tag: container.Image_Tag,
+                imageId: container.Image_ImageId,
+                size: container.Image_Size ?? 0,
+                containers: container.Image_Containers ?? 0,
+                platformId: container.Image_platformId ?? Guid.Empty,
+                createdAt: container.Image_CreatedAt ?? DateTime.MinValue,
+                isUpToDate: container.Image_IsUpToDate,
+                updatedAt: container.Image_UpdatedAt,
+                registryId: container.Image_RegistryId
+            ),
             stats: [new ContainerStat(
                 ContainerId: container.Id,
                 MemoryActive: container.Stat_MemoryActive,

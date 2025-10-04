@@ -29,7 +29,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     public async Task<Container?> GetByIdAsync(string containerId, CancellationToken cancellationToken)
     {
         var sql = """
-            SELECT * FROM Containers
+            SELECT * FROM Containers c
             WHERE ContainerId LIKE @ContainerIdPrefix || '%'
             LIMIT 1
             """;
@@ -37,10 +37,45 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         return result?.ToDomain();
     }
 
+    public async Task<Container?> GetContainerWithImageByIdAsync(string containerId, CancellationToken cancellationToken)
+    {
+        var sql = """
+            SELECT c.*,
+                i.Id as Image_Id,
+                i.Name as Image_Name,
+                i.Tag as Image_Tag,
+                i.ImageId as Image_ImageId,
+                i.Size as Image_Size,
+                i.Containers as Image_Containers,
+                i.PlatformId as Image_PlatformId,
+                i.CreatedAt as Image_CreatedAt,
+                i.IsUpToDate as Image_IsUpToDate,
+                i.UpdatedAt as Image_UpdatedAt,
+                i.RegistryId as Image_RegistryId
+            FROM Containers c
+            LEFT JOIN Images i ON c.ImageEntityId = i.Id
+            WHERE ContainerId LIKE @ContainerIdPrefix || '%'
+            LIMIT 1
+            """;
+        var result = await db.QuerySingleOrDefaultAsync<ContainerWithImageDto>(sql, new { ContainerIdPrefix = containerId }, transaction: tx());
+        return result?.ToDomain();
+    }
+
     public async Task<IEnumerable<Container>?> GetAllWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken)
     {
         const string sql = """
-        SELECT c.*, 
+        SELECT c.*,
+            i.Id as Image_Id,
+            i.Name as Image_Name,
+            i.Tag as Image_Tag,
+            i.ImageId as Image_ImageId,
+            i.Size as Image_Size,
+            i.Containers as Image_Containers,
+            i.PlatformId as Image_PlatformId,
+            i.CreatedAt as Image_CreatedAt,
+            i.IsUpToDate as Image_IsUpToDate,
+            i.UpdatedAt as Image_UpdatedAt,
+            i.RegistryId as Image_RegistryId,
             s.Created as Stat_Created,
             s.MemoryActive as Stat_MemoryActive,
             s.MemoryCache as Stat_MemoryCache, 
@@ -49,6 +84,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             s.RxBytes as Stat_RxBytes, 
             s.TxBytes as Stat_TxBytes
         FROM Containers c
+        LEFT JOIN Images i ON c.ImageEntityId = i.Id
         LEFT JOIN ContainerStats s ON s.ContainerId = c.Id
           AND s.Id = (
               SELECT Id FROM ContainerStats 
@@ -68,9 +104,9 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
             INSERT INTO Containers (
-                Id, PlatformId, ContainerId, Name, Image, ImageId, Created, Updated, State, Stack, Ports, ImageEntityId
+                Id, PlatformId, ContainerId, Name, ImageId, Created, Updated, State, Stack, Ports, ImageEntityId
             ) VALUES (
-                @Id, @PlatformId, @ContainerId, @Name, @Image, @ImageId, @Created, @Updated, @State, @Stack, @Ports, @ImageEntityId
+                @Id, @PlatformId, @ContainerId, @Name, @ImageId, @Created, @Updated, @State, @Stack, @Ports, @ImageEntityId
             )
         """;
         return db.ExecuteAsync(sql, new 
@@ -79,7 +115,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             PlatformId = container.PlatformId.Format(),
             ContainerId = container.ContainerId,
             Name = container.Name,
-            Image = container.Image,
+           
             ImageId = container.ImageId,
             Created = container.Created,
             Updated = container.Updated,
@@ -94,7 +130,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
             UPDATE Containers
-            SET Name = @Name, Image = @Image, ImageId = @ImageId, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports, Created = @Created, ImageEntityId = @ImageEntityId
+            SET Name = @Name, ImageId = @ImageId, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports, Created = @Created, ImageEntityId = @ImageEntityId
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
@@ -118,11 +154,10 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     public Task<int> BulkUpsertAsync(IEnumerable<Container> containers, CancellationToken cancellationToken)
     {
         const string sql = """
-        INSERT INTO Containers (Id, PlatformId, ContainerId, Name, Image, ImageId, Created, Updated, State, Stack, Ports, ImageEntityId)
-        VALUES (@Id, @PlatformId, @ContainerId, @Name, @Image, @ImageId, @Created, @Updated, @State, @Stack, @Ports, @ImageEntityId)
+        INSERT INTO Containers (Id, PlatformId, ContainerId, Name, ImageId, Created, Updated, State, Stack, Ports, ImageEntityId)
+        VALUES (@Id, @PlatformId, @ContainerId, @Name, @ImageId, @Created, @Updated, @State, @Stack, @Ports, @ImageEntityId)
         ON CONFLICT(Id) DO UPDATE SET
             Name = excluded.Name,
-            Image = excluded.Image,
             ImageId = excluded.ImageId,
             ImageEntityId = excluded.ImageEntityId,
             Created = excluded.Created,
@@ -138,7 +173,6 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             PlatformId = c.PlatformId.Format(),
             ContainerId = c.ContainerId,
             Name = c.Name,
-            Image = c.Image,
             ImageId = c.ImageId,
             Created = c.Created,
             Updated = c.Updated,

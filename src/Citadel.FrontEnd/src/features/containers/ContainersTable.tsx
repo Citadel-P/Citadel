@@ -12,6 +12,7 @@ import { ContainerDropdownActions } from './ContainerDropdownActions';
 import { ContainerStateIndicator } from './ContainerStateIndicator';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { PortsDisplay } from '@/components/ui/PortsDisplay';
+import { ImageName } from './container-info/ImageName';
 
 const columns: ColumnDef<ContainerView>[] = [
   {
@@ -66,15 +67,7 @@ const columns: ColumnDef<ContainerView>[] = [
   {
     accessorKey: 'image',
     header: ({ column }) => <SortableCell cellName="Image" column={column} />,
-    cell: ({ row }) => (
-      <Link
-        to={`/platforms/${row.original.platformId}/images/${row.original.imageId?.slice(0, 12)}`}
-        className="table-link">
-        {row.original.image.startsWith('sha256:')
-          ? truncate(row.original.image.slice(7), 24)
-          : truncate(row.original.image ?? '', 24)}
-      </Link>
-    ),
+    cell: ({ row }) => <ImageName image={row.original.imageView ?? undefined} />,
   },
   {
     accessorKey: 'CPU',

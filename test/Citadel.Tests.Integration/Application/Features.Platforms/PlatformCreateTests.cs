@@ -3,6 +3,7 @@ using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Platforms;
@@ -18,6 +19,8 @@ public class PlatformCreateTests : IntegrationTestBase
 {
     private readonly Mock<IConnectorFactory<IPlatformConnector>> platformFactoryMock = new();
     private readonly Mock<IConnectorFactory<IContainerConnector>> containerFactoryMock = new();
+    private readonly Mock<IConnectorFactory<IImageConnector>> imageFactoryMock = new();
+    private readonly Mock<IImageConnector> imageConnector = new();
     private readonly Mock<IPlatformConnector> platformConnector = new();
     private readonly Mock<IContainerConnector> containerConnector = new();
     private readonly Mock<IPlatformHealthMonitorJob> healthMonitorMock = new();
@@ -25,8 +28,10 @@ public class PlatformCreateTests : IntegrationTestBase
     protected override void ConfigureTestServices(IServiceCollection services)
     {
         services.AddSingleton(_ => healthMonitorMock.Object);
+        services.AddSingleton(_ => imageFactoryMock.Object);
         services.AddSingleton(_ => platformFactoryMock.Object);
         services.AddSingleton(_ => containerFactoryMock.Object);
+        services.AddSingleton(_ => imageConnector.Object);
         services.AddSingleton(_ => platformConnector.Object);
         services.AddSingleton(_ => containerConnector.Object);
     }
@@ -46,6 +51,12 @@ public class PlatformCreateTests : IntegrationTestBase
 
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(Fakes.GetDummyContainers().ToDictionary(c => c.ContainerId)));
+
+        imageConnector.Setup(x => x.ListImagesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success<IReadOnlyList<ImageResult>>(Fakes.GetDummyImages()));
+
+        imageFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+            .Returns(imageConnector.Object);
 
         healthMonitorMock.Setup(x => x.TrackPlatform(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<PlatformConnectorType>())).Returns(true);
 
@@ -71,9 +82,13 @@ public class PlatformCreateTests : IntegrationTestBase
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var platform = await uow.Platforms.GetByNameAsync("P-NEW", TestContext.Current.CancellationToken) ?? throw new Exception("platform can not be null");
         var containers = await uow.Containers.GetAllWithLatestStatAsync(platform.Id, TestContext.Current.CancellationToken);
+        var images = await uow.Images.GetByPlatformIdAsync(platform.Id, TestContext.Current.CancellationToken);
 
         Assert.NotNull(platform);
+        Assert.Equal(3, images.Count());
         Assert.Equal(3, containers?.Count());
+        // Containers has foreign key on Images table
+        Assert.All(containers, c => Assert.Contains(c.ImageEntityId.Value, images.Select(i => i.Id)));
         healthMonitorMock.Verify(x => x.TrackPlatform("https://localhost:9000", platform.Id, PlatformConnectorType.Agent), Times.Once);
         await VerifyJson(responseBody);
     }
@@ -93,6 +108,12 @@ public class PlatformCreateTests : IntegrationTestBase
 
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(Fakes.GetDummyContainers().ToDictionary(c => c.ContainerId)));
+
+        imageConnector.Setup(x => x.ListImagesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success(Fakes.GetDummyImages()));
+
+        imageFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+            .Returns(imageConnector.Object);
 
         healthMonitorMock.Setup(x => x.TrackPlatform(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<PlatformConnectorType>())).Returns(true);
 
@@ -117,9 +138,13 @@ public class PlatformCreateTests : IntegrationTestBase
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var platform = await uow.Platforms.GetByNameAsync("P-NEW", TestContext.Current.CancellationToken) ?? throw new Exception("platform can not be null");
         var containers = await uow.Containers.GetAllWithLatestStatAsync(platform.Id, TestContext.Current.CancellationToken) ?? throw new Exception("containers can not be null");
+        var images = await uow.Images.GetByPlatformIdAsync(platform.Id, TestContext.Current.CancellationToken);
 
         Assert.NotNull(platform);
-        Assert.Equal(3, containers.Count());
+        Assert.Equal(3, images.Count());
+        Assert.Equal(3, containers?.Count());
+        // Containers has foreign key on Images table
+        Assert.All(containers, c => Assert.Contains(c.ImageEntityId.Value, images.Select(i => i.Id)));
         healthMonitorMock.Verify(x => x.TrackPlatform(Constants.LocalDockerHostUrl, platform.Id, PlatformConnectorType.Local), Times.Once);
         await VerifyJson(responseBody);
     }

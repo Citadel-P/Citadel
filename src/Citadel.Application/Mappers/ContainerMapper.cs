@@ -18,7 +18,6 @@ internal static class ContainerMapper
         => new
         (
             name: container.Name,
-            image: container.Image,
             imageId: container.ImageId,
             stack: container.Stack,
             platformId: platformId,
