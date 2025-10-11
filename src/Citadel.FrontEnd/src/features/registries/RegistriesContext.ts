@@ -1,7 +1,7 @@
 import { createContext } from 'react';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { IDialogData } from '@/hooks/useDialogState';
-import { RegistryView } from '@/api/_generated';
+import { RegistryView } from '@/api/generated/api.types';
 
 interface IContext {
   isLoading: boolean;

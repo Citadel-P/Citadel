@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { RegistryView } from '@/api/_generated';
+import { RegistryView } from '@/api/generated/api.types';
 import SortableCell from '@/components/ui/SortableCell';
 import DropdownTableMenu from './DropdownTableMenu';
 import { ColumnDef, Row } from '@tanstack/react-table';

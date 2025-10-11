@@ -1,4 +1,4 @@
-import { RegistryView } from '@/api/_generated';
+import { RegistryView } from '@/api/generated/api.types';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Link } from 'lucide-react';
 

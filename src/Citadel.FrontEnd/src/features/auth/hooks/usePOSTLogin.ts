@@ -4,13 +4,8 @@ import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 
 export const usePOSTLogin = () => {
   const { apiClient } = useApiClientContext();
-  const { mutate, isPending, isSuccess, error, data } = useMutation({ mutationFn: apiClient?.api.authenticationLogin });
+  const { mutate, isPending, isSuccess, error, data } = useMutation({ mutationFn: apiClient?.api.login });
   const validationErrors = useGetValidationErrors(error);
 
-  if (isSuccess && data?.data.accessToken) {
-    // Reload the entire app
-    window.location.href = '/';
-  }
-
-  return { mutate, isPending, validationErrors };
+  return { mutate, isSuccess, data, isPending, validationErrors };
 };

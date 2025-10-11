@@ -15,7 +15,7 @@
     "prettier": "prettier --config ./.prettierrc --write \"src/**/*{.ts,.tsx,.html,.scss,.json}\"",
     "prettier:verify": "prettier --config ./.prettierrc --check \"src/**/*{.ts,.tsx,.html,.scss,.json}\"",
     "preview": "vite preview",
-    "api:generate": "npx swagger-typescript-api generate --path ./src/api/swagger.json -o ./src/api/ -n _generated.ts --responses"
+    "api:generate": "npx swagger-typescript-api generate --path ./src/api/swagger.json -o ./src/api/ -n generated/api.types.ts --responses && tsx scripts/generate-resources.ts"
   },
   "dependencies": {
     "@formkit/auto-animate": "^0.8.2",
@@ -38,7 +38,6 @@
     "@radix-ui/react-tabs": "^1.1.12",
     "@radix-ui/react-tooltip": "^1.2.7",
     "@tailwindcss/aspect-ratio": "^0.4.2",
-    "@tailwindcss/forms": "^0.5.10",
     "@tailwindcss/typography": "^0.5.16",
     "@tanstack/react-query": "^5.83.0",
     "@tanstack/react-table": "^8.21.3",
@@ -69,7 +68,7 @@
     "@eslint/js": "^9.32.0",
     "@tailwindcss/postcss": "^4.1.11",
     "@tailwindcss/vite": "^4.1.11",
-    "@types/node": "^24.1.0",
+    "@types/node": "^24.7.0",
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
     "@typescript-eslint/eslint-plugin": "^8.24.1",
@@ -89,6 +88,8 @@
     "swagger-typescript-api": "^13.2.7",
     "tailwind-scrollbar": "4.0.2",
     "tailwindcss": "^4.1.11",
+    "ts-morph": "^27.0.0",
+    "tsx": "^4.20.6",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
     "vite": "^7.0.6",

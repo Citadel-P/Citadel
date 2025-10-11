@@ -1,12 +1,12 @@
-import { PlatformView, PlatformType } from '@/api/_generated';
+import { PlatformView, PlatformType } from '@/api/generated/api.types';
 import { createContext, JSX, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate, useParams } from 'react-router';
-import { useGETPlatform } from './../hooks/useGETPlatform';
 import { usePOSTPlatform } from './hooks/usePOSTPlatform';
 import { usePATCHPlatform } from './hooks/usePATCHPlatform';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import AddDockerPlatform from '../addDockerPlatform/AddDockerPltaform';
+import { useRead } from '@/lib/hooks';
 
 interface IPlatformProvider {
   id: 'docker' | 'swarm' | 'k8s';
@@ -62,7 +62,7 @@ const PlatformFormProvider: React.FC<IProps> = ({ children }) => {
   const navigate = useNavigate();
   const { platformId } = useParams();
   const mode: FormMode = platformId ? 'edit' : 'add';
-  const { data, isLoading } = useGETPlatform(platformId);
+  const { data, isLoading } = useRead('getPlatfom', { id: platformId });
   const {
     mutate: _requestCreate,
     validationErrors: createErrors,

@@ -1,6 +1,6 @@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { CreateVolumeInput } from '@/api/_generated';
+import { CreateVolumeInput } from '@/api/generated/api.types';
 import { AlertMessage } from '@/components/ui/alert-message';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';

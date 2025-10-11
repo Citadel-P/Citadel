@@ -5,7 +5,7 @@ import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 export const usePOSTLogout = () => {
   const { apiClient } = useApiClientContext();
   const { mutate, isPending, isSuccess, error, data } = useMutation({
-    mutationFn: apiClient?.api.authenticationLogout,
+    mutationFn: apiClient?.api.logout,
   });
   const validationErrors = useGetValidationErrors(error);
 

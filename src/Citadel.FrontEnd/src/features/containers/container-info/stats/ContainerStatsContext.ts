@@ -1,6 +1,6 @@
 import { createContext } from 'react';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
-import { ContainerStatView } from '@/api/_generated';
+import { ContainerStatView } from '@/api/generated/api.types';
 import { DockerContainerView } from '@/api/models';
 
 export interface ContainerStatsContextValue {

@@ -1,4 +1,4 @@
-import { ContainerImageResult, ContainerStateStatus, InspectImageView, PlatformView } from '@/api/_generated';
+import { ContainerImageResult, ContainerStateStatus, InspectImageView, PlatformView } from '@/api/generated/api.types';
 import { useAppContext } from '@/AppContext';
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/ui/PortsDisplay';

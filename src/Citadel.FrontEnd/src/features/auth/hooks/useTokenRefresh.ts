@@ -1,12 +1,11 @@
 import { useInterval } from '@/hooks/useInterval';
-import { useGETAccessToken } from './useGETAccessToken';
 import { jwtDecode } from 'jwt-decode';
 import { useEffect, useRef } from 'react';
+import { useRead } from '@/lib/hooks';
 
 export const useTokenRefresh = (accessToken: string | undefined, isAuthenticated: boolean) => {
-  const { refetch: refetchAccessToken, error } = useGETAccessToken();
+  const { data, isSuccess, refetch: refetchAccessToken, error } = useRead('refreshToken');
   const isRefreshing = useRef(false);
-
   const parseJwt = (token: string) => {
     try {
       if (!token) return null;
@@ -63,5 +62,5 @@ export const useTokenRefresh = (accessToken: string | undefined, isAuthenticated
     };
   }, [accessToken, isAuthenticated, refetchAccessToken]);
 
-  return { error };
+  return { data, isSuccess, error };
 };

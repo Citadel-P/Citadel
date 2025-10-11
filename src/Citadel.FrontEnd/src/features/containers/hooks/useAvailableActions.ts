@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ContainerView, ContainerStateStatus } from '@/api/_generated';
+import { ContainerView, ContainerStateStatus } from '@/api/generated/api.types';
 import { actionType, usePATCHContainers } from './usePATCHContainers';
 import { DockerContainerView } from '@/api/models';
 

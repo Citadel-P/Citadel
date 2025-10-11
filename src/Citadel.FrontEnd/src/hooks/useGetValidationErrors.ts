@@ -1,4 +1,4 @@
-import { ProblemDetails, HttpValidationProblemDetails } from '@/api/_generated';
+import { ProblemDetails, HttpValidationProblemDetails } from '@/api/generated/api.types';
 
 export const useGetValidationErrors = (error: Error | null): string | undefined => {
   if (!error) return undefined;

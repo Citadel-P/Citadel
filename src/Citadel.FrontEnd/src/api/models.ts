@@ -1,4 +1,4 @@
-import { ContainerStateStatus, NullableOfContainerStatView, PlatformStatView } from './_generated';
+import { ContainerStateStatus, ContainerStatView, PlatformStatView } from './generated/api.types';
 
 export interface Cancellable {
   signal: AbortSignal;
@@ -24,6 +24,6 @@ export interface DockerContainerView {
   state: ContainerStateStatus;
   created: number | null;
   stack: string | null;
-  containerStat: NullableOfContainerStatView;
+  containerStat: ContainerStatView;
   containerPort: null | [];
 }

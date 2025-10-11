@@ -1,4 +1,4 @@
-import { ImageView } from '@/api/_generated';
+import { ImageView } from '@/api/generated/api.types';
 import { useDialogState } from '@/hooks/useDialogState';
 
 export const useRunImageDialog = () => {

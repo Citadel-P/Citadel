@@ -1,47 +1,47 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useGETAccessToken } from './hooks/useGETAccessToken';
 import { useApiClientContext } from '@/api/ApiClientContext';
 import { useHTTPErrorHandler } from './hooks/useHTTPErrorHandler';
 import { usePOSTLogout } from './hooks/usePOSTLogout';
 import { useTokenRefresh } from './hooks/useTokenRefresh';
 import { AuthContext } from './AuthContext';
 import { toast } from 'sonner';
-import { ProblemDetails } from '@/api/_generated';
+import { ProblemDetails } from '@/api/generated/api.types';
 
-const accessTokenKey = 'access_token';
-const storedJwt = sessionStorage.getItem(accessTokenKey);
+export const ACCESS_TOKEN_KEY = 'access_token';
+const storedJwt = sessionStorage.getItem(ACCESS_TOKEN_KEY);
 
 export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   useHTTPErrorHandler();
   const { apiClient } = useApiClientContext();
-  const { data, isSuccess, error } = useGETAccessToken();
   const { mutate: logout } = usePOSTLogout();
   const [accessToken, setAccessToken] = useState<string | undefined>(storedJwt ?? undefined);
   const isAuthenticated = useMemo(() => accessToken != null, [accessToken]);
-  const { error: refreshError } = useTokenRefresh(accessToken, isAuthenticated);
+  const { data, isSuccess, error } = useTokenRefresh(accessToken, isAuthenticated);
 
   const handleSetAccessToken = useCallback(
     (token: string | undefined) => {
       if (token) {
         setAccessToken(token);
         apiClient?.setSecurityData(token);
-        sessionStorage.setItem(accessTokenKey, token);
+        sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
       } else {
         setAccessToken(undefined);
         apiClient?.setSecurityData(undefined);
-        sessionStorage.removeItem(accessTokenKey);
+        sessionStorage.removeItem(ACCESS_TOKEN_KEY);
       }
     },
     [apiClient],
   );
 
   useEffect(() => {
-    if ((refreshError as ProblemDetails)?.status === 401) {
+    if ((error as ProblemDetails)?.status === 401) {
       toast.error('Session expired', {
         description: 'Please login again',
       });
+      setAccessToken(undefined);
+      logout({});
     }
-  }, [refreshError]);
+  }, [error, logout]);
 
   // Handle access token updates from the API
   useEffect(() => {
@@ -49,14 +49,6 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
       handleSetAccessToken(data.data.accessToken);
     }
   }, [data, isSuccess, handleSetAccessToken]);
-
-  // Handle 401 errors by logging out
-  useEffect(() => {
-    if (error && ((error as any)?.error?.status === 401 || (error as any)?.error?.status === 400)) {
-      setAccessToken(undefined);
-      logout({});
-    }
-  }, [error, logout]);
 
   return (
     <AuthContext.Provider

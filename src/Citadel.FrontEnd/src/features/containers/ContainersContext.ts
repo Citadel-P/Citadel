@@ -1,4 +1,4 @@
-import { ContainerView, DeleteContainersRequest } from '@/api/_generated';
+import { ContainerView, DeleteContainersRequest } from '@/api/generated/api.types';
 import { createContext } from 'react';
 import { IDialogData } from '@/hooks/useDialogState';
 import { useRequiredContext } from '@/hooks/useRequiredContext';

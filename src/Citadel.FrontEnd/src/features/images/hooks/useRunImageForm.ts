@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Constants } from '@/lib/constants';
-import { ContainerRestartPolicy } from '@/api/_generated';
+import { ContainerRestartPolicy } from '@/api/generated/api.types';
 
 export const useRunImageForm = () => {
   const formSchema = z

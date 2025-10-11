@@ -4,7 +4,7 @@ import { MoreHorizontal, Trash, SearchCode } from 'lucide-react';
 import { useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
 import { useVolumesContext } from './VolumesContext';
-import { DockerVolumeResult } from '@/api/_generated';
+import { DockerVolumeResult } from '@/api/generated/api.types';
 import { useNavigate } from 'react-router';
 
 const DropdownTableMenu = ({ volume }: { volume: DockerVolumeResult }) => {

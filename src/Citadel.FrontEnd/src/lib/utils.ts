@@ -93,3 +93,15 @@ export function formatId(id?: string): string {
 
   return truncate(normalized, 12, 'right', true);
 }
+
+export const filterBySplit = <T>(items: T[] | undefined, search: string, extract: (item: T) => string) => {
+  const split = search.toLowerCase().split(' ');
+  return (
+    (split.length
+      ? items?.filter((item) => {
+          const target = extract(item).toLowerCase();
+          return split.every((term) => target.includes(term));
+        })
+      : items) ?? []
+  );
+};

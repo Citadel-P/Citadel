@@ -5,7 +5,7 @@ import { ContainerActionBar } from './ContainerActionBar';
 import { AlertMessage } from '@/components/ui/alert-message';
 import { DeleteContainerDialog } from './dialogs/DeleteContainerDialog';
 import { useMemo } from 'react';
-import { ContainerStateStatus } from '@/api/_generated';
+import { ContainerStateStatus } from '@/api/generated/api.types';
 import { useContainersContext } from './ContainersContext';
 
 const Containers = () => {

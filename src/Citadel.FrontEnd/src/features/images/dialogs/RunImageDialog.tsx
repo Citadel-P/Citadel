@@ -10,7 +10,6 @@ import { useEffect, useState } from 'react';
 import { useRunImageForm } from '../hooks/useRunImageForm';
 import { Form, FormControl, FormField, FormItem, FormMessage, FormLabel } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { useGETImageInfo } from '../hooks/useGETImageInfo';
 import PortMappingInput from '../components/PortMappingInput';
 import VolumeMappingInput from '../components/VolumeMappingInput';
 import { MultiSelect } from '@/components/ui/multi-select';
@@ -21,11 +20,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Switch } from '@/components/ui/switch';
 import ValueInput from '@/components/ui/ValueInput';
 import { usePOSTContainer } from '../hooks/usePOSTContainer';
-import { ContainerRestartPolicy, CreateContainerInput, ImageView } from '@/api/_generated';
+import { ContainerRestartPolicy, CreateContainerInput, ImageView } from '@/api/generated/api.types';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
 import { AlertMessage } from '@/components/ui/alert-message';
 import { IDialogData } from '@/hooks/useDialogState';
+import { useRead } from '@/lib/hooks';
 
 export const RunImageDialog = ({
   runDialogData,
@@ -43,7 +43,10 @@ export const RunImageDialog = ({
     data: imageInfo,
     isLoading: imageInfoIsLoading,
     isSuccess: imageInfoIsSuccess,
-  } = useGETImageInfo(currentPlatform?.id, runDialogData.currentSelection?.at(0)?.imageId);
+  } = useRead('getImageInfo', {
+    platformId: currentPlatform?.id,
+    imageId: runDialogData.currentSelection?.at(0)?.imageId,
+  });
   const { control } = form;
 
   useEffect(() => {

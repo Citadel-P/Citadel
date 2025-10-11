@@ -1,20 +1,20 @@
-import { RegistryView } from '@/api/_generated';
-import { useGETRegistries } from './hooks/useGETRegistries';
+import { RegistryView } from '@/api/generated/api.types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDELETERegistries } from './hooks/useDELETERegistries';
 import { toast } from 'sonner';
 import { useDialogState } from '@/hooks/useDialogState';
 import { RegistriesContext } from './RegistriesContext';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRead } from '@/lib/hooks';
 
 export const RegistriesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const client = useQueryClient();
   const { mutate, isPending: deleteIsPending, isSuccess: deleteIsSuccess } = useDELETERegistries();
-  const { data, isLoading, isSuccess } = useGETRegistries();
+  const { data, isLoading, isSuccess } = useRead('listRegistries');
+
   const [selectedRows, setSelectedRows] = useState<RegistryView[] | undefined>([]);
   const [registries, setRegistries] = useState<RegistryView[] | undefined>([]);
   const { dialogData, setDialogData } = useDialogState<RegistryView>();
-
   useEffect(() => {
     if (isSuccess && data?.data) {
       setRegistries(data?.data.registries ?? []);
@@ -23,7 +23,7 @@ export const RegistriesProvider: React.FC<{ children?: React.ReactNode }> = ({ c
 
   useEffect(() => {
     if (deleteIsSuccess) {
-      client.invalidateQueries({ queryKey: ['useGETRegistries'] });
+      client.invalidateQueries({ queryKey: ['listRegistries'] });
       setDialogData({ open: false });
       setSelectedRows([]);
 

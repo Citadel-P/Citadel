@@ -36,8 +36,9 @@ void Configure(WebApplication app)
         app.MapOpenApi();
         app.UseSwaggerUI(options => 
         {
-            options.AddCustomSwaggerUIOptions(app.Environment.IsDevelopment());
-            options.SwaggerEndpoint("/openapi/v1.json", "v1");
+            options
+            .AddCustomSwaggerUIOptions()
+            .SwaggerEndpoint("/openapi/v1.json", "v1");
         });
     }
 

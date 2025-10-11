@@ -11,7 +11,7 @@ import { useAppContext } from '@/AppContext';
 import { useState } from 'react';
 import { SwitchSection } from '@/components/ui/SwitchSection';
 import { IDialogData } from '@/hooks/useDialogState';
-import { DeleteVolumesInput, DockerVolumeResult } from '@/api/_generated';
+import { DeleteVolumesInput, DockerVolumeResult } from '@/api/generated/api.types';
 
 export const DeleteVolumeDialog = ({
   dialogData,

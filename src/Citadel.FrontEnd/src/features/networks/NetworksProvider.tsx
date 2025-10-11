@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { DockerNetworkResult } from '@/api/_generated';
+import { DockerNetworkResult } from '@/api/generated/api.types';
 import { NetworksContext } from './NetworksContext';
 import { useDeleteNetworkDialog } from './hooks/useDeleteNetworkDialog';
 

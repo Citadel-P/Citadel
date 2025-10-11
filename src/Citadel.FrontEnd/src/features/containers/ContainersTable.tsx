@@ -2,7 +2,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useContainersContext } from './ContainersContext';
-import { ContainerView, ContainerStateStatus, ContainerStatView } from '@/api/_generated';
+import { ContainerView, ContainerStateStatus, ContainerStatView } from '@/api/generated/api.types';
 import { truncate } from '@/lib/truncate';
 import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';

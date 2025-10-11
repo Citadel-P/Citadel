@@ -22,6 +22,11 @@ export enum VolumeScope {
   Multi = "Multi",
 }
 
+export enum ScalingStrategy {
+  RollingUpdate = "RollingUpdate",
+  Recreate = "Recreate",
+}
+
 export enum RegistryType {
   Custom = "Custom",
   DockerHub = "DockerHub",
@@ -74,6 +79,24 @@ export enum DockerHubTagStatus {
 export enum DockerHubImageStatus {
   Active = "Active",
   Inactive = "Inactive",
+}
+
+export enum DeploymentStatus {
+  Created = "Created",
+  Pending = "Pending",
+  Deploying = "Deploying",
+  Running = "Running",
+  Failed = "Failed",
+  Succeeded = "Succeeded",
+  Paused = "Paused",
+  RolledBack = "RolledBack",
+}
+
+export enum DeploymentSource {
+  UI = "UI",
+  Git = "Git",
+  API = "API",
+  CLI = "CLI",
 }
 
 export enum ContainerStateStatus {
@@ -467,6 +490,148 @@ export interface DeleteVolumesInput {
   platformId: string;
   names: string[];
   force: null | boolean;
+}
+
+export interface DeploymentInfoView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: null | string;
+  /** @format date-time */
+  createdAt: any;
+  /** @format date-time */
+  updatedAt: any;
+  /** @format uuid */
+  createdBy: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  activeVersion: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  versionCount: number | string;
+}
+
+export interface DeploymentScaling {
+  strategy: ScalingStrategy;
+  /**
+   * @format int32
+   * @default 1
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  replicas?: number | string;
+  /**
+   * @format int32
+   * @default 1
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  maxParallel?: number | string;
+}
+
+export interface DeploymentSpec {
+  imageId: string;
+  target: DeploymentTarget;
+  name: null | string;
+  workingDir: null | string;
+  user: null | string;
+  /**
+   * @format float
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  memoryLimit: null | number | string;
+  /**
+   * @format float
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  cpuLimit: null | number | string;
+  /**
+   * @format float
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  memoryReservation: null | number | string;
+  autoRemove: null | boolean;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  stopTimeout: null | number | string;
+  restartPolicy: ContainerRestartPolicy;
+  labels: null | object;
+  envVars: null | any[];
+  ports: null | any[];
+  volumes: null | any[];
+  networks: null | any[];
+  entryPoint: null | any[];
+  command: null | any[];
+  hostname?: null | string;
+  dns?: null | any[];
+  deploymentScaling?: null | DeploymentScaling;
+  security?: null | SecurityConfig;
+  loggingConfig?: null | LoggingConfig;
+  healthCheck?: null | HealthCheckConfig;
+  metadata?: null | object;
+}
+
+export interface DeploymentTarget {
+  /** @format uuid */
+  platformId: string;
+  platformName: null | string;
+  /**
+   * @format int32
+   * @default 1
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  replicas?: number | string;
+}
+
+export interface DeploymentVersion {
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  version: number | string;
+  /** @format uuid */
+  createdBy: string;
+  spec: DeploymentSpec;
+  status: DeploymentStatus;
+  source: DeploymentSource;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  rolledBackFromVersion?: null | number | string;
+  gitRepoUrl?: null | string;
+  gitPath?: null | string;
+  gitCommitHash?: null | string;
+  annotations?: null | object;
+  /** @format date-time */
+  createdAt?: any;
+}
+
+export interface DeploymentView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: null | string;
+  /** @format date-time */
+  createdAt: any;
+  /** @format date-time */
+  updatedAt: any;
+  /** @format uuid */
+  createdBy: string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  activeVersion: number | string;
+  versions: DeploymentVersion[];
+}
+
+export interface DeploymentsView {
+  deployments: DeploymentInfoView[];
 }
 
 export interface DockerHubImageResult {
@@ -976,7 +1141,7 @@ export interface LogConfiguration {
 
 export interface LoggingConfig {
   driver: LoggingDriverType;
-  options: Record<string, string>;
+  options?: null | object;
 }
 
 export interface LoginRequest {
@@ -1757,7 +1922,7 @@ export class Api<
      * No description
      *
      * @tags Authentication
-     * @name AuthenticationRefreshToken
+     * @name RefreshToken
      * @summary Request a new access token
      * @request GET:/api/v1/authentication/refresh
      * @response `200` `RefreshTokenResponse` OK
@@ -1765,7 +1930,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    authenticationRefreshToken: (params: RequestParams = {}) =>
+    refreshToken: (params: RequestParams = {}) =>
       this.request<
         RefreshTokenResponse,
         HttpValidationProblemDetails | ProblemDetails
@@ -1780,7 +1945,7 @@ export class Api<
      * No description
      *
      * @tags Authentication
-     * @name AuthenticationLogin
+     * @name Login
      * @summary Check user credentials and issue an access token on successful login
      * @request POST:/api/v1/authentication/login
      * @response `200` `LoginResponse` OK
@@ -1788,7 +1953,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    authenticationLogin: (data: LoginRequest, params: RequestParams = {}) =>
+    login: (data: LoginRequest, params: RequestParams = {}) =>
       this.request<
         LoginResponse,
         HttpValidationProblemDetails | ProblemDetails
@@ -1805,7 +1970,7 @@ export class Api<
      * No description
      *
      * @tags Authentication
-     * @name AuthenticationLogout
+     * @name Logout
      * @summary Log out
      * @request POST:/api/v1/authentication/logout
      * @secure
@@ -1816,7 +1981,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    authenticationLogout: (params: RequestParams = {}) =>
+    logout: (params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/authentication/logout`,
         method: "POST",
@@ -1828,7 +1993,7 @@ export class Api<
      * No description
      *
      * @tags Containers
-     * @name ContainersGetById
+     * @name GetContainer
      * @summary Get container by Id
      * @request GET:/api/v1/containers/{id}
      * @secure
@@ -1839,7 +2004,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    containersGetById: (id: string, params: RequestParams = {}) =>
+    getContainer: (id: string, params: RequestParams = {}) =>
       this.request<
         ContainerView,
         HttpValidationProblemDetails | ProblemDetails
@@ -1855,7 +2020,7 @@ export class Api<
      * No description
      *
      * @tags Containers
-     * @name ContainersGetInfo
+     * @name GetContainerInfo
      * @summary Get basic container details
      * @request GET:/api/v1/containers/{id}/info
      * @secure
@@ -1866,7 +2031,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    containersGetInfo: (id: string, params: RequestParams = {}) =>
+    getContainerInfo: (id: string, params: RequestParams = {}) =>
       this.request<
         ContainerInfoView,
         HttpValidationProblemDetails | ProblemDetails
@@ -1882,7 +2047,7 @@ export class Api<
      * No description
      *
      * @tags Containers
-     * @name ContainersGetStats
+     * @name GetContainerStats
      * @summary Get container stats
      * @request GET:/api/v1/containers/{id}/stats
      * @secure
@@ -1893,7 +2058,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    containersGetStats: (id: string, params: RequestParams = {}) =>
+    getContainerStats: (id: string, params: RequestParams = {}) =>
       this.request<
         ContainerStatsView,
         HttpValidationProblemDetails | ProblemDetails
@@ -1909,7 +2074,7 @@ export class Api<
      * No description
      *
      * @tags Containers
-     * @name ContainersInspect
+     * @name InspectContainer
      * @summary Inspect a container
      * @request GET:/api/v1/containers/{id}/inspect
      * @secure
@@ -1920,7 +2085,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    containersInspect: (id: string, params: RequestParams = {}) =>
+    inspectContainer: (id: string, params: RequestParams = {}) =>
       this.request<
         ContainerInspectView,
         HttpValidationProblemDetails | ProblemDetails
@@ -1936,7 +2101,7 @@ export class Api<
      * No description
      *
      * @tags Containers
-     * @name ContainersCreate
+     * @name CreateContainer
      * @summary Create a container
      * @request POST:/api/v1/containers
      * @secure
@@ -1947,10 +2112,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    containersCreate: (
-      data: CreateContainerInput,
-      params: RequestParams = {},
-    ) =>
+    createContainer: (data: CreateContainerInput, params: RequestParams = {}) =>
       this.request<
         CreateContainerView,
         HttpValidationProblemDetails | ProblemDetails
@@ -1968,7 +2130,7 @@ export class Api<
      * No description
      *
      * @tags Containers
-     * @name ContainersDeleteContainers
+     * @name DeleteContainers
      * @summary Delete the given container(s)
      * @request DELETE:/api/v1/containers
      * @secure
@@ -1979,7 +2141,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    containersDeleteContainers: (
+    deleteContainers: (
       data: DeleteContainersRequest,
       params: RequestParams = {},
     ) =>
@@ -1996,7 +2158,7 @@ export class Api<
      * No description
      *
      * @tags Containers
-     * @name ContainersStartContainers
+     * @name StartContainers
      * @summary Starts the given container(s)
      * @request PATCH:/api/v1/containers/start
      * @secure
@@ -2007,7 +2169,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    containersStartContainers: (data: string[], params: RequestParams = {}) =>
+    startContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/start`,
         method: "PATCH",
@@ -2021,7 +2183,7 @@ export class Api<
      * No description
      *
      * @tags Containers
-     * @name ContainersStopContainers
+     * @name StopContainers
      * @summary Stops the given container(s)
      * @request PATCH:/api/v1/containers/stop
      * @secure
@@ -2032,7 +2194,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    containersStopContainers: (data: string[], params: RequestParams = {}) =>
+    stopContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/stop`,
         method: "PATCH",
@@ -2046,7 +2208,7 @@ export class Api<
      * No description
      *
      * @tags Containers
-     * @name ContainersPauseContainers
+     * @name PauseContainers
      * @summary Pause the given container(s)
      * @request PATCH:/api/v1/containers/pause
      * @secure
@@ -2057,7 +2219,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    containersPauseContainers: (data: string[], params: RequestParams = {}) =>
+    pauseContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/pause`,
         method: "PATCH",
@@ -2071,7 +2233,7 @@ export class Api<
      * No description
      *
      * @tags Containers
-     * @name ContainersRestartContainers
+     * @name RestartContainers
      * @summary Restarts the given container(s)
      * @request PATCH:/api/v1/containers/restart
      * @secure
@@ -2082,7 +2244,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    containersRestartContainers: (data: string[], params: RequestParams = {}) =>
+    restartContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/restart`,
         method: "PATCH",
@@ -2096,8 +2258,8 @@ export class Api<
      * No description
      *
      * @tags Containers
-     * @name ContainersUnpauseContainers
-     * @summary Unpause the given container(s)
+     * @name UnpauseContainers
+     * @summary Resume a container(s) which has been paused
      * @request PATCH:/api/v1/containers/unpause
      * @secure
      * @response `204` `void` No Content
@@ -2107,7 +2269,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    containersUnpauseContainers: (data: string[], params: RequestParams = {}) =>
+    unpauseContainers: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/unpause`,
         method: "PATCH",
@@ -2121,7 +2283,7 @@ export class Api<
      * No description
      *
      * @tags Platforms
-     * @name PlatformsList
+     * @name ListPlatforms
      * @summary List all platforms
      * @request GET:/api/v1/platforms
      * @secure
@@ -2132,7 +2294,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    platformsList: (params: RequestParams = {}) =>
+    listPlatforms: (params: RequestParams = {}) =>
       this.request<
         PlatformsView,
         HttpValidationProblemDetails | ProblemDetails
@@ -2148,7 +2310,7 @@ export class Api<
      * No description
      *
      * @tags Platforms
-     * @name PlatformsCreate
+     * @name CreatePlatform
      * @summary Create a platform
      * @request POST:/api/v1/platforms
      * @secure
@@ -2159,7 +2321,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    platformsCreate: (data: PlatformInput, params: RequestParams = {}) =>
+    createPlatform: (data: PlatformInput, params: RequestParams = {}) =>
       this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>(
         {
           path: `/api/v1/platforms`,
@@ -2176,7 +2338,7 @@ export class Api<
      * No description
      *
      * @tags Platforms
-     * @name PlatformsDelete
+     * @name DeletePlatform
      * @summary Delete a platform
      * @request DELETE:/api/v1/platforms
      * @secure
@@ -2187,7 +2349,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    platformsDelete: (
+    deletePlatform: (
       query: {
         /**
          * The platform id
@@ -2209,7 +2371,7 @@ export class Api<
      * No description
      *
      * @tags Platforms
-     * @name PlatformsGetById
+     * @name GetPlatfom
      * @summary Get platform by Id
      * @request GET:/api/v1/platforms/{id}
      * @secure
@@ -2220,7 +2382,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    platformsGetById: (id: string, params: RequestParams = {}) =>
+    getPlatfom: (id: string, params: RequestParams = {}) =>
       this.request<PlatformView, HttpValidationProblemDetails | ProblemDetails>(
         {
           path: `/api/v1/platforms/${id}`,
@@ -2235,7 +2397,7 @@ export class Api<
      * No description
      *
      * @tags Platforms
-     * @name PlatformsPatch
+     * @name UpdatePlatform
      * @summary Patch a platform
      * @request PATCH:/api/v1/platforms/{id}
      * @secure
@@ -2247,7 +2409,7 @@ export class Api<
      * @response `409` `ProblemDetails` Conflict
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    platformsPatch: (
+    updatePlatform: (
       id: string,
       data: PlatformInput,
       params: RequestParams = {},
@@ -2268,7 +2430,7 @@ export class Api<
      * No description
      *
      * @tags Platforms
-     * @name PlatformsListContainers
+     * @name ListContainers
      * @summary Returns the list of containers of the given platform
      * @request GET:/api/v1/platforms/{id}/containers
      * @secure
@@ -2279,7 +2441,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    platformsListContainers: (id: string, params: RequestParams = {}) =>
+    listContainers: (id: string, params: RequestParams = {}) =>
       this.request<
         ContainersView,
         HttpValidationProblemDetails | ProblemDetails
@@ -2295,9 +2457,9 @@ export class Api<
      * No description
      *
      * @tags Registries
-     * @name RegistriesGetAll
+     * @name ListRegistries
      * @summary Get all registries
-     * @request GET:/api/v1/registries/all
+     * @request GET:/api/v1/registries
      * @secure
      * @response `200` `RegistriesView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -2305,12 +2467,12 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    registriesGetAll: (params: RequestParams = {}) =>
+    listRegistries: (params: RequestParams = {}) =>
       this.request<
         RegistriesView,
         HttpValidationProblemDetails | ProblemDetails
       >({
-        path: `/api/v1/registries/all`,
+        path: `/api/v1/registries`,
         method: "GET",
         secure: true,
         format: "json",
@@ -2318,10 +2480,63 @@ export class Api<
       }),
 
     /**
+     * @description A discriminator should be provided in the request, this discriminator is based on RegistryType enum
+     *
+     * @tags Registries
+     * @name CreateRegistry
+     * @summary Create a registry
+     * @request POST:/api/v1/registries
+     * @secure
+     * @response `200` `RegistryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createRegistry: (data: RegistryInput, params: RequestParams = {}) =>
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/registries`,
+          method: "POST",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
+
+    /**
      * No description
      *
      * @tags Registries
-     * @name RegistriesGetById
+     * @name DeleteRegistry
+     * @summary Delete registries
+     * @request DELETE:/api/v1/registries
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteRegistry: (data: DeleteRegistriesInput, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/registries`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Registries
+     * @name GetRegistry
      * @summary Get registry by ID
      * @request GET:/api/v1/registries/{id}
      * @secure
@@ -2332,7 +2547,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    registriesGetById: (id: string, params: RequestParams = {}) =>
+    getRegistry: (id: string, params: RequestParams = {}) =>
       this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>(
         {
           path: `/api/v1/registries/${id}`,
@@ -2347,8 +2562,8 @@ export class Api<
      * @description A discriminator should be provided in the request, this discriminator is based on RegistryType enum
      *
      * @tags Registries
-     * @name RegistriesPatch
-     * @summary Patch a registry
+     * @name UpdateRegistry
+     * @summary Update a registry
      * @request PATCH:/api/v1/registries/{id}
      * @secure
      * @response `200` `RegistryView` OK
@@ -2359,7 +2574,7 @@ export class Api<
      * @response `409` `ProblemDetails` Conflict
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    registriesPatch: (
+    updateRegistry: (
       id: string,
       data: RegistryInput,
       params: RequestParams = {},
@@ -2380,7 +2595,7 @@ export class Api<
      * No description
      *
      * @tags Registries
-     * @name RegistriesGetWithConfig
+     * @name GetRegistryWithConfig
      * @summary Get registry and it's configuration
      * @request GET:/api/v1/registries/{id}/_cfg
      * @secure
@@ -2391,7 +2606,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    registriesGetWithConfig: (id: string, params: RequestParams = {}) =>
+    getRegistryWithConfig: (id: string, params: RequestParams = {}) =>
       this.request<
         RegistryWithConfigView,
         HttpValidationProblemDetails | ProblemDetails
@@ -2404,68 +2619,12 @@ export class Api<
       }),
 
     /**
-     * @description A discriminator should be provided in the request, this discriminator is based on RegistryType enum
-     *
-     * @tags Registries
-     * @name RegistriesCreate
-     * @summary Create a registry
-     * @request POST:/api/v1/registries
-     * @secure
-     * @response `200` `RegistryView` OK
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    registriesCreate: (data: RegistryInput, params: RequestParams = {}) =>
-      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>(
-        {
-          path: `/api/v1/registries`,
-          method: "POST",
-          body: data,
-          secure: true,
-          type: ContentType.Json,
-          format: "json",
-          ...params,
-        },
-      ),
-
-    /**
-     * No description
-     *
-     * @tags Registries
-     * @name RegistriesDelete
-     * @summary Delete registries
-     * @request DELETE:/api/v1/registries
-     * @secure
-     * @response `204` `void` No Content
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    registriesDelete: (
-      data: DeleteRegistriesInput,
-      params: RequestParams = {},
-    ) =>
-      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/registries`,
-        method: "DELETE",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        ...params,
-      }),
-
-    /**
      * No description
      *
      * @tags Images
-     * @name ImagesGetAllLocalImages
+     * @name ListImages
      * @summary Get all local images for the given platform
-     * @request GET:/api/v1/images/{platformId}/local-images
+     * @request GET:/api/v1/images/{platformId}
      * @secure
      * @response `200` `ImagesView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -2473,9 +2632,9 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesGetAllLocalImages: (platformId: string, params: RequestParams = {}) =>
+    listImages: (platformId: string, params: RequestParams = {}) =>
       this.request<ImagesView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/images/${platformId}/local-images`,
+        path: `/api/v1/images/${platformId}`,
         method: "GET",
         secure: true,
         format: "json",
@@ -2486,7 +2645,7 @@ export class Api<
      * No description
      *
      * @tags Images
-     * @name ImagesGetExternalRepositories
+     * @name GetExternalRepositories
      * @summary List external repositories of the given registry
      * @request GET:/api/v1/images/{registryName}/repositories
      * @secure
@@ -2496,7 +2655,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesGetExternalRepositories: (
+    getExternalRepositories: (
       registryName: string,
       params: RequestParams = {},
     ) =>
@@ -2515,7 +2674,7 @@ export class Api<
      * No description
      *
      * @tags Images
-     * @name ImagesGetGhcrPackageVersions
+     * @name GetGhcrPackageVersions
      * @summary List versions of GHCR package
      * @request GET:/api/v1/images/ghcr/{registryName}/{packageName}/versions
      * @secure
@@ -2525,7 +2684,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesGetGhcrPackageVersions: (
+    getGhcrPackageVersions: (
       registryName: string,
       packageName: string,
       params: RequestParams = {},
@@ -2545,7 +2704,7 @@ export class Api<
      * No description
      *
      * @tags Images
-     * @name ImagesGetDockerHubRepositories
+     * @name GetDockerHubRepositories
      * @summary List DockerHub repositories
      * @request GET:/api/v1/images/dockerhub/{registryName}/repositories
      * @secure
@@ -2555,7 +2714,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesGetDockerHubRepositories: (
+    getDockerHubRepositories: (
       registryName: string,
       params: RequestParams = {},
     ) =>
@@ -2574,7 +2733,7 @@ export class Api<
      * No description
      *
      * @tags Images
-     * @name ImagesGetDockerHubRepositoryTags
+     * @name GetDockerHubRepositoryTags
      * @summary List DockerHub repository tags
      * @request GET:/api/v1/images/dockerhub/{registryName}/{repositoryName}/tags
      * @secure
@@ -2584,7 +2743,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesGetDockerHubRepositoryTags: (
+    getDockerHubRepositoryTags: (
       registryName: string,
       repositoryName: string,
       params: RequestParams = {},
@@ -2604,7 +2763,7 @@ export class Api<
      * No description
      *
      * @tags Images
-     * @name ImagesGetDockerHubPublicImages
+     * @name GetDockerHubPublicImages
      * @summary Search for DockerHub public images. If the image name is empty, a default list of Docker images will be returned.
      * @request GET:/api/v1/images/dockerhub
      * @secure
@@ -2614,7 +2773,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesGetDockerHubPublicImages: (
+    getDockerHubPublicImages: (
       query?: {
         imageName?: string;
       },
@@ -2636,7 +2795,7 @@ export class Api<
      * No description
      *
      * @tags Images
-     * @name ImagesInspect
+     * @name InspectImage
      * @summary Inspect an image
      * @request GET:/api/v1/images/{platformId}/{imageId}
      * @secure
@@ -2647,7 +2806,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesInspect: (
+    inspectImage: (
       platformId: string,
       imageId: string,
       params: RequestParams = {},
@@ -2667,7 +2826,7 @@ export class Api<
      * No description
      *
      * @tags Images
-     * @name ImagesGetImageInfo
+     * @name GetImageInfo
      * @summary Get image info
      * @request GET:/api/v1/images/{platformId}/{imageId}/_info
      * @secure
@@ -2678,7 +2837,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesGetImageInfo: (
+    getImageInfo: (
       platformId: string,
       imageId: string,
       params: RequestParams = {},
@@ -2698,7 +2857,7 @@ export class Api<
      * No description
      *
      * @tags Images
-     * @name ImagesPullImage
+     * @name PullImage
      * @summary Pull an image from a registry and returns logs as a stream
      * @request POST:/api/v1/images/pull
      * @secure
@@ -2708,7 +2867,7 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesPullImage: (data: PullImageRequest, params: RequestParams = {}) =>
+    pullImage: (data: PullImageRequest, params: RequestParams = {}) =>
       this.request<
         PullImageResult[],
         HttpValidationProblemDetails | ProblemDetails
@@ -2726,7 +2885,7 @@ export class Api<
      * No description
      *
      * @tags Images
-     * @name ImagesDelete
+     * @name DeleteImage
      * @summary Remove an image(s), along with any untagged parent images that were referenced by that image
      * @request DELETE:/api/v1/images
      * @secure
@@ -2737,7 +2896,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    imagesDelete: (data: DeleteImagesRequest, params: RequestParams = {}) =>
+    deleteImage: (data: DeleteImagesRequest, params: RequestParams = {}) =>
       this.request<
         DeleteImageResult,
         HttpValidationProblemDetails | ProblemDetails
@@ -2755,9 +2914,9 @@ export class Api<
      * No description
      *
      * @tags Networks
-     * @name NetworksList
+     * @name ListNetworks
      * @summary List all networks
-     * @request GET:/api/v1/networks/{id}
+     * @request GET:/api/v1/networks/{platformId}
      * @secure
      * @response `200` `NetworksView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -2766,8 +2925,8 @@ export class Api<
      * @response `409` `ProblemDetails` Conflict
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    networksList: (
-      id: string,
+    listNetworks: (
+      platformId: string,
       query?: {
         Dangling?: boolean;
         Driver?: string;
@@ -2778,7 +2937,7 @@ export class Api<
     ) =>
       this.request<NetworksView, HttpValidationProblemDetails | ProblemDetails>(
         {
-          path: `/api/v1/networks/${id}`,
+          path: `/api/v1/networks/${platformId}`,
           method: "GET",
           query: query,
           secure: true,
@@ -2791,7 +2950,7 @@ export class Api<
      * No description
      *
      * @tags Networks
-     * @name NetworksInspect
+     * @name InspectNetwork
      * @summary Inspect a network
      * @request GET:/api/v1/networks/{platformId}/{networkId}
      * @secure
@@ -2802,7 +2961,7 @@ export class Api<
      * @response `409` `ProblemDetails` Conflict
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    networksInspect: (
+    inspectNetwork: (
       platformId: string,
       networkId: string,
       params: RequestParams = {},
@@ -2822,7 +2981,7 @@ export class Api<
      * No description
      *
      * @tags Networks
-     * @name NetworksCreate
+     * @name CreateNetwork
      * @summary Create a network
      * @request POST:/api/v1/networks
      * @secure
@@ -2833,7 +2992,7 @@ export class Api<
      * @response `409` `ProblemDetails` Conflict
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    networksCreate: (data: CreateNetworkInput, params: RequestParams = {}) =>
+    createNetwork: (data: CreateNetworkInput, params: RequestParams = {}) =>
       this.request<
         CreateNetworkView,
         HttpValidationProblemDetails | ProblemDetails
@@ -2851,7 +3010,7 @@ export class Api<
      * No description
      *
      * @tags Networks
-     * @name NetworksDelete
+     * @name DeleteNetwork
      * @summary Delete a network(s)
      * @request DELETE:/api/v1/networks
      * @secure
@@ -2862,7 +3021,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    networksDelete: (data: DeleteNetworksInput, params: RequestParams = {}) =>
+    deleteNetwork: (data: DeleteNetworksInput, params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/networks`,
         method: "DELETE",
@@ -2876,9 +3035,9 @@ export class Api<
      * No description
      *
      * @tags Volumes
-     * @name VolumesList
+     * @name ListVolumes
      * @summary List all volumes
-     * @request GET:/api/v1/volumes/{id}
+     * @request GET:/api/v1/volumes/{platformId}
      * @secure
      * @response `200` `VolumesView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -2887,8 +3046,8 @@ export class Api<
      * @response `409` `ProblemDetails` Conflict
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    volumesList: (
-      id: string,
+    listVolumes: (
+      platformId: string,
       query?: {
         Dangling?: boolean;
         Driver?: string;
@@ -2897,7 +3056,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<VolumesView, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/volumes/${id}`,
+        path: `/api/v1/volumes/${platformId}`,
         method: "GET",
         query: query,
         secure: true,
@@ -2909,7 +3068,7 @@ export class Api<
      * No description
      *
      * @tags Volumes
-     * @name VolumesInspect
+     * @name InspectVolume
      * @summary Inspect a volume
      * @request GET:/api/v1/volumes/{platformId}/{name}
      * @secure
@@ -2920,7 +3079,7 @@ export class Api<
      * @response `409` `ProblemDetails` Conflict
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    volumesInspect: (
+    inspectVolume: (
       platformId: string,
       name: string,
       params: RequestParams = {},
@@ -2940,32 +3099,7 @@ export class Api<
      * No description
      *
      * @tags Volumes
-     * @name VolumesDelete
-     * @summary Delete a volume(s)
-     * @request DELETE:/api/v1/volumes
-     * @secure
-     * @response `204` `void` No Content
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    volumesDelete: (data: DeleteVolumesInput, params: RequestParams = {}) =>
-      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/volumes`,
-        method: "DELETE",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Volumes
-     * @name VolumesCreate
+     * @name CreateVolume
      * @summary Create a volume
      * @request POST:/api/v1/volumes
      * @secure
@@ -2976,7 +3110,7 @@ export class Api<
      * @response `409` `ProblemDetails` Conflict
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    volumesCreate: (data: CreateVolumeInput, params: RequestParams = {}) =>
+    createVolume: (data: CreateVolumeInput, params: RequestParams = {}) =>
       this.request<
         DockerVolumeResult,
         HttpValidationProblemDetails | ProblemDetails
@@ -2987,6 +3121,31 @@ export class Api<
         secure: true,
         type: ContentType.Json,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Volumes
+     * @name DeleteVolumes
+     * @summary Delete a volume(s)
+     * @request DELETE:/api/v1/volumes
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteVolumes: (data: DeleteVolumesInput, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/volumes`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         ...params,
       }),
 
@@ -3015,6 +3174,60 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name ListDeployments
+     * @summary List all deployments
+     * @request GET:/api/v1/deployments
+     * @secure
+     * @response `200` `DeploymentsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listDeployments: (params: RequestParams = {}) =>
+      this.request<
+        DeploymentsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/deployments`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name GetDeployment
+     * @summary Get deployment by Id
+     * @request GET:/api/v1/deployments/{deploymentId}
+     * @secure
+     * @response `200` `DeploymentView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getDeployment: (deploymentId: string, params: RequestParams = {}) =>
+      this.request<
+        DeploymentView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/deployments/${deploymentId}`,
+        method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),

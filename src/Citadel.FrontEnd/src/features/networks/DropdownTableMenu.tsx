@@ -4,7 +4,7 @@ import { MoreHorizontal, Trash, SearchCode } from 'lucide-react';
 import { startTransition, useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
 import { useNetworksContext } from './NetworksContext';
-import { DockerNetworkResult } from '@/api/_generated';
+import { DockerNetworkResult } from '@/api/generated/api.types';
 import { useNavigate } from 'react-router';
 import { formatId } from '@/lib/utils';
 

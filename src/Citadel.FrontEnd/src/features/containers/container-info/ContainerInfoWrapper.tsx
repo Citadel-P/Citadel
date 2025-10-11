@@ -11,7 +11,7 @@ import ContainerInspect from './inspect/ContainerInspect';
 import Loader from '@/components/ui/loader';
 import { ContainerStatsProvider } from './stats/ContainerStatsProvider';
 import { useContainerInfoGroup } from '../hooks/useContainerInfoGroup';
-import { ContainerStateStatus } from '@/api/_generated';
+import { ContainerStateStatus } from '@/api/generated/api.types';
 import { ContainerStateIndicator } from '../ContainerStateIndicator';
 import { useDeleteContainerDialog } from '../dialogs/useDeleteContainerDialog';
 import { DeleteContainerDialog } from '../dialogs/DeleteContainerDialog';

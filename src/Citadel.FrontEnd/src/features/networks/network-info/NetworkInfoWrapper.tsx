@@ -1,4 +1,3 @@
-import { useGETInspect } from '../hooks/useGETInspect';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useNavigate, useParams } from 'react-router';
 import { useCallback, useEffect, useMemo } from 'react';
@@ -8,19 +7,20 @@ import Loader from '@/components/ui/loader';
 import { NetworkStateIndicator } from '../NetworkSateIndicator';
 import { NetworkActionButtons } from '../NetworkActionButtons';
 import { useDeleteNetworkDialog } from '../hooks/useDeleteNetworkDialog';
-import { DockerNetworkResult } from '@/api/_generated';
+import { DockerNetworkResult } from '@/api/generated/api.types';
 import { DeleteNetworkDialog } from '../dialogs/DeleteNetworkDialog';
 import { Box, Info, Share2 } from 'lucide-react';
 import { ContainerInfoTable } from './ContainerInfoTable';
 import { NetworkInfoTable } from './NetworkInfoTable';
 import { IPAMInfoTable } from './IPAMInfoTable';
+import { useRead } from '@/lib/hooks';
 
 const NetworkInfoWrapper = () => {
   const navigate = useNavigate();
   const { route } = useAppContext();
   const { setDialogData, dialogData, deleteIsSuccess, deleteIsPending, requestDelete } = useDeleteNetworkDialog();
   const { platformId, resourceId } = useParams<{ platformId: string; resourceId: string }>();
-  const { data, isLoading } = useGETInspect(platformId ?? null, resourceId ?? null);
+  const { data, isLoading } = useRead('inspectNetwork', { platformId, networkId: resourceId });
 
   useEffect(() => {
     if (deleteIsSuccess) {
@@ -115,7 +115,7 @@ const NetworkInfoWrapper = () => {
                         <div className="text-sm font-semibold text-muted-foreground leading-none">IPAM</div>
                       </div>
                       <div className="space-y-1 rounded-sm border p-1 shadow-xs">
-                        <IPAMInfoTable ipam={data?.data?.ipam} />
+                        <IPAMInfoTable ipam={data?.data?.ipam ?? undefined} />
                       </div>
                     </div>
                   )}

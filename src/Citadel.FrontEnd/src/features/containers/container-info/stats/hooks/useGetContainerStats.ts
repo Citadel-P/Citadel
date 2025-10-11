@@ -5,7 +5,7 @@ export const useGetContainerStats = (containerId: string | undefined) => {
   const { apiClient } = useApiClientContext();
   const { data, error, isLoading, isSuccess } = useQuery({
     queryKey: [`${containerId}/stats`],
-    queryFn: ({ signal }) => apiClient!.api.containersGetStats(containerId!, { signal }),
+    queryFn: ({ signal }) => apiClient!.api.getContainerStats(containerId!, { signal }),
     enabled: !!containerId,
   });
 

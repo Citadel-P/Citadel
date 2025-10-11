@@ -1,6 +1,6 @@
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { createContext } from 'react';
-import { PlatformView } from '@/api/_generated';
+import { PlatformView } from '@/api/generated/api.types';
 import { IDialogData } from '@/hooks/useDialogState';
 
 interface IContext {

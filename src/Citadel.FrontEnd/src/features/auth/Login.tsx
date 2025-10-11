@@ -4,13 +4,21 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { useLoginForm } from './hooks/useLoginForm';
 import { usePOSTLogin } from './hooks/usePOSTLogin';
-import { LoginRequest } from '@/api/_generated';
+import { LoginRequest } from '@/api/generated/api.types';
 import { LoaderCircle } from 'lucide-react';
 import { AlertMessage } from '@/components/ui/alert-message';
+import { useEffect } from 'react';
+import { ACCESS_TOKEN_KEY } from './AuthProvider';
 
 const Login = () => {
   const { form } = useLoginForm();
-  const { mutate, isPending, validationErrors } = usePOSTLogin();
+  const { mutate, isSuccess, data, isPending, validationErrors } = usePOSTLogin();
+
+  useEffect(() => {
+    if (isSuccess && data?.data) {
+      sessionStorage.setItem(ACCESS_TOKEN_KEY, data?.data.accessToken);
+      window.location.href = '/';
+    }}, [isSuccess, data]);
 
   const onSubmit = (values: LoginRequest) => {
     mutate(values);

@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
 import dayjs from 'dayjs';
 import { byteTransform } from '@/lib/bytes.helper';
-import { NullableOfContainerStatView } from '@/api/_generated';
+import { NullableOfContainerStatView } from '@/api/generated/api.types';
 import { useContainerStatsContext } from './ContainerStatsContext';
 import { DockerContainerView } from '@/api/models';
 

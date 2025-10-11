@@ -11,9 +11,9 @@ namespace WebApi.Routes.Endpoints;
 
 public static class Volumes
 {
-    public static async Task<Results<Ok<VolumesView>, ProblemHttpResult>> List(IMediator mediator, [Description("The platform id")] Guid id, [AsParameters] ListVolumesRequest listNetworksRequest, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<VolumesView>, ProblemHttpResult>> List(IMediator mediator, [Description("The platform id")] Guid platformId, [AsParameters] ListVolumesRequest listNetworksRequest, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(listNetworksRequest.ToQuery(id), cancellationToken);
+        var result = await mediator.Send(listNetworksRequest.ToQuery(platformId), cancellationToken);
         return EndpointHandlers.HandleResult(result, (v) => new VolumesView(v));
     }
 

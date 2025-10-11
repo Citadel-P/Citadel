@@ -181,3 +181,29 @@ public enum LoggingDriverType
     [JsonStringEnumMemberName("etwlogs")]
     Etwlogs
 }
+
+public enum DeploymentStatus
+{
+    Created,
+    Pending,
+    Deploying,
+    Running,
+    Failed,
+    Succeeded,
+    Paused,
+    RolledBack
+}
+
+public enum DeploymentSource 
+{
+    UI,
+    Git, 
+    API, 
+    CLI 
+}
+
+public enum ScalingStrategy
+{
+    RollingUpdate, 
+    Recreate
+}

@@ -12,19 +12,18 @@ import { CheckCheck, ChevronRight, Clipboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { useGETExternalRepositories } from './hooks/useGETExternalRepositories';
 import Loader from '@/components/ui/loader';
-import { DockerHubTagView, IImageRepositoryDockerHubRepositoryResponse } from '@/api/_generated';
+import { DockerHubTagView, IImageRepositoryDockerHubRepositoryResponse } from '@/api/generated/api.types';
 import { useImagesContext } from './ImagesContext';
 import { fromNow } from '@/lib/dayjs.helper';
 import { truncate } from '@/lib/truncate';
 import PullProgressSheetContent from './PullProgressSheetContent';
 import { Sheet } from '@/components/ui/sheet';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
-import { useGETDockerHubTags } from './hooks/useGETDockerHubTags';
 import { byteTransform } from '@/lib/bytes.helper';
 import { useSheetState } from './hooks/useSheetState';
 import { PullImageBadge } from '@/components/ui/PullImageBadge';
+import { useRead } from '@/lib/hooks';
 
 // Column helpers
 const repositoryColumnHelper = createColumnHelper<IImageRepositoryDockerHubRepositoryResponse>();
@@ -33,10 +32,10 @@ const tagColumnHelper = createColumnHelper<DockerHubTagView>();
 // Nested table component
 function NestedImagesTable({ dockerhubRepo }: { dockerhubRepo: IImageRepositoryDockerHubRepositoryResponse }) {
   const { selectedRegistry } = useImagesContext();
-  const { isLoading, data } = useGETDockerHubTags(
-    selectedRegistry?.name ?? undefined,
-    dockerhubRepo?.name ?? undefined,
-  );
+  const { isLoading, data } = useRead('getDockerHubRepositoryTags', {
+    registryName: selectedRegistry?.name,
+    repositoryName: dockerhubRepo?.name,
+  });
   const { sheetState, openSheet, closeSheet } = useSheetState<DockerHubTagView>();
 
   const tagColumns = useMemo(
@@ -154,7 +153,7 @@ const VersionRow = ({ version }: { version: string }) => {
 };
 
 export default function PrivateDockerHubImagesTable({ registryName }: { registryName: string }) {
-  const { isLoading, data } = useGETExternalRepositories(registryName);
+  const { isLoading, data } = useRead('getExternalRepositories', { registryName });
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const columns = useMemo(
     () => [

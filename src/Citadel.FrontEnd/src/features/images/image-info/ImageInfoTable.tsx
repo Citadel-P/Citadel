@@ -1,4 +1,4 @@
-import { InspectImageView } from '@/api/_generated';
+import { InspectImageView } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { RegistryDisplay } from '@/components/ui/RegistryDisplay';
 import { byteTransform } from '@/lib/bytes.helper';

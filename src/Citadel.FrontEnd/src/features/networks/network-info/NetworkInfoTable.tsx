@@ -1,4 +1,4 @@
-import { DockerNetworkDetails } from '@/api/_generated';
+import { DockerNetworkDetails } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 

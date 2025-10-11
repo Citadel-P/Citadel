@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Ban, MoreHorizontal, Pause, Play, RotateCcw, Trash, Eye } from 'lucide-react';
-import { ContainerView } from '@/api/_generated';
+import { ContainerView } from '@/api/generated/api.types';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { useNavigate } from 'react-router';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';

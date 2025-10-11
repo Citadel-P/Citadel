@@ -1,6 +1,6 @@
 import { Play, SearchCode, Trash } from 'lucide-react';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
-import { ImageView } from '@/api/_generated';
+import { ImageView } from '@/api/generated/api.types';
 import { IDialogData } from '@/hooks/useDialogState';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { useMemo } from 'react';

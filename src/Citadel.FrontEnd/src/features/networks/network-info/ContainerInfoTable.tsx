@@ -1,4 +1,4 @@
-import { DockerNetworkDetails, NetworkConnectedContainer, PlatformView } from '@/api/_generated';
+import { DockerNetworkDetails, NetworkConnectedContainer, PlatformView } from '@/api/generated/api.types';
 import { useAppContext } from '@/AppContext';
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';

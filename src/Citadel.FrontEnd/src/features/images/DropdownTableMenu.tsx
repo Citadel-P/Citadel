@@ -6,7 +6,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, SearchCode, Trash } from 'lucide-react';
-import { ImageView } from '@/api/_generated';
+import { ImageView } from '@/api/generated/api.types';
 import { useImagesContext } from './ImagesContext';
 import { useCallback } from 'react';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';

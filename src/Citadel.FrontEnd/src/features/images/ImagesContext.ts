@@ -1,6 +1,6 @@
 import { createContext } from 'react';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
-import { DeleteImagesRequest, ImageView, RegistryView } from '@/api/_generated';
+import { DeleteImagesRequest, ImageView, RegistryView } from '@/api/generated/api.types';
 import { IDialogData } from '@/hooks/useDialogState';
 
 interface IContext {

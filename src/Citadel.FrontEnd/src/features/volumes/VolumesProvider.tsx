@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { DockerVolumeResult } from '@/api/_generated';
+import { DockerVolumeResult } from '@/api/generated/api.types';
 import { VolumesContext } from './VolumesContext';
 import { useDeleteVolumeDialog } from './hooks/useDeleteVolumeDialog';
 

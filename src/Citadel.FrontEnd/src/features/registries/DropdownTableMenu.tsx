@@ -6,7 +6,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, Pencil, Trash } from 'lucide-react';
-import { RegistryView } from '@/api/_generated';
+import { RegistryView } from '@/api/generated/api.types';
 import { useNavigate } from 'react-router';
 import { useRegistriesContext } from './RegistriesContext';
 import { useCallback } from 'react';

@@ -5,7 +5,7 @@ import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 export const useDELETEPlatform = () => {
   const { apiClient } = useApiClientContext();
   const { mutate, isPending, isSuccess, error, data } = useMutation({
-    mutationFn: apiClient?.api.platformsDelete,
+    mutationFn: apiClient?.api.deletePlatform,
   });
   const validationErrors = useGetValidationErrors(error);
 

@@ -1,4 +1,4 @@
-import { HostPortBinding } from '@/api/_generated';
+import { HostPortBinding } from '@/api/generated/api.types';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { EthernetPort, Link } from 'lucide-react';
 

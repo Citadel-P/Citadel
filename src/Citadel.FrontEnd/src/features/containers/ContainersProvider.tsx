@@ -1,4 +1,4 @@
-import { ContainerView } from '@/api/_generated';
+import { ContainerView } from '@/api/generated/api.types';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useContainersGroup } from './hooks/useContainersGroup';
 import { useParams } from 'react-router';

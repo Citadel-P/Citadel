@@ -99,6 +99,11 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
         crumbs.push({ title: 'Registries', link: '/registries' });
         crumbs.push({ title: 'Edit Registry', isActive: true });
       },
+      [AppPaths.deployments]: () => crumbs.push({ title: 'Deployments', isActive: true }),
+      [AppPaths.addDeployment]: () => {
+        crumbs.push({ title: 'Deployments', link: '/deployments' });
+        crumbs.push({ title: 'Add Deployment', isActive: true });
+      },
       [AppPaths.images]: () => {
         crumbs.push({ title: 'Platforms', link: '/' });
         crumbs.push({ title: currentPlatform?.name ?? '', link: `/platforms/${currentPlatform?.id}` });
@@ -244,7 +249,7 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
                     {crumb.badge.title}
                   </Badge>
                 )}
-                {i < generateCrumbs.length - 1 && <BreadcrumbSeparator className='text-[1px]' />}
+                {i < generateCrumbs.length - 1 && <BreadcrumbSeparator className="text-[1px]" />}
               </Fragment>
             ))}
           </BreadcrumbList>

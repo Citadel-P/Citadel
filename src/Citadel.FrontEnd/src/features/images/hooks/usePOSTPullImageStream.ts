@@ -1,7 +1,7 @@
 import { useApiClientContext } from '@/api/ApiClientContext';
 import { useMutation } from '@tanstack/react-query';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
-import { PullImageRequest } from '@/api/_generated';
+import { PullImageRequest } from '@/api/generated/api.types';
 import { Cancellable } from '@/api/models';
 import { useAuthContext } from '@/features/auth/AuthContext';
 

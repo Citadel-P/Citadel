@@ -1,13 +1,11 @@
-import { RegistryInput, RegistryType, RegistryWithConfigView } from '@/api/_generated';
+import { RegistryInput, RegistryType, RegistryWithConfigView } from '@/api/generated/api.types';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import DockerHubConfiguration from './DockerHubConfiguration';
 import GhcrConfiguration from './GhcrConfiguration';
 import { useNavigate, useParams } from 'react-router';
-import { usePOSTRegistry } from './hooks/usePOSTRegistry';
-import { usePATCHRegistry } from './hooks/usePATCHRegistry';
 import { FormMode, IRegistryProvider, RegistryFormContext } from './RegistryFormContext';
-import { useGetRegistryWithConfig } from './hooks/useGETRegitryWithConfig';
+import { useMutate, useRead } from '@/lib/hooks';
 
 export const RegistryFormProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const defaultProviders: IRegistryProvider[] = [
@@ -44,21 +42,21 @@ export const RegistryFormProvider: React.FC<{ children?: React.ReactNode }> = ({
   const navigate = useNavigate();
   const { registryId } = useParams();
   const mode: FormMode = registryId ? 'edit' : 'add';
-  const { data, isLoading } = useGetRegistryWithConfig(registryId);
+  const { data, isLoading } = useRead('getRegistryWithConfig', { id: registryId });
   const {
     mutate: requestCreate,
     validationErrors: createErrors,
     isSuccess: createIsSuccess,
     isPending: createIsPending,
     data: createData,
-  } = usePOSTRegistry();
+  } = useMutate('createRegistry'); //usePOSTRegistry();
   const {
     mutate: requestPatch,
     validationErrors: patchErrors,
     isSuccess: patchIsSuccess,
     isPending: patchIsPending,
     data: patchData,
-  } = usePATCHRegistry();
+  } = useMutate('updateRegistry'); //usePATCHRegistry();
   const [currentProvider, setCurrentProvider] = useState<string>(RegistryType.DockerHub);
   const [registry, setRegistry] = useState<RegistryWithConfigView | undefined>(undefined);
   let providers = [...defaultProviders];
@@ -102,9 +100,9 @@ export const RegistryFormProvider: React.FC<{ children?: React.ReactNode }> = ({
       const payload = {
         ...data,
         type: registry?.type,
-        configuration: { $type: registry?.configuration.$type, ...data.configuration },
+        configuration: { $type: registry?.configuration?.$type, ...data.configuration },
       };
-      requestPatch({ id: registry?.id, data: payload as RegistryInput });
+      requestPatch({ id: registry?.id ?? '', data: payload as RegistryInput });
     }
   }
 

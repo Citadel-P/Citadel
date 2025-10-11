@@ -1,4 +1,4 @@
-import { ImageView } from '@/api/_generated';
+import { ImageView } from '@/api/generated/api.types';
 
 export const useAvailableActions = (images: ImageView[] | undefined) => {
   const actions: ImageActionsState = {

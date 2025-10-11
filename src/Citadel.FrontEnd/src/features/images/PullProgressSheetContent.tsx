@@ -1,4 +1,4 @@
-import { PullImageRequest, PullImageResult } from '@/api/_generated';
+import { PullImageRequest, PullImageResult } from '@/api/generated/api.types';
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Check, CircleX, LoaderCircle } from 'lucide-react';
 import { usePOSTPullImageStream } from './hooks/usePOSTPullImageStream';

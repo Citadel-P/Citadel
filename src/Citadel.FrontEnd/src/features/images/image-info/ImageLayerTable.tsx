@@ -1,4 +1,4 @@
-import { HistoryImageResult, InspectImageView } from '@/api/_generated';
+import { HistoryImageResult, InspectImageView } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { byteTransform } from '@/lib/bytes.helper';
 import { truncate } from '@/lib/truncate';

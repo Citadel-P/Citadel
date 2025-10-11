@@ -21,14 +21,14 @@ internal static class WebApiModule
     public static IServiceCollection RegisterWebApiModule(this IServiceCollection services, IConfiguration configuration)
     {
         services
-            .AddOpenApi(cfg =>
+            .AddOpenApi(options =>
             {
-                cfg.AddSchemaTransformer<EnumSchemaFilter>();
-                cfg.AddDocumentTransformer<ServerTransformer>();
-                cfg.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
-                cfg.AddOperationTransformer<AddCookieOperationTransformer>();
-                cfg.AddOperationTransformer<ProduceCookieOperationTransformer>();
-                cfg.AddOperationTransformer<ExampleOperationTransformer>();
+                options.AddSchemaTransformer<EnumSchemaFilter>();
+                options.AddDocumentTransformer<ServerTransformer>();
+                options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
+                options.AddOperationTransformer<AddCookieOperationTransformer>();
+                options.AddOperationTransformer<ProduceCookieOperationTransformer>();
+                options.AddOperationTransformer<ExampleOperationTransformer>();
             })
             .AddCors();
 

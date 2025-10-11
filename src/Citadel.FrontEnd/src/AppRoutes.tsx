@@ -30,6 +30,9 @@ export const AppPaths: Record<string, string> = {
   volume: 'platforms/:platformId/volumes/:resourceId',
   volumeInspect: 'platforms/:platformId/volumes/:resourceId/inspect',
   addVolume: 'platforms/:platformId/volumes/add',
+  deployments: 'deployments',
+  addDeployment: 'deployments/add',
+  editDeployment: 'deployments/edit/:deploymentId',
 };
 
 export const AppRoutes = () => {
@@ -119,6 +122,24 @@ export const AppRoutes = () => {
           path: AppPaths.editRegistry,
           lazy: async () => {
             return { Component: (await import('@/pages/registries-page')).RegistryFormPage };
+          },
+        },
+        {
+          path: AppPaths.deployments,
+          lazy: async () => {
+            return { Component: (await import('@/pages/deployments-page')).default };
+          },
+        },
+        {
+          path: AppPaths.addDeployment,
+          lazy: async () => {
+            return { Component: (await import('@/pages/deployments-page')).DeploymentFormPage };
+          },
+        },
+        {
+          path: AppPaths.editDeployment,
+          lazy: async () => {
+            return { Component: (await import('@/pages/deployments-page')).DeploymentFormPage };
           },
         },
         {

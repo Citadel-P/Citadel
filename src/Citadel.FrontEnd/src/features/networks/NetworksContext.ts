@@ -1,7 +1,7 @@
 import { createContext } from 'react';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { IDialogData } from '@/hooks/useDialogState';
-import { DeleteNetworksInput, DockerNetworkResult } from '@/api/_generated';
+import { DeleteNetworksInput, DockerNetworkResult } from '@/api/generated/api.types';
 
 interface IContext {
   selectedRows: DockerNetworkResult[] | undefined;

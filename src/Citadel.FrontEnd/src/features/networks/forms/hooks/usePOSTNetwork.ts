@@ -4,7 +4,7 @@ import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 
 export const usePOSTNetwork = () => {
   const { apiClient } = useApiClientContext();
-  const { mutate, isPending, isSuccess, error, data } = useMutation({ mutationFn: apiClient?.api.networksCreate });
+  const { mutate, isPending, isSuccess, error, data } = useMutation({ mutationFn: apiClient?.api.createNetwork });
   const validationErrors = useGetValidationErrors(error);
 
   return { mutate, isPending, isSuccess, data, validationErrors };

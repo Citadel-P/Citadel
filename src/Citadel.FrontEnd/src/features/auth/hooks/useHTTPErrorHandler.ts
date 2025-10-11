@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { ProblemDetails } from '@/api/_generated';
+import { ProblemDetails } from '@/api/generated/api.types';
 import { toast } from 'sonner';
 
 export function useHTTPErrorHandler() {

@@ -1,4 +1,4 @@
-import { ContainerView, DeleteContainersRequest } from '@/api/_generated';
+import { ContainerView, DeleteContainersRequest } from '@/api/generated/api.types';
 import { useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useDELETEContainers } from '../hooks/useDELETEContainers';

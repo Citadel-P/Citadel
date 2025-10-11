@@ -7,7 +7,7 @@ import { LoaderCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRegistryFormContext } from './RegistryFormContext';
 import { FieldChange } from '@/components/ui/field-change';
-import { RegistryInput } from '@/api/_generated';
+import { RegistryInput } from '@/api/generated/api.types';
 import { getEditedFields } from '@/lib/utils';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';

@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useDELETEVolumes } from './useDELETEVolumes';
-import { DeleteVolumesInput, DockerVolumeResult } from '@/api/_generated';
+import { DeleteVolumesInput, DockerVolumeResult } from '@/api/generated/api.types';
 import { useDialogState } from '@/hooks/useDialogState';
 import { use400ErrorToast } from '@/hooks/use400ErrorToast';
 import { useCallback, useEffect } from 'react';

@@ -1,4 +1,4 @@
-import { DockerHubImageResult, DockerHubTagView, GitHubCrPackageVersion } from '@/api/_generated';
+import { DockerHubImageResult, DockerHubTagView, GitHubCrPackageVersion } from '@/api/generated/api.types';
 import { useState } from 'react';
 
 type AllowedTypes = GitHubCrPackageVersion | DockerHubTagView | DockerHubImageResult;

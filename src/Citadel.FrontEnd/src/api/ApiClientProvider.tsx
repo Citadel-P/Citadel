@@ -1,4 +1,4 @@
-import { Api } from './_generated';
+import { Api } from './generated/api.types';
 import { ApiClientContext } from './ApiClientContext';
 
 export const ApiClientProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {

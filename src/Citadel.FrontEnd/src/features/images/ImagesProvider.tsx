@@ -1,17 +1,17 @@
-import { useGETRegistries } from '../registries/hooks/useGETRegistries';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { ImageView, RegistryView } from '@/api/_generated';
+import { ImageView, RegistryView } from '@/api/generated/api.types';
 import { useQueryClient } from '@tanstack/react-query';
 import { ImagesContext } from './ImagesContext';
 import { useDeleteImageDialog } from './hooks/useDeleteImageDialog';
 import { useRunImageDialog } from './hooks/useRunImageDialog';
 import { useImagesGroup } from './hooks/useImagesGroup';
 import { useParams } from 'react-router';
+import { useRead } from '@/lib/hooks';
 
 export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const client = useQueryClient();
   const { platformId } = useParams<{ platformId: string }>();
-  const { data, isLoading, isSuccess } = useGETRegistries();
+  const { data, isLoading, isSuccess } = useRead('listRegistries');
 
   const { imagesInfo, isLoading: imagesLoading } = useImagesGroup(platformId);
 

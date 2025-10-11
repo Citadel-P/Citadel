@@ -1,4 +1,4 @@
-import { PlatformDescriptorDockerPlatformDescriptor, PlatformStatus, PlatformView } from '@/api/_generated';
+import { PlatformDescriptorDockerPlatformDescriptor, PlatformStatus, PlatformView } from '@/api/generated/api.types';
 import DockerIcon from '@/assets/docker.svg';
 import { Link } from 'react-router';
 import { Power, PowerOff, CirclePause, Pencil, Trash2 } from 'lucide-react';
@@ -118,20 +118,20 @@ const DockerPlatform = ({ platform }: { platform: PlatformView }) => {
               <div className="flex flex-wrap gap-x-3">
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
                   <Link to={'/platforms/' + platform.id + '/containers'}>
-                    {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containerCount?? '-'}{' '}
+                    {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containerCount ?? '-'}{' '}
                     containers
                   </Link>
                 </div>
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  <Link to={'/platforms/' + platform.id + '/images'}>{platform?.imageCount?? '-'} images</Link>
+                  <Link to={'/platforms/' + platform.id + '/images'}>{platform?.imageCount ?? '-'} images</Link>
                 </div>
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  <Link to={'/platforms/' + platform.id + '/volumes'}>{platform?.volumeCount?? '-'} volumes</Link>
+                  <Link to={'/platforms/' + platform.id + '/volumes'}>{platform?.volumeCount ?? '-'} volumes</Link>
                 </div>
                 <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
                   <Link to={'/platforms/' + platform.id + '/networks'}>{platform?.networkCount ?? '-'} networks</Link>
                 </div>
-                <div className="truncate text-xs text-muted-foreground">{platform?.cpuCount?? '-'} CPU</div>
+                <div className="truncate text-xs text-muted-foreground">{platform?.cpuCount ?? '-'} CPU</div>
                 <div className="truncate text-xs text-muted-foreground">{byteTransform(platform?.memTotal)} RAM</div>
               </div>
             </div>

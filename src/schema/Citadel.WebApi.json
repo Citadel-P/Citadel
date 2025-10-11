@@ -11,7 +11,7 @@
           "Authentication"
         ],
         "summary": "Request a new access token",
-        "operationId": "Authentication_RefreshToken",
+        "operationId": "refreshToken",
         "parameters": [
           {
             "name": "refresh_token",
@@ -73,7 +73,7 @@
           "Authentication"
         ],
         "summary": "Check user credentials and issue an access token on successful login",
-        "operationId": "Authentication_Login",
+        "operationId": "login",
         "requestBody": {
           "content": {
             "application/json": {
@@ -134,7 +134,7 @@
           "Authentication"
         ],
         "summary": "Log out",
-        "operationId": "Authentication_Logout",
+        "operationId": "logout",
         "parameters": [
           {
             "name": "refresh_token",
@@ -214,7 +214,7 @@
           "Containers"
         ],
         "summary": "Get container by Id",
-        "operationId": "Containers_GetById",
+        "operationId": "getContainer",
         "parameters": [
           {
             "name": "id",
@@ -300,7 +300,7 @@
           "Containers"
         ],
         "summary": "Get basic container details",
-        "operationId": "Containers_GetInfo",
+        "operationId": "getContainerInfo",
         "parameters": [
           {
             "name": "id",
@@ -386,7 +386,7 @@
           "Containers"
         ],
         "summary": "Get container stats",
-        "operationId": "Containers_GetStats",
+        "operationId": "getContainerStats",
         "parameters": [
           {
             "name": "id",
@@ -473,7 +473,7 @@
           "Containers"
         ],
         "summary": "Inspect a container",
-        "operationId": "Containers_Inspect",
+        "operationId": "inspectContainer",
         "parameters": [
           {
             "name": "id",
@@ -560,7 +560,7 @@
           "Containers"
         ],
         "summary": "Create a container",
-        "operationId": "Containers_Create",
+        "operationId": "createContainer",
         "requestBody": {
           "content": {
             "application/json": {
@@ -644,7 +644,7 @@
           "Containers"
         ],
         "summary": "Delete the given container(s)",
-        "operationId": "Containers_DeleteContainers",
+        "operationId": "deleteContainers",
         "requestBody": {
           "content": {
             "application/json": {
@@ -723,7 +723,7 @@
           "Containers"
         ],
         "summary": "Starts the given container(s)",
-        "operationId": "Containers_StartContainers",
+        "operationId": "startContainers",
         "requestBody": {
           "content": {
             "application/json": {
@@ -805,7 +805,7 @@
           "Containers"
         ],
         "summary": "Stops the given container(s)",
-        "operationId": "Containers_StopContainers",
+        "operationId": "stopContainers",
         "requestBody": {
           "content": {
             "application/json": {
@@ -887,7 +887,7 @@
           "Containers"
         ],
         "summary": "Pause the given container(s)",
-        "operationId": "Containers_PauseContainers",
+        "operationId": "pauseContainers",
         "requestBody": {
           "content": {
             "application/json": {
@@ -969,7 +969,7 @@
           "Containers"
         ],
         "summary": "Restarts the given container(s)",
-        "operationId": "Containers_RestartContainers",
+        "operationId": "restartContainers",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1050,8 +1050,8 @@
         "tags": [
           "Containers"
         ],
-        "summary": "Unpause the given container(s)",
-        "operationId": "Containers_UnpauseContainers",
+        "summary": "Resume a container(s) which has been paused",
+        "operationId": "unpauseContainers",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1133,7 +1133,7 @@
           "Platforms"
         ],
         "summary": "List all platforms",
-        "operationId": "Platforms_List",
+        "operationId": "listPlatforms",
         "responses": {
           "500": {
             "description": "Internal Server Error",
@@ -1207,7 +1207,7 @@
           "Platforms"
         ],
         "summary": "Create a platform",
-        "operationId": "Platforms_Create",
+        "operationId": "createPlatform",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1291,7 +1291,7 @@
           "Platforms"
         ],
         "summary": "Delete a platform",
-        "operationId": "Platforms_Delete",
+        "operationId": "deletePlatform",
         "parameters": [
           {
             "name": "id",
@@ -1372,7 +1372,7 @@
           "Platforms"
         ],
         "summary": "Get platform by Id",
-        "operationId": "Platforms_GetById",
+        "operationId": "getPlatfom",
         "parameters": [
           {
             "name": "id",
@@ -1458,7 +1458,7 @@
           "Platforms"
         ],
         "summary": "Patch a platform",
-        "operationId": "Platforms_Patch",
+        "operationId": "updatePlatform",
         "parameters": [
           {
             "name": "id",
@@ -1571,7 +1571,7 @@
           "Platforms"
         ],
         "summary": "Returns the list of containers of the given platform",
-        "operationId": "Platforms_ListContainers",
+        "operationId": "listContainers",
         "parameters": [
           {
             "name": "id",
@@ -1653,13 +1653,13 @@
         ]
       }
     },
-    "/api/v1/registries/all": {
+    "/api/v1/registries": {
       "get": {
         "tags": [
           "Registries"
         ],
         "summary": "Get all registries",
-        "operationId": "Registries_GetAll",
+        "operationId": "listRegistries",
         "responses": {
           "500": {
             "description": "Internal Server Error",
@@ -1717,6 +1717,234 @@
             "Bearer": [ ]
           }
         ]
+      },
+      "post": {
+        "tags": [
+          "Registries"
+        ],
+        "summary": "Create a registry",
+        "description": "A discriminator should be provided in the request, this discriminator is based on RegistryType enum ",
+        "operationId": "createRegistry",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistryInput"
+              },
+              "examples": {
+                "Azure": {
+                  "value": {
+                    "Name": "my-azure-registry",
+                    "Url": "myproject.azurecr.io",
+                    "Type": "Azure",
+                    "Configuration": {
+                      "$type": "Azure",
+                      "UserName": "johnDoe",
+                      "Password": "myPassword"
+                    }
+                  }
+                },
+                "AWS": {
+                  "value": {
+                    "Name": "my-ecr-registry",
+                    "Url": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
+                    "Type": "AWS",
+                    "Configuration": {
+                      "$type": "AWS",
+                      "AccessKey": "",
+                      "AuthenticationRequired": true,
+                      "SecretAccessKey": "",
+                      "Region": "us-east-2"
+                    }
+                  }
+                },
+                "Gitlab": {
+                  "value": {
+                    "Name": "",
+                    "Url": "https://registry.gitlab.com",
+                    "Type": "Gitlab",
+                    "Configuration": {
+                      "$type": "Gitlab",
+                      "UserName": "",
+                      "PAT": "",
+                      "InstanceUrl": "https://gitlab.com"
+                    }
+                  }
+                },
+                "DockerHub": {
+                  "value": {
+                    "Name": "my-custom-registry",
+                    "Url": "",
+                    "Type": "DockerHub",
+                    "Configuration": {
+                      "$type": "DockerHub",
+                      "UserName": "",
+                      "PAT": ""
+                    }
+                  }
+                },
+                "GitHub": {
+                  "value": {
+                    "Name": "my-custom-registry",
+                    "Url": "",
+                    "Type": "GitHub",
+                    "Configuration": {
+                      "$type": "GitHub",
+                      "Name": "organization or user name",
+                      "PAT": "",
+                      "Type": "Organization"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Registries"
+        ],
+        "summary": "Delete registries",
+        "operationId": "deleteRegistry",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteRegistriesInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/registries/{id}": {
@@ -1725,7 +1953,7 @@
           "Registries"
         ],
         "summary": "Get registry by ID",
-        "operationId": "Registries_GetById",
+        "operationId": "getRegistry",
         "parameters": [
           {
             "name": "id",
@@ -1810,9 +2038,9 @@
         "tags": [
           "Registries"
         ],
-        "summary": "Patch a registry",
+        "summary": "Update a registry",
         "description": "A discriminator should be provided in the request, this discriminator is based on RegistryType enum",
-        "operationId": "Registries_Patch",
+        "operationId": "updateRegistry",
         "parameters": [
           {
             "name": "id",
@@ -2057,7 +2285,7 @@
           "Registries"
         ],
         "summary": "Get registry and it's configuration",
-        "operationId": "Registries_GetWithConfig",
+        "operationId": "getRegistryWithConfig",
         "parameters": [
           {
             "name": "id",
@@ -2139,243 +2367,13 @@
         ]
       }
     },
-    "/api/v1/registries": {
-      "post": {
-        "tags": [
-          "Registries"
-        ],
-        "summary": "Create a registry",
-        "description": "A discriminator should be provided in the request, this discriminator is based on RegistryType enum ",
-        "operationId": "Registries_Create",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegistryInput"
-              },
-              "examples": {
-                "Azure": {
-                  "value": {
-                    "Name": "my-azure-registry",
-                    "Url": "myproject.azurecr.io",
-                    "Type": "Azure",
-                    "Configuration": {
-                      "$type": "Azure",
-                      "UserName": "johnDoe",
-                      "Password": "myPassword"
-                    }
-                  }
-                },
-                "AWS": {
-                  "value": {
-                    "Name": "my-ecr-registry",
-                    "Url": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
-                    "Type": "AWS",
-                    "Configuration": {
-                      "$type": "AWS",
-                      "AccessKey": "",
-                      "AuthenticationRequired": true,
-                      "SecretAccessKey": "",
-                      "Region": "us-east-2"
-                    }
-                  }
-                },
-                "Gitlab": {
-                  "value": {
-                    "Name": "",
-                    "Url": "https://registry.gitlab.com",
-                    "Type": "Gitlab",
-                    "Configuration": {
-                      "$type": "Gitlab",
-                      "UserName": "",
-                      "PAT": "",
-                      "InstanceUrl": "https://gitlab.com"
-                    }
-                  }
-                },
-                "DockerHub": {
-                  "value": {
-                    "Name": "my-custom-registry",
-                    "Url": "",
-                    "Type": "DockerHub",
-                    "Configuration": {
-                      "$type": "DockerHub",
-                      "UserName": "",
-                      "PAT": ""
-                    }
-                  }
-                },
-                "GitHub": {
-                  "value": {
-                    "Name": "my-custom-registry",
-                    "Url": "",
-                    "Type": "GitHub",
-                    "Configuration": {
-                      "$type": "GitHub",
-                      "Name": "organization or user name",
-                      "PAT": "",
-                      "Type": "Organization"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegistryView"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "Registries"
-        ],
-        "summary": "Delete registries",
-        "operationId": "Registries_Delete",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeleteRegistriesInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/images/{platformId}/local-images": {
+    "/api/v1/images/{platformId}": {
       "get": {
         "tags": [
           "Images"
         ],
         "summary": "Get all local images for the given platform",
-        "operationId": "Images_GetAllLocalImages",
+        "operationId": "listImages",
         "parameters": [
           {
             "name": "platformId",
@@ -2453,7 +2451,7 @@
           "Images"
         ],
         "summary": "List external repositories of the given registry",
-        "operationId": "Images_GetExternalRepositories",
+        "operationId": "getExternalRepositories",
         "parameters": [
           {
             "name": "registryName",
@@ -2533,7 +2531,7 @@
           "Images"
         ],
         "summary": "List versions of GHCR package",
-        "operationId": "Images_GetGhcrPackageVersions",
+        "operationId": "getGhcrPackageVersions",
         "parameters": [
           {
             "name": "registryName",
@@ -2622,7 +2620,7 @@
           "Images"
         ],
         "summary": "List DockerHub repositories",
-        "operationId": "Images_GetDockerHubRepositories",
+        "operationId": "getDockerHubRepositories",
         "parameters": [
           {
             "name": "registryName",
@@ -2702,7 +2700,7 @@
           "Images"
         ],
         "summary": "List DockerHub repository tags",
-        "operationId": "Images_GetDockerHubRepositoryTags",
+        "operationId": "getDockerHubRepositoryTags",
         "parameters": [
           {
             "name": "registryName",
@@ -2791,7 +2789,7 @@
           "Images"
         ],
         "summary": "Search for DockerHub public images. If the image name is empty, a default list of Docker images will be returned.",
-        "operationId": "Images_GetDockerHubPublicImages",
+        "operationId": "getDockerHubPublicImages",
         "parameters": [
           {
             "name": "imageName",
@@ -2869,7 +2867,7 @@
           "Images"
         ],
         "summary": "Inspect an image",
-        "operationId": "Images_Inspect",
+        "operationId": "inspectImage",
         "parameters": [
           {
             "name": "platformId",
@@ -2964,7 +2962,7 @@
           "Images"
         ],
         "summary": "Get image info",
-        "operationId": "Images_GetImageInfo",
+        "operationId": "getImageInfo",
         "parameters": [
           {
             "name": "platformId",
@@ -3059,7 +3057,7 @@
           "Images"
         ],
         "summary": "Pull an image from a registry and returns logs as a stream",
-        "operationId": "Images_PullImage",
+        "operationId": "pullImage",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3138,7 +3136,7 @@
           "Images"
         ],
         "summary": "Remove an image(s), along with any untagged parent images that were referenced by that image",
-        "operationId": "Images_Delete",
+        "operationId": "deleteImage",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3218,16 +3216,16 @@
         ]
       }
     },
-    "/api/v1/networks/{id}": {
+    "/api/v1/networks/{platformId}": {
       "get": {
         "tags": [
           "Networks"
         ],
         "summary": "List all networks",
-        "operationId": "Networks_List",
+        "operationId": "listNetworks",
         "parameters": [
           {
-            "name": "id",
+            "name": "platformId",
             "in": "path",
             "description": "The platform id",
             "required": true,
@@ -3340,7 +3338,7 @@
           "Networks"
         ],
         "summary": "Inspect a network",
-        "operationId": "Networks_Inspect",
+        "operationId": "inspectNetwork",
         "parameters": [
           {
             "name": "platformId",
@@ -3435,7 +3433,7 @@
           "Networks"
         ],
         "summary": "Create a network",
-        "operationId": "Networks_Create",
+        "operationId": "createNetwork",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3519,7 +3517,7 @@
           "Networks"
         ],
         "summary": "Delete a network(s)",
-        "operationId": "Networks_Delete",
+        "operationId": "deleteNetwork",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3592,16 +3590,16 @@
         ]
       }
     },
-    "/api/v1/volumes/{id}": {
+    "/api/v1/volumes/{platformId}": {
       "get": {
         "tags": [
           "Volumes"
         ],
         "summary": "List all volumes",
-        "operationId": "Volumes_List",
+        "operationId": "listVolumes",
         "parameters": [
           {
-            "name": "id",
+            "name": "platformId",
             "in": "path",
             "description": "The platform id",
             "required": true,
@@ -3707,7 +3705,7 @@
           "Volumes"
         ],
         "summary": "Inspect a volume",
-        "operationId": "Volumes_Inspect",
+        "operationId": "inspectVolume",
         "parameters": [
           {
             "name": "platformId",
@@ -3797,89 +3795,12 @@
       }
     },
     "/api/v1/volumes": {
-      "delete": {
-        "tags": [
-          "Volumes"
-        ],
-        "summary": "Delete a volume(s)",
-        "operationId": "Volumes_Delete",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeleteVolumesInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      },
       "post": {
         "tags": [
           "Volumes"
         ],
         "summary": "Create a volume",
-        "operationId": "Volumes_Create",
+        "operationId": "createVolume",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3957,6 +3878,83 @@
             "Bearer": [ ]
           }
         ]
+      },
+      "delete": {
+        "tags": [
+          "Volumes"
+        ],
+        "summary": "Delete a volume(s)",
+        "operationId": "deleteVolumes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteVolumesInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/compose/up": {
@@ -3965,7 +3963,7 @@
           "Compose"
         ],
         "summary": "Deploy a stack",
-        "operationId": "Compose_Up",
+        "operationId": "composeUp",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3996,6 +3994,170 @@
                   "items": {
                     "$ref": "#/components/schemas/ComposeDeploymentEvent"
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/deployments": {
+      "get": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "List all deployments",
+        "operationId": "listDeployments",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/deployments/{deploymentId}": {
+      "get": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Get deployment by Id",
+        "operationId": "getDeployment",
+        "parameters": [
+          {
+            "name": "deploymentId",
+            "in": "path",
+            "description": "The deployment id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentView"
                 }
               }
             }
@@ -5616,6 +5778,498 @@
               "null",
               "boolean"
             ]
+          }
+        }
+      },
+      "DeploymentInfoView": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "activeVersion",
+          "versionCount"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "createdAt": {
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "format": "date-time"
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "activeVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "versionCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "DeploymentScaling": {
+        "required": [
+          "strategy"
+        ],
+        "type": "object",
+        "properties": {
+          "strategy": {
+            "$ref": "#/components/schemas/ScalingStrategy"
+          },
+          "replicas": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32",
+            "default": 1
+          },
+          "maxParallel": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32",
+            "default": 1
+          }
+        }
+      },
+      "DeploymentSource": {
+        "enum": [
+          "UI",
+          "Git",
+          "API",
+          "CLI"
+        ],
+        "type": "string"
+      },
+      "DeploymentSpec": {
+        "required": [
+          "imageId",
+          "target",
+          "name",
+          "workingDir",
+          "user",
+          "memoryLimit",
+          "cpuLimit",
+          "memoryReservation",
+          "autoRemove",
+          "stopTimeout",
+          "restartPolicy",
+          "labels",
+          "envVars",
+          "ports",
+          "volumes",
+          "networks",
+          "entryPoint",
+          "command"
+        ],
+        "type": "object",
+        "properties": {
+          "imageId": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/DeploymentTarget"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "workingDir": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "user": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "memoryLimit": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "float"
+          },
+          "cpuLimit": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "float"
+          },
+          "memoryReservation": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "float"
+          },
+          "autoRemove": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "stopTimeout": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "restartPolicy": {
+            "$ref": "#/components/schemas/ContainerRestartPolicy"
+          },
+          "labels": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "envVars": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "ports": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "volumes": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "networks": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "entryPoint": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "command": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "hostname": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dns": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "deploymentScaling": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DeploymentScaling"
+              }
+            ]
+          },
+          "security": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SecurityConfig"
+              }
+            ]
+          },
+          "loggingConfig": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LoggingConfig"
+              }
+            ]
+          },
+          "healthCheck": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HealthCheckConfig"
+              }
+            ]
+          },
+          "metadata": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "DeploymentStatus": {
+        "enum": [
+          "Created",
+          "Pending",
+          "Deploying",
+          "Running",
+          "Failed",
+          "Succeeded",
+          "Paused",
+          "RolledBack"
+        ],
+        "type": "string"
+      },
+      "DeploymentTarget": {
+        "required": [
+          "platformId",
+          "platformName"
+        ],
+        "type": "object",
+        "properties": {
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platformName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "replicas": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32",
+            "default": 1
+          }
+        }
+      },
+      "DeploymentVersion": {
+        "required": [
+          "version",
+          "createdBy",
+          "spec",
+          "status",
+          "source"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DeploymentStatus"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DeploymentSource"
+          },
+          "rolledBackFromVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "gitRepoUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "gitPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "gitCommitHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "annotations": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "format": "date-time"
+          }
+        }
+      },
+      "DeploymentView": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "activeVersion",
+          "versions"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "createdAt": {
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "format": "date-time"
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "activeVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeploymentVersion"
+            }
+          }
+        }
+      },
+      "DeploymentsView": {
+        "required": [
+          "deployments"
+        ],
+        "type": "object",
+        "properties": {
+          "deployments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeploymentInfoView"
+            }
           }
         }
       },
@@ -7510,8 +8164,7 @@
       },
       "LoggingConfig": {
         "required": [
-          "driver",
-          "options"
+          "driver"
         ],
         "type": "object",
         "properties": {
@@ -7519,7 +8172,10 @@
             "$ref": "#/components/schemas/LoggingDriverType"
           },
           "options": {
-            "type": "object",
+            "type": [
+              "null",
+              "object"
+            ],
             "additionalProperties": {
               "type": "string"
             }
@@ -8800,6 +9456,13 @@
           }
         }
       },
+      "ScalingStrategy": {
+        "enum": [
+          "RollingUpdate",
+          "Recreate"
+        ],
+        "type": "string"
+      },
       "SecurityConfig": {
         "required": [
           "privileged",
@@ -9174,6 +9837,9 @@
     },
     {
       "name": "Compose"
+    },
+    {
+      "name": "Deployments"
     }
   ]
 }

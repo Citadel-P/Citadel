@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useAddDockerForm } from './useAddDockerForm';
-import { PutPlatformRequest } from '@/api/_generated';
+import { PutPlatformRequest } from '@/api/generated/api.types';
 import { usePUTDockerPlatform } from './usePUTDockerPlatform';
 import { AlertMessage } from '@/components/ui/alert-message';
 import { LoaderCircle } from 'lucide-react';

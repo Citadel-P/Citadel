@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { ImageView } from '@/api/_generated';
+import { ImageView } from '@/api/generated/api.types';
 import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';

@@ -1,4 +1,4 @@
-import { ContainerInfoView } from '@/api/_generated';
+import { ContainerInfoView } from '@/api/generated/api.types';
 import { useAppContext } from '@/AppContext';
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/ui/PortsDisplay';
@@ -39,7 +39,10 @@ const columns: ColumnDef<ContainerInfoView & { id: string | null } & { statusSna
       <div className=" text-foreground gap-2 flex flex-wrap items-center">
         <Network width={13} height={13} className="text-primary" />
         {Object.entries(row.original.networks).map(([key, value]) => (
-          <Link to={`/platforms/${row.original.platformId}/networks/${formatId(value)}`} key={value} className="table-link">
+          <Link
+            to={`/platforms/${row.original.platformId}/networks/${formatId(value)}`}
+            key={value}
+            className="table-link">
             {key}
           </Link>
         ))}

@@ -5,7 +5,7 @@ import { usePlatformsContext } from './PlatformsContext';
 import { DeletePlatformDialog } from './dialogs/DeletePlatformDialog';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
-import { PlatformType } from '@/api/_generated';
+import { PlatformType } from '@/api/generated/api.types';
 import DockerPlatform from './DockerPlatform';
 
 const Platforms = () => {

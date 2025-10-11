@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { LoaderCircle } from 'lucide-react';
 import { useRegistryFormContext } from './RegistryFormContext';
 import { FieldChange } from '@/components/ui/field-change';
-import { RegistryInput } from '@/api/_generated';
+import { RegistryInput } from '@/api/generated/api.types';
 import { getEditedFields } from '@/lib/utils';
 
 const DockerHubConfiguration = () => {

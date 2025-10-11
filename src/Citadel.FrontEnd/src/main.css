@@ -5,7 +5,6 @@ layer(base);
 
 /** Plugins **/
 
-@plugin "@tailwindcss/forms";
 @plugin "@tailwindcss/typography";
 @plugin "@tailwindcss/aspect-ratio";
 @plugin "tailwind-scrollbar";
@@ -326,24 +325,7 @@ layer(base);
   }
 }
 
-/** Custom Forms **/
-[type='text'],
-[type='email'],
-[type='url'],
-[type='password'],
-[type='number'],
-[type='date'],
-[type='datetime-local'],
-[type='month'],
-[type='search'],
-[type='tel'],
-[type='time'],
-[type='week'],
-[multiple],
-textarea,
-select {
-  @apply w-full rounded-md border border-border bg-background text-sm text-foreground placeholder-muted-foreground focus:z-10 focus:ring-1 focus:outline-hidden;
-}
+
 
 [type='checkbox'],
 [type='radio'] {
@@ -354,7 +336,7 @@ select {
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
     @apply bg-background text-foreground;

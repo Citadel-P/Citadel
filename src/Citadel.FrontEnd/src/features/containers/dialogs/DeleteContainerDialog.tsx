@@ -10,7 +10,7 @@ import { useReducer } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { SwitchSection } from '@/components/ui/SwitchSection';
 import { IDialogData } from '@/hooks/useDialogState';
-import { ContainerView, DeleteContainersRequest } from '@/api/_generated';
+import { ContainerView, DeleteContainersRequest } from '@/api/generated/api.types';
 import { DockerContainerView } from '@/api/models';
 
 // Reducer for managing volume and force states

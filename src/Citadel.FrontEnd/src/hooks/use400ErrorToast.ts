@@ -1,4 +1,4 @@
-import { HttpValidationProblemDetails, ProblemDetails } from '@/api/_generated';
+import { HttpValidationProblemDetails, ProblemDetails } from '@/api/generated/api.types';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 

@@ -19,13 +19,13 @@ public static class Registries
         return EndpointHandlers.HandleResult(result, RegistryView.Map);
     }
 
-    public static async Task<Results<Ok<RegistriesView>, ProblemHttpResult>> GetAll(IMediator mediator, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<RegistriesView>, ProblemHttpResult>> List(IMediator mediator, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAllRegistries(), cancellationToken);
         return EndpointHandlers.HandleResult(result, RegistriesView.Map);
     }
 
-    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> GetById(IMediator mediator, [Description("Registry id")] Guid id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Get(IMediator mediator, [Description("Registry id")] Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetRegistry(id), cancellationToken);
         return EndpointHandlers.HandleResult(result, RegistryView.Map);

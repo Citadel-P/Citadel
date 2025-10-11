@@ -1,4 +1,4 @@
-import { RequestParams } from '@/api/_generated';
+import { RequestParams } from '@/api/generated/api.types';
 import { useApiClientContext } from '@/api/ApiClientContext';
 import { use400ErrorToast } from '@/hooks/use400ErrorToast';
 import { useMutation } from '@tanstack/react-query';
@@ -15,13 +15,13 @@ export const usePATCHContainers = () => {
     mutationFn: ({ action, containersId: data, params }: IArgs) => {
       switch (action) {
         case 'start':
-          return apiClient!.api.containersStartContainers(data, params);
+          return apiClient!.api.startContainers(data, params);
         case 'stop':
-          return apiClient!.api.containersStopContainers(data, params);
+          return apiClient!.api.stopContainers(data, params);
         case 'pause':
-          return apiClient!.api.containersPauseContainers(data, params);
+          return apiClient!.api.pauseContainers(data, params);
         case 'restart':
-          return apiClient!.api.containersRestartContainers(data, params);
+          return apiClient!.api.restartContainers(data, params);
         default:
           throw new Error(`Unsupported action: ${action}`);
       }

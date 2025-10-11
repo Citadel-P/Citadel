@@ -1,16 +1,15 @@
 import { useMemo } from 'react';
 import { matchRoutes, useLocation, useParams } from 'react-router';
 import { AppPaths } from '@/AppRoutes';
-import { useGETPlatform } from './features/platforms/hooks/useGETPlatform';
-import { useGETContainerInfo } from './features/containers/hooks/useGETContainerInfo';
 import { AppContext } from './AppContext';
 import { SignalRProvider } from './SignalRProvider';
+import { useRead } from './lib/hooks';
 
 export const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const { platformId, containerId } = useParams();
-  const { data: platformData, isLoading: platformIsLoading } = useGETPlatform(platformId);
-  const { data: containerData, isLoading: containerIsLoading } = useGETContainerInfo(containerId);
+  const { data: platformData, isLoading: platformIsLoading } = useRead('getPlatfom', { id: platformId });
+  const { data: containerData, isLoading: containerIsLoading } = useRead('getContainerInfo', { id: containerId });
 
   const [{ route }] = useMemo(
     () =>

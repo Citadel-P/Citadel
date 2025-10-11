@@ -12,10 +12,8 @@ import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { useGETExternalRepositories } from './hooks/useGETExternalRepositories';
 import Loader from '@/components/ui/loader';
-import { GitHubCrPackageVersion, IImageRepositoryGitHubPackageResponse } from '@/api/_generated';
-import { useGETPackageVersions } from './hooks/useGETPackageVersions';
+import { GitHubCrPackageVersion, IImageRepositoryGitHubPackageResponse } from '@/api/generated/api.types';
 import { useImagesContext } from './ImagesContext';
 import { fromNow } from '@/lib/dayjs.helper';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +23,7 @@ import { Sheet } from '@/components/ui/sheet';
 import { useSheetState } from './hooks/useSheetState';
 import { PullImageBadge } from '@/components/ui/PullImageBadge';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
+import { useRead } from '@/lib/hooks';
 
 // Column helpers
 const packageColumnHelper = createColumnHelper<IImageRepositoryGitHubPackageResponse>();
@@ -33,7 +32,10 @@ const versionColumnHelper = createColumnHelper<GitHubCrPackageVersion>();
 // Nested table component
 function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubPackageResponse }) {
   const { selectedRegistry } = useImagesContext();
-  const { isLoading, data } = useGETPackageVersions(selectedRegistry?.name, ghPackage?.name);
+  const { isLoading, data } = useRead('getGhcrPackageVersions', {
+    registryName: selectedRegistry?.name,
+    packageName: ghPackage.name,
+  });
   const { sheetState, openSheet, closeSheet } = useSheetState<GitHubCrPackageVersion>();
 
   const versionColumns = useMemo(
@@ -145,7 +147,7 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubP
 }
 
 export default function GhcrImagesTable({ registryName }: { registryName: string }) {
-  const { isLoading, data } = useGETExternalRepositories(registryName);
+  const { isLoading, data } = useRead('getExternalRepositories', { registryName });
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const columns = useMemo(
     () => [

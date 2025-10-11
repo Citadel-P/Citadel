@@ -1,4 +1,4 @@
-import { RegistryConfigurationBaseDockerHubRegistry, RegistryType } from '@/api/_generated';
+import { RegistryConfigurationBaseDockerHubRegistry, RegistryType } from '@/api/generated/api.types';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';

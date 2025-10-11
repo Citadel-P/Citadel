@@ -1,6 +1,6 @@
 import { createContext } from 'react';
-import { Api } from './_generated';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
+import { Api } from './generated/api.types';
 
 interface IContext {
   apiClient: Api<unknown>;

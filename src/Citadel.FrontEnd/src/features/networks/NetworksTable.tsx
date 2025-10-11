@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { DockerNetworkResult } from '@/api/_generated';
+import { DockerNetworkResult } from '@/api/generated/api.types';
 import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -7,16 +7,16 @@ import { truncate } from '@/lib/truncate';
 import { useEffect, useCallback, useMemo } from 'react';
 import { useNetworksContext } from './NetworksContext';
 import { useAppContext } from '@/AppContext';
-import { useGETNetworks } from './hooks/useGETNetworks';
 import DropdownTableMenu from './DropdownTableMenu';
 import { DeleteNetworkDialog } from './dialogs/DeleteNetworkDialog';
 import { NetworkStateIndicator } from './NetworkSateIndicator';
 import { useNavigate, useParams } from 'react-router';
 import { formatId } from '@/lib/utils';
+import { useRead } from '@/lib/hooks';
 
 export default function NetworksTable() {
   const { currentPlatform } = useAppContext();
-  const { data, isLoading, isSuccess } = useGETNetworks(currentPlatform?.id);
+  const { data, isLoading, isSuccess } = useRead('listNetworks', { platformId: currentPlatform?.id });
   const { setSelectedRows, setNetworks, networks, dialogData, setDialogData, requestDelete, deleteIsPending } =
     useNetworksContext();
 

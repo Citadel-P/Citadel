@@ -1,4 +1,4 @@
-import { DockerVolumeResult } from '@/api/_generated';
+import { DockerVolumeResult } from '@/api/generated/api.types';
 import { ActionBarButton } from '@/components/ui/ActionBarButton';
 import { IDialogData } from '@/hooks/useDialogState';
 import { formatId } from '@/lib/utils';

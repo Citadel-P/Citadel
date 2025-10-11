@@ -20,7 +20,7 @@ public static class Platforms
         return EndpointHandlers.HandleResult(result, PlatformsView.Map);
     }
 
-    public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> GetById(IMediator mediator, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<PlatformView>, ProblemHttpResult>> Get(IMediator mediator, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetPlatformById(id), cancellationToken);
         return EndpointHandlers.HandleResult(result, PlatformView.Map);

@@ -15,6 +15,7 @@ using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Auth;
 using WebApi.Routes.Endpoints.Resources.Compose;
 using WebApi.Routes.Endpoints.Resources.Containers;
+using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Networks;
 using WebApi.Routes.Endpoints.Resources.Platforms;
@@ -130,6 +131,17 @@ namespace Application.Models;
 [JsonSerializable(typeof(RegistryWithConfigView))]
 [JsonSerializable(typeof(IEnumerable<ContainerVolumeResult>))]
 [JsonSerializable(typeof(InspectImageView))]
+[JsonSerializable(typeof(DeploymentsView))]
+[JsonSerializable(typeof(IEnumerable<DeploymentInfoView>))]
+[JsonSerializable(typeof(DeploymentView))]
+[JsonSerializable(typeof(IEnumerable<DeploymentVersion>))]
+[JsonSerializable(typeof(DeploymentSpec))]
+[JsonSerializable(typeof(DeploymentTarget))]
+[JsonSerializable(typeof(DeploymentScaling))]
+[JsonSerializable(typeof(SecurityConfig))]
+[JsonSerializable(typeof(DeploymentScaling))]
+[JsonSerializable(typeof(LoggingConfig))]
+[JsonSerializable(typeof(HealthCheckConfig))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

@@ -1,4 +1,4 @@
-import { DockerVolumeResult } from '@/api/_generated';
+import { DockerVolumeResult } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { byteTransform } from '@/lib/bytes.helper';
 import { fromNow } from '@/lib/dayjs.helper';
@@ -24,7 +24,7 @@ const columns: ColumnDef<DockerVolumeResult>[] = [
     accessorKey: 'size',
     header: () => <span>Size</span>,
     cell: ({ row }) => <span>{byteTransform(row.original.usageData?.size, 2)}</span>,
-  }
+  },
 ];
 
 export const VolumeInfoTable = ({ volume }: { volume: DockerVolumeResult | undefined }) => {

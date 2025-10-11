@@ -14,7 +14,7 @@ namespace WebApi.Routes.Endpoints;
 
 public static class Images
 {
-    public static async Task<Results<Ok<ImagesView>, ProblemHttpResult>> GetAllLocalImages(IMediator mediator, [Description("The platform id")] Guid platformId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<ImagesView>, ProblemHttpResult>> ListLocalImages(IMediator mediator, [Description("The platform id")] Guid platformId, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAllLocalImages(platformId), cancellationToken);
         return EndpointHandlers.HandleResult(result, ImagesView.Map);

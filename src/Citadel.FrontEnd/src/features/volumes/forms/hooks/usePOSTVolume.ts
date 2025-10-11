@@ -4,7 +4,7 @@ import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 
 export const usePOSTVolume = () => {
   const { apiClient } = useApiClientContext();
-  const { mutate, isPending, isSuccess, error, data } = useMutation({ mutationFn: apiClient?.api.volumesCreate });
+  const { mutate, isPending, isSuccess, error, data } = useMutation({ mutationFn: apiClient?.api.createVolume });
   const validationErrors = useGetValidationErrors(error);
 
   return { mutate, isPending, isSuccess, data, validationErrors };

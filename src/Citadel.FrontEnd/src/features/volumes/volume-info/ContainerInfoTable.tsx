@@ -1,4 +1,9 @@
-import { ContainerVolumeResult, ContainerStateStatus, DockerVolumeResult, PlatformView } from '@/api/_generated';
+import {
+  ContainerVolumeResult,
+  ContainerStateStatus,
+  DockerVolumeResult,
+  PlatformView,
+} from '@/api/generated/api.types';
 import { useAppContext } from '@/AppContext';
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/ui/PortsDisplay';

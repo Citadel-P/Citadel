@@ -1,4 +1,4 @@
-import { ContainerStateStatus } from '@/api/_generated';
+import { ContainerStateStatus } from '@/api/generated/api.types';
 import { memo } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 

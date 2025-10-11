@@ -1,4 +1,4 @@
-import { Layers, Users, Cable, Bell } from 'lucide-react';
+import { Layers, Users, Cable, Bell, Rocket } from 'lucide-react';
 import { JSX } from 'react';
 import DockerIcon from '@/assets/docker.min.svg';
 interface IMenuItem {
@@ -41,6 +41,11 @@ const MenuItems: IMenuItem[] = [
           { label: 'Teams', route: '/teams' },
           { label: 'Roles', route: '/roles' },
         ],
+      },
+      {
+        icon: <Rocket width={17} height={17} />,
+        label: 'Deployments',
+        route: '/deployments',
       },
       {
         icon: <Cable width={17} height={17} />,

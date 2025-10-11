@@ -3,7 +3,7 @@ import { useDELETENetworks } from './useDELETENetworks';
 import { useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { DeleteNetworksInput, DockerNetworkResult } from '@/api/_generated';
+import { DeleteNetworksInput, DockerNetworkResult } from '@/api/generated/api.types';
 import { useDialogState } from '@/hooks/useDialogState';
 
 export const useDeleteNetworkDialog = () => {

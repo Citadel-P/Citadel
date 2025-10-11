@@ -1,6 +1,6 @@
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { createContext, JSX } from 'react';
-import { RegistryInput, RegistryWithConfigView } from '@/api/_generated';
+import { RegistryInput, RegistryWithConfigView } from '@/api/generated/api.types';
 
 export interface IContext {
   mode: FormMode;

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { HubConnection } from '@microsoft/signalr';
-import { ImagesView, ImageView } from '@/api/_generated';
+import { ImagesView, ImageView } from '@/api/generated/api.types';
 import { useDockerDaemonGroup } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 

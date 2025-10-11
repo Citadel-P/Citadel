@@ -1,4 +1,3 @@
-import { useGETInspect } from '../hooks/useGETInspect';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useNavigate, useParams } from 'react-router';
 import { useCallback, useEffect, useMemo } from 'react';
@@ -6,7 +5,7 @@ import { useAppContext } from '@/AppContext';
 import Loader from '@/components/ui/loader';
 import { VolumeStateIndicator } from '../VolumeStateIndicator';
 import { useDeleteVolumeDialog } from '../hooks/useDeleteVolumeDialog';
-import { DockerVolumeResult } from '@/api/_generated';
+import { DockerVolumeResult } from '@/api/generated/api.types';
 import { Box, Info } from 'lucide-react';
 
 import { DeleteVolumeDialog } from '../dialogs/DeleteVolumeDialog';
@@ -14,13 +13,14 @@ import { VolumeActionButtons } from '../VolumeActionButtons';
 import { ContainerInfoTable } from './ContainerInfoTable';
 import { VolumeInfoTable } from './VolumeInfoTable';
 import { truncate } from '@/lib/truncate';
+import { useRead } from '@/lib/hooks';
 
 const VolumeInfoWrapper = () => {
   const navigate = useNavigate();
   const { route } = useAppContext();
   const { setDialogData, dialogData, deleteIsSuccess, deleteIsPending, requestDelete } = useDeleteVolumeDialog();
   const { platformId, resourceId } = useParams<{ platformId: string; resourceId: string }>();
-  const { data, isLoading } = useGETInspect(platformId ?? null, resourceId ?? null);
+  const { data, isLoading } = useRead('inspectVolume', { name: resourceId, platformId });
 
   useEffect(() => {
     if (deleteIsSuccess) {

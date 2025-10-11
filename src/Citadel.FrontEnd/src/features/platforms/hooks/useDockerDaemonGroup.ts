@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { HubConnection } from '@microsoft/signalr';
-import { ContainerView, ImageView } from '@/api/_generated';
+import { ContainerView, ImageView } from '@/api/generated/api.types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 
 export const useDockerDaemonGroup = (platformId?: string) => {

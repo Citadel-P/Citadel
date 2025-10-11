@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { LoaderCircle } from 'lucide-react';
 import { useAppContext } from '@/AppContext';
-import { DeleteNetworksInput, DockerNetworkResult } from '@/api/_generated';
+import { DeleteNetworksInput, DockerNetworkResult } from '@/api/generated/api.types';
 import { IDialogData } from '@/hooks/useDialogState';
 
 export const DeleteNetworkDialog = ({

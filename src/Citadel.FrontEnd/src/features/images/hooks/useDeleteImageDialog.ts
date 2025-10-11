@@ -1,4 +1,4 @@
-import { DeleteImagesRequest, ImageView } from '@/api/_generated';
+import { DeleteImagesRequest, ImageView } from '@/api/generated/api.types';
 import { useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useDialogState } from '@/hooks/useDialogState';

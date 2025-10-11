@@ -1,5 +1,4 @@
-import { ImageView } from '@/api/_generated';
-import { useGETInspect } from '../hooks/useGETInspect';
+import { ImageView } from '@/api/generated/api.types';
 import { ImageActionButtons } from '../ImageActionButtons';
 import { ImageSateIndicator } from '../ImageStateIndicator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -17,6 +16,7 @@ import { ImageInfoTable } from './ImageInfoTable';
 import { ImageLayerTable } from './ImageLayerTable';
 import Loader from '@/components/ui/loader';
 import { truncate } from '@/lib/truncate';
+import { useRead } from '@/lib/hooks';
 
 const ImageInfoWrapper = () => {
   const navigate = useNavigate();
@@ -24,7 +24,7 @@ const ImageInfoWrapper = () => {
   const { platformId, resourceId } = useParams<{ platformId: string; resourceId: string }>();
   const { runDialogData, setRunDialogData } = useRunImageDialog();
   const { setDialogData, dialogData, deleteIsSuccess, deleteIsPending, requestDelete } = useDeleteImageDialog();
-  const { data, isLoading } = useGETInspect(platformId ?? null, resourceId ?? null);
+  const { data, isLoading } = useRead('inspectImage', { platformId, imageId: resourceId });
 
   const [name, tag] = data?.data.repoTags?.at(0)?.split(':') ?? [];
 

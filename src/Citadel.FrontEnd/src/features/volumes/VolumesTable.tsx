@@ -1,11 +1,10 @@
 import { DataTable } from '@/components/ui/data-table';
-import { DockerVolumeResult } from '@/api/_generated';
+import { DockerVolumeResult } from '@/api/generated/api.types';
 import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useEffect, useCallback, useMemo } from 'react';
 import { useAppContext } from '@/AppContext';
-import { useGETVolumes } from './hooks/useGETVolumes';
 import { useVolumesContext } from './VolumesContext';
 import DropdownTableMenu from './DropdownTableMenu';
 import { DeleteVolumeDialog } from './dialogs/DeleteVolumeDialog';
@@ -13,10 +12,11 @@ import { byteTransform } from '@/lib/bytes.helper';
 import { fromNow } from '@/lib/dayjs.helper';
 import { VolumeStateIndicator } from './VolumeStateIndicator';
 import { useNavigate, useParams } from 'react-router';
+import { useRead } from '@/lib/hooks';
 
 export default function VolumesTable() {
   const { currentPlatform } = useAppContext();
-  const { data, isLoading, isSuccess } = useGETVolumes(currentPlatform?.id);
+  const { data, isLoading, isSuccess } = useRead('listVolumes', { platformId: currentPlatform?.id });
   const { setSelectedRows, setVolumes, volumes, dialogData, setDialogData, requestDelete, deleteIsPending } =
     useVolumesContext();
 
@@ -116,8 +116,12 @@ const columns: ColumnDef<DockerVolumeResult>[] = [
   {
     accessorKey: 'size',
     header: ({ column }) => <SortableCell cellName="Size" column={column} />,
-    cell: ({ row }) => <span className="">{byteTransform(row.original.usageData.size, 2)}</span>,
-    sortingFn: (rowA, rowB) => (rowA.original.usageData.size! < rowB.original.usageData.size! ? 1 : -1),
+    cell: ({ row }) => <span className="">{byteTransform(row.original.usageData?.size, 2)}</span>,
+    sortingFn: (rowA, rowB) => {
+      const sizeA = rowA.original.usageData?.size ?? 0;
+      const sizeB = rowB.original.usageData?.size ?? 0;
+      return sizeA < sizeB ? 1 : -1;
+    },
   },
   {
     id: 'actions',

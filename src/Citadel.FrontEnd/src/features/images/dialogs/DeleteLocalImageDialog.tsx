@@ -11,7 +11,7 @@ import { LoaderCircle } from 'lucide-react';
 import { useAppContext } from '@/AppContext';
 import { SwitchSection } from '@/components/ui/SwitchSection';
 import { IDialogData } from '@/hooks/useDialogState';
-import { DeleteImagesRequest, ImageView } from '@/api/_generated';
+import { DeleteImagesRequest, ImageView } from '@/api/generated/api.types';
 
 export const DeleteLocalImageDialog = ({
   dialogData,

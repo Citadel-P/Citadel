@@ -1,5 +1,6 @@
 ﻿using Application.Features.Containers.Commands;
 using Domain;
+using Domain.Entities;
 
 namespace WebApi.Routes.Endpoints.Resources.Containers;
 
@@ -52,24 +53,3 @@ public sealed record CreateContainerInput(
         );
     }
 }
-
-public sealed record HealthCheckConfig(
-    IEnumerable<string> Test,
-    string Interval = "30s",
-    string Timeout = "5s",
-    int Retries = 3,
-    string StartPeriod = "0s"
-    );
-
-public sealed record LoggingConfig(
-    LoggingDriverType Driver,
-    Dictionary<string, string> Options
-    );
-
-public sealed record SecurityConfig(
-    bool Privileged,
-    List<string> CapAdd,
-    List<string> CapDrop,
-    bool ReadOnlyRootFs,
-    List<string> SecurityOpt
-    );

@@ -1,7 +1,7 @@
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { createContext } from 'react';
 import { IDialogData } from '@/hooks/useDialogState';
-import { DeleteVolumesInput, DockerVolumeResult } from '@/api/_generated';
+import { DeleteVolumesInput, DockerVolumeResult } from '@/api/generated/api.types';
 
 interface IContext {
   selectedRows: DockerVolumeResult[] | undefined;

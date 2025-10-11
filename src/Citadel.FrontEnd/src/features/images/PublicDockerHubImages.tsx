@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Package, Award, Star } from 'lucide-react';
-import { useGETPublicDockerImages } from './hooks/useGETPublicDockerImages';
-import { DockerHubImageResult } from '@/api/_generated';
+import { DockerHubImageResult } from '@/api/generated/api.types';
 import { PullImageBadge } from '@/components/ui/PullImageBadge';
 import { useSheetState } from './hooks/useSheetState';
 import { Sheet } from '@/components/ui/sheet';
@@ -11,11 +10,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { formatNumber } from '@/lib/utils';
 import { SearchField } from '@/components/ui/SearchField';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useRead } from '@/lib/hooks';
 
 export function PublicDockerHubImages() {
   const [searchValue, setSearchValue] = useState<string | undefined>('');
-  const debouncedSearchValue = useDebounce(searchValue, 300);
-  const { data, error, isLoading, isSuccess } = useGETPublicDockerImages(debouncedSearchValue);
+  const imageName = useDebounce(searchValue, 300);
+  const { data, error, isLoading, isSuccess } = useRead('getDockerHubPublicImages', {
+    query: { imageName },
+  });
   const [images, setImages] = useState<DockerHubImageResult[]>();
   const { sheetState, openSheet, closeSheet } = useSheetState<DockerHubImageResult>();
 

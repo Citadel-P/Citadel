@@ -1,11 +1,11 @@
 import { useParams } from 'react-router';
-import { useGETContainerInspect } from './hooks/useGETContainerInspect';
 import { Highlight, themes } from 'prism-react-renderer';
 import { useMemo } from 'react';
+import { useRead } from '@/lib/hooks';
 
 const ContainerInspect = () => {
   const { containerId } = useParams();
-  const { data, isSuccess, isLoading } = useGETContainerInspect(containerId);
+  const { data, isSuccess, isLoading } = useRead('inspectContainer', { id: containerId });
 
   // Memoize the code to avoid recalculating it on every render
   const code = useMemo(() => {
