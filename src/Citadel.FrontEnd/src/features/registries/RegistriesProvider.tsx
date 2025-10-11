@@ -1,15 +1,14 @@
-import { RegistryView } from '@/api/generated/api.types';
+import { DeleteRegistriesInput, RegistryView } from '@/api/generated/api.types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useDELETERegistries } from './hooks/useDELETERegistries';
 import { toast } from 'sonner';
 import { useDialogState } from '@/hooks/useDialogState';
 import { RegistriesContext } from './RegistriesContext';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRead } from '@/lib/hooks';
+import { useMutate, useRead } from '@/lib/hooks';
 
 export const RegistriesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const client = useQueryClient();
-  const { mutate, isPending: deleteIsPending, isSuccess: deleteIsSuccess } = useDELETERegistries();
+  const { mutate, isPending: deleteIsPending, isSuccess: deleteIsSuccess } = useMutate('deleteRegistries');
   const { data, isLoading, isSuccess } = useRead('listRegistries');
 
   const [selectedRows, setSelectedRows] = useState<RegistryView[] | undefined>([]);
@@ -33,7 +32,7 @@ export const RegistriesProvider: React.FC<{ children?: React.ReactNode }> = ({ c
 
   const requestDelete = useCallback(
     (ids: string[]) => {
-      mutate({ ids });
+      mutate({ ids } as DeleteRegistriesInput);
     },
     [mutate],
   );

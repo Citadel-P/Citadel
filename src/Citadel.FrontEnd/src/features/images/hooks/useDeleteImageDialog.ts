@@ -2,14 +2,14 @@ import { DeleteImagesRequest, ImageView } from '@/api/generated/api.types';
 import { useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useDialogState } from '@/hooks/useDialogState';
-import { useDELETEImages } from './useDELETEImages';
 import { use400ErrorToast } from '@/hooks/use400ErrorToast';
 import { useQueryClient } from '@tanstack/react-query';
+import { useMutate } from '@/lib/hooks';
 
 export const useDeleteImageDialog = () => {
   const client = useQueryClient();
   const { dialogData, setDialogData } = useDialogState<ImageView>();
-  const { mutate, isSuccess: deleteIsSuccess, isPending: deleteIsPending, data, error } = useDELETEImages();
+  const { mutate, isSuccess: deleteIsSuccess, isPending: deleteIsPending, data, error } = useMutate('deleteImages');
 
   use400ErrorToast(error, 'The selected image(s) could not be deleted (status code: 400).', on400ErrorHandled);
 

@@ -91,30 +91,42 @@ export function useMutate<TResource extends keyof ApiFnMap>(
   >,
 ) {
   const { apiClient } = useApiClientContext();
-  const resDef = resources[resource as keyof typeof resources];
+  const resDef = resources[resource];
   if (!resDef) throw new Error(`Unknown resource: ${String(resource)}`);
 
-  const fn = apiClient.api[resource] as ApiFn<TResource>;
+  const fn = apiClient.api[resource] as ApiFn<TResource>
   if (!WRITE_METHODS.includes(resDef.method as (typeof WRITE_METHODS)[number])) {
     throw new Error(`useMutate can only be used with write endpoints, got ${resDef.method}`);
   }
 
   const mutation = useMutation<Awaited<ReturnType<typeof fn>>, Error, MutateVariables<TResource>>({
     ...options,
-    mutationFn: ((variables: MutateVariables<TResource>) => {
-      const args = resDef.params.map((param) => variables[param as keyof MutateVariables<TResource>]);
+    mutationFn: ((variables: any) => {
+      let args: any[];
+
+      if (resDef.params.length === 1) {
+        args = [variables];
+      } else if (resDef.params.length === 2) {
+        if (variables && typeof variables === 'object' && 'data' in variables) {
+          args = [variables.data, variables.params ?? {}];
+        } else {
+          args = [variables, {}];
+        }
+      } else {
+        args = resDef.params.map((param) => variables[param]);
+      }
       return fn(...args);
-    }) as unknown as MutationFunction<Awaited<ReturnType<typeof fn>>, MutateVariables<TResource>>,
+    }) as MutationFunction<Awaited<ReturnType<typeof fn>>, MutateVariables<TResource>>,
   });
 
   const validationErrors = useGetValidationErrors(mutation.error);
 
-  return { ...mutation, validationErrors } as UseMutationResult<
-    Awaited<ReturnType<typeof fn>>,
-    Error,
-    MutateVariables<TResource>,
-    unknown
-  > & { validationErrors: ReturnType<typeof useGetValidationErrors> };
+  return {
+    ...mutation,
+    validationErrors,
+  } as UseMutationResult<Awaited<ReturnType<typeof fn>>, Error, MutateVariables<TResource>, unknown> & {
+    validationErrors: ReturnType<typeof useGetValidationErrors>;
+  };
 }
 
 export type LocalStorageSetter<T> = (state: T) => T;

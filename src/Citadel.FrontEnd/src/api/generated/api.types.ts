@@ -2511,7 +2511,7 @@ export class Api<
      * No description
      *
      * @tags Registries
-     * @name DeleteRegistry
+     * @name DeleteRegistries
      * @summary Delete registries
      * @request DELETE:/api/v1/registries
      * @secure
@@ -2522,7 +2522,10 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    deleteRegistry: (data: DeleteRegistriesInput, params: RequestParams = {}) =>
+    deleteRegistries: (
+      data: DeleteRegistriesInput,
+      params: RequestParams = {},
+    ) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/registries`,
         method: "DELETE",
@@ -2885,7 +2888,7 @@ export class Api<
      * No description
      *
      * @tags Images
-     * @name DeleteImage
+     * @name DeleteImages
      * @summary Remove an image(s), along with any untagged parent images that were referenced by that image
      * @request DELETE:/api/v1/images
      * @secure
@@ -2896,7 +2899,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    deleteImage: (data: DeleteImagesRequest, params: RequestParams = {}) =>
+    deleteImages: (data: DeleteImagesRequest, params: RequestParams = {}) =>
       this.request<
         DeleteImageResult,
         HttpValidationProblemDetails | ProblemDetails
@@ -3010,7 +3013,7 @@ export class Api<
      * No description
      *
      * @tags Networks
-     * @name DeleteNetwork
+     * @name DeleteNetworks
      * @summary Delete a network(s)
      * @request DELETE:/api/v1/networks
      * @secure
@@ -3021,7 +3024,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    deleteNetwork: (data: DeleteNetworksInput, params: RequestParams = {}) =>
+    deleteNetworks: (data: DeleteNetworksInput, params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/networks`,
         method: "DELETE",

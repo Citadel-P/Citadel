@@ -1,11 +1,11 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useApiClientContext } from '@/api/ApiClientContext';
 import { useHTTPErrorHandler } from './hooks/useHTTPErrorHandler';
-import { usePOSTLogout } from './hooks/usePOSTLogout';
 import { useTokenRefresh } from './hooks/useTokenRefresh';
 import { AuthContext } from './AuthContext';
 import { toast } from 'sonner';
 import { ProblemDetails } from '@/api/generated/api.types';
+import { useMutate } from '@/lib/hooks';
 
 export const ACCESS_TOKEN_KEY = 'access_token';
 const storedJwt = sessionStorage.getItem(ACCESS_TOKEN_KEY);
@@ -13,7 +13,7 @@ const storedJwt = sessionStorage.getItem(ACCESS_TOKEN_KEY);
 export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   useHTTPErrorHandler();
   const { apiClient } = useApiClientContext();
-  const { mutate: logout } = usePOSTLogout();
+  const { mutate: logout } = useMutate('logout');
   const [accessToken, setAccessToken] = useState<string | undefined>(storedJwt ?? undefined);
   const isAuthenticated = useMemo(() => accessToken != null, [accessToken]);
   const { data, isSuccess, error } = useTokenRefresh(accessToken, isAuthenticated);

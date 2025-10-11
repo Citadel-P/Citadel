@@ -1,16 +1,16 @@
 import { useParams } from 'react-router';
-import { useGetContainerStats } from './hooks/useGetContainerStats';
 import { ContainerStateStatus, ContainerStatView } from '@/api/generated/api.types';
 import { useEffect, useMemo, useState } from 'react';
 import { ContainerStatsContext } from './ContainerStatsContext';
 import { DockerContainerView } from '@/api/models';
+import { useRead } from '@/lib/hooks';
 
 export const ContainerStatsProvider: React.FC<{
   children?: React.ReactNode;
   container: DockerContainerView | undefined;
 }> = ({ children, container }) => {
   const { containerId } = useParams<{ containerId: string }>();
-  const { data, isSuccess, isLoading } = useGetContainerStats(containerId);
+  const { data, isSuccess, isLoading } = useRead('getContainerStats', { id: containerId });
   const [stats, setStats] = useState<ContainerStatView[]>([]);
 
   useEffect(() => {

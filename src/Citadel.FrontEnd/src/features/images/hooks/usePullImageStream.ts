@@ -5,7 +5,7 @@ import { PullImageRequest } from '@/api/generated/api.types';
 import { Cancellable } from '@/api/models';
 import { useAuthContext } from '@/features/auth/AuthContext';
 
-export const usePOSTPullImageStream = (onChunkReceived: (chunk: string) => void) => {
+export const usePullImageStream = (onChunkReceived: (chunk: string) => void) => {
   const { apiClient } = useApiClientContext();
   const { accessToken } = useAuthContext();
 

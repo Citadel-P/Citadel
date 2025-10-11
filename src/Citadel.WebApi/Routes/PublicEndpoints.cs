@@ -297,7 +297,7 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .WithName("deleteRegistry");
+            .WithName("deleteRegistries");
     }
 
     private static void MapImageEndpoints(RouteGroupBuilder images)
@@ -373,7 +373,7 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .WithName("deleteImage");
+            .WithName("deleteImages");
     }
 
     private static void MapNetworkEndpoints(RouteGroupBuilder networks)
@@ -408,7 +408,7 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .WithName("deleteNetwork");
+            .WithName("deleteNetworks");
     }
 
     private static void MapVolumeEndpoints(RouteGroupBuilder volumes)

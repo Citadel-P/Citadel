@@ -1,7 +1,7 @@
 import { PullImageRequest, PullImageResult } from '@/api/generated/api.types';
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Check, CircleX, LoaderCircle } from 'lucide-react';
-import { usePOSTPullImageStream } from './hooks/usePOSTPullImageStream';
+import { usePullImageStream } from './hooks/usePullImageStream';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useImagesContext } from './ImagesContext';
 import { Highlight, themes } from 'prism-react-renderer';
@@ -26,7 +26,7 @@ export default function PullProgressSheetContent({ sheetProps }: { sheetProps: P
     setStreamData((prevChunks) => [...prevChunks, chunk]);
   }, []);
 
-  const { isPending, isSuccess, error, mutate } = usePOSTPullImageStream(handleChunkReceived);
+  const { isPending, isSuccess, error, mutate } = usePullImageStream(handleChunkReceived);
 
   // Memoized request object
   const pullRequest = useMemo<PullImageRequest>(

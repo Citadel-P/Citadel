@@ -32,20 +32,27 @@ for (const pathStr in doc.paths) {
     const requiredParams: string[] = [];
     let queryParams: string[] = [];
 
+    // Path parameters
     const pathParams = op.parameters?.filter((p) => p.in === 'path') ?? [];
     for (const p of pathParams) {
       if (!params.includes(p.name)) params.push(p.name);
       if (p.required) requiredParams.push(p.name);
     }
 
+    // Query parameters
     const qParams = op.parameters?.filter((p) => p.in === 'query') ?? [];
     queryParams = qParams.map((p) => p.name);
-    if (qParams.length > 0) params.push('query');
+    if (qParams.length > 0) {
+      params.push('query');
+      requiredParams.push(...qParams.filter((p) => p.required).map((p) => p.name));
+    }
 
+    // Request body (POST/PATCH/PUT)
     if (op.requestBody && ['POST', 'PATCH', 'PUT'].includes(method.toUpperCase())) {
       params.push('data');
     }
 
+    // Always include optional RequestParams
     if (!params.includes('params')) params.push('params');
 
     endpoints.push({

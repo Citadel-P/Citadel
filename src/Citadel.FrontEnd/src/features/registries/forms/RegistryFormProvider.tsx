@@ -49,14 +49,14 @@ export const RegistryFormProvider: React.FC<{ children?: React.ReactNode }> = ({
     isSuccess: createIsSuccess,
     isPending: createIsPending,
     data: createData,
-  } = useMutate('createRegistry'); //usePOSTRegistry();
+  } = useMutate('createRegistry');
   const {
     mutate: requestPatch,
     validationErrors: patchErrors,
     isSuccess: patchIsSuccess,
     isPending: patchIsPending,
     data: patchData,
-  } = useMutate('updateRegistry'); //usePATCHRegistry();
+  } = useMutate('updateRegistry');
   const [currentProvider, setCurrentProvider] = useState<string>(RegistryType.DockerHub);
   const [registry, setRegistry] = useState<RegistryWithConfigView | undefined>(undefined);
   let providers = [...defaultProviders];

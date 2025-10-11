@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePlatformsGroup } from './hooks/usePlatformsGroup';
-import { useDELETEPlatform } from './hooks/useDELETEPlatform';
 import { toast } from 'sonner';
 import { PlatformsContext } from './PlatformsContext';
 import { IDialogData } from '@/hooks/useDialogState';
 import { PlatformView } from '@/api/generated/api.types';
+import { useMutate } from '@/lib/hooks';
 
 export const PlatformsProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const { platformsMessage, isLoading } = usePlatformsGroup();
   const [dialogData, setDialogData] = useState<IDialogData<PlatformView>>({ open: false });
-  const { mutate, isSuccess: deleteIsSuccess, isPending: deleteIsPending } = useDELETEPlatform();
+  const { mutate, isSuccess: deleteIsSuccess, isPending: deleteIsPending } = useMutate('deletePlatform');
 
   const platforms = useMemo(() => {
     if (platformsMessage && platformsMessage.length > 0) {

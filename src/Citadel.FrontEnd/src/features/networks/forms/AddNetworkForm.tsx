@@ -11,10 +11,10 @@ import { LoaderCircle, ChevronDown } from 'lucide-react';
 import KeyValuePairInput from '@/components/ui/KeyValuePairInput';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import React, { useEffect } from 'react';
-import { usePOSTNetwork } from './hooks/usePOSTNetwork';
 import { useAppContext } from '@/AppContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
+import { useMutate } from '@/lib/hooks';
 
 const driverOptions = [
   { value: 'bridge', label: 'Bridge' },
@@ -61,7 +61,7 @@ function IPField({
 const AddNetworkForm = () => {
   const { form } = useNetworkForm();
   const navigate = useNavigate();
-  const { mutate, isPending, isSuccess, data, validationErrors } = usePOSTNetwork();
+  const { mutate, isPending, isSuccess, data, validationErrors } = useMutate('createNetwork');
   const { currentPlatform } = useAppContext();
 
   const enableIPv4 = form.watch('enableIPv4');

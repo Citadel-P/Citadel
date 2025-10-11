@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
 import dayjs from 'dayjs';
 import { byteTransform } from '@/lib/bytes.helper';
-import { NullableOfContainerStatView } from '@/api/generated/api.types';
+import { ContainerStatView } from '@/api/generated/api.types';
 import { useContainerStatsContext } from './ContainerStatsContext';
 import { DockerContainerView } from '@/api/models';
 
@@ -71,7 +71,7 @@ const MemoryUsage = () => {
               nameKey="stats"
               indicator="dot"
               labelFormatter={(_, n) => {
-                const created = (n.at(0)?.payload as NullableOfContainerStatView).created as number;
+                const created = (n.at(0)?.payload as ContainerStatView).created as number;
                 return <span className="text-foreground">{dayjs(created * 1000).format('HH:mm:ss')}</span>;
               }}
               formatter={(value, name) => (

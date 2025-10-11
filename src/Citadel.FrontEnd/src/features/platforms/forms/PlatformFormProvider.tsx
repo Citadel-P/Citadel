@@ -2,11 +2,9 @@ import { PlatformView, PlatformType } from '@/api/generated/api.types';
 import { createContext, JSX, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate, useParams } from 'react-router';
-import { usePOSTPlatform } from './hooks/usePOSTPlatform';
-import { usePATCHPlatform } from './hooks/usePATCHPlatform';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import AddDockerPlatform from '../addDockerPlatform/AddDockerPltaform';
-import { useRead } from '@/lib/hooks';
+import { useMutate, useRead } from '@/lib/hooks';
 
 interface IPlatformProvider {
   id: 'docker' | 'swarm' | 'k8s';
@@ -69,14 +67,14 @@ const PlatformFormProvider: React.FC<IProps> = ({ children }) => {
     isSuccess: createIsSuccess,
     isPending: createIsPending,
     data: createData,
-  } = usePOSTPlatform();
+  } = useMutate('createPlatform');
   const {
     mutate: _requestPatch,
     validationErrors: patchErrors,
     isSuccess: patchIsSuccess,
     isPending: patchIsPending,
     data: patchData,
-  } = usePATCHPlatform();
+  } = useMutate('updatePlatform');
 
   const [currentProvider, setCurrentProvider] = useState<string>(PlatformType.Docker);
   const [platform, setPlatform] = useState<PlatformView | undefined>(undefined);

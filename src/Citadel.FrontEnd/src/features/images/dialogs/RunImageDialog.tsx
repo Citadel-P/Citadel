@@ -19,13 +19,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
 import ValueInput from '@/components/ui/ValueInput';
-import { usePOSTContainer } from '../hooks/usePOSTContainer';
 import { ContainerRestartPolicy, CreateContainerInput, ImageView } from '@/api/generated/api.types';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
 import { AlertMessage } from '@/components/ui/alert-message';
 import { IDialogData } from '@/hooks/useDialogState';
-import { useRead } from '@/lib/hooks';
+import { useMutate, useRead } from '@/lib/hooks';
 
 export const RunImageDialog = ({
   runDialogData,
@@ -36,7 +35,7 @@ export const RunImageDialog = ({
 }) => {
   const navigate = useNavigate();
   const { currentPlatform } = useAppContext();
-  const { mutate, isPending, isSuccess, data, validationErrors, reset } = usePOSTContainer();
+  const { mutate, isPending, isSuccess, data, validationErrors, reset } = useMutate('createContainer');
   const { form } = useRunImageForm();
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const {

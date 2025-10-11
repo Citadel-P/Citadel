@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useContainerLogsContext } from './ContainerLogsContext';
 
 const ContainerLogs = () => {
-  const { logs, isPending } = useContainerLogsContext();
+  const { logs } = useContainerLogsContext();
   const scrollRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
@@ -13,10 +13,7 @@ const ContainerLogs = () => {
   }, [logs]);
 
   return (
-    <Highlight
-      theme={themes.nightOwl}
-      code={isPending && logs?.length === 0 ? 'Loading...' : logs!.join('\n')}
-      language="tsx">
+    <Highlight theme={themes.nightOwl} code={logs?.length === 0 ? 'Loading...' : logs!.join('\n')} language="tsx">
       {({ style, tokens, getLineProps, getTokenProps }) => (
         <pre
           ref={scrollRef}

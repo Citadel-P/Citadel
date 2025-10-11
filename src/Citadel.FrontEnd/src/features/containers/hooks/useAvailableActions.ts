@@ -1,27 +1,38 @@
 import { useMemo } from 'react';
 import { ContainerView, ContainerStateStatus } from '@/api/generated/api.types';
-import { actionType, usePATCHContainers } from './usePATCHContainers';
 import { DockerContainerView } from '@/api/models';
+import { useMutate } from '@/lib/hooks';
 
-export const useAvailableActions = (containers: ContainerView[] | DockerContainerView[] | undefined) => {
-  const { mutate, isPending } = usePATCHContainers();
-  // Calculate available actions using useMemo
+export const useAvailableActions = (containers: (ContainerView | DockerContainerView)[] | undefined) => {
+  const mutations = {
+    start: useMutate('startContainers'),
+    stop: useMutate('stopContainers'),
+    restart: useMutate('restartContainers'),
+    pause: useMutate('pauseContainers'),
+  };
+
+  const isPending = Object.values(mutations).some((m) => m.isPending);
+
   const availableActions = useMemo<ContainerActionsState | undefined>(() => {
-    return containers?.reduce<ContainerActionsState>(
+    if (!containers) return undefined;
+
+    return containers.reduce<ContainerActionsState>(
       (actions, container) => {
-        const isRunningOrPaused =
-          container.state === ContainerStateStatus.Running || container.state === ContainerStateStatus.Paused;
+        const { state } = container;
+        const isRunningOrPaused = state === ContainerStateStatus.Running || state === ContainerStateStatus.Paused;
+
         const canStart =
-          container.state !== ContainerStateStatus.Running &&
-          container.state !== ContainerStateStatus.Offline &&
-          container.state !== ContainerStateStatus.Paused;
-        const canDelete = container.state !== ContainerStateStatus.Offline;
+          state !== ContainerStateStatus.Running &&
+          state !== ContainerStateStatus.Offline &&
+          state !== ContainerStateStatus.Paused;
+
+        const canDelete = state !== ContainerStateStatus.Offline;
 
         return {
           canStart: actions.canStart || canStart,
           canStop: actions.canStop || isRunningOrPaused,
           canRestart: actions.canRestart || isRunningOrPaused,
-          canPause: actions.canPause || container.state === ContainerStateStatus.Running,
+          canPause: actions.canPause || state === ContainerStateStatus.Running,
           canDelete: actions.canDelete || canDelete,
         };
       },
@@ -35,19 +46,21 @@ export const useAvailableActions = (containers: ContainerView[] | DockerContaine
     );
   }, [containers]);
 
-  // Request a patch action
   const requestPatch = (action: actionType) => {
-    if (isPending) return; // Prevent duplicate requests if a mutation is already pending
-    mutate({
-      action,
-      containersId: containers?.map((s) => s.containerId!).filter(Boolean) ?? [],
-    });
+    if (isPending) return;
+    const containersId = containers?.map((s) => s.containerId!).filter(Boolean) ?? [];
+
+    const mutation = mutations[action];
+    if (!mutation) throw new Error(`Unsupported action: ${action}`);
+
+    mutation.mutate({ data: containersId });
   };
 
   return { availableActions, requestPatch, isPending };
 };
 
-export type ContainerActionsState = {
+type actionType = 'start' | 'stop' | 'pause' | 'restart';
+type ContainerActionsState = {
   canStart: boolean;
   canStop: boolean;
   canRestart: boolean;

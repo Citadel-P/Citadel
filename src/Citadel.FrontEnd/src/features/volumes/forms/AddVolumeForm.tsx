@@ -13,14 +13,14 @@ import { useAppContext } from '@/AppContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
 import { useVolumeForm } from './hooks/useVolumeForm';
-import { usePOSTVolume } from './hooks/usePOSTVolume';
+import { useMutate } from '@/lib/hooks';
 
 const driverOptions = [{ value: 'local', label: 'Local' }];
 
 const AddVolumeForm = () => {
   const { form } = useVolumeForm();
   const navigate = useNavigate();
-  const { mutate, isPending, isSuccess, data, validationErrors } = usePOSTVolume();
+  const { mutate, isPending, isSuccess, data, validationErrors } = useMutate('createVolume');
   const { currentPlatform } = useAppContext();
 
   const { control } = form;

@@ -1874,7 +1874,7 @@
           "Registries"
         ],
         "summary": "Delete registries",
-        "operationId": "deleteRegistry",
+        "operationId": "deleteRegistries",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3136,7 +3136,7 @@
           "Images"
         ],
         "summary": "Remove an image(s), along with any untagged parent images that were referenced by that image",
-        "operationId": "deleteImage",
+        "operationId": "deleteImages",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3517,7 +3517,7 @@
           "Networks"
         ],
         "summary": "Delete a network(s)",
-        "operationId": "deleteNetwork",
+        "operationId": "deleteNetworks",
         "requestBody": {
           "content": {
             "application/json": {
