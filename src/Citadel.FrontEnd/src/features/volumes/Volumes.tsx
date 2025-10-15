@@ -3,7 +3,7 @@ import { SearchField } from '@/components/ui/SearchField';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router';
 import { useVolumesContext } from './VolumesContext';
-import { VolumesActionBar } from './VolumesActionBar';
+import { VolumesActionBar } from './action-bar';
 import VolumesTable from './VolumesTable';
 
 const Volumes = () => {

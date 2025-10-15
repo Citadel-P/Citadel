@@ -1,7 +1,7 @@
 import { Box } from 'lucide-react';
 import { SearchField } from '../../components/ui/SearchField';
 import { ContainersTable } from './ContainersTable';
-import { ContainerActionBar } from './ContainerActionBar';
+import { ContainerActionBar } from './action-bar';
 import { AlertMessage } from '@/components/ui/alert-message';
 import { DeleteDialog } from './delete-dialog';
 import { useMemo } from 'react';

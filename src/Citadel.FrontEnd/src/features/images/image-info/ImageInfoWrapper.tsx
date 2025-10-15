@@ -1,5 +1,5 @@
 import { ImageView } from '@/api/generated/api.types';
-import { ImageActionButtons } from '../ImageActionButtons';
+import { ImageActionBarButtons } from '../action-bar-buttons';
 import { ImageSateIndicator } from '../ImageStateIndicator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useNavigate, useParams } from 'react-router';
@@ -66,7 +66,7 @@ const ImageInfoWrapper = () => {
                   </div>
                 </div>
                 <div className="flex justify-start md:justify-end w-full">
-                  <ImageActionButtons
+                  <ImageActionBarButtons
                     selectedImages={[{ id: data?.data.id, imageId: data?.data.id, name, tag } as ImageView]}
                     setDialogData={setDialogData}
                     setRunDialogData={setRunDialogData}

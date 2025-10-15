@@ -8,7 +8,7 @@ import LocalImagesTable from './LocalImagesTable';
 import Loader from '@/components/ui/loader';
 import { SearchField } from '@/components/ui/SearchField';
 import { useImagesContext } from './ImagesContext';
-import { ImageActionBar } from './ImageActionBar';
+import { ImageActionBar } from './action-bar';
 
 const Images = () => {
   const navigate = useNavigate();

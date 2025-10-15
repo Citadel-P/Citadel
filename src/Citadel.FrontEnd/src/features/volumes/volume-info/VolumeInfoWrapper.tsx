@@ -8,7 +8,7 @@ import { DockerVolumeResult } from '@/api/generated/api.types';
 import { Box, Info } from 'lucide-react';
 
 import { DeleteDialog } from '../delete-dialog';
-import { VolumeActionButtons } from '../VolumeActionButtons';
+import { VolumeActionBarButtons } from '../action-bar-buttons';
 import { ContainerInfoTable } from './ContainerInfoTable';
 import { VolumeInfoTable } from './VolumeInfoTable';
 import { truncate } from '@/lib/truncate';
@@ -57,8 +57,8 @@ const VolumeInfoWrapper = () => {
                   </div>
                 </div>
                 <div className="flex justify-start md:justify-end ">
-                  <VolumeActionButtons
-                    selectedVolumes={[
+                  <VolumeActionBarButtons
+                    selectedRows={[
                       {
                         id: data?.data.id,
                         inUse: data?.data?.containers?.length !== 0,

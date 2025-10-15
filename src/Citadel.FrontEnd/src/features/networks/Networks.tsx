@@ -2,7 +2,7 @@ import { Network, Plus } from 'lucide-react';
 import { SearchField } from '@/components/ui/SearchField';
 import { useNetworksContext } from './NetworksContext';
 import NetworksTable from './NetworksTable';
-import { NetworksActionBar } from './NetworksActionBar';
+import { NetworksActionBar } from './action-bar';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router';
 

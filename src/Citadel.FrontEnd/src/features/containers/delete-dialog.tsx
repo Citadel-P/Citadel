@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { IDialogData } from '@/hooks/useDialogState';
 import { ContainerView, DeleteContainersRequest } from '@/api/generated/api.types';
 import { DockerContainerView } from '@/api/types';
 import { ConfirmDeleteDialog } from '@/components/custom/confirm-delete-dialog';
 import { SwitchList } from '@/components/custom/switch-section';
+import { IDialogData } from '@/lib/hooks';
 
 export const DeleteDialog = ({
   isPending,

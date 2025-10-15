@@ -5,7 +5,7 @@ import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { useAppContext } from '@/AppContext';
 import Loader from '@/components/ui/loader';
 import { NetworkStateIndicator } from '../NetworkSateIndicator';
-import { NetworkActionButtons } from '../NetworkActionButtons';
+import { NetworkActionBarButtons } from '../action-bar-buttons';
 import { DockerNetworkResult } from '@/api/generated/api.types';
 import { DeleteDialog } from '../delete-dialog';
 import { Box, Info, Share2 } from 'lucide-react';
@@ -61,8 +61,8 @@ const NetworkInfoWrapper = () => {
                   </div>
                 </div>
                 <div className="flex justify-start md:justify-end w-full">
-                  <NetworkActionButtons
-                    selectedNetworks={[
+                  <NetworkActionBarButtons
+                    selectedRows={[
                       {
                         id: data?.data.id,
                         name: data?.data.name,
