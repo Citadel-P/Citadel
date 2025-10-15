@@ -7,7 +7,7 @@ import { truncate } from '@/lib/truncate';
 import { useEffect, useCallback, useMemo } from 'react';
 import { useNetworksContext } from './NetworksContext';
 import { useAppContext } from '@/AppContext';
-import DropdownTableMenu from './DropdownTableMenu';
+import { TableDropDown } from './table-dropdown';
 import { DeleteDialog } from './delete-dialog';
 import { NetworkStateIndicator } from './NetworkSateIndicator';
 import { useNavigate, useParams } from 'react-router';
@@ -167,11 +167,7 @@ const columns: ColumnDef<DockerNetworkResult>[] = [
   },
   {
     id: 'actions',
-    cell: ({ row }) => (
-      <div className="text-center">
-        <DropdownTableMenu network={row.original} />
-      </div>
-    ),
+    cell: ({ row }) => <TableDropDown network={row.original} />,
   },
 ];
 

@@ -1,7 +1,7 @@
 import { DataTable } from '@/components/ui/data-table';
 import { RegistryView } from '@/api/generated/api.types';
 import SortableCell from '@/components/ui/SortableCell';
-import DropdownTableMenu from './DropdownTableMenu';
+import { TableDropdown } from './table-dropdown';
 import { ColumnDef, Row } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useRegistriesContext } from './RegistriesContext';
@@ -104,11 +104,7 @@ const columns: ColumnDef<RegistryView>[] = [
       if (row.original.isDefault) {
         return <></>;
       }
-      return (
-        <div className="text-center">
-          <DropdownTableMenu registry={row.original} />
-        </div>
-      );
+      return <TableDropdown registry={row.original} />;
     },
   },
 ];

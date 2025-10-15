@@ -8,7 +8,7 @@ import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
 import SortableCell from '@/components/ui/SortableCell';
 import { Link } from 'react-router';
-import { ContainerDropdownActions } from './ContainerDropdownActions';
+import { TableDropdown } from './table-dropdown';
 import { ContainerStateIndicator } from './ContainerStateIndicator';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { PortsDisplay } from '@/components/ui/PortsDisplay';
@@ -129,11 +129,7 @@ const CPUCell = ({ container }: { container: ContainerView }) => {
 
 const ActionsCell = ({ container }: { container: ContainerView }) => {
   const { setDialogData } = useContainersContext();
-  return (
-    <div className="text-center">
-      <ContainerDropdownActions container={container} setDialogData={setDialogData} />
-    </div>
-  );
+  return <TableDropdown container={container} setDialogData={setDialogData} />;
 };
 
 export const ContainersTable = () => {

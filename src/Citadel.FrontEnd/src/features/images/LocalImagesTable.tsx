@@ -3,7 +3,7 @@ import { ImageView } from '@/api/generated/api.types';
 import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import DropdownTableMenu from './DropdownTableMenu';
+import { TableDropDown } from './table-dropdown';
 import { useImagesContext } from './ImagesContext';
 import { truncate } from '@/lib/truncate';
 import { Play } from 'lucide-react';
@@ -111,10 +111,7 @@ const RenderActions = ({ image }: { image: ImageView }) => {
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-
-      <div className="text-center">
-        <DropdownTableMenu image={image} />
-      </div>
+      <TableDropDown image={image} />
     </div>
   );
 };

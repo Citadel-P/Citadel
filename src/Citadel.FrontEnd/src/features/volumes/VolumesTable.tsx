@@ -6,13 +6,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useEffect, useCallback, useMemo } from 'react';
 import { useAppContext } from '@/AppContext';
 import { useVolumesContext } from './VolumesContext';
-import DropdownTableMenu from './DropdownTableMenu';
 import { DeleteDialog } from './delete-dialog';
 import { byteTransform } from '@/lib/bytes.helper';
 import { fromNow } from '@/lib/dayjs.helper';
 import { VolumeStateIndicator } from './VolumeStateIndicator';
 import { useNavigate, useParams } from 'react-router';
 import { useRead } from '@/lib/hooks';
+import { TableDropDown } from './table-dropdown';
 
 export default function VolumesTable() {
   const { currentPlatform } = useAppContext();
@@ -125,11 +125,7 @@ const columns: ColumnDef<DockerVolumeResult>[] = [
   },
   {
     id: 'actions',
-    cell: ({ row }) => (
-      <div className="text-center">
-        <DropdownTableMenu volume={row.original} />
-      </div>
-    ),
+    cell: ({ row }) => <TableDropDown volume={row.original} />,
   },
 ];
 
