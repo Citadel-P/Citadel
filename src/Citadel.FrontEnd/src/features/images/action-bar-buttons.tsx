@@ -6,7 +6,7 @@ import { IDialogData } from '@/lib/hooks';
 import { ActionButtonConfig, ActionButtons } from '@/components/custom/action-bar';
 import { ImageView } from '@/api/generated/api.types';
 
-export const ImageActionBarButtons = ({
+export const ActionBarButtons = ({
   selectedImages,
   setDialogData,
   setRunDialogData,

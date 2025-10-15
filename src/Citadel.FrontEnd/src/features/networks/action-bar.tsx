@@ -1,23 +1,19 @@
 import { useNetworksContext } from './NetworksContext';
-import { NetworkActionBarButtons } from './action-bar-buttons';
-import { ActionBar } from '@/components/custom/action-bar';
+import { ActionBarButtons } from './action-bar-buttons';
+import { GenericActionBar } from '@/components/custom/action-bar';
 
-export const NetworksActionBar = () => {
+export const ActionBar = () => {
   const { setDialogData, selectedRows, networks } = useNetworksContext();
 
   const canInspect = selectedRows?.length === 1;
 
   return (
-    <ActionBar
+    <GenericActionBar
       selectedRows={selectedRows}
       allItems={networks}
       resource="Network"
       actionButtons={
-        <NetworkActionBarButtons
-          selectedRows={selectedRows}
-          setDialogData={setDialogData}
-          showInspectButton={canInspect}
-        />
+        <ActionBarButtons selectedRows={selectedRows} setDialogData={setDialogData} showInspectButton={canInspect} />
       }
     />
   );

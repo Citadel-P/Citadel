@@ -4,7 +4,7 @@ import { Pencil, Trash } from 'lucide-react';
 import { IDialogData } from '@/lib/hooks';
 import { ActionButtonConfig, ActionButtons } from '@/components/custom/action-bar';
 
-export const RegistriesActionBarButtons = ({
+export const ActionBarButtons = ({
   selectedRows,
   setDialogData,
 }: {

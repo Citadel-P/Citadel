@@ -5,10 +5,10 @@ import { formatId } from '@/lib/utils';
 import { SearchCode, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 
-export const VolumeActionBarButtons = ({
+export const ActionBarButtons = ({
   selectedRows,
   setDialogData,
-  showInspectButton,
+  showInspectButton = true,
 }: {
   selectedRows: DockerVolumeResult[] | undefined;
   setDialogData: (data: IDialogData<DockerVolumeResult>) => void;

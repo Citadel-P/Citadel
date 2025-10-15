@@ -5,7 +5,7 @@ import { formatId } from '@/lib/utils';
 import { SearchCode, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 
-export const NetworkActionBarButtons = ({
+export const ActionBarButtons = ({
   selectedRows,
   setDialogData,
   showInspectButton = true,

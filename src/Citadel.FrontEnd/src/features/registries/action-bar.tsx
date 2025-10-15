@@ -1,16 +1,16 @@
-import { ActionBar } from '@/components/custom/action-bar';
+import { GenericActionBar } from '@/components/custom/action-bar';
 import { useRegistriesContext } from './RegistriesContext';
-import { RegistriesActionBarButtons } from './action-bar-buttons';
+import { ActionBarButtons } from './action-bar-buttons';
 
-export const RegistriesActionBar = () => {
+export const ActionBar = () => {
   const { selectedRows, registries, setDialogData } = useRegistriesContext();
 
   return (
-    <ActionBar
+    <GenericActionBar
       selectedRows={selectedRows}
       allItems={registries}
       resource="Registry"
-      actionButtons={<RegistriesActionBarButtons selectedRows={selectedRows} setDialogData={setDialogData} />}
+      actionButtons={<ActionBarButtons selectedRows={selectedRows} setDialogData={setDialogData} />}
     />
   );
 };

@@ -1,16 +1,16 @@
 import { useContainersContext } from './ContainersContext';
-import { ContainerActionBarButtons } from './action-bar-buttons';
-import { ActionBar } from '@/components/custom/action-bar';
+import { ActionBarButtons } from './action-bar-buttons';
+import { GenericActionBar } from '@/components/custom/action-bar';
 
-export const ContainerActionBar = () => {
+export const ActionBar = () => {
   const { containers, selectedRows, setDialogData } = useContainersContext();
 
   return (
-    <ActionBar
+    <GenericActionBar
       selectedRows={selectedRows}
       allItems={containers}
       resource="Container"
-      actionButtons={<ContainerActionBarButtons selectedContainers={selectedRows} setDialogData={setDialogData} />}
+      actionButtons={<ActionBarButtons selectedContainers={selectedRows} setDialogData={setDialogData} />}
     />
   );
 };

@@ -1,19 +1,19 @@
 import { useImagesContext } from './ImagesContext';
-import { ImageActionBarButtons } from './action-bar-buttons';
-import { ActionBar } from '@/components/custom/action-bar';
+import { ActionBarButtons } from './action-bar-buttons';
+import { GenericActionBar } from '@/components/custom/action-bar';
 
-export const ImageActionBar = () => {
+export const ActionBar = () => {
   const { setDialogData, selectedRows, localImages: images, setRunDialogData } = useImagesContext();
 
   if (!selectedRows?.length) return null;
 
   return (
-    <ActionBar
+    <GenericActionBar
       selectedRows={selectedRows}
       allItems={images}
       resource="Image"
       actionButtons={
-        <ImageActionBarButtons
+        <ActionBarButtons
           selectedImages={selectedRows}
           setDialogData={setDialogData}
           setRunDialogData={setRunDialogData}

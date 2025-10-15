@@ -14,7 +14,7 @@ export interface ActionButtonConfig {
   className?: string;
 }
 
-export const ActionBar = <T,>({ selectedRows, allItems, resource, actionButtons }: ActionBarProps<T>) => {
+export const GenericActionBar = <T,>({ selectedRows, allItems, resource, actionButtons }: ActionBarProps<T>) => {
   const { sidebarMinimized } = useLayoutContext();
 
   if (!selectedRows?.length) return null;

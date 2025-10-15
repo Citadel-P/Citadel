@@ -14,7 +14,7 @@ import { useContainerInfoGroup } from '../hooks/useContainerInfoGroup';
 import { ContainerStateStatus, ContainerView } from '@/api/generated/api.types';
 import { ContainerStateIndicator } from '../ContainerStateIndicator';
 import { DeleteDialog } from '../delete-dialog';
-import { ContainerActionBarButtons } from '../action-bar-buttons';
+import { ActionBarButtons } from '../action-bar-buttons';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { fromNow } from '@/lib/dayjs.helper';
 import { ContainerInfoTable } from './ContainerInfoTable';
@@ -103,7 +103,7 @@ const ContainerInfoWrapper = () => {
             </div>
             <div className="flex justify-start md:justify-end w-full">
               <div className="flex flex-row items-center ">
-                <ContainerActionBarButtons
+                <ActionBarButtons
                   selectedContainers={[containerInfo! ?? currentContainer]}
                   setDialogData={setDialogData}
                 />

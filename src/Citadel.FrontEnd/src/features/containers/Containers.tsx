@@ -1,7 +1,7 @@
 import { Box } from 'lucide-react';
 import { SearchField } from '../../components/ui/SearchField';
 import { ContainersTable } from './ContainersTable';
-import { ContainerActionBar } from './action-bar';
+import { ActionBar } from './action-bar';
 import { AlertMessage } from '@/components/ui/alert-message';
 import { DeleteDialog } from './delete-dialog';
 import { useMemo } from 'react';
@@ -46,7 +46,7 @@ const Containers = () => {
           </div>
         </div>
       </div>
-      <ContainerActionBar />
+      <ActionBar />
       <DeleteDialog
         requestDelete={requestDelete}
         isPending={isPending}

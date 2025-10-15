@@ -5,7 +5,7 @@ import { DockerContainerView } from '@/api/types';
 import { IDialogData } from '@/lib/hooks';
 import { ActionButtonConfig, ActionButtons } from '@/components/custom/action-bar';
 
-export const ContainerActionBarButtons = ({
+export const ActionBarButtons = ({
   selectedContainers,
   setDialogData,
 }: {

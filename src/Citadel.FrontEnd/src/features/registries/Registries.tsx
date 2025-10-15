@@ -5,7 +5,7 @@ import { Cable, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useRegistriesContext } from './RegistriesContext';
 import { RegistriesTable } from './RegistriesTable';
-import { RegistriesActionBar } from './action-bar';
+import { ActionBar } from './action-bar';
 
 export default function Registries() {
   const navigate = useNavigate();
@@ -47,7 +47,7 @@ export default function Registries() {
           </div>
         </div>
       </div>
-      <RegistriesActionBar />
+      <ActionBar />
     </div>
   );
 }
