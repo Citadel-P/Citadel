@@ -2,17 +2,14 @@
 using Domain.Contracts.Resources.Networks;
 using FluentValidation;
 using Hosting.Common;
-using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-using static Google.Rpc.Context.AttributeContext.Types;
 
 namespace Application.Features.Networks.Commands;
 
-public sealed record class DeleteNetwork(Guid PlatformId, string[] Ids) : ICommand<Result>
+public sealed record class DeleteNetworks(Guid PlatformId, string[] Ids) : ICommand<Result>
 {
-    internal class Validator : AbstractValidator<DeleteNetwork>
+    internal class Validator : AbstractValidator<DeleteNetworks>
     {
         public Validator()
         {
@@ -22,9 +19,9 @@ public sealed record class DeleteNetwork(Guid PlatformId, string[] Ids) : IComma
     }
 }
 
-internal class DeleteNetworksHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<INetworkConnector> connectorFactory) : ICommandHandler<DeleteNetwork, Result>
+internal class DeleteNetworksHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<INetworkConnector> connectorFactory) : ICommandHandler<DeleteNetworks, Result>
 {
-    public async ValueTask<Result> Handle(DeleteNetwork command, CancellationToken cancellationToken)
+    public async ValueTask<Result> Handle(DeleteNetworks command, CancellationToken cancellationToken)
     {
         if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform, out var error))
         {

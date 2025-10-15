@@ -1,4 +1,4 @@
-import { HubConnection } from "@microsoft/signalr";
+import { HubConnection } from '@microsoft/signalr';
 
 /**
  * Starts a SignalR connection with a retry mechanism in case of failure.
@@ -37,7 +37,6 @@ export const startConnectionWithRetry = async (
   try {
     // Attempt to start the connection.
     await connection.start();
-    console.log('SignalR connection established');
   } catch (error: any) {
     // If the retry process has been canceled, stop the connection and exit.
     if (isCanceled.current) {
@@ -76,10 +75,6 @@ export const startConnectionWithRetry = async (
     onRetryAttempt?.(currentRetryAttempt + 1, retryDelay, error);
 
     // Schedule the next retry attempt.
-    setTimeout(
-      () =>
-        startConnectionWithRetry(connection, isCanceled, options, currentRetryAttempt + 1),
-      retryDelay,
-    );
+    setTimeout(() => startConnectionWithRetry(connection, isCanceled, options, currentRetryAttempt + 1), retryDelay);
   }
 };

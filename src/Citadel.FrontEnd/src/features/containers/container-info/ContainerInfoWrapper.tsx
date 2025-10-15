@@ -11,14 +11,15 @@ import ContainerInspect from './inspect/ContainerInspect';
 import Loader from '@/components/ui/loader';
 import { ContainerStatsProvider } from './stats/ContainerStatsProvider';
 import { useContainerInfoGroup } from '../hooks/useContainerInfoGroup';
-import { ContainerStateStatus } from '@/api/generated/api.types';
+import { ContainerStateStatus, ContainerView } from '@/api/generated/api.types';
 import { ContainerStateIndicator } from '../ContainerStateIndicator';
-import { useDeleteContainerDialog } from '../dialogs/useDeleteContainerDialog';
-import { DeleteContainerDialog } from '../dialogs/DeleteContainerDialog';
+import { DeleteDialog } from '../delete-dialog';
 import { ContainerActionButtons } from '../ContainerActionButtons';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { fromNow } from '@/lib/dayjs.helper';
 import { ContainerInfoTable } from './ContainerInfoTable';
+import { useDeleteDialog } from '@/lib/hooks';
+import { DockerContainerView } from '@/api/types';
 
 const ContainerInfoWrapper = () => {
   const navigate = useNavigate();
@@ -27,10 +28,15 @@ const ContainerInfoWrapper = () => {
   const {
     deleteIsPending: isPending,
     requestDelete,
-    deleteIsSuccess,
     dialogData,
     setDialogData,
-  } = useDeleteContainerDialog();
+  } = useDeleteDialog<ContainerView | DockerContainerView>({
+    type: 'Container',
+    onSuccess: useCallback(
+      () => navigate(`/platforms/${currentContainer?.platformId}/containers`),
+      [currentContainer?.platformId, navigate],
+    ),
+  });
 
   const [containerId, setContainerId] = useState<string | undefined>();
   const [containerName, setContainerName] = useState<string | undefined>();
@@ -53,12 +59,6 @@ const ContainerInfoWrapper = () => {
       setStatusSnapshot(fromNow(new Date(Date.now())));
     }
   }, [currentContainer, containerInfo]);
-
-  useEffect(() => {
-    if (deleteIsSuccess) {
-      navigate(`/platforms/${currentContainer?.platformId}/containers`);
-    }
-  }, [deleteIsSuccess, navigate, currentContainer]);
 
   // Memoize the current tab based on the route
   const currentTab = useMemo(() => {
@@ -144,7 +144,7 @@ const ContainerInfoWrapper = () => {
           </Tabs>
         </div>
       </div>
-      <DeleteContainerDialog
+      <DeleteDialog
         requestDelete={requestDelete}
         isPending={isPending}
         dialogData={dialogData}

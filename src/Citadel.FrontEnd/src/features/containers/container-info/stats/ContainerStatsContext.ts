@@ -1,7 +1,7 @@
 import { createContext } from 'react';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { ContainerStatView } from '@/api/generated/api.types';
-import { DockerContainerView } from '@/api/models';
+import { DockerContainerView } from '@/api/types';
 
 export interface ContainerStatsContextValue {
   isLoading: boolean;

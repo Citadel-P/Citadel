@@ -105,3 +105,5 @@ export const filterBySplit = <T>(items: T[] | undefined, search: string, extract
       : items) ?? []
   );
 };
+
+export const pluralize = (word: string) => (word.endsWith('y') ? word.slice(0, -1) + 'ies' : word + 's');

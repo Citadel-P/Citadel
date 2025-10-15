@@ -14,7 +14,7 @@ import dayjs from 'dayjs';
 import { ContainerStatView } from '@/api/generated/api.types';
 import { byteTransform } from '@/lib/bytes.helper';
 import { useContainerStatsContext } from './ContainerStatsContext';
-import { DockerContainerView } from '@/api/models';
+import { DockerContainerView } from '@/api/types';
 
 const NetworkUsageHeader = ({ container }: { container: DockerContainerView | undefined }) => (
   <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">

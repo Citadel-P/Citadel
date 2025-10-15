@@ -1,7 +1,29 @@
-import { Label } from './label';
-import { Switch } from './switch';
+import { Label } from '../ui/label';
+import { Switch } from '../ui/switch';
 
-// Reusable Switch Section Component
+interface SwitchConfig {
+  id: string;
+  label: string;
+  description: string;
+  checked: boolean;
+  onToggle: () => void;
+}
+
+export const SwitchList = ({ switches }: { switches: SwitchConfig[] }) => (
+  <div className="grid gap-4 py-4">
+    {switches.map((s) => (
+      <SwitchSection
+        key={s.id}
+        id={s.id}
+        label={s.label}
+        description={s.description}
+        checked={s.checked}
+        onToggle={s.onToggle}
+      />
+    ))}
+  </div>
+);
+
 export const SwitchSection = ({
   id,
   label,

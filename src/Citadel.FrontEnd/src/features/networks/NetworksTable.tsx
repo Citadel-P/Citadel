@@ -8,7 +8,7 @@ import { useEffect, useCallback, useMemo } from 'react';
 import { useNetworksContext } from './NetworksContext';
 import { useAppContext } from '@/AppContext';
 import DropdownTableMenu from './DropdownTableMenu';
-import { DeleteNetworkDialog } from './dialogs/DeleteNetworkDialog';
+import { DeleteDialog } from './delete-dialog';
 import { NetworkStateIndicator } from './NetworkSateIndicator';
 import { useNavigate, useParams } from 'react-router';
 import { formatId } from '@/lib/utils';
@@ -57,7 +57,7 @@ export default function NetworksTable() {
           </span>
         )}
       </div>
-      <DeleteNetworkDialog
+      <DeleteDialog
         dialogData={dialogData}
         setDialogData={setDialogData}
         requestDelete={requestDelete}

@@ -7,7 +7,7 @@ import { useEffect, useCallback, useMemo } from 'react';
 import { useAppContext } from '@/AppContext';
 import { useVolumesContext } from './VolumesContext';
 import DropdownTableMenu from './DropdownTableMenu';
-import { DeleteVolumeDialog } from './dialogs/DeleteVolumeDialog';
+import { DeleteDialog } from './delete-dialog';
 import { byteTransform } from '@/lib/bytes.helper';
 import { fromNow } from '@/lib/dayjs.helper';
 import { VolumeStateIndicator } from './VolumeStateIndicator';
@@ -59,7 +59,7 @@ export default function VolumesTable() {
           )}
         </div>
       </div>
-      <DeleteVolumeDialog
+      <DeleteDialog
         dialogData={dialogData}
         setDialogData={setDialogData}
         requestDelete={requestDelete}

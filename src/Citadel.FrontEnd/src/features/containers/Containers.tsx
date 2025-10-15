@@ -3,7 +3,7 @@ import { SearchField } from '../../components/ui/SearchField';
 import { ContainersTable } from './ContainersTable';
 import { ContainerActionBar } from './ContainerActionBar';
 import { AlertMessage } from '@/components/ui/alert-message';
-import { DeleteContainerDialog } from './dialogs/DeleteContainerDialog';
+import { DeleteDialog } from './delete-dialog';
 import { useMemo } from 'react';
 import { ContainerStateStatus } from '@/api/generated/api.types';
 import { useContainersContext } from './ContainersContext';
@@ -47,7 +47,7 @@ const Containers = () => {
         </div>
       </div>
       <ContainerActionBar />
-      <DeleteContainerDialog
+      <DeleteDialog
         requestDelete={requestDelete}
         isPending={isPending}
         dialogData={dialogData}

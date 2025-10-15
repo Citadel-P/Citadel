@@ -1,34 +1,31 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useNavigate, useParams } from 'react-router';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { useAppContext } from '@/AppContext';
 import Loader from '@/components/ui/loader';
 import { NetworkStateIndicator } from '../NetworkSateIndicator';
 import { NetworkActionButtons } from '../NetworkActionButtons';
-import { useDeleteNetworkDialog } from '../hooks/useDeleteNetworkDialog';
 import { DockerNetworkResult } from '@/api/generated/api.types';
-import { DeleteNetworkDialog } from '../dialogs/DeleteNetworkDialog';
+import { DeleteDialog } from '../delete-dialog';
 import { Box, Info, Share2 } from 'lucide-react';
 import { ContainerInfoTable } from './ContainerInfoTable';
 import { NetworkInfoTable } from './NetworkInfoTable';
 import { IPAMInfoTable } from './IPAMInfoTable';
-import { useRead } from '@/lib/hooks';
+import { useDeleteDialog, useRead } from '@/lib/hooks';
 
 const NetworkInfoWrapper = () => {
   const navigate = useNavigate();
   const { route } = useAppContext();
-  const { setDialogData, dialogData, deleteIsSuccess, deleteIsPending, requestDelete } = useDeleteNetworkDialog();
+
   const { platformId, resourceId } = useParams<{ platformId: string; resourceId: string }>();
   const { data, isLoading } = useRead('inspectNetwork', { platformId, networkId: resourceId });
 
-  useEffect(() => {
-    if (deleteIsSuccess) {
-      navigate(`/platforms/${platformId}/networks`);
-    }
-  }, [deleteIsSuccess, platformId, navigate]);
+  const { setDialogData, dialogData, deleteIsPending, requestDelete } = useDeleteDialog<DockerNetworkResult>({
+    type: 'Network',
+    onSuccess: useCallback(() => navigate(`/platforms/${platformId}/networks`), [platformId, navigate]),
+  });
 
-  // Memoize the current tab based on the route
   const currentTab = useMemo(() => {
     const matches = route?.path.match('[^/]+$');
     const tab = matches && matches[0];
@@ -126,7 +123,7 @@ const NetworkInfoWrapper = () => {
           )}
         </div>
       </div>
-      <DeleteNetworkDialog
+      <DeleteDialog
         dialogData={dialogData}
         setDialogData={setDialogData}
         requestDelete={requestDelete}

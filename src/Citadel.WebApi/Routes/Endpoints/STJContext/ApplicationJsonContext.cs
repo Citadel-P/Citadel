@@ -142,6 +142,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(DeploymentScaling))]
 [JsonSerializable(typeof(LoggingConfig))]
 [JsonSerializable(typeof(HealthCheckConfig))]
+[JsonSerializable(typeof(DeletePlatformsInput))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

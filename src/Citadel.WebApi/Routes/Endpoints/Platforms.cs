@@ -43,9 +43,9 @@ public static class Platforms
         return EndpointHandlers.HandleResult(result, PlatformView.Map);
     }
 
-    public static async Task<Results<NoContent, ProblemHttpResult>> Delete(IMediator mediator, [Description("The platform id")] Guid id, CancellationToken cancellationToken)
+    public static async Task<Results<NoContent, ProblemHttpResult>> Delete(IMediator mediator, DeletePlatformsInput input, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new DeletePlatform(id), cancellationToken);
+        var result = await mediator.Send(input.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 

@@ -2,15 +2,14 @@
 using Domain.Contracts.Resources.Volumes;
 using FluentValidation;
 using Hosting.Common;
-using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Volumes.Commands;
 
-public sealed record DeleteVolume(Guid PlatformId, string[] Names, bool? Force = false) : ICommand<Result>
+public sealed record DeleteVolumes(Guid PlatformId, string[] Names, bool? Force = false) : ICommand<Result>
 {
-    internal class Validator : AbstractValidator<DeleteVolume>
+    internal class Validator : AbstractValidator<DeleteVolumes>
     {
         public Validator()
         {
@@ -20,9 +19,9 @@ public sealed record DeleteVolume(Guid PlatformId, string[] Names, bool? Force =
     }
 }
 
-internal class DeleteVolumeHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IVolumeConnector> connectorFactory) : ICommandHandler<DeleteVolume, Result>
+internal class DeleteVolumesHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IVolumeConnector> connectorFactory) : ICommandHandler<DeleteVolumes, Result>
 {
-    public async ValueTask<Result> Handle(DeleteVolume command, CancellationToken cancellationToken)
+    public async ValueTask<Result> Handle(DeleteVolumes command, CancellationToken cancellationToken)
     {
         if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform, out var error))
         {

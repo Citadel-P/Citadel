@@ -1290,20 +1290,18 @@
         "tags": [
           "Platforms"
         ],
-        "summary": "Delete a platform",
-        "operationId": "deletePlatform",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "query",
-            "description": "The platform id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
+        "summary": "Delete platforms",
+        "operationId": "deletePlatforms",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletePlatformsInput"
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
         "responses": {
           "500": {
             "description": "Internal Server Error",
@@ -5736,6 +5734,21 @@
             "type": "array",
             "items": {
               "type": "string"
+            }
+          }
+        }
+      },
+      "DeletePlatformsInput": {
+        "required": [
+          "ids"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         }

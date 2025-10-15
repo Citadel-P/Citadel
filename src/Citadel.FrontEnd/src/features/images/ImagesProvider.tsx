@@ -2,11 +2,10 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { ImageView, RegistryView } from '@/api/generated/api.types';
 import { useQueryClient } from '@tanstack/react-query';
 import { ImagesContext } from './ImagesContext';
-import { useDeleteImageDialog } from './hooks/useDeleteImageDialog';
 import { useRunImageDialog } from './hooks/useRunImageDialog';
 import { useImagesGroup } from './hooks/useImagesGroup';
 import { useParams } from 'react-router';
-import { useRead } from '@/lib/hooks';
+import { useDeleteDialog, useRead } from '@/lib/hooks';
 
 export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const client = useQueryClient();
@@ -21,7 +20,9 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
   const [selectedRegistry, setSelectedRegistry] = useState<RegistryView | undefined>();
   const [localImages, setLocalImages] = useState<ImageView[]>([]);
   const [originalLocalImages, setOriginalLocalImages] = useState<ImageView[] | undefined>([]);
-  const { deleteIsPending, requestDelete, dialogData, setDialogData } = useDeleteImageDialog();
+  const { deleteIsPending, requestDelete, dialogData, setDialogData } = useDeleteDialog<ImageView>({
+    type: 'Image',
+  });
   const { runDialogData, setRunDialogData } = useRunImageDialog();
 
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');

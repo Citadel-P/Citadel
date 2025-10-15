@@ -5,16 +5,28 @@ import {
   UseMutationOptions,
   UseMutationResult,
   useQuery,
+  useQueryClient,
   UseQueryOptions,
   UseQueryResult,
 } from '@tanstack/react-query';
 import { useApiClientContext } from '@/api/ApiClientContext';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import type { KnownResourceName, ResourceResponse, UseReadArgs } from '@/api/resource-types';
+import {
+  AnyFn,
+  ApiFn,
+  ApiFnMap,
+  KnownResourceName,
+  MutateVariables,
+  PluralResourceMap,
+  ResourceResponse,
+  ResourceType,
+  UseReadArgs,
+} from '@/api/types';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
+import { use400ErrorToast } from '@/hooks/use400ErrorToast';
+import { toast } from 'sonner';
 
-type AnyFn = (...args: any[]) => Promise<any>;
 const EMPTY_ARGS = Object.freeze({});
 
 export function useRead<
@@ -24,7 +36,7 @@ export function useRead<
   resource: TResource,
   args?: UseReadArgs<TResource>,
   options?: Omit<
-    UseQueryOptions<TResult, Error, TResult, readonly [TResource, {} | UseReadArgs<TResource>]>,
+    UseQueryOptions<TResult, Error, TResult, readonly [TResource, UseReadArgs<TResource> | {}]>,
     'queryKey' | 'queryFn' | 'enabled'
   >,
 ): UseQueryResult<TResult, Error> {
@@ -32,56 +44,30 @@ export function useRead<
   const resDef = resources[resource];
   if (!resDef) throw new Error(`Unknown resource: ${String(resource)}`);
 
-  const queryObj: Record<string, any> = args?.query ?? {};
-
   const stableArgs = args ?? EMPTY_ARGS;
   const queryKey = useMemo(() => [resource, stableArgs] as const, [resource, stableArgs]);
 
-  const hasMounted = useRef(false);
-  const [mounted, setMounted] = useState(false);
+  const isEnabled = !!apiClient && resDef.requiredParams.every((p) => (args as any)?.[p] != null);
 
-  useEffect(() => {
-    hasMounted.current = true;
-    setMounted(true);
-  }, []);
-
-  const isEnabled = !!apiClient && resDef.requiredParams.every((p) => (args as any)?.[p] != null) && mounted;
-
-  return useQuery<TResult, Error, TResult, readonly [TResource, {} | UseReadArgs<TResource>]>({
+  return useQuery<TResult, Error, TResult, readonly [TResource, UseReadArgs<TResource> | {}]>({
     queryKey,
     enabled: isEnabled,
     queryFn: async ({ signal }) => {
       const fn = (apiClient.api as any)[resource] as AnyFn;
       if (!fn) throw new Error(`Unknown API resource: ${resource}`);
 
+      // Build arguments dynamically based on the resource definition
       const callArgs = resDef.params.map((paramName) => {
         if (paramName === 'params') return { ...(args?.params ?? {}), signal };
-        if (paramName === 'query') return queryObj;
-        return (args as any)?.[paramName] ?? undefined;
+        if (paramName === 'query') return args?.query ?? {};
+        return (args as any)?.[paramName];
       });
 
-      callArgs.push({ signal });
       return fn(...callArgs);
     },
     ...options,
   });
 }
-
-const WRITE_METHODS = ['POST', 'PATCH', 'PUT', 'DELETE'] as const;
-
-// Infer API client method types
-type ApiClientType = ReturnType<typeof useApiClientContext>['apiClient'];
-type ApiFnMap = ApiClientType['api'];
-type ApiFn<TResource extends keyof ApiFnMap> = ApiFnMap[TResource];
-
-type MutateVariables<TResource extends keyof typeof resources> = {
-  [K in (typeof resources)[TResource]['requiredParams'][number]]: string;
-} & {
-  [K in Exclude<
-    (typeof resources)[TResource]['params'][number],
-    (typeof resources)[TResource]['requiredParams'][number]
-  >]?: any;
-};
 
 export function useMutate<TResource extends keyof ApiFnMap>(
   resource: TResource,
@@ -94,10 +80,7 @@ export function useMutate<TResource extends keyof ApiFnMap>(
   const resDef = resources[resource];
   if (!resDef) throw new Error(`Unknown resource: ${String(resource)}`);
 
-  const fn = apiClient.api[resource] as ApiFn<TResource>
-  if (!WRITE_METHODS.includes(resDef.method as (typeof WRITE_METHODS)[number])) {
-    throw new Error(`useMutate can only be used with write endpoints, got ${resDef.method}`);
-  }
+  const fn = apiClient.api[resource] as ApiFn<TResource>;
 
   const mutation = useMutation<Awaited<ReturnType<typeof fn>>, Error, MutateVariables<TResource>>({
     ...options,
@@ -129,18 +112,51 @@ export function useMutate<TResource extends keyof ApiFnMap>(
   };
 }
 
-export type LocalStorageSetter<T> = (state: T) => T;
+export function useDialogState<T>() {
+  const [dialogData, setDialogData] = useState<IDialogData<T>>({ open: false });
 
-export const useLocalStorage = <T>(key: string, init: T): [T, (state: T | LocalStorageSetter<T>) => void] => {
-  const stored = localStorage.getItem(key);
-  const parsed = stored ? (JSON.parse(stored) as T) : undefined;
-  const [state, inner_set] = useState<T>(parsed ?? init);
-  const set = (state: T | LocalStorageSetter<T>) => {
-    inner_set((prev_state) => {
-      const new_val = typeof state === 'function' ? (state as LocalStorageSetter<T>)(prev_state) : state;
-      localStorage.setItem(key, JSON.stringify(new_val));
-      return new_val;
-    });
-  };
-  return [state, set];
-};
+  return { dialogData, setDialogData };
+}
+
+export interface IDialogData<T> {
+  open: boolean;
+  currentSelection?: T[];
+}
+
+interface DeleteDialogOptions {
+  type: ResourceType;
+  onSuccess?: () => void;
+}
+
+export function useDeleteDialog<TData>({ type, onSuccess }: DeleteDialogOptions) {
+  const client = useQueryClient();
+
+  const queryKeyToInvalidate = resources[`list${PluralResourceMap[type]}`].key;
+  const mutationKey = resources[`delete${PluralResourceMap[type]}`].key;
+
+  const resourceName = type.toLowerCase();
+
+  const { mutate, isPending: deleteIsPending, isSuccess: deleteIsSuccess, error } = useMutate(mutationKey);
+  const [dialogData, setDialogData] = useState<IDialogData<TData>>({ open: false });
+
+  const on400ErrorHandled = () => setDialogData({ open: false });
+
+  use400ErrorToast(
+    error,
+    `The selected ${resourceName}(s) could not be deleted (status code: 400).`,
+    on400ErrorHandled,
+  );
+
+  useEffect(() => {
+    if (deleteIsSuccess) {
+      if (queryKeyToInvalidate) client.invalidateQueries({ queryKey: [queryKeyToInvalidate] });
+      setDialogData({ open: false });
+      onSuccess?.();
+      toast.success(`The selected ${resourceName}(s) has been successfully deleted`);
+    }
+  }, [deleteIsSuccess, client, queryKeyToInvalidate, resourceName, onSuccess]);
+
+  const requestDelete = useCallback((data: MutateVariables<typeof mutationKey>) => mutate(data), [mutate]);
+
+  return { dialogData, setDialogData, deleteIsPending, requestDelete };
+}

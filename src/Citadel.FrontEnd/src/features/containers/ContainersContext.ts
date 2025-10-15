@@ -1,8 +1,8 @@
 import { ContainerView, DeleteContainersRequest } from '@/api/generated/api.types';
 import { createContext } from 'react';
-import { IDialogData } from '@/hooks/useDialogState';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
-import { DockerContainerView } from '@/api/models';
+import { DockerContainerView } from '@/api/types';
+import { IDialogData } from '@/lib/hooks';
 
 interface IContext {
   isLoading: boolean;

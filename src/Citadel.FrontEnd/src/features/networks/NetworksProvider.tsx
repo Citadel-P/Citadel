@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { DockerNetworkResult } from '@/api/generated/api.types';
 import { NetworksContext } from './NetworksContext';
-import { useDeleteNetworkDialog } from './hooks/useDeleteNetworkDialog';
+import { useDeleteDialog } from '@/lib/hooks';
 
 export const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   // State variables
@@ -11,7 +11,9 @@ export const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ chi
   const [currentNetwork, setCurrentNetwork] = useState<DockerNetworkResult>();
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
-  const { setDialogData, dialogData, requestDelete, deleteIsPending } = useDeleteNetworkDialog();
+  const { setDialogData, dialogData, requestDelete, deleteIsPending } = useDeleteDialog<DockerNetworkResult>({
+    type: 'Network',
+  });
 
   // Wrapper function that handles both original and filtered networks
   const handleNetworksUpdate = useCallback((networks: DockerNetworkResult[]) => {

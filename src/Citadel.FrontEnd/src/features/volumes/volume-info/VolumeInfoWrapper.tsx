@@ -1,41 +1,37 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useNavigate, useParams } from 'react-router';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useAppContext } from '@/AppContext';
 import Loader from '@/components/ui/loader';
 import { VolumeStateIndicator } from '../VolumeStateIndicator';
-import { useDeleteVolumeDialog } from '../hooks/useDeleteVolumeDialog';
 import { DockerVolumeResult } from '@/api/generated/api.types';
 import { Box, Info } from 'lucide-react';
 
-import { DeleteVolumeDialog } from '../dialogs/DeleteVolumeDialog';
+import { DeleteDialog } from '../delete-dialog';
 import { VolumeActionButtons } from '../VolumeActionButtons';
 import { ContainerInfoTable } from './ContainerInfoTable';
 import { VolumeInfoTable } from './VolumeInfoTable';
 import { truncate } from '@/lib/truncate';
-import { useRead } from '@/lib/hooks';
+import { useDeleteDialog, useRead } from '@/lib/hooks';
 
 const VolumeInfoWrapper = () => {
   const navigate = useNavigate();
   const { route } = useAppContext();
-  const { setDialogData, dialogData, deleteIsSuccess, deleteIsPending, requestDelete } = useDeleteVolumeDialog();
+
   const { platformId, resourceId } = useParams<{ platformId: string; resourceId: string }>();
   const { data, isLoading } = useRead('inspectVolume', { name: resourceId, platformId });
 
-  useEffect(() => {
-    if (deleteIsSuccess) {
-      navigate(`/platforms/${platformId}/volumes`);
-    }
-  }, [deleteIsSuccess, platformId, navigate]);
+  const { setDialogData, dialogData, deleteIsPending, requestDelete } = useDeleteDialog<DockerVolumeResult>({
+    type: 'Volume',
+    onSuccess: useCallback(() => navigate(`/platforms/${platformId}/volumes`), [platformId, navigate]),
+  });
 
-  // Memoize the current tab based on the route
   const currentTab = useMemo(() => {
     const matches = route?.path.match('[^/]+$');
     const tab = matches && matches[0];
     return tab && ['inspect', 'activity'].includes(tab) ? tab : 'inspect';
   }, [route]);
 
-  // Handle tab change
   const onValueChange = useCallback(
     (tabName: string) => {
       if (resourceId) {
@@ -110,7 +106,7 @@ const VolumeInfoWrapper = () => {
           )}
         </div>
       </div>
-      <DeleteVolumeDialog
+      <DeleteDialog
         dialogData={dialogData}
         setDialogData={setDialogData}
         requestDelete={requestDelete}

@@ -8,7 +8,7 @@ import { useRegistriesContext } from './RegistriesContext';
 import { Link } from 'react-router';
 import { InfoIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { DeleteRegistryDialog } from './dialogs/DeleteRegistryDialog';
+import { DeleteDialog } from './delete-dialog';
 
 const getNonDefaultRows = (rows: Row<RegistryView>[]) => rows.filter((row) => !row.original.isDefault);
 
@@ -133,7 +133,7 @@ export const RegistriesTable = () => {
           Showing {registries.length} of {registries.length} registries
         </span>
       </div>
-      <DeleteRegistryDialog />
+      <DeleteDialog />
     </div>
   );
 };

@@ -1,13 +1,15 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { DockerVolumeResult } from '@/api/generated/api.types';
 import { VolumesContext } from './VolumesContext';
-import { useDeleteVolumeDialog } from './hooks/useDeleteVolumeDialog';
+import { useDeleteDialog } from '@/lib/hooks';
 
 export const VolumesProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const [selectedRows, setSelectedRows] = useState<DockerVolumeResult[] | undefined>();
   const [volumes, setVolumes] = useState<DockerVolumeResult[] | undefined>([]);
   const [originalVolumes, setOriginalVolumes] = useState<DockerVolumeResult[] | undefined>([]);
-  const { setDialogData, dialogData, requestDelete, deleteIsPending } = useDeleteVolumeDialog();
+  const { setDialogData, dialogData, requestDelete, deleteIsPending } = useDeleteDialog<DockerVolumeResult>({
+    type: 'Volume',
+  });
   const [currentVolume, setCurrentVolume] = useState<DockerVolumeResult>();
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 

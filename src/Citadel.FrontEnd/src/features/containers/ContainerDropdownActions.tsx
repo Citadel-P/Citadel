@@ -11,7 +11,7 @@ import { ContainerView } from '@/api/generated/api.types';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { useNavigate } from 'react-router';
 import { ActionMenuItem } from '@/components/ui/ActionMenuItem';
-import { DockerContainerView } from '@/api/models';
+import { DockerContainerView } from '@/api/types';
 import { IDialogData } from '@/hooks/useDialogState';
 
 export const ContainerDropdownActions: React.FC<{

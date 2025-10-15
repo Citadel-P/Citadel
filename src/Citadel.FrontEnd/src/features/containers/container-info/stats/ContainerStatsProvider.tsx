@@ -2,7 +2,7 @@ import { useParams } from 'react-router';
 import { ContainerStateStatus, ContainerStatView } from '@/api/generated/api.types';
 import { useEffect, useMemo, useState } from 'react';
 import { ContainerStatsContext } from './ContainerStatsContext';
-import { DockerContainerView } from '@/api/models';
+import { DockerContainerView } from '@/api/types';
 import { useRead } from '@/lib/hooks';
 
 export const ContainerStatsProvider: React.FC<{

@@ -17,7 +17,7 @@ export const resources = {
   unpauseContainers: { method: "PATCH", key: "unpauseContainers", params: ["data","params"], requiredParams: [], queryParams: [] },
   listPlatforms: { method: "GET", key: "listPlatforms", params: ["params"], requiredParams: [], queryParams: [] },
   createPlatform: { method: "POST", key: "createPlatform", params: ["data","params"], requiredParams: [], queryParams: [] },
-  deletePlatform: { method: "DELETE", key: "deletePlatform", params: ["query","params"], requiredParams: ["id"], queryParams: ["id"] },
+  deletePlatforms: { method: "DELETE", key: "deletePlatforms", params: ["params"], requiredParams: [], queryParams: [] },
   getPlatfom: { method: "GET", key: "getPlatfom", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   updatePlatform: { method: "PATCH", key: "updatePlatform", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
   listContainers: { method: "GET", key: "listContainers", params: ["id","params"], requiredParams: ["id"], queryParams: [] },

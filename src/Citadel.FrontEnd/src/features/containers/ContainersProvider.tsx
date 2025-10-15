@@ -3,7 +3,8 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useContainersGroup } from './hooks/useContainersGroup';
 import { useParams } from 'react-router';
 import { ContainersContext } from './ContainersContext';
-import { useDeleteContainerDialog } from './dialogs/useDeleteContainerDialog';
+import { DockerContainerView } from '@/api/types';
+import { useDeleteDialog } from '@/lib/hooks';
 
 export const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const { platformId } = useParams<{ platformId: string }>();
@@ -17,7 +18,9 @@ export const ContainersProvider: React.FC<{ children?: React.ReactNode }> = ({ c
   const [originalContainers, setOriginalContainers] = useState<ContainerView[] | undefined>([]);
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
 
-  const { deleteIsPending, requestDelete, dialogData, setDialogData } = useDeleteContainerDialog();
+  const { deleteIsPending, requestDelete, dialogData, setDialogData } = useDeleteDialog<ContainerView | DockerContainerView>({
+      type: 'Container',
+    });
   // Update containers when hub info changes
   useEffect(() => {
     if (containersInfo?.containers) {

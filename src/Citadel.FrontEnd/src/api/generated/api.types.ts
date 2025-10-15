@@ -481,6 +481,10 @@ export interface DeleteNetworksInput {
   ids: string[];
 }
 
+export interface DeletePlatformsInput {
+  ids: string[];
+}
+
 export interface DeleteRegistriesInput {
   ids: string[];
 }
@@ -2338,8 +2342,8 @@ export class Api<
      * No description
      *
      * @tags Platforms
-     * @name DeletePlatform
-     * @summary Delete a platform
+     * @name DeletePlatforms
+     * @summary Delete platforms
      * @request DELETE:/api/v1/platforms
      * @secure
      * @response `204` `void` No Content
@@ -2349,21 +2353,13 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    deletePlatform: (
-      query: {
-        /**
-         * The platform id
-         * @format uuid
-         */
-        id: string;
-      },
-      params: RequestParams = {},
-    ) =>
+    deletePlatforms: (data: DeletePlatformsInput, params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/platforms`,
         method: "DELETE",
-        query: query,
+        body: data,
         secure: true,
+        type: ContentType.Json,
         ...params,
       }),
 

@@ -2,7 +2,7 @@ import { useApiClientContext } from '@/api/ApiClientContext';
 import { useMutation } from '@tanstack/react-query';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 import { PullImageRequest } from '@/api/generated/api.types';
-import { Cancellable } from '@/api/models';
+import { Cancellable } from '@/api/types';
 import { useAuthContext } from '@/features/auth/AuthContext';
 
 export const usePullImageStream = (onChunkReceived: (chunk: string) => void) => {

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { PlatformDescriptorDockerPlatformDescriptor, PlatformsView, PlatformView } from '@/api/generated/api.types';
 import { HubConnection } from '@microsoft/signalr';
-import { PlatformStatsBatchView } from '@/api/models';
+import { PlatformStatsBatchView } from '@/api/types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 
 export const usePlatformsGroup = () => {

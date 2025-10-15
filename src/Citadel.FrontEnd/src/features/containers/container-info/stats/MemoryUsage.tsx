@@ -14,7 +14,7 @@ import dayjs from 'dayjs';
 import { byteTransform } from '@/lib/bytes.helper';
 import { ContainerStatView } from '@/api/generated/api.types';
 import { useContainerStatsContext } from './ContainerStatsContext';
-import { DockerContainerView } from '@/api/models';
+import { DockerContainerView } from '@/api/types';
 
 const MemoryUsage = () => {
   const { stats, container, isLoading } = useContainerStatsContext();

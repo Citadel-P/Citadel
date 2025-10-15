@@ -1,7 +1,7 @@
 import { createContext } from 'react';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { DeleteImagesRequest, ImageView, RegistryView } from '@/api/generated/api.types';
-import { IDialogData } from '@/hooks/useDialogState';
+import { IDialogData } from '@/lib/hooks';
 
 interface IContext {
   isLoading: boolean;

@@ -10,7 +10,7 @@ import { Play } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
 import { byteTransform } from '@/lib/bytes.helper';
-import { DeleteLocalImageDialog } from './dialogs/DeleteLocalImageDialog';
+import { DeleteDialog } from './delete-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { RunImageDialog } from './dialogs/RunImageDialog';
@@ -188,7 +188,7 @@ export default function LocalImagesTable() {
         )}
       </div>
       <RunImageDialog runDialogData={runDialogData} setRunDialogData={setRunDialogData} />
-      <DeleteLocalImageDialog
+      <DeleteDialog
         dialogData={dialogData}
         setDialogData={setDialogData}
         requestDelete={requestDelete}

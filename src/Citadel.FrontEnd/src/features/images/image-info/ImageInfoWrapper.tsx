@@ -4,9 +4,8 @@ import { ImageSateIndicator } from '../ImageStateIndicator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useNavigate, useParams } from 'react-router';
 import { RunImageDialog } from '../dialogs/RunImageDialog';
-import { DeleteLocalImageDialog } from '../dialogs/DeleteLocalImageDialog';
-import { useDeleteImageDialog } from '../hooks/useDeleteImageDialog';
-import { useCallback, useEffect, useMemo } from 'react';
+import { DeleteDialog } from '../delete-dialog';
+import { useCallback, useMemo } from 'react';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { useRunImageDialog } from '../hooks/useRunImageDialog';
 import { useAppContext } from '@/AppContext';
@@ -16,32 +15,29 @@ import { ImageInfoTable } from './ImageInfoTable';
 import { ImageLayerTable } from './ImageLayerTable';
 import Loader from '@/components/ui/loader';
 import { truncate } from '@/lib/truncate';
-import { useRead } from '@/lib/hooks';
+import { useDeleteDialog, useRead } from '@/lib/hooks';
 
 const ImageInfoWrapper = () => {
   const navigate = useNavigate();
   const { route } = useAppContext();
   const { platformId, resourceId } = useParams<{ platformId: string; resourceId: string }>();
   const { runDialogData, setRunDialogData } = useRunImageDialog();
-  const { setDialogData, dialogData, deleteIsSuccess, deleteIsPending, requestDelete } = useDeleteImageDialog();
+
+  const { setDialogData, dialogData, deleteIsPending, requestDelete } = useDeleteDialog<ImageView>({
+    type: 'Image',
+    onSuccess: useCallback(() => navigate(`/platforms/${platformId}/images`), [platformId, navigate]),
+  });
+
   const { data, isLoading } = useRead('inspectImage', { platformId, imageId: resourceId });
 
   const [name, tag] = data?.data.repoTags?.at(0)?.split(':') ?? [];
 
-  useEffect(() => {
-    if (deleteIsSuccess) {
-      navigate(`/platforms/${platformId}/images`);
-    }
-  }, [deleteIsSuccess, platformId, navigate]);
-
-  // Memoize the current tab based on the route
   const currentTab = useMemo(() => {
     const matches = route?.path.match('[^/]+$');
     const tab = matches && matches[0];
     return tab && ['inspect', 'activity'].includes(tab) ? tab : 'inspect';
   }, [route]);
 
-  // Handle tab change
   const onValueChange = useCallback(
     (tabName: string) => {
       if (resourceId) {
@@ -125,7 +121,7 @@ const ImageInfoWrapper = () => {
           )}
         </div>
       </div>
-      <DeleteLocalImageDialog
+      <DeleteDialog
         dialogData={dialogData}
         setDialogData={setDialogData}
         requestDelete={requestDelete}

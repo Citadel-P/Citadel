@@ -1,14 +1,14 @@
 import { createContext } from 'react';
 import { useRequiredContext } from '@/hooks/useRequiredContext';
-import { IDialogData } from '@/hooks/useDialogState';
-import { RegistryView } from '@/api/generated/api.types';
+import { DeleteRegistriesInput, RegistryView } from '@/api/generated/api.types';
+import { IDialogData } from '@/lib/hooks';
 
 interface IContext {
   isLoading: boolean;
   registries: RegistryView[] | undefined;
   selectedRows: RegistryView[] | undefined;
   setSelectedRows: (ids: RegistryView[]) => void;
-  requestDelete: (ids: string[]) => void;
+  requestDelete: (ids: DeleteRegistriesInput) => void;
   deleteIsPending: boolean;
   dialogData: IDialogData<RegistryView>;
   setDialogData: (data: IDialogData<RegistryView>) => void;

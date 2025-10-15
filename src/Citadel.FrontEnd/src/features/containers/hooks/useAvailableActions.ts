@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { ContainerView, ContainerStateStatus } from '@/api/generated/api.types';
-import { DockerContainerView } from '@/api/models';
+import { DockerContainerView } from '@/api/types';
 import { useMutate } from '@/lib/hooks';
 
 export const useAvailableActions = (containers: (ContainerView | DockerContainerView)[] | undefined) => {

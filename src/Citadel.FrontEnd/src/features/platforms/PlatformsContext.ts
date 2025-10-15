@@ -1,14 +1,14 @@
 import { useRequiredContext } from '@/hooks/useRequiredContext';
 import { createContext } from 'react';
-import { PlatformView } from '@/api/generated/api.types';
-import { IDialogData } from '@/hooks/useDialogState';
+import { DeletePlatformsInput, PlatformView } from '@/api/generated/api.types';
+import { IDialogData } from '@/lib/hooks';
 
 interface IContext {
   isLoading: boolean;
   platforms: PlatformView[] | undefined;
   dialogData: IDialogData<PlatformView>;
   setDialogData: (data: IDialogData<PlatformView>) => void;
-  requestDelete: (platformId: string) => void;
+  requestDelete: (ids: DeletePlatformsInput) => void;
   deleteIsPending: boolean;
 }
 

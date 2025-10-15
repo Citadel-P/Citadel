@@ -13,7 +13,7 @@ import { useMemo } from 'react';
 import dayjs from 'dayjs';
 import { ContainerStatView } from '@/api/generated/api.types';
 import { useContainerStatsContext } from './ContainerStatsContext';
-import { DockerContainerView } from '@/api/models';
+import { DockerContainerView } from '@/api/types';
 
 const CpuUsageHeader = ({ container }: { container: DockerContainerView | undefined }) => (
   <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">

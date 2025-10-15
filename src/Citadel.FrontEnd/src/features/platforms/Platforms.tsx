@@ -2,7 +2,7 @@ import Loader from '@/components/ui/loader';
 import { useNavigate } from 'react-router';
 import { AlertMessage } from '@/components/ui/alert-message';
 import { usePlatformsContext } from './PlatformsContext';
-import { DeletePlatformDialog } from './dialogs/DeletePlatformDialog';
+import { DeleteDialog } from './delete-dialog';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { PlatformType } from '@/api/generated/api.types';
@@ -46,7 +46,7 @@ const Platforms = () => {
             ),
         )}
       </div>
-      <DeletePlatformDialog />
+      <DeleteDialog />
     </div>
   );
 };

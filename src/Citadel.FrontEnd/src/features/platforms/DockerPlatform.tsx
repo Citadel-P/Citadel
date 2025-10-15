@@ -89,7 +89,7 @@ const DockerPlatform = ({ platform }: { platform: PlatformView }) => {
   };
 
   const handleDeletePlatform = () => {
-    setDialogData({ open: true, platform });
+    setDialogData({ open: true, currentSelection: [platform] });
   };
 
   return (

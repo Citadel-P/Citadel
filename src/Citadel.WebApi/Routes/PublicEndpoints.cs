@@ -227,12 +227,12 @@ public static class PublicEndpoints
             .WithName("createPlatform");
 
         platforms.MapDelete("/", Platforms.Delete)
-            .WithSummary("Delete a platform")
+            .WithSummary("Delete platforms")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .WithName("deletePlatform");
+            .WithName("deletePlatforms");
 
     }
 
