@@ -8,6 +8,8 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router';
+import { startTransition, useCallback } from 'react';
 
 export interface DropdownAction {
   id: string;
@@ -23,7 +25,7 @@ interface DropdownActionsProps {
   items: DropdownAction[];
 }
 
-export const DropdownActions = ({ items }: DropdownActionsProps) => (
+const DropdownActions = ({ items }: DropdownActionsProps) => (
   <DropdownMenu>
     <DropdownMenuTrigger asChild>
       <Button variant="ghost" className="h-8 w-8 p-0">
@@ -50,3 +52,29 @@ export const DropdownActions = ({ items }: DropdownActionsProps) => (
     </DropdownMenuContent>
   </DropdownMenu>
 );
+
+interface BaseContext<T> {
+  setDialogData: (data: { open: boolean; currentSelection: T[] }) => void;
+}
+
+interface CreateDropdownConfig<T> {
+  resource: T;
+  context: BaseContext<T>;
+  actions: (args: {
+    navigate: ReturnType<typeof useNavigate>;
+    openDialog: () => void;
+  }) => DropdownAction[];
+}
+
+export function createTableDropdown<T>({ resource, context, actions }: CreateDropdownConfig<T>) {
+  const navigate = useNavigate();
+
+  const openDialog = useCallback(() => {
+    startTransition(() => {
+      context.setDialogData({ open: true, currentSelection: [resource] });
+    });
+  }, [context, resource]);
+
+  const items = actions({ navigate, openDialog });
+  return <DropdownActions items={items} />;
+}
