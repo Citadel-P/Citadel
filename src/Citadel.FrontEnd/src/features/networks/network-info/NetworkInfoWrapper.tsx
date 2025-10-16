@@ -4,7 +4,6 @@ import { useCallback, useMemo } from 'react';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { useAppContext } from '@/AppContext';
 import Loader from '@/components/ui/loader';
-import { NetworkStateIndicator } from '../NetworkSateIndicator';
 import { ActionBarButtons } from '../action-bar-buttons';
 import { DockerNetworkResult } from '@/api/generated/api.types';
 import { DeleteDialog } from '../delete-dialog';
@@ -13,6 +12,7 @@ import { ContainerInfoTable } from './ContainerInfoTable';
 import { NetworkInfoTable } from './NetworkInfoTable';
 import { IPAMInfoTable } from './IPAMInfoTable';
 import { useDeleteDialog, useRead } from '@/lib/hooks';
+import { StateIndicator } from '@/components/custom/state-indicator';
 
 const NetworkInfoWrapper = () => {
   const navigate = useNavigate();
@@ -52,7 +52,7 @@ const NetworkInfoWrapper = () => {
             <div>
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-3">
                 <div className="flex items-center gap-1 mb-4 md:mb-0">
-                  <NetworkStateIndicator inUse={Object.keys(data?.data.containers ?? {}).length > 0} />
+                  <StateIndicator value={Object.keys(data?.data.containers ?? {}).length > 0} />
                   <div className="flex flex-col text-md font-bold text-foreground">
                     <span>{data?.data.name}</span>
                     <span className="text-xs text-foreground/40">

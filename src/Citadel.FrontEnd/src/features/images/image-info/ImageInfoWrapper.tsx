@@ -1,6 +1,5 @@
 import { ImageView } from '@/api/generated/api.types';
 import { ActionBarButtons } from '../action-bar-buttons';
-import { ImageSateIndicator } from '../ImageStateIndicator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useNavigate, useParams } from 'react-router';
 import { RunImageDialog } from '../dialogs/RunImageDialog';
@@ -16,6 +15,7 @@ import { ImageLayerTable } from './ImageLayerTable';
 import Loader from '@/components/ui/loader';
 import { truncate } from '@/lib/truncate';
 import { useDeleteDialog, useRead } from '@/lib/hooks';
+import { StateIndicator } from '@/components/custom/state-indicator';
 
 const ImageInfoWrapper = () => {
   const navigate = useNavigate();
@@ -57,7 +57,7 @@ const ImageInfoWrapper = () => {
             <div>
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-3">
                 <div className="flex items-center gap-1 mb-4 md:mb-0">
-                  <ImageSateIndicator inUse={Object.keys(data?.data.containers ?? {}).length > 0} />
+                  <StateIndicator value={Object.keys(data?.data.containers ?? {}).length > 0} />
                   <div className="flex flex-col text-md font-bold text-foreground">
                     <span>{truncate(data?.data.repoTags?.at(0) ?? '-:-', 42)}</span>
                     <span className="text-xs text-foreground/40">

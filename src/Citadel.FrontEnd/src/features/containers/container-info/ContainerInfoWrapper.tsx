@@ -12,7 +12,6 @@ import Loader from '@/components/ui/loader';
 import { ContainerStatsProvider } from './stats/ContainerStatsProvider';
 import { useContainerInfoGroup } from '../hooks/useContainerInfoGroup';
 import { ContainerStateStatus, ContainerView } from '@/api/generated/api.types';
-import { ContainerStateIndicator } from '../ContainerStateIndicator';
 import { DeleteDialog } from '../delete-dialog';
 import { ActionBarButtons } from '../action-bar-buttons';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
@@ -20,6 +19,7 @@ import { fromNow } from '@/lib/dayjs.helper';
 import { ContainerInfoTable } from './ContainerInfoTable';
 import { useDeleteDialog } from '@/lib/hooks';
 import { DockerContainerView } from '@/api/types';
+import { StateIndicator } from '@/components/custom/state-indicator';
 
 const ContainerInfoWrapper = () => {
   const navigate = useNavigate();
@@ -93,7 +93,7 @@ const ContainerInfoWrapper = () => {
           {/* Header */}
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between">
             <div className="flex items-center gap-1 mb-4 md:mb-0">
-              <ContainerStateIndicator stat={containerState ?? ContainerStateStatus.Exited} />
+              <StateIndicator value={containerState ?? ContainerStateStatus.Exited} />
               <div className="flex flex-col text-md font-bold text-foreground">
                 <span>{containerName?.slice(1)}</span>
                 <span className="text-xs text-foreground/40">

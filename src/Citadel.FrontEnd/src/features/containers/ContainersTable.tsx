@@ -9,10 +9,10 @@ import { byteTransform } from '@/lib/bytes.helper';
 import SortableCell from '@/components/ui/SortableCell';
 import { Link } from 'react-router';
 import { TableDropdown } from './table-dropdown';
-import { ContainerStateIndicator } from './ContainerStateIndicator';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { PortsDisplay } from '@/components/ui/PortsDisplay';
 import { ImageName } from './container-info/ImageName';
+import { StateIndicator } from '@/components/custom/state-indicator';
 
 const columns: ColumnDef<ContainerView>[] = [
   {
@@ -42,7 +42,7 @@ const columns: ColumnDef<ContainerView>[] = [
         {' '}
         {/* row container */}
         <div className="flex items-center">
-          <ContainerStateIndicator stat={row.original.state ?? ContainerStateStatus.Exited} />
+          <StateIndicator value={row.original.state ?? ContainerStateStatus.Exited} />
         </div>
         <Link to={`../containers/${row.original.containerId?.slice(0, 12)}/logs`} className="table-link">
           {row.original.name ? row.original.name?.slice(1) : ''}

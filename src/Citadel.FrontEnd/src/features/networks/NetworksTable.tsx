@@ -9,10 +9,10 @@ import { useNetworksContext } from './NetworksContext';
 import { useAppContext } from '@/AppContext';
 import { TableDropDown } from './table-dropdown';
 import { DeleteDialog } from './delete-dialog';
-import { NetworkStateIndicator } from './NetworkSateIndicator';
 import { useNavigate, useParams } from 'react-router';
 import { formatId } from '@/lib/utils';
 import { useRead } from '@/lib/hooks';
+import { StateIndicator } from '@/components/custom/state-indicator';
 
 export default function NetworksTable() {
   const { currentPlatform } = useAppContext();
@@ -181,7 +181,7 @@ const NetworkNameRow = ({ network }: { network: DockerNetworkResult }) => {
   return (
     <div className="flex items-center whitespace-nowrap">
       <div className="flex items-center">
-        <NetworkStateIndicator inUse={network.inUse ?? false} />
+        <StateIndicator value={network.inUse} />
       </div>
       <span
         className="cursor-pointer hover:underline text-[13px]"

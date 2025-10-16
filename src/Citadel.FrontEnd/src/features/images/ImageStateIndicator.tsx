@@ -8,7 +8,7 @@ export const ImageSateIndicator = memo(({ inUse }: { inUse: boolean }) => {
     <TooltipProvider delayDuration={200}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className={`${getStatusClass()} p-1 mr-2 h-2 w-2 rounded-full`} />
+          <div className={`${getStatusClass()} mr-2 h-2 w-2 rounded-full`} />
         </TooltipTrigger>
         <TooltipContent>
           <span>{inUse ? 'In use' : 'Unused'}</span>

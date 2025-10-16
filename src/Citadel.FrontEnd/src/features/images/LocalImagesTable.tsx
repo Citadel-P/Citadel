@@ -14,11 +14,11 @@ import { DeleteDialog } from './delete-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { RunImageDialog } from './dialogs/RunImageDialog';
-import { ImageSateIndicator } from './ImageStateIndicator';
 import { useNavigate, useParams } from 'react-router';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { formatId } from '@/lib/utils';
 import { RegistryDisplay } from '@/components/ui/RegistryDisplay';
+import { StateIndicator } from '@/components/custom/state-indicator';
 
 const columns = (): ColumnDef<ImageView>[] => [
   {
@@ -126,7 +126,7 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
   return (
     <div className="flex items-center whitespace-nowrap">
       <div className="flex items-center">
-        <ImageSateIndicator inUse={image.isInUse ?? false} />
+        <StateIndicator value={image.isInUse} />
       </div>
       <span
         className="cursor-pointer table-link"

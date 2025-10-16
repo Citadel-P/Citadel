@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router';
 import { useCallback, useMemo } from 'react';
 import { useAppContext } from '@/AppContext';
 import Loader from '@/components/ui/loader';
-import { VolumeStateIndicator } from '../VolumeStateIndicator';
 import { DockerVolumeResult } from '@/api/generated/api.types';
 import { Box, Info } from 'lucide-react';
 
@@ -13,6 +12,7 @@ import { ContainerInfoTable } from './ContainerInfoTable';
 import { VolumeInfoTable } from './VolumeInfoTable';
 import { truncate } from '@/lib/truncate';
 import { useDeleteDialog, useRead } from '@/lib/hooks';
+import { StateIndicator } from '@/components/custom/state-indicator';
 
 const VolumeInfoWrapper = () => {
   const navigate = useNavigate();
@@ -51,7 +51,7 @@ const VolumeInfoWrapper = () => {
             <div>
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-3">
                 <div className="flex items-center gap-1 mb-4 md:mb-0">
-                  <VolumeStateIndicator inUse={data?.data.inUse ?? false} />
+                  <StateIndicator value={data?.data.inUse ?? false} />
                   <div className="flex text-wrap text-md font-bold text-foreground">
                     <span>{truncate(data?.data.id ?? '', 42)}</span>
                   </div>

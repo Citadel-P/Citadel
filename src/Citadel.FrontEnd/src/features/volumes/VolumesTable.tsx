@@ -9,10 +9,10 @@ import { useVolumesContext } from './VolumesContext';
 import { DeleteDialog } from './delete-dialog';
 import { byteTransform } from '@/lib/bytes.helper';
 import { fromNow } from '@/lib/dayjs.helper';
-import { VolumeStateIndicator } from './VolumeStateIndicator';
 import { useNavigate, useParams } from 'react-router';
 import { useRead } from '@/lib/hooks';
 import { TableDropDown } from './table-dropdown';
+import { StateIndicator } from '@/components/custom/state-indicator';
 
 export default function VolumesTable() {
   const { currentPlatform } = useAppContext();
@@ -138,7 +138,7 @@ const VolumeNameRow = ({ volume }: { volume: DockerVolumeResult }) => {
   return (
     <div className="flex items-center whitespace-nowrap">
       <div className="flex items-center">
-        <VolumeStateIndicator inUse={volume.inUse ?? false} />
+        <StateIndicator value={volume.inUse} />
       </div>
       <span
         className="cursor-pointer hover:underline text-[13px]"
