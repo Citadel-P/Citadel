@@ -20,7 +20,7 @@ export const useImagesGroup = (platformId?: string) => {
       }
 
       const updatedImages = [...(currentInfo.images ?? [])];
-      const existingIndex = updatedImages.findIndex((c) => c.imageId === image.imageId);
+      const existingIndex = updatedImages.findIndex((c) => c.dockerImageId === image.dockerImageId);
 
       if (existingIndex === -1) {
         return { ...currentInfo, images: [image, ...updatedImages] };
@@ -41,7 +41,7 @@ export const useImagesGroup = (platformId?: string) => {
       }
 
       const updatedImages = [...(currentInfo.images ?? [])];
-      const existingIndex = updatedImages.findIndex((c) => c.imageId === imageEvent?.image.imageId);
+      const existingIndex = updatedImages.findIndex((c) => c.dockerImageId === imageEvent?.image.dockerImageId);
 
       switch (imageEvent?.eventType) {
         case 'delete':

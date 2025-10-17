@@ -64,7 +64,7 @@ const columns = (): ColumnDef<ImageView>[] => [
     header: ({ column }) => <SortableCell cellName="Image Id" column={column} />,
     cell: ({ row }) => (
       <CopyTextToClipboard
-        textToCopy={row.original.imageId}
+        textToCopy={row.original.dockerImageId}
         transform={formatId}
         groupClassName="rowid"
         textClassName=""
@@ -120,7 +120,7 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
   const { platformId } = useParams<{ platformId: string }>();
   const navigate = useNavigate();
   function onNameClick() {
-    navigate(`/platforms/${platformId}/images/${formatId(image.imageId)}/`);
+    navigate(`/platforms/${platformId}/images/${formatId(image.dockerImageId)}/`);
   }
 
   return (

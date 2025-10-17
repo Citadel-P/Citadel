@@ -20,7 +20,7 @@ export const DeleteDialog = ({
   const [force, setForce] = useState(false);
   const [noPrune, setNoPrune] = useState(false);
 
-  const imageIds = dialogData.currentSelection?.map((c) => c.imageId!) ?? [];
+  const imageIds = dialogData.currentSelection?.map((c) => c.dockerImageId!) ?? [];
   const handleDelete = () => {
     requestDelete({ platformId: currentPlatform?.id ?? '', ids: imageIds, force, noPrune });
   };

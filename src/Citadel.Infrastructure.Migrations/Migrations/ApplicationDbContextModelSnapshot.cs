@@ -22,22 +22,22 @@ namespace Infrastructure.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ContainerId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
                     b.Property<long>("Created")
                         .HasColumnType("REAL");
 
                     b.Property<string>("DeploymentId")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ImageEntityId")
+                    b.Property<string>("DockerContainerId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DockerImageId")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ImageId")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
@@ -67,8 +67,8 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("DeploymentId");
 
-                    b.HasIndex("ImageEntityId")
-                        .HasDatabaseName("IX_Containers_ImageEntityId");
+                    b.HasIndex("DockerImageId")
+                        .HasDatabaseName("IX_Containers_DockerImageId");
 
                     b.HasIndex("ImageId")
                         .HasDatabaseName("IX_Containers_ImageId");
@@ -76,9 +76,9 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("PlatformId")
                         .HasDatabaseName("IX_Containers_PlatformId");
 
-                    b.HasIndex("ContainerId", "PlatformId")
+                    b.HasIndex("DockerContainerId", "PlatformId")
                         .IsUnique()
-                        .HasDatabaseName("IX__Containers_ContainerId_PlatformId");
+                        .HasDatabaseName("IX__Containers_DockerContainerId_PlatformId");
 
                     b.ToTable("Containers", (string)null);
                 });
@@ -175,7 +175,7 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ImageId")
+                    b.Property<string>("DockerImageId")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -212,9 +212,9 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("RegistryId");
 
-                    b.HasIndex("ImageId", "PlatformId")
+                    b.HasIndex("DockerImageId", "PlatformId")
                         .IsUnique()
-                        .HasDatabaseName("IX_Images_ImageId_PlatformId");
+                        .HasDatabaseName("IX_Images_DockerImageId_PlatformId");
 
                     b.ToTable("Images", (string)null);
                 });
@@ -538,7 +538,7 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasOne("Image", null)
                         .WithMany()
-                        .HasForeignKey("ImageEntityId")
+                        .HasForeignKey("ImageId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("Platform", null)

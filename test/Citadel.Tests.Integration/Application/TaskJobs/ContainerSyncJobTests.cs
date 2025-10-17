@@ -58,10 +58,10 @@ public class ContainerSyncJobTests : IntegrationTestBase
         {
             await uow.Containers.AddAsync(new Container(
                     name: container.Name,
-                    imageId: container.Image,
+                    dockerImageId: container.Image,
                     platformId: platform.Id,
                     ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
-                    containerId: container.ContainerId,
+                    dockerContainerId: container.ContainerId,
                     state: ContainerStateStatus.Offline)
                 , TestContext.Current.CancellationToken);
         }
@@ -96,7 +96,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
         Assert.All(dbContainers, s =>
             Assert.True(
                 s.State == ContainerStateStatus.Running,
-                $"Container {s.ContainerId} is not running. Actual state: {s.State}"
+                $"Container {s.DockerContainerId} is not running. Actual state: {s.State}"
             ));
         Assert.True(cache.TryGetContainers(platformId, out var cacheContainers));
         Assert.Equal(3, cacheContainers?.Count);
@@ -109,10 +109,10 @@ public class ContainerSyncJobTests : IntegrationTestBase
         // Arrange: Seed DB with a container that will be missing from the fresh list
         var staleContainer = new Container(
             name: "stale",
-            imageId: "fake-id",
+            dockerImageId: "fake-id",
             platformId: platformId,
             ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
-            containerId: "stale-id",
+            dockerContainerId: "stale-id",
             state: ContainerStateStatus.Running);
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -135,7 +135,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
         var freshUow = assertScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
         var dbContainers = await freshUow.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);
-        Assert.DoesNotContain(dbContainers, c => c.ContainerId == "stale-id");
+        Assert.DoesNotContain(dbContainers, c => c.DockerContainerId == "stale-id");
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var dbContainers = await uow.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);
-        Assert.Contains(dbContainers, c => c.ContainerId == "new-id");
+        Assert.Contains(dbContainers, c => c.DockerContainerId == "new-id");
     }
 
     [Fact]
@@ -177,10 +177,10 @@ public class ContainerSyncJobTests : IntegrationTestBase
         var containerId = "update-id";
         var oldContainer = new Container(
             name: "old",
-            imageId: "fake-id",
+            dockerImageId: "fake-id",
             platformId: platformId,
             ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
-            containerId: containerId,
+            dockerContainerId: containerId,
             state: ContainerStateStatus.Paused);
         await using (var uow = Services.GetRequiredService<IUnitOfWork>())
         {
@@ -213,7 +213,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
         await using var scope = Services.CreateAsyncScope();
         var uow2 = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var dbContainers = await uow2.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);
-        var updated = dbContainers.First(c => c.ContainerId == containerId);
+        var updated = dbContainers.First(c => c.DockerContainerId == containerId);
         Assert.Equal("updated", updated.Name);
         Assert.Equal(ContainerStateStatus.Running, updated.State);
     }

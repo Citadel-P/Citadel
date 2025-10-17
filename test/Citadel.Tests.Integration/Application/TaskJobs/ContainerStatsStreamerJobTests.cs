@@ -52,10 +52,10 @@ public class ContainerStatsStreamerJobTests : IntegrationTestBase
         {
             await uow.Containers.AddAsync(new Container(
                 name: container.Name,
-                imageId: container.ImageId,
+                dockerImageId: container.ImageId,
                 platformId: platform.Id,
                 ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
-                containerId: container.ContainerId,
+                dockerContainerId: container.ContainerId,
                 state: ContainerStateStatus.Running), TestContext.Current.CancellationToken);
         }
 

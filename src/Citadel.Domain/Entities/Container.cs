@@ -2,14 +2,14 @@
 
 public class Container(
     string name,
-    string imageId,
+    string dockerImageId,
     Guid platformId,
-    string containerId,
+    string dockerContainerId,
     ContainerStateStatus state,
     long? created = null,
     string? stack = null,
     Guid? deploymentId = null,
-    Guid? imageEntityId = null,
+    Guid? imageId = null,
     IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null)
 {
     private readonly List<ContainerStat> stats = [];
@@ -19,14 +19,14 @@ public class Container(
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid PlatformId { get; private set; } = platformId;
     public Guid? DeploymentId { get; private set; } = deploymentId;
-    public string ContainerId { get; private set; } = containerId;
+    public Guid? ImageId { get; private set; } = imageId;
+    public string DockerContainerId { get; private set; } = dockerContainerId;
+    public string? DockerImageId { get; private set; } = dockerImageId;
     public string Name { get; private set; } = name;
     public long Created { get; private set; } = created is not null ? created.Value : (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
     public long Updated { get; private set; } = (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
     public ContainerStateStatus State { get; set; } = state;
     public string? Stack { get; private set; } = stack;
-    public string? ImageId { get; private set; } = imageId;
-    public Guid? ImageEntityId { get; private set; } = imageEntityId;
     public IDictionary<string, IReadOnlyList<HostPortBinding>> Ports => ports;
     public IReadOnlyCollection<ContainerStat>? Stats => stats;
     public Platform? Platform { get; private set; } = null!;
@@ -34,22 +34,21 @@ public class Container(
 
     public Container PartialUpdate(
         string? name = null,
-        string? image = null,
-        string ? imageId = null,
+        string ? dockerImageId = null,
         ContainerStateStatus? state = null,
         string? stack = null,
         long? created = null,
         Guid? platformId = null,
-        Guid? imageEntityId = null,
+        Guid? imageId = null,
         IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null)
     {
         if (name != null) Name = name;
-        if (imageId != null) ImageId = imageId;
+        if (dockerImageId != null) DockerImageId = dockerImageId;
         if (state != null) State = state.Value;
         if (stack != null) Stack = stack;
         if (created != null) Created = created.Value;
         if (platformId != null) PlatformId = platformId.Value;
-        if (imageEntityId is not null) ImageEntityId = imageEntityId;
+        if (imageId is not null) ImageId = imageId;
         if (ports != null)
         {
             this.ports.Clear();
@@ -70,33 +69,33 @@ public class Container(
         (
         Guid id,
         Guid platformId,
-        string containerId,
+        string dockerContainerId,
+        string dockerImageId,
         string name,
-        string imageId,
         long created,
         long updated,
         ContainerStateStatus state,
         IDictionary<string, IReadOnlyList<HostPortBinding>> ports,
         string? stack = null,
-        Guid? imageEntityId = null,
-        Image? imageEntity = null,
+        Guid? imageId = null,
+        Image? image = null,
         IReadOnlyCollection<ContainerStat>? stats = null
         )
     {
         var container = new Container(
             name: name,
-            imageId: imageId,
+            dockerContainerId: dockerContainerId,
+            dockerImageId: dockerImageId,
             platformId: platformId,
-            containerId: containerId,
             state: state,
             created: created,
             stack: stack,
             ports: ports,
-            imageEntityId: imageEntityId)
+            imageId: imageId)
         {
             Id = id,
             Updated = updated,
-            Image = imageEntity,
+            Image = image,
         };
 
         if (stats is not null)

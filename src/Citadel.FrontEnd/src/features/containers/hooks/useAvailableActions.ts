@@ -9,6 +9,7 @@ export const useAvailableActions = (containers: (ContainerView | DockerContainer
     stop: useMutate('stopContainers'),
     restart: useMutate('restartContainers'),
     pause: useMutate('pauseContainers'),
+    unpause: useMutate('unpauseContainers'),
   };
 
   const isPending = Object.values(mutations).some((m) => m.isPending);
@@ -33,6 +34,7 @@ export const useAvailableActions = (containers: (ContainerView | DockerContainer
           canStop: actions.canStop || isRunningOrPaused,
           canRestart: actions.canRestart || isRunningOrPaused,
           canPause: actions.canPause || state === ContainerStateStatus.Running,
+          canUnpause: actions.canUnpause || state === ContainerStateStatus.Paused,
           canDelete: actions.canDelete || canDelete,
         };
       },
@@ -41,6 +43,7 @@ export const useAvailableActions = (containers: (ContainerView | DockerContainer
         canStop: false,
         canRestart: false,
         canPause: false,
+        canUnpause: false,
         canDelete: false,
       },
     );
@@ -53,17 +56,18 @@ export const useAvailableActions = (containers: (ContainerView | DockerContainer
     const mutation = mutations[action];
     if (!mutation) throw new Error(`Unsupported action: ${action}`);
 
-    mutation.mutate({ data: containersId });
+    if (containersId.length > 0) mutation.mutate({ data: containersId });
   };
 
   return { availableActions, requestPatch, isPending };
 };
 
-type actionType = 'start' | 'stop' | 'pause' | 'restart';
+type actionType = 'start' | 'stop' | 'pause' | 'restart' | 'unpause';
 type ContainerActionsState = {
   canStart: boolean;
   canStop: boolean;
   canRestart: boolean;
   canPause: boolean;
+  canUnpause: boolean;
   canDelete: boolean;
 };

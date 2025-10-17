@@ -26,25 +26,25 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         return result?.ToDomain() ?? [];
     }
 
-    public async Task<Container?> GetByIdAsync(string containerId, CancellationToken cancellationToken)
+    public async Task<Container?> GetByIdAsync(string dockerContainerId, CancellationToken cancellationToken)
     {
         var sql = """
             SELECT * FROM Containers c
-            WHERE ContainerId LIKE @ContainerIdPrefix || '%'
+            WHERE DockerContainerId LIKE @DockerContainerIdPrefix || '%'
             LIMIT 1
             """;
-        var result = await db.QuerySingleOrDefaultAsync<ContainerDto>(sql, new { ContainerIdPrefix = containerId }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<ContainerDto>(sql, new { DockerContainerIdPrefix = dockerContainerId }, transaction: tx());
         return result?.ToDomain();
     }
 
-    public async Task<Container?> GetContainerWithImageByIdAsync(string containerId, CancellationToken cancellationToken)
+    public async Task<Container?> GetContainerWithImageByIdAsync(string dockerContainerId, CancellationToken cancellationToken)
     {
         var sql = """
             SELECT c.*,
-                i.Id as Image_Id,
+                i.Id as Image_ImageId,
                 i.Name as Image_Name,
                 i.Tag as Image_Tag,
-                i.ImageId as Image_ImageId,
+                i.DockerImageId as Image_DockerImageId,
                 i.Size as Image_Size,
                 i.Containers as Image_Containers,
                 i.PlatformId as Image_PlatformId,
@@ -53,11 +53,12 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
                 i.UpdatedAt as Image_UpdatedAt,
                 i.RegistryId as Image_RegistryId
             FROM Containers c
-            LEFT JOIN Images i ON c.ImageEntityId = i.Id
-            WHERE ContainerId LIKE @ContainerIdPrefix || '%'
+            LEFT JOIN Images i ON c.ImageId = i.Id
+            WHERE DockerContainerId LIKE @DockerContainerIdPrefix || '%'
             LIMIT 1
             """;
-        var result = await db.QuerySingleOrDefaultAsync<ContainerWithImageDto>(sql, new { ContainerIdPrefix = containerId }, transaction: tx());
+       
+        var result = await db.QuerySingleOrDefaultAsync<ContainerWithImageDto>(sql, new { DockerContainerIdPrefix = dockerContainerId }, transaction: tx());
         return result?.ToDomain();
     }
 
@@ -65,10 +66,10 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
         SELECT c.*,
-            i.Id as Image_Id,
+            i.Id as Image_ImageId,
             i.Name as Image_Name,
             i.Tag as Image_Tag,
-            i.ImageId as Image_ImageId,
+            i.DockerImageId as Image_DockerImageId,
             i.Size as Image_Size,
             i.Containers as Image_Containers,
             i.PlatformId as Image_PlatformId,
@@ -84,7 +85,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             s.RxBytes as Stat_RxBytes, 
             s.TxBytes as Stat_TxBytes
         FROM Containers c
-        LEFT JOIN Images i ON c.ImageEntityId = i.Id
+        LEFT JOIN Images i ON c.ImageId = i.Id
         LEFT JOIN ContainerStats s ON s.ContainerId = c.Id
           AND s.Id = (
               SELECT Id FROM ContainerStats 
@@ -104,24 +105,23 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
             INSERT INTO Containers (
-                Id, PlatformId, ContainerId, Name, ImageId, Created, Updated, State, Stack, Ports, ImageEntityId
+                Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId
             ) VALUES (
-                @Id, @PlatformId, @ContainerId, @Name, @ImageId, @Created, @Updated, @State, @Stack, @Ports, @ImageEntityId
+                @Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports, @ImageId
             )
         """;
         return db.ExecuteAsync(sql, new 
         {
             Id = container.Id.Format(),
             PlatformId = container.PlatformId.Format(),
-            ContainerId = container.ContainerId,
+            DockerContainerId = container.DockerContainerId,
+            DockerImageId = container.DockerImageId,
             Name = container.Name,
-           
-            ImageId = container.ImageId,
             Created = container.Created,
             Updated = container.Updated,
             State = EnumFormatter<ContainerStateStatus>.GetValue(container.State),
             Stack = container.Stack,
-            ImageEntityId = container.ImageEntityId == null ? null : container.ImageEntityId.Value.Format(),
+            ImageId = container.ImageId?.Format(),
             Ports = JsonSerializer.Serialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding)
         }, transaction: tx());
     }
@@ -130,7 +130,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
             UPDATE Containers
-            SET Name = @Name, ImageId = @ImageId, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports, Created = @Created, ImageEntityId = @ImageEntityId
+            SET Name = @Name, DockerImageId = @DockerImageId, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports, Created = @Created, ImageId = @ImageId
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
@@ -138,11 +138,10 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
 
             Id = container.Id.Format(),
             PlatformId = container.PlatformId.Format(),
-            ContainerId = container.ContainerId,
-            ImageEntityId = container.ImageEntityId != null ? container.ImageEntityId.Value.Format() : null,
+            ImageId = container.ImageId?.Format(),
             Name = container.Name,
             Image = container.Image,
-            ImageId = container.ImageId,
+            DockerImageId = container.DockerImageId,
             Created = container.Created,
             Updated = container.Updated,
             State = EnumFormatter<ContainerStateStatus>.GetValue(container.State),
@@ -154,12 +153,12 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     public Task<int> BulkUpsertAsync(IEnumerable<Container> containers, CancellationToken cancellationToken)
     {
         const string sql = """
-        INSERT INTO Containers (Id, PlatformId, ContainerId, Name, ImageId, Created, Updated, State, Stack, Ports, ImageEntityId)
-        VALUES (@Id, @PlatformId, @ContainerId, @Name, @ImageId, @Created, @Updated, @State, @Stack, @Ports, @ImageEntityId)
+        INSERT INTO Containers (Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId)
+        VALUES (@Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports, @ImageId)
         ON CONFLICT(Id) DO UPDATE SET
             Name = excluded.Name,
+            DockerImageId = excluded.DockerImageId,
             ImageId = excluded.ImageId,
-            ImageEntityId = excluded.ImageEntityId,
             Created = excluded.Created,
             Updated = excluded.Updated,
             State = excluded.State,
@@ -171,14 +170,14 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         {
             Id = c.Id.Format(),
             PlatformId = c.PlatformId.Format(),
-            ContainerId = c.ContainerId,
+            DockerContainerId = c.DockerContainerId,
             Name = c.Name,
-            ImageId = c.ImageId,
+            DockerImageId = c.DockerImageId,
             Created = c.Created,
             Updated = c.Updated,
             State = EnumFormatter<ContainerStateStatus>.GetValue(c.State),
             Stack = c.Stack,
-            ImageEntityId = c.ImageEntityId != null ? c.ImageEntityId.Value.Format() : null,
+            ImageId = c.ImageId?.Format(),
             Ports = JsonSerializer.Serialize(
                 c.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding
             )

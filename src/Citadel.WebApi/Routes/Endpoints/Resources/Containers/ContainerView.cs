@@ -12,7 +12,7 @@ public sealed record ContainerView(
     Guid PlatformId,
     string ContainerId,
     string Name,
-    string ImageId,
+    string DockerImageId,
     long Created,
     ContainerStateStatus State,
     long Updated,
@@ -30,20 +30,20 @@ public sealed record ContainerView(
     {
         string GetImageId()
         {
-            if (string.IsNullOrEmpty(container.ImageId)) return string.Empty;
+            if (string.IsNullOrEmpty(container.DockerImageId)) return string.Empty;
 
-            ReadOnlySpan<char> span = container.ImageId.AsSpan();
-            int idx = container.ImageId.IndexOf(':');
+            ReadOnlySpan<char> span = container.DockerImageId.AsSpan();
+            int idx = container.DockerImageId.IndexOf(':');
 
-            return idx >= 0 ? span[(idx + 1)..].ToString() : container.ImageId;
+            return idx >= 0 ? span[(idx + 1)..].ToString() : container.DockerImageId;
         }
 
         return new (
             Id: container.Id,
             PlatformId: container.PlatformId,
-            ContainerId: container.ContainerId,
+            ContainerId: container.DockerContainerId,
             Name: container.Name,
-            ImageId: GetImageId(), // container.ImageId,
+            DockerImageId: GetImageId(),
             Created: container.Created,
             State: container.State,
             Updated: container.Updated,

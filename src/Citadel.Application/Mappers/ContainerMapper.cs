@@ -9,23 +9,23 @@ internal static class ContainerMapper
     {
         foreach (var container in containers)
         {
-            var imageEntity = images.FirstOrDefault(i => i.ImageId == container.ImageId && i.PlatformId == platformId);
-            yield return container.Map(platformId, imageEntity?.Id);
+            var image = images.FirstOrDefault(i => i.DockerImageId == container.ImageId && i.PlatformId == platformId);
+            yield return container.Map(platformId, image?.Id);
         }
     }
 
-    internal static Container Map(this DockerContainer container, Guid platformId, Guid? imageEntityId)
+    internal static Container Map(this DockerContainer container, Guid platformId, Guid? imageId)
         => new
         (
             name: container.Name,
-            imageId: container.ImageId,
+            dockerImageId: container.ImageId,
             stack: container.Stack,
             platformId: platformId,
-            containerId: container.ContainerId,
+            dockerContainerId: container.ContainerId,
             created: container.Created,
             state: container.State,
             ports: container.Ports,
-            imageEntityId: imageEntityId
+            imageId: imageId
         );
 
     internal static ContainerStat Map(this DockerContainerStat container, Guid containerId, long? created)

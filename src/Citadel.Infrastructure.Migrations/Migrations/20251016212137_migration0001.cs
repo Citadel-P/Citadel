@@ -132,7 +132,7 @@ namespace Infrastructure.Migrations.Migrations
                     Id = table.Column<string>(type: "TEXT", nullable: false),
                     Containers = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 0),
                     CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
-                    ImageId = table.Column<string>(type: "TEXT", nullable: false),
+                    DockerImageId = table.Column<string>(type: "TEXT", nullable: false),
                     IsUpToDate = table.Column<bool>(type: "INTEGER", nullable: true),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
                     PlatformId = table.Column<string>(type: "TEXT", nullable: false),
@@ -220,11 +220,11 @@ namespace Infrastructure.Migrations.Migrations
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
-                    ContainerId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     Created = table.Column<long>(type: "REAL", nullable: false),
                     DeploymentId = table.Column<string>(type: "TEXT", nullable: true),
-                    ImageEntityId = table.Column<string>(type: "TEXT", nullable: true),
-                    ImageId = table.Column<string>(type: "TEXT", nullable: false),
+                    DockerContainerId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    DockerImageId = table.Column<string>(type: "TEXT", nullable: false),
+                    ImageId = table.Column<string>(type: "TEXT", nullable: true),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
                     PlatformId = table.Column<string>(type: "TEXT", nullable: false),
                     Ports = table.Column<string>(type: "TEXT", nullable: false),
@@ -242,8 +242,8 @@ namespace Infrastructure.Migrations.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
-                        name: "FK_Containers_Images_ImageEntityId",
-                        column: x => x.ImageEntityId,
+                        name: "FK_Containers_Images_ImageId",
+                        column: x => x.ImageId,
                         principalTable: "Images",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.SetNull);
@@ -336,9 +336,9 @@ namespace Infrastructure.Migrations.Migrations
                 column: "DeploymentId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Containers_ImageEntityId",
+                name: "IX_Containers_DockerImageId",
                 table: "Containers",
-                column: "ImageEntityId");
+                column: "DockerImageId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Containers_ImageId",
@@ -351,9 +351,9 @@ namespace Infrastructure.Migrations.Migrations
                 column: "PlatformId");
 
             migrationBuilder.CreateIndex(
-                name: "IX__Containers_ContainerId_PlatformId",
+                name: "IX__Containers_DockerContainerId_PlatformId",
                 table: "Containers",
-                columns: new[] { "ContainerId", "PlatformId" },
+                columns: new[] { "DockerContainerId", "PlatformId" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -362,9 +362,9 @@ namespace Infrastructure.Migrations.Migrations
                 column: "PlatformId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Images_ImageId_PlatformId",
+                name: "IX_Images_DockerImageId_PlatformId",
                 table: "Images",
-                columns: new[] { "ImageId", "PlatformId" },
+                columns: new[] { "DockerImageId", "PlatformId" },
                 unique: true);
 
             migrationBuilder.CreateIndex(

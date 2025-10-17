@@ -15,7 +15,7 @@ export const TableDropDown = ({ image }: { image: ImageView }) => {
         id: 'inspect',
         label: 'Inspect',
         icon: <SearchCode className="mr-2 h-3 w-3" />,
-        onClick: () => navigate(`${formatId(image.imageId)}`),
+        onClick: () => navigate(`${formatId(image.dockerImageId)}`),
       },
       {
         id: 'delete',

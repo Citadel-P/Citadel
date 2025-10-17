@@ -67,7 +67,7 @@ const ImageInfoWrapper = () => {
                 </div>
                 <div className="flex justify-start md:justify-end w-full">
                   <ActionBarButtons
-                    selectedImages={[{ id: data?.data.id, imageId: data?.data.id, name, tag } as ImageView]}
+                    selectedImages={[{ id: data?.data.id, dockerImageId: data?.data.id, name, tag } as ImageView]}
                     setDialogData={setDialogData}
                     setRunDialogData={setRunDialogData}
                     showInspectButton={false}

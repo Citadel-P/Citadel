@@ -16,15 +16,15 @@ internal static class ContainerMappers
         Container.FromPersistence(
             id: container.Id,
             platformId: container.PlatformId,
-            containerId: container.ContainerId,
+            dockerContainerId: container.DockerContainerId,
             name: container.Name,
-            imageId: container.ImageId,
+            dockerImageId: container.DockerImageId,
             created: container.Created,
             updated: container.Updated,
             state: Enum.Parse<ContainerStateStatus>(container.State),
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             stack: container.Stack,
-            imageEntityId: container.ImageEntityId,
+            imageId: container.ImageId,
             stats: container.Stats?.Select(ToDomain).ToList());
     }
 
@@ -34,20 +34,20 @@ internal static class ContainerMappers
         Container.FromPersistence(
             id: container.Id,
             platformId: container.PlatformId,
-            containerId: container.ContainerId,
+            dockerContainerId: container.DockerContainerId,
             name: container.Name,
-            imageId: container.ImageId,
+            dockerImageId: container.DockerImageId,
             created: container.Created,
             updated: container.Updated,
             state: Enum.Parse<ContainerStateStatus>(container.State),
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             stack: container.Stack,
-            imageEntityId: container.ImageEntityId,
-            imageEntity: container.Image_Id != null ? Image.FromPersistence(
-                id: container.Image_Id == null ? Guid.Empty : Guid.Parse(container.Image_Id),
+            imageId: container.ImageId,
+            image: container.Image_ImageId != null ? Image.FromPersistence(
+                id: container.Image_ImageId ?? Guid.Empty,
                 name: container.Image_Name,
                 tag: container.Image_Tag,
-                imageId: container.Image_ImageId,
+                dockerImageId: container.Image_DockerImageId,
                 size: container.Image_Size ?? 0,
                 containers: container.Image_Containers ?? 0,
                 platformId: container.Image_platformId ?? Guid.Empty,
@@ -67,21 +67,21 @@ internal static class ContainerMappers
         Container.FromPersistence(
             id: container.Id,
             platformId: container.PlatformId,
-            containerId: container.ContainerId,
+            dockerContainerId: container.DockerContainerId,
             name: container.Name,
-            imageId: container.ImageId,
+            dockerImageId: container.DockerImageId,
             created: container.Created,
             updated: container.Updated,
             state: Enum.Parse<ContainerStateStatus>(container.State),
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             stack: container.Stack,
-            imageEntityId: container.ImageEntityId,
-            imageEntity: container.Image_Id == null ? null : Image.FromPersistence
+            imageId: container.ImageId,
+            image: container.Image_ImageId == null ? null : Image.FromPersistence
             (
-                id: Guid.Parse(container.Image_Id),
+                id: container.Image_ImageId ?? Guid.Empty,
                 name: container.Image_Name,
                 tag: container.Image_Tag,
-                imageId: container.Image_ImageId,
+                dockerImageId: container.Image_DockerImageId,
                 size: container.Image_Size ?? 0,
                 containers: container.Image_Containers ?? 0,
                 platformId: container.Image_platformId ?? Guid.Empty,

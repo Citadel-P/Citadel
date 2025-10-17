@@ -1,4 +1,4 @@
-import { Play, Pause, RotateCcw, Ban, Trash } from 'lucide-react';
+import { Play, Pause, RotateCcw, Ban, Trash, StepForward } from 'lucide-react';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { ContainerView } from '@/api/generated/api.types';
 import { DockerContainerView } from '@/api/types';
@@ -32,12 +32,14 @@ export const ActionBarButtons = ({
       ariaLabel: 'Stop selected containers',
     },
     {
-      id: 'pause',
-      icon: Pause,
-      label: 'Pause',
-      onClick: () => requestPatch('pause'),
-      disabled: !availableActions?.canPause || isPending,
-      ariaLabel: 'Pause selected containers',
+      id: availableActions?.canUnpause ? 'unpause' : 'pause',
+      icon: availableActions?.canUnpause ? StepForward : Pause,
+      label: availableActions?.canUnpause ? 'Resume' : 'Pause',
+      onClick: () => requestPatch(availableActions?.canUnpause ? 'unpause' : 'pause'),
+      disabled: availableActions?.canUnpause
+        ? !availableActions.canUnpause || isPending
+        : !availableActions?.canPause || isPending,
+      ariaLabel: availableActions?.canUnpause ? 'Resume selected containers' : 'Pause selected containers',
     },
     {
       id: 'restart',

@@ -27,7 +27,7 @@ internal static class ImageMapper
         => new (
             name: image.GetName() ?? string.Empty,
             tag: image.GetTag(),
-            imageId: image.Id,
+            dockerImageId: image.Id,
             size: image.Size,
             platformId: platformId,
             registryId: registry?.Id == Guid.Empty ? null : registry?.Id,

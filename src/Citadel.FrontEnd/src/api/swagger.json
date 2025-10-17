@@ -5101,7 +5101,7 @@
           "platformId",
           "containerId",
           "name",
-          "imageId",
+          "dockerImageId",
           "created",
           "state",
           "updated",
@@ -5125,7 +5125,7 @@
           "name": {
             "type": "string"
           },
-          "imageId": {
+          "dockerImageId": {
             "type": "string"
           },
           "created": {
@@ -7896,7 +7896,7 @@
           "id",
           "tag",
           "name",
-          "imageId",
+          "dockerImageId",
           "size",
           "isInUse",
           "platformId",
@@ -7914,7 +7914,7 @@
           "name": {
             "type": "string"
           },
-          "imageId": {
+          "dockerImageId": {
             "type": "string"
           },
           "size": {

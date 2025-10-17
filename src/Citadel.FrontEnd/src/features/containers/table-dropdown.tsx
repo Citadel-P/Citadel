@@ -1,4 +1,4 @@
-import { Ban, Play, RotateCcw, Trash, Eye } from 'lucide-react';
+import { Ban, Play, RotateCcw, Trash, Eye, Pause, StepForward } from 'lucide-react';
 import { ContainerView } from '@/api/generated/api.types';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { DockerContainerView } from '@/api/types';
@@ -19,8 +19,8 @@ export const TableDropdown = ({
   return createTableDropdown({
     resource: container,
     context: { setDialogData },
-    actions: ({ navigate, openDialog }) =>
-      [
+    actions: ({ navigate, openDialog }) => {
+      const actions: DropdownAction[] = [
         {
           id: 'start',
           label: 'Start',
@@ -36,28 +36,48 @@ export const TableDropdown = ({
           disabled: !availableActions?.canStop || isPending,
         },
         {
+          id: availableActions?.canUnpause ? 'unpause' : 'pause',
+          label: availableActions?.canUnpause ? 'Resume' : 'Pause',
+          icon: availableActions?.canUnpause ? (
+            <StepForward className="mr-2 h-3 w-3" />
+          ) : (
+            <Pause className="mr-2 h-3 w-3" />
+          ),
+          onClick: () => requestPatch(availableActions?.canUnpause ? 'unpause' : 'pause'),
+          disabled: availableActions?.canUnpause
+            ? !availableActions.canUnpause || isPending
+            : !availableActions?.canPause || isPending,
+        },
+        {
           id: 'restart',
           label: 'Restart',
           icon: <RotateCcw className="mr-2 h-3 w-3" />,
           onClick: () => requestPatch('restart'),
           disabled: !availableActions?.canRestart || isPending,
         },
-        !hideDetails && {
+      ];
+
+      if (!hideDetails) {
+        actions.push({
           id: 'details',
           label: 'View details',
           icon: <Eye className="mr-2 h-3 w-3" />,
           onClick: () => navigate(`../containers/${container.containerId?.slice(0, 12)}/logs`),
           separatorBefore: true,
-        },
-        {
-          id: 'delete',
-          label: 'Delete',
-          icon: <Trash className="mr-2 h-3 w-3 text-danger" />,
-          onClick: openDialog,
-          disabled: !availableActions?.canDelete || isPending,
-          danger: true,
-          separatorBefore: true,
-        },
-      ].filter(Boolean) as DropdownAction[],
+        });
+      }
+
+      actions.push({
+        id: 'delete',
+        label: 'Delete',
+        icon: <Trash className="mr-2 h-3 w-3 text-danger" />,
+        onClick: openDialog,
+        disabled: !availableActions?.canDelete || isPending,
+        danger: true,
+        separatorBefore: true,
+      });
+
+      return actions;
+    },
   });
 };

@@ -335,7 +335,7 @@ export interface ContainerView {
   platformId: string;
   containerId: string;
   name: string;
-  imageId: string;
+  dockerImageId: string;
   /**
    * @format int64
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -1074,7 +1074,7 @@ export interface ImageView {
   id: string;
   tag: string;
   name: string;
-  imageId: string;
+  dockerImageId: string;
   /**
    * @format double
    * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$

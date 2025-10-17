@@ -14,7 +14,7 @@ internal static class ImageMappers
                 id: image.Id,
                 name: image.Name,
                 tag: image.Tag,
-                imageId: image.ImageId,
+                dockerImageId: image.DockerImageId,
                 size: image.Size,
                 containers: image.Containers,
                 platformId: image.PlatformId,

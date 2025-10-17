@@ -3,15 +3,15 @@
 internal record ContainerDto(
     Guid Id,
     Guid PlatformId,
-    string ContainerId,
+    string DockerContainerId,
     string Name,
-    string ImageId,
+    string DockerImageId,
     long Created,
     long Updated,
     string State, // ContainerStateStatus
     string Ports, // List<ContainerPort> 
     string? Stack,
-    Guid? ImageEntityId = null
+    Guid? ImageId = null
 )
 {
     public ICollection<ContainerStatDto> Stats { get; init; } = [];
@@ -35,12 +35,12 @@ internal record struct ContainerStatDto(
 );
 
 internal record ContainerWithImageDto(
-     string? Image_Id = null,
+     Guid? Image_ImageId = null,
      Guid? Image_platformId = null,
      Guid? Image_RegistryId = null,
      string? Image_Name = null,
      string? Image_Tag = null,
-     string? Image_ImageId = null,
+     string? Image_DockerImageId = null,
      double? Image_Size = null,
      int? Image_Containers = null,
      DateTime? Image_CreatedAt = null,

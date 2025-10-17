@@ -116,7 +116,7 @@ internal sealed class DockerDaemonEventJob(
 
         var image = await uow.Images.GetByImageIdAsync(eventInfo.Container.ImageId, platformId, cancellationToken);
         var container = eventInfo.Container.Map(platformId, image?.Id);
-        platformContainerCache.TryAddContainer(platformId, container.ContainerId, container.Id);
+        platformContainerCache.TryAddContainer(platformId, container.DockerContainerId, container.Id);
 
 
         await uow.Containers.AddAsync(container, cancellationToken);
@@ -124,7 +124,7 @@ internal sealed class DockerDaemonEventJob(
 
         await SendContainerEventChanges(container, eventInfo.Action);
 
-        await UpdateImageStatus(uow, platformId, container?.ImageId, eventInfo.Action, cancellationToken);
+        await UpdateImageStatus(uow, platformId, container?.DockerImageId, eventInfo.Action, cancellationToken);
     }
 
     private async Task OnContainerUpdated(DaemonContainerEventInfo eventInfo, CancellationToken cancellationToken)
@@ -132,7 +132,7 @@ internal sealed class DockerDaemonEventJob(
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-        var existing = await uow.Containers.GetByIdAsync(eventInfo.ContainerId, cancellationToken);
+        var existing = await uow.Containers.GetContainerWithImageByIdAsync(eventInfo.ContainerId, cancellationToken);
         if (existing != null)
         {
             existing.PartialUpdate(state: eventInfo.Container?.State, ports: eventInfo.Container?.Ports);
@@ -150,14 +150,14 @@ internal sealed class DockerDaemonEventJob(
         var existingDestroy = await uow.Containers.GetByIdAsync(eventInfo.ContainerId, cancellationToken);
         if (existingDestroy != null)
         {
-            platformContainerCache.TryRemoveContainer(platformId, existingDestroy.ContainerId);
+            platformContainerCache.TryRemoveContainer(platformId, existingDestroy.DockerContainerId);
 
             await uow.Containers.DeleteAsync([existingDestroy.Id], cancellationToken);
             await uow.CommitAsync();
 
             await SendContainerEventChanges(existingDestroy, eventInfo.Action);
 
-            await UpdateImageStatus(uow, platformId, existingDestroy?.ImageId, eventInfo.Action, cancellationToken);
+            await UpdateImageStatus(uow, platformId, existingDestroy?.DockerImageId, eventInfo.Action, cancellationToken);
         }
     }
 
@@ -203,7 +203,7 @@ internal sealed class DockerDaemonEventJob(
         try
         {
             await dockerDaemonHub.SendContainerEvent(container, action);
-            await containerEventBroadcaster.PublishAsync(new ContainerEvent(container.PlatformId, container.ContainerId, action));
+            await containerEventBroadcaster.PublishAsync(new ContainerEvent(container.PlatformId, container.DockerContainerId, action));
         }
         catch (Exception ex)
         {

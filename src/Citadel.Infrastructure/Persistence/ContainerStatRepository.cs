@@ -10,7 +10,7 @@ namespace Infrastructure.Persistence;
 
 internal class ContainerStatRepository(IDbConnection db, Func<IDbTransaction> tx) : IContainerStatRepository 
 {
-    public async Task<IEnumerable<ContainerStat>> GetStatsAggregatedLast24HoursAsync(string containerId, CancellationToken cancellationToken)
+    public async Task<IEnumerable<ContainerStat>> GetStatsAggregatedLast24HoursAsync(string dockerContainerId, CancellationToken cancellationToken)
     {
         // We don't retrieve the full stats, but rather aggregate them to reduce the amount of data transferred and processed.
         const string sql = """
@@ -24,14 +24,14 @@ internal class ContainerStatRepository(IDbConnection db, Func<IDbTransaction> tx
               AVG(S.TxBytes) AS TxBytes
             FROM ContainerStats S
             INNER JOIN Containers C on C.Id = S.ContainerId 
-            WHERE C.ContainerId LIKE @ContainerIdPrefix || '%'
+            WHERE C.DockerContainerId LIKE @DockerContainerIdPrefix || '%'
               AND S.Created > @Last24h
             GROUP BY strftime('%Y-%m-%d %H:%M', datetime(S.Created, 'unixepoch'))
             ORDER BY S.Created
             """;
       
         var last24h = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeSeconds();
-        var result = await db.QueryAsync<ContainerStatDto>(sql, new { ContainerIdPrefix = containerId, Last24h = last24h }, transaction: tx());
+        var result = await db.QueryAsync<ContainerStatDto>(sql, new { DockerContainerIdPrefix = dockerContainerId, Last24h = last24h }, transaction: tx());
         return result?.ToDomain() ?? [];
     }
 

@@ -136,7 +136,7 @@ internal class ContainerSyncJob(
                 Id: platformEvent.Id,
                 Address: platformEvent.Address,
                 ConnectorType: platformEvent.Type,
-                Containers: syncedContainers.ToDictionary(c => c.ContainerId, c => c.Id)
+                Containers: syncedContainers.ToDictionary(c => c.DockerContainerId, c => c.Id)
             );
             platformContainerCache.ReplacePlatformContainers(platformEvent.Id, cacheEntry);
         }
@@ -178,20 +178,19 @@ internal class ContainerSyncJob(
 
         var images = await unitOfWork.Images.GetByPlatformIdAsync(platformEvent.Id, cancellationToken);
         var containers = await unitOfWork.Containers.GetByPlatformIdAsync(platformEvent.Id, cancellationToken);
-        var existingContainersInDb = containers.ToDictionary(c => c.ContainerId, c => c, StringComparer.OrdinalIgnoreCase);
+        var existingContainersInDb = containers.ToDictionary(c => c.DockerContainerId, c => c, StringComparer.OrdinalIgnoreCase);
 
         var currentActiveContainers = new List<Container>();
 
         foreach (var freshContainer in freshContainers.Values)
         {
-            var imageEntityId = images.FirstOrDefault(i => i.ImageId == freshContainer.ImageId)?.Id;
+            var imageId = images.FirstOrDefault(i => i.DockerImageId == freshContainer.ImageId)?.Id;
             if (existingContainersInDb.TryGetValue(freshContainer.ContainerId, out var existingDbContainer))
             {
                 existingDbContainer.PartialUpdate(
                     name: freshContainer.Name,
-                    image: freshContainer.Image,
-                    imageId: freshContainer.ImageId,
-                    imageEntityId: imageEntityId,
+                    imageId: imageId,
+                    dockerImageId: freshContainer.ImageId,
                     state: freshContainer.State,
                     stack: freshContainer.Stack,
                     created: freshContainer.Created,
@@ -201,7 +200,7 @@ internal class ContainerSyncJob(
             }
             else
             {
-                var container = freshContainer.Map(platformEvent.Id, imageEntityId);
+                var container = freshContainer.Map(platformEvent.Id, imageId);
                 currentActiveContainers.Add(container);
             }
         }
@@ -211,7 +210,7 @@ internal class ContainerSyncJob(
         // Remove stale
         var freshIds = freshContainers.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var staleContainers = existingContainersInDb.Values
-            .Where(c => !freshIds.Contains(c.ContainerId))
+            .Where(c => !freshIds.Contains(c.DockerContainerId))
             .ToArray();
 
         if (staleContainers.Length > 0)

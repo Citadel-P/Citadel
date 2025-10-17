@@ -19,7 +19,7 @@ export const ActionBarButtons = ({
 }) => {
   const { actions } = useAvailableActions(selectedImages);
   const navigate = useNavigate();
-  const imageId = formatId(selectedImages?.at(0)?.imageId);
+  const imageId = formatId(selectedImages?.at(0)?.dockerImageId);
 
   const buttons: ActionButtonConfig[] = [
     {

@@ -143,7 +143,7 @@ internal class ImageSyncJob(
         }
 
         var images = await uow.Images.GetByPlatformIdAsync(platformEvent.Id, cancellationToken);
-        var existingImagesInDb = images.ToDictionary(c => c.ImageId, c => c);
+        var existingImagesInDb = images.ToDictionary(c => c.DockerImageId, c => c);
 
         var currentActiveImages = new List<Image>();
         foreach (var freshImage in freshImages)
@@ -151,7 +151,7 @@ internal class ImageSyncJob(
             if (existingImagesInDb.TryGetValue(freshImage.Id, out var existingDbImage))
             {
                 existingDbImage.PartialUpdate(
-                    imageId: freshImage.Id,
+                    dockerImageId: freshImage.Id,
                     containers: freshImage.Containers,
                     tag: freshImage.RepoTags?.Count > 0 ?  freshImage.RepoTags[0] : "",
                     size: freshImage.Size
@@ -168,7 +168,7 @@ internal class ImageSyncJob(
 
         // Remove stale images
         var freshIds = freshImages.Select(f => f.Id).ToHashSet();
-        var staleImages = existingImagesInDb.Values.Where(c => !freshIds.Contains(c.ImageId)).ToArray();
+        var staleImages = existingImagesInDb.Values.Where(c => !freshIds.Contains(c.DockerImageId)).ToArray();
         if (staleImages.Length > 0)
         {
             logger.LogInformation("Removing {Count} stale images for platform {PlatformId}", staleImages.Length, platformEvent.Id);

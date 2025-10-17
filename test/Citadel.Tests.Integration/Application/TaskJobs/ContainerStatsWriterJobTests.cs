@@ -49,10 +49,10 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
 
         var container = new Container(
                 name: "container-1",
-                imageId: "image-id-1",
+                dockerImageId: "image-id-1",
                 platformId: platform.Id,
                 ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
-                containerId: "container-id-1",
+                dockerContainerId: "container-id-1",
                 state: ContainerStateStatus.Running);
         await uow.Containers.AddAsync(container, TestContext.Current.CancellationToken);
         

@@ -37,10 +37,11 @@ public interface IRegistryRepository
 
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
 }
+
 public interface IContainerRepository 
 {
-    Task<Container?> GetByIdAsync(string containerId, CancellationToken cancellationToken);
-    Task<Container?> GetContainerWithImageByIdAsync(string containerId, CancellationToken cancellationToken);
+    Task<Container?> GetByIdAsync(string dockerContainerId, CancellationToken cancellationToken);
+    Task<Container?> GetContainerWithImageByIdAsync(string dockerContainerId, CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<Container>?> GetAllWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken);
 
@@ -52,12 +53,14 @@ public interface IContainerRepository
 
     Task<int> DeleteAsync(IEnumerable<Guid> containersId, CancellationToken cancellationToken);
 }
+
 public interface IContainerStatRepository 
 {
     Task<IEnumerable<ContainerStat>> GetStatsAggregatedLast24HoursAsync(string containerId, CancellationToken cancellationToken);
     Task<int> BulkInsertAsync(IEnumerable<ContainerStat> stats, CancellationToken cancellationToken);
     Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken);
 }
+
 public interface IRefreshTokenRepository 
 {
     Task<int> CountAsync(Guid userId, CancellationToken cancellationToken);
@@ -67,20 +70,23 @@ public interface IRefreshTokenRepository
     Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken);
     Task<int> DeleteOldestTokensAsync(Guid userId, int tokensToRemoveCount, CancellationToken cancellationToken);
 }
+
 public interface IPlatformStatRepository 
 {
     Task<IEnumerable<PlatformStat>> GetStatsAggregatedLast24HoursAsync(Guid platformId, CancellationToken cancellationToken);
     Task<int> BulkInsertAsync(IEnumerable<PlatformStat> stats, CancellationToken cancellationToken);
     Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken);
 }
+
 public interface ITeamRepository { }
+
 public interface IPlatformRepository 
 {
     Task<Platform?> GetByIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<Platform?> GetByNameAsync(string name, CancellationToken cancellationToken);
     Task<IEnumerable<Platform>?> GetPlatformsWithLatestStatAsync(CancellationToken cancellationToken);
     Task<Platform?> GetPlatformWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken);
-    Task<PlatformConnectionInfo?> GetPlatformDetailsByContainerIdAsync(string containerId, CancellationToken cancellationToken);
+    Task<PlatformConnectionInfo?> GetPlatformDetailsByContainerIdAsync(string dockerContainerId, CancellationToken cancellationToken);
     Task<PlatformConnectionInfo?> GetPlatformInfoAsync(Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<PlatformConnectionInfo>> GetPlatformsInfoAsync(CancellationToken cancellationToken);
 
@@ -95,7 +101,7 @@ public interface IPlatformRepository
 
 public interface IImageRepository
 {
-    Task<Image?> GetByImageIdAsync(string imageId, Guid platformId, CancellationToken cancellationToken);
+    Task<Image?> GetByImageIdAsync(string dockerImageId, Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<Image>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
 
     Task<int> AddAsync(Image image, CancellationToken cancellationToken);

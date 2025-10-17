@@ -184,7 +184,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     }
 
 
-    public async Task<PlatformConnectionInfo?> GetPlatformDetailsByContainerIdAsync(string containerId, CancellationToken cancellationToken)
+    public async Task<PlatformConnectionInfo?> GetPlatformDetailsByContainerIdAsync(string dockerContainerId, CancellationToken cancellationToken)
     {
         const string sql = """
             SELECT 
@@ -194,11 +194,11 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
                 Platforms.ConnectorType
             FROM Containers
             JOIN Platforms ON Platforms.Id = Containers.PlatformId
-            WHERE Containers.ContainerId LIKE @ContainerIdPrefix || '%'
+            WHERE Containers.DockerContainerId LIKE @ContainerIdPrefix || '%'
             LIMIT 1
             """;
 
-        var result = await db.QuerySingleOrDefaultAsync<PlatformConnectionInfoDto>(sql, new { ContainerIdPrefix = containerId }, transaction: tx());
+        var result = await db.QuerySingleOrDefaultAsync<PlatformConnectionInfoDto>(sql, new { ContainerIdPrefix = dockerContainerId }, transaction: tx());
         return result?.ToDomain();
     }
 }

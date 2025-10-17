@@ -1,5 +1,4 @@
-﻿using System.Drawing;
-using Application.Configs;
+﻿using Application.Configs;
 using Application.Mappers;
 using Application.Services;
 using Application.Services.SignalR;
@@ -8,9 +7,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Images;
 using Domain.Entities;
-using Hosting.DockerClient;
 using LightResults;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -61,7 +58,7 @@ public class ImageSyncJobTests : IntegrationTestBase
             await uow.Images.AddAsync(new Image(
                 name: image.GetName() ?? "",
                 tag: image.GetTag(),
-                imageId: image.Id,
+                dockerImageId: image.Id,
                 size: image.Size,
                 containers : image.Containers,
                 isUpToDate: false,
@@ -110,7 +107,7 @@ public class ImageSyncJobTests : IntegrationTestBase
         var staleImage = new Image(
             name: "stale",
             tag: "stale:01",
-            imageId: staleImageId,
+            dockerImageId: staleImageId,
             size: 900000,
             containers: 0,
             isUpToDate: false,
@@ -135,7 +132,7 @@ public class ImageSyncJobTests : IntegrationTestBase
         var freshUow = assertScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
         var dbImages = await freshUow.Images.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);
-        Assert.DoesNotContain(dbImages, c => c.ImageId == staleImageId);
+        Assert.DoesNotContain(dbImages, c => c.DockerImageId == staleImageId);
         Assert.Equal(3, dbImages.Count());
     }
 
@@ -143,9 +140,9 @@ public class ImageSyncJobTests : IntegrationTestBase
     public async Task AddsNewImages_WhenNotInDatabase()
     {
         // Arrange: DB has no images, but fresh list has one
-        var imageId = "new-id";
+        var dockerImageId = "new-id";
         var newImage = new ImageResult(
-            Id: imageId,
+            Id: dockerImageId,
             RepoTags: [$"new-image:latest"],
             Size: 123456,
             Containers: 3,
@@ -168,18 +165,18 @@ public class ImageSyncJobTests : IntegrationTestBase
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var dbImages = await uow.Images.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);
-        Assert.Contains(dbImages, c => c.ImageId == imageId);
+        Assert.Contains(dbImages, c => c.DockerImageId == dockerImageId);
     }
 
     [Fact]
     public async Task UpdatesExistingImages_WhenPropertiesChange()
     {
         // Arrange: Seed DB with an image, then fresh list has same image with different properties
-        var imageId = "update-id";
+        var dockerImageId = "update-id";
         var oldImage = new Image(
             name: "old",
             tag: "old:latest",
-            imageId: "fake-id",
+            dockerImageId: "fake-id",
             size: 100000,
             containers: 2,
             platformId: platformId,
@@ -193,7 +190,7 @@ public class ImageSyncJobTests : IntegrationTestBase
         }
 
         var updatedDockerContainer = new ImageResult(
-            Id: imageId,
+            Id: dockerImageId,
             RepoTags: ["updated-image:latest"],
             Size: 200000,
             Containers: 3,
@@ -216,9 +213,9 @@ public class ImageSyncJobTests : IntegrationTestBase
         await using var scope = Services.CreateAsyncScope();
         var uow2 = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var dbImages = await uow2.Images.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);
-        var updated = dbImages.First(c => c.ImageId == imageId);
+        var updated = dbImages.First(c => c.DockerImageId == dockerImageId);
         Assert.Equal(1, dbImages?.Count());
-        Assert.Equal(imageId, updated.ImageId);
+        Assert.Equal(dockerImageId, updated.DockerImageId);
         Assert.Equal(200000, updated.Size);
     }
 }

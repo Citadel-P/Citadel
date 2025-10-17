@@ -19,7 +19,7 @@ internal sealed class RefreshTokenCommandHandler(IUnitOfWork unitOfWork, IJwtSer
         var refreshToken = context.HttpContext?.Request.Cookies[Constants.RefreshToken];
 
         if (string.IsNullOrWhiteSpace(refreshToken))
-            return Result.Failure<string>(new BadRequestError("Please include a refresh token in the request."));
+            return Result.Failure<string>(new UnauthorizedError("Missing refresh token."));
 
         if (!jwtService.TryValidate(refreshToken, out var tokenId))
             return Result.Failure<string>(new UnauthorizedError("Invalid refresh token."));

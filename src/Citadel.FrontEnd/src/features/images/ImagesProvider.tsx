@@ -61,9 +61,9 @@ export const ImagesProvider: React.FC<{ children?: React.ReactNode }> = ({ child
           image.name?.toLowerCase().includes(searchLower) || image.tag?.toLowerCase().includes(searchLower) || false;
         const idMatches =
           // Short ID format (first 12 characters)
-          (image.imageId && image.imageId.substring(0, 12).toLowerCase().includes(searchLower)) ||
+          (image.dockerImageId && image.dockerImageId.substring(0, 12).toLowerCase().includes(searchLower)) ||
           // Full ID format
-          (image.imageId && image.imageId.toLowerCase().includes(searchLower)) ||
+          (image.dockerImageId && image.dockerImageId.toLowerCase().includes(searchLower)) ||
           false;
 
         return nameMatches || idMatches;

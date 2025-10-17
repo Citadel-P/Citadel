@@ -88,7 +88,7 @@ public class PlatformCreateTests : IntegrationTestBase
         Assert.Equal(3, images.Count());
         Assert.Equal(3, containers?.Count());
         // Containers has foreign key on Images table
-        Assert.All(containers, c => Assert.Contains(c.ImageEntityId.Value, images.Select(i => i.Id)));
+        Assert.All(containers, c => Assert.Contains(c.ImageId.Value, images.Select(i => i.Id)));
         healthMonitorMock.Verify(x => x.TrackPlatform("https://localhost:9000", platform.Id, PlatformConnectorType.Agent), Times.Once);
         await VerifyJson(responseBody);
     }
@@ -144,7 +144,7 @@ public class PlatformCreateTests : IntegrationTestBase
         Assert.Equal(3, images.Count());
         Assert.Equal(3, containers?.Count());
         // Containers has foreign key on Images table
-        Assert.All(containers, c => Assert.Contains(c.ImageEntityId.Value, images.Select(i => i.Id)));
+        Assert.All(containers, c => Assert.Contains(c.ImageId.Value, images.Select(i => i.Id)));
         healthMonitorMock.Verify(x => x.TrackPlatform(Constants.LocalDockerHostUrl, platform.Id, PlatformConnectorType.Local), Times.Once);
         await VerifyJson(responseBody);
     }

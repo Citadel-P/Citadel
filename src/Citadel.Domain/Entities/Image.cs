@@ -3,7 +3,7 @@
 public sealed class Image(
     string name,
     string tag,
-    string imageId,
+    string dockerImageId,
     double size,
     int containers,
     Guid platformId,
@@ -16,7 +16,7 @@ public sealed class Image(
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid PlatformId { get; private set; } = platformId;
     public Guid? RegistryId { get; private set; } = registryId;
-    public string ImageId { get; private set; } = imageId;
+    public string DockerImageId { get; private set; } = dockerImageId;
     public int Containers { get; private set; } = containers;
     public bool? IsUpToDate { get; private set; } = isUpToDate;
     public string Tag { get; private set; } = tag;
@@ -29,7 +29,7 @@ public sealed class Image(
     public void PartialUpdate(
         string? name = null,
         string? tag = null,
-        string? imageId = null,
+        string? dockerImageId = null,
         double? size = null,
         int? containers = null,
         bool? isUpToDate = null,
@@ -40,8 +40,8 @@ public sealed class Image(
             Name = name;
         if (tag is not null && Tag != tag)
             Tag = tag;
-        if (imageId is not null && ImageId != imageId)
-            ImageId = imageId;
+        if (dockerImageId is not null && DockerImageId != dockerImageId)
+            DockerImageId = dockerImageId;
         if (size is not null && Size != size)
             Size = size.Value;
         if (containers is not null && Containers != containers)
@@ -58,7 +58,7 @@ public sealed class Image(
         Guid id,
         string name,
         string tag,
-        string imageId,
+        string dockerImageId,
         double size,
         int containers,
         Guid platformId,
@@ -71,7 +71,7 @@ public sealed class Image(
         return new Image(
             name: name,
             tag: tag,
-            imageId: imageId,
+            dockerImageId: dockerImageId,
             size: size,
             containers: containers,
             platformId: platformId,

@@ -4,7 +4,7 @@ internal sealed record ImageDto(
     Guid Id,
     string Name,
     string Tag,
-    string ImageId,
+    string DockerImageId,
     double Size,
     int Containers,
     Guid PlatformId,
