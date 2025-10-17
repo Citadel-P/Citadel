@@ -8,7 +8,9 @@ export function useHTTPErrorHandler() {
 
   useEffect(() => {
     const handleError = (error: ProblemDetails) => {
-      if (error?.status != null && error?.status > 400) {
+      if (!error) return;
+      if (error.status === 401) return; // handled by AuthProvider
+      if (error.status != null && (error.status as number) > 400) {
         toast.error(error.status + ' ' + error.title, {
           description: error.detail,
         });

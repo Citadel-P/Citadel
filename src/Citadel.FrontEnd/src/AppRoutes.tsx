@@ -35,14 +35,21 @@ export const AppPaths: Record<string, string> = {
   editDeployment: 'deployments/edit/:deploymentId',
 };
 
+export const REDIRECT_TO_KEY = 'redirectTo';
+
 export const AppRoutes = () => {
   const { isAuthenticated } = useAuthContext();
   const protectedRoutes = [
     {
       path: AppPaths.main,
       element: <Layout />,
-      loader: () => {
-        return !isAuthenticated ? redirect(AppPaths.login) : null;
+      loader: ({ request }: any) => {
+        if (!isAuthenticated) {
+          const currentUrl = new URL(request.url).pathname;
+          sessionStorage.setItem(REDIRECT_TO_KEY, currentUrl);
+          return redirect(AppPaths.login);
+        }
+        return null;
       },
       hydrateFallbackElement: <Fallback />,
       children: [
@@ -225,10 +232,8 @@ export const AppRoutes = () => {
     },
   ];
 
-  // Define the router
   const router = createBrowserRouter([...publicRoutes, ...protectedRoutes]);
 
-  // Dispose router on hot reload
   if (import.meta.hot) {
     import.meta.hot.dispose(() => router.dispose());
   }
@@ -236,7 +241,6 @@ export const AppRoutes = () => {
   return <RouterProvider router={router} />;
 };
 
-// Fallback component for lazy loading
 function Fallback() {
   return <p>Loading...</p>;
 }

@@ -15,6 +15,7 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
   const { apiClient } = useApiClientContext();
   const { mutate: logout } = useMutate('logout');
   const [accessToken, setAccessToken] = useState<string | undefined>(storedJwt ?? undefined);
+  const [hasHadValidToken, setHasHadValidToken] = useState<boolean>(!!storedJwt); // Track if user ever had a valid token
   const isAuthenticated = useMemo(() => accessToken != null, [accessToken]);
   const { data, isSuccess, error } = useTokenRefresh(accessToken, isAuthenticated);
 
@@ -22,6 +23,7 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
     (token: string | undefined) => {
       if (token) {
         setAccessToken(token);
+        setHasHadValidToken(true);
         apiClient?.setSecurityData(token);
         sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
       } else {
@@ -35,13 +37,16 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     if ((error as ProblemDetails)?.status === 401) {
-      toast.error('Session expired', {
-        description: 'Please login again',
-      });
+      if (hasHadValidToken) {
+        toast.error('Session expired', {
+          description: 'Please login again',
+        });
+      }
       setAccessToken(undefined);
+      setHasHadValidToken(false);
       logout({});
     }
-  }, [error, logout]);
+  }, [error, logout, hasHadValidToken]);
 
   // Handle access token updates from the API
   useEffect(() => {

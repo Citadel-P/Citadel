@@ -1,6 +1,6 @@
 import { createContext } from 'react';
 import { useRequiredContext } from './hooks/useRequiredContext';
-import { ContainerInfoView, PlatformView } from './api/_generated';
+import { ContainerInfoView, PlatformView } from './api/generated/api.types';
 
 interface IContext {
   isLoading: boolean;

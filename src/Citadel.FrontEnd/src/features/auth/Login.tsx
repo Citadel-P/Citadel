@@ -9,6 +9,7 @@ import { AlertMessage } from '@/components/ui/alert-message';
 import { useEffect } from 'react';
 import { ACCESS_TOKEN_KEY } from './AuthProvider';
 import { useMutate } from '@/lib/hooks';
+import { REDIRECT_TO_KEY } from '@/AppRoutes';
 
 const Login = () => {
   const { form } = useLoginForm();
@@ -17,7 +18,9 @@ const Login = () => {
   useEffect(() => {
     if (isSuccess && data?.data) {
       sessionStorage.setItem(ACCESS_TOKEN_KEY, data?.data.accessToken);
-      window.location.href = '/';
+      const redirectTo = sessionStorage.getItem(REDIRECT_TO_KEY) ?? '/';
+      sessionStorage.removeItem(REDIRECT_TO_KEY);
+      window.location.href = redirectTo;
     }
   }, [isSuccess, data]);
 
