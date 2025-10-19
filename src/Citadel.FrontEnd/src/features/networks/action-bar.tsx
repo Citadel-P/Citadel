@@ -1,4 +1,4 @@
-import { useNetworksContext } from './NetworksContext';
+import { useNetworksContext } from './context';
 import { ActionBarButtons } from './action-bar-buttons';
 import { GenericActionBar } from '@/components/custom/action-bar';
 

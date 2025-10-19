@@ -3,71 +3,31 @@ import { DockerVolumeResult } from '@/api/generated/api.types';
 import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useEffect, useCallback, useMemo } from 'react';
-import { useAppContext } from '@/AppContext';
-import { useVolumesContext } from './VolumesContext';
-import { DeleteDialog } from './delete-dialog';
+import { useMemo } from 'react';
 import { byteTransform } from '@/lib/bytes.helper';
 import { fromNow } from '@/lib/dayjs.helper';
 import { useNavigate, useParams } from 'react-router';
-import { useRead } from '@/lib/hooks';
 import { TableDropDown } from './table-dropdown';
 import { StateIndicator } from '@/components/custom/state-indicator';
+import { useSelectedResources } from '@/lib/atoms';
 
-export default function VolumesTable() {
-  const { currentPlatform } = useAppContext();
-  const { data, isLoading, isSuccess } = useRead('listVolumes', { platformId: currentPlatform?.id });
-  const { setSelectedRows, setVolumes, volumes, dialogData, setDialogData, requestDelete, deleteIsPending } =
-    useVolumesContext();
-
-  // Update volumes when data is fetched
-  useEffect(() => {
-    if (isSuccess && data?.data.volumes) {
-      setVolumes(data.data.volumes);
-    }
-    return () => {
-      setVolumes([]);
-      setSelectedRows([]);
-    };
-  }, [data, isSuccess, setVolumes, setSelectedRows]);
-
-  // Memoized selection change handler
-  const handleSelectionChange = useCallback(
-    (ids: string[]) => {
-      setSelectedRows(volumes?.filter((c) => ids.includes(c.id!)));
-    },
-    [volumes, setSelectedRows],
-  );
-
-  // Memoized row count
-  const rowCount = useMemo(() => volumes?.length ?? 0, [volumes]);
+export const VolumesTable = ({ items, isLoading }: { items: DockerVolumeResult[]; isLoading: boolean }) => {
+  const rowCount = useMemo(() => items?.length ?? 0, [items]);
+  const [_, setSelectedResources] = useSelectedResources<DockerVolumeResult>('Volume');
 
   return (
-    <>
-      <div className="flex flex-col gap-3">
-        <DataTable
-          columns={columns}
-          data={volumes ?? []}
-          isLoading={isLoading}
-          onSelectionChange={handleSelectionChange}
-        />
-        <div className="text-muted-foreground text-xs p-2 font-normal">
-          {rowCount > 0 && (
-            <span>
-              Showing {rowCount} of {rowCount} volume(s)
-            </span>
-          )}
-        </div>
+    <div className="flex flex-col gap-3">
+      <DataTable columns={columns} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+      <div className="text-muted-foreground text-xs p-2 font-normal">
+        {rowCount > 0 && (
+          <span>
+            Showing {rowCount} of {rowCount} volume(s)
+          </span>
+        )}
       </div>
-      <DeleteDialog
-        dialogData={dialogData}
-        setDialogData={setDialogData}
-        requestDelete={requestDelete}
-        deleteIsPending={deleteIsPending}
-      />
-    </>
+    </div>
   );
-}
+};
 
 const columns: ColumnDef<DockerVolumeResult>[] = [
   {

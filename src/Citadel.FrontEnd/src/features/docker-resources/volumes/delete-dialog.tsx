@@ -3,33 +3,30 @@ import { useState } from 'react';
 import { DeleteVolumesInput, DockerVolumeResult } from '@/api/generated/api.types';
 import { ConfirmDeleteDialog } from '@/components/custom/confirm-delete-dialog';
 import { SwitchList } from '@/components/custom/switch-section';
-import { IDialogData } from '@/lib/hooks';
+import { useDeleteDialog } from '@/lib/hooks';
 
-export const DeleteDialog = ({
-  dialogData,
-  setDialogData,
-  requestDelete,
-  deleteIsPending,
-}: {
-  dialogData: IDialogData<DockerVolumeResult>;
-  setDialogData: (data: IDialogData<DockerVolumeResult>) => void;
-  requestDelete: (request: DeleteVolumesInput) => void;
-  deleteIsPending: boolean;
-}) => {
+export const DeleteDialog = () => {
+  const type = 'Volume';
+  const { open, targets, closeDialog, requestDelete, deleteIsPending } = useDeleteDialog<DockerVolumeResult>({ type });
   const { currentPlatform } = useAppContext();
   const [force, setForce] = useState(false);
 
-  const volumesId = dialogData.currentSelection?.map((c) => c.id!) ?? [];
+  const volumesId = targets.map((c) => c.id!);
+
   const handleDelete = () => {
-    requestDelete({ platformId: currentPlatform?.id ?? '', names: volumesId, force });
+    requestDelete({
+      platformId: currentPlatform?.id ?? '',
+      names: volumesId,
+      force,
+    } as DeleteVolumesInput);
   };
 
   return (
     <ConfirmDeleteDialog
-      open={dialogData.open}
-      onOpenChange={(open) => setDialogData({ open })}
+      open={open}
+      onOpenChange={closeDialog}
       count={volumesId.length}
-      type="Volume"
+      type={type}
       isPending={deleteIsPending}
       onConfirm={handleDelete}>
       <SwitchList

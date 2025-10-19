@@ -2,7 +2,8 @@ import { Api, ContainerStateStatus, ContainerStatView, PlatformStatView } from '
 import { ResourceName, resources } from '@/api/generated/resources';
 import { useApiClientContext } from '@/api/ApiClientContext';
 
-export type ResourceType = 'Network' | 'Volume' | 'Image' | 'Container' | 'Registry' | 'Platform';
+export type DockerResourceType = 'Network' | 'Volume' | 'Image' | 'Container';
+export type ResourceType = DockerResourceType | 'Registry' | 'Platform';
 export const PluralResourceMap = {
   Network: 'Networks',
   Volume: 'Volumes',

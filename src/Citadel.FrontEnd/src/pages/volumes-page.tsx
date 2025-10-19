@@ -1,5 +1,5 @@
-import Volumes from '@/features/volumes/Volumes';
-import { VolumesProvider } from '@/features/volumes/VolumesProvider';
+import Volumes from '@/features/volumes';
+import { VolumesProvider } from '@/features/volumes/context-provider';
 
 const VolumesPage = () => {
   return (

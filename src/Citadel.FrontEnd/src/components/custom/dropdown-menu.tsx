@@ -10,6 +10,8 @@ import {
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router';
 import { startTransition, useCallback } from 'react';
+import { DockerResourceType } from '@/api/types';
+import { useDeleteDialog } from '@/lib/hooks';
 
 export interface DropdownAction {
   id: string;
@@ -25,7 +27,7 @@ interface DropdownActionsProps {
   items: DropdownAction[];
 }
 
-const DropdownActions = ({ items }: DropdownActionsProps) => (
+export const DropdownActions = ({ items }: DropdownActionsProps) => (
   <DropdownMenu>
     <DropdownMenuTrigger asChild>
       <Button variant="ghost" className="h-8 w-8 p-0">
@@ -53,28 +55,26 @@ const DropdownActions = ({ items }: DropdownActionsProps) => (
   </DropdownMenu>
 );
 
-interface BaseContext<T> {
-  setDialogData: (data: { open: boolean; currentSelection: T[] }) => void;
-}
-
 interface CreateDropdownConfig<T> {
-  resource: T;
-  context: BaseContext<T>;
+  type: DockerResourceType;
   actions: (args: {
     navigate: ReturnType<typeof useNavigate>;
-    openDialog: () => void;
+    openDialog: (targets: T | T[]) => void;
   }) => DropdownAction[];
 }
 
-export function createTableDropdown<T>({ resource, context, actions }: CreateDropdownConfig<T>) {
+export function createTableDropdown<T>({ type, actions }: CreateDropdownConfig<T>) {
   const navigate = useNavigate();
+  const { openDialog } = useDeleteDialog<T>({ type });
 
-  const openDialog = useCallback(() => {
-    startTransition(() => {
-      context.setDialogData({ open: true, currentSelection: [resource] });
-    });
-  }, [context, resource]);
+  const handleOpenDialog = useCallback(
+    (targets: T | T[]) => {
+      startTransition(() => openDialog(targets));
+    },
+    [openDialog],
+  );
 
-  const items = actions({ navigate, openDialog });
+  const items = actions({ navigate, openDialog: handleOpenDialog });
+
   return <DropdownActions items={items} />;
 }

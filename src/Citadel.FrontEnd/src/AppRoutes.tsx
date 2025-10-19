@@ -2,6 +2,7 @@ import { createBrowserRouter, redirect, RouterProvider } from 'react-router';
 import Layout from '@/layout/Layout';
 import NotFound from '@/pages/NotFound';
 import { useAuthContext } from './features/auth/AuthContext';
+import { Loader2 } from 'lucide-react';
 
 export const AppPaths: Record<string, string> = {
   any: '*',
@@ -26,7 +27,7 @@ export const AppPaths: Record<string, string> = {
   network: 'platforms/:platformId/networks/:resourceId',
   networkInspect: 'platforms/:platformId/networks/:resourceId/inspect',
   addNetwork: 'platforms/:platformId/networks/add',
-  volumes: 'platforms/:platformId/volumes',
+  resource: 'platforms/:platformId/:type',
   volume: 'platforms/:platformId/volumes/:resourceId',
   volumeInspect: 'platforms/:platformId/volumes/:resourceId/inspect',
   addVolume: 'platforms/:platformId/volumes/add',
@@ -194,25 +195,29 @@ export const AppRoutes = () => {
         {
           path: AppPaths.volume,
           lazy: async () => {
-            return { Component: (await import('@/features/volumes/volume-info/VolumeInfoWrapper')).default };
+            return {
+              Component: (await import('@/features/docker-resources/volumes/volume-info/VolumeInfoWrapper')).default,
+            };
           },
         },
         {
           path: AppPaths.volumeInspect,
           lazy: async () => {
-            return { Component: (await import('@/features/volumes/volume-info/VolumeInfoWrapper')).default };
+            return {
+              Component: (await import('@/features/docker-resources/volumes/volume-info/VolumeInfoWrapper')).default,
+            };
           },
         },
         {
-          path: AppPaths.volumes,
+          path: AppPaths.resource,
           lazy: async () => {
-            return { Component: (await import('@/pages/volumes-page')).default };
+            return { Component: (await import('@/pages/docker-resource-page')).default };
           },
         },
         {
           path: AppPaths.addVolume,
           lazy: async () => {
-            return { Component: (await import('@/features/volumes/forms/AddVolumeForm')).default };
+            return { Component: (await import('@/features/docker-resources/volumes/forms/AddVolumeForm')).default };
           },
         },
         { path: AppPaths.any, element: <NotFound /> },
@@ -242,5 +247,9 @@ export const AppRoutes = () => {
 };
 
 function Fallback() {
-  return <p>Loading...</p>;
+  return (
+    <div className="w-[100vw] h-[100vh] flex items-center justify-center">
+      <Loader2 className="w-16 h-16 animate-spin" />
+    </div>
+  );
 }

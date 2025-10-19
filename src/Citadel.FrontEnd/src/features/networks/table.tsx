@@ -5,7 +5,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { truncate } from '@/lib/truncate';
 import { useEffect, useCallback, useMemo } from 'react';
-import { useNetworksContext } from './NetworksContext';
+import { useNetworksContext } from './context';
 import { useAppContext } from '@/AppContext';
 import { TableDropDown } from './table-dropdown';
 import { DeleteDialog } from './delete-dialog';
@@ -20,7 +20,6 @@ export default function NetworksTable() {
   const { setSelectedRows, setNetworks, networks, dialogData, setDialogData, requestDelete, deleteIsPending } =
     useNetworksContext();
 
-  // Update networks when data is fetched
   useEffect(() => {
     if (isSuccess && data?.data.networks) {
       setNetworks(data.data.networks);
@@ -31,7 +30,6 @@ export default function NetworksTable() {
     };
   }, [data, isSuccess, setNetworks, setSelectedRows]);
 
-  // Memoized selection change handler
   const handleSelectionChange = useCallback(
     (ids: string[]) => {
       setSelectedRows(networks?.filter((c) => ids.includes(c.id!)));
@@ -39,7 +37,6 @@ export default function NetworksTable() {
     [networks, setSelectedRows],
   );
 
-  // Memoized row count
   const rowCount = useMemo(() => networks?.length ?? 0, [networks]);
 
   return (

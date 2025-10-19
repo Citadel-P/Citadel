@@ -1,5 +1,5 @@
 import { Trash, SearchCode } from 'lucide-react';
-import { useNetworksContext } from './NetworksContext';
+import { useNetworksContext } from './context';
 import { DockerNetworkResult } from '@/api/generated/api.types';
 import { formatId } from '@/lib/utils';
 import { createTableDropdown } from '@/components/custom/dropdown-menu';

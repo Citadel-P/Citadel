@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { truncate } from './truncate';
+import { DockerResourceType, KnownResourceName } from '@/api/types';
 
 /**
  * A utility function to conditionally join CSS class names together.

@@ -16,16 +16,18 @@ import {
   AnyFn,
   ApiFn,
   ApiFnMap,
+  DockerResourceType,
   KnownResourceName,
   MutateVariables,
   PluralResourceMap,
   ResourceResponse,
-  ResourceType,
   UseReadArgs,
 } from '@/api/types';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 import { use400ErrorToast } from '@/hooks/use400ErrorToast';
 import { toast } from 'sonner';
+import { useParams } from 'react-router';
+import { useDeleteDialogState } from './atoms';
 
 const EMPTY_ARGS = Object.freeze({});
 
@@ -124,39 +126,55 @@ export interface IDialogData<T> {
 }
 
 interface DeleteDialogOptions {
-  type: ResourceType;
+  type: DockerResourceType;
   onSuccess?: () => void;
 }
 
-export function useDeleteDialog<TData>({ type, onSuccess }: DeleteDialogOptions) {
+export function useDeleteDialog<T>({ type, onSuccess }: DeleteDialogOptions) {
+  const [state, setState] = useDeleteDialogState(type);
   const client = useQueryClient();
 
   const queryKeyToInvalidate = resources[`list${PluralResourceMap[type]}`].key;
   const mutationKey = resources[`delete${PluralResourceMap[type]}`].key;
-
   const resourceName = type.toLowerCase();
 
   const { mutate, isPending: deleteIsPending, isSuccess: deleteIsSuccess, error } = useMutate(mutationKey);
-  const [dialogData, setDialogData] = useState<IDialogData<TData>>({ open: false });
 
-  const on400ErrorHandled = () => setDialogData({ open: false });
+  const closeDialog = useCallback(() => {
+    setState({ open: false, targets: [] });
+  }, [setState]);
 
-  use400ErrorToast(
-    error,
-    `The selected ${resourceName}(s) could not be deleted (status code: 400).`,
-    on400ErrorHandled,
-  );
+  use400ErrorToast(error, `The selected ${resourceName}(s) could not be deleted (status code: 400).`, closeDialog);
 
   useEffect(() => {
     if (deleteIsSuccess) {
       if (queryKeyToInvalidate) client.invalidateQueries({ queryKey: [queryKeyToInvalidate] });
-      setDialogData({ open: false });
       onSuccess?.();
-      toast.success(`The selected ${resourceName}(s) has been successfully deleted`);
+      closeDialog();
+      toast.success(`The selected ${resourceName}(s) have been successfully deleted`);
     }
-  }, [deleteIsSuccess, client, queryKeyToInvalidate, resourceName, onSuccess]);
+  }, [deleteIsSuccess, client, queryKeyToInvalidate, resourceName, onSuccess, closeDialog]);
 
-  const requestDelete = useCallback((data: MutateVariables<typeof mutationKey>) => mutate(data), [mutate]);
+  const requestDelete = useCallback((data: any) => mutate(data), [mutate]);
 
-  return { dialogData, setDialogData, deleteIsPending, requestDelete };
+  const openDialog = useCallback(
+    (targets: T[] | T) => {
+      setState({ open: true, targets: Array.isArray(targets) ? targets : [targets] });
+    },
+    [setState],
+  );
+
+  return {
+    open: state.open,
+    targets: state.targets as T[],
+    openDialog,
+    closeDialog,
+    deleteIsPending,
+    requestDelete,
+  };
 }
+export const useDockerResourceParamType = () => {
+  const type = useParams().type;
+  if (!type) return undefined;
+  return (type[0].toUpperCase() + type.slice(1, -1)) as DockerResourceType;
+};

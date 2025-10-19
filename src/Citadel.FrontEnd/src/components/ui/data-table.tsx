@@ -20,7 +20,7 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
   isLoading: boolean;
   getRowId?: (row: TData) => string;
-  onSelectionChange?: (selectedRows: string[]) => void;
+  onSelectionChange?: (selectedRows: TData[]) => void;
 }
 interface Identifiable {
   id?: string | null;
@@ -51,8 +51,8 @@ export function DataTable<TData extends Identifiable, TValue>({
 
   useEffect(() => {
     if (onSelectionChange) {
-      const rowIds = Object.keys(table.getSelectedRowModel().rowsById);
-      onSelectionChange(rowIds);
+      const selectedRows = table.getSelectedRowModel().rows.map((r) => r.original);
+      onSelectionChange(selectedRows);
     }
   }, [rowSelection, data]);
 

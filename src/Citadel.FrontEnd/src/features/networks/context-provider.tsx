@@ -1,10 +1,9 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { DockerNetworkResult } from '@/api/generated/api.types';
-import { NetworksContext } from './NetworksContext';
+import { NetworksContext } from './context';
 import { useDeleteDialog } from '@/lib/hooks';
 
 export const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
-  // State variables
   const [selectedRows, setSelectedRows] = useState<DockerNetworkResult[] | undefined>();
   const [networks, setNetworks] = useState<DockerNetworkResult[] | undefined>([]);
   const [originalNetworks, setOriginalNetworks] = useState<DockerNetworkResult[] | undefined>([]);
@@ -15,28 +14,23 @@ export const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ chi
     type: 'Network',
   });
 
-  // Wrapper function that handles both original and filtered networks
   const handleNetworksUpdate = useCallback((networks: DockerNetworkResult[]) => {
     setOriginalNetworks(networks);
     setNetworks(networks);
   }, []);
 
-  // Search function to filter networks by name or ID
   const onSearch = useCallback((searchTerm: string) => {
     setCurrentSearchTerm(searchTerm);
   }, []);
 
-  // Filter networks whenever search term changes
   useEffect(() => {
     if (!originalNetworks?.length) return;
 
     if (currentSearchTerm.trim() === '') {
-      // If no search term, show all networks
       setNetworks(originalNetworks);
     } else {
       const searchLower = currentSearchTerm.toLowerCase();
 
-      // Filter networks by name OR id containing the search term
       const filtered = originalNetworks.filter((network) => {
         const nameMatches = network.name?.toLowerCase().includes(searchLower) || false;
         const idMatches =
@@ -53,7 +47,6 @@ export const NetworksProvider: React.FC<{ children?: React.ReactNode }> = ({ chi
     }
   }, [originalNetworks, currentSearchTerm]);
 
-  // Memoized context value
   const contextValue = useMemo(
     () => ({
       selectedRows,

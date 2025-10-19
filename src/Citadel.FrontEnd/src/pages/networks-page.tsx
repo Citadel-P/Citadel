@@ -1,5 +1,5 @@
-import Networks from '@/features/networks/Networks';
-import { NetworksProvider } from '@/features/networks/NetworksProvider';
+import Networks from '@/features/networks';
+import { NetworksProvider } from '@/features/networks/context-provider';
 
 const NetworksPage = () => {
   return (
