@@ -18,24 +18,15 @@ import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { fromNow } from '@/lib/dayjs.helper';
 import { ContainerInfoTable } from './ContainerInfoTable';
 import { useDeleteDialog } from '@/lib/hooks';
-import { DockerContainerView } from '@/api/types';
 import { StateIndicator } from '@/components/custom/state-indicator';
 
 const ContainerInfoWrapper = () => {
   const navigate = useNavigate();
   const { route, currentContainer, isLoading } = useAppContext();
   const { containerInfo } = useContainerInfoGroup(currentContainer?.containerId, currentContainer?.platformId);
-  const {
-    deleteIsPending: isPending,
-    requestDelete,
-    dialogData,
-    setDialogData,
-  } = useDeleteDialog<ContainerView | DockerContainerView>({
+  const { openDialog } = useDeleteDialog<ContainerView>({
     type: 'Container',
-    onSuccess: useCallback(
-      () => navigate(`/platforms/${currentContainer?.platformId}/containers`),
-      [currentContainer?.platformId, navigate],
-    ),
+    onSuccess: () => navigate(`/platforms/${currentContainer?.platformId}/containers`),
   });
 
   const [containerId, setContainerId] = useState<string | undefined>();
@@ -104,8 +95,8 @@ const ContainerInfoWrapper = () => {
             <div className="flex justify-start md:justify-end w-full">
               <div className="flex flex-row items-center ">
                 <ActionBarButtons
-                  selectedContainers={[containerInfo! ?? currentContainer]}
-                  setDialogData={setDialogData}
+                  selectedRows={[(containerInfo! ?? currentContainer ?? []) as any]}
+                  openDialog={openDialog}
                 />
               </div>
             </div>
@@ -144,12 +135,7 @@ const ContainerInfoWrapper = () => {
           </Tabs>
         </div>
       </div>
-      <DeleteDialog
-        requestDelete={requestDelete}
-        isPending={isPending}
-        dialogData={dialogData}
-        setDialogData={setDialogData}
-      />
+      <DeleteDialog />
     </div>
   );
 };

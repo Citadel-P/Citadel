@@ -1,8 +1,9 @@
 import { HardDrive } from 'lucide-react';
 import { ActionBar } from './action-bar';
 import { VolumesTable } from './table';
-import { RequiredDockerComponents } from '@/pages/types';
+import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
 import { DeleteDialog } from './delete-dialog';
+import { useRead } from '@/lib/hooks';
 
 export const VolumeComponents: RequiredDockerComponents = {
   Icon: <HardDrive className="h-4 w-4" />,
@@ -14,5 +15,18 @@ export const VolumeComponents: RequiredDockerComponents = {
   },
   DeleteDialog: () => {
     return <DeleteDialog />;
+  },
+  useData: function (platformId: string): ResourceDataHookResult<any> {
+    const { data, isLoading } = useRead(`listVolumes`, { platformId: platformId });
+    return { items: data?.data?.volumes ?? [], isLoading };
+  },
+  filterItems: (items, search) => {
+    if (!search.trim()) return items;
+    const s = search.toLowerCase();
+    return items.filter((v) =>
+      v.name?.toLowerCase().includes(s) ||
+      v.id?.toLowerCase().includes(s) ||
+      v.id?.substring(0, 12).toLowerCase().includes(s)
+    );
   },
 };

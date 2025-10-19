@@ -1,61 +1,31 @@
-import { useDockerResourceParamType, useRead } from '@/lib/hooks';
+import { useDockerResourceParamType } from '@/lib/hooks';
 import { useNavigate, useParams } from 'react-router';
-import { DockerResourceComponents } from './types';
-import { PluralResourceMap } from '@/api/types';
+import { DockerResourceComponents, RequiredDockerComponents } from './types';
+import { DockerResourceType, PluralResourceMap } from '@/api/types';
 import { SearchField } from '@/components/ui/SearchField';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import NotFound from './NotFound';
-import { useCallback, useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 const DockerResourcePage = () => {
-  const navigate = useNavigate();
-  const platformId = useParams().platformId;
-
+  const platformId = useParams().platformId ?? '';
   const type = useDockerResourceParamType()!;
-  const { data, isLoading } = useRead(`list${type}s`, { platformId: platformId });
-  const [items, setItems] = useState<any[]>([]);
-  const [originalItems, setOriginalItems] = useState<any[]>([]);
-  const [currentSearchTerm, setCurrentSearchTerm] = useState('');
-
-  useEffect(() => {
-    if (data?.data) {
-      const result = data?.data[PluralResourceMap[type].toLowerCase() as keyof typeof data.data] ?? [];
-      setItems(result);
-      setOriginalItems(result);
-    }
-  }, [data, type]);
-
-  useEffect(() => {
-    if (!originalItems?.length) return;
-
-    if (currentSearchTerm.trim() === '') {
-      setItems(originalItems);
-    } else {
-      const searchLower = currentSearchTerm.toLowerCase();
-      // filter by name or id containing the search term
-      const filtered = originalItems.filter((item) => {
-        const nameMatches = item.name?.toLowerCase().includes(searchLower) || false;
-        const idMatches =
-          (item.id && item.id.substring(0, 12).toLowerCase().includes(searchLower)) ||
-          (item.id && item.id.toLowerCase().includes(searchLower)) ||
-          false;
-
-        return nameMatches || idMatches;
-      });
-
-      setItems(filtered);
-    }
-  }, [originalItems, currentSearchTerm]);
-
-  const onSearch = useCallback((searchTerm: string) => {
-    setCurrentSearchTerm(searchTerm);
-  }, []);
 
   const Components = DockerResourceComponents[type];
-  if (!Components) {
-    return <NotFound />;
-  }
+  if (!Components) return <NotFound />;
+
+  return <ResourceView key={type} Components={Components} platformId={platformId} type={type} />;
+};
+
+const ResourceView = <T,>({ Components, platformId, type }: ResourceViewProps<T>) => {
+  const navigate = useNavigate();
+
+  const { items, isLoading } = Components.useData(platformId);
+  const [search, setSearch] = useState('');
+  const filtered = useMemo(() => {
+    return Components.filterItems ? Components.filterItems(items, search) : items;
+  }, [items, search, Components]);
 
   return (
     <div className="flex-col justify-between relative">
@@ -70,7 +40,7 @@ const DockerResourcePage = () => {
               <div className="text-md font-bold text-foreground">{PluralResourceMap[type]}</div>
             </div>
             <div className="flex gap-2">
-              <SearchField onSearch={onSearch} />
+              <SearchField onSearch={setSearch} />
               <Button
                 type="button"
                 onClick={() => navigate('./add')}
@@ -79,15 +49,23 @@ const DockerResourcePage = () => {
               </Button>
             </div>
           </div>
+
           <div className="space-y-1 rounded-sm border p-1 shadow-xs">
-            <Components.Table items={items} isLoading={isLoading} />
+            <Components.Table items={filtered ?? []} isLoading={isLoading} />
           </div>
         </div>
       </div>
+
       <Components.ActionBar items={items} />
       <Components.DeleteDialog />
     </div>
   );
+};
+
+type ResourceViewProps<T = any> = {
+  Components: RequiredDockerComponents<T>;
+  platformId: string;
+  type: DockerResourceType;
 };
 
 export default DockerResourcePage;

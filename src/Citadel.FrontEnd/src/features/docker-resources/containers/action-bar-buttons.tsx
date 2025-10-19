@@ -1,18 +1,16 @@
 import { Play, Pause, RotateCcw, Ban, Trash, StepForward } from 'lucide-react';
 import { useAvailableActions } from './hooks/useAvailableActions';
 import { ContainerView } from '@/api/generated/api.types';
-import { DockerContainerView } from '@/api/types';
-import { IDialogData } from '@/lib/hooks';
 import { ActionButtonConfig, ActionButtons } from '@/components/custom/action-bar';
 
 export const ActionBarButtons = ({
-  selectedContainers,
-  setDialogData,
+  selectedRows,
+  openDialog,
 }: {
-  selectedContainers: ContainerView[] | DockerContainerView[] | undefined;
-  setDialogData: (_: IDialogData<ContainerView | DockerContainerView>) => void;
+  selectedRows: ContainerView[] | undefined;
+  openDialog: (targets: ContainerView[]) => void;
 }) => {
-  const { availableActions, isPending, requestPatch } = useAvailableActions(selectedContainers);
+  const { availableActions, isPending, requestPatch } = useAvailableActions(selectedRows);
 
   const buttons: ActionButtonConfig[] = [
     {
@@ -53,7 +51,7 @@ export const ActionBarButtons = ({
       id: 'delete',
       icon: Trash,
       label: 'Delete',
-      onClick: () => setDialogData({ open: true, currentSelection: selectedContainers }),
+      onClick: () => openDialog(selectedRows ?? []),
       disabled: !availableActions?.canDelete || isPending,
       ariaLabel: 'Delete selected containers',
       variant: 'danger' as const,

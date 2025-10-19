@@ -67,7 +67,6 @@ export const useContainersGroup = (platformId?: string) => {
           break;
 
         default:
-          console.log(containerEvent?.container)
           if (
             existingIndex !== -1 &&
             JSON.stringify(updatedContainers[existingIndex]) !== JSON.stringify(containerEvent?.container)

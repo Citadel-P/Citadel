@@ -1,7 +1,6 @@
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useContainersContext } from './ContainersContext';
 import { ContainerView, ContainerStateStatus, ContainerStatView } from '@/api/generated/api.types';
 import { truncate } from '@/lib/truncate';
 import { toFixedNumber } from '@/lib/utils';
@@ -13,6 +12,26 @@ import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { PortsDisplay } from '@/components/ui/PortsDisplay';
 import { ImageName } from './container-info/ImageName';
 import { StateIndicator } from '@/components/custom/state-indicator';
+import { useMemo } from 'react';
+import { useSelectedResources } from '@/lib/atoms';
+
+export const ContainersTable = ({ items, isLoading }: { items: ContainerView[]; isLoading: boolean }) => {
+  const rowCount = useMemo(() => items?.length ?? 0, [items]);
+  const [_, setSelectedResources] = useSelectedResources<ContainerView>('Container');
+
+  return (
+    <div className="flex flex-col gap-3">
+      <DataTable columns={columns} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+      <div className="text-muted-foreground text-xs p-2 font-normal">
+        {rowCount > 0 && (
+          <span>
+            Showing {rowCount} of {rowCount} volume(s)
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const columns: ColumnDef<ContainerView>[] = [
   {
@@ -105,7 +124,7 @@ const columns: ColumnDef<ContainerView>[] = [
   },
   {
     id: 'actions',
-    cell: ({ row }) => <ActionsCell container={row.original} />,
+    cell: ({ row }) => <TableDropdown container={row.original} />,
   },
 ];
 
@@ -125,30 +144,4 @@ const CPUCell = ({ container }: { container: ContainerView }) => {
     return <div className="text-muted">0%</div>;
   }
   return container.lastStats?.cpuUsage ? toFixedNumber(container.lastStats?.cpuUsage as number, 'percent') : '0%';
-};
-
-const ActionsCell = ({ container }: { container: ContainerView }) => {
-  const { setDialogData } = useContainersContext();
-  return <TableDropdown container={container} setDialogData={setDialogData} />;
-};
-
-export const ContainersTable = () => {
-  const { containers, isLoading, setSelectedRows } = useContainersContext();
-  return (
-    <div className="flex flex-col gap-3">
-      <DataTable
-        columns={columns}
-        data={containers ?? []}
-        isLoading={isLoading}
-        onSelectionChange={(ids: string[]) => setSelectedRows(containers?.filter((c) => ids.includes(c.id!)))}
-      />
-      <div className="text-muted-foreground text-xs p-2 font-normal">
-        {containers && containers.length > 0 && (
-          <span>
-            Showing {containers?.length} of {containers?.length} container(s)
-          </span>
-        )}
-      </div>
-    </div>
-  );
 };

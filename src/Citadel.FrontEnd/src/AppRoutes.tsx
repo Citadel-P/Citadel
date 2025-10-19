@@ -10,7 +10,6 @@ export const AppPaths: Record<string, string> = {
   main: '/',
   platforms: 'platforms',
   addPlatform: 'platforms/add',
-  platformContainers: 'platforms/:platformId/containers',
   container: 'containers/:containerId',
   containerLogs: 'containers/:containerId/logs',
   containerStats: 'containers/:containerId/stats',
@@ -71,33 +70,39 @@ export const AppRoutes = () => {
           },
         },
         {
-          path: AppPaths.platformContainers,
-          lazy: async () => {
-            return { Component: (await import('@/pages/containers-page')).default };
-          },
-        },
-        {
           path: AppPaths.container,
           lazy: async () => {
-            return { Component: (await import('@/features/containers/container-info/ContainerInfoWrapper')).default };
+            return {
+              Component: (await import('@/features/docker-resources/containers/container-info/ContainerInfoWrapper'))
+                .default,
+            };
           },
         },
         {
           path: AppPaths.containerLogs,
           lazy: async () => {
-            return { Component: (await import('@/features/containers/container-info/ContainerInfoWrapper')).default };
+            return {
+              Component: (await import('@/features/docker-resources/containers/container-info/ContainerInfoWrapper'))
+                .default,
+            };
           },
         },
         {
           path: AppPaths.containerStats,
           lazy: async () => {
-            return { Component: (await import('@/features/containers/container-info/ContainerInfoWrapper')).default };
+            return {
+              Component: (await import('@/features/docker-resources/containers/container-info/ContainerInfoWrapper'))
+                .default,
+            };
           },
         },
         {
           path: AppPaths.containerInspect,
           lazy: async () => {
-            return { Component: (await import('@/features/containers/container-info/ContainerInfoWrapper')).default };
+            return {
+              Component: (await import('@/features/docker-resources/containers/container-info/ContainerInfoWrapper'))
+                .default,
+            };
           },
         },
         {

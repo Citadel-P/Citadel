@@ -1,24 +1,13 @@
 import { Ban, Play, RotateCcw, Trash, Eye, Pause, StepForward } from 'lucide-react';
 import { ContainerView } from '@/api/generated/api.types';
 import { useAvailableActions } from './hooks/useAvailableActions';
-import { DockerContainerView } from '@/api/types';
-import { IDialogData } from '@/lib/hooks';
 import { createTableDropdown, DropdownAction } from '@/components/custom/dropdown-menu';
 
-export const TableDropdown = ({
-  container,
-  hideDetails,
-  setDialogData,
-}: {
-  container: ContainerView | DockerContainerView;
-  hideDetails?: boolean;
-  setDialogData: (data: IDialogData<ContainerView | DockerContainerView>) => void;
-}) => {
+export const TableDropdown = ({ container }: { container: ContainerView }) => {
   const { availableActions, isPending, requestPatch } = useAvailableActions([container]);
 
   return createTableDropdown({
-    resource: container,
-    context: { setDialogData },
+    type: 'Container',
     actions: ({ navigate, openDialog }) => {
       const actions: DropdownAction[] = [
         {
@@ -55,23 +44,20 @@ export const TableDropdown = ({
           onClick: () => requestPatch('restart'),
           disabled: !availableActions?.canRestart || isPending,
         },
-      ];
-
-      if (!hideDetails) {
-        actions.push({
+        {
           id: 'details',
           label: 'View details',
           icon: <Eye className="mr-2 h-3 w-3" />,
           onClick: () => navigate(`../containers/${container.containerId?.slice(0, 12)}/logs`),
           separatorBefore: true,
-        });
-      }
+        },
+      ];
 
       actions.push({
         id: 'delete',
         label: 'Delete',
         icon: <Trash className="mr-2 h-3 w-3 text-danger" />,
-        onClick: openDialog,
+        onClick: () => openDialog(container),
         disabled: !availableActions?.canDelete || isPending,
         danger: true,
         separatorBefore: true,
