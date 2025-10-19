@@ -1,17 +1,16 @@
 import { DockerNetworkResult } from '@/api/generated/api.types';
 import { ActionButtonConfig, ActionButtons } from '@/components/custom/action-bar';
-import { IDialogData } from '@/lib/hooks';
 import { formatId } from '@/lib/utils';
 import { SearchCode, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 
 export const ActionBarButtons = ({
   selectedRows,
-  setDialogData,
+  openDialog,
   showInspectButton = true,
 }: {
   selectedRows: DockerNetworkResult[] | undefined;
-  setDialogData: (data: IDialogData<DockerNetworkResult>) => void;
+  openDialog: (targets: DockerNetworkResult[]) => void;
   showInspectButton?: boolean;
 }) => {
   const navigate = useNavigate();
@@ -37,7 +36,7 @@ export const ActionBarButtons = ({
       id: 'delete',
       icon: Trash,
       label: 'Delete',
-      onClick: () => setDialogData({ open: true, currentSelection: selectedRows }),
+      onClick: () => openDialog(selectedRows ?? []),
       disabled: !canDelete,
       ariaLabel: 'Delete selected networks',
       variant: 'danger',

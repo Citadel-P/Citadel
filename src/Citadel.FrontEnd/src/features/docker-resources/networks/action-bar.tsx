@@ -1,13 +1,13 @@
 import { ActionBarButtons } from './action-bar-buttons';
 import { GenericActionBar } from '@/components/custom/action-bar';
-import { DockerVolumeResult } from '@/api/generated/api.types';
-import { useSelectedResources } from '@/lib/atoms';
 import { useDeleteDialog } from '@/lib/hooks';
+import { useSelectedResources } from '@/lib/atoms';
+import { DockerNetworkResult } from '@/api/generated/api.types';
 
-export const ActionBar = ({ items }: { items: DockerVolumeResult[] }) => {
-  const type = 'Volume';
-  const { openDialog } = useDeleteDialog<DockerVolumeResult>({ type });
-  const [selectedRows, _] = useSelectedResources<DockerVolumeResult>(type);
+export const ActionBar = ({ items }: { items: DockerNetworkResult[] }) => {
+  const type = 'Network';
+  const { openDialog } = useDeleteDialog<DockerNetworkResult>({ type });
+  const [selectedRows, _] = useSelectedResources<DockerNetworkResult>(type);
 
   if (!selectedRows?.length) return null;
 

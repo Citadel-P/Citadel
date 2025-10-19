@@ -33,10 +33,13 @@ const DockerResourcePage = () => {
       setItems(originalItems);
     } else {
       const searchLower = currentSearchTerm.toLowerCase();
-
+      // filter by name or id containing the search term
       const filtered = originalItems.filter((item) => {
-        const nameMatches = item.id?.toLowerCase().includes(searchLower) || false;
-        const idMatches = (item.id && item.id.toLowerCase().includes(searchLower)) || false;
+        const nameMatches = item.name?.toLowerCase().includes(searchLower) || false;
+        const idMatches =
+          (item.id && item.id.substring(0, 12).toLowerCase().includes(searchLower)) ||
+          (item.id && item.id.toLowerCase().includes(searchLower)) ||
+          false;
 
         return nameMatches || idMatches;
       });
@@ -62,7 +65,7 @@ const DockerResourcePage = () => {
             <div className="mb-3 flex items-baseline gap-1">
               <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 {Components.Icon}
-                <span className="sr-only">PluralResourceMap[type]</span>
+                <span className="sr-only">{PluralResourceMap[type]}</span>
               </div>
               <div className="text-md font-bold text-foreground">{PluralResourceMap[type]}</div>
             </div>

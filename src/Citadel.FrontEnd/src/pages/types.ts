@@ -1,4 +1,5 @@
 import { DockerResourceType } from '@/api/types';
+import { NetworkComponents } from '@/features/docker-resources/networks';
 import { VolumeComponents } from '@/features/docker-resources/volumes';
 
 export interface RequiredDockerComponents {
@@ -12,4 +13,5 @@ export const DockerResourceComponents: {
   [key in DockerResourceType]: RequiredDockerComponents;
 } = {
   Volume: VolumeComponents,
+  Network: NetworkComponents,
 };

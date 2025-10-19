@@ -4,49 +4,20 @@ import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { truncate } from '@/lib/truncate';
-import { useEffect, useCallback, useMemo } from 'react';
-import { useNetworksContext } from './context';
-import { useAppContext } from '@/AppContext';
+import { useMemo } from 'react';
 import { TableDropDown } from './table-dropdown';
-import { DeleteDialog } from './delete-dialog';
 import { useNavigate, useParams } from 'react-router';
 import { formatId } from '@/lib/utils';
-import { useRead } from '@/lib/hooks';
 import { StateIndicator } from '@/components/custom/state-indicator';
+import { useSelectedResources } from '@/lib/atoms';
 
-export default function NetworksTable() {
-  const { currentPlatform } = useAppContext();
-  const { data, isLoading, isSuccess } = useRead('listNetworks', { platformId: currentPlatform?.id });
-  const { setSelectedRows, setNetworks, networks, dialogData, setDialogData, requestDelete, deleteIsPending } =
-    useNetworksContext();
-
-  useEffect(() => {
-    if (isSuccess && data?.data.networks) {
-      setNetworks(data.data.networks);
-    }
-    return () => {
-      setNetworks([]);
-      setSelectedRows([]);
-    };
-  }, [data, isSuccess, setNetworks, setSelectedRows]);
-
-  const handleSelectionChange = useCallback(
-    (ids: string[]) => {
-      setSelectedRows(networks?.filter((c) => ids.includes(c.id!)));
-    },
-    [networks, setSelectedRows],
-  );
-
-  const rowCount = useMemo(() => networks?.length ?? 0, [networks]);
+export const NetworksTable = ({ items, isLoading }: { items: DockerNetworkResult[]; isLoading: boolean }) => {
+  const rowCount = useMemo(() => items?.length ?? 0, [items]);
+  const [_, setSelectedResources] = useSelectedResources<DockerNetworkResult>('Network');
 
   return (
     <div className="flex flex-col gap-3">
-      <DataTable
-        columns={columns}
-        data={networks ?? []}
-        isLoading={isLoading}
-        onSelectionChange={handleSelectionChange}
-      />
+      <DataTable columns={columns} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
       <div className="text-muted-foreground text-xs p-2 font-normal">
         {rowCount > 0 && (
           <span>
@@ -54,15 +25,9 @@ export default function NetworksTable() {
           </span>
         )}
       </div>
-      <DeleteDialog
-        dialogData={dialogData}
-        setDialogData={setDialogData}
-        requestDelete={requestDelete}
-        deleteIsPending={deleteIsPending}
-      />
     </div>
   );
-}
+};
 
 const columns: ColumnDef<DockerNetworkResult>[] = [
   {
