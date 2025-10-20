@@ -4,21 +4,42 @@ import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TableDropDown } from './table-dropdown';
-import { useImagesContext } from './ImagesContext';
 import { truncate } from '@/lib/truncate';
 import { Play } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
 import { byteTransform } from '@/lib/bytes.helper';
-import { DeleteDialog } from './delete-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { RunImageDialog } from './dialogs/RunImageDialog';
 import { useNavigate, useParams } from 'react-router';
 import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
 import { formatId } from '@/lib/utils';
 import { RegistryDisplay } from '@/components/ui/RegistryDisplay';
 import { StateIndicator } from '@/components/custom/state-indicator';
+import { useSelectedResources } from '@/lib/atoms';
+
+export const LocalImagesTable = ({ items, isLoading }: { items: ImageView[]; isLoading: boolean }) => {
+  const rowCount = useMemo(() => items?.length ?? 0, [items]);
+  const [_, setSelectedResources] = useSelectedResources<ImageView>('Image');
+
+  return (
+    <div className="flex flex-col gap-3">
+      <DataTable
+        columns={columns()}
+        data={items ?? []}
+        isLoading={isLoading}
+        onSelectionChange={setSelectedResources}
+      />
+      <div className="text-muted-foreground text-xs p-2 font-normal">
+        {rowCount > 0 && (
+          <span>
+            Showing {rowCount} of {rowCount} image(s)
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const columns = (): ColumnDef<ImageView>[] => [
   {
@@ -91,18 +112,12 @@ const columns = (): ColumnDef<ImageView>[] => [
 ];
 
 const RenderActions = ({ image }: { image: ImageView }) => {
-  const { setRunDialogData } = useImagesContext();
-
   return (
     <div className="flex justify-center">
       <TooltipProvider delayDuration={200}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 rounded-full"
-              onClick={() => setRunDialogData({ open: true, currentSelection: [image] })}>
+            <Button variant="ghost" size="icon" className="size-8 rounded-full" onClick={() => null}>
               <Play className="text-blue-500" />
             </Button>
           </TooltipTrigger>
@@ -144,53 +159,3 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
     </div>
   );
 };
-
-export default function LocalImagesTable() {
-  const {
-    setSelectedRows,
-    localImages,
-    setDialogData,
-    dialogData,
-    requestDelete,
-    deleteIsPending,
-    setRunDialogData,
-    runDialogData,
-    isLoading,
-  } = useImagesContext();
-
-  // Memoized selection change handler
-  const handleSelectionChange = useCallback(
-    (ids: string[]) => {
-      setSelectedRows(localImages.filter((c) => ids.includes(c.id!)));
-    },
-    [localImages, setSelectedRows],
-  );
-
-  // Memoized row count
-  const rowCount = useMemo(() => localImages?.length ?? 0, [localImages]);
-
-  return (
-    <div className="flex flex-col gap-3">
-      <DataTable
-        columns={columns()}
-        data={localImages}
-        isLoading={isLoading}
-        onSelectionChange={handleSelectionChange}
-      />
-      <div className="text-muted-foreground text-xs p-2 font-normal">
-        {rowCount > 0 && (
-          <span>
-            Showing {rowCount} of {rowCount} image(s)
-          </span>
-        )}
-      </div>
-      <RunImageDialog runDialogData={runDialogData} setRunDialogData={setRunDialogData} />
-      <DeleteDialog
-        dialogData={dialogData}
-        setDialogData={setDialogData}
-        requestDelete={requestDelete}
-        deleteIsPending={deleteIsPending}
-      />
-    </div>
-  );
-}

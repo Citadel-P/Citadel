@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ContainerView } from '@/api/generated/api.types';
+import { ContainerView, DeleteContainersRequest } from '@/api/generated/api.types';
 import { ConfirmDeleteDialog } from '@/components/custom/confirm-delete-dialog';
 import { SwitchList } from '@/components/custom/switch-section';
 import { useDeleteDialog } from '@/lib/hooks';
@@ -12,7 +12,7 @@ export const DeleteDialog = () => {
   const [force, toggleForce] = useState(true);
 
   const containerIds = targets.map((c) => c.containerId!) ?? [];
-  const handleDelete = () => requestDelete({ containerIds, v: volume, force });
+  const handleDelete = () => requestDelete({ containerIds, v: volume, force } as DeleteContainersRequest);
 
   return (
     <ConfirmDeleteDialog

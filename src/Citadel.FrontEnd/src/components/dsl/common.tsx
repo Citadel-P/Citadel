@@ -4,28 +4,35 @@ import { Button } from '../ui/button';
 import { ChevronsUpDown, SearchX } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 import { filterBySplit } from '@/lib/utils';
+import { PluralResourceMap, ResourceType } from '@/api/types';
+import { useRead } from '@/lib/hooks';
+import { useResourceFilter } from '@/lib/atoms';
 
 export const ResourceSelector = <T extends { id: string; name: string }>({
+  type,
   selected,
   onSelect,
   disabled,
   align,
   placeholder,
-  items,
 }: {
-  selected: string | undefined;
-  onSelect?: (id: string) => void;
+  type: ResourceType;
+  selected?: T | undefined;
+  onSelect?: (item: T | undefined) => void;
   disabled?: boolean;
   align?: 'start' | 'center' | 'end';
   placeholder?: string;
-  items: T[];
 }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const resourceName = PluralResourceMap[type];
+  const [filter, setFilter] = useResourceFilter<{ item: T }>(type);
 
-  const type = 'Server';
+  const items = Object.values(useRead(`list${resourceName}`).data?.data ?? {}).at(0) as T[];
 
-  const name = items?.find((r) => r.id === selected)?.name;
+  const selectedItem = filter?.item ?? selected;
+
+  const name = items?.find((r) => r.id === selectedItem?.id)?.name;
 
   if (!items) return null;
 
@@ -42,7 +49,10 @@ export const ResourceSelector = <T extends { id: string; name: string }>({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="secondary" className="flex justify-start gap-2 w-fit max-w-[350px]" disabled={disabled}>
+        <Button
+          variant="secondary"
+          className="flex justify-start gap-2 w-fit max-w-[350px] bg-accent/60 hover:bg-accent/80"
+          disabled={disabled}>
           {name || (placeholder ?? `Select the resource`)}
           {!disabled && <ChevronsUpDown className="w-3 h-3" />}
         </Button>
@@ -65,7 +75,8 @@ export const ResourceSelector = <T extends { id: string; name: string }>({
               {!search && (
                 <CommandItem
                   onSelect={() => {
-                    onSelect && onSelect('');
+                    onSelect && onSelect(undefined);
+                    setFilter(null);
                     setOpen(false);
                   }}
                   className="flex items-center justify-between cursor-pointer">
@@ -76,7 +87,9 @@ export const ResourceSelector = <T extends { id: string; name: string }>({
                 <CommandItem
                   key={resource.id}
                   onSelect={() => {
-                    onSelect && onSelect(resource.id);
+                    setFilter({ item: resource });
+
+                    onSelect && onSelect(resource);
                     setOpen(false);
                   }}
                   className="flex items-center justify-between cursor-pointer">

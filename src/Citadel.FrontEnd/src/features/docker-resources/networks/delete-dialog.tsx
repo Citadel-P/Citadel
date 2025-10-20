@@ -8,17 +8,17 @@ export const DeleteDialog = () => {
   const { open, targets, closeDialog, requestDelete, deleteIsPending } = useDeleteDialog<DockerNetworkResult>({ type });
   const { currentPlatform } = useAppContext();
 
-  const networkIds = targets.map((c) => c.id!) ?? [];
+  const networksId = targets.map((c) => c.id!) ?? [];
 
   const handleDelete = () => {
-    requestDelete({ platformId: currentPlatform?.id ?? '', ids: networkIds } as DeleteNetworksInput);
+    requestDelete({ platformId: currentPlatform?.id ?? '', ids: networksId } as DeleteNetworksInput);
   };
 
   return (
     <ConfirmDeleteDialog
       open={open}
       onOpenChange={closeDialog}
-      count={networkIds.length}
+      count={networksId.length}
       type={type}
       isPending={deleteIsPending}
       onConfirm={handleDelete}

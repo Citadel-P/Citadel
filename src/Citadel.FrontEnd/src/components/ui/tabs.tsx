@@ -1,5 +1,5 @@
 // This component has been patched:
-// - update talist to use bg-accent/60 justify-start
+// - update tablist to use bg-accent/60 justify-start
 import * as React from 'react';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 

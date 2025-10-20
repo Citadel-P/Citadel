@@ -11,12 +11,12 @@ export const DeleteDialog = () => {
   const { currentPlatform } = useAppContext();
   const [force, setForce] = useState(false);
 
-  const volumesId = targets.map((c) => c.id!);
+  const volumeIds = targets.map((c) => c.id!);
 
   const handleDelete = () => {
     requestDelete({
       platformId: currentPlatform?.id ?? '',
-      names: volumesId,
+      names: volumeIds,
       force,
     } as DeleteVolumesInput);
   };
@@ -25,7 +25,7 @@ export const DeleteDialog = () => {
     <ConfirmDeleteDialog
       open={open}
       onOpenChange={closeDialog}
-      count={volumesId.length}
+      count={volumeIds.length}
       type={type}
       isPending={deleteIsPending}
       onConfirm={handleDelete}>

@@ -20,6 +20,10 @@ export const ContainerComponents: RequiredDockerComponents = {
     const { containersInfo, isLoading } = useContainersGroup(platformId);
     return { items: containersInfo?.containers ?? [], isLoading };
   },
+  header: {
+    showAdd: false,
+    showSearch: true,
+  },
   filterItems: (items, search) => {
     if (!search.trim()) return items;
     const s = search.toLowerCase();

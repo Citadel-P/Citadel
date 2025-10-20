@@ -1,36 +1,28 @@
 import { useState } from 'react';
-import { useAppContext } from '@/AppContext';
 import { DeleteImagesRequest, ImageView } from '@/api/generated/api.types';
 import { ConfirmDeleteDialog } from '@/components/custom/confirm-delete-dialog';
 import { SwitchList } from '@/components/custom/switch-section';
-import { IDialogData } from '@/lib/hooks';
+import { useDeleteDialog } from '@/lib/hooks';
+import { useAppContext } from '@/AppContext';
 
-export const DeleteDialog = ({
-  dialogData,
-  setDialogData,
-  requestDelete,
-  deleteIsPending,
-}: {
-  dialogData: IDialogData<ImageView>;
-  setDialogData: (data: IDialogData<ImageView>) => void;
-  requestDelete: (request: DeleteImagesRequest) => void;
-  deleteIsPending: boolean;
-}) => {
+export const DeleteDialog = () => {
+  const type = 'Image';
+  const { open, targets, closeDialog, requestDelete, deleteIsPending } = useDeleteDialog<ImageView>({ type });
   const { currentPlatform } = useAppContext();
   const [force, setForce] = useState(false);
   const [noPrune, setNoPrune] = useState(false);
 
-  const imageIds = dialogData.currentSelection?.map((c) => c.dockerImageId!) ?? [];
+  const imageIds = targets?.map((c) => c.dockerImageId!) ?? [];
   const handleDelete = () => {
-    requestDelete({ platformId: currentPlatform?.id ?? '', ids: imageIds, force, noPrune });
+    requestDelete({ platformId: currentPlatform?.id ?? '', ids: imageIds, force, noPrune } as DeleteImagesRequest);
   };
 
   return (
     <ConfirmDeleteDialog
-      open={dialogData.open}
-      onOpenChange={(open) => setDialogData({ open })}
+      open={open}
+      onOpenChange={closeDialog}
       count={imageIds.length}
-      type="Image"
+      type={type}
       isPending={deleteIsPending}
       onConfirm={handleDelete}>
       <SwitchList

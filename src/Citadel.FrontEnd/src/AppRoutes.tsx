@@ -3,6 +3,7 @@ import Layout from '@/layout/Layout';
 import NotFound from '@/pages/NotFound';
 import { useAuthContext } from './features/auth/AuthContext';
 import { Loader2 } from 'lucide-react';
+import Loader from './components/ui/loader';
 
 export const AppPaths: Record<string, string> = {
   any: '*',
@@ -19,8 +20,6 @@ export const AppPaths: Record<string, string> = {
   editRegistry: 'registries/edit/:registryId',
   image: 'platforms/:platformId/images/:resourceId',
   imageInspect: 'platforms/:platformId/images/:resourceId/inspect',
-  localImages: 'platforms/:platformId/images/local',
-  externalImages: 'platforms/:platformId/images/external',
   network: 'platforms/:platformId/networks/:resourceId',
   networkInspect: 'platforms/:platformId/networks/:resourceId/inspect',
   addNetwork: 'platforms/:platformId/networks/add',
@@ -49,7 +48,7 @@ export const AppRoutes = () => {
         }
         return null;
       },
-      hydrateFallbackElement: <Fallback />,
+      hydrateFallbackElement: <Loader />,
       children: [
         {
           index: true,
@@ -108,13 +107,17 @@ export const AppRoutes = () => {
         {
           path: AppPaths.image,
           lazy: async () => {
-            return { Component: (await import('@/features/images/image-info/ImageInfoWrapper')).default };
+            return {
+              Component: (await import('@/features/docker-resources/images/image-info/ImageInfoWrapper')).default,
+            };
           },
         },
         {
           path: AppPaths.imageInspect,
           lazy: async () => {
-            return { Component: (await import('@/features/images/image-info/ImageInfoWrapper')).default };
+            return {
+              Component: (await import('@/features/docker-resources/images/image-info/ImageInfoWrapper')).default,
+            };
           },
         },
         {
@@ -151,24 +154,6 @@ export const AppRoutes = () => {
           path: AppPaths.editDeployment,
           lazy: async () => {
             return { Component: (await import('@/pages/deployments-page')).DeploymentFormPage };
-          },
-        },
-        {
-          path: AppPaths.images,
-          lazy: async () => {
-            return { Component: (await import('@/pages/images-page')).default };
-          },
-        },
-        {
-          path: AppPaths.localImages,
-          lazy: async () => {
-            return { Component: (await import('@/pages/images-page')).default };
-          },
-        },
-        {
-          path: AppPaths.externalImages,
-          lazy: async () => {
-            return { Component: (await import('@/pages/images-page')).default };
           },
         },
         {
@@ -246,11 +231,3 @@ export const AppRoutes = () => {
 
   return <RouterProvider router={router} />;
 };
-
-function Fallback() {
-  return (
-    <div className="w-[100vw] h-[100vh] flex items-center justify-center">
-      <Loader2 className="w-16 h-16 animate-spin" />
-    </div>
-  );
-}

@@ -26,7 +26,7 @@ import {
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 import { use400ErrorToast } from '@/hooks/use400ErrorToast';
 import { toast } from 'sonner';
-import { useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import { useDeleteDialogState } from './atoms';
 
 const EMPTY_ARGS = Object.freeze({});
@@ -178,3 +178,22 @@ export const useDockerResourceParamType = () => {
   if (!type) return undefined;
   return (type[0].toUpperCase() + type.slice(1, -1)) as DockerResourceType;
 };
+
+export function useLocalStorage<T>(key: string, initialValue: T) {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const stored = localStorage.getItem(key);
+      return stored ? (JSON.parse(stored) as T) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {/** Ignore */}
+  }, [key, value]);
+
+  return [value, setValue] as const;
+}
