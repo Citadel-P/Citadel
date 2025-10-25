@@ -1,4 +1,4 @@
-import { AlertMessage } from '@/components/ui/alert-message';
+import { AlertMessage } from '@/components/custom/alert-message';
 import { useGhcrForm } from './hooks/useGhcrForm';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';

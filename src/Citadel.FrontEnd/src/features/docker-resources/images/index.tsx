@@ -1,5 +1,5 @@
 import { HardDrive } from 'lucide-react';
-import { ExternalRepositories } from './external-repoitiories';
+import { ExternalRepositories } from './external-repositories';
 import { LocalImagesTable } from './local-images-table';
 import { ActionBar } from './action-bar';
 import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';

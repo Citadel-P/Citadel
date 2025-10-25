@@ -1,7 +1,9 @@
-﻿using Domain.Contracts.Interfaces;
+﻿using Application.Services.SignalR;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Images;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
@@ -19,7 +21,12 @@ public sealed record DeleteImages(Guid PlatformId, string[] Ids, bool Force = fa
     }
 }
 
-internal sealed class DeleteImagesHandler(IPlatformContainerCache platformContainerCache, IConnectorFactory<IImageConnector> connectorFactory) : ICommandHandler<DeleteImages, Result<DeleteImageResult>>
+internal sealed class DeleteImagesHandler(
+    IUnitOfWork unitOfWork,
+    IDockerDaemonStreamManager dockerDaemonHub,
+    IPlatformContainerCache platformContainerCache, 
+    IConnectorFactory<IImageConnector> connectorFactory 
+) : ICommandHandler<DeleteImages, Result<DeleteImageResult>>
 {
     public async ValueTask<Result<DeleteImageResult>> Handle(DeleteImages command, CancellationToken cancellationToken)
     {
@@ -35,8 +42,25 @@ internal sealed class DeleteImagesHandler(IPlatformContainerCache platformContai
             NoPrune: command.NoPrune,
             PlatformAddress: platform.Address
         );
-        return await connectorFactory
+        var result = await connectorFactory
             .GetConnector(platform.ConnectorType)
             .DeleteImageAsync(args, cancellationToken: cancellationToken);
+
+        // Handle the case where the image is not on the platform but still in db
+        if (result.IsFailure(out var errorResult) && errorResult is NotFoundError)
+        {
+            // Todo: handle bulk delete
+            foreach (var id in command.Ids)
+            {
+                var existing = await unitOfWork.Images.GetByImageIdAsync(id, command.PlatformId, cancellationToken);
+                if (existing == null) continue;
+                await unitOfWork.Images.DeleteAsync([existing.Id], cancellationToken);
+                await dockerDaemonHub.SendImageEvent(existing, "delete");
+
+            }
+            await unitOfWork.CommitAsync();
+        }
+
+        return result;
     }
 }

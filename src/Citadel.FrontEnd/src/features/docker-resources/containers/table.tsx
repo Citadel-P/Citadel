@@ -8,7 +8,7 @@ import { byteTransform } from '@/lib/bytes.helper';
 import SortableCell from '@/components/ui/SortableCell';
 import { Link } from 'react-router';
 import { TableDropdown } from './table-dropdown';
-import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
+import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import { PortsDisplay } from '@/components/ui/PortsDisplay';
 import { ImageName } from './container-info/ImageName';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -76,7 +76,7 @@ const columns: ColumnDef<ContainerView>[] = [
     accessorKey: 'containerId',
     header: ({ column }) => <SortableCell cellName="ID" column={column} />,
     cell: ({ row }) => (
-      <CopyTextToClipboard
+      <CopyToClipboard
         textToCopy={row.original.containerId}
         transform={() => row.original.containerId?.slice(0, 12)}
         groupClassName="rowid"

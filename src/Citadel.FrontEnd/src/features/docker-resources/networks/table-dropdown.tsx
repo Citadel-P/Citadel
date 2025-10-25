@@ -1,7 +1,7 @@
 import { Trash, SearchCode } from 'lucide-react';
 import { DockerNetworkResult } from '@/api/generated/api.types';
 import { formatId } from '@/lib/utils';
-import { createTableDropdown } from '@/components/custom/dropdown-menu';
+import { createTableDropdown } from '@/components/custom/dropdown-with-dialog';
 
 export const TableDropDown = ({ network }: { network: DockerNetworkResult }) => {
   return createTableDropdown({

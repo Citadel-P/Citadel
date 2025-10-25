@@ -22,7 +22,7 @@ import PullProgressSheetContent from './PullProgressSheetContent';
 import { Sheet } from '@/components/ui/sheet';
 import { useSheetState } from './hooks/useSheetState';
 import { PullImageBadge } from '@/components/ui/PullImageBadge';
-import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
+import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import { useRead } from '@/lib/hooks';
 
 // Column helpers
@@ -43,7 +43,7 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubP
       versionColumnHelper.accessor('name', {
         header: 'Version',
         cell: (info) => (
-          <CopyTextToClipboard
+          <CopyToClipboard
             textToCopy={info.getValue() ?? ''}
             transform={(v) => truncate(v, 12, 'right', true)}
             groupClassName="rowid"

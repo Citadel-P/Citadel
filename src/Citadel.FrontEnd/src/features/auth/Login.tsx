@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { useLoginForm } from './hooks/useLoginForm';
 import { LoginRequest } from '@/api/generated/api.types';
 import { LoaderCircle } from 'lucide-react';
-import { AlertMessage } from '@/components/ui/alert-message';
+import { AlertMessage } from '@/components/custom/alert-message';
 import { useEffect } from 'react';
 import { ACCESS_TOKEN_KEY } from './AuthProvider';
 import { useMutate } from '@/lib/hooks';

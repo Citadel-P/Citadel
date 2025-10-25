@@ -1,0 +1,286 @@
+import { Loader2, MoreHorizontal } from 'lucide-react';
+import { Button } from '../ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
+import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router';
+import { forwardRef, ReactNode, startTransition, useCallback, useEffect, useRef, useState } from 'react';
+import { DockerResourceType } from '@/api/types';
+import { useDeleteDialog } from '@/lib/hooks';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import { toast } from 'sonner';
+import { Input } from '../ui/input';
+import { ConfirmButton } from './action-with-dialog';
+import React from 'react';
+import { ActionData, DropdownActionComponent } from '@/pages/types';
+import { ProblemDetails } from '@/api/generated/api.types';
+
+export interface DropdownAction {
+  id: string;
+  label: string;
+  icon: React.ReactElement;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+  separatorBefore?: boolean;
+}
+
+interface DropdownActionsProps {
+  items: DropdownAction[];
+}
+
+export const DropdownActions = ({ items }: DropdownActionsProps) => (
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Button variant="ghost" className="h-8 w-8 p-0">
+        <span className="sr-only">Open menu</span>
+        <MoreHorizontal className="h-4 w-4" />
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" className="w-38 drop-shadow-md shadow-custom bg-background pt-2 pb-2">
+      {items.map((action) => (
+        <div key={action.id}>
+          {action.separatorBefore && <DropdownMenuSeparator />}
+          <DropdownMenuItem
+            onClick={action.onClick}
+            disabled={action.disabled}
+            className={cn(
+              'grow rounded-sm px-3 py-2 text-[12px] font-semibold text-foreground/70',
+              action.danger ? 'text-danger hover:text-danger!' : '',
+            )}>
+            {action.icon}
+            <span>{action.label}</span>
+          </DropdownMenuItem>
+        </div>
+      ))}
+    </DropdownMenuContent>
+  </DropdownMenu>
+);
+
+interface CreateDropdownConfig<T> {
+  type: DockerResourceType;
+  actions: (args: {
+    navigate: ReturnType<typeof useNavigate>;
+    openDialog: (targets: T | T[]) => void;
+  }) => DropdownAction[];
+}
+
+export function createTableDropdown<T>({ type, actions }: CreateDropdownConfig<T>) {
+  const navigate = useNavigate();
+  const { openDialog } = useDeleteDialog<T>({ type });
+
+  const handleOpenDialog = useCallback(
+    (targets: T | T[]) => {
+      startTransition(() => openDialog(targets));
+    },
+    [openDialog],
+  );
+
+  const items = actions({ navigate, openDialog: handleOpenDialog });
+
+  return <DropdownActions items={items} />;
+}
+
+export const RowActionMenu = <T extends { id: string; name: string }>({
+  actions,
+  resource,
+}: {
+  actions: Record<string, DropdownActionComponent<T>>;
+  resource: T;
+}) => {
+  const [activeAction, setActiveAction] = useState<{
+    key: string;
+    data?: ActionData;
+  } | null>(null);
+
+  return (
+    <>
+      <RowActionDropdown actions={actions} resource={resource} onActionSelect={setActiveAction} />
+      <ActionDialog action={activeAction} onClose={() => setActiveAction(null)} />
+    </>
+  );
+};
+
+export const RowActionDropdown = <T,>({
+  actions,
+  resource,
+  onActionSelect,
+}: {
+  actions: Record<string, DropdownActionComponent<T>>;
+  resource: T;
+  onActionSelect: (action: { key: string; data?: ActionData }) => void;
+}) => {
+  const entries = Object.entries(actions);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-8 w-8 p-0">
+          <span className="sr-only">Open menu</span>
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent align="end" className="w-38 bg-background py-2">
+        {entries.map(([key, Action]) => (
+          <Action
+            key={key}
+            resource={resource}
+            onAction={(actionKey, data) => onActionSelect({ key: actionKey, data })}
+          />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+const ActionDialog = ({
+  action,
+  onClose,
+}: {
+  action: { key: string; data?: ActionData } | null;
+  onClose: () => void;
+}) => {
+  const [input, setInput] = useState('');
+  const [loading, setIsLoading] = useState(false);
+  const confirmButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (action) {
+      setInput('');
+      setIsLoading(false);
+    }
+  }, [action]);
+
+  if (!action?.data) return null;
+
+  const { name, title, icon, disabled = false, onClick, variant } = action.data;
+
+  const handleConfirm = () => {
+    try {
+      setIsLoading(true);
+      const maybePromise = onClick?.();
+      Promise.resolve(maybePromise)
+        .catch((err) => {
+          const problem = (err as any)?.error as ProblemDetails;
+          if (problem && problem.status === 400) {
+            toast.error(`400: ${problem.title ?? 'Bad Request'}`, {
+              description: problem?.detail,
+            });
+          }
+        })
+        .finally(() => setIsLoading(false));
+    } catch {
+      setIsLoading(false);
+    }
+  };
+
+  const isConfirmDisabled = disabled || name !== input || loading;
+  return (
+    <Dialog open={!!action} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Confirm {title}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 my-4">
+          <p
+            onClick={() => {
+              navigator.clipboard.writeText(name);
+              toast(`Copied "${name}" to clipboard!`);
+            }}
+            className="cursor-pointer">
+            Please enter <b>{name}</b> below to confirm this action.
+            <br />
+            <span className="text-xs text-muted-foreground">You may click the name in bold to copy it</span>
+          </p>
+          <Input value={input} onChange={(e) => setInput(e.target.value)} className="focus-visible:ring-1" autoFocus />
+        </div>
+        <DialogFooter>
+          <ConfirmButton
+            ref={confirmButtonRef}
+            title={title}
+            icon={icon}
+            disabled={isConfirmDisabled}
+            loading={loading}
+            onClick={handleConfirm}
+            variant={variant}
+          />
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export const DropdownActionButton = forwardRef<
+  HTMLDivElement,
+  {
+    title: string;
+    icon: ReactNode;
+    iconPosition?: 'left' | 'right';
+    disabled?: boolean;
+    className?: string;
+    onClick?: () => void;
+    loading?: boolean;
+    inset?: boolean;
+    separatorBefore?: boolean;
+    variant?: 'default' | 'destructive' | 'link' | 'outline' | 'secondary' | 'ghost' | null | undefined;
+  }
+>(
+  (
+    {
+      title,
+      icon,
+      iconPosition = 'left',
+      disabled,
+      className,
+      loading,
+      onClick,
+      inset,
+      separatorBefore,
+      variant = 'default',
+    },
+    ref,
+  ) => {
+    const iconClasses = cn('w-4 h-4', loading && 'animate-spin', variant === 'destructive' && 'text-destructive');
+
+    const renderIcon = loading ? (
+      <Loader2 className={iconClasses} />
+    ) : React.isValidElement(icon) ? (
+      React.cloneElement(icon as React.ReactElement<React.SVGProps<SVGSVGElement>>, {
+        className: cn((icon.props as any).className, iconClasses),
+      })
+    ) : (
+      icon
+    );
+
+    const handleClick = () => {
+      startTransition(() => onClick?.());
+    };
+
+    return (
+      <>
+        {separatorBefore && <DropdownMenuSeparator />}
+        <DropdownMenuItem
+          variant={variant === 'destructive' ? 'destructive' : 'default'}
+          inset={inset}
+          className={cn(
+            'flex items-center gap-3 cursor-pointer px-3 py-2 text-sm',
+            disabled && 'opacity-50 cursor-not-allowed',
+            className,
+          )}
+          onSelect={handleClick}
+          disabled={disabled || loading}
+          ref={ref}>
+          {iconPosition === 'left' && renderIcon}
+          <span>{title}</span>
+          {iconPosition === 'right' && renderIcon}
+        </DropdownMenuItem>
+      </>
+    );
+  },
+);

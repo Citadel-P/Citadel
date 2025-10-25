@@ -3,7 +3,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { useNetworkForm } from './hooks/useNetworkForm';
 import { CreateNetworkInput } from '@/api/generated/api.types';
-import { AlertMessage } from '@/components/ui/alert-message';
+import { AlertMessage } from '@/components/custom/alert-message';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFieldArray } from 'react-hook-form';

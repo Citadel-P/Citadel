@@ -1,6 +1,6 @@
 import Loader from '@/components/ui/loader';
 import { useNavigate } from 'react-router';
-import { AlertMessage } from '@/components/ui/alert-message';
+import { AlertMessage } from '@/components/custom/alert-message';
 import { usePlatformsContext } from './PlatformsContext';
 import { DeleteDialog } from './delete-dialog';
 import { Button } from '@/components/ui/button';

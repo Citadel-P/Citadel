@@ -1,7 +1,7 @@
 import { Pencil, Trash } from 'lucide-react';
 import { RegistryView } from '@/api/generated/api.types';
 import { useRegistriesContext } from './RegistriesContext';
-import { createTableDropdown } from '@/components/custom/dropdown-menu';
+import { createTableDropdown } from '@/components/custom/dropdown-with-dialog';
 
 export const TableDropdown = ({ registry }: { registry: RegistryView }) => {
   const context = useRegistriesContext();

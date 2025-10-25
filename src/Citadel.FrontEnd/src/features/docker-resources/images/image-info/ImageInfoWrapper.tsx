@@ -5,7 +5,7 @@ import { useNavigate, useParams } from 'react-router';
 import { RunImageDialog } from '../dialogs/RunImageDialog';
 import { DeleteDialog } from '../delete-dialog';
 import { useCallback, useMemo } from 'react';
-import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
+import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import { useRunImageDialog } from '../hooks/useRunImageDialog';
 import { useAppContext } from '@/AppContext';
 import { ContainerInfoTable } from './ContainerInfoTable';
@@ -61,7 +61,7 @@ const ImageInfoWrapper = () => {
                   <div className="flex flex-col text-md font-bold text-foreground">
                     <span>{truncate(data?.data.repoTags?.at(0) ?? '-:-', 42)}</span>
                     <span className="text-xs text-foreground/40">
-                      <CopyTextToClipboard textToCopy={data?.data.id ?? '-'} />
+                      <CopyToClipboard textToCopy={data?.data.id ?? '-'} />
                     </span>
                   </div>
                 </div>

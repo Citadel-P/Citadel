@@ -2,6 +2,7 @@ import { DockerResourceType } from '@/api/types';
 import { ContainerComponents } from '@/features/docker-resources/containers';
 import { ImageComponents } from '@/features/docker-resources/images';
 import { NetworkComponents } from '@/features/docker-resources/networks';
+import { NetworkInfoComponents } from '@/features/docker-resources/networks/network-info';
 import { VolumeComponents } from '@/features/docker-resources/volumes';
 
 /**
@@ -9,17 +10,28 @@ import { VolumeComponents } from '@/features/docker-resources/volumes';
  * This single interface can represent either a **single-table resource** or a **tabbed resource**.
  */
 export interface RequiredDockerComponents<T = any> {
-  /** Dialog component for deletion confirmation */
-  DeleteDialog: React.FC;
-
   /** Icon displayed in the page header */
   Icon: React.ReactElement;
 
   /** Action bar component shown below the header */
   ActionBar: React.FC<{ items: any[] }>;
 
+  /** Button actions for action bars, toolbars, etc. */
+  ButtonActions?: {
+    [action: string]: ButtonActionComponent<T>;
+  };
+
+  /** Dropdown actions for table rows and context menus */
+  DropdownActions?: {
+    [action: string]: DropdownActionComponent<T>;
+  };
+
   /** Table component for single-table resources */
-  Table?: React.FC<{ items: any[]; isLoading: boolean }>;
+  Table?: React.FC<{
+    items: any[];
+    actions: Record<string, DropdownActionComponent<T>>;
+    isLoading: boolean;
+  }>;
 
   /** Data hook for single-table resources */
   useData?: (platformId: string) => ResourceDataHookResult<T>;
@@ -27,23 +39,43 @@ export interface RequiredDockerComponents<T = any> {
   /** Optional helper to filter items by search term */
   filterItems?: (items: T[], search: string) => T[];
 
-  /** Optional configuration for header  */
+  /** Optional configuration for header */
   header?: HeaderOptions;
 
   /** Tabs configuration for tabbed resources */
   tabs?: {
+    label: string;
+    Content: React.FC<{ items: any[]; isLoading: boolean }>;
+    useData?: (platformId: string) => ResourceDataHookResult<T>;
+    header?: HeaderOptions;
+  }[];
+}
+
+/**
+ * Defines the components needed to render a Docker info resource page.
+ */
+export interface RequiredDockerInfoComponents<T = any> {
+  /** Configuration for header  */
+  Header: {
+    Indicator: React.FC<{ resource: T }>;
+    ActionButtons: React.FC<{ resource: T }>;
+  };
+  /** Action buttons */
+  Actions: { [action: string]: React.FC<{ resource: T }> };
+  /** Tabs configuration for tabbed resources */
+  Tabs: {
     /** Tab label shown in the UI */
     label: string;
 
-    /** Table component for this tab */
-    Content: React.FC<{ items: any[]; isLoading: boolean }>;
+    /** Component(s) for this tab */
+    Content: React.FC<{ resource: T }>;
 
-    /** Data hook for this tab */
-    useData?: (platformId: string) => ResourceDataHookResult<T>;
-
-    /** Optional configuration for header specific to this tab. */
-    header?: HeaderOptions;
+    /** Data hook for this resource */
+    useData?: (platformId: string, resourceId: string) => ResourceInfoHookResult<T>;
   }[];
+
+  /** Data hook for this resource */
+  useData: (platformId: string, resourceId: string) => ResourceInfoHookResult<T>;
 }
 
 export const DockerResourceComponents: {
@@ -55,12 +87,24 @@ export const DockerResourceComponents: {
   Container: ContainerComponents,
 };
 
+export const DockerResourceInfoComponents: {
+  [key in DockerResourceType]: RequiredDockerInfoComponents;
+} = {
+  Network: NetworkInfoComponents,
+};
+
 export interface ResourceDataHookResult<T> {
   items: T[];
   isLoading: boolean;
 }
 
-export interface HeaderOptions {
+interface ResourceInfoHookResult<T> {
+  resource: T | undefined;
+  isLoading: boolean;
+  error: Error | null;
+}
+
+interface HeaderOptions {
   /** Whether to show the search field. Defaults to true. */
   showSearch?: boolean;
   /** Whether to show the "Add" button. Defaults to true. */
@@ -68,3 +112,19 @@ export interface HeaderOptions {
   /** Additional custom header items (buttons, dropdowns, etc.). */
   Extra?: React.FC;
 }
+
+export type ActionData = {
+  name: string;
+  title: string;
+  icon: React.ReactNode;
+  disabled?: boolean;
+  loading?: boolean;
+  onClick?: () => void | Promise<unknown>;
+  variant?: 'link' | 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | null | undefined;
+};
+
+export type ButtonActionComponent<T = any> = React.FC<{ resource: T }>;
+export type DropdownActionComponent<T = any> = React.FC<{
+  resource: T;
+  onAction?: (actionKey: string, actionData?: ActionData) => void;
+}>;

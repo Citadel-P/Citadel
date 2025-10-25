@@ -2,7 +2,6 @@ import { createBrowserRouter, redirect, RouterProvider } from 'react-router';
 import Layout from '@/layout/Layout';
 import NotFound from '@/pages/NotFound';
 import { useAuthContext } from './features/auth/AuthContext';
-import { Loader2 } from 'lucide-react';
 import Loader from './components/ui/loader';
 
 export const AppPaths: Record<string, string> = {
@@ -20,10 +19,10 @@ export const AppPaths: Record<string, string> = {
   editRegistry: 'registries/edit/:registryId',
   image: 'platforms/:platformId/images/:resourceId',
   imageInspect: 'platforms/:platformId/images/:resourceId/inspect',
-  network: 'platforms/:platformId/networks/:resourceId',
-  networkInspect: 'platforms/:platformId/networks/:resourceId/inspect',
   addNetwork: 'platforms/:platformId/networks/add',
   resource: 'platforms/:platformId/:type',
+  resourceInfo: 'platforms/:platformId/:type/:resourceId',
+
   volume: 'platforms/:platformId/volumes/:resourceId',
   volumeInspect: 'platforms/:platformId/volumes/:resourceId/inspect',
   addVolume: 'platforms/:platformId/volumes/add',
@@ -157,22 +156,6 @@ export const AppRoutes = () => {
           },
         },
         {
-          path: AppPaths.network,
-          lazy: async () => {
-            return {
-              Component: (await import('@/features/docker-resources/networks/network-info/NetworkInfoWrapper')).default,
-            };
-          },
-        },
-        {
-          path: AppPaths.networkInspect,
-          lazy: async () => {
-            return {
-              Component: (await import('@/features/docker-resources/networks/network-info/NetworkInfoWrapper')).default,
-            };
-          },
-        },
-        {
           path: AppPaths.addNetwork,
           lazy: async () => {
             return { Component: (await import('@/features/docker-resources/networks/forms/AddNetworkForm')).default };
@@ -197,7 +180,13 @@ export const AppRoutes = () => {
         {
           path: AppPaths.resource,
           lazy: async () => {
-            return { Component: (await import('@/pages/docker-resource-page')).default };
+            return { Component: (await import('@/pages/docker-resource')).default };
+          },
+        },
+        {
+          path: AppPaths.resourceInfo,
+          lazy: async () => {
+            return { Component: (await import('@/pages/docker-resource-info')).default };
           },
         },
         {

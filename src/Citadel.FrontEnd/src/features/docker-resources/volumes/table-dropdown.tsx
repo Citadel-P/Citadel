@@ -1,6 +1,6 @@
 import { Trash, SearchCode } from 'lucide-react';
 import { DockerVolumeResult } from '@/api/generated/api.types';
-import { createTableDropdown } from '@/components/custom/dropdown-menu';
+import { createTableDropdown } from '@/components/custom/dropdown-with-dialog';
 
 export const TableDropDown = ({ volume }: { volume: DockerVolumeResult }) => {
   return createTableDropdown<DockerVolumeResult>({

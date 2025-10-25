@@ -1,4 +1,4 @@
-import { AlertMessage } from '@/components/ui/alert-message';
+import { AlertMessage } from '@/components/custom/alert-message';
 import { Button } from '@/components/ui/button';
 import Loader from '@/components/ui/loader';
 import { Cable, Plus } from 'lucide-react';

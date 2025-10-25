@@ -1,7 +1,7 @@
 import { Ban, Play, RotateCcw, Trash, Eye, Pause, StepForward } from 'lucide-react';
 import { ContainerView } from '@/api/generated/api.types';
 import { useAvailableActions } from './hooks/useAvailableActions';
-import { createTableDropdown, DropdownAction } from '@/components/custom/dropdown-menu';
+import { createTableDropdown, DropdownAction } from '@/components/custom/dropdown-with-dialog';
 
 export const TableDropdown = ({ container }: { container: ContainerView }) => {
   const { availableActions, isPending, requestPatch } = useAvailableActions([container]);

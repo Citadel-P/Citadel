@@ -2,7 +2,7 @@ import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { cn } from '@/lib/utils';
 import { CheckCheck, Clipboard } from 'lucide-react';
 
-export const CopyTextToClipboard = ({
+export const CopyToClipboard = ({
   textToCopy,
   transform,
   groupClassName,

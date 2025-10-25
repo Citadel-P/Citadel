@@ -5,19 +5,36 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { truncate } from '@/lib/truncate';
 import { useMemo } from 'react';
-import { TableDropDown } from './table-dropdown';
 import { useNavigate, useParams } from 'react-router';
 import { formatId } from '@/lib/utils';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useSelectedResources } from '@/lib/atoms';
+import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
+import { ActionData } from '@/pages/types';
 
-export const NetworksTable = ({ items, isLoading }: { items: DockerNetworkResult[]; isLoading: boolean }) => {
+export const NetworksTable = ({
+  items,
+  actions,
+  isLoading,
+}: {
+  isLoading: boolean;
+  items: DockerNetworkResult[];
+  actions: Record<
+    string,
+    React.FC<{ resource: DockerNetworkResult; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >;
+}) => {
   const rowCount = useMemo(() => items?.length ?? 0, [items]);
   const [_, setSelectedResources] = useSelectedResources<DockerNetworkResult>('Network');
 
   return (
     <div className="flex flex-col gap-3">
-      <DataTable columns={columns} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+      <DataTable
+        columns={columns(actions ?? {})}
+        data={items ?? []}
+        isLoading={isLoading}
+        onSelectionChange={setSelectedResources}
+      />
       <div className="text-muted-foreground text-xs p-2 font-normal">
         {rowCount > 0 && (
           <span>
@@ -29,7 +46,12 @@ export const NetworksTable = ({ items, isLoading }: { items: DockerNetworkResult
   );
 };
 
-const columns: ColumnDef<DockerNetworkResult>[] = [
+const columns = (
+  actions: Record<
+    string,
+    React.FC<{ resource: DockerNetworkResult; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >,
+): ColumnDef<DockerNetworkResult>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -129,7 +151,7 @@ const columns: ColumnDef<DockerNetworkResult>[] = [
   },
   {
     id: 'actions',
-    cell: ({ row }) => <TableDropDown network={row.original} />,
+    cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
   },
 ];
 

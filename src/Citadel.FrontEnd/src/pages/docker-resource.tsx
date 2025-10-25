@@ -10,17 +10,17 @@ import { useMemo, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const DockerResourcePage = () => {
-  const platformId = useParams().platformId ?? '';
   const type = useDockerResourceParamType()!;
 
   const Components = DockerResourceComponents[type];
   if (!Components) return <NotFound />;
 
-  return <ResourceView key={type} Components={Components} platformId={platformId} type={type} />;
+  return <ResourceView key={type} Components={Components} type={type} />;
 };
 
-const ResourceView = <T,>({ Components, platformId, type }: ResourceViewProps<T>) => {
+const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
   const navigate = useNavigate();
+  const platformId = useParams().platformId ?? '';
   const [search, setSearch] = useState('');
   const tabs = Components.tabs;
 
@@ -100,21 +100,19 @@ const ResourceView = <T,>({ Components, platformId, type }: ResourceViewProps<T>
             </Tabs>
           ) : (
             <div className="space-y-1 rounded-sm border p-1 shadow-xs">
-              <ActiveContent items={filtered} isLoading={isLoading} />
+              <ActiveContent items={filtered} isLoading={isLoading} actions={Components.DropdownActions ?? {}}  />
             </div>
           )}
         </div>
       </div>
 
       <Components.ActionBar items={items} />
-      <Components.DeleteDialog />
     </div>
   );
 };
 
 type ResourceViewProps<T = any> = {
   Components: RequiredDockerComponents<T>;
-  platformId: string;
   type: DockerResourceType;
 };
 

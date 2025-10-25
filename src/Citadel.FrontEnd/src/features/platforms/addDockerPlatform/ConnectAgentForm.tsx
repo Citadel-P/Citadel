@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { useAddDockerForm } from './useAddDockerForm';
 import { PutPlatformRequest } from '@/api/generated/api.types';
 import { usePUTDockerPlatform } from './usePUTDockerPlatform';
-import { AlertMessage } from '@/components/ui/alert-message';
+import { AlertMessage } from '@/components/custom/alert-message';
 import { LoaderCircle } from 'lucide-react';
 
 const ConnectAgentForm = () => {

@@ -12,7 +12,7 @@ import { byteTransform } from '@/lib/bytes.helper';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { useNavigate, useParams } from 'react-router';
-import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
+import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import { formatId } from '@/lib/utils';
 import { RegistryDisplay } from '@/components/ui/RegistryDisplay';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -84,7 +84,7 @@ const columns = (): ColumnDef<ImageView>[] => [
     accessorKey: 'id',
     header: ({ column }) => <SortableCell cellName="Image Id" column={column} />,
     cell: ({ row }) => (
-      <CopyTextToClipboard
+      <CopyToClipboard
         textToCopy={row.original.dockerImageId}
         transform={formatId}
         groupClassName="rowid"

@@ -22,7 +22,7 @@ import ValueInput from '@/components/ui/ValueInput';
 import { ContainerRestartPolicy, CreateContainerInput, ImageView, ProblemDetails } from '@/api/generated/api.types';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
-import { AlertMessage } from '@/components/ui/alert-message';
+import { AlertMessage } from '@/components/custom/alert-message';
 import { IDialogData, useMutate, useRead } from '@/lib/hooks';
 
 export const RunImageDialog = ({

@@ -14,7 +14,7 @@ import { useContainerInfoGroup } from '../hooks/useContainerInfoGroup';
 import { ContainerStateStatus, ContainerView } from '@/api/generated/api.types';
 import { DeleteDialog } from '../delete-dialog';
 import { ActionBarButtons } from '../action-bar-buttons';
-import { CopyTextToClipboard } from '@/components/ui/CopyTextToClipboard';
+import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import { fromNow } from '@/lib/dayjs.helper';
 import { ContainerInfoTable } from './ContainerInfoTable';
 import { useDeleteDialog } from '@/lib/hooks';
@@ -88,7 +88,7 @@ const ContainerInfoWrapper = () => {
               <div className="flex flex-col text-md font-bold text-foreground">
                 <span>{containerName?.slice(1)}</span>
                 <span className="text-xs text-foreground/40">
-                  <CopyTextToClipboard textToCopy={containerId ?? '-'} />
+                  <CopyToClipboard textToCopy={containerId ?? '-'} />
                 </span>
               </div>
             </div>

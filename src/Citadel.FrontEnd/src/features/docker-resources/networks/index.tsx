@@ -2,19 +2,23 @@ import { Network } from 'lucide-react';
 import { NetworksTable } from './table';
 import { ActionBar } from './action-bar';
 import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
-import { DeleteDialog } from './delete-dialog';
 import { useRead } from '@/lib/hooks';
+import { DeleteNetworkButton, DeleteNetworkDropdown, InspectNetworkDropDown } from './actions';
 
 export const NetworkComponents: RequiredDockerComponents = {
   Icon: <Network className="h-4 w-4" />,
-  Table: ({ items, isLoading }) => {
-    return <NetworksTable items={items} isLoading={isLoading} />;
+  Table: ({ items, actions, isLoading }) => {
+    return <NetworksTable items={items} actions={actions} isLoading={isLoading} />;
   },
   ActionBar: ({ items }) => {
     return <ActionBar items={items} />;
   },
-  DeleteDialog: () => {
-    return <DeleteDialog />;
+  ButtonActions: {
+    DeleteNetworkButton,
+  },
+  DropdownActions: {
+    InspectNetworkDropDown,
+    DeleteNetworkDropdown,
   },
   useData: function (platformId: string): ResourceDataHookResult<any> {
     const { data, isLoading } = useRead(`listNetworks`, { platformId: platformId });

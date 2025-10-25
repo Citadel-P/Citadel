@@ -28,3 +28,12 @@ export function useResourceFilter<T extends object = any>(key: ResourceType) {
   const [filter, setFilter] = useAtom(resourceFilterAtom(key));
   return [filter as T | null, setFilter as (value: T | null) => void] as const;
 }
+
+export function useDeleteDialogAtom<T>(type: DockerResourceType) {
+  const [state, setState] = useAtom(deleteDialogAtom(type));
+
+  const openDialog = (targets: T[]) => setState({ open: true, targets });
+  const closeDialog = () => setState({ open: false, targets: [] });
+
+  return { state, openDialog, closeDialog };
+}
