@@ -1,6 +1,9 @@
 import { ResourceType } from '@/api/types';
 import { useLayoutContext } from '@/layout/LayoutContext';
+import { useSelectedResources } from '@/lib/atoms';
 import { cn } from '@/lib/utils';
+import { ButtonActionComponent, ButtonGroupComponent } from '@/pages/types';
+import { ButtonGroup } from '@/components/ui/button-group';
 import { LucideIcon } from 'lucide-react';
 
 export interface ActionButtonConfig {
@@ -14,7 +17,63 @@ export interface ActionButtonConfig {
   className?: string;
 }
 
-export const GenericActionBar = <T,>({ selectedRows, allItems, resource, actionButtons }: ActionBarProps<T>) => {
+export const ActionBar2 = <T,>({ items, actions }: { items: T[]; actions: ButtonGroupComponent<T>[] }) => {
+  const type = 'Network';
+  const [selectedRows, _] = useSelectedResources<T>(type);
+
+  if (!selectedRows?.length) return null;
+
+  return <GenericActionBar2 selectedItems={selectedRows} allItems={items} resource={type} actions={actions} />;
+};
+
+export const GenericActionBar2 = <T,>({ selectedItems, allItems, resource, actions }: ActionBarProps2<T>) => {
+  const { sidebarMinimized } = useLayoutContext();
+
+  if (!selectedItems?.length) return null;
+
+  return (
+    <div
+      className={`fixed -translate-x-5 inset-x-0 bottom-0 shadow-lg p-2 bg-background flex flex-wrap justify-center items-center gap-x-4 gap-y-2 sm:justify-between ${
+        sidebarMinimized ? 'action-bar-left-collapsed' : 'action-bar-left'
+      }`}
+      style={{
+        width: sidebarMinimized ? 'calc(100% - var(--sidebar-minimized-width))' : 'calc(100% - var(--sidebar-width))',
+      }}>
+      <div className="flex-1 text-xs text-muted-foreground mt-2">
+        {selectedItems.length} of {allItems?.length} {resource.toLowerCase()}(s) selected.
+      </div>
+      <ButtonGroup>
+      {actions.map((Action, id) => (
+        <Action resources={selectedItems} key={id} />
+      ))}
+    </ButtonGroup>
+    </div>
+  );
+};
+
+export const GenericActionBarButtons = <T,>({
+  actions,
+  resource,
+}: {
+  actions: ButtonActionComponent<any>[];
+  resource: T;
+}) => {
+  return (
+    <ButtonGroup>
+      {actions.map((Action, id) => (
+        <Action resource={resource} key={id} />
+      ))}
+    </ButtonGroup>
+  );
+};
+
+export const GenericActionBar = <T,>({
+  selectedItems: selectedRows,
+  allItems,
+  resource,
+  actionButtons,
+  actions,
+}: ActionBarProps<T>) => {
   const { sidebarMinimized } = useLayoutContext();
 
   if (!selectedRows?.length) return null;
@@ -30,7 +89,15 @@ export const GenericActionBar = <T,>({ selectedRows, allItems, resource, actionB
       <div className="flex-1 text-xs text-muted-foreground mt-2">
         {selectedRows.length} of {allItems?.length} {resource.toLowerCase()}(s) selected.
       </div>
-      {actionButtons}
+      {actions && actions.length > 0 ? (
+        <ButtonGroup>
+          {actions.map((Action, id) => (
+            <Action resources={selectedRows} key={id} />
+          ))}
+        </ButtonGroup>
+      ) : (
+        actionButtons
+      )}
     </div>
   );
 };
@@ -97,12 +164,19 @@ const ActionBarButton = ({
     {label}
   </button>
 );
+interface ActionBarProps2<T> {
+  resource: ResourceType;
+  allItems: T[] | undefined;
+  selectedItems: T[] | undefined;
+  actions: ButtonGroupComponent<T>[];
+}
 
 interface ActionBarProps<T> {
-  selectedRows: T[] | undefined;
+  selectedItems: T[] | undefined;
   allItems: T[] | undefined;
   resource: ResourceType;
-  actionButtons: React.ReactNode;
+  actionButtons?: React.ReactNode;
+  actions?: ButtonGroupComponent<T>[];
 }
 
 interface ActionButtonsProps {

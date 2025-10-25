@@ -7,7 +7,7 @@ export const ActionBar = () => {
 
   return (
     <GenericActionBar
-      selectedRows={selectedRows}
+      selectedItems={selectedRows}
       allItems={registries}
       resource="Registry"
       actionButtons={<ActionBarButtons selectedRows={selectedRows} setDialogData={setDialogData} />}

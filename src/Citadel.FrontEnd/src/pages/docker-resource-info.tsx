@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Loader from '@/components/ui/loader';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { ProblemDetails } from '@/api/generated/api.types';
-import { ActionGroup } from '@/components/custom/action-with-dialog';
 
 const DockerResourceInfoPage = () => {
   const type = useDockerResourceParamType()!;
@@ -59,11 +58,9 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
                   </div>
                 </div>
                 <div className="flex justify-start md:justify-end w-full">
-                  {Object.keys(Components.Actions).length > 0 && (
+                  {Components.Header.ActionButtons && (
                     <div className="flex gap-4 items-center flex-wrap">
-                      {Object.keys(Components.Actions).length > 0 && (
-                        <ActionGroup actions={Components.Actions} resource={resource} />
-                      )}
+                      <Components.Header.ActionButtons resource={resource} />
                     </div>
                   )}
                 </div>

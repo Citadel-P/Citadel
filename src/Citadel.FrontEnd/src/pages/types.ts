@@ -14,17 +14,20 @@ export interface RequiredDockerComponents<T = any> {
   Icon: React.ReactElement;
 
   /** Action bar component shown below the header */
-  ActionBar: React.FC<{ items: any[] }>;
+  ActionBar?: React.FC<{ items: any[] }>;
 
   /** Button actions for action bars, toolbars, etc. */
   ButtonActions?: {
     [action: string]: ButtonActionComponent<T>;
   };
 
-  /** Dropdown actions for table rows and context menus */
+  /** Dropdown actions for table rows */
   DropdownActions?: {
     [action: string]: DropdownActionComponent<T>;
   };
+
+  /** Group actions for the action bar */
+  GroupActions?: React.FC<{ items: any[] }>;
 
   /** Table component for single-table resources */
   Table?: React.FC<{
@@ -60,8 +63,6 @@ export interface RequiredDockerInfoComponents<T = any> {
     Indicator: React.FC<{ resource: T }>;
     ActionButtons: React.FC<{ resource: T }>;
   };
-  /** Action buttons */
-  Actions: { [action: string]: React.FC<{ resource: T }> };
   /** Tabs configuration for tabbed resources */
   Tabs: {
     /** Tab label shown in the UI */
@@ -124,6 +125,7 @@ export type ActionData = {
 };
 
 export type ButtonActionComponent<T = any> = React.FC<{ resource: T }>;
+export type ButtonGroupComponent<T = any> = React.FC<{ resources: T[] }>;
 export type DropdownActionComponent<T = any> = React.FC<{
   resource: T;
   onAction?: (actionKey: string, actionData?: ActionData) => void;

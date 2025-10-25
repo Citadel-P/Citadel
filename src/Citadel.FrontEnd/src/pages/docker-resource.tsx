@@ -100,13 +100,13 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
             </Tabs>
           ) : (
             <div className="space-y-1 rounded-sm border p-1 shadow-xs">
-              <ActiveContent items={filtered} isLoading={isLoading} actions={Components.DropdownActions ?? {}}  />
+              <ActiveContent items={filtered} isLoading={isLoading} actions={Components.DropdownActions ?? {}} />
             </div>
           )}
         </div>
       </div>
 
-      <Components.ActionBar items={items} />
+      {Components.GroupActions && <Components.GroupActions items={items} />}
     </div>
   );
 };

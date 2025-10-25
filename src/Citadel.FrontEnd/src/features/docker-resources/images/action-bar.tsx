@@ -13,7 +13,7 @@ export const ActionBar = ({ items }: { items: ImageView[] }) => {
 
   return (
     <GenericActionBar
-      selectedRows={selectedRows}
+      selectedItems={selectedRows}
       allItems={items}
       resource={type}
       actionButtons={<ActionBarButtons selectedRows={selectedRows} openDialog={openDialog} />}

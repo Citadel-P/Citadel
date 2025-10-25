@@ -1,17 +1,20 @@
 import { Network } from 'lucide-react';
 import { NetworksTable } from './table';
-import { ActionBar } from './action-bar';
 import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
-import { DeleteNetworkButton, DeleteNetworkDropdown, InspectNetworkDropDown } from './actions';
+import {
+  DeleteNetworkButton,
+  DeleteNetworkDropdown,
+  DeleteNetworksButtonGroup,
+  InspectNetworkButtonGroup,
+  InspectNetworkDropDown,
+} from './actions';
+import { ActionBar2 } from '@/components/custom/action-bar';
 
 export const NetworkComponents: RequiredDockerComponents = {
   Icon: <Network className="h-4 w-4" />,
   Table: ({ items, actions, isLoading }) => {
     return <NetworksTable items={items} actions={actions} isLoading={isLoading} />;
-  },
-  ActionBar: ({ items }) => {
-    return <ActionBar items={items} />;
   },
   ButtonActions: {
     DeleteNetworkButton,
@@ -19,6 +22,9 @@ export const NetworkComponents: RequiredDockerComponents = {
   DropdownActions: {
     InspectNetworkDropDown,
     DeleteNetworkDropdown,
+  },
+  GroupActions: ({ items }) => {
+    return <ActionBar2 items={items} actions={[InspectNetworkButtonGroup, DeleteNetworksButtonGroup]} />;
   },
   useData: function (platformId: string): ResourceDataHookResult<any> {
     const { data, isLoading } = useRead(`listNetworks`, { platformId: platformId });

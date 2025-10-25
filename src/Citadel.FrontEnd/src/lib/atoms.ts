@@ -11,7 +11,7 @@ const selectedResourcesAtoms = atomFamily((_: string) => atom<any[]>([]));
 const deleteDialogAtom = atomFamily((_: DockerResourceType) => atom<DialogState<any>>({ open: false, targets: [] }));
 const resourceFilterAtom = atomFamily((_: ResourceType) => atom<{ item: any } | null>(null));
 
-export function useSelectedResources<T>(key: DockerResourceType) {
+export function useSelectedResources<T>(key: ResourceType) {
   const [selected, setSelected] = useAtom(selectedResourcesAtoms(key));
   return [selected as T[], setSelected as (items: T[]) => void] as const;
 }
