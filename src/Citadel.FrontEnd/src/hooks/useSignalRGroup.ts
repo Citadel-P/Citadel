@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { HubConnection } from '@microsoft/signalr';
-import { useSignalRContext } from '@/SignalRContext';
+import { useSignalRContext } from '@/lib/context/signalr-context';
 
 /**
  * Options for the `useSignalRGroup` hook.

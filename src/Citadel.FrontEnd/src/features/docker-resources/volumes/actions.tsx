@@ -1,4 +1,4 @@
-import { DockerNetworkDetails, DockerNetworkResult } from '@/api/generated/api.types';
+import { DockerVolumeResult } from '@/api/generated/api.types';
 import { useAppContext } from '@/lib/context/app-context';
 import { ActionButton, ActionWithDialog, GroupActionWithDialog } from '@/components/custom/action-with-dialog';
 import { DropdownActionButton } from '@/components/custom/dropdown-with-dialog';
@@ -10,17 +10,18 @@ import { SearchCode, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 
-export const DeleteNetworkDropdown: DropdownActionComponent<DockerNetworkResult> = ({ resource, onAction }) => {
+export const DeleteVolumeDropdown: DropdownActionComponent<DockerVolumeResult> = ({ resource, onAction }) => {
   const client = useQueryClient();
   const { currentPlatform } = useAppContext();
 
   const onSuccess = () => {
-    client.invalidateQueries({ queryKey: ['listNetworks'] });
+    client.invalidateQueries({ queryKey: ['listVolumes'] });
     toast.success(`${resource.name} has been successfully removed.`);
   };
-  const { mutateAsync: deleteNetworkAsync } = useMutate('deleteNetworks', { onSuccess });
+  const { mutateAsync: deleteVolumeAsync } = useMutate('deleteVolumes', { onSuccess });
 
-  const handleDeleteAsync = () => deleteNetworkAsync({ platformId: currentPlatform?.id ?? '', ids: [resource.id] });
+  const handleDeleteAsync = () =>
+    deleteVolumeAsync({ platformId: currentPlatform?.id ?? '', names: [resource.id], force: true });
 
   return (
     <DropdownActionButton
@@ -43,18 +44,19 @@ export const DeleteNetworkDropdown: DropdownActionComponent<DockerNetworkResult>
   );
 };
 
-export const DeleteNetworkButton: ButtonActionComponent<DockerNetworkDetails> = ({ resource }) => {
+export const DeleteVolumeButton: ButtonActionComponent<DockerVolumeResult> = ({ resource }) => {
   const navigate = useNavigate();
   const { currentPlatform } = useAppContext();
 
   const canDelete = Object.keys(resource?.containers ?? {})?.length === 0;
   const onSuccess = () => {
-    navigate(`/platforms/${currentPlatform?.id}/networks`);
+    navigate(`/platforms/${currentPlatform?.id}/volumes`);
     toast.success(`${resource.name} has been successfully removed.`);
   };
-  const { mutateAsync: deleteNetworkAsync } = useMutate('deleteNetworks', { onSuccess });
+  const { mutateAsync: deleteVolumeAsync } = useMutate('deleteVolumes', { onSuccess });
 
-  const handleDelete = () => deleteNetworkAsync({ platformId: currentPlatform?.id ?? '', ids: [resource.id] });
+  const handleDelete = () =>
+    deleteVolumeAsync({ platformId: currentPlatform?.id ?? '', names: [resource.id], force: true });
 
   return (
     <ActionWithDialog
@@ -69,26 +71,26 @@ export const DeleteNetworkButton: ButtonActionComponent<DockerNetworkDetails> = 
   );
 };
 
-export const InspectNetworkDropDown: DropdownActionComponent<DockerNetworkResult> = ({ resource }) => {
+export const InspectVolumeDropDown: DropdownActionComponent<DockerVolumeResult> = ({ resource }) => {
   const navigate = useNavigate();
   const { currentPlatform } = useAppContext();
 
   const handleInspect = () => {
     if (!resource?.id) return;
     const id = formatId(resource.id);
-    navigate(`/platforms/${currentPlatform?.id}/networks/${id}/`);
+    navigate(`/platforms/${currentPlatform?.id}/volumes/${id}/`);
   };
 
   return <DropdownActionButton title="Inspect" icon={<SearchCode className="h-4 w-4" />} onClick={handleInspect} />;
 };
 
-export const InspectNetworkButtonGroup: ButtonGroupComponent<DockerNetworkResult> = ({ resources }) => {
+export const InspectVolumeButtonGroup: ButtonGroupComponent<DockerVolumeResult> = ({ resources }) => {
   const navigate = useNavigate();
   const { currentPlatform } = useAppContext();
   const canInspect = resources?.length === 1;
 
   const handleInspect = () => {
-    navigate(`/platforms/${currentPlatform?.id}/networks/${resources.at(0)?.id}/`);
+    navigate(`/platforms/${currentPlatform?.id}/volumes/${resources.at(0)?.id}/`);
   };
 
   return (
@@ -103,24 +105,24 @@ export const InspectNetworkButtonGroup: ButtonGroupComponent<DockerNetworkResult
   );
 };
 
-export const DeleteNetworksButtonGroup: ButtonGroupComponent<DockerNetworkResult> = ({ resources }) => {
+export const DeleteVolumesButtonGroup: ButtonGroupComponent<DockerVolumeResult> = ({ resources }) => {
   const { currentPlatform } = useAppContext();
   const client = useQueryClient();
 
   const canDelete = (resources?.length ?? 0) > 0 && resources?.find((r) => r.inUse) === undefined;
   const onSuccess = () => {
-    client.invalidateQueries({ queryKey: ['listNetworks'] });
+    client.invalidateQueries({ queryKey: ['listVolumes'] });
 
-    toast.success(`${resources.length} ${resources.length === 1 ? 'network' : 'networks'} successfully removed.`);
+    toast.success(`${resources.length} ${resources.length === 1 ? 'network' : 'volumes'} successfully removed.`);
   };
-  const { mutateAsync: deleteNetworkAsync } = useMutate('deleteNetworks', { onSuccess });
+  const { mutateAsync: deleteVolumeAsync } = useMutate('deleteVolumes', { onSuccess });
 
   const handleDelete = () =>
-    deleteNetworkAsync({ platformId: currentPlatform?.id ?? '', ids: resources.map((r) => r.id) });
+    deleteVolumeAsync({ platformId: currentPlatform?.id ?? '', names: resources.map((r) => r.id), force: true });
 
   return (
     <GroupActionWithDialog
-      type="Network"
+      type="Volume"
       name="Delete"
       title="Delete"
       iconPosition="left"

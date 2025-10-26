@@ -1,7 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ContainerLogsProvider } from './logs/ContainerLogsProvider';
 import ContainerLogs from './logs/ContainerLogs';
-import { useAppContext } from '@/AppContext';
+import { useAppContext } from '@/lib/context/app-context';
 import { useNavigate } from 'react-router';
 import NetworkUsage from './stats/NetworkUsage';
 import MemoryUsage from './stats/MemoryUsage';

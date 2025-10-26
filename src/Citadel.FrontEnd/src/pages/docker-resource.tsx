@@ -92,9 +92,11 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
                           ? Components.filterItems(allTabData?.[i]?.items ?? [], search)
                           : (allTabData?.[i]?.items ?? [])
                       }
+                      actions={tab.DropdownActions ?? {}}
                       isLoading={allTabData?.[i]?.isLoading ?? false}
                     />
                   </div>
+                  {tab.GroupActions && <tab.GroupActions items={items} />}
                 </TabsContent>
               ))}
             </Tabs>

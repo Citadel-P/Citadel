@@ -9,7 +9,7 @@ import { AlertMessage } from '@/components/custom/alert-message';
 import { useEffect } from 'react';
 import { ACCESS_TOKEN_KEY } from './AuthProvider';
 import { useMutate } from '@/lib/hooks';
-import { REDIRECT_TO_KEY } from '@/AppRoutes';
+import { REDIRECT_TO_KEY } from '@/app-routes';
 
 const Login = () => {
   const { form } = useLoginForm();

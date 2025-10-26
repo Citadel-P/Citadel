@@ -1,21 +1,14 @@
 import { HardDrive } from 'lucide-react';
 import { ExternalRepositories } from './external-repositories';
-import { LocalImagesTable } from './local-images-table';
-import { ActionBar } from './action-bar';
+import { LocalImagesTable } from './table';
 import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
-import { DeleteDialog } from './delete-dialog';
 import { useImagesGroup } from './hooks/useImagesGroup';
 import { ResourceSelector } from '@/components/dsl/common';
+import { ActionBar2 } from '@/components/custom/action-bar';
+import { DeleteImageDropdown, DeleteImagesButtonGroup, InspectImageButtonGroup, InspectImageDropDown } from './actions';
 
 export const ImageComponents: RequiredDockerComponents = {
   Icon: <HardDrive className="h-4 w-4" />,
-
-  ActionBar: ({ items }) => {
-    return <ActionBar items={items} />;
-  },
-  DeleteDialog: () => {
-    return <DeleteDialog />;
-  },
   tabs: [
     {
       label: 'Local',
@@ -27,6 +20,14 @@ export const ImageComponents: RequiredDockerComponents = {
       header: {
         showAdd: false,
         showSearch: true,
+      },
+      ButtonActions: {},
+      DropdownActions: {
+        InspectImageDropDown,
+        DeleteImageDropdown,
+      },
+      GroupActions: ({ items }) => {
+        return <ActionBar2 type="Image" items={items} actions={[InspectImageButtonGroup, DeleteImagesButtonGroup]} />;
       },
     },
     {

@@ -1,9 +1,11 @@
 import { DockerResourceType } from '@/api/types';
 import { ContainerComponents } from '@/features/docker-resources/containers';
 import { ImageComponents } from '@/features/docker-resources/images';
+import { ImageInfoComponents } from '@/features/docker-resources/images/image-info';
 import { NetworkComponents } from '@/features/docker-resources/networks';
 import { NetworkInfoComponents } from '@/features/docker-resources/networks/network-info';
 import { VolumeComponents } from '@/features/docker-resources/volumes';
+import { VolumeInfoComponents } from '@/features/docker-resources/volumes/volume-info';
 
 /**
  * Defines the components needed to render a Docker resource page.
@@ -15,11 +17,6 @@ export interface RequiredDockerComponents<T = any> {
 
   /** Action bar component shown below the header */
   ActionBar?: React.FC<{ items: any[] }>;
-
-  /** Button actions for action bars, toolbars, etc. */
-  ButtonActions?: {
-    [action: string]: ButtonActionComponent<T>;
-  };
 
   /** Dropdown actions for table rows */
   DropdownActions?: {
@@ -48,9 +45,16 @@ export interface RequiredDockerComponents<T = any> {
   /** Tabs configuration for tabbed resources */
   tabs?: {
     label: string;
-    Content: React.FC<{ items: any[]; isLoading: boolean }>;
+    Content: React.FC<{ items: any[]; isLoading: boolean; actions: Record<string, DropdownActionComponent<T>> }>;
     useData?: (platformId: string) => ResourceDataHookResult<T>;
     header?: HeaderOptions;
+    ButtonActions?: {
+      [action: string]: ButtonActionComponent<T>;
+    };
+    DropdownActions?: {
+      [action: string]: DropdownActionComponent<T>;
+    };
+    GroupActions?: React.FC<{ items: any[] }>;
   }[];
 }
 
@@ -92,6 +96,8 @@ export const DockerResourceInfoComponents: {
   [key in DockerResourceType]: RequiredDockerInfoComponents;
 } = {
   Network: NetworkInfoComponents,
+  Volume: VolumeInfoComponents,
+  Image: ImageInfoComponents,
 };
 
 export interface ResourceDataHookResult<T> {

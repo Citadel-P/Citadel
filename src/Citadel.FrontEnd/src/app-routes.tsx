@@ -17,14 +17,9 @@ export const AppPaths: Record<string, string> = {
   registries: 'registries',
   addRegistry: 'registries/add',
   editRegistry: 'registries/edit/:registryId',
-  image: 'platforms/:platformId/images/:resourceId',
-  imageInspect: 'platforms/:platformId/images/:resourceId/inspect',
   addNetwork: 'platforms/:platformId/networks/add',
   resource: 'platforms/:platformId/:type',
   resourceInfo: 'platforms/:platformId/:type/:resourceId',
-
-  volume: 'platforms/:platformId/volumes/:resourceId',
-  volumeInspect: 'platforms/:platformId/volumes/:resourceId/inspect',
   addVolume: 'platforms/:platformId/volumes/add',
   deployments: 'deployments',
   addDeployment: 'deployments/add',
@@ -104,22 +99,6 @@ export const AppRoutes = () => {
           },
         },
         {
-          path: AppPaths.image,
-          lazy: async () => {
-            return {
-              Component: (await import('@/features/docker-resources/images/image-info/ImageInfoWrapper')).default,
-            };
-          },
-        },
-        {
-          path: AppPaths.imageInspect,
-          lazy: async () => {
-            return {
-              Component: (await import('@/features/docker-resources/images/image-info/ImageInfoWrapper')).default,
-            };
-          },
-        },
-        {
           path: AppPaths.registries,
           lazy: async () => {
             return { Component: (await import('@/pages/registries-page')).default };
@@ -158,23 +137,7 @@ export const AppRoutes = () => {
         {
           path: AppPaths.addNetwork,
           lazy: async () => {
-            return { Component: (await import('@/features/docker-resources/networks/forms/AddNetworkForm')).default };
-          },
-        },
-        {
-          path: AppPaths.volume,
-          lazy: async () => {
-            return {
-              Component: (await import('@/features/docker-resources/volumes/volume-info/VolumeInfoWrapper')).default,
-            };
-          },
-        },
-        {
-          path: AppPaths.volumeInspect,
-          lazy: async () => {
-            return {
-              Component: (await import('@/features/docker-resources/volumes/volume-info/VolumeInfoWrapper')).default,
-            };
+            return { Component: (await import('@/features/docker-resources/networks/forms/add-network')).default };
           },
         },
         {
@@ -192,7 +155,7 @@ export const AppRoutes = () => {
         {
           path: AppPaths.addVolume,
           lazy: async () => {
-            return { Component: (await import('@/features/docker-resources/volumes/forms/AddVolumeForm')).default };
+            return { Component: (await import('@/features/docker-resources/volumes/forms/add-volume')).default };
           },
         },
         { path: AppPaths.any, element: <NotFound /> },

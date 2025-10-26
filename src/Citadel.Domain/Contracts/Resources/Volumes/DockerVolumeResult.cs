@@ -4,6 +4,7 @@ namespace Domain.Contracts.Resources.Volumes;
 
 public record DockerVolumeResult (
     string Id,
+    string Name,
     bool InUse,
     string Scope,
     string Driver,

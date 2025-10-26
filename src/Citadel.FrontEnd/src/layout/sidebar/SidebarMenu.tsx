@@ -4,7 +4,7 @@ import { ISubMenuItem, MenuItems, DockerPlatformMenu, IMenuItem } from './menu-i
 import { ChevronRight } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { SidebarSubMenu } from './SidebarSidemenu';
-import { useAppContext } from '@/AppContext';
+import { useAppContext } from '@/lib/context/app-context';
 
 export const SidebarMenu = () => {
   const location = useLocation();

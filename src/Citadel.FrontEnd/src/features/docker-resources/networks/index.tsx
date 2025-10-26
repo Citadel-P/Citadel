@@ -3,7 +3,6 @@ import { NetworksTable } from './table';
 import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import {
-  DeleteNetworkButton,
   DeleteNetworkDropdown,
   DeleteNetworksButtonGroup,
   InspectNetworkButtonGroup,
@@ -16,15 +15,12 @@ export const NetworkComponents: RequiredDockerComponents = {
   Table: ({ items, actions, isLoading }) => {
     return <NetworksTable items={items} actions={actions} isLoading={isLoading} />;
   },
-  ButtonActions: {
-    DeleteNetworkButton,
-  },
   DropdownActions: {
     InspectNetworkDropDown,
     DeleteNetworkDropdown,
   },
   GroupActions: ({ items }) => {
-    return <ActionBar2 items={items} actions={[InspectNetworkButtonGroup, DeleteNetworksButtonGroup]} />;
+    return <ActionBar2 type="Network" items={items} actions={[InspectNetworkButtonGroup, DeleteNetworksButtonGroup]} />;
   },
   useData: function (platformId: string): ResourceDataHookResult<any> {
     const { data, isLoading } = useRead(`listNetworks`, { platformId: platformId });

@@ -1,7 +1,7 @@
-import GhcrImagesTable from './GhcrImagesTable';
+import GhcrImagesTable from './ghcr-images';
 import { RegistryType, RegistryView } from '@/api/generated/api.types';
-import PrivateDockerHubImagesTable from './DockerHubImagesTable';
-import { PublicDockerHubImages } from './PublicDockerHubImages';
+import PrivateDockerHubImagesTable from './dockerhub-private-images';
+import { PublicDockerHubImages } from './dockerhub-public-images';
 import { useResourceFilter } from '@/lib/atoms';
 
 export const ExternalRepositories = () => {

@@ -5,6 +5,8 @@ namespace WebApi.Routes.Endpoints.Resources.Images;
 
 public sealed record InspectImageView(
     string Id,
+    string Name,
+    string Tag,
     long Size,
     string Os,
     string Created,
@@ -20,10 +22,14 @@ public sealed record InspectImageView(
     RegistryView? Registry
     )
 {
+
     public static InspectImageView Map (InspectImageResult image)
     {
+        var nameTag = image.RepoTags.FirstOrDefault()?.Split(':', 2);
         return new InspectImageView(
             Id: image.Id,
+            Name: nameTag is not null && nameTag.Length == 2 ? nameTag[0] : string.Empty,
+            Tag: nameTag is not null && nameTag.Length == 2 ? nameTag[1] : string.Empty,
             Size: image.Size,
             Os: image.Os,
             Created: image.Created,

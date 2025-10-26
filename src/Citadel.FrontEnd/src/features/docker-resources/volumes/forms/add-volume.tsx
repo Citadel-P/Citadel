@@ -9,7 +9,7 @@ import { LoaderCircle, ChevronDown } from 'lucide-react';
 import KeyValuePairInput from '@/components/ui/KeyValuePairInput';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useEffect, useState } from 'react';
-import { useAppContext } from '@/AppContext';
+import { useAppContext } from '@/lib/context/app-context';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
 import { useVolumeForm } from './hooks/useVolumeForm';
@@ -17,7 +17,7 @@ import { useMutate } from '@/lib/hooks';
 
 const driverOptions = [{ value: 'local', label: 'Local' }];
 
-const AddVolumeForm = () => {
+const AddVolume = () => {
   const { form } = useVolumeForm();
   const navigate = useNavigate();
   const { mutate, isPending, isSuccess, data, validationErrors } = useMutate('createVolume');
@@ -195,4 +195,4 @@ const AddVolumeForm = () => {
   );
 };
 
-export default AddVolumeForm;
+export default AddVolume;

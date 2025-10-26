@@ -136,7 +136,6 @@ function NestedImagesTable({ dockerhubRepo }: { dockerhubRepo: IImageRepositoryD
   );
 }
 
-// Reusable VersionRow Component
 const VersionRow = ({ version }: { version: string }) => {
   const [copiedWinCmd, copyWinCmdToClipboard] = useCopyToClipboard(5000);
   const v = version?.split(':').at(1) ?? '';

@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-import { useAppContext } from '@/AppContext';
+import { useAppContext } from '@/lib/context/app-context';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import KeyValuePairInput from '@/components/ui/KeyValuePairInput';
 import { LoaderCircle, ChevronDown, Info } from 'lucide-react';

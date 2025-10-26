@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useImagesContext } from './ImagesContext';
 import { Highlight, themes } from 'prism-react-renderer';
 import { toast } from 'sonner';
-import { useAppContext } from '@/AppContext';
+import { useAppContext } from '@/lib/context/app-context';
 
 export interface PullProgressSheetProps {
   imageTag: string;

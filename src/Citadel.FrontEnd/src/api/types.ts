@@ -86,6 +86,9 @@ type ApiClientType = ReturnType<typeof useApiClientContext>['apiClient'];
 export type ApiFnMap = ApiClientType['api'];
 export type ApiFn<TResource extends keyof ApiFnMap> = ApiFnMap[TResource];
 
+type ApiFnParams<T extends keyof ApiFnMap> = Parameters<ApiFn<T>>;
+export type PrimaryArg<T extends keyof ApiFnMap> = ApiFnParams<T>[0];
+
 export type MutateVariables<TResource extends keyof typeof resources> = {
   [K in (typeof resources)[TResource]['requiredParams'][number]]: string;
 } & {

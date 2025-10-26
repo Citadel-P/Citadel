@@ -11,7 +11,7 @@ import { LoaderCircle, ChevronDown } from 'lucide-react';
 import KeyValuePairInput from '@/components/ui/KeyValuePairInput';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import React, { useEffect } from 'react';
-import { useAppContext } from '@/AppContext';
+import { useAppContext } from '@/lib/context/app-context';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
 import { useMutate } from '@/lib/hooks';
@@ -58,7 +58,7 @@ function IPField({
   );
 }
 
-const AddNetworkForm = () => {
+const AddNetwork = () => {
   const { form } = useNetworkForm();
   const navigate = useNavigate();
   const { mutate, isPending, isSuccess, data, validationErrors } = useMutate('createNetwork');
@@ -370,4 +370,4 @@ const AddNetworkForm = () => {
   );
 };
 
-export default AddNetworkForm;
+export default AddNetwork;

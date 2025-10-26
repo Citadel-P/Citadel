@@ -3,7 +3,7 @@ import { useLayoutContext } from './LayoutContext';
 import { LayoutProvider } from './LayoutProvider';
 import { Sidebar } from './sidebar/Sidebar';
 import Breadcrumb from './breadcrumb/Breadcrumb';
-import { AppProvider } from '@/AppProvider';
+import { AppProvider } from '@/lib/context/app-provider';
 import { useEffect, useRef, useState } from 'react';
 
 const LayoutPage = () => {

@@ -17,8 +17,15 @@ export interface ActionButtonConfig {
   className?: string;
 }
 
-export const ActionBar2 = <T,>({ items, actions }: { items: T[]; actions: ButtonGroupComponent<T>[] }) => {
-  const type = 'Network';
+export const ActionBar2 = <T,>({
+  type,
+  items,
+  actions,
+}: {
+  type: ResourceType;
+  items: T[];
+  actions: ButtonGroupComponent<T>[];
+}) => {
   const [selectedRows, _] = useSelectedResources<T>(type);
 
   if (!selectedRows?.length) return null;
@@ -43,10 +50,10 @@ export const GenericActionBar2 = <T,>({ selectedItems, allItems, resource, actio
         {selectedItems.length} of {allItems?.length} {resource.toLowerCase()}(s) selected.
       </div>
       <ButtonGroup>
-      {actions.map((Action, id) => (
-        <Action resources={selectedItems} key={id} />
-      ))}
-    </ButtonGroup>
+        {actions.map((Action, id) => (
+          <Action resources={selectedItems} key={id} />
+        ))}
+      </ButtonGroup>
     </div>
   );
 };

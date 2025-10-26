@@ -3,29 +3,38 @@ import { ImageView } from '@/api/generated/api.types';
 import SortableCell from '@/components/ui/SortableCell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { TableDropDown } from './table-dropdown';
 import { truncate } from '@/lib/truncate';
-import { Play } from 'lucide-react';
 import { useMemo } from 'react';
 import { fromNow } from '@/lib/dayjs.helper';
 import { byteTransform } from '@/lib/bytes.helper';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Button } from '@/components/ui/button';
 import { useNavigate, useParams } from 'react-router';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import { formatId } from '@/lib/utils';
 import { RegistryDisplay } from '@/components/ui/RegistryDisplay';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useSelectedResources } from '@/lib/atoms';
+import { ActionData } from '@/pages/types';
+import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 
-export const LocalImagesTable = ({ items, isLoading }: { items: ImageView[]; isLoading: boolean }) => {
+export const LocalImagesTable = ({
+  items,
+  isLoading,
+  actions,
+}: {
+  items: ImageView[];
+  isLoading: boolean;
+  actions: Record<
+    string,
+    React.FC<{ resource: ImageView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >;
+}) => {
   const rowCount = useMemo(() => items?.length ?? 0, [items]);
   const [_, setSelectedResources] = useSelectedResources<ImageView>('Image');
 
   return (
     <div className="flex flex-col gap-3">
       <DataTable
-        columns={columns()}
+        columns={columns(actions ?? {})}
         data={items ?? []}
         isLoading={isLoading}
         onSelectionChange={setSelectedResources}
@@ -41,7 +50,12 @@ export const LocalImagesTable = ({ items, isLoading }: { items: ImageView[]; isL
   );
 };
 
-const columns = (): ColumnDef<ImageView>[] => [
+const columns = (
+  actions: Record<
+    string,
+    React.FC<{ resource: ImageView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >,
+): ColumnDef<ImageView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -107,29 +121,9 @@ const columns = (): ColumnDef<ImageView>[] => [
   },
   {
     id: 'actions',
-    cell: ({ row }) => <RenderActions image={row.original} />,
+    cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
   },
 ];
-
-const RenderActions = ({ image }: { image: ImageView }) => {
-  return (
-    <div className="flex justify-center">
-      <TooltipProvider delayDuration={200}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-8 rounded-full" onClick={() => null}>
-              <Play className="text-blue-500" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <span>Create</span>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-      <TableDropDown image={image} />
-    </div>
-  );
-};
 
 const ImageNameRow = ({ image }: { image: ImageView }) => {
   const { platformId } = useParams<{ platformId: string }>();

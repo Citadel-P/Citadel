@@ -1,4 +1,3 @@
-import { usePromptHotkeys } from '@/lib/hooks';
 import { forwardRef, ReactNode, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { toast } from 'sonner';
@@ -8,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { useSelectedResources } from '@/lib/atoms';
 import { ResourceType } from '@/api/types';
-import { ProblemDetails } from '@/api/generated/api.types';
+import { useConfirmByName } from '@/lib/hooks';
 
 export const ActionButton = forwardRef<
   HTMLButtonElement,
@@ -99,50 +98,21 @@ export const ActionWithDialog = ({
   variant?: 'link' | 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | null | undefined;
 }) => {
   const [open, setOpen] = useState(false);
-  const [input, setInput] = useState('');
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  usePromptHotkeys({
-    onConfirm: () => {
-      if (name === input && !disabled) {
-        onClick && onClick();
-        setOpen(false);
-      }
-    },
-    onCancel: () => setOpen(false),
-    enabled: open,
-    confirmDisabled: disabled || name !== input,
+  const { input, setInput, isLoading, isConfirmDisabled, handleConfirm, reset } = useConfirmByName({
+    name,
+    disabled,
+    onConfirm: onClick,
+    onClose: () => setOpen(false),
+    hotkeysEnabled: open,
   });
-
-  const handleConfirm = () => {
-    try {
-      setIsLoading(true);
-      const maybePromise = onClick?.();
-      Promise.resolve(maybePromise)
-        .then(() => {
-          setOpen(false);
-        })
-        .catch((err) => {
-          const problem = (err as any)?.error as ProblemDetails;
-          if (problem && problem.status === 400) {
-            toast.error(`400: ${problem.title ?? 'Bad Request'}`, {
-              description: problem?.detail,
-            });
-          }
-        })
-        .finally(() => setIsLoading(false));
-    } catch {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <Dialog
       open={open}
       onOpenChange={(open) => {
         setOpen(open);
-        setInput('');
+        reset();
       }}>
       <DialogTrigger asChild>
         <ActionButton
@@ -179,7 +149,7 @@ export const ActionWithDialog = ({
             ref={confirmButtonRef}
             title={title}
             icon={icon}
-            disabled={disabled || name !== input}
+            disabled={isConfirmDisabled}
             variant={variant}
             onClick={handleConfirm}
             loading={isLoading}
@@ -236,49 +206,21 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
   variant?: 'link' | 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | null | undefined;
 }) => {
   const [open, setOpen] = useState(false);
-  const [input, setInput] = useState('');
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
   const [selected, _] = useSelectedResources<T>(type);
-  const [isLoading, setIsLoading] = useState(false);
-
-  usePromptHotkeys({
-    onConfirm: () => {
-      if (name === input && !disabled && !isLoading) {
-        handleConfirm();
-      }
-    },
-    onCancel: () => setOpen(false),
-    enabled: open,
-    confirmDisabled: disabled || name !== input || isLoading,
+  const { input, setInput, isLoading, isConfirmDisabled, handleConfirm, reset } = useConfirmByName({
+    name,
+    disabled,
+    onConfirm: onClick,
+    onClose: () => setOpen(false),
+    hotkeysEnabled: open,
   });
-
-  const handleConfirm = () => {
-    try {
-      setIsLoading(true);
-      const maybePromise = onClick?.();
-      Promise.resolve(maybePromise)
-        .then(() => {
-          setOpen(false);
-        })
-        .catch((err) => {
-          const problem = (err as any)?.error as ProblemDetails;
-          if (problem && problem.status === 400) {
-            toast.error(`400: ${problem.title ?? 'Bad Request'}`, {
-              description: problem?.detail,
-            });
-          }
-        })
-        .finally(() => setIsLoading(false));
-    } catch {
-      setIsLoading(false);
-    }
-  };
   return (
     <Dialog
       open={open}
       onOpenChange={(open) => {
         setOpen(open);
-        setInput('');
+        reset();
       }}>
       <DialogTrigger asChild>
         <ActionButton
@@ -321,7 +263,7 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
             title={title}
             icon={icon}
             variant={variant}
-            disabled={disabled || name !== input || isLoading}
+            disabled={isConfirmDisabled}
             loading={isLoading}
             onClick={handleConfirm}
           />

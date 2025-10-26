@@ -743,6 +743,7 @@ export interface DockerNetworkResult {
 
 export interface DockerVolumeResult {
   id: string;
+  name: string;
   inUse: boolean;
   scope: string;
   driver: string;
@@ -1098,6 +1099,8 @@ export interface ImagesView {
 
 export interface InspectImageView {
   id: string;
+  name: string;
+  tag: string;
   /**
    * @format int64
    * @pattern ^-?(?:0|[1-9]\d*)$

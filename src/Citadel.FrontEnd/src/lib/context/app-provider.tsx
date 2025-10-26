@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { matchRoutes, useLocation, useParams } from 'react-router';
-import { AppPaths } from '@/AppRoutes';
-import { AppContext } from './AppContext';
-import { SignalRProvider } from './SignalRProvider';
-import { useRead } from './lib/hooks';
+import { AppPaths } from '@/app-routes';
+import { AppContext } from './app-context';
+import { SignalRProvider } from './signalr-provider';
+import { useRead } from '../hooks';
 
 export const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const location = useLocation();

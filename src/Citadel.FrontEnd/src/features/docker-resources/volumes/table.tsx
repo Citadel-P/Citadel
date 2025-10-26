@@ -7,17 +7,34 @@ import { useMemo } from 'react';
 import { byteTransform } from '@/lib/bytes.helper';
 import { fromNow } from '@/lib/dayjs.helper';
 import { useNavigate, useParams } from 'react-router';
-import { TableDropDown } from './table-dropdown';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useSelectedResources } from '@/lib/atoms';
+import { ActionData } from '@/pages/types';
+import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 
-export const VolumesTable = ({ items, isLoading }: { items: DockerVolumeResult[]; isLoading: boolean }) => {
+export const VolumesTable = ({
+  items,
+  actions,
+  isLoading,
+}: {
+  items: DockerVolumeResult[];
+  isLoading: boolean;
+  actions: Record<
+    string,
+    React.FC<{ resource: DockerVolumeResult; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >;
+}) => {
   const rowCount = useMemo(() => items?.length ?? 0, [items]);
   const [_, setSelectedResources] = useSelectedResources<DockerVolumeResult>('Volume');
 
   return (
     <div className="flex flex-col gap-3">
-      <DataTable columns={columns} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+      <DataTable
+        columns={columns(actions ?? {})}
+        data={items ?? []}
+        isLoading={isLoading}
+        onSelectionChange={setSelectedResources}
+      />
       <div className="text-muted-foreground text-xs p-2 font-normal">
         {rowCount > 0 && (
           <span>
@@ -29,7 +46,12 @@ export const VolumesTable = ({ items, isLoading }: { items: DockerVolumeResult[]
   );
 };
 
-const columns: ColumnDef<DockerVolumeResult>[] = [
+const columns = (
+  actions: Record<
+    string,
+    React.FC<{ resource: DockerVolumeResult; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >,
+): ColumnDef<DockerVolumeResult>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -85,7 +107,7 @@ const columns: ColumnDef<DockerVolumeResult>[] = [
   },
   {
     id: 'actions',
-    cell: ({ row }) => <TableDropDown volume={row.original} />,
+    cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
   },
 ];
 

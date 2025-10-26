@@ -1,5 +1,5 @@
-import { useAppContext } from '@/AppContext';
-import { AppPaths } from '@/AppRoutes';
+import { useAppContext } from '@/lib/context/app-context';
+import { AppPaths } from '@/app-routes';
 import { Badge } from '@/components/ui/badge';
 import {
   Breadcrumb,

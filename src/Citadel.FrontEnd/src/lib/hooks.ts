@@ -18,8 +18,8 @@ import {
   ApiFnMap,
   DockerResourceType,
   KnownResourceName,
-  MutateVariables,
   PluralResourceMap,
+  PrimaryArg,
   ResourceResponse,
   UseReadArgs,
 } from '@/api/types';
@@ -28,6 +28,7 @@ import { use400ErrorToast } from '@/hooks/use400ErrorToast';
 import { toast } from 'sonner';
 import { useParams } from 'react-router';
 import { useDeleteDialogAtom } from './atoms';
+import { ProblemDetails } from '@/api/generated/api.types';
 
 const EMPTY_ARGS = Object.freeze({});
 
@@ -71,12 +72,12 @@ export function useRead<
   });
 }
 
-export function useMutate<TResource extends keyof ApiFnMap>(
+export function useMutate<
+  TResource extends keyof ApiFnMap,
+  TVariables = PrimaryArg<TResource> | { data: PrimaryArg<TResource>; params?: any },
+>(
   resource: TResource,
-  options?: Omit<
-    UseMutationOptions<Awaited<ReturnType<ApiFn<TResource>>>, Error, MutateVariables<TResource>>,
-    'mutationFn'
-  >,
+  options?: Omit<UseMutationOptions<Awaited<ReturnType<ApiFn<TResource>>>, Error, TVariables>, 'mutationFn'>,
 ) {
   const { apiClient } = useApiClientContext();
   const resDef = resources[resource];
@@ -84,24 +85,28 @@ export function useMutate<TResource extends keyof ApiFnMap>(
 
   const fn = apiClient.api[resource] as ApiFn<TResource>;
 
-  const mutation = useMutation<Awaited<ReturnType<typeof fn>>, Error, MutateVariables<TResource>>({
+  const mutation = useMutation<Awaited<ReturnType<typeof fn>>, Error, TVariables>({
+    mutationKey: [resource],
     ...options,
     mutationFn: ((variables: any) => {
-      let args: any[];
+      let args: any[] = [];
 
-      if (resDef.params.length === 1) {
-        args = [variables];
-      } else if (resDef.params.length === 2) {
-        if (variables && typeof variables === 'object' && 'data' in variables) {
-          args = [variables.data, variables.params ?? {}];
-        } else {
-          args = [variables, {}];
-        }
+      const hasAllNamed =
+        variables && typeof variables === 'object' && resDef.params.every((p: string) => p in variables);
+
+      if (hasAllNamed) {
+        args = resDef.params.map((param: string) => (param === 'params' ? (variables[param] ?? {}) : variables[param]));
       } else {
-        args = resDef.params.map((param) => variables[param]);
+        if (variables && typeof variables === 'object' && 'data' in variables) {
+          args = [variables.data, (variables as any).params ?? {}];
+        } else {
+          args = [variables];
+          const fnParamLen = fn.length ?? 1;
+          if (fnParamLen > 1) args.push({});
+        }
       }
       return fn(...args);
-    }) as MutationFunction<Awaited<ReturnType<typeof fn>>, MutateVariables<TResource>>,
+    }) as MutationFunction<Awaited<ReturnType<typeof fn>>, TVariables>,
   });
 
   const validationErrors = useGetValidationErrors(mutation.error);
@@ -109,7 +114,7 @@ export function useMutate<TResource extends keyof ApiFnMap>(
   return {
     ...mutation,
     validationErrors,
-  } as UseMutationResult<Awaited<ReturnType<typeof fn>>, Error, MutateVariables<TResource>, unknown> & {
+  } as UseMutationResult<Awaited<ReturnType<typeof fn>>, Error, TVariables, unknown> & {
     validationErrors: ReturnType<typeof useGetValidationErrors>;
   };
 }
@@ -190,24 +195,6 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
   return [value, setValue] as const;
 }
 
-export interface PromptHotkeysConfig {
-  /** Function to call when Enter is pressed (confirm action) */
-  onConfirm?: () => void;
-  /** Function to call when Escape is pressed (cancel/close action) */
-  onCancel?: () => void;
-  /** Whether the hotkeys are enabled. Defaults to true */
-  enabled?: boolean;
-  /** Whether to ignore hotkeys when inside input/textarea elements. Defaults to true */
-  ignoreInputs?: boolean;
-  /** Whether the confirm action is disabled (e.g., form validation failed) */
-  confirmDisabled?: boolean;
-}
-
-/**
- * Hook that provides standard prompt/dialog hotkey behavior:
- * - Enter: Confirm/submit action
- * - Escape: Cancel/close action
- */
 export const usePromptHotkeys = ({
   enabled = true,
   onConfirm,
@@ -266,3 +253,55 @@ export const usePromptHotkeys = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [enabled, onConfirm, onCancel, ignoreInputs, confirmDisabled]);
 };
+
+export function useConfirmByName(args: {
+  name: string;
+  disabled?: boolean;
+  onConfirm?: () => void | Promise<unknown>;
+  onClose?: () => void;
+  hotkeysEnabled?: boolean;
+}) {
+  const { name, disabled, onConfirm, onClose, hotkeysEnabled } = args;
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleConfirm = useCallback(() => {
+    try {
+      setIsLoading(true);
+      const maybe = onConfirm?.();
+      Promise.resolve(maybe)
+        .then(() => onClose?.())
+        .catch((err) => {
+          const problem = (err as any)?.error as ProblemDetails;
+          if (problem && problem.status === 400) {
+            toast.error(`400: ${problem.title ?? 'Bad Request'}`, { description: problem?.detail });
+          }
+        })
+        .finally(() => setIsLoading(false));
+    } catch {
+      setIsLoading(false);
+    }
+  }, [onConfirm, onClose]);
+
+  usePromptHotkeys({
+    onConfirm: () => {
+      if (name === input && !disabled && !isLoading) handleConfirm();
+    },
+    onCancel: () => onClose?.(),
+    enabled: !!hotkeysEnabled,
+    confirmDisabled: !!disabled || name !== input || isLoading,
+  });
+
+  const isConfirmDisabled = !!disabled || name !== input || isLoading;
+  const reset = () => setInput('');
+
+  return { input, setInput, isLoading, isConfirmDisabled, handleConfirm, reset } as const;
+}
+
+export interface PromptHotkeysConfig {
+  onConfirm?: () => void;
+  onCancel?: () => void;
+  enabled?: boolean;
+  ignoreInputs?: boolean;
+  confirmDisabled?: boolean;
+}

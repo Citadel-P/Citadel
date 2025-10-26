@@ -6676,6 +6676,7 @@
       "DockerVolumeResult": {
         "required": [
           "id",
+          "name",
           "inUse",
           "scope",
           "driver",
@@ -6691,6 +6692,9 @@
         "type": "object",
         "properties": {
           "id": {
+            "type": "string"
+          },
+          "name": {
             "type": "string"
           },
           "inUse": {
@@ -7978,6 +7982,8 @@
       "InspectImageView": {
         "required": [
           "id",
+          "name",
+          "tag",
           "size",
           "os",
           "created",
@@ -7995,6 +8001,12 @@
         "type": "object",
         "properties": {
           "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tag": {
             "type": "string"
           },
           "size": {

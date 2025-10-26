@@ -18,6 +18,7 @@ internal static class VolumeMappers
     {
         return new DockerVolumeResult(
             Id: volume.Name,
+            Name: volume.Name,
             Driver: volume.Driver,
             Labels: volume.Labels.ToDictionary(kv => kv.Key, kv => kv.Value),
             Options: volume.Options.ToDictionary(kv => kv.Key, kv => kv.Value),
@@ -50,6 +51,7 @@ internal static class VolumeMappers
         return new DockerVolumeResult
         (
             Id: volume.Name,
+            Name: volume.Name,
             InUse: volume.InUse,
             Scope: volume.Scope,
             Driver: volume.Driver,

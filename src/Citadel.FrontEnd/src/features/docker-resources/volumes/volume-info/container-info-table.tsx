@@ -4,7 +4,7 @@ import {
   DockerVolumeResult,
   PlatformView,
 } from '@/api/generated/api.types';
-import { useAppContext } from '@/AppContext';
+import { useAppContext } from '@/lib/context/app-context';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/ui/PortsDisplay';

@@ -1,4 +1,4 @@
-import { useAppContext } from '@/AppContext';
+import { useAppContext } from '@/lib/context/app-context';
 import { useState } from 'react';
 import { DeleteVolumesInput, DockerVolumeResult } from '@/api/generated/api.types';
 import { ConfirmDeleteDialog } from '@/components/custom/confirm-delete-dialog';

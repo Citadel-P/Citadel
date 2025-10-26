@@ -1,6 +1,6 @@
 import { HubConnection, HubConnectionState } from '@microsoft/signalr';
 import { createContext } from 'react';
-import { useRequiredContext } from './hooks/useRequiredContext';
+import { useRequiredContext } from '../../hooks/useRequiredContext';
 
 export type SignalRContextType = {
   connection: HubConnection | null;
