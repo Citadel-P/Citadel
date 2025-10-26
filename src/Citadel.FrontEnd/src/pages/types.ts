@@ -1,12 +1,3 @@
-import { DockerResourceType } from '@/api/types';
-import { ContainerComponents } from '@/features/docker-resources/containers';
-import { ImageComponents } from '@/features/docker-resources/images';
-import { ImageInfoComponents } from '@/features/docker-resources/images/image-info';
-import { NetworkComponents } from '@/features/docker-resources/networks';
-import { NetworkInfoComponents } from '@/features/docker-resources/networks/network-info';
-import { VolumeComponents } from '@/features/docker-resources/volumes';
-import { VolumeInfoComponents } from '@/features/docker-resources/volumes/volume-info';
-
 /**
  * Defines the components needed to render a Docker resource page.
  * This single interface can represent either a **single-table resource** or a **tabbed resource**.
@@ -82,23 +73,6 @@ export interface RequiredDockerInfoComponents<T = any> {
   /** Data hook for this resource */
   useData: (platformId: string, resourceId: string) => ResourceInfoHookResult<T>;
 }
-
-export const DockerResourceComponents: {
-  [key in DockerResourceType]: RequiredDockerComponents;
-} = {
-  Image: ImageComponents,
-  Volume: VolumeComponents,
-  Network: NetworkComponents,
-  Container: ContainerComponents,
-};
-
-export const DockerResourceInfoComponents: {
-  [key in DockerResourceType]: RequiredDockerInfoComponents;
-} = {
-  Network: NetworkInfoComponents,
-  Volume: VolumeInfoComponents,
-  Image: ImageInfoComponents,
-};
 
 export interface ResourceDataHookResult<T> {
   items: T[];

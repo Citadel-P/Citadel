@@ -1,6 +1,6 @@
 import { useDockerResourceParamType, useLocalStorage } from '@/lib/hooks';
 import { useParams } from 'react-router';
-import { DockerResourceInfoComponents, RequiredDockerInfoComponents } from './types';
+import { RequiredDockerInfoComponents } from './types';
 import { DockerResourceType } from '@/api/types';
 import NotFound from './NotFound';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Loader from '@/components/ui/loader';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { ProblemDetails } from '@/api/generated/api.types';
+import { DockerResourceInfoComponents } from '@/features/docker-resources';
 
 const DockerResourceInfoPage = () => {
   const type = useDockerResourceParamType()!;

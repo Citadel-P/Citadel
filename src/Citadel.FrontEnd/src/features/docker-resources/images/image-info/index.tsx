@@ -2,7 +2,7 @@ import { ImageView, InspectImageView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredDockerInfoComponents } from '@/pages/types';
-import { DeleteImageButton, QuickDeployImageButton } from '../actions';
+import { DeleteImageButton } from '../actions';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { Box, Info, Layers } from 'lucide-react';
 import { ImageInfoTable } from './image-info-table';
@@ -25,7 +25,7 @@ export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView>
               tag: resource.tag,
             } as ImageView
           }
-          actions={[QuickDeployImageButton, DeleteImageButton]}
+          actions={[DeleteImageButton]}
         />
       );
     },

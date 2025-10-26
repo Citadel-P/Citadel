@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="blue" class="light">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
@@ -16,3 +16,21 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('theme');
+          var theme = stored ? JSON.parse(stored) : { color: 'blue', mode: 'light' };
+          var html = document.documentElement;
+          if (theme && html) {
+            if (theme.color) html.setAttribute('data-theme', theme.color);
+            if (theme.mode) {
+              html.classList.remove('light', 'dark');
+              html.classList.add(theme.mode);
+            }
+          }
+        } catch (e) {
+          // no-op
+        }
+      })();
+    </script>

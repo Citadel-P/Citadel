@@ -16,6 +16,10 @@ export interface ITheme {
   color?: string;
 }
 
+export interface ISidebarStatus {
+  minimized: boolean;
+}
+
 export const LayoutContext = createContext<IContext | undefined>(undefined);
 LayoutContext.displayName = 'LayoutContext';
 

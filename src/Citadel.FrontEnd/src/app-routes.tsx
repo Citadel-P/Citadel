@@ -1,5 +1,5 @@
 import { createBrowserRouter, redirect, RouterProvider } from 'react-router';
-import Layout from '@/layout/Layout';
+import Layout from '@/layout/layout';
 import NotFound from '@/pages/NotFound';
 import { useAuthContext } from './features/auth/AuthContext';
 import Loader from './components/ui/loader';

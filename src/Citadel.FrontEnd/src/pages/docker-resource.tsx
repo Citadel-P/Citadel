@@ -1,6 +1,6 @@
 import { useDockerResourceParamType, useLocalStorage } from '@/lib/hooks';
 import { useNavigate, useParams } from 'react-router';
-import { DockerResourceComponents, RequiredDockerComponents } from './types';
+import { RequiredDockerComponents } from './types';
 import { DockerResourceType, PluralResourceMap } from '@/api/types';
 import { SearchField } from '@/components/ui/SearchField';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { Plus } from 'lucide-react';
 import NotFound from './NotFound';
 import { useMemo, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DockerResourceComponents } from '@/features/docker-resources';
 
 const DockerResourcePage = () => {
   const type = useDockerResourceParamType()!;

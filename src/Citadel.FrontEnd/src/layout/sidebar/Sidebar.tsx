@@ -1,10 +1,10 @@
-import { useLayoutContext } from '@/layout/LayoutContext';
+import { useLayoutContext } from '@/lib/context/layout-context';
 import { ChevronsRight, ChevronsUpDown, Info } from 'lucide-react';
 import LogoIcon from '@/assets/logo.svg';
-import { SidebarMenu } from './SidebarMenu';
+import { SidebarMenu } from './sidebar-menu';
 import { useNavigate } from 'react-router';
 import useAnimation from '@/hooks/useAnimation';
-import { SidebarDropDown } from './SidebarDropDown';
+import { SidebarDropDown } from './sidebar-dropdown';
 
 export const Sidebar = () => {
   const navigate = useNavigate();
@@ -27,7 +27,7 @@ export const Sidebar = () => {
                 className="flex text-background cursor-pointer items-center justify-center rounded bg-primary p-2 focus:outline-hidden focus:ring-1">
                 <LogoIcon />
               </span>
-              <b className="ml-1 pl-2 text-sm font-bold text-foreground"> Citadel </b>
+              <b className="ml-1 pl-2 text-sm font-bold text-foreground">Citadel</b>
             </div>
           )}
           <button

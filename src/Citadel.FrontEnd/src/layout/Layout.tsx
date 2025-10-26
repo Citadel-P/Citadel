@@ -1,8 +1,8 @@
 import { Outlet } from 'react-router';
-import { useLayoutContext } from './LayoutContext';
-import { LayoutProvider } from './LayoutProvider';
-import { Sidebar } from './sidebar/Sidebar';
-import Breadcrumb from './breadcrumb/Breadcrumb';
+import { useLayoutContext } from '../lib/context/layout-context';
+import { LayoutProvider } from '../lib/context/layout.provider';
+import { Sidebar } from './sidebar/sidebar';
+import Breadcrumb from './breadcrumb/breadcrumb';
 import { AppProvider } from '@/lib/context/app-provider';
 import { useEffect, useRef, useState } from 'react';
 

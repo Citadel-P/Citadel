@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
-import { useLayoutContext } from '@/layout/LayoutContext';
+import { useLayoutContext } from '@/lib/context/layout-context';
 import { ISubMenuItem, MenuItems, DockerPlatformMenu, IMenuItem } from './menu-items';
 import { ChevronRight } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { SidebarSubMenu } from './SidebarSidemenu';
+import { SidebarSubMenu } from './sidebar-sidemenu';
 import { useAppContext } from '@/lib/context/app-context';
 
 export const SidebarMenu = () => {
@@ -20,7 +20,6 @@ export const SidebarMenu = () => {
     [location.pathname],
   );
 
-  // Add platform menu dynamically
   const addPlatformToMenu = useCallback(
     (platform: { id: string; name: string }) => {
       if (!platform?.id) return;

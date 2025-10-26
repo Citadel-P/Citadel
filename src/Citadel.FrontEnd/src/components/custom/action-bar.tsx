@@ -1,5 +1,5 @@
 import { ResourceType } from '@/api/types';
-import { useLayoutContext } from '@/layout/LayoutContext';
+import { useLayoutContext } from '@/lib/context/layout-context';
 import { useSelectedResources } from '@/lib/atoms';
 import { cn } from '@/lib/utils';
 import { ButtonActionComponent, ButtonGroupComponent } from '@/pages/types';

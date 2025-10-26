@@ -1,5 +1,5 @@
 import { User, Settings, LogOut, Sun, Moon } from 'lucide-react';
-import { useLayoutContext } from '@/layout/LayoutContext';
+import { useLayoutContext } from '@/lib/context/layout-context';
 import { JSX } from 'react/jsx-runtime';
 
 interface ProfileMenu {
