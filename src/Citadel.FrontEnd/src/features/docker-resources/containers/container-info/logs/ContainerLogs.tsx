@@ -18,7 +18,7 @@ const ContainerLogs = () => {
         <pre
           ref={scrollRef}
           style={style}
-          className="bg-card-foreground dark:bg-card p-6! rounded-sm shadow-xs w-full overflow-auto max-w-[1400px] max-h-[600px] scrollbar-thumb-rounded scrollbar-track-rounded scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted">
+          className="bg-card-foreground dark:bg-card p-6! rounded-sm shadow-xs w-full overflow-auto max-w-[1400px] max-h-[600px]">
           {tokens.map((line, i) => (
             <div key={i} {...getLineProps({ line })} className="table-row">
               <span className="table-cell pr-4 text-xs text-gray-500 text-right select-none">{i + 1}</span>

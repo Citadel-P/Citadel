@@ -109,7 +109,7 @@ export default function PullProgressSheetContent({ sheetProps }: { sheetProps: P
           <pre
             ref={scrollRef}
             style={style}
-            className="bg-card-foreground dark:bg-card p-6! rounded-none shadow-xs w-full overflow-auto max-w-full max-h-[300px] scrollbar-thumb-rounded scrollbar-track-rounded scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted">
+            className="bg-card-foreground dark:bg-card p-6! rounded-none shadow-xs w-full overflow-auto max-w-full max-h-[300px]">
             {tokens.map((line, i) => (
               <div key={i} {...getLineProps({ line })} className="table-row flex-col-reverse">
                 <span className="table-cell pr-4 text-xs text-gray-500 text-right select-none">{i + 1}</span>

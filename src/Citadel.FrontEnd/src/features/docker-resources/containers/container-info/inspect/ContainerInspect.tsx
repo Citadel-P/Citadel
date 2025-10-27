@@ -16,7 +16,7 @@ const ContainerInspect = () => {
 
   // Define styles for the <pre> element
   const preClassName =
-    'bg-card-foreground dark:bg-card p-6 rounded-sm shadow-xs w-full overflow-auto max-w-[1400px] max-h-[650px] scrollbar-thumb-rounded scrollbar-track-rounded scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted';
+    'bg-card-foreground dark:bg-card p-6 rounded-sm shadow-xs w-full overflow-auto max-w-[1400px] max-h-[650px]';
 
   return (
     <Highlight theme={themes.nightOwl} code={code} language="tsx">

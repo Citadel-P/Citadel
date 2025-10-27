@@ -7,7 +7,6 @@ layer(base);
 
 @plugin "@tailwindcss/typography";
 @plugin "@tailwindcss/aspect-ratio";
-@plugin "tailwind-scrollbar";
 @plugin "tailwindcss-animate";
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -137,14 +136,6 @@ layer(base);
   }
 }
 
-/*
-  The default border color has changed to `currentColor` in Tailwind CSS v4,
-  so we've added these compatibility styles to make sure everything still
-  looks the same as it did with Tailwind CSS v3.
-
-  If we ever want to remove these styles, we need to add an explicit border
-  color utility to any element that depends on these defaults.
-*/
 @layer base {
   *,
   ::after,
@@ -152,6 +143,15 @@ layer(base);
   ::backdrop,
   ::file-selector-button {
     border-color: var(--color-gray-200, currentColor);
+  }
+  * {
+    @apply border-border scroll-smooth;
+  }
+  *::-webkit-scrollbar {
+    @apply w-1 h-1 bg-background;
+  }
+  *::-webkit-scrollbar-thumb {
+    @apply rounded-lg bg-foreground/50;
   }
 }
 
@@ -318,15 +318,6 @@ layer(base);
   }
 }
 
-/** Scroll bar **/
-@supports selector(::-webkit-scrollbar) {
-  .supports-scrollbars\: pr-2 {
-    padding-right: 0.5rem;
-  }
-}
-
-
-
 [type='checkbox'],
 [type='radio'] {
   @apply h-4 w-4 rounded-sm border-border bg-background checked:border-primary checked:bg-primary indeterminate:border-primary indeterminate:bg-primary focus:ring-2 focus:ring-primary;
@@ -342,6 +333,7 @@ layer(base);
     @apply bg-background text-foreground;
   }
 }
+
 .sidebar-expanded {
   --sidebar-width: 295px;
 }

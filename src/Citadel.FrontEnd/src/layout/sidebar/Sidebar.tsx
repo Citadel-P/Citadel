@@ -13,7 +13,7 @@ export const Sidebar = () => {
   const { ref, open, setOpen } = useAnimation('dropDown');
   return (
     <aside
-      className={`w-[calc(var(--sidebar-width)-40px)] scrollbar-thumb-rounded scrollbar-track-rounded hidden h-full flex-col justify-between bg-background pt-3 transition-all duration-300 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-card lg:flex`}>
+      className={`w-[calc(var(--sidebar-width)-40px)] hidden h-full flex-col justify-between bg-background pt-3 transition-all duration-300 lg:flex`}>
       <div className="px-4">
         {/* Logo */}
         <div className="relative h-10">

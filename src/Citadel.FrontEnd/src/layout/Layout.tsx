@@ -1,10 +1,10 @@
 import { Outlet } from 'react-router';
 import { useLayoutContext } from '../lib/context/layout-context';
 import { LayoutProvider } from '../lib/context/layout.provider';
-import { Sidebar } from './sidebar/sidebar';
-import Breadcrumb from './breadcrumb/breadcrumb';
 import { AppProvider } from '@/lib/context/app-provider';
 import { useEffect, useRef, useState } from 'react';
+import { Sidebar } from './sidebar/Sidebar';
+import Breadcrumb from './breadcrumb/Breadcrumb';
 
 const LayoutPage = () => {
   const breadcrumbRef = useRef<HTMLDivElement>(null);
@@ -41,7 +41,7 @@ const LayoutPage = () => {
       <main className="flex grow relative flex-col content-start overflow-hidden bg-card">
         <div
           ref={contentRef}
-          className="scrollbar-thumb-rounded scrollbar-track-rounded grow overflow-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted dark:scrollbar-thumb-muted-foreground">
+          className="grow overflow-auto">
           <span ref={breadcrumbRef}>
             <Breadcrumb isSticky={isSticky} />
           </span>
