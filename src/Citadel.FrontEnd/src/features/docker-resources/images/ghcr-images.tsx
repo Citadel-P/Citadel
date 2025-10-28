@@ -14,29 +14,31 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn } from '@/lib/utils';
 import Loader from '@/components/ui/loader';
 import { GitHubCrPackageVersion, IImageRepositoryGitHubPackageResponse } from '@/api/generated/api.types';
-import { useImagesContext } from './ImagesContext';
 import { fromNow } from '@/lib/dayjs.helper';
 import { Badge } from '@/components/ui/badge';
 import { truncate } from '@/lib/truncate';
-import PullProgressSheetContent from './PullProgressSheetContent';
-import { Sheet } from '@/components/ui/sheet';
-import { useSheetState } from './hooks/useSheetState';
 import { PullImageBadge } from '@/components/ui/PullImageBadge';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import { useRead } from '@/lib/hooks';
+import { useTaskSheet } from '@/lib/atoms';
 
 // Column helpers
 const packageColumnHelper = createColumnHelper<IImageRepositoryGitHubPackageResponse>();
 const versionColumnHelper = createColumnHelper<GitHubCrPackageVersion>();
 
 // Nested table component
-function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubPackageResponse }) {
-  const { selectedRegistry } = useImagesContext();
+function NestedVersionsTable({
+  ghPackage,
+  registryName,
+}: {
+  ghPackage: IImageRepositoryGitHubPackageResponse;
+  registryName: string;
+}) {
   const { isLoading, data } = useRead('getGhcrPackageVersions', {
-    registryName: selectedRegistry?.name,
+    registryName,
     packageName: ghPackage.name,
   });
-  const { sheetState, openSheet, closeSheet } = useSheetState<GitHubCrPackageVersion>();
+  const { open } = useTaskSheet('Image');
 
   const versionColumns = useMemo(
     () => [
@@ -82,11 +84,19 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubP
       {
         id: 'select',
         cell: ({ row }: { row: Row<GitHubCrPackageVersion> }) => (
-          <PullImageBadge onClick={() => openSheet(row.original)} className="group-hover/rowid:visible" />
+          <PullImageBadge
+            onClick={() =>
+              open({
+                kind: 'pull',
+                payload: { repository: ghPackage.name ?? '', imageTag: row.original.name ?? '', registryName },
+              })
+            }
+            className="group-hover/rowid:visible"
+          />
         ),
       },
     ],
-    [openSheet],
+    [open, ghPackage.name, registryName],
   );
 
   const versionsTable = useReactTable({
@@ -98,51 +108,42 @@ function NestedVersionsTable({ ghPackage }: { ghPackage: IImageRepositoryGitHubP
   if (isLoading) return <Loader />;
 
   return (
-    <>
-      <Table className="bg-background">
-        <TableHeader>
-          {versionsTable.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <TableHead key={header.id}>
-                  {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                </TableHead>
+    <Table className="bg-background">
+      <TableHeader>
+        {versionsTable.getHeaderGroups().map((headerGroup) => (
+          <TableRow key={headerGroup.id}>
+            {headerGroup.headers.map((header) => (
+              <TableHead key={header.id}>
+                {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+              </TableHead>
+            ))}
+          </TableRow>
+        ))}
+      </TableHeader>
+      <TableBody>
+        {versionsTable.getRowModel().rows.length ? (
+          versionsTable.getRowModel().rows.map((row) => (
+            <TableRow key={row.id} className="group/rowid">
+              {row.getVisibleCells().map((cell, index) => (
+                <TableCell
+                  key={cell.id}
+                  className={cn({
+                    'justify-items-center': index === row.getVisibleCells().length - 1,
+                  })}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
               ))}
             </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {versionsTable.getRowModel().rows.length ? (
-            versionsTable.getRowModel().rows.map((row) => (
-              <TableRow key={row.id} className="group/rowid">
-                {row.getVisibleCells().map((cell, index) => (
-                  <TableCell
-                    key={cell.id}
-                    className={cn({
-                      'justify-items-center': index === row.getVisibleCells().length - 1,
-                    })}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={versionColumns.length} className="h-24 text-center">
-                No results found.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-      {sheetState.image && (
-        <Sheet open={sheetState.isOpen} onOpenChange={(open) => (open ? openSheet(sheetState.image!) : closeSheet())}>
-          <PullProgressSheetContent
-            sheetProps={{ repository: ghPackage.name ?? '', imageTag: sheetState.image.name ?? '' }}
-          />
-        </Sheet>
-      )}
-    </>
+          ))
+        ) : (
+          <TableRow>
+            <TableCell colSpan={versionColumns.length} className="h-24 text-center">
+              No results found.
+            </TableCell>
+          </TableRow>
+        )}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -233,7 +234,7 @@ export default function GhcrImagesTable({ registryName }: { registryName: string
               <TableRow className="bg-muted/20 hover:bg-muted/20">
                 <TableCell colSpan={row.getVisibleCells().length} className="p-0">
                   <div className="overflow-hidden min-h-0 pl-10 bg-background">
-                    <NestedVersionsTable ghPackage={row.original} />
+                    <NestedVersionsTable ghPackage={row.original} registryName={registryName} />
                   </div>
                 </TableCell>
               </TableRow>

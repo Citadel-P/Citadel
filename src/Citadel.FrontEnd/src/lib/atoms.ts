@@ -1,14 +1,16 @@
-import { DockerResourceType, ResourceType } from '@/api/types';
+import { ResourceType } from '@/api/types';
 import { atom, useAtom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
+import { TaskSpec, TaskSheetState } from '@/components/custom/task-sheet';
 
 export interface DialogState<T> {
   open: boolean;
   targets: T[];
 }
 
+const taskSheetAtom = atomFamily((_: ResourceType) => atom<TaskSheetState>({ open: false }));
 const selectedResourcesAtoms = atomFamily((_: string) => atom<any[]>([]));
-const deleteDialogAtom = atomFamily((_: DockerResourceType) => atom<DialogState<any>>({ open: false, targets: [] }));
+const deleteDialogAtom = atomFamily((_: ResourceType) => atom<DialogState<any>>({ open: false, targets: [] }));
 const resourceFilterAtom = atomFamily((_: ResourceType) => atom<{ item: any } | null>(null));
 
 export function useSelectedResources<T>(key: ResourceType) {
@@ -16,7 +18,7 @@ export function useSelectedResources<T>(key: ResourceType) {
   return [selected as T[], setSelected as (items: T[]) => void] as const;
 }
 
-export function useDeleteDialogState<T>(key: DockerResourceType) {
+export function useDeleteDialogState<T>(key: ResourceType) {
   const [dialogState, setDialogState] = useAtom(deleteDialogAtom(key));
   return [
     dialogState as DialogState<T>,
@@ -29,11 +31,20 @@ export function useResourceFilter<T extends object = any>(key: ResourceType) {
   return [filter as T | null, setFilter as (value: T | null) => void] as const;
 }
 
-export function useDeleteDialogAtom<T>(type: DockerResourceType) {
+export function useDeleteDialogAtom<T>(type: ResourceType) {
   const [state, setState] = useAtom(deleteDialogAtom(type));
 
   const openDialog = (targets: T[]) => setState({ open: true, targets });
   const closeDialog = () => setState({ open: false, targets: [] });
 
   return { state, openDialog, closeDialog };
+}
+
+export function useTaskSheet(type: ResourceType) {
+  const [state, setState] = useAtom(taskSheetAtom(type));
+
+  const open = (task: TaskSpec) => setState({ open: true, task });
+  const close = () => setState((s) => ({ ...s, open: false }));
+
+  return { state, open, close } as const;
 }

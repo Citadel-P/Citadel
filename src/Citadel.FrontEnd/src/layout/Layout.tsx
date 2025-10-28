@@ -39,9 +39,7 @@ const LayoutPage = () => {
     <div className={`${sidebarMinimized ? 'sidebar-collapsed' : 'sidebar-expanded'} flex h-dvh w-full overflow-hidden`}>
       <Sidebar />
       <main className="flex grow relative flex-col content-start overflow-hidden bg-card">
-        <div
-          ref={contentRef}
-          className="grow overflow-auto">
+        <div ref={contentRef} className="grow overflow-auto">
           <span ref={breadcrumbRef}>
             <Breadcrumb isSticky={isSticky} />
           </span>

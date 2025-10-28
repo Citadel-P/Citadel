@@ -14,29 +14,31 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn } from '@/lib/utils';
 import Loader from '@/components/ui/loader';
 import { DockerHubTagView, IImageRepositoryDockerHubRepositoryResponse } from '@/api/generated/api.types';
-import { useImagesContext } from './ImagesContext';
 import { fromNow } from '@/lib/dayjs.helper';
 import { truncate } from '@/lib/truncate';
-import PullProgressSheetContent from './PullProgressSheetContent';
-import { Sheet } from '@/components/ui/sheet';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { byteTransform } from '@/lib/bytes.helper';
-import { useSheetState } from './hooks/useSheetState';
 import { PullImageBadge } from '@/components/ui/PullImageBadge';
 import { useRead } from '@/lib/hooks';
+import { useTaskSheet } from '@/lib/atoms';
 
 // Column helpers
 const repositoryColumnHelper = createColumnHelper<IImageRepositoryDockerHubRepositoryResponse>();
 const tagColumnHelper = createColumnHelper<DockerHubTagView>();
 
 // Nested table component
-function NestedImagesTable({ dockerhubRepo }: { dockerhubRepo: IImageRepositoryDockerHubRepositoryResponse }) {
-  const { selectedRegistry } = useImagesContext();
+function NestedImagesTable({
+  dockerhubRepo,
+  registryName,
+}: {
+  dockerhubRepo: IImageRepositoryDockerHubRepositoryResponse;
+  registryName: string;
+}) {
   const { isLoading, data } = useRead('getDockerHubRepositoryTags', {
-    registryName: selectedRegistry?.name,
+    registryName,
     repositoryName: dockerhubRepo?.name,
   });
-  const { sheetState, openSheet, closeSheet } = useSheetState<DockerHubTagView>();
+  const { open } = useTaskSheet('Image');
 
   const tagColumns = useMemo(
     () => [
@@ -69,11 +71,19 @@ function NestedImagesTable({ dockerhubRepo }: { dockerhubRepo: IImageRepositoryD
       {
         id: 'select',
         cell: ({ row }: { row: Row<DockerHubTagView> }) => (
-          <PullImageBadge onClick={() => openSheet(row.original)} className="group-hover/versionrow:visible" />
+          <PullImageBadge
+            onClick={() =>
+              open({
+                kind: 'pull',
+                payload: { repository: dockerhubRepo.name ?? '', imageTag: row.original.name ?? '', registryName },
+              })
+            }
+            className="group-hover/versionrow:visible"
+          />
         ),
       },
     ],
-    [openSheet],
+    [open, dockerhubRepo.name, registryName],
   );
 
   const versionsTable = useReactTable({
@@ -85,54 +95,42 @@ function NestedImagesTable({ dockerhubRepo }: { dockerhubRepo: IImageRepositoryD
   if (isLoading) return <Loader />;
 
   return (
-    <>
-      <Table className="bg-background">
-        <TableHeader>
-          {versionsTable.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <TableHead key={header.id}>
-                  {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                </TableHead>
+    <Table className="bg-background">
+      <TableHeader>
+        {versionsTable.getHeaderGroups().map((headerGroup) => (
+          <TableRow key={headerGroup.id}>
+            {headerGroup.headers.map((header) => (
+              <TableHead key={header.id}>
+                {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+              </TableHead>
+            ))}
+          </TableRow>
+        ))}
+      </TableHeader>
+      <TableBody>
+        {versionsTable.getRowModel().rows.length ? (
+          versionsTable.getRowModel().rows.map((row) => (
+            <TableRow key={row.id} className="group/versionrow">
+              {row.getVisibleCells().map((cell, index) => (
+                <TableCell
+                  key={cell.id}
+                  className={cn({
+                    'justify-items-center': index === row.getVisibleCells().length - 1,
+                  })}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
               ))}
             </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {versionsTable.getRowModel().rows.length ? (
-            versionsTable.getRowModel().rows.map((row) => (
-              <TableRow key={row.id} className="group/versionrow">
-                {row.getVisibleCells().map((cell, index) => (
-                  <TableCell
-                    key={cell.id}
-                    className={cn({
-                      'justify-items-center': index === row.getVisibleCells().length - 1,
-                    })}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={tagColumns.length} className="h-24 text-center">
-                No results found.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-      {sheetState.image && (
-        <Sheet open={sheetState.isOpen} onOpenChange={(open) => (open ? openSheet(sheetState.image!) : closeSheet())}>
-          <PullProgressSheetContent
-            sheetProps={{
-              repository: dockerhubRepo.name ?? '',
-              imageTag: sheetState.image.name ?? '',
-            }}
-          />
-        </Sheet>
-      )}
-    </>
+          ))
+        ) : (
+          <TableRow>
+            <TableCell colSpan={tagColumns.length} className="h-24 text-center">
+              No results found.
+            </TableCell>
+          </TableRow>
+        )}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -230,7 +228,7 @@ export default function PrivateDockerHubImagesTable({ registryName }: { registry
               <TableRow className="bg-muted/20 hover:bg-muted/20">
                 <TableCell colSpan={row.getVisibleCells().length} className="p-0">
                   <div className="overflow-hidden min-h-0 pl-10 bg-background">
-                    <NestedImagesTable dockerhubRepo={row.original} />
+                    <NestedImagesTable dockerhubRepo={row.original} registryName={registryName} />
                   </div>
                 </TableCell>
               </TableRow>

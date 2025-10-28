@@ -2,15 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { Package, Award, Star } from 'lucide-react';
 import { DockerHubImageResult } from '@/api/generated/api.types';
 import { PullImageBadge } from '@/components/ui/PullImageBadge';
-import { useSheetState } from './hooks/useSheetState';
-import { Sheet } from '@/components/ui/sheet';
-import PullProgressSheetContent from './PullProgressSheetContent';
 import Loader from '@/components/ui/loader';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatNumber } from '@/lib/utils';
 import { SearchField } from '@/components/ui/SearchField';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useRead } from '@/lib/hooks';
+import { useResourceFilter, useTaskSheet } from '@/lib/atoms';
 
 export function PublicDockerHubImages() {
   const [searchValue, setSearchValue] = useState<string | undefined>('');
@@ -18,8 +16,9 @@ export function PublicDockerHubImages() {
   const { data, error, isLoading, isSuccess } = useRead('getDockerHubPublicImages', {
     query: { imageName },
   });
+  const { open } = useTaskSheet('Image');
   const [images, setImages] = useState<DockerHubImageResult[]>();
-  const { sheetState, openSheet, closeSheet } = useSheetState<DockerHubImageResult>();
+  const [registryFilter] = useResourceFilter<{ item: any }>('Registry');
 
   useEffect(() => {
     if (isSuccess && data?.data) {
@@ -58,7 +57,15 @@ export function PublicDockerHubImages() {
           </div>
         </a>
         <div>
-          <PullImageBadge onClick={() => openSheet(image)} className="group-hover/versionrow:visible" />
+          <PullImageBadge
+            onClick={() =>
+              open({
+                kind: 'pull',
+                payload: { repository: '', imageTag: image.name ?? '', registryName: registryFilter?.item?.name },
+              })
+            }
+            className="group-hover/versionrow:visible"
+          />
         </div>
       </div>
       <p className="text-sm text-foreground/70 mt-2">{image.description || 'No description available.'}</p>
@@ -109,16 +116,6 @@ export function PublicDockerHubImages() {
           </div>
         )}
       </div>
-      {sheetState.image && (
-        <Sheet open={sheetState.isOpen} onOpenChange={(open) => (open ? openSheet(sheetState.image!) : closeSheet())}>
-          <PullProgressSheetContent
-            sheetProps={{
-              repository: '',
-              imageTag: sheetState.image.name ?? '',
-            }}
-          />
-        </Sheet>
-      )}
     </TooltipProvider>
   );
 }

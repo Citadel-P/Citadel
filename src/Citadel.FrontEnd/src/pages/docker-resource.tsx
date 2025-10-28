@@ -9,6 +9,7 @@ import NotFound from './NotFound';
 import { useMemo, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DockerResourceComponents } from '@/features/docker-resources';
+import TaskSheet from '@/components/custom/task-sheet';
 
 const DockerResourcePage = () => {
   const type = useDockerResourceParamType()!;
@@ -110,6 +111,7 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
       </div>
 
       {Components.GroupActions && <Components.GroupActions items={items} />}
+      <TaskSheet type={type} />
     </div>
   );
 };
