@@ -9,7 +9,7 @@ internal class StreamContext
 
     public virtual void AddSubscriber(string connectionId)
     {
-        lock (@lock)
+        using (@lock.EnterScope())
         {
             subscribers.Add(connectionId);
         }
@@ -17,7 +17,7 @@ internal class StreamContext
 
     public virtual void RemoveSubscriber(string connectionId)
     {
-        lock (@lock)
+        using (@lock.EnterScope())
         {
             subscribers.Remove(connectionId);
             if (IsEmpty)
@@ -31,14 +31,14 @@ internal class StreamContext
     {
         get
         {
-            lock (@lock)
+            using (@lock.EnterScope())
                 return subscribers.Count == 0;
         }
     }
 
     public bool TryStart()
     {
-        lock (@lock)
+        using (@lock.EnterScope())
         {
             if (started) return false;
             started = true;

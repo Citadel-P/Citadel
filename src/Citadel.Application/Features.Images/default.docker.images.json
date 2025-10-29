@@ -126,20 +126,6 @@
         "Description": "HAProxy - The Reliable, High Performance TCP/HTTP Load Balancer"
     },
     {
-        "Name": "consul",
-        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/consul/live/logo-1720462171784.png",
-        "IsOfficial": true,
-        "Url": "https://hub.docker.com/_/consul",
-        "Description": "Consul is a datacenter runtime that provides service discovery, configuration, and orchestration."
-    },
-    {
-        "Name": "vault",
-        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/vault/live/logo-1720462317417.png",
-        "IsOfficial": true,
-        "Url": "https://hub.docker.com/_/vault",
-        "Description": "Vault is a tool for securely accessing secrets via a unified interface and tight access control."
-    },
-    {
         "Name": "tomcat",
         "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/tomcat/live/logo-1720462300603.png",
         "IsOfficial": true,
@@ -183,7 +169,7 @@
     },
     {
         "Name": "gradle",
-        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/gradle/live/logo-1720462203779.png",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/gradle/live/logo-1757355057919.png",
         "IsOfficial": true,
         "Url": "https://hub.docker.com/_/gradle",
         "Description": "Gradle is a build tool with a focus on build automation and support for multi-language development."
@@ -197,7 +183,7 @@
     },
     {
         "Name": "cassandra",
-        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/cassandra/live/logo-1720462160940.png",
+        "Icon": "https://djeqr6to3dedg.cloudfront.net/repo-logos/library/cassandra/live/logo-1755389442219.png",
         "IsOfficial": true,
         "Url": "https://hub.docker.com/_/cassandra",
         "Description": "Apache Cassandra is an open-source distributed storage system."

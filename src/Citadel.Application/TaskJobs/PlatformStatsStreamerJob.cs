@@ -75,7 +75,10 @@ internal class PlatformStatsStreamerJob(
 
             await foreach (var platformStats in connector.StreamStatsAsync(command, cancellationToken))
             {
-                await platformStatsWriter.WriteAsync((platformId, platformStats), cancellationToken);
+                if (!platformStatsWriter.TryWrite((platformId, platformStats)))
+                {
+                    await platformStatsWriter.WriteAsync((platformId, platformStats), cancellationToken);
+                }
             }
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)

@@ -2,9 +2,10 @@ import { DockerResourceType } from '@/api/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import CodeHighlight from '@/components/custom/code-highlight';
 import { usePullProgress as useImagePullProgress } from '@/features/docker-resources/images/hooks/usePullProgress';
-import { Check, CircleX, LoaderCircle } from 'lucide-react';
+import { Clock, LoaderCircle } from 'lucide-react';
 import { useTaskSheet } from '@/lib/atoms';
-import { ReactNode } from 'react';
+import { ReactNode, useMemo } from 'react';
+import { DockerResourceComponents } from '@/features/docker-resources';
 
 export function TaskSheet({ type }: { type: DockerResourceType }) {
   const { state, close } = useTaskSheet(type);
@@ -18,12 +19,12 @@ export function TaskSheet({ type }: { type: DockerResourceType }) {
     <Sheet open={state.open} onOpenChange={(open) => (!open ? close() : undefined)}>
       <SheetContent side="bottom" className="mx-auto w-[1200px] max-w-[100vw] rounded-t-md">
         {Renderer ? (
-          <Renderer payload={(state.task as any).payload}>
-            {({ status, content }) => (
+          <Renderer payload={(state.task as any).payload} type={type}>
+            {({ description, content }) => (
               <>
                 <SheetHeader>
                   <SheetTitle>{title}</SheetTitle>
-                  <SheetDescription>{status}</SheetDescription>
+                  <SheetDescription>{description}</SheetDescription>
                 </SheetHeader>
                 <div className="pt-0 pb-4 px-4">{content}</div>
               </>
@@ -35,7 +36,7 @@ export function TaskSheet({ type }: { type: DockerResourceType }) {
               <SheetTitle>{title}</SheetTitle>
               <SheetDescription></SheetDescription>
             </SheetHeader>
-            <div className="pt-0 pb-4 px-4">Not registred</div>
+            <div className="pt-0 pb-4 px-4">Not registered</div>
           </>
         )}
       </SheetContent>
@@ -44,49 +45,51 @@ export function TaskSheet({ type }: { type: DockerResourceType }) {
 }
 
 type PullImageTaskRendererProps = {
+  type: DockerResourceType;
   payload: PullImageParams;
   children: (slots: TaskRendererSlots) => ReactNode;
 };
 
-function PullImageTaskRenderer({ payload, children }: PullImageTaskRendererProps) {
-  const { text, status } = useImagePullProgress({
+function PullImageTaskRenderer({ payload, type, children }: PullImageTaskRendererProps) {
+  const { text, status, elapsedLabel } = useImagePullProgress({
     imageTag: payload.imageTag,
     repository: payload.repository,
     registryName: payload.registryName,
   });
 
-  const statusIcon =
-    status === 'pending' ? (
-      <LoaderCircle className="ml-1 h-4 w-4 animate-spin" />
-    ) : status === 'error' ? (
-      <CircleX className="text-red-500 ml-1 h-4 w-4" />
-    ) : (
-      <Check className="text-green-500 ml-1 h-4 w-4" />
-    );
+  const refName = useMemo(
+    () => `${payload.repository ? payload.repository + ':' : ''}${payload.imageTag}`,
+    [payload.repository, payload.imageTag],
+  );
 
-  const statusEl = (
-    <div className="flex items-center gap-2">
-      <span className="text-sm text-muted-foreground">Status</span>
-      {statusIcon}
+  const description = (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      <div className="flex flex-row gap-2 items-center">
+        {status === 'pending' && <LoaderCircle className="h-4 w-4 animate-spin" />}
+        {status === 'error' && <span className="text-destructive">{DockerResourceComponents[type].Icon}</span>}
+        {status === 'success' && <span className="text-success">{DockerResourceComponents[type].Icon}</span>}
+        <span>{refName}</span>
+      </div>
+
+      <div className="flex flex-row gap-2 items-center">
+        <Clock className="w-4 h-4" />
+        <span>{elapsedLabel} seconds</span>{' '}
+      </div>
     </div>
   );
 
-  const bodyEl = (
-    <CodeHighlight
-      code={text}
-      language="text"
-      autoScroll
-      className="p-6! rounded-md shadow-xs overflow-x-auto overflow-y-auto max-h-[50vh] mx-auto w-full"
-      lineWrapperClassName="table-row flex-col-reverse"
-    />
-  );
+  const content = <CodeHighlight code={text} language="text" autoScroll />;
 
-  return <>{children({ status: statusEl, content: bodyEl })}</>;
+  return <>{children({ description, content })}</>;
 }
 
-type TaskRendererSlots = { status: React.ReactElement | null; content: React.ReactElement };
+type TaskRendererSlots = {
+  description: React.ReactElement | string | null;
+  content: React.ReactElement;
+};
 type TaskRendererComponent<P> = (props: {
   payload: P;
+  type: DockerResourceType;
   children: (slots: TaskRendererSlots) => ReactNode;
 }) => React.ReactElement;
 

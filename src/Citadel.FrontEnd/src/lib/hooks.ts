@@ -10,7 +10,7 @@ import {
   UseQueryResult,
 } from '@tanstack/react-query';
 import { useApiClientContext } from '@/api/ApiClientContext';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 
 import {
   AnyFn,
@@ -304,4 +304,32 @@ export interface PromptHotkeysConfig {
   enabled?: boolean;
   ignoreInputs?: boolean;
   confirmDisabled?: boolean;
+}
+
+export function useStickySentinel(topOffsetPx: number = 0) {
+  const [isStuck, setIsStuck] = useState(false);
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+
+  const sentinelRef = useCallback((el: HTMLDivElement | null) => {
+    setNode(el);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    setIsStuck(rect.top <= topOffsetPx);
+  }, [topOffsetPx, node]);
+
+  useEffect(() => {
+    if (!node) return;
+    const observer = new IntersectionObserver(([entry]) => setIsStuck(!entry.isIntersecting), {
+      root: null,
+      threshold: 1,
+      rootMargin: `-${topOffsetPx}px 0px 0px 0px`,
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [topOffsetPx, node]);
+
+  return { sentinelRef, isStuck } as const;
 }

@@ -11,7 +11,7 @@ internal sealed class ChannelStreamContext<T> : StreamContext where T : class
     public override void RemoveSubscriber(string connectionId)
     {
         Task? toObserve = null;
-        lock (@lock)
+        using (@lock.EnterScope())
         {
             subscribers.Remove(connectionId);
             if (IsEmpty)

@@ -1,8 +1,9 @@
-import { CSSProperties, useEffect, useMemo, useRef } from 'react';
+import { CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Clipboard, CheckCheck } from 'lucide-react';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
+import { useLayoutContext } from '@/lib/context/layout-context';
 
 export type CodeHighlightProps = {
   code: string;
@@ -21,11 +22,11 @@ export type CodeHighlightProps = {
 export function CodeHighlight({
   code,
   language = 'tsx',
-  showLineNumbers = true,
-  className = 'bg-card-foreground dark:bg-card p-6 rounded-sm shadow-xs inline-block max-w-full overflow-auto',
+  showLineNumbers = false,
+  className = 'p-4 max-h-[600px] rounded-sm border shadow-xs inline-block w-full overflow-auto bg-transparent ',
   style,
   lineNumberClassName = 'table-cell pr-4 text-xs text-gray-500 text-right select-none',
-  lineContentClassName = 'text-sm',
+  lineContentClassName = 'text-xs',
   lineWrapperClassName = 'table-row',
   autoScroll = false,
   showCopyButton = false,
@@ -33,6 +34,12 @@ export function CodeHighlight({
 }: CodeHighlightProps) {
   const scrollRef = useRef<HTMLPreElement>(null);
   const [copied, copyToClipboard] = useCopyToClipboard(3000);
+  const [codeTheme, setCodeTheme] = useState(themes.vsLight);
+  const { theme } = useLayoutContext();
+
+  useEffect(() => {
+    setCodeTheme(theme.mode === 'dark' ? themes.vsDark : themes.vsLight);
+  }, [theme.mode]);
 
   const safeCode = useMemo(() => (code?.length ? code : ''), [code]);
 
@@ -44,7 +51,7 @@ export function CodeHighlight({
   }, [autoScroll, safeCode]);
 
   return (
-    <Highlight theme={themes.nightOwl} code={safeCode} language={language}>
+    <Highlight theme={codeTheme} code={safeCode} language={language}>
       {({ style: hlStyle, tokens, getLineProps, getTokenProps }) => (
         <pre
           ref={scrollRef}

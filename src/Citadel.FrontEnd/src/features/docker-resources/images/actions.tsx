@@ -138,7 +138,7 @@ export const DeleteImagesButtonGroup: ButtonGroupComponent<ImageView> = ({ resou
   const { mutateAsync: deleteImageAsync } = useMutate('deleteImages', { onSuccess });
 
   const handleDelete = () =>
-    deleteImageAsync({ platformId: currentPlatform?.id ?? '', ids: resources.map((r) => r.dockerImageId) });
+    deleteImageAsync({ platformId: currentPlatform?.id ?? '', force: true, ids: resources.map((r) => r.dockerImageId) });
 
   return (
     <GroupActionWithDialog

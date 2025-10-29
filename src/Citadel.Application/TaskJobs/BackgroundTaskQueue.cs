@@ -30,7 +30,10 @@ public sealed class BackgroundTaskQueue : IBackgroundTaskQueue
 
     public async ValueTask<Func<CancellationToken, Task>?> DequeueAsync(CancellationToken cancellationToken)
     {
-        var workItem = await queue.Reader.ReadAsync(cancellationToken);
+        if (!queue.Reader.TryRead(out var workItem))
+        {
+            workItem = await queue.Reader.ReadAsync(cancellationToken);
+        }
         return workItem;
     }
 }

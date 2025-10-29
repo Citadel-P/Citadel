@@ -25,7 +25,7 @@ internal sealed class LogStreamContext : StreamContext, IDisposable
     /// <summary>Force a reset when container restarts (keeps subscribers, keeps watcher).</summary>
     public void Reset()
     {
-        lock (@lock)
+        using (@lock.EnterScope())
         {
             ResetInternal();
         }
@@ -100,7 +100,7 @@ internal sealed class PooledLogBuffer : IDisposable
 
     public void AddLog(ReadOnlySpan<byte> logBytes)
     {
-        lock (@lock)
+        using (@lock.EnterScope())
         {
             foreach (byte b in logBytes)
             {
@@ -114,7 +114,7 @@ internal sealed class PooledLogBuffer : IDisposable
 
     public byte[] GetRecentLogsBytes()
     {
-        lock (@lock)
+        using (@lock.EnterScope())
         {
             byte[] output = new byte[lengthUsed];
             int start = (writeIndex - lengthUsed + capacity) % capacity;
@@ -137,7 +137,7 @@ internal sealed class PooledLogBuffer : IDisposable
     }
     public void Clear()
     {
-        lock (@lock)
+        using (@lock.EnterScope())
         {
             writeIndex = 0;
             lengthUsed = 0;
@@ -173,13 +173,13 @@ internal sealed class RingBuffer<T>
 
     public int Count
     {
-        get { lock (_lock) { return count; } }
+        get { using (_lock.EnterScope()) { return count; } }
     }
 
     public void Enqueue(T item)
     {
         if (buffer.Length == 0) return;
-        lock (_lock)
+        using (_lock.EnterScope())
         {
             if (count < buffer.Length)
             {
@@ -198,7 +198,7 @@ internal sealed class RingBuffer<T>
 
     public T[] ToArray()
     {
-        lock (_lock)
+        using (_lock.EnterScope())
         {
             if (count == 0) return Array.Empty<T>();
             var arr = new T[count];
@@ -219,7 +219,7 @@ internal sealed class RingBuffer<T>
     public void Clear()
     {
         if (buffer.Length == 0) return;
-        lock (_lock)
+        using (_lock.EnterScope())
         {
             Array.Clear(buffer, 0, buffer.Length);
             head = 0;

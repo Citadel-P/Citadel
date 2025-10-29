@@ -95,7 +95,10 @@ internal class ContainerStatsStreamerJob(
 
                         if (stats.Count > 0)
                         {
-                            await channel.WriteAsync(new ContainersStatBatch(platformId, stats), cancellationToken);
+                            if (!channel.TryWrite(new ContainersStatBatch(platformId, stats)))
+                            {
+                                await channel.WriteAsync(new ContainersStatBatch(platformId, stats), cancellationToken);
+                            }
                         }
                     }
                 }

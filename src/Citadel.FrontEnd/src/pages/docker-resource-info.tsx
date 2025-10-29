@@ -1,4 +1,5 @@
-import { useDockerResourceParamType, useLocalStorage } from '@/lib/hooks';
+import { useDockerResourceParamType, useLocalStorage, useStickySentinel } from '@/lib/hooks';
+import { cn } from '@/lib/utils';
 import { useParams } from 'react-router';
 import { RequiredDockerInfoComponents } from './types';
 import { DockerResourceType } from '@/api/types';
@@ -34,6 +35,7 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
     tabs[0]?.label ?? 'default',
   );
   const errorDetail = (error as any)?.error as ProblemDetails;
+  const { sentinelRef, isStuck } = useStickySentinel(32);
 
   return (
     <div className="flex flex-col justify-between">
@@ -69,13 +71,22 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
 
               {/* Tabs */}
               <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-4">
-                <TabsList className="w-full overflow-x-auto">
-                  {tabs.map((tab) => (
-                    <TabsTrigger key={tab.label} value={tab.label}>
-                      {tab.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
+                {/* Sentinel to detect when the tabs reach sticky position */}
+                <div ref={sentinelRef} aria-hidden className="h-px" />
+                <div
+                  className={cn(
+                    'sticky top-8 z-30 bg-background left-0 right-0 transition-all duration-200',
+                    isStuck ? '-mx-4' : 'mx-0',
+                  )}
+                >
+                  <TabsList className={cn('w-full overflow-x-auto', isStuck && 'border-b rounded-none py-2')}>
+                    {tabs.map((tab) => (
+                      <TabsTrigger key={tab.label} value={tab.label}>
+                        {tab.label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </div>
 
                 {tabs.map((tab) => (
                   <TabsContent key={tab.label} value={tab.label}>

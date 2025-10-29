@@ -12,7 +12,7 @@ internal class MulticastChannel<T>
     public ChannelReader<T> AddSubscriber()
     {
         var channel = Channel.CreateBounded<T>(Helpers.ChannelDefaultOptions());
-        lock (@lock)
+        using (@lock.EnterScope())
         {
             subscribers.Add(channel);
         }
@@ -22,7 +22,7 @@ internal class MulticastChannel<T>
     // Remove a subscriber by Channel
     public void RemoveSubscriber(Channel<T> channel)
     {
-        lock (@lock)
+        using (@lock.EnterScope())
         {
             subscribers.Remove(channel);
             channel.Writer.TryComplete();
@@ -32,7 +32,7 @@ internal class MulticastChannel<T>
     // Remove a subscriber by ChannelReader
     public void RemoveSubscriber(ChannelReader<T> reader)
     {
-        lock (@lock)
+        using (@lock.EnterScope())
         {
             var channel = subscribers.FirstOrDefault(c => c.Reader == reader);
             if (channel != null)
@@ -49,7 +49,7 @@ internal class MulticastChannel<T>
         Channel<T>[] snapshot;
 
         // Take a snapshot under lock to avoid holding the lock during async operations
-        lock (@lock)
+        using (@lock.EnterScope())
         {
             snapshot = [.. subscribers];
         }
@@ -59,7 +59,10 @@ internal class MulticastChannel<T>
         {
             try
             {
-                await sub.Writer.WriteAsync(@event, cancellationToken).ConfigureAwait(false);
+                if (!sub.Writer.TryWrite(@event))
+                {
+                    await sub.Writer.WriteAsync(@event, cancellationToken).ConfigureAwait(false);
+                }
             }
             catch (ChannelClosedException)
             {
@@ -72,7 +75,7 @@ internal class MulticastChannel<T>
     public void Complete()
     {
         Channel<T>[] snapshot;
-        lock (@lock)
+        using (@lock.EnterScope())
         {
             snapshot = [.. subscribers];
             subscribers.Clear();

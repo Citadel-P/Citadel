@@ -12,7 +12,7 @@ public class BaseStreamManagerTests
         {
             get
             {
-                lock (@lock)
+                using (@lock.EnterScope())
                 {
                     return subscribers.Count;
                 }
@@ -21,7 +21,7 @@ public class BaseStreamManagerTests
 
         public override void AddSubscriber(string connectionId)
         {
-            lock (@lock)
+            using (@lock.EnterScope())
             {
                 subscribers.Add(connectionId);
             }
@@ -29,7 +29,7 @@ public class BaseStreamManagerTests
 
         public override void RemoveSubscriber(string connectionId)
         {
-            lock (@lock)
+            using (@lock.EnterScope())
             {
                 subscribers.Remove(connectionId);
             }

@@ -19,12 +19,17 @@ export type ImagePullProgressState = {
   isSuccess: boolean;
   status: 'pending' | 'success' | 'error';
   error?: string;
+  elapsedMs: number;
+  elapsedLabel: string;
 };
 
 export function usePullProgress(params: PullImageParams): ImagePullProgressState {
   const [lines, setLines] = useState<string[]>([]);
   const [pullError, setPullError] = useState<string | undefined>();
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number>(0);
+  const startRef = useRef<number | null>(null);
+  const timerRef = useRef<number | null>(null);
 
   const { currentPlatform } = useAppContext();
   const [registryFilter] = useResourceFilter<{ item: RegistryView }>('Registry');
@@ -49,10 +54,15 @@ export function usePullProgress(params: PullImageParams): ImagePullProgressState
     if (!abortControllerRef.current) {
       abortControllerRef.current = new AbortController();
     }
+    // Start the stream request
     mutate({ ...request, signal: abortControllerRef.current.signal });
     return () => {
       abortControllerRef.current?.abort();
       abortControllerRef.current = null;
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     };
   }, [mutate, request]);
 
@@ -83,6 +93,36 @@ export function usePullProgress(params: PullImageParams): ImagePullProgressState
     return 'success';
   }, [isPending, pullError, error]);
 
+  // Manage timer lifecycle based on pending status
+  useEffect(() => {
+    if (isPending) {
+      if (startRef.current == null) startRef.current = performance.now();
+      if (timerRef.current == null) {
+        timerRef.current = window.setInterval(() => {
+          if (startRef.current != null)
+            setElapsedMs(Math.max(0, performance.now() - startRef.current));
+        }, 100);
+      }
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+    return () => {
+      // cleanup when unmounting or deps change
+      if (!isPending && timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isPending]);
+
+  const elapsedLabel = useMemo(() => {
+    const tenths = Math.floor(elapsedMs / 100) / 10; // e.g., 59.5
+    return tenths.toFixed(1).replace('.', ',');
+  }, [elapsedMs]);
+
   return {
     lines,
     text: lines.length === 0 && isPending ? 'Loading...' : lines.join('\n'),
@@ -90,5 +130,7 @@ export function usePullProgress(params: PullImageParams): ImagePullProgressState
     isSuccess,
     status,
     error: pullError || (error as any)?.message,
+    elapsedMs,
+    elapsedLabel,
   };
 }

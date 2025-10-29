@@ -1,4 +1,5 @@
-import { useDockerResourceParamType, useLocalStorage } from '@/lib/hooks';
+import { useDockerResourceParamType, useLocalStorage, useStickySentinel } from '@/lib/hooks';
+import { cn } from '@/lib/utils';
 import { useNavigate, useParams } from 'react-router';
 import { RequiredDockerComponents } from './types';
 import { DockerResourceType, PluralResourceMap } from '@/api/types';
@@ -46,6 +47,7 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
 
   const ActiveContent =
     tabs && currentTabIndex !== undefined && currentTabIndex >= 0 ? tabs[currentTabIndex].Content : Components.Table!;
+  const { sentinelRef, isStuck } = useStickySentinel(32);
 
   return (
     <div className="flex-col justify-between relative">
@@ -77,13 +79,21 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
           {/* Tabs */}
           {tabs ? (
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="mb-2">
-                {tabs.map((tab) => (
-                  <TabsTrigger key={tab.label} value={tab.label}>
-                    {tab.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+              <div ref={sentinelRef} aria-hidden className="h-px" />
+              <div
+                className={cn(
+                  'sticky top-8 z-30 bg-background left-0 right-0 transition-all duration-200',
+                  isStuck ? '-mx-4' : 'mx-0',
+                )}
+              >
+                <TabsList className={cn('w-full overflow-x-auto', isStuck && 'border-b rounded-none py-2')}>
+                  {tabs.map((tab) => (
+                    <TabsTrigger key={tab.label} value={tab.label}>
+                      {tab.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </div>
 
               {tabs.map((tab, i) => (
                 <TabsContent key={tab.label} value={tab.label}>
