@@ -4,7 +4,6 @@ import { ContainerInfoView, PlatformView } from '../../api/generated/api.types';
 
 interface IContext {
   isLoading: boolean;
-  route: { path: string };
   currentPlatform: PlatformView | undefined;
   currentContainer: ContainerInfoView | undefined;
 }

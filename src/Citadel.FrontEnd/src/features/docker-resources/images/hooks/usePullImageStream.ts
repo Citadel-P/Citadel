@@ -1,9 +1,9 @@
-import { useApiClientContext } from '@/api/ApiClientContext';
+import { useApiClientContext } from '@/api/api-client-context';
 import { useMutation } from '@tanstack/react-query';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
 import { PullImageRequest } from '@/api/generated/api.types';
 import { Cancellable } from '@/api/types';
-import { useAuthContext } from '@/features/auth/AuthContext';
+import { useAuthContext } from '@/features/auth/auth-context';
 
 export const usePullImageStream = (onChunkReceived: (chunk: string) => void) => {
   const { apiClient } = useApiClientContext();

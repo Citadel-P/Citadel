@@ -4,10 +4,10 @@ import { Toaster } from '@/components/ui/sonner';
 import './main.css';
 import { ErrorBoundary } from 'react-error-boundary';
 import QueryClientWrapper from './query-client-wrapper';
-import { ApiClientProvider } from './api/ApiClientProvider';
-import { AuthProvider } from './features/auth/AuthProvider';
+import { ApiClientProvider } from './api/api-client-provider';
+import { AuthProvider } from './features/auth/auth-provider';
 import LoadingBarWrapper from './components/custom/loading-bar-wrapper';
-import { AppRoutes } from './app-routes';
+import { Router } from './router';
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -16,12 +16,12 @@ createRoot(document.getElementById('root')!).render(
         <ApiClientProvider>
           <AuthProvider>
             <LoadingBarWrapper />
-            <AppRoutes />
+            <Router />
+            <Toaster richColors toastOptions={{}} />
           </AuthProvider>
         </ApiClientProvider>
       </QueryClientWrapper>
     </ErrorBoundary>
-    <Toaster richColors toastOptions={{}} />
   </React.StrictMode>,
 );
 

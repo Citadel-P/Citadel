@@ -1,5 +1,5 @@
 import { useAppContext } from '@/lib/context/app-context';
-import { AppPaths } from '@/app-routes';
+import { Router as AppPaths } from '@/router';
 import { Badge } from '@/components/ui/badge';
 import {
   Breadcrumb,
@@ -20,7 +20,7 @@ interface ICrumbs {
 }
 
 const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
-  const { currentPlatform, currentContainer, route } = useAppContext();
+  const { currentPlatform, currentContainer } = useAppContext();
   const { resourceId } = useParams<{ platformId: string; resourceId: string }>();
 
   const navigate = useNavigate();
@@ -221,10 +221,10 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
       },
     };
 
-    routeMap[route?.path ?? '']?.();
+    routeMap['']?.();
 
     return crumbs;
-  }, [route, currentPlatform, resourceId, currentContainer]);
+  }, [currentPlatform, resourceId, currentContainer]);
 
   return (
     <div className={`sticky top-0 z-40 mx-auto px-4 lg:container sm:px-6 ${isSticky ? 'pt-0' : 'pt-3'}`}>

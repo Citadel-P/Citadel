@@ -6,7 +6,7 @@ import {
   HubConnectionState,
 } from '@microsoft/signalr';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAuthContext } from '@/features/auth/AuthContext';
+import { useAuthContext } from '@/features/auth/auth-context';
 import { SignalRContext } from './signalr-context';
 import { startConnectionWithRetry } from '../startConnectionWithRetry';
 import { MessagePackHubProtocol } from '@microsoft/signalr-protocol-msgpack';

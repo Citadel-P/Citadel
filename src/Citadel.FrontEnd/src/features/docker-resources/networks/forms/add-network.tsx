@@ -58,7 +58,7 @@ function IPField({
   );
 }
 
-const AddNetwork = () => {
+export default function AddNetwork() {
   const { form } = useNetworkForm();
   const navigate = useNavigate();
   const { mutate, isPending, isSuccess, data, validationErrors } = useMutate('createNetwork');
@@ -368,6 +368,4 @@ const AddNetwork = () => {
       </div>
     </div>
   );
-};
-
-export default AddNetwork;
+}

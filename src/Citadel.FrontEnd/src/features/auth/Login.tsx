@@ -2,27 +2,31 @@ import LogoIcon from '@/assets/logo.svg';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { useLoginForm } from './hooks/useLoginForm';
+import { useLoginForm } from './hooks/use-login-form';
 import { LoginRequest } from '@/api/generated/api.types';
 import { LoaderCircle } from 'lucide-react';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { useEffect } from 'react';
-import { ACCESS_TOKEN_KEY } from './AuthProvider';
 import { useMutate } from '@/lib/hooks';
-import { REDIRECT_TO_KEY } from '@/app-routes';
+import { REDIRECT_TO_KEY } from '@/router';
+import { useNavigate } from 'react-router';
+import { useAuthContext } from './auth-context';
 
-const Login = () => {
+export default function Login() {
   const { form } = useLoginForm();
+
   const { mutate, isSuccess, data, isPending, validationErrors } = useMutate('login');
+  const navigate = useNavigate();
+  const { setAccessToken } = useAuthContext();
 
   useEffect(() => {
     if (isSuccess && data?.data) {
-      sessionStorage.setItem(ACCESS_TOKEN_KEY, data?.data.accessToken);
+      setAccessToken(data?.data.accessToken);
       const redirectTo = sessionStorage.getItem(REDIRECT_TO_KEY) ?? '/';
       sessionStorage.removeItem(REDIRECT_TO_KEY);
-      window.location.href = redirectTo;
+      navigate(redirectTo, { replace: true });
     }
-  }, [isSuccess, data]);
+  }, [isSuccess, data, setAccessToken, navigate]);
 
   const onSubmit = (values: LoginRequest) => {
     mutate(values);
@@ -94,6 +98,4 @@ const Login = () => {
       </div>
     </div>
   );
-};
-
-export default Login;
+}

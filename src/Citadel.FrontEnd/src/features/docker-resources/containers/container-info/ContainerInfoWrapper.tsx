@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router';
 import NetworkUsage from './stats/NetworkUsage';
 import MemoryUsage from './stats/MemoryUsage';
 import CpuUsage from './stats/CpuUsage';
-import { useMemo, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import ContainerInspect from './inspect/ContainerInspect';
 import Loader from '@/components/ui/loader';
 import { ContainerStatsProvider } from './stats/ContainerStatsProvider';
@@ -22,7 +22,7 @@ import { StateIndicator } from '@/components/custom/state-indicator';
 
 const ContainerInfoWrapper = () => {
   const navigate = useNavigate();
-  const { route, currentContainer, isLoading } = useAppContext();
+  const { currentContainer, isLoading } = useAppContext();
   const { containerInfo } = useContainerInfoGroup(currentContainer?.containerId, currentContainer?.platformId);
   const { openDialog } = useDeleteDialog<ContainerView>({
     type: 'Container',
@@ -50,13 +50,6 @@ const ContainerInfoWrapper = () => {
       setStatusSnapshot(fromNow(new Date(Date.now())));
     }
   }, [currentContainer, containerInfo]);
-
-  // Memoize the current tab based on the route
-  const currentTab = useMemo(() => {
-    const matches = route?.path.match('[^/]+$');
-    const tab = matches && matches[0];
-    return tab && ['logs', 'stats', 'inspect', 'activity'].includes(tab) ? tab : 'logs';
-  }, [route]);
 
   // Handle tab change
   const onValueChange = useCallback(
@@ -106,7 +99,7 @@ const ContainerInfoWrapper = () => {
             <ContainerInfoTable statusSnapshot={containerState + ' ' + (statusSnapshot ? `(${statusSnapshot})` : '')} />
           </div>
           {/* Tabs */}
-          <Tabs value={currentTab} onValueChange={onValueChange}>
+          <Tabs value="logs" onValueChange={onValueChange}>
             <TabsList className="w-full">
               <TabsTrigger value="logs">Logs</TabsTrigger>
               <TabsTrigger value="inspect">Inspect</TabsTrigger>

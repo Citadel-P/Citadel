@@ -1,6 +1,6 @@
 import { Api, ContainerStateStatus, ContainerStatView, PlatformStatView } from './generated/api.types';
 import { ResourceName, resources } from '@/api/generated/resources';
-import { useApiClientContext } from '@/api/ApiClientContext';
+import { useApiClientContext } from '@/api/api-client-context';
 
 export type DockerResourceType = 'Network' | 'Volume' | 'Image' | 'Container';
 export type ResourceType = DockerResourceType | 'Registry' | 'Platform';

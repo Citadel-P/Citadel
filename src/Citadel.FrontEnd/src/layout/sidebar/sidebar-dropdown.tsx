@@ -1,10 +1,12 @@
 import { User, Settings, LogOut, Sun, Moon } from 'lucide-react';
 import { useLayoutContext } from '@/lib/context/layout-context';
 import { JSX } from 'react/jsx-runtime';
+import { useAuthContext } from '@/features/auth/auth-context';
 
 interface ProfileMenu {
   title: string;
   link: string;
+  key?: string;
   icon: JSX.Element;
 }
 const profileMenu: ProfileMenu[] = [
@@ -20,6 +22,7 @@ const profileMenu: ProfileMenu[] = [
   },
   {
     title: 'Log out',
+    key: 'logout',
     link: '/auth',
     icon: <LogOut width={20} />,
   },
@@ -68,9 +71,14 @@ const themeModes = [
 ];
 
 export const SidebarDropDown = () => {
+  const { logout } = useAuthContext();
   const { toggleThemeColor, setThemeMode, theme } = useLayoutContext();
 
-  const handleMenuClick = (_: ProfileMenu) => {};
+  const handleMenuClick = (item: ProfileMenu) => {
+    if (item.key == 'logout') {
+      logout();
+    }
+  };
   return (
     <div className="absolute bottom-0 z-10 mt-2 w-60 origin-bottom-left transform rounded-md bg-background py-4 drop-shadow-md shadow-custom ring-1 ring-transparent ring-opacity-5 transition focus:outline-hidden">
       <div className="flext-row flex items-center px-4 pb-4">

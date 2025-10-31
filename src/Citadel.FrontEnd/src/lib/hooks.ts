@@ -9,7 +9,7 @@ import {
   UseQueryOptions,
   UseQueryResult,
 } from '@tanstack/react-query';
-import { useApiClientContext } from '@/api/ApiClientContext';
+import { useApiClientContext } from '@/api/api-client-context';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 
 import {
@@ -40,7 +40,7 @@ export function useRead<
   args?: UseReadArgs<TResource>,
   options?: Omit<
     UseQueryOptions<TResult, Error, TResult, readonly [TResource, UseReadArgs<TResource> | {}]>,
-    'queryKey' | 'queryFn' | 'enabled'
+    'queryKey' | 'queryFn'
   >,
 ): UseQueryResult<TResult, Error> {
   const { apiClient } = useApiClientContext();
@@ -54,9 +54,9 @@ export function useRead<
 
   return useQuery<TResult, Error, TResult, readonly [TResource, UseReadArgs<TResource> | {}]>({
     queryKey,
-    enabled: isEnabled,
+    enabled: options?.enabled ?? isEnabled,
     queryFn: async ({ signal }) => {
-      const fn = (apiClient.api as any)[resource] as AnyFn;
+      const fn = (apiClient?.api as any)[resource] as AnyFn;
       if (!fn) throw new Error(`Unknown API resource: ${resource}`);
 
       // Build arguments dynamically based on the resource definition
@@ -332,4 +332,35 @@ export function useStickySentinel(topOffsetPx: number = 0) {
   }, [topOffsetPx, node]);
 
   return { sentinelRef, isStuck } as const;
+}
+
+export function useHTTPErrorHandler() {
+  const client = useQueryClient();
+
+  useEffect(() => {
+    const handleError = (error: ProblemDetails) => {
+      if (!error) return;
+      if (error.status != null && (error.status as number) > 400) {
+        toast.error(error.status + ' ' + error.title, {
+          description: error.detail,
+        });
+      }
+    };
+    const mutationUnsubscribe = client.getMutationCache().subscribe((event) => {
+      if (event.type === 'updated' && event.action.type === 'error') {
+        handleError(event.action.error.error);
+      }
+    });
+
+    const queryUnsubscribe = client.getQueryCache().subscribe((event) => {
+      if (event.type === 'updated' && event.action.type === 'error') {
+        handleError(event.action.error.error);
+      }
+    });
+
+    return () => {
+      mutationUnsubscribe();
+      queryUnsubscribe();
+    };
+  }, [client]);
 }
