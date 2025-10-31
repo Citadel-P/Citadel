@@ -82,9 +82,17 @@ const columns = (
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
   },
   {
-    accessorKey: 'tag',
-    header: ({ column }) => <SortableCell cellName="Tag" column={column} />,
-    cell: ({ row }) => <div className="">{truncate(row.original.tag ?? '', 28)}</div>,
+    accessorKey: 'tags',
+    header: ({ column }) => <SortableCell cellName="Tags" column={column} />,
+    cell: ({ row }) => (
+      <div className="flex flex-wrap gap-1">
+        {row.original.tags.map((t) => (
+          <span key={t} className="px-2 py-0.5 bg-muted/25 rounded text-xs">
+            {truncate(t ?? '', 28)}
+          </span>
+        ))}
+      </div>
+    ),
     sortingFn: (rowA: any, rowB: any): number => rowA.original?.tag?.localeCompare(rowB.original?.tag),
   },
   {

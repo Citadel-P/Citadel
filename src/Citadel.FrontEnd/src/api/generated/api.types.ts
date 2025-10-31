@@ -1073,7 +1073,7 @@ export interface ImagePullProgress {
 export interface ImageView {
   /** @format uuid */
   id: string;
-  tag: string;
+  tags: string[];
   name: string;
   dockerImageId: string;
   /**

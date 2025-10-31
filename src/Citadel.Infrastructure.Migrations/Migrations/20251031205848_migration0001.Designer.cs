@@ -10,14 +10,14 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251016212137_migration0001")]
+    [Migration("20251031205848_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.0-rc.1.25451.107");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.0-rc.2.25502.107");
 
             modelBuilder.Entity("Container", b =>
                 {
@@ -201,7 +201,7 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("REAL")
                         .HasDefaultValue(0.0);
 
-                    b.Property<string>("Tag")
+                    b.Property<string>("Tags")
                         .IsRequired()
                         .HasColumnType("TEXT");
 

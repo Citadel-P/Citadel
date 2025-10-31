@@ -5,7 +5,7 @@ import { DropdownActionButton } from '@/components/custom/dropdown-with-dialog';
 import { useMutate } from '@/lib/hooks';
 import { formatId } from '@/lib/utils';
 import { ButtonActionComponent, ButtonGroupComponent, DropdownActionComponent } from '@/pages/types';
-import { Rocket, SearchCode, Trash } from 'lucide-react';
+import { SearchCode, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 
@@ -19,7 +19,7 @@ export const DeleteImageDropdown: DropdownActionComponent<ImageView> = ({ resour
   const { mutateAsync: deleteImageAsync } = useMutate('deleteImages', { onSuccess });
 
   const handleDeleteAsync = () =>
-    deleteImageAsync({ platformId: currentPlatform?.id ?? '', ids: [resource.dockerImageId] });
+    deleteImageAsync({ platformId: currentPlatform?.id ?? '', force: true, ids: [resource.dockerImageId] });
 
   return (
     <DropdownActionButton
@@ -53,7 +53,8 @@ export const DeleteImageButton: ButtonActionComponent<ImageView> = ({ resource }
   };
   const { mutateAsync: deleteImageAsync } = useMutate('deleteImages', { onSuccess });
 
-  const handleDelete = () => deleteImageAsync({ platformId: currentPlatform?.id ?? '', ids: [resource.dockerImageId] });
+  const handleDelete = () =>
+    deleteImageAsync({ platformId: currentPlatform?.id ?? '', force: true, ids: [resource.dockerImageId] });
 
   return (
     <ActionWithDialog
@@ -64,32 +65,6 @@ export const DeleteImageButton: ButtonActionComponent<ImageView> = ({ resource }
       onClick={handleDelete}
       disabled={!canDelete}
       variant={'destructive'}
-    />
-  );
-};
-
-export const QuickDeployImageButton: ButtonActionComponent<ImageView> = ({ resource }) => {
-  const navigate = useNavigate();
-  const { currentPlatform } = useAppContext();
-  const { canDelete } = useAvailableActions(resource ? [resource] : undefined);
-
-  const onSuccess = () => {
-    navigate(`/platforms/${currentPlatform?.id}/images`);
-    toast.success(`${resource.name} has been successfully removed.`);
-  };
-  const { mutateAsync: deleteImageAsync } = useMutate('deleteImages', { onSuccess });
-
-  const handleDeploy = () => deleteImageAsync({ platformId: currentPlatform?.id ?? '', ids: [resource.dockerImageId] });
-
-  return (
-    <ActionWithDialog
-      name={resource.name}
-      title="Deploy"
-      iconPosition="left"
-      icon={<Rocket className="h-4 w-4" />}
-      onClick={handleDeploy}
-      disabled={!canDelete}
-      variant={'outline'}
     />
   );
 };
@@ -138,7 +113,11 @@ export const DeleteImagesButtonGroup: ButtonGroupComponent<ImageView> = ({ resou
   const { mutateAsync: deleteImageAsync } = useMutate('deleteImages', { onSuccess });
 
   const handleDelete = () =>
-    deleteImageAsync({ platformId: currentPlatform?.id ?? '', force: true, ids: resources.map((r) => r.dockerImageId) });
+    deleteImageAsync({
+      platformId: currentPlatform?.id ?? '',
+      force: true,
+      ids: resources.map((r) => r.dockerImageId),
+    });
 
   return (
     <GroupActionWithDialog

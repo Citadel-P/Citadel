@@ -1,6 +1,7 @@
 ﻿using Domain;
 using Domain.Entities;
 using Infrastructure.Persistence.Dtos;
+using System.Text.Json;
 
 namespace Infrastructure.Persistence.Mappers;
 
@@ -13,7 +14,7 @@ internal static class ImageMappers
         => Image.FromPersistence(
                 id: image.Id,
                 name: image.Name,
-                tag: image.Tag,
+                tags: string.IsNullOrEmpty(image?.Tags) ? [] : JsonSerializer.Deserialize(image.Tags, ImagTagsContext.Default.IEnumerableString),
                 dockerImageId: image.DockerImageId,
                 size: image.Size,
                 containers: image.Containers,

@@ -46,7 +46,7 @@ internal static class ContainerMappers
             image: container.Image_ImageId != null ? Image.FromPersistence(
                 id: container.Image_ImageId ?? Guid.Empty,
                 name: container.Image_Name,
-                tag: container.Image_Tag,
+                tags: string.IsNullOrEmpty(container?.Image_Tags) ? [] : JsonSerializer.Deserialize(container.Image_Tags, ImagTagsContext.Default.IEnumerableString),
                 dockerImageId: container.Image_DockerImageId,
                 size: container.Image_Size ?? 0,
                 containers: container.Image_Containers ?? 0,
@@ -80,7 +80,7 @@ internal static class ContainerMappers
             (
                 id: container.Image_ImageId ?? Guid.Empty,
                 name: container.Image_Name,
-                tag: container.Image_Tag,
+                tags: string.IsNullOrEmpty(container?.Image_Tags) ? [] : JsonSerializer.Deserialize(container.Image_Tags, ImagTagsContext.Default.IEnumerableString),
                 dockerImageId: container.Image_DockerImageId,
                 size: container.Image_Size ?? 0,
                 containers: container.Image_Containers ?? 0,

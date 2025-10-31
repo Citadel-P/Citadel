@@ -138,7 +138,7 @@ namespace Infrastructure.Migrations.Migrations
                     PlatformId = table.Column<string>(type: "TEXT", nullable: false),
                     RegistryId = table.Column<string>(type: "TEXT", nullable: true),
                     Size = table.Column<double>(type: "REAL", nullable: false, defaultValue: 0.0),
-                    Tag = table.Column<string>(type: "TEXT", nullable: false),
+                    Tags = table.Column<string>(type: "TEXT", nullable: false),
                     UpdatedAt = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>

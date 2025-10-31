@@ -3,7 +3,7 @@
 internal sealed record ImageDto(
     Guid Id,
     string Name,
-    string Tag,
+    string Tags, // List<string>
     string DockerImageId,
     double Size,
     int Containers,

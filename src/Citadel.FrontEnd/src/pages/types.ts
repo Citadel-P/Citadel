@@ -3,11 +3,14 @@
  * This single interface can represent either a **single-table resource** or a **tabbed resource**.
  */
 export interface RequiredDockerComponents<T = any> {
+  /** Optional configuration for header */
+  header?: HeaderOptions;
+
+  /** Optional subheader */
+  SubHeader?: React.FC;
+
   /** Icon displayed in the page header */
   Icon: React.ReactElement;
-
-  /** Action bar component shown below the header */
-  ActionBar?: React.FC<{ items: any[] }>;
 
   /** Dropdown actions for table rows */
   DropdownActions?: {
@@ -29,24 +32,6 @@ export interface RequiredDockerComponents<T = any> {
 
   /** Optional helper to filter items by search term */
   filterItems?: (items: T[], search: string) => T[];
-
-  /** Optional configuration for header */
-  header?: HeaderOptions;
-
-  /** Tabs configuration for tabbed resources */
-  tabs?: {
-    label: string;
-    Content: React.FC<{ items: any[]; isLoading: boolean; actions: Record<string, DropdownActionComponent<T>> }>;
-    useData?: (platformId: string) => ResourceDataHookResult<T>;
-    header?: HeaderOptions;
-    ButtonActions?: {
-      [action: string]: ButtonActionComponent<T>;
-    };
-    DropdownActions?: {
-      [action: string]: DropdownActionComponent<T>;
-    };
-    GroupActions?: React.FC<{ items: any[] }>;
-  }[];
 }
 
 /**

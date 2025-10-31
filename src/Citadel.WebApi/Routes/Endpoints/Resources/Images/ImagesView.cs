@@ -5,7 +5,7 @@ namespace WebApi.Routes.Endpoints.Resources.Images;
 
 public sealed record ImageView(
     Guid Id,
-    string Tag,
+    IEnumerable<string> Tags,
     string Name,
     string DockerImageId,
     double Size,
@@ -19,11 +19,11 @@ public sealed record ImageView(
 
 public sealed record ImagesView(IEnumerable<ImageView> Images)
 {
-    internal static ImagesView Map(IEnumerable<Image> images) => new(images.Select(Map));
+    internal static ImagesView Map(IEnumerable<Image> images) => new(images?.Select(Map) ?? []);
     internal static ImageView Map(Image image)
         => new(
             Id: image.Id,
-            Tag: image.Tag,
+            Tags: image.Tags,
             Name: image.Name,
             DockerImageId: image.DockerImageId,
             Size: image.Size,

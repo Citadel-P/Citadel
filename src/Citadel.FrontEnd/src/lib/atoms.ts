@@ -12,6 +12,7 @@ const taskSheetAtom = atomFamily((_: ResourceType) => atom<TaskSheetState>({ ope
 const selectedResourcesAtoms = atomFamily((_: string) => atom<any[]>([]));
 const deleteDialogAtom = atomFamily((_: ResourceType) => atom<DialogState<any>>({ open: false, targets: [] }));
 const resourceFilterAtom = atomFamily((_: ResourceType) => atom<{ item: any } | null>(null));
+const inlineSubHeaderAtom = atomFamily((_: ResourceType) => atom<boolean>(false));
 
 export function useSelectedResources<T>(key: ResourceType) {
   const [selected, setSelected] = useAtom(selectedResourcesAtoms(key));
@@ -47,4 +48,12 @@ export function useTaskSheet(type: ResourceType) {
   const close = () => setState((s) => ({ ...s, open: false }));
 
   return { state, open, close } as const;
+}
+
+export function useInlineSubHeader(type: ResourceType) {
+  const [open, setOpen] = useAtom(inlineSubHeaderAtom(type));
+  const show = () => setOpen(true);
+  const hide = () => setOpen(false);
+  const toggle = () => setOpen((v) => !v);
+  return { open, show, hide, toggle } as const;
 }

@@ -14,7 +14,7 @@ namespace Infrastructure.Migrations.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.0-rc.1.25451.107");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.0-rc.2.25502.107");
 
             modelBuilder.Entity("Container", b =>
                 {
@@ -198,7 +198,7 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("REAL")
                         .HasDefaultValue(0.0);
 
-                    b.Property<string>("Tag")
+                    b.Property<string>("Tags")
                         .IsRequired()
                         .HasColumnType("TEXT");
 

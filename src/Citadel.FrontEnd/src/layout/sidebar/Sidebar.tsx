@@ -3,14 +3,14 @@ import { ChevronsRight, ChevronsUpDown, Info } from 'lucide-react';
 import LogoIcon from '@/assets/logo.svg';
 import { SidebarMenu } from './sidebar-menu';
 import { useNavigate } from 'react-router';
-import useAnimation from '@/hooks/useAnimation';
+import useAnimatedDropdown from '@/hooks/useAnimation';
 import { SidebarDropDown } from './sidebar-dropdown';
 
 export const Sidebar = () => {
   const navigate = useNavigate();
   const { toggleSidebar, sidebarMinimized } = useLayoutContext();
 
-  const { ref, open, setOpen } = useAnimation('dropDown');
+  const { ref, open, setOpen } = useAnimatedDropdown('dropDown');
   return (
     <aside
       className={`w-[calc(var(--sidebar-width)-40px)] hidden h-full flex-col justify-between bg-background pt-3 transition-all duration-300 lg:flex`}>

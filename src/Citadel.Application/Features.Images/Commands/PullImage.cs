@@ -10,6 +10,7 @@ using FluentValidation;
 using Hosting.Common;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
 
 namespace Application.Features.Images.Commands;
@@ -50,10 +51,11 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
             case DockerHubRegistry dockerCfg:
                 if (RegistryName == Registry.DefaultRegistryName)
                 {
+                    var imageDefaultTag = ImageTag.Split(':').Length == 1 ? $"{ImageTag}:latest" : ImageTag;
                     return new PullImageCommand
                         (
                             PlatformAddress: platformAddress,
-                            FromImage: $"{ImageTag}:latest".ToLower()
+                            FromImage: imageDefaultTag.ToLower()
                         );
                 }
                 else
@@ -75,7 +77,7 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
 }
 
 internal sealed class PullImageHandler(IConnectorFactory<IImageConnector> connectorFactory, IImageStreamManager imageStream, IUnitOfWork unitOfWork, 
-    IPlatformContainerCache platformContainerCache, IBackgroundTaskQueue backgroundTaskQueue, IServiceScopeFactory scopeFactory) : IStreamCommandHandler<PullImage, PullImageResult>
+    IPlatformContainerCache platformContainerCache, IBackgroundTaskQueue backgroundTaskQueue, IServiceScopeFactory scopeFactory, ILogger<PullImageHandler> logger) : IStreamCommandHandler<PullImage, PullImageResult>
 {
     public async IAsyncEnumerable<PullImageResult> Handle(PullImage command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -103,13 +105,13 @@ internal sealed class PullImageHandler(IConnectorFactory<IImageConnector> connec
             yield return reply;
         }
 
-        backgroundTaskQueue.Enqueue(ct => PersistPulledImage(connector, scopeFactory, platform, registry, command.ImageTag, ct));
+        backgroundTaskQueue.Enqueue(ct => PersistPulledImage(connector, scopeFactory, platform, registry, command.ImageTag, logger, ct));
     }
 
-    private async Task PersistPulledImage(IImageConnector connector, IServiceScopeFactory scopeFactory, PlatformCacheEntry paltform, Registry registry, string imageName, CancellationToken cancellationToken)
+    private async Task PersistPulledImage(IImageConnector connector, IServiceScopeFactory scopeFactory, PlatformCacheEntry paltform, Registry registry, string imageName, ILogger logger, CancellationToken cancellationToken)
     {
         var imageResult = await connector.GetAsync(paltform.Address, imageName, cancellationToken);
-        if (imageResult.IsSuccess(out var image))
+        if (imageResult.IsSuccess(out var image, out var error))
         {
             var imageEntity = image.Map(paltform.Id, registry);
             await using var scope = scopeFactory.CreateAsyncScope();
@@ -119,6 +121,10 @@ internal sealed class PullImageHandler(IConnectorFactory<IImageConnector> connec
             await uow.CommitAsync();
 
             await imageStream.SendImageInfo(paltform.Id, imageEntity);
+        }
+        else
+        {
+            logger.LogError("Failed to retrieve image info after pull: {Error}", error?.Message);
         }
     }
 }

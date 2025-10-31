@@ -155,7 +155,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             LIMIT 1;
         """;
 
-        var result = await db.QuerySingleAsync<PlatformWithSingleStatDto>(sql, new { Id = platformId.Format() }, tx());
+        var result = await db.QuerySingleOrDefaultAsync<PlatformWithSingleStatDto>(sql, new { Id = platformId.Format() }, tx());
         return result?.ToDomain();
     }
 

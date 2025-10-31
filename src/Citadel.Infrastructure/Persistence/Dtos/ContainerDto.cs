@@ -39,7 +39,7 @@ internal record ContainerWithImageDto(
      Guid? Image_platformId = null,
      Guid? Image_RegistryId = null,
      string? Image_Name = null,
-     string? Image_Tag = null,
+     string? Image_Tags = null, // List<string>
      string? Image_DockerImageId = null,
      double? Image_Size = null,
      int? Image_Containers = null,

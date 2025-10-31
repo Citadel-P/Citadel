@@ -1,11 +1,12 @@
-﻿using System.Data;
-using Dapper;
+﻿using Dapper;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Infrastructure.Persistence.Dtos;
-using Infrastructure.TypeHandlers;
 using Infrastructure.Persistence.Mappers;
-
+using Infrastructure.TypeHandlers;
+using System.Data;
+using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
 
 namespace Infrastructure.Persistence;
@@ -18,7 +19,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
             SELECT 
                 i.Id,
                 i.Name AS Name,
-                i.Tag,
+                i.Tags,
                 i.DockerImageId,
                 i.Size,
                 i.Containers,
@@ -49,7 +50,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
             SELECT 
                 i.Id,
                 i.Name AS Name,
-                i.Tag,
+                i.Tags,
                 i.DockerImageId,
                 i.Size,
                 i.Containers,
@@ -76,9 +77,9 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
     {
         const string sql = """
             INSERT INTO Images (
-                Id, PlatformId, DockerImageId, Name, Containers, IsUpToDate, Tag, Size, RegistryId, CreatedAt, UpdatedAt
+                Id, PlatformId, DockerImageId, Name, Containers, IsUpToDate, Tags, Size, RegistryId, CreatedAt, UpdatedAt
             ) VALUES (
-                @Id, @PlatformId, @DockerImageId, @Name, @Containers, @IsUpToDate, @Tag, @Size, @RegistryId, @CreatedAt, @UpdatedAt
+                @Id, @PlatformId, @DockerImageId, @Name, @Containers, @IsUpToDate, @Tags, @Size, @RegistryId, @CreatedAt, @UpdatedAt
             )
         """;
         return db.ExecuteAsync(sql, new
@@ -89,7 +90,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
             Name = image.Name,
             Containers = image.Containers,
             IsUpToDate = image.IsUpToDate,
-            Tag = image.Tag,
+            Tags = JsonSerializer.Serialize(image.Tags, ImagTagsContext.Default.IEnumerableString),
             Size = image.Size,
             RegistryId = image.RegistryId?.Format(),
             CreatedAt = image.CreatedAt,
@@ -101,15 +102,15 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
     {
         const string sql = """
             INSERT INTO Images (
-                Id, PlatformId, DockerImageId, Name, Containers, IsUpToDate, Tag, Size, RegistryId, CreatedAt, UpdatedAt
+                Id, PlatformId, DockerImageId, Name, Containers, IsUpToDate, Tags, Size, RegistryId, CreatedAt, UpdatedAt
             ) VALUES (
-                @Id, @PlatformId, @DockerImageId, @Name, @Containers, @IsUpToDate, @Tag, @Size, @RegistryId, @CreatedAt, @UpdatedAt
+                @Id, @PlatformId, @DockerImageId, @Name, @Containers, @IsUpToDate, @Tags, @Size, @RegistryId, @CreatedAt, @UpdatedAt
             )
             ON CONFLICT(DockerImageId, PlatformId) DO UPDATE SET
                 Name = excluded.Name,
                 Containers = excluded.Containers,
                 IsUpToDate = excluded.IsUpToDate,
-                Tag = excluded.Tag,
+                Tags = excluded.Tags,
                 Size = excluded.Size,
                 RegistryId = excluded.RegistryId,
                 UpdatedAt = excluded.UpdatedAt
@@ -123,7 +124,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
             Name = image.Name,
             Containers = image.Containers,
             IsUpToDate = image.IsUpToDate,
-            Tag = image.Tag,
+            Tags = JsonSerializer.Serialize(image.Tags, ImagTagsContext.Default.IEnumerableString),
             Size = image.Size,
             RegistryId = image.RegistryId?.Format(),
             CreatedAt = image.CreatedAt,
@@ -136,7 +137,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
         const string sql = """
             UPDATE Images
                 SET PlatformId = @PlatformId, DockerImageId = @DockerImageId, Name = @Name, 
-                    Containers = @Containers, IsUpToDate = @IsUpToDate, Tag = @Tag, Size = @Size, RegistryId = @RegistryId, CreatedAt = @CreatedAt, UpdatedAt = @UpdatedAt
+                    Containers = @Containers, IsUpToDate = @IsUpToDate, Tags = @Tags, Size = @Size, RegistryId = @RegistryId, CreatedAt = @CreatedAt, UpdatedAt = @UpdatedAt
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
@@ -147,7 +148,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
             Name = image.Name,
             Containers = image.Containers,
             IsUpToDate = image.IsUpToDate,
-            Tag = image.Tag,
+            Tags = JsonSerializer.Serialize(image.Tags, ImagTagsContext.Default.IEnumerableString),
             Size = image.Size,
             RegistryId = image.RegistryId?.Format(),
             CreatedAt = image.CreatedAt,
@@ -159,17 +160,17 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
     {
         const string sql = """
             INSERT INTO Images (
-                Id, PlatformId, DockerImageId, Name, Containers, IsUpToDate, Tag, Size, RegistryId, CreatedAt, UpdatedAt
+                Id, PlatformId, DockerImageId, Name, Containers, IsUpToDate, Tags, Size, RegistryId, CreatedAt, UpdatedAt
             )
             VALUES (
-                @Id, @PlatformId, @DockerImageId, @Name, @Containers, @IsUpToDate, @Tag, @Size, @RegistryId, @CreatedAt, @UpdatedAt
+                @Id, @PlatformId, @DockerImageId, @Name, @Containers, @IsUpToDate, @Tags, @Size, @RegistryId, @CreatedAt, @UpdatedAt
             )
             ON CONFLICT(Id) DO UPDATE SET
                 PlatformId  = excluded.PlatformId,
                 Name        = excluded.Name,
                 Containers  = excluded.Containers,
                 IsUpToDate  = excluded.IsUpToDate,
-                Tag         = excluded.Tag,
+                Tags        = excluded.Tags,
                 Size        = excluded.Size,
                 RegistryId  = excluded.RegistryId,
                 CreatedAt   = excluded.CreatedAt,
@@ -185,7 +186,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
             Name = img.Name,
             Containers = img.Containers,
             IsUpToDate = img.IsUpToDate,
-            Tag = img.Tag,
+            Tags = JsonSerializer.Serialize(img.Tags, ImagTagsContext.Default.IEnumerableString),
             Size = img.Size,
             RegistryId = img.RegistryId?.Format(),
             CreatedAt = img.CreatedAt,

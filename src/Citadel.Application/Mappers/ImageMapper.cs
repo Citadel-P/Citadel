@@ -26,7 +26,7 @@ internal static class ImageMapper
     internal static Image Map(this ImageResult image, Guid platformId, Registry? registry = null)
         => new (
             name: image.GetName() ?? string.Empty,
-            tag: image.GetTag(),
+            tags: image.RepoTags ?? [],
             dockerImageId: image.Id,
             size: image.Size,
             platformId: platformId,

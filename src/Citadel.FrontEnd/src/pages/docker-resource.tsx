@@ -1,5 +1,4 @@
-import { useDockerResourceParamType, useLocalStorage, useStickySentinel } from '@/lib/hooks';
-import { cn } from '@/lib/utils';
+import { useDockerResourceParamType } from '@/lib/hooks';
 import { useNavigate, useParams } from 'react-router';
 import { RequiredDockerComponents } from './types';
 import { DockerResourceType, PluralResourceMap } from '@/api/types';
@@ -8,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import NotFound from './NotFound';
 import { useMemo, useState } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DockerResourceComponents } from '@/features/docker-resources';
 import TaskSheet from '@/components/custom/task-sheet';
 
@@ -25,39 +23,28 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
   const navigate = useNavigate();
   const platformId = useParams().platformId ?? '';
   const [search, setSearch] = useState('');
-  const tabs = Components.tabs;
 
-  const [activeTab, setActiveTab] = useLocalStorage(`${useParams().type}.active-tab`, tabs?.[0]?.label ?? 'default');
+  const { items = [], isLoading = false } = Components.useData?.(platformId) ?? {};
 
-  const allTabData = tabs?.map((tab) => tab.useData?.(platformId));
-  const singleData = Components.useData?.(platformId);
+  const headerCfg = Components.header ?? { showSearch: true, showAdd: true };
 
-  const currentTabIndex = tabs?.findIndex((t) => t.label === activeTab);
-  const currentData =
-    tabs && currentTabIndex !== undefined && currentTabIndex >= 0 ? allTabData?.[currentTabIndex] : singleData;
-
-  const headerCfg = Components.tabs?.[currentTabIndex ?? 0]?.header ??
-    Components.header ?? { showSearch: true, showAdd: true };
-
-  const { items = [], isLoading = false } = currentData ?? {};
   const filtered = useMemo(
     () => (Components.filterItems ? Components.filterItems(items, search) : items),
     [items, search, Components],
   );
 
-  const ActiveContent =
-    tabs && currentTabIndex !== undefined && currentTabIndex >= 0 ? tabs[currentTabIndex].Content : Components.Table!;
-  const { sentinelRef, isStuck } = useStickySentinel(32);
+  const ActiveContent = Components.Table!;
+  const Icon = Components.Icon;
 
   return (
     <div className="flex-col justify-between relative">
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
-        <div className="w-full rounded-lg border-border bg-background p-4">
+        <div className="w-full rounded-lg border-border bg-background p-4 flex flex-col gap-1">
           {/* Header */}
           <div className="sm:flex sm:justify-between">
             <div className="mb-3 flex items-baseline gap-1">
               <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                {Components.Icon}
+                {Icon}
                 <span className="sr-only">{PluralResourceMap[type]}</span>
               </div>
               <div className="text-md font-bold text-foreground">{PluralResourceMap[type]}</div>
@@ -76,47 +63,13 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
             </div>
           </div>
 
-          {/* Tabs */}
-          {tabs ? (
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <div ref={sentinelRef} aria-hidden className="h-px" />
-              <div
-                className={cn(
-                  'sticky top-8 z-30 bg-background left-0 right-0 transition-all duration-200',
-                  isStuck ? '-mx-4' : 'mx-0',
-                )}
-              >
-                <TabsList className={cn('w-full overflow-x-auto', isStuck && 'border-b rounded-none py-2')}>
-                  {tabs.map((tab) => (
-                    <TabsTrigger key={tab.label} value={tab.label}>
-                      {tab.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </div>
+          {/* Sub Header */}
+          {Components.SubHeader && <Components.SubHeader />}
 
-              {tabs.map((tab, i) => (
-                <TabsContent key={tab.label} value={tab.label}>
-                  <div className="space-y-1 rounded-sm border p-1 shadow-xs">
-                    <tab.Content
-                      items={
-                        Components.filterItems
-                          ? Components.filterItems(allTabData?.[i]?.items ?? [], search)
-                          : (allTabData?.[i]?.items ?? [])
-                      }
-                      actions={tab.DropdownActions ?? {}}
-                      isLoading={allTabData?.[i]?.isLoading ?? false}
-                    />
-                  </div>
-                  {tab.GroupActions && <tab.GroupActions items={items} />}
-                </TabsContent>
-              ))}
-            </Tabs>
-          ) : (
-            <div className="space-y-1 rounded-sm border p-1 shadow-xs">
-              <ActiveContent items={filtered} isLoading={isLoading} actions={Components.DropdownActions ?? {}} />
-            </div>
-          )}
+          {/* Table */}
+          <div className="rounded-sm border p-1 shadow-xs">
+            <ActiveContent items={filtered} actions={Components.DropdownActions ?? {}} isLoading={isLoading} />
+          </div>
         </div>
       </div>
 

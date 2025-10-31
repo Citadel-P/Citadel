@@ -77,7 +77,7 @@ CREATE TABLE "Images" (
     "PlatformId" TEXT NOT NULL,
     "RegistryId" TEXT NULL,
     "Size" REAL NOT NULL DEFAULT 0.0,
-    "Tag" TEXT NOT NULL,
+    "Tags" TEXT NOT NULL,
     "UpdatedAt" TEXT NULL,
     CONSTRAINT "FK_Images_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE,
     CONSTRAINT "FK_Images_Registries_RegistryId" FOREIGN KEY ("RegistryId") REFERENCES "Registries" ("Id") ON DELETE SET NULL
@@ -202,7 +202,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20251016212137_migration0001', '10.0.0-rc.1.25451.107');
+VALUES ('20251031205848_migration0001', '10.0.0-rc.2.25502.107');
 
 COMMIT;
 

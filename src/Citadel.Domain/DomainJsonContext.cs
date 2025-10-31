@@ -48,3 +48,9 @@ public partial class RegistryJsonContext : JsonSerializerContext
 public partial class ContainerPortsContext : JsonSerializerContext
 {
 }
+
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
+[JsonSerializable(typeof(IEnumerable<string>))]
+public partial class ImagTagsContext : JsonSerializerContext
+{
+}

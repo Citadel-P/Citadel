@@ -57,7 +57,7 @@ public class ImageSyncJobTests : IntegrationTestBase
         {
             await uow.Images.AddAsync(new Image(
                 name: image.GetName() ?? "",
-                tag: image.GetTag(),
+                tags: image.RepoTags ?? [],
                 dockerImageId: image.Id,
                 size: image.Size,
                 containers : image.Containers,
@@ -106,7 +106,7 @@ public class ImageSyncJobTests : IntegrationTestBase
         string staleImageId = "012sfv545s";
         var staleImage = new Image(
             name: "stale",
-            tag: "stale:01",
+            tags: ["stale:01"],
             dockerImageId: staleImageId,
             size: 900000,
             containers: 0,
@@ -175,7 +175,7 @@ public class ImageSyncJobTests : IntegrationTestBase
         var dockerImageId = "update-id";
         var oldImage = new Image(
             name: "old",
-            tag: "old:latest",
+            tags: ["old:latest"],
             dockerImageId: "fake-id",
             size: 100000,
             containers: 2,

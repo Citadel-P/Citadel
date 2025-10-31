@@ -405,7 +405,7 @@ internal static class Configuration
         image.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         image.Property<Guid?>("RegistryId").HasColumnType("TEXT").HasConversion(GuidConverter);
         image.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        image.Property<string>("Tag").HasColumnType("TEXT").IsRequired();
+        image.Property<string>("Tags").HasColumnType("TEXT").IsRequired();
         image.Property<string>("DockerImageId").HasColumnType("TEXT").IsRequired();
         image.Property<string>("CreatedAt").HasColumnType("TEXT").IsRequired();
         image.Property<string?>("UpdatedAt").HasColumnType("TEXT").HasDefaultValue(null);
