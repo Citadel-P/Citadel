@@ -30,7 +30,7 @@ const ValueInput = ({
 }: ValueInputProps) => (
   <div className="col-span-2">
     <div className="flex items-center gap-1">
-      <Label className="flex-none text-xs mb-1">{label}</Label>
+      <Label className="flex-none text-sm shadow-xs font-normal mb-1">{label}</Label>
       {helpText && (
         <TooltipProvider>
           <Tooltip>
@@ -51,11 +51,7 @@ const ValueInput = ({
             render={({ field }) => (
               <FormItem className="flex-1 w-full">
                 <FormControl>
-                  <Input
-                    placeholder={valuePlaceHolder}
-                    className="focus-visible:ring-transparent"
-                    {...field}
-                  />
+                  <Input placeholder={valuePlaceHolder} className="focus-visible:ring-transparent" {...field} />
                 </FormControl>
               </FormItem>
             )}

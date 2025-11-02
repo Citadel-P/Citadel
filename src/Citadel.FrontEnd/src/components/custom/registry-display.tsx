@@ -8,11 +8,11 @@ export function RegistryDisplay({ registry }: { registry: RegistryView | undefin
     <div className="flex flex-wrap gap-2">
       <HoverCard openDelay={150} closeDelay={150}>
         <HoverCardTrigger>
-          <div className="flex flex-row items-center justify-center cursor-pointer text-[13px] gap-2 hover:underline">
+          <div className="flex flex-row items-center justify-center cursor-pointer text-sm gap-2 hover:underline">
             <span>{registry.name == '' ? 'Docker Hub' : registry.name}</span>
           </div>
         </HoverCardTrigger>
-        <HoverCardContent className="flex flex-col gap-3 p-3 text-xs bg-background w-fit">
+        <HoverCardContent className="flex flex-col gap-3 p-3 text-sm bg-background w-fit">
           <div
             className="flex items-center justify-center gap-1 hover:underline cursor-pointer"
             onClick={() => window.open(registry.url == '' ? 'https://hub.docker.com' : registry.url, '_blank')}>

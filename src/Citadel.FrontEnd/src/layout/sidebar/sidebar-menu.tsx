@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef, Fragment } from 'react';
 import { useLayoutContext } from '@/lib/context/layout-context';
 import { ISubMenuItem, MenuItems, DockerPlatformMenu, IMenuItem } from './menu-items';
 import { ChevronRight } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { SidebarSubMenu } from './sidebar-sidemenu';
 import { useAppContext } from '@/lib/context/app-context';
+import clsx from 'clsx';
 
 export const SidebarMenu = () => {
   const location = useLocation();
@@ -22,36 +23,26 @@ export const SidebarMenu = () => {
 
   const addPlatformToMenu = useCallback(
     (platform: { id: string; name: string }) => {
-      if (!platform?.id) return;
-      if (addedPlatformIdsRef.current.has(platform.id)) return;
+      if (!platform?.id || addedPlatformIdsRef.current.has(platform.id)) return;
 
       const platformRoute = `/platforms/${platform.id}`;
       const platformMenu = DockerPlatformMenu(platform);
 
-      // Mark children as active/expanded if applicable
       platformMenu.children?.forEach((item) => {
         item.active = isRouteActive(item.route ?? '');
       });
       platformMenu.expanded = platformMenu.children?.some((menu) => menu.active) || false;
       addedPlatformIdsRef.current.add(platform.id);
 
-      setMenuItems((prevMenuItems) => {
-        const baseMenuIndex = prevMenuItems.findIndex((menu) => menu.group === 'Base');
+      setMenuItems((prev) => {
+        const baseMenuIndex = prev.findIndex((menu) => menu.group === 'Base');
+        if (baseMenuIndex === -1) return prev;
 
-        if (baseMenuIndex === -1) return prevMenuItems;
+        const baseMenu = prev[baseMenuIndex];
+        if (baseMenu.items.some((i) => i.route === platformRoute)) return prev;
 
-        const baseMenu = prevMenuItems[baseMenuIndex];
-
-        // Double-check for duplicates in state (safety check)
-        if (baseMenu.items.some((item) => item.route === platformRoute)) return prevMenuItems;
-
-        // Add the new platform
-        const updatedBaseMenu = {
-          ...baseMenu,
-          items: [...baseMenu.items, platformMenu],
-        };
-
-        return [...prevMenuItems.slice(0, baseMenuIndex), updatedBaseMenu, ...prevMenuItems.slice(baseMenuIndex + 1)];
+        const updatedBase = { ...baseMenu, items: [...baseMenu.items, platformMenu] };
+        return [...prev.slice(0, baseMenuIndex), updatedBase, ...prev.slice(baseMenuIndex + 1)];
       });
     },
     [isRouteActive],
@@ -60,139 +51,79 @@ export const SidebarMenu = () => {
   // Clean up removed platforms
   useEffect(() => {
     const baseMenu = menuItems.find((menu) => menu.group === 'Base');
-    if (baseMenu) {
-      const currentPlatformIds = new Set<string>();
+    if (!baseMenu) return;
 
-      // Extract platform IDs from current menu items
-      baseMenu.items.forEach((item) => {
-        if (item.isPlatform && item.route) {
-          // Extract ID from route like "/platforms/123"
-          const match = item.route.match(/\/platforms\/(.+)/);
-          if (match && match[1]) {
-            currentPlatformIds.add(match[1]);
-          }
-        }
-      });
-
-      // Update our ref to match the current state
-      addedPlatformIdsRef.current = currentPlatformIds;
-    }
+    const ids = new Set<string>();
+    baseMenu.items.forEach((item) => {
+      const match = item.route?.match(/\/platforms\/(.+)/);
+      if (match?.[1]) ids.add(match[1]);
+    });
+    addedPlatformIdsRef.current = ids;
   }, [menuItems]);
 
-  // Update menu items when location changes
+  // Update active state
   useEffect(() => {
-    const updateMenuItems = (items: ISubMenuItem[]): ISubMenuItem[] =>
+    const updateItems = (items: ISubMenuItem[]): ISubMenuItem[] =>
       items.map((item) => ({
         ...item,
         active: isRouteActive(item.route ?? ''),
         expanded: item.children
-          ? item.expanded || item.children.some((child) => child.expanded)
+          ? item.expanded || item.children.some((c) => c.active)
           : isRouteActive(item.route ?? ''),
-        children: item.children ? updateMenuItems(item.children) : undefined,
+        children: item.children ? updateItems(item.children) : undefined,
       }));
 
-    setMenuItems((prevMenuItems) =>
-      prevMenuItems.map((menu) => ({
+    setMenuItems((prev) =>
+      prev.map((menu) => ({
         ...menu,
-        active: menu.items.some((subMenu) => isRouteActive(subMenu.route ?? '')),
-        items: updateMenuItems(menu.items),
+        items: updateItems(menu.items),
       })),
     );
   }, [location, isRouteActive]);
 
-  // Add platform menu when currentPlatform changes
   useEffect(() => {
     if (currentPlatform?.id) {
       addPlatformToMenu({ id: currentPlatform.id, name: currentPlatform.name ?? '' });
     }
   }, [currentPlatform, addPlatformToMenu]);
 
-  const toggleMenu = (menu: ISubMenuItem): void => {
-    const updateSubMenu = (items: ISubMenuItem[]): ISubMenuItem[] =>
-      items.map((item) => ({
-        ...item,
-        expanded: item === menu ? !item.expanded : item.expanded,
-        children: item.children ? updateSubMenu(item.children) : undefined,
+  const toggleMenu = (menu: ISubMenuItem) => {
+    const update = (items: ISubMenuItem[]): ISubMenuItem[] =>
+      items.map((i) => ({
+        ...i,
+        expanded: i === menu ? !i.expanded : i.expanded,
+        children: i.children ? update(i.children) : undefined,
       }));
 
-    setMenuItems((prevMenuItems) =>
-      prevMenuItems.map((menuGroup) => ({
-        ...menuGroup,
-        items: updateSubMenu(menuGroup.items),
+    setMenuItems((prev) =>
+      prev.map((group) => ({
+        ...group,
+        items: update(group.items),
       })),
     );
 
-    if (sidebarMinimized && menu.children) {
-      toggleSidebar();
-    } else if (!menu.children && menu.route) {
-      navigate(menu.route);
-    }
+    if (sidebarMinimized && menu.children) toggleSidebar();
+    else if (!menu.children && menu.route) navigate(menu.route);
   };
 
-  const renderMenuItem = (item: ISubMenuItem) => (
-    <li key={item.label}>
-      <div
-        onClick={() => toggleMenu(item)}
-        className="group relative text-muted-foreground cursor-pointer hover:bg-card flex h-9 items-center justify-start rounded"
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') toggleMenu(item);
-        }}>
-        <div
-          className={`${
-            item.active && sidebarMinimized ? 'text-primary' : 'text-muted-foreground/50'
-          } pointer-events-none absolute m-2`}>
-          {item.icon}
-        </div>
-
-        {item.children && !sidebarMinimized ? (
-          <ExpandableMenuItem item={item} />
-        ) : (
-          <Link
-            to={item.route!}
-            className={`ml-10 truncate text-xs font-semibold tracking-wide ${item.active ? 'text-primary' : ''}`}>
-            {item.label}
-          </Link>
-        )}
-
-        {sidebarMinimized && (
-          <div className="absolute w-full">
-            <span className="z-100 absolute left-14 -top-[34px] w-auto min-w-max origin-left scale-0 rounded-md bg-foreground p-2 text-xs font-bold text-background shadow-md transition-all duration-200 group-hover:scale-100">
-              {item.label}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {item.children && <SidebarSubMenu submenu={item} toggleMenu={toggleMenu} />}
-    </li>
-  );
-
-  const ExpandableMenuItem = ({ item }: { item: ISubMenuItem }) => (
-    <div className="flex h-9 items-center justify-start rounded hover:bg-card">
-      <span className="ml-10 truncate text-xs font-semibold tracking-wide text-muted-foreground group-hover:text-foreground">
-        {item.label}
-      </span>
-      <button
-        className={`${item.expanded ? 'rotate-90' : ''} absolute top-1 right-0 flex items-center p-1 text-muted-foreground/50 transition-all transform duration-500`}
-        aria-label="Expand submenu">
-        <ChevronRight className="w-4 h-4" />
-      </button>
-    </div>
-  );
-
   return (
-    <>
+    <Fragment>
       {menuItems.map((menu, i) => (
         <div className="pt-4" key={menu.group || i}>
-          <div className="mx-1 mb-2 flex items-center justify-between">
-            <small className={`${sidebarMinimized ? 'hidden' : ''} text-xs font-semibold text-muted-foreground/50`}>
-              {menu.group}
-            </small>
-          </div>
+          {!sidebarMinimized && (
+            <div className="mx-1 mb-2 flex items-center justify-between">
+              <small className="text-xs font-medium text-muted-foreground/50">{menu.group}</small>
+            </div>
+          )}
 
-          <ul className="flex flex-col space-y-1">{menu.items.map(renderMenuItem)}</ul>
+          <ul className="flex flex-col space-y-1">
+            {menu.items.map((item) => (
+              <li key={item.label}>
+                <SidebarRow item={item} minimized={!!sidebarMinimized} onClick={() => toggleMenu(item)} />
+                {item.children && <SidebarSubMenu submenu={item} toggleMenu={toggleMenu} />}
+              </li>
+            ))}
+          </ul>
 
           {menu.separator && (
             <div className="pt-3">
@@ -201,6 +132,78 @@ export const SidebarMenu = () => {
           )}
         </div>
       ))}
-    </>
+    </Fragment>
   );
 };
+
+function SidebarRow({ item, minimized, onClick }: { item: ISubMenuItem; minimized: boolean; onClick: () => void }) {
+  return (
+    <div
+      className={clsx("group relative flex items-center h-9 rounded cursor-pointer hover:bg-card text-muted-foreground px-2", item.active && 'text-primary bg-card')}
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onClick()}>
+      {/* Icon */}
+      <div
+        className={clsx(
+          'absolute flex items-center justify-center',
+          'left-2',
+          item.active ? 'text-primary' : 'text-muted-foreground/50',
+        )}>
+        {item.icon}
+      </div>
+
+      {/* Label section (hidden when minimized) */}
+      {!minimized && (
+        <div className={'flex items-center hover:underline gap-3 w-full pl-10'}>
+          {item.children ? (
+            <ExpandableHead label={item.label} expanded={!!item.expanded} />
+          ) : (
+            <Link
+              to={item.route ?? '/'}
+              className={clsx('truncate text-xs font-medium', item.active && 'text-primary ')}>
+              {item.label}
+            </Link>
+          )}
+        </div>
+      )}
+
+      {/* Tooltip when collapsed */}
+      {minimized && (
+        <div className="absolute inset-0 flex items-center justify-center group">
+          <div
+            className="
+              absolute left-14
+              top-1/2 -translate-y-1/2
+              scale-0 group-hover:scale-100
+              transition-transform duration-150 origin-left
+              bg-foreground text-background
+              text-xs font-medium
+              rounded-md shadow-md
+              p-2 whitespace-nowrap
+              pointer-events-auto
+              z-50
+            ">
+            {item.label}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExpandableHead({ label, expanded }: { label: string; expanded: boolean }) {
+  return (
+    <div className="flex h-9 items-center justify-between rounded hover:bg-card w-full pr-1">
+      <span className="truncate text-xs font-medium text-muted-foreground group-hover:text-foreground">{label}</span>
+      <ChevronRight
+        className={clsx(
+          'h-4 w-4 transition-transform duration-300 ease-out text-muted-foreground/60',
+          expanded && 'rotate-90',
+        )}
+        aria-hidden
+      />
+    </div>
+  );
+}

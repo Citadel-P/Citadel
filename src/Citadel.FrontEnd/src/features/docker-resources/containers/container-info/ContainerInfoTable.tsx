@@ -1,7 +1,7 @@
 import { ContainerInfoView } from '@/api/generated/api.types';
 import { useAppContext } from '@/lib/context/app-context';
 import { DataTable } from '@/components/ui/data-table';
-import { PortsDisplay } from '@/components/ui/PortsDisplay';
+import { PortsDisplay } from '@/components/custom/ports-display';
 import { truncate } from '@/lib/truncate';
 import { formatId } from '@/lib/utils';
 import { ColumnDef } from '@tanstack/react-table';

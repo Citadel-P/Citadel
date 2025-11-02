@@ -1,6 +1,6 @@
 import { DataTable } from '@/components/ui/data-table';
 import { DockerVolumeResult } from '@/api/generated/api.types';
-import SortableCell from '@/components/ui/SortableCell';
+import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useMemo } from 'react';
@@ -123,7 +123,7 @@ const VolumeNameRow = ({ volume }: { volume: DockerVolumeResult }) => {
         <StateIndicator value={volume.inUse} />
       </div>
       <span
-        className="cursor-pointer hover:underline text-[13px]"
+        className="cursor-pointer hover:underline"
         onClick={onClick}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {

@@ -55,7 +55,7 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
                   <Header.Indicator resource={resource} />
                   <div className="flex flex-col text-md font-bold text-foreground">
                     <span>{resource.name}</span>
-                    <span className="text-xs text-foreground/40">
+                    <span className="text-sm text-foreground/40">
                       <CopyToClipboard textToCopy={resource.id ?? '-'} />
                     </span>
                   </div>

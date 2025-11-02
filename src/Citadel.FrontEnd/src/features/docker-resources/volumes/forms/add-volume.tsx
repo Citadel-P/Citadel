@@ -6,7 +6,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFieldArray } from 'react-hook-form';
 import { LoaderCircle, ChevronDown } from 'lucide-react';
-import KeyValuePairInput from '@/components/ui/KeyValuePairInput';
+import KeyValuePairInput from '@/components/custom/key-value-pair-input';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useEffect, useState } from 'react';
 import { useAppContext } from '@/lib/context/app-context';
@@ -86,7 +86,9 @@ const AddVolume = () => {
                       name="name"
                       render={({ field }) => (
                         <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
-                          <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">Name</FormLabel>
+                          <FormLabel className="flex-none w-full sm:w-36 text-sm font-normal mb-2 sm:mb-0">
+                            Name
+                          </FormLabel>
                           <div className="flex-1">
                             <FormControl>
                               <Input
@@ -107,7 +109,9 @@ const AddVolume = () => {
                       name="driver"
                       render={({ field }) => (
                         <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
-                          <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">Driver</FormLabel>
+                          <FormLabel className="flex-none w-full sm:w-36 font-normal text-sm mb-2 sm:mb-0">
+                            Driver
+                          </FormLabel>
                           <div className="flex-1">
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl className="w-full shadow-none">

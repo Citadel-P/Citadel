@@ -236,16 +236,16 @@ const BreadCrumb = ({ isSticky }: { isSticky: boolean }) => {
                 <BreadcrumbItem>
                   {!crumb.isActive ? (
                     <BreadcrumbLink
-                      className="hover:text-primary text-[13px] cursor-pointer"
+                      className="hover:text-primary text-xs cursor-pointer"
                       onClick={() => navigate(crumb.link ?? '/')}>
                       {crumb.title}
                     </BreadcrumbLink>
                   ) : (
-                    <BreadcrumbPage className="text-muted-foreground text-[13px]">{crumb.title}</BreadcrumbPage>
+                    <BreadcrumbPage className="text-muted-foreground text-xs">{crumb.title}</BreadcrumbPage>
                   )}
                 </BreadcrumbItem>
                 {crumb.badge && (
-                  <Badge variant="secondary" className="px-1.5 font-normal text-[12px]">
+                  <Badge variant="secondary" className="px-1.5 font-normal text-xs">
                     {crumb.badge.title}
                   </Badge>
                 )}

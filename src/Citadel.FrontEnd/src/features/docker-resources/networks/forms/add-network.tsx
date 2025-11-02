@@ -8,7 +8,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFieldArray } from 'react-hook-form';
 import { LoaderCircle, ChevronDown } from 'lucide-react';
-import KeyValuePairInput from '@/components/ui/KeyValuePairInput';
+import KeyValuePairInput from '@/components/custom/key-value-pair-input';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import React, { useEffect } from 'react';
 import { useAppContext } from '@/lib/context/app-context';
@@ -40,7 +40,7 @@ function IPField({
       name={name}
       render={({ field }) => (
         <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
-          <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">{label}</FormLabel>
+          <FormLabel className="flex-none w-full sm:w-36 font-normal text-sm mb-2 sm:mb-0">{label}</FormLabel>
           <div className="flex-1">
             <FormControl>
               <Input
@@ -50,7 +50,7 @@ function IPField({
                 {...field}
               />
             </FormControl>
-            <FormMessage className="text-xs" />
+            <FormMessage className="text-sm" />
           </div>
         </FormItem>
       )}
@@ -118,7 +118,7 @@ export default function AddNetwork() {
               {/* Basic Configuration */}
               <li className="mb-10 ms-6">
                 {validationErrors && <AlertMessage type="error">{validationErrors}</AlertMessage>}
-                <span className="absolute flex items-center justify-center w-5 h-5 bg-primary/80 rounded-full -start-2.5 ring-4 ring-background text-xs text-primary-foreground">
+                <span className="absolute flex items-center justify-center w-5 h-5 bg-primary/80 rounded-full -start-2.5 ring-4 ring-background text-sm text-primary-foreground">
                   1
                 </span>
                 <div className="flex flex-col space-y-4">
@@ -129,7 +129,9 @@ export default function AddNetwork() {
                       name="name"
                       render={({ field }) => (
                         <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
-                          <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">Name</FormLabel>
+                          <FormLabel className="flex-none w-full sm:w-36 font-normal text-sm mb-2 sm:mb-0">
+                            Name
+                          </FormLabel>
                           <div className="flex-1">
                             <FormControl>
                               <Input
@@ -139,7 +141,7 @@ export default function AddNetwork() {
                                 {...field}
                               />
                             </FormControl>
-                            <FormMessage className="text-xs" />
+                            <FormMessage className="text-sm" />
                           </div>
                         </FormItem>
                       )}
@@ -150,7 +152,9 @@ export default function AddNetwork() {
                       name="driver"
                       render={({ field }) => (
                         <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
-                          <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">Driver</FormLabel>
+                          <FormLabel className="flex-none w-full sm:w-36 font-normal text-sm mb-2 sm:mb-0">
+                            Driver
+                          </FormLabel>
                           <div className="flex-1">
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl className="w-full shadow-none">
@@ -177,7 +181,7 @@ export default function AddNetwork() {
 
               {/* Advanced Configuration */}
               <li className="mb-10 ms-6">
-                <span className="absolute flex items-center justify-center w-5 h-5 bg-primary/80 rounded-full -start-2.5 mt-1.5 ring-4 ring-background text-xs text-primary-foreground">
+                <span className="absolute flex items-center justify-center w-5 h-5 bg-primary/80 rounded-full -start-2.5 mt-1.5 ring-4 ring-background text-sm text-primary-foreground">
                   2
                 </span>
                 <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
@@ -206,7 +210,7 @@ export default function AddNetwork() {
                               <div className="space-y-0.5">
                                 <FormLabel>Enable IPv4</FormLabel>
                                 <FormDescription>
-                                  <FormMessage className="text-xs" />
+                                  <FormMessage className="text-sm" />
                                   Controls whether IPv4 address allocation is enabled for this network.
                                 </FormDescription>
                               </div>
@@ -260,7 +264,7 @@ export default function AddNetwork() {
                               <FormControl>
                                 <Switch checked={field.value} onCheckedChange={field.onChange} />
                               </FormControl>
-                              <FormMessage className="text-xs" />
+                              <FormMessage className="text-sm" />
                             </FormItem>
                           )}
                         />

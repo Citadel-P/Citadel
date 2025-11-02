@@ -1,6 +1,6 @@
 import { DataTable } from '@/components/ui/data-table';
 import { ImageView } from '@/api/generated/api.types';
-import SortableCell from '@/components/ui/SortableCell';
+import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { truncate } from '@/lib/truncate';
@@ -10,13 +10,13 @@ import { byteTransform } from '@/lib/bytes.helper';
 import { useNavigate, useParams } from 'react-router';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import { formatId } from '@/lib/utils';
-import { RegistryDisplay } from '@/components/ui/RegistryDisplay';
+import { RegistryDisplay } from '@/components/custom/registry-display';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 
-export const LocalImagesTable = ({
+export const ImagesTable = ({
   items,
   isLoading,
   actions,
@@ -87,7 +87,7 @@ const columns = (
     cell: ({ row }) => (
       <div className="flex flex-wrap gap-1">
         {row.original.tags.map((t) => (
-          <span key={t} className="px-2 py-0.5 bg-muted/25 rounded text-xs">
+          <span key={t} className="px-2 py-0.5 bg-muted/25 rounded text-sm">
             {truncate(t ?? '', 28)}
           </span>
         ))}

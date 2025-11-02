@@ -2,7 +2,7 @@ import { useDockerResourceParamType } from '@/lib/hooks';
 import { useNavigate, useParams } from 'react-router';
 import { RequiredDockerComponents } from './types';
 import { DockerResourceType, PluralResourceMap } from '@/api/types';
-import { SearchField } from '@/components/ui/SearchField';
+import { SearchField } from '@/components/custom/search-field';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import NotFound from './NotFound';
@@ -55,7 +55,7 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
                 <Button
                   type="button"
                   onClick={() => navigate('./add')}
-                  className="inline-flex items-center bg-primary hover:bg-primary/80 font-medium rounded-sm text-xs px-2.5 py-2.5">
+                  className="inline-flex items-center bg-primary hover:bg-primary/80 rounded-sm text-sm px-2.5 py-2.5">
                   <Plus className="h-3 w-3" /> Add {type}
                 </Button>
               )}

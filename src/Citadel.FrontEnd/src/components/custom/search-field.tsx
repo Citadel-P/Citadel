@@ -23,14 +23,14 @@ export const SearchField = ({ onSearch, placeholder = 'Search', className = '' }
   }, [debouncedSearchTerm, onSearch]);
 
   return (
-    <div className={cn(`relative font-semibold mb-2 sm:mb-0`, className)}>
+    <div className={cn(`relative mb-2 sm:mb-0`, className)}>
       <Input
         type="search"
         placeholder={placeholder}
         value={searchTerm}
         onChange={handleSearchChange}
-        className="bg-background placeholder:text-foreground/50 h-9 px-5 pr-10 rounded-full text-xs focus:outline-hidden focus-visible:ring-transparent"
-        aria-label="Search containers by name"
+        className="bg-background placeholder:text-foreground/50 h-9 px-5 pr-10 rounded-full text-sm focus:outline-hidden focus-visible:ring-transparent"
+        aria-label="Search resources by name"
       />
       <Search className="absolute text-slate-300 right-0 top-0 mt-1.5 mr-4 h4 w-4 pointer-events-none" />
     </div>

@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 
 import { useAppContext } from '@/lib/context/app-context';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import KeyValuePairInput from '@/components/ui/KeyValuePairInput';
+import KeyValuePairInput from '@/components/custom/key-value-pair-input';
 import { LoaderCircle, ChevronDown, Info } from 'lucide-react';
 import { useFieldArray } from 'react-hook-form';
 import { DialogFooter } from '@/components/ui/dialog';
@@ -18,7 +18,7 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
-import ValueInput from '@/components/ui/ValueInput';
+import ValueInput from '@/components/custom/value-input';
 import { ContainerRestartPolicy, CreateContainerInput, ImageView, ProblemDetails } from '@/api/generated/api.types';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';

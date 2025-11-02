@@ -3,7 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
 import { ChevronsUpDown, SearchX } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
-import { filterBySplit } from '@/lib/utils';
+import { cn, filterBySplit } from '@/lib/utils';
 import { PluralResourceMap, ResourceType } from '@/api/types';
 import { useRead } from '@/lib/hooks';
 import { useResourceFilter } from '@/lib/atoms';
@@ -15,6 +15,7 @@ export const ResourceSelector = <T extends { id: string; name: string }>({
   disabled,
   align,
   placeholder,
+  className,
 }: {
   type: ResourceType;
   selected?: T | undefined;
@@ -22,6 +23,7 @@ export const ResourceSelector = <T extends { id: string; name: string }>({
   disabled?: boolean;
   align?: 'start' | 'center' | 'end';
   placeholder?: string;
+  className?: string;
 }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -50,8 +52,11 @@ export const ResourceSelector = <T extends { id: string; name: string }>({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant="secondary"
-          className="flex justify-start gap-2 w-fit max-w-[350px] bg-accent/60 hover:bg-accent/80"
+          variant="ghost"
+          className={cn(
+            `flex justify-start gap-2 w-fit max-w-[350px] bg-accent/60 hover:bg-accent/80 shadow-none`,
+            className,
+          )}
           disabled={disabled}>
           {name || (placeholder ?? `Select the resource`)}
           {!disabled && <ChevronsUpDown className="w-3 h-3" />}
@@ -60,8 +65,8 @@ export const ResourceSelector = <T extends { id: string; name: string }>({
       <PopoverContent className="w-[300px] max-h-[300px] p-0 bg-background" align={align}>
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder={`Search ${type}s`}
-            className="h-9 border-transparent"
+            placeholder={`Search ${PluralResourceMap[type]}`}
+            className={cn(`h-9`, className)}
             value={search}
             onValueChange={setSearch}
           />
@@ -80,7 +85,7 @@ export const ResourceSelector = <T extends { id: string; name: string }>({
                     setOpen(false);
                   }}
                   className="flex items-center justify-between cursor-pointer">
-                  <div className="p-1">None</div>
+                  <div className={cn(`p-1`, className)}>None</div>
                 </CommandItem>
               )}
               {filtered.map((resource) => (
@@ -92,8 +97,8 @@ export const ResourceSelector = <T extends { id: string; name: string }>({
                     onSelect && onSelect(resource);
                     setOpen(false);
                   }}
-                  className="flex items-center justify-between cursor-pointer">
-                  <div className="p-1">{resource.name}</div>
+                  className="flex items-center justify-between cursor-pointer ">
+                  <div className={cn(`p-1`, className)}>{resource.name}</div>
                 </CommandItem>
               ))}
             </CommandGroup>

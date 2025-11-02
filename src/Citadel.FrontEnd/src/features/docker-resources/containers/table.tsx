@@ -5,11 +5,11 @@ import { ContainerView, ContainerStateStatus, ContainerStatView } from '@/api/ge
 import { truncate } from '@/lib/truncate';
 import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
-import SortableCell from '@/components/ui/SortableCell';
+import SortableCell from '@/components/custom/sortable-cell';
 import { Link } from 'react-router';
 import { TableDropdown } from './table-dropdown';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
-import { PortsDisplay } from '@/components/ui/PortsDisplay';
+import { PortsDisplay } from '@/components/custom/ports-display';
 import { ImageName } from './container-info/ImageName';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useMemo } from 'react';
@@ -22,7 +22,7 @@ export const ContainersTable = ({ items, isLoading }: { items: ContainerView[]; 
   return (
     <div className="flex flex-col gap-3">
       <DataTable columns={columns} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
-      <div className="text-muted-foreground text-xs p-2 font-normal">
+      <div className="text-muted-foreground text-sm p-2 font-normal">
         {rowCount > 0 && (
           <span>
             Showing {rowCount} of {rowCount} volume(s)

@@ -1,6 +1,6 @@
 import { DataTable } from '@/components/ui/data-table';
 import { RegistryView } from '@/api/generated/api.types';
-import SortableCell from '@/components/ui/SortableCell';
+import SortableCell from '@/components/custom/sortable-cell';
 import { TableDropdown } from './table-dropdown';
 import { ColumnDef, Row } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';

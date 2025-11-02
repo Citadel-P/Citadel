@@ -63,19 +63,19 @@ function PullImageTaskRenderer({ payload, type, children }: PullImageTaskRendere
   );
 
   const description = (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-      <div className="flex flex-row gap-2 items-center">
+    <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
+      <span className="inline-flex flex-row gap-2 items-center">
         {status === 'pending' && <LoaderCircle className="h-4 w-4 animate-spin" />}
         {status === 'error' && <span className="text-destructive">{DockerResourceComponents[type].Icon}</span>}
         {status === 'success' && <span className="text-success">{DockerResourceComponents[type].Icon}</span>}
         <span>{refName}</span>
-      </div>
+      </span>
 
-      <div className="flex flex-row gap-2 items-center">
+      <span className="inline-flex flex-row gap-2 items-center">
         <Clock className="w-4 h-4" />
         <span>{elapsedLabel} seconds</span>{' '}
-      </div>
-    </div>
+      </span>
+    </span>
   );
 
   const content = <CodeHighlight code={text} language="text" autoScroll />;

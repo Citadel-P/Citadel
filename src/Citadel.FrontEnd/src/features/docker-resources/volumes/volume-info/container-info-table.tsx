@@ -7,7 +7,7 @@ import {
 import { useAppContext } from '@/lib/context/app-context';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { DataTable } from '@/components/ui/data-table';
-import { PortsDisplay } from '@/components/ui/PortsDisplay';
+import { PortsDisplay } from '@/components/custom/ports-display';
 import { truncate } from '@/lib/truncate';
 import { formatId } from '@/lib/utils';
 import { ColumnDef } from '@tanstack/react-table';
@@ -19,7 +19,7 @@ const columns = (currentPlatform: PlatformView | undefined): ColumnDef<Container
     accessorKey: 'name',
     header: () => <span>Name</span>,
     cell: ({ row }) => (
-      <div className="flex flex-wrap gap-2 text-[13px] items-center">
+      <div className="flex flex-wrap gap-2 text-sm items-center">
         <StateIndicator value={row.original.state ?? ContainerStateStatus.Exited} />
         <Link to={`/containers/${row.original.id?.slice(0, 12)}`} className="table-link">
           {row.original.name?.slice(1)}

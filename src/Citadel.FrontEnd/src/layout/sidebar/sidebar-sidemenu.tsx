@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import { useLayoutContext } from '@/lib/context/layout-context';
 import { ISubMenuItem } from './menu-items';
 import { ChevronRight } from 'lucide-react';
+import clsx from 'clsx';
 
 interface IProps {
   submenu: ISubMenuItem;
@@ -10,34 +11,21 @@ interface IProps {
 
 export const SidebarSubMenu = ({ submenu, toggleMenu }: IProps) => {
   const { sidebarMinimized } = useLayoutContext();
+  const expanded = !!submenu.expanded;
+
+  if (sidebarMinimized) return null;
+
   return (
     <div
-      className={`transition-all duration-500 overflow-hidden pt-1 pl-4 ${
-        sidebarMinimized ? 'hidden' : submenu.expanded ? 'max-h-screen' : 'max-h-0'
-      }`}>
-      <ul className="flex flex-col border-l border-dashed border-border pl-2 text-muted-foreground">
-        {submenu.children?.map((sub, index) => (
-          <li key={index}>
-            <div
-              className="flex items-center rounded text-muted-foreground hover:bg-card hover:text-foreground"
-              role="button"
-              tabIndex={0}
-              onClick={() => toggleMenu(sub)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  toggleMenu(sub);
-                }
-              }}>
-              {sub.children ? (
-                <ExpandableMenuItem sub={sub} sidebarMinimized={sidebarMinimized ?? false} />
-              ) : (
-                <Link
-                  to={sub.route ?? '/'}
-                  className={`inline-block w-full px-4 py-2 text-xs font-semibold ${sub.active ? 'text-primary' : ''}`}>
-                  {sub.label}
-                </Link>
-              )}
-            </div>
+      aria-hidden={!expanded}
+      className={clsx(
+        'transition-all duration-300 ease-out overflow-hidden pl-4 pt-1',
+        expanded ? 'grid grid-rows-[1fr] opacity-100' : 'grid grid-rows-[0fr] opacity-0',
+      )}>
+      <ul className="overflow-hidden flex flex-col border-l border-dashed border-border pl-2 gap-0.5 text-muted-foreground">
+        {submenu.children?.map((sub) => (
+          <li key={sub.label} className='hover:underline'>
+            <SubRow sub={sub} toggleMenu={toggleMenu} />
             {sub.children && sub.expanded && <SidebarSubMenu submenu={sub} toggleMenu={toggleMenu} />}
           </li>
         ))}
@@ -46,20 +34,35 @@ export const SidebarSubMenu = ({ submenu, toggleMenu }: IProps) => {
   );
 };
 
-interface ExpandableMenuItemProps {
-  sub: ISubMenuItem;
-  sidebarMinimized: boolean;
-}
+function SubRow({ sub, toggleMenu }: { sub: ISubMenuItem; toggleMenu: (menu: ISubMenuItem) => void }) {
+  const base = 'flex items-center rounded text-muted-foreground hover:bg-card hover:text-foreground';
 
-const ExpandableMenuItem = ({ sub, sidebarMinimized }: ExpandableMenuItemProps) => (
-  <div className="flex items-center justify-between w-full">
-    <span className="inline-block cursor-pointer px-4 py-2 text-xs font-semibold">{sub.label}</span>
-    <button
-      className={`flex items-center p-1 text-muted-foreground transition-transform duration-500 ${
-        sidebarMinimized ? 'hidden' : sub.expanded ? 'rotate-90' : ''
-      }`}
-      aria-label="Expand submenu">
-      <ChevronRight />
-    </button>
-  </div>
-);
+  if (sub.children) {
+    return (
+      <button
+        type="button"
+        onClick={() => toggleMenu(sub)}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleMenu(sub)}
+        aria-expanded={!!sub.expanded}
+        className={clsx(base, 'w-full px-3 py-2')}>
+        <span className="flex-1 text-left text-xs font-medium">{sub.label}</span>
+        <ChevronRight
+          className={clsx(
+            'h-4 w-4 transition-transform duration-300 ease-out text-muted-foreground/60',
+            sub.expanded && 'rotate-90',
+          )}
+          aria-hidden
+        />
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      to={sub.route ?? '/'}
+      className={clsx(base, 'w-full px-3 py-2 text-xs font-medium', sub.active && 'text-primary bg-card')}
+      onClick={() => toggleMenu(sub)}>
+      {sub.label}
+    </Link>
+  );
+}

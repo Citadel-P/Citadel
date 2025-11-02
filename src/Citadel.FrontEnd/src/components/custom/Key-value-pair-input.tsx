@@ -32,7 +32,7 @@ const KeyValuePairInput = ({
 }: KeyValuePairInputProps) => (
   <div className="col-span-2">
     <div className="flex items-center gap-1">
-      <Label className="flex-none text-xs mb-1">{label}</Label>
+      <Label className="flex-none text-sm font-normal mb-1">{label}</Label>
       {helpText && (
         <TooltipProvider>
           <Tooltip>
@@ -54,7 +54,7 @@ const KeyValuePairInput = ({
               <FormItem className="flex-1 w-full">
                 <FormControl>
                   <div className="flex items-stretch">
-                    <span className="flex z-10 items-center px-6 bg-accent-foreground/5 border-l rounded-l-sm border-y border-border text-xs h-full">
+                    <span className="flex z-10 items-center px-6 bg-accent-foreground/5 border-l rounded-l-sm border-y border-border text-sm shadow-xs h-full">
                       key
                     </span>
                     <Input
@@ -74,7 +74,7 @@ const KeyValuePairInput = ({
               <FormItem className="flex-1 w-full">
                 <FormControl>
                   <div className="flex items-stretch">
-                    <span className="flex z-10 items-center px-6 bg-accent-foreground/5 border-l rounded-l-sm border-y border-border text-xs h-full">
+                    <span className="flex z-10 items-center px-6 bg-accent-foreground/5 border-l rounded-l-sm border-y border-border text-sm font-normal shadow-xs h-full">
                       value
                     </span>
                     <Input

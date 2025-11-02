@@ -1,6 +1,6 @@
 import { DataTable } from '@/components/ui/data-table';
 import { DockerNetworkResult } from '@/api/generated/api.types';
-import SortableCell from '@/components/ui/SortableCell';
+import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { truncate } from '@/lib/truncate';
@@ -168,7 +168,7 @@ const NetworkNameRow = ({ network }: { network: DockerNetworkResult }) => {
         <StateIndicator value={network.inUse} />
       </div>
       <span
-        className="cursor-pointer hover:underline text-[13px]"
+        className="cursor-pointer hover:underline"
         onClick={onClick}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {

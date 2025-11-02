@@ -1,6 +1,6 @@
 import { InspectImageView } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
-import { RegistryDisplay } from '@/components/ui/RegistryDisplay';
+import { RegistryDisplay } from '@/components/custom/registry-display';
 import { byteTransform } from '@/lib/bytes.helper';
 import { fromNow } from '@/lib/dayjs.helper';
 import { ColumnDef } from '@tanstack/react-table';

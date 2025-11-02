@@ -10,7 +10,7 @@ const columns: ColumnDef<NetworkConnectedContainerProps>[] = [
     accessorKey: 'name',
     header: () => <span>Name</span>,
     cell: ({ row }) => (
-      <div className="flex flex-wrap gap-2 text-[13px] items-center">
+      <div className="flex flex-wrap gap-2 text-sm items-center">
         <Box width={13} height={13} className="text-primary" />
         <Link to={`/containers/${row.original.id?.slice(0, 12)}`} className="table-link">
           {row.original.name}

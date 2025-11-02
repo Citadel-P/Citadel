@@ -1,5 +1,5 @@
 import { HardDrive } from 'lucide-react';
-import { LocalImagesTable } from './table';
+import { ImagesTable } from './table';
 import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
 import { useImagesGroup } from './hooks/useImagesGroup';
 import { ActionBar2 } from '@/components/custom/action-bar';
@@ -9,7 +9,7 @@ import PullImageForm, { PullButton } from './pull-image';
 export const ImageComponents: RequiredDockerComponents = {
   Icon: <HardDrive className="h-4 w-4" />,
 
-  Table: LocalImagesTable,
+  Table: ImagesTable,
   useData: function (platformId: string): ResourceDataHookResult<any> {
     const { imagesInfo, isLoading } = useImagesGroup(platformId);
     return { items: imagesInfo?.images ?? [], isLoading };
