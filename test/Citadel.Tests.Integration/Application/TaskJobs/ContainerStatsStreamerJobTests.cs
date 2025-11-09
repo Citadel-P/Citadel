@@ -55,7 +55,7 @@ public class ContainerStatsStreamerJobTests : IntegrationTestBase
                 dockerImageId: container.ImageId,
                 platformId: platform.Id,
                 ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
-                dockerContainerId: container.ContainerId,
+                dockerContainerId: container.Id,
                 state: ContainerStateStatus.Running), TestContext.Current.CancellationToken);
         }
 

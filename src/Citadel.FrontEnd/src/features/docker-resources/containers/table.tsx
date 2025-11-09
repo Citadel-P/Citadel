@@ -3,13 +3,13 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ContainerView, ContainerStateStatus, ContainerStatView } from '@/api/generated/api.types';
 import { truncate } from '@/lib/truncate';
-import { toFixedNumber } from '@/lib/utils';
+import { formatId, toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
 import SortableCell from '@/components/custom/sortable-cell';
 import { Link } from 'react-router';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import { PortsDisplay } from '@/components/custom/ports-display';
-import { ImageName } from './container-info/ImageName';
+import { ImageName } from './container-info/';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useMemo } from 'react';
 import { useSelectedResources } from '@/lib/atoms';
@@ -33,12 +33,7 @@ export const ContainersTable = ({
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
   return (
     <div className="flex flex-col gap-3">
-      <DataTable
-        columns={cols}
-        data={items ?? []}
-        isLoading={isLoading}
-        onSelectionChange={setSelectedResources}
-      />
+      <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
       <div className="text-muted-foreground text-sm p-2 font-normal">
         {rowCount > 0 && (
           <span>
@@ -85,7 +80,7 @@ const columns = (
         <div className="flex items-center">
           <StateIndicator value={row.original.state ?? ContainerStateStatus.Exited} />
         </div>
-        <Link to={`../containers/${row.original.containerId?.slice(0, 12)}/logs`} className="table-link">
+        <Link to={`./${formatId(row.original.containerId)}`} className="table-link">
           {row.original.name ? row.original.name?.slice(1) : ''}
         </Link>
       </div>
@@ -94,7 +89,6 @@ const columns = (
       return rowA.original.name < rowB.original.name ? 1 : -1;
     },
   },
-  
   {
     accessorKey: 'image',
     header: ({ column }) => <SortableCell cellName="Image" column={column} />,

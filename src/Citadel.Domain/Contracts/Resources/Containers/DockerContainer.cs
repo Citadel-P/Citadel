@@ -5,7 +5,7 @@ namespace Domain.Contracts.Resources.Containers;
 public sealed record DockerContainer(
     string Name,
     string Image,
-    string ContainerId,
+    string Id,
     string ImageId,
     ContainerStateStatus State,
     long? Created = null,

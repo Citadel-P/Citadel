@@ -11,23 +11,55 @@ import { Card, CardContent, CardHeader, CardDescription, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
 import dayjs from 'dayjs';
-import { byteTransform } from '@/lib/bytes.helper';
 import { ContainerStatView } from '@/api/generated/api.types';
-import { useContainerStatsContext } from './ContainerStatsContext';
+import { byteTransform } from '@/lib/bytes.helper';
 import { DockerContainerView } from '@/api/types';
 
-const MemoryUsage = () => {
-  const { stats, container, isLoading } = useContainerStatsContext();
+const NetworkUsageHeader = ({ container }: { container: DockerContainerView | undefined }) => (
+  <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
+    <div className="flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0">
+      <CardTitle>Network Usage</CardTitle>
+      <CardDescription>Showing total network usage for the past 24 hours</CardDescription>
+    </div>
+    <div className="flex">
+      <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
+        <span className="text-xs text-muted-foreground">Received</span>
+        <span className="text-sm text-foreground font-medium leading-none">
+          {container?.state === 'Running' && container?.containerStat
+            ? byteTransform(container.containerStat.rxBytes, 2)
+            : '-'}
+        </span>
+      </div>
+      <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
+        <span className="text-xs text-muted-foreground">Sent</span>
+        <span className="text-sm text-foreground font-medium leading-none">
+          {container?.state === 'Running' && container?.containerStat
+            ? byteTransform(container.containerStat.txBytes, 2)
+            : '-'}
+        </span>
+      </div>
+    </div>
+  </CardHeader>
+);
 
+const NetworkUsage = ({
+  stats,
+  container,
+  isLoading,
+}: {
+  stats: ContainerStatView[];
+  container: DockerContainerView | undefined;
+  isLoading: boolean;
+}) => {
   const chartConfig = useMemo(
     () =>
       ({
-        memoryActive: {
-          label: <span className="text-foreground">Active</span>,
+        rxBytes: {
+          label: <span className="text-foreground">Data received</span>,
           color: 'var(--chart-1)',
         },
-        memoryCache: {
-          label: <span className="text-foreground">Cache</span>,
+        txBytes: {
+          label: <span className="text-foreground">Data sent</span>,
           color: 'var(--chart-2)',
         },
       }) satisfies ChartConfig,
@@ -37,13 +69,13 @@ const MemoryUsage = () => {
   const gradientDefs = useMemo(
     () => (
       <defs>
-        <linearGradient id="fillmemoryActive" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="5%" stopColor="var(--color-memoryActive)" stopOpacity={0.8} />
-          <stop offset="95%" stopColor="var(--color-memoryActive)" stopOpacity={0.1} />
+        <linearGradient id="fillrxBytes" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="5%" stopColor="var(--color-rxBytes)" stopOpacity={0.8} />
+          <stop offset="95%" stopColor="var(--color-rxBytes)" stopOpacity={0.1} />
         </linearGradient>
-        <linearGradient id="fillmemoryCache" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="5%" stopColor="var(--color-memoryCache)" stopOpacity={0.8} />
-          <stop offset="95%" stopColor="var(--color-memoryCache)" stopOpacity={0.1} />
+        <linearGradient id="filltxBytes" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="5%" stopColor="var(--color-txBytes)" stopOpacity={0.8} />
+          <stop offset="95%" stopColor="var(--color-txBytes)" stopOpacity={0.1} />
         </linearGradient>
       </defs>
     ),
@@ -68,8 +100,6 @@ const MemoryUsage = () => {
           defaultIndex={1}
           content={
             <ChartTooltipContent
-              nameKey="stats"
-              indicator="dot"
               labelFormatter={(_, n) => {
                 const created = (n.at(0)?.payload as ContainerStatView).created as number;
                 return <span className="text-foreground">{dayjs(created * 1000).format('HH:mm:ss')}</span>;
@@ -94,20 +124,8 @@ const MemoryUsage = () => {
             />
           }
         />
-        <Area
-          dataKey="memoryActive"
-          type="natural"
-          fill="url(#fillmemoryActive)"
-          stroke="var(--color-memoryActive)"
-          stackId="a"
-        />
-        <Area
-          dataKey="memoryCache"
-          type="natural"
-          fill="url(#fillmemoryCache)"
-          stroke="var(--color-memoryCache)"
-          stackId="a"
-        />
+        <Area dataKey="rxBytes" type="natural" fill="url(#fillrxBytes)" stroke="var(--color-rxBytes)" stackId="a" />
+        <Area dataKey="txBytes" type="natural" fill="url(#filltxBytes)" stroke="var(--color-txBytes)" stackId="a" />
         <ChartLegend content={<ChartLegendContent />} />
       </AreaChart>
     ),
@@ -118,7 +136,7 @@ const MemoryUsage = () => {
     <Skeleton className="h-[225px] w-full rounded-xl" />
   ) : (
     <Card className="bg-background rounded-sm shadow-xs py-0">
-      <MemoryUsageHeader container={container} />
+      <NetworkUsageHeader container={container} />
       <CardContent className="px-2 sm:px-6">
         <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
           {memoizedChart}
@@ -127,33 +145,5 @@ const MemoryUsage = () => {
     </Card>
   );
 };
-interface MemoryUsageHeaderProps {
-  container: DockerContainerView | undefined;
-}
 
-const MemoryUsageHeader = ({ container }: MemoryUsageHeaderProps) => {
-  const renderStat = (label: string, value: string | number | undefined) => (
-    <div className="flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-sm text-foreground font-medium leading-none">
-        {container?.state === 'Running' && value !== undefined ? byteTransform(value, 2) : '-'}
-      </span>
-    </div>
-  );
-
-  return (
-    <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
-      <div className="flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0">
-        <CardTitle>Memory Usage</CardTitle>
-        <CardDescription>Showing total memory usage for the past 24 hours</CardDescription>
-      </div>
-      <div className="flex">
-        {renderStat('Active', container?.containerStat?.memoryActive)}
-        {renderStat('Cache', container?.containerStat?.memoryCache)}
-        {renderStat('Limit', container?.containerStat?.memoryLimit)}
-      </div>
-    </CardHeader>
-  );
-};
-
-export default MemoryUsage;
+export default NetworkUsage;

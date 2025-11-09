@@ -2,7 +2,7 @@ import { HardDrive } from 'lucide-react';
 import { VolumesTable } from './table';
 import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
-import { ActionBar2 } from '@/components/custom/action-bar';
+import { ActionBar } from '@/components/custom/action-bar';
 import { VolumeDropdownActions, VolumeGroupActions } from './actions';
 
 export const VolumeComponents: RequiredDockerComponents = {
@@ -12,7 +12,7 @@ export const VolumeComponents: RequiredDockerComponents = {
   },
   DropdownActions: VolumeDropdownActions,
   GroupActions: ({ items }) => {
-    return <ActionBar2 type="Volume" items={items} actions={Object.values(VolumeGroupActions)} />;
+    return <ActionBar type="Volume" items={items} actions={Object.values(VolumeGroupActions)} />;
   },
 
   useData: function (platformId: string): ResourceDataHookResult<any> {

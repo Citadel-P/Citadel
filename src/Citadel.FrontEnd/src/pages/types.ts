@@ -43,6 +43,8 @@ export interface RequiredDockerInfoComponents<T = any> {
     Indicator: React.FC<{ resource: T }>;
     ActionButtons: React.FC<{ resource: T }>;
   };
+  /** Optional subheader */
+  SubHeader?: React.FC<{ resource: T }>;
   /** Tabs configuration for tabbed resources */
   Tabs: {
     /** Tab label shown in the UI */

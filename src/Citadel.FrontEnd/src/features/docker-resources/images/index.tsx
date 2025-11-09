@@ -2,13 +2,12 @@ import { HardDrive } from 'lucide-react';
 import { ImagesTable } from './table';
 import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
 import { useImagesGroup } from './hooks/useImagesGroup';
-import { ActionBar2 } from '@/components/custom/action-bar';
+import { ActionBar } from '@/components/custom/action-bar';
 import { ImageDropdownActions, ImageGroupActions } from './actions';
 import PullImageForm, { PullButton } from './pull-image';
 
 export const ImageComponents: RequiredDockerComponents = {
   Icon: <HardDrive className="h-4 w-4" />,
-
   Table: ImagesTable,
   useData: function (platformId: string): ResourceDataHookResult<any> {
     const { imagesInfo, isLoading } = useImagesGroup(platformId);
@@ -22,9 +21,8 @@ export const ImageComponents: RequiredDockerComponents = {
   SubHeader: PullImageForm,
   DropdownActions: ImageDropdownActions,
   GroupActions: ({ items }) => {
-    return <ActionBar2 type="Image" items={items} actions={Object.values(ImageGroupActions)} />;
+    return <ActionBar type="Image" items={items} actions={Object.values(ImageGroupActions)} />;
   },
-
   filterItems: (items, search) => {
     if (!search.trim()) return items;
     const s = search.toLowerCase();

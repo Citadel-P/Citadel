@@ -27,7 +27,7 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
     [handleContainerInfoUpdated],
   );
 
-  useSignalRGroup({
+  const { isLoading } = useSignalRGroup({
     groupName: `container-info:${containerId}`,
     setupEventListeners,
     removeEventListeners,
@@ -41,17 +41,17 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
       containerEvent?.eventType !== 'destroy'
     ) {
       const container: DockerContainerView = {
-        containerId: containerEvent.container.containerId,
+        id: containerEvent.container.containerId,
         name: containerEvent.container.name,
         state: containerEvent.container.state,
         created: containerEvent.container.created as number,
         stack: containerEvent.container.stack,
-        containerStat: containerEvent.container.lastStats,
+        containerStat: containerEvent.container.lastStats ?? {},
         containerPort: containerEvent.container.ports as any,
       };
-      setContainerInfo(() => container);
+      setContainerInfo(container);
     }
   }, [containerEvent, containerId]);
 
-  return { containerInfo };
+  return { containerInfo, isLoading: isLoading || !containerInfo };
 };

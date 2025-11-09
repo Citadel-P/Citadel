@@ -17,7 +17,7 @@ export interface ActionButtonConfig {
   className?: string;
 }
 
-export const ActionBar2 = <T,>({
+export const ActionBar = <T,>({
   type,
   items,
   actions,
@@ -30,12 +30,12 @@ export const ActionBar2 = <T,>({
 
   if (!selectedRows?.length) return null;
 
-  return <GenericActionBar2 selectedItems={selectedRows} allItems={items} resource={type} actions={actions} />;
+  return <GenericActionBar selectedItems={selectedRows} allItems={items} resource={type} actions={actions} />;
 };
 
-export const GenericActionBar2 = <T,>({ selectedItems, allItems, resource, actions }: ActionBarProps2<T>) => {
+const GenericActionBar = <T,>({ selectedItems, allItems, resource, actions }: ActionBarProps<T>) => {
   const { sidebarMinimized } = useLayoutContext();
-
+console.log(sidebarMinimized)
   if (!selectedItems?.length) return null;
 
   return (
@@ -71,41 +71,6 @@ export const GenericActionBarButtons = <T,>({
         <Action resource={resource} key={id} />
       ))}
     </ButtonGroup>
-  );
-};
-
-export const GenericActionBar = <T,>({
-  selectedItems: selectedRows,
-  allItems,
-  resource,
-  actionButtons,
-  actions,
-}: ActionBarProps<T>) => {
-  const { sidebarMinimized } = useLayoutContext();
-
-  if (!selectedRows?.length) return null;
-
-  return (
-    <div
-      className={`fixed -translate-x-5 inset-x-0 bottom-0 shadow-lg p-2 bg-background flex flex-wrap justify-center items-center gap-x-4 gap-y-2 sm:justify-between ${
-        sidebarMinimized ? 'action-bar-left-collapsed' : 'action-bar-left'
-      }`}
-      style={{
-        width: sidebarMinimized ? 'calc(100% - var(--sidebar-minimized-width))' : 'calc(100% - var(--sidebar-width))',
-      }}>
-      <div className="flex-1 text-xs text-muted-foreground mt-2">
-        {selectedRows.length} of {allItems?.length} {resource.toLowerCase()}(s) selected.
-      </div>
-      {actions && actions.length > 0 ? (
-        <ButtonGroup>
-          {actions.map((Action, id) => (
-            <Action resources={selectedRows} key={id} />
-          ))}
-        </ButtonGroup>
-      ) : (
-        actionButtons
-      )}
-    </div>
   );
 };
 
@@ -171,19 +136,11 @@ const ActionBarButton = ({
     {label}
   </button>
 );
-interface ActionBarProps2<T> {
+interface ActionBarProps<T> {
   resource: ResourceType;
   allItems: T[] | undefined;
   selectedItems: T[] | undefined;
   actions: ButtonGroupComponent<T>[];
-}
-
-interface ActionBarProps<T> {
-  selectedItems: T[] | undefined;
-  allItems: T[] | undefined;
-  resource: ResourceType;
-  actionButtons?: React.ReactNode;
-  actions?: ButtonGroupComponent<T>[];
 }
 
 interface ActionButtonsProps {

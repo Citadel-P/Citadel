@@ -1,6 +1,9 @@
-import { Ban, Pause, Play, RotateCcw, StepForward, Trash } from 'lucide-react';
+import { Ban, Eye, Pause, Play, RotateCcw, StepForward, Trash } from 'lucide-react';
 import { ContainerView, ContainerStateStatus } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
+import { formatId } from '@/lib/utils';
+import { useNavigate } from 'react-router';
+import { useAppContext } from '@/lib/context/app-context';
 
 const useVariables = (resources: ContainerView | ContainerView[]) =>
   Array.isArray(resources) ? resources.map((r) => r.containerId) : [resources.containerId];
@@ -67,6 +70,29 @@ export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions 
         const can = (x: ContainerView) =>
           x.state === ContainerStateStatus.Running || x.state === ContainerStateStatus.Paused;
         return Array.isArray(r) ? r.some(can) : can(r);
+      },
+    })
+    .addAction({
+      key: 'details',
+      type: 'command',
+      separatorBefore: true,
+      icon: Eye,
+      useHandler: ({ resources }) => {
+        const navigate = useNavigate();
+        const { currentPlatform } = useAppContext();
+        const selected = Array.isArray(resources) ? resources[0] : resources;
+        let canExecute = !!selected;
+        if (Array.isArray(resources)) {
+          canExecute &&= resources.length === 1;
+        }
+        return {
+          canExecute,
+          isPending: false,
+          run: () => {
+            if (!canExecute || !selected) return;
+            navigate(`/platforms/${currentPlatform?.id}/containers/${formatId(selected.containerId)}`);
+          },
+        };
       },
     })
     .addAction({

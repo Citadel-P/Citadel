@@ -61,7 +61,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
                     dockerImageId: container.Image,
                     platformId: platform.Id,
                     ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
-                    dockerContainerId: container.ContainerId,
+                    dockerContainerId: container.Id,
                     state: ContainerStateStatus.Offline)
                 , TestContext.Current.CancellationToken);
         }
@@ -78,7 +78,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
         syncBarrierMock.Setup(x => x.WaitForAsync<ImageSyncJob>(It.IsAny<CancellationToken>())).Returns(ValueTask.CompletedTask);
         containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(containerConnector.Object);
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success(Fakes.GetDummyContainers().ToDictionary(c => c.ContainerId) as IReadOnlyDictionary<string, DockerContainer>));
+            .ReturnsAsync(Result.Success(Fakes.GetDummyContainers().ToDictionary(c => c.Id) as IReadOnlyDictionary<string, DockerContainer>));
 
         // Act
         await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
@@ -123,7 +123,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
         syncBarrierMock.Setup(x => x.WaitForAsync<ImageSyncJob>(It.IsAny<CancellationToken>())).Returns(ValueTask.CompletedTask);
         containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(containerConnector.Object);
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success(Fakes.GetDummyContainers().ToDictionary(c => c.ContainerId) as IReadOnlyDictionary<string, DockerContainer>));
+            .ReturnsAsync(Result.Success(Fakes.GetDummyContainers().ToDictionary(c => c.Id) as IReadOnlyDictionary<string, DockerContainer>));
 
         // Act
         await broadcaster.PublishAsync(new PlatformHealth(platformId, "https://original.address", PlatformConnectorType.Agent, IsOnLine: true),
@@ -146,7 +146,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
             Name: "new",
             Image: "new:latest",
             ImageId: "fake-id",
-            ContainerId: "new-id",
+            Id: "new-id",
             State: ContainerStateStatus.Running,
             Ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             Created: 123456,
@@ -192,7 +192,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
             Name: "updated",
             Image: "updated:latest",
             ImageId: "fake-id",
-            ContainerId: containerId,
+            Id: containerId,
             State: ContainerStateStatus.Running,
             Ports: new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             Created: 123456,

@@ -12,7 +12,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
 import dayjs from 'dayjs';
 import { ContainerStatView } from '@/api/generated/api.types';
-import { useContainerStatsContext } from './ContainerStatsContext';
 import { DockerContainerView } from '@/api/types';
 
 const CpuUsageHeader = ({ container }: { container: DockerContainerView | undefined }) => (
@@ -34,9 +33,15 @@ const CpuUsageHeader = ({ container }: { container: DockerContainerView | undefi
   </CardHeader>
 );
 
-const CpuUsage = () => {
-  const { stats, container, isLoading } = useContainerStatsContext();
-
+const CpuUsage = ({
+  stats,
+  container,
+  isLoading,
+}: {
+  stats: ContainerStatView[];
+  container: DockerContainerView | undefined;
+  isLoading: boolean;
+}) => {
   const chartConfig = useMemo(
     () =>
       ({

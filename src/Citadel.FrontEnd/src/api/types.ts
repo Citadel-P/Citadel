@@ -116,9 +116,8 @@ export interface PlatformStatsBatchView {
 }
 
 export interface DockerContainerView {
+  id: string;
   name: string;
-  image: string;
-  containerId: string;
   state: ContainerStateStatus;
   created: number | null;
   stack: string | null;

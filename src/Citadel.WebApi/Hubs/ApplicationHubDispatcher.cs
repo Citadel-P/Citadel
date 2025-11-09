@@ -15,7 +15,7 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
     #region Container Info
     public Task SendContainerInfo(DockerContainer container, CancellationToken cancellationToken) =>
         hubContext.Clients
-            .Group(WellKnownSignalRGroups.ContainerInfoGroup(container.ContainerId))
+            .Group(WellKnownSignalRGroups.ContainerInfoGroup(container.Id.Length > 12 ? container.Id[..12] : container.Id))
             .SendAsync("ReceiveContainerInfo", container, cancellationToken);
     #endregion
 

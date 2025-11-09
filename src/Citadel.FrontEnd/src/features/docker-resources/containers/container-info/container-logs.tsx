@@ -1,7 +1,16 @@
-import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import CodeHighlight from '@/components/custom/code-highlight';
+import { DockerContainerView } from '@/api/types';
+import { useCallback, useState } from 'react';
 import { HubConnection } from '@microsoft/signalr';
-import { useState, useCallback } from 'react';
+import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 const decoder = new TextDecoder('utf-8');
+
+export const ContainerLogs = ({ resource }: { resource: DockerContainerView | undefined }) => {
+  const { containerLogs: logs } = useContainerLogGroup(resource?.id);
+
+  return <CodeHighlight code={logs?.length === 0 ? 'Loading...' : logs!.join('\n')} language="tsx" autoScroll />;
+};
+
 export const useContainerLogGroup = (containerId?: string) => {
   const [containerLogs, setContainerLogs] = useState<string[]>([]);
 

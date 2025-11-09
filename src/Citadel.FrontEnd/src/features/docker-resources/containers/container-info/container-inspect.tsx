@@ -1,11 +1,10 @@
-import { useParams } from 'react-router';
 import { useMemo } from 'react';
 import { useRead } from '@/lib/hooks';
 import CodeHighlight from '@/components/custom/code-highlight';
+import { DockerContainerView } from '@/api/types';
 
-const ContainerInspect = () => {
-  const { containerId } = useParams();
-  const { data, isSuccess, isLoading } = useRead('inspectContainer', { id: containerId });
+const ContainerInspect = ({ resource }: { resource: DockerContainerView | undefined }) => {
+  const { data, isSuccess, isLoading } = useRead('inspectContainer', { id: resource?.id });
 
   const code = useMemo(() => {
     if (isLoading) return 'Loading...';

@@ -3,7 +3,7 @@ import { ContainersTable } from './table';
 import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
 import { useContainersGroup } from './hooks/useContainersGroup';
 import { ContainerDropdownActions, ContainerGroupActions } from './actions';
-import { ActionBar2 } from '@/components/custom/action-bar';
+import { ActionBar } from '@/components/custom/action-bar';
 
 export const ContainerComponents: RequiredDockerComponents = {
   Icon: <Box className="h-4 w-4" />,
@@ -21,7 +21,7 @@ export const ContainerComponents: RequiredDockerComponents = {
   },
   DropdownActions: ContainerDropdownActions,
   GroupActions: ({ items }) => (
-    <ActionBar2 type="Container" items={items} actions={Object.values(ContainerGroupActions)} />
+    <ActionBar type="Container" items={items} actions={Object.values(ContainerGroupActions)} />
   ),
 
   filterItems: (items, search) => {

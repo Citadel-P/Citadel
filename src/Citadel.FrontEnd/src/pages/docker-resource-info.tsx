@@ -44,8 +44,8 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
           {isLoading ? (
             <Loader />
           ) : error || !resource ? (
-            <AlertMessage title={`${errorDetail.status}  ${errorDetail.title}`} type="error">
-              {errorDetail.detail ?? 'Unknown error'}{' '}
+            <AlertMessage title={`${errorDetail?.status}  ${errorDetail?.title}`} type="error">
+              {errorDetail?.detail ?? 'Unknown error'}{' '}
             </AlertMessage>
           ) : (
             <div>
@@ -69,6 +69,9 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
                 </div>
               </div>
 
+              {/* Sub Header */}
+              {Components.SubHeader && <Components.SubHeader resource={resource} />}
+
               {/* Tabs */}
               <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-4">
                 {/* Sentinel to detect when the tabs reach sticky position */}
@@ -77,8 +80,7 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
                   className={cn(
                     'sticky top-8 z-30 bg-background left-0 right-0 transition-all duration-200',
                     isStuck ? '-mx-4' : 'mx-0',
-                  )}
-                >
+                  )}>
                   <TabsList className={cn('w-full overflow-x-auto', isStuck && 'border-b rounded-none py-2')}>
                     {tabs.map((tab) => (
                       <TabsTrigger key={tab.label} value={tab.label}>

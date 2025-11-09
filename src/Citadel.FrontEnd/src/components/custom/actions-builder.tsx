@@ -298,15 +298,27 @@ export function createActionsBuilder<R extends BaseResource>(options?: { showToa
                 );
               };
 
+              if (act.confirm || act.destructive) {
+                return (
+                  <ActionWithDialog
+                    name={resource.name}
+                    title={capitalize(act.key)}
+                    iconPosition="left"
+                    icon={<act.icon className="h-4 w-4" />}
+                    onClick={execute}
+                    disabled={!canRun || isPending}
+                    variant={act.destructive ? 'destructive' : 'default'}
+                  />
+                );
+              }
               return (
-                <ActionWithDialog
-                  name={resource.name}
-                  title={capitalize(act.key)}
+                <ActionButton
+                  title={title}
                   iconPosition="left"
+                  variant={act.destructive ? 'destructive' : 'outline'}
                   icon={<act.icon className="h-4 w-4" />}
                   onClick={execute}
                   disabled={!canRun || isPending}
-                  variant={act.destructive ? 'destructive' : 'default'}
                 />
               );
             };
@@ -367,8 +379,34 @@ export function createActionsBuilder<R extends BaseResource>(options?: { showToa
             );
           };
 
+          const Info: ButtonActionComponent<R> = ({ resource }) => {
+            const useSecondary = act.secondary.canExecute(resource);
+            const cfg = useSecondary ? act.secondary : act.primary;
+            const { mutateAsync, isPending } = useMutate(cfg.mutateKey);
+            const runActionMutation = useRunActionMutation(mutateAsync);
+            const canRun = cfg.canExecute(resource);
+            const vars = cfg.useVariables ? cfg.useVariables(resource) : undefined;
+            const successCallback = cfg.onSuccess?.({ resources: resource });
+
+            const handleRun = async () => {
+              await runActionMutation(vars, `${cfg.title} executed for ${resource.name}`, successCallback);
+            };
+
+            return (
+              <ActionButton
+                iconPosition="left"
+                variant="outline"
+                title={cfg.title}
+                icon={<cfg.icon className="h-4 w-4" />}
+                onClick={handleRun}
+                disabled={!canRun || isPending}
+              />
+            );
+          };
+
           dropdown[act.key] = Dropdown;
           group[act.key] = Group;
+          info[act.key] = Info;
         }
       }
 

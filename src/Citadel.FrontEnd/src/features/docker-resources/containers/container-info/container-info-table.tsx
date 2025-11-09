@@ -1,5 +1,4 @@
-import { ContainerInfoView } from '@/api/generated/api.types';
-import { useAppContext } from '@/lib/context/app-context';
+import { ContainerInfoView, ContainerStateStatus } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { PortsDisplay } from '@/components/custom/ports-display';
 import { truncate } from '@/lib/truncate';
@@ -7,9 +6,13 @@ import { formatId } from '@/lib/utils';
 import { ColumnDef } from '@tanstack/react-table';
 import { Clock, Database, HardDrive, Network, Server } from 'lucide-react';
 import { Link } from 'react-router';
-import { ImageName } from './ImageName';
+import { DockerContainerView } from '@/api/types';
+import { useRead } from '@/lib/hooks';
+import { useEffect, useMemo } from 'react';
+import { fromNow } from '@/lib/dayjs.helper';
+import { ImageName } from '.';
 
-const columns: ColumnDef<ContainerInfoView & { id: string | null } & { statusSnapshot: string | undefined }>[] = [
+const columns = (statusSnapshot: string | undefined): ColumnDef<ContainerInfoView>[] => [
   {
     accessorKey: 'platformName',
     header: () => <span>Platform</span>,
@@ -71,25 +74,42 @@ const columns: ColumnDef<ContainerInfoView & { id: string | null } & { statusSna
   {
     accessorKey: 'status',
     header: () => <span>Status</span>,
-    cell: ({ row }) => (
+    cell: () => (
       <div className=" text-foreground gap-2 flex flex-wrap items-center">
         <Clock width={13} height={13} className="text-primary" />
-        {row.original.statusSnapshot}
+        {statusSnapshot}
       </div>
     ),
   },
 ];
 
-export const ContainerInfoTable = ({ statusSnapshot }: { statusSnapshot: string | undefined }) => {
-  const { currentContainer } = useAppContext();
-  if (!currentContainer) return <></>;
+export const ContainerInfoTable = ({ container }: { container: DockerContainerView }) => {
+  const { data, isLoading, refetch } = useRead('getContainerInfo', { id: container.id });
+
+  useEffect(() => {
+    refetch();
+  }, [container.state, refetch]);
+
+  const containerInfo = data?.data;
+  const statusSnapshot = useMemo(() => {
+    if (!containerInfo) return undefined;
+    if (container.state === ContainerStateStatus.Created) return undefined;
+
+    const baseDate =
+      container.state === ContainerStateStatus.Running
+        ? new Date(containerInfo.startedAt)
+        : new Date(containerInfo.finishedAt ?? Date.now());
+
+    return fromNow(baseDate);
+  }, [container.state, containerInfo]);
+
+  const cols = useMemo(() => columns(statusSnapshot), [statusSnapshot]);
+
+  if (isLoading || !containerInfo) return null;
+
   return (
     <div className="flex flex-col gap-3">
-      <DataTable
-        columns={columns}
-        data={currentContainer ? [{ id: '1', statusSnapshot, ...currentContainer }] : []}
-        isLoading={false}
-      />
+      <DataTable columns={cols} data={[{ id: containerInfo.containerId, ...containerInfo }]} isLoading={isLoading} />
     </div>
   );
 };

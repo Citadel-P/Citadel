@@ -50,7 +50,7 @@ public class PlatformCreateTests : IntegrationTestBase
             .Returns(containerConnector.Object);
 
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(Fakes.GetDummyContainers().ToDictionary(c => c.ContainerId)));
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(Fakes.GetDummyContainers().ToDictionary(c => c.Id)));
 
         imageConnector.Setup(x => x.ListImagesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success<IReadOnlyList<ImageResult>>(Fakes.GetDummyImages()));
@@ -107,7 +107,7 @@ public class PlatformCreateTests : IntegrationTestBase
             .Returns(containerConnector.Object);
 
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(Fakes.GetDummyContainers().ToDictionary(c => c.ContainerId)));
+            .ReturnsAsync(Result.Success<IReadOnlyDictionary<string, DockerContainer>>(Fakes.GetDummyContainers().ToDictionary(c => c.Id)));
 
         imageConnector.Setup(x => x.ListImagesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success(Fakes.GetDummyImages()));

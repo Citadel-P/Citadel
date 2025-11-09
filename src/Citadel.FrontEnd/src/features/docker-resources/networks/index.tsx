@@ -3,7 +3,7 @@ import { NetworksTable } from './table';
 import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { NetworkDropdownActions, NetworkGroupActions } from './actions';
-import { ActionBar2 } from '@/components/custom/action-bar';
+import { ActionBar } from '@/components/custom/action-bar';
 
 export const NetworkComponents: RequiredDockerComponents = {
   Icon: <Network className="h-4 w-4" />,
@@ -12,7 +12,7 @@ export const NetworkComponents: RequiredDockerComponents = {
   },
   DropdownActions: NetworkDropdownActions,
   GroupActions: ({ items }) => {
-    return <ActionBar2 type="Network" items={items} actions={Object.values(NetworkGroupActions)} />;
+    return <ActionBar type="Network" items={items} actions={Object.values(NetworkGroupActions)} />;
   },
   useData: function (platformId: string): ResourceDataHookResult<any> {
     const { data, isLoading } = useRead(`listNetworks`, { platformId: platformId });

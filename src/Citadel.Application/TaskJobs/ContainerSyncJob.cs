@@ -185,7 +185,7 @@ internal class ContainerSyncJob(
         foreach (var freshContainer in freshContainers.Values)
         {
             var imageId = images.FirstOrDefault(i => i.DockerImageId == freshContainer.ImageId)?.Id;
-            if (existingContainersInDb.TryGetValue(freshContainer.ContainerId, out var existingDbContainer))
+            if (existingContainersInDb.TryGetValue(freshContainer.Id, out var existingDbContainer))
             {
                 existingDbContainer.PartialUpdate(
                     name: freshContainer.Name,

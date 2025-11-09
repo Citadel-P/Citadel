@@ -21,7 +21,7 @@ internal static class ContainerMapper
             dockerImageId: container.ImageId,
             stack: container.Stack,
             platformId: platformId,
-            dockerContainerId: container.ContainerId,
+            dockerContainerId: container.Id,
             created: container.Created,
             state: container.State,
             ports: container.Ports,
