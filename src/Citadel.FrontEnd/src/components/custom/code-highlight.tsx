@@ -25,7 +25,7 @@ export function CodeHighlight({
   showLineNumbers = false,
   className = 'p-4 max-h-[600px] rounded-sm border shadow-xs inline-block w-full overflow-auto bg-transparent ',
   style,
-  lineNumberClassName = 'table-cell pr-4 text-sm text-gray-500 text-right select-none',
+  lineNumberClassName = 'table-cell pr-4 text-xs text-gray-500 text-right select-none',
   lineContentClassName = 'text-xs',
   lineWrapperClassName = 'table-row',
   autoScroll = false,

@@ -16,7 +16,7 @@ const columns = (currentPlatform: PlatformView | undefined): ColumnDef<Container
     cell: ({ row }) => (
       <div className="flex flex-wrap gap-2 text-sm items-center">
         <StateIndicator value={row.original.state ?? ContainerStateStatus.Exited} />
-        <Link to={`/containers/${row.original.id?.slice(0, 12)}`} className="table-link">
+        <Link to={`/platforms/${currentPlatform?.id}/containers/${formatId(row.original.id)}`} className="table-link">
           {row.original.name?.slice(1)}
         </Link>
       </div>

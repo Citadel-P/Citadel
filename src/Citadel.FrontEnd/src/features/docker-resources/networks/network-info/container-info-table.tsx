@@ -1,18 +1,20 @@
 import { DockerNetworkDetails, NetworkConnectedContainer } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
+import { useAppContext } from '@/lib/context/app-context';
+import { formatId } from '@/lib/utils';
 import { ColumnDef } from '@tanstack/react-table';
 import { Box } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 
-const columns: ColumnDef<NetworkConnectedContainerProps>[] = [
+const columns = (platformId: string | undefined): ColumnDef<NetworkConnectedContainerProps>[] => [
   {
     accessorKey: 'name',
     header: () => <span>Name</span>,
     cell: ({ row }) => (
       <div className="flex flex-wrap gap-2 text-sm items-center">
         <Box width={13} height={13} className="text-primary" />
-        <Link to={`/containers/${row.original.id?.slice(0, 12)}`} className="table-link">
+        <Link to={`/platforms/${platformId}/containers/${formatId(row.original.id)}`} className="table-link">
           {row.original.name}
         </Link>
       </div>
@@ -42,6 +44,7 @@ const columns: ColumnDef<NetworkConnectedContainerProps>[] = [
 ];
 
 export const ContainerInfoTable = ({ network }: { network: DockerNetworkDetails | undefined }) => {
+  const { currentPlatform } = useAppContext();
   const containers: NetworkConnectedContainerProps[] = useMemo(
     () =>
       Object.entries(network?.containers ?? [])
@@ -62,7 +65,7 @@ export const ContainerInfoTable = ({ network }: { network: DockerNetworkDetails 
   if (!network) return <></>;
   return (
     <div className="flex flex-col gap-3">
-      <DataTable columns={columns} data={containers} isLoading={false} />
+      <DataTable columns={columns(currentPlatform?.id)} data={containers} isLoading={false} />
     </div>
   );
 };
