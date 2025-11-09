@@ -2,12 +2,12 @@ import { ImageView, InspectImageView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredDockerInfoComponents } from '@/pages/types';
-import { DeleteImageButton } from '../actions';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { Box, Info, Layers } from 'lucide-react';
 import { ImageInfoTable } from './image-info-table';
 import { ContainerInfoTable } from './container-info-table';
 import { ImageLayerTable } from './image-layer-table';
+import { ImageInfoActions } from './actions';
 
 export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView> = {
   Header: {
@@ -23,9 +23,9 @@ export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView>
               dockerImageId: resource.id,
               name: resource.name,
               tag: resource.tag,
-            } as ImageView
+            } as Partial<ImageView>
           }
-          actions={[DeleteImageButton]}
+          actions={Object.values(ImageInfoActions)}
         />
       );
     },

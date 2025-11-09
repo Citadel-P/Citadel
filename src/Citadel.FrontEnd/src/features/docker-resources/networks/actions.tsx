@@ -1,133 +1,54 @@
-import { DockerNetworkDetails, DockerNetworkResult } from '@/api/generated/api.types';
+import { DockerNetworkResult } from '@/api/generated/api.types';
 import { useAppContext } from '@/lib/context/app-context';
-import { ActionButton, ActionWithDialog, GroupActionWithDialog } from '@/components/custom/action-with-dialog';
-import { DropdownActionButton } from '@/components/custom/dropdown-with-dialog';
-import { useMutate } from '@/lib/hooks';
-import { formatId } from '@/lib/utils';
-import { ButtonActionComponent, ButtonGroupComponent, DropdownActionComponent } from '@/pages/types';
-import { useQueryClient } from '@tanstack/react-query';
 import { SearchCode, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
-import { toast } from 'sonner';
+import { createActionsBuilder } from '@/components/custom/actions-builder';
 
-export const DeleteNetworkDropdown: DropdownActionComponent<DockerNetworkResult> = ({ resource, onAction }) => {
-  const client = useQueryClient();
-  const { currentPlatform } = useAppContext();
-
-  const onSuccess = () => {
-    client.invalidateQueries({ queryKey: ['listNetworks'] });
-    toast.success(`${resource.name} has been successfully removed.`);
-  };
-  const { mutateAsync: deleteNetworkAsync } = useMutate('deleteNetworks', { onSuccess });
-
-  const handleDeleteAsync = () => deleteNetworkAsync({ platformId: currentPlatform?.id ?? '', ids: [resource.id] });
-
-  return (
-    <DropdownActionButton
-      title="Delete"
-      icon={<Trash className="h-4 w-4" />}
-      separatorBefore
-      onClick={() =>
-        onAction?.('delete', {
-          name: resource.name,
-          title: 'Delete',
-          icon: <Trash className="h-4 w-4" />,
-          onClick: handleDeleteAsync,
-          disabled: resource?.inUse,
-          variant: 'destructive',
-        })
-      }
-      disabled={resource?.inUse}
-      variant="destructive"
-    />
-  );
-};
-
-export const DeleteNetworkButton: ButtonActionComponent<DockerNetworkDetails> = ({ resource }) => {
-  const navigate = useNavigate();
-  const { currentPlatform } = useAppContext();
-
-  const canDelete = Object.keys(resource?.containers ?? {})?.length === 0;
-  const onSuccess = () => {
-    navigate(`/platforms/${currentPlatform?.id}/networks`);
-    toast.success(`${resource.name} has been successfully removed.`);
-  };
-  const { mutateAsync: deleteNetworkAsync } = useMutate('deleteNetworks', { onSuccess });
-
-  const handleDelete = () => deleteNetworkAsync({ platformId: currentPlatform?.id ?? '', ids: [resource.id] });
-
-  return (
-    <ActionWithDialog
-      name={resource.name}
-      title="Delete"
-      iconPosition="left"
-      icon={<Trash className="h-4 w-4" />}
-      onClick={handleDelete}
-      disabled={!canDelete}
-      variant={'destructive'}
-    />
-  );
-};
-
-export const InspectNetworkDropDown: DropdownActionComponent<DockerNetworkResult> = ({ resource }) => {
-  const navigate = useNavigate();
-  const { currentPlatform } = useAppContext();
-
-  const handleInspect = () => {
-    if (!resource?.id) return;
-    const id = formatId(resource.id);
-    navigate(`/platforms/${currentPlatform?.id}/networks/${id}/`);
-  };
-
-  return <DropdownActionButton title="Inspect" icon={<SearchCode className="h-4 w-4" />} onClick={handleInspect} />;
-};
-
-export const InspectNetworkButtonGroup: ButtonGroupComponent<DockerNetworkResult> = ({ resources }) => {
-  const navigate = useNavigate();
-  const { currentPlatform } = useAppContext();
-  const canInspect = resources?.length === 1;
-
-  const handleInspect = () => {
-    navigate(`/platforms/${currentPlatform?.id}/networks/${resources.at(0)?.id}/`);
-  };
-
-  return (
-    <ActionButton
-      title="Inspect"
-      iconPosition="left"
-      variant={'outline'}
-      icon={<SearchCode className="h-4 w-4" />}
-      onClick={handleInspect}
-      disabled={!canInspect}
-    />
-  );
-};
-
-export const DeleteNetworksButtonGroup: ButtonGroupComponent<DockerNetworkResult> = ({ resources }) => {
-  const { currentPlatform } = useAppContext();
-  const client = useQueryClient();
-
-  const canDelete = (resources?.length ?? 0) > 0 && resources?.find((r) => r.inUse) === undefined;
-  const onSuccess = () => {
-    client.invalidateQueries({ queryKey: ['listNetworks'] });
-
-    toast.success(`${resources.length} ${resources.length === 1 ? 'network' : 'networks'} successfully removed.`);
-  };
-  const { mutateAsync: deleteNetworkAsync } = useMutate('deleteNetworks', { onSuccess });
-
-  const handleDelete = () =>
-    deleteNetworkAsync({ platformId: currentPlatform?.id ?? '', ids: resources.map((r) => r.id) });
-
-  return (
-    <GroupActionWithDialog
-      type="Network"
-      name="Delete"
-      title="Delete"
-      iconPosition="left"
-      variant={'destructive'}
-      icon={<Trash className="h-4 w-4" />}
-      onClick={handleDelete}
-      disabled={!canDelete}
-    />
-  );
-};
+export const { dropdown: NetworkDropdownActions, group: NetworkGroupActions } =
+  createActionsBuilder<DockerNetworkResult>()
+    .addAction({
+      key: 'inspect',
+      type: 'command',
+      icon: SearchCode,
+      useHandler: ({ resources }) => {
+        const navigate = useNavigate();
+        const { currentPlatform } = useAppContext();
+        const selected = Array.isArray(resources) ? resources[0] : resources;
+        let canExecute = !!selected;
+        if (Array.isArray(resources)) {
+          canExecute &&= resources.length === 1;
+        }
+        return {
+          canExecute,
+          isPending: false,
+          run: () => {
+            if (!canExecute || !selected) return;
+            navigate(`/platforms/${currentPlatform?.id}/networks/${selected.id}/`);
+          },
+        };
+      },
+    })
+    .addAction({
+      key: 'delete',
+      type: 'command',
+      icon: Trash,
+      mutateKey: 'deleteNetworks',
+      invalidate: 'listNetworks',
+      canExecute: (r) => {
+        const can = (x: DockerNetworkResult) => x.inUse === false;
+        return Array.isArray(r) ? r.every(can) : can(r);
+      },
+      separatorBefore: true,
+      confirm: true,
+      destructive: true,
+      resourceType: 'Network',
+      useVariables: (resources) => {
+        const { currentPlatform } = useAppContext();
+        const selected = Array.isArray(resources) ? resources : [resources];
+        return {
+          platformId: currentPlatform?.id ?? '',
+          ids: selected.map((x) => x.id!),
+        };
+      },
+    })
+    .build();

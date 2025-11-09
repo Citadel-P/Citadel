@@ -3,7 +3,7 @@ import { ImagesTable } from './table';
 import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
 import { useImagesGroup } from './hooks/useImagesGroup';
 import { ActionBar2 } from '@/components/custom/action-bar';
-import { DeleteImageDropdown, DeleteImagesButtonGroup, InspectImageButtonGroup, InspectImageDropDown } from './actions';
+import { ImageDropdownActions, ImageGroupActions } from './actions';
 import PullImageForm, { PullButton } from './pull-image';
 
 export const ImageComponents: RequiredDockerComponents = {
@@ -20,12 +20,9 @@ export const ImageComponents: RequiredDockerComponents = {
     Extra: () => <PullButton />,
   },
   SubHeader: PullImageForm,
-  DropdownActions: {
-    InspectImageDropDown,
-    DeleteImageDropdown,
-  },
+  DropdownActions: ImageDropdownActions,
   GroupActions: ({ items }) => {
-    return <ActionBar2 type="Image" items={items} actions={[InspectImageButtonGroup, DeleteImagesButtonGroup]} />;
+    return <ActionBar2 type="Image" items={items} actions={Object.values(ImageGroupActions)} />;
   },
 
   filterItems: (items, search) => {

@@ -2,11 +2,13 @@ import { Box } from 'lucide-react';
 import { ContainersTable } from './table';
 import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
 import { useContainersGroup } from './hooks/useContainersGroup';
+import { ContainerDropdownActions, ContainerGroupActions } from './actions';
+import { ActionBar2 } from '@/components/custom/action-bar';
 
 export const ContainerComponents: RequiredDockerComponents = {
   Icon: <Box className="h-4 w-4" />,
-  Table: ({ items, isLoading }) => {
-    return <ContainersTable items={items} isLoading={isLoading} />;
+  Table: ({ items, isLoading, actions }) => {
+    return <ContainersTable items={items} isLoading={isLoading} actions={actions} />;
   },
 
   useData: function (platformId: string): ResourceDataHookResult<any> {
@@ -17,6 +19,11 @@ export const ContainerComponents: RequiredDockerComponents = {
     showAdd: false,
     showSearch: true,
   },
+  DropdownActions: ContainerDropdownActions,
+  GroupActions: ({ items }) => (
+    <ActionBar2 type="Container" items={items} actions={Object.values(ContainerGroupActions)} />
+  ),
+
   filterItems: (items, search) => {
     if (!search.trim()) return items;
     const s = search.toLowerCase();

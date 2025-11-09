@@ -13,7 +13,10 @@ public sealed record DeleteContainers(string[] ContainerIds, bool? V = false, bo
     internal class Validator : AbstractValidator<DeleteContainers>
     {
         public Validator()
-            => RuleForEach(s => s.ContainerIds).ValidContainerId();
+        {
+            RuleFor(s => s.ContainerIds).NotEmpty().WithMessage("At least one container ID must be provided.");
+            RuleForEach(s => s.ContainerIds).ValidContainerId(); 
+        }
     }
 }
 

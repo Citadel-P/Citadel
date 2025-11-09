@@ -1,135 +1,54 @@
 import { DockerVolumeResult } from '@/api/generated/api.types';
 import { useAppContext } from '@/lib/context/app-context';
-import { ActionButton, ActionWithDialog, GroupActionWithDialog } from '@/components/custom/action-with-dialog';
-import { DropdownActionButton } from '@/components/custom/dropdown-with-dialog';
-import { useMutate } from '@/lib/hooks';
-import { formatId } from '@/lib/utils';
-import { ButtonActionComponent, ButtonGroupComponent, DropdownActionComponent } from '@/pages/types';
-import { useQueryClient } from '@tanstack/react-query';
 import { SearchCode, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
-import { toast } from 'sonner';
+import { createActionsBuilder } from '@/components/custom/actions-builder';
 
-export const DeleteVolumeDropdown: DropdownActionComponent<DockerVolumeResult> = ({ resource, onAction }) => {
-  const client = useQueryClient();
-  const { currentPlatform } = useAppContext();
-
-  const onSuccess = () => {
-    client.invalidateQueries({ queryKey: ['listVolumes'] });
-    toast.success(`${resource.name} has been successfully removed.`);
-  };
-  const { mutateAsync: deleteVolumeAsync } = useMutate('deleteVolumes', { onSuccess });
-
-  const handleDeleteAsync = () =>
-    deleteVolumeAsync({ platformId: currentPlatform?.id ?? '', names: [resource.id], force: true });
-
-  return (
-    <DropdownActionButton
-      title="Delete"
-      icon={<Trash className="h-4 w-4" />}
-      separatorBefore
-      onClick={() =>
-        onAction?.('delete', {
-          name: resource.name,
-          title: 'Delete',
-          icon: <Trash className="h-4 w-4" />,
-          onClick: handleDeleteAsync,
-          disabled: resource?.inUse,
-          variant: 'destructive',
-        })
+export const { dropdown: VolumeDropdownActions, group: VolumeGroupActions } = createActionsBuilder<DockerVolumeResult>()
+  .addAction({
+    key: 'inspect',
+    type: 'command',
+    icon: SearchCode,
+    useHandler: ({ resources }) => {
+      const navigate = useNavigate();
+      const { currentPlatform } = useAppContext();
+      const selected = Array.isArray(resources) ? resources[0] : resources;
+      let canExecute = !!selected;
+      if (Array.isArray(resources)) {
+        canExecute &&= resources.length === 1;
       }
-      disabled={resource?.inUse}
-      variant="destructive"
-    />
-  );
-};
-
-export const DeleteVolumeButton: ButtonActionComponent<DockerVolumeResult> = ({ resource }) => {
-  const navigate = useNavigate();
-  const { currentPlatform } = useAppContext();
-
-  const canDelete = Object.keys(resource?.containers ?? {})?.length === 0;
-  const onSuccess = () => {
-    navigate(`/platforms/${currentPlatform?.id}/volumes`);
-    toast.success(`${resource.name} has been successfully removed.`);
-  };
-  const { mutateAsync: deleteVolumeAsync } = useMutate('deleteVolumes', { onSuccess });
-
-  const handleDelete = () =>
-    deleteVolumeAsync({ platformId: currentPlatform?.id ?? '', names: [resource.id], force: true });
-
-  return (
-    <ActionWithDialog
-      name={resource.name}
-      title="Delete"
-      iconPosition="left"
-      icon={<Trash className="h-4 w-4" />}
-      onClick={handleDelete}
-      disabled={!canDelete}
-      variant={'destructive'}
-    />
-  );
-};
-
-export const InspectVolumeDropDown: DropdownActionComponent<DockerVolumeResult> = ({ resource }) => {
-  const navigate = useNavigate();
-  const { currentPlatform } = useAppContext();
-
-  const handleInspect = () => {
-    if (!resource?.id) return;
-    const id = formatId(resource.id);
-    navigate(`/platforms/${currentPlatform?.id}/volumes/${id}/`);
-  };
-
-  return <DropdownActionButton title="Inspect" icon={<SearchCode className="h-4 w-4" />} onClick={handleInspect} />;
-};
-
-export const InspectVolumeButtonGroup: ButtonGroupComponent<DockerVolumeResult> = ({ resources }) => {
-  const navigate = useNavigate();
-  const { currentPlatform } = useAppContext();
-  const canInspect = resources?.length === 1;
-
-  const handleInspect = () => {
-    navigate(`/platforms/${currentPlatform?.id}/volumes/${resources.at(0)?.id}/`);
-  };
-
-  return (
-    <ActionButton
-      title="Inspect"
-      iconPosition="left"
-      variant={'outline'}
-      icon={<SearchCode className="h-4 w-4" />}
-      onClick={handleInspect}
-      disabled={!canInspect}
-    />
-  );
-};
-
-export const DeleteVolumesButtonGroup: ButtonGroupComponent<DockerVolumeResult> = ({ resources }) => {
-  const { currentPlatform } = useAppContext();
-  const client = useQueryClient();
-
-  const canDelete = (resources?.length ?? 0) > 0 && resources?.find((r) => r.inUse) === undefined;
-  const onSuccess = () => {
-    client.invalidateQueries({ queryKey: ['listVolumes'] });
-
-    toast.success(`${resources.length} ${resources.length === 1 ? 'network' : 'volumes'} successfully removed.`);
-  };
-  const { mutateAsync: deleteVolumeAsync } = useMutate('deleteVolumes', { onSuccess });
-
-  const handleDelete = () =>
-    deleteVolumeAsync({ platformId: currentPlatform?.id ?? '', names: resources.map((r) => r.id), force: true });
-
-  return (
-    <GroupActionWithDialog
-      type="Volume"
-      name="Delete"
-      title="Delete"
-      iconPosition="left"
-      variant={'destructive'}
-      icon={<Trash className="h-4 w-4" />}
-      onClick={handleDelete}
-      disabled={!canDelete}
-    />
-  );
-};
+      return {
+        canExecute,
+        isPending: false,
+        run: () => {
+          if (!canExecute || !selected) return;
+          navigate(`/platforms/${currentPlatform?.id}/volumes/${selected.id}/`);
+        },
+      };
+    },
+  })
+  .addAction({
+    key: 'delete',
+    type: 'command',
+    icon: Trash,
+    mutateKey: 'deleteVolumes',
+    invalidate: 'listVolumes',
+    canExecute: (r) => {
+      const can = (x: DockerVolumeResult) => x.inUse === false;
+      return Array.isArray(r) ? r.every(can) : can(r);
+    },
+    separatorBefore: true,
+    confirm: true,
+    destructive: true,
+    resourceType: 'Volume',
+    useVariables: (resources) => {
+      const { currentPlatform } = useAppContext();
+      const selected = Array.isArray(resources) ? resources : [resources];
+      return {
+        platformId: currentPlatform?.id ?? '',
+        names: selected.map((x) => x.id!),
+        force: true,
+      };
+    },
+  })
+  .build();

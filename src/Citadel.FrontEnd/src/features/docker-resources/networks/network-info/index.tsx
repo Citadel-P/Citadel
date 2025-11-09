@@ -6,8 +6,8 @@ import { IPAMInfoTable } from './ipam-info-table';
 import { useRead } from '@/lib/hooks';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredDockerInfoComponents } from '@/pages/types';
-import { DeleteNetworkButton } from '../actions';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
+import { NetworkInfoActions } from './actions';
 
 export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDetails> = {
   Header: {
@@ -24,7 +24,7 @@ export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDe
               inUse: Object.keys(resource.containers ?? {}).length > 0,
             } as DockerNetworkResult
           }
-          actions={[DeleteNetworkButton]}
+          actions={Object.values(NetworkInfoActions)}
         />
       );
     },

@@ -7,21 +7,38 @@ import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
 import SortableCell from '@/components/custom/sortable-cell';
 import { Link } from 'react-router';
-import { TableDropdown } from './table-dropdown';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import { PortsDisplay } from '@/components/custom/ports-display';
 import { ImageName } from './container-info/ImageName';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useMemo } from 'react';
 import { useSelectedResources } from '@/lib/atoms';
+import { ActionData } from '@/pages/types';
+import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 
-export const ContainersTable = ({ items, isLoading }: { items: ContainerView[]; isLoading: boolean }) => {
+export const ContainersTable = ({
+  items,
+  isLoading,
+  actions,
+}: {
+  items: ContainerView[];
+  isLoading: boolean;
+  actions: Record<
+    string,
+    React.FC<{ resource: ContainerView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >;
+}) => {
   const rowCount = useMemo(() => items?.length ?? 0, [items]);
   const [_, setSelectedResources] = useSelectedResources<ContainerView>('Container');
-
+  const cols = useMemo(() => columns(actions ?? {}), [actions]);
   return (
     <div className="flex flex-col gap-3">
-      <DataTable columns={columns} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+      <DataTable
+        columns={cols}
+        data={items ?? []}
+        isLoading={isLoading}
+        onSelectionChange={setSelectedResources}
+      />
       <div className="text-muted-foreground text-sm p-2 font-normal">
         {rowCount > 0 && (
           <span>
@@ -33,7 +50,12 @@ export const ContainersTable = ({ items, isLoading }: { items: ContainerView[]; 
   );
 };
 
-const columns: ColumnDef<ContainerView>[] = [
+const columns = (
+  actions: Record<
+    string,
+    React.FC<{ resource: ContainerView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >,
+): ColumnDef<ContainerView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -72,6 +94,12 @@ const columns: ColumnDef<ContainerView>[] = [
       return rowA.original.name < rowB.original.name ? 1 : -1;
     },
   },
+  
+  {
+    accessorKey: 'image',
+    header: ({ column }) => <SortableCell cellName="Image" column={column} />,
+    cell: ({ row }) => <ImageName image={row.original.imageView ?? undefined} />,
+  },
   {
     accessorKey: 'containerId',
     header: ({ column }) => <SortableCell cellName="ID" column={column} />,
@@ -82,11 +110,6 @@ const columns: ColumnDef<ContainerView>[] = [
         groupClassName="rowid"
       />
     ),
-  },
-  {
-    accessorKey: 'image',
-    header: ({ column }) => <SortableCell cellName="Image" column={column} />,
-    cell: ({ row }) => <ImageName image={row.original.imageView ?? undefined} />,
   },
   {
     accessorKey: 'CPU',
@@ -117,14 +140,14 @@ const columns: ColumnDef<ContainerView>[] = [
   {
     accessorKey: 'stack',
     header: ({ column }) => <SortableCell cellName="Stack" column={column} />,
-    cell: ({ row }) => <div>{row.original.stack && truncate(row.original.stack, 10, 'left')}</div>,
+    cell: ({ row }) => <span>{row.original.stack && truncate(row.original.stack, 10, 'left')}</span>,
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
       return rowA.original.stack < rowB.original.stack ? 1 : -1;
     },
   },
   {
     id: 'actions',
-    cell: ({ row }) => <TableDropdown container={row.original} />,
+    cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
   },
 ];
 

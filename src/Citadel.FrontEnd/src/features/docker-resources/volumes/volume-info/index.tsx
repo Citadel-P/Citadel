@@ -4,9 +4,9 @@ import { ContainerInfoTable } from './container-info-table';
 import { useRead } from '@/lib/hooks';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredDockerInfoComponents } from '@/pages/types';
-import { DeleteVolumeButton } from '../actions';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { VolumeInfoTable } from './volume-info-table';
+import { VolumeInfoActions } from './actions';
 
 export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResult> = {
   Header: {
@@ -14,7 +14,7 @@ export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResu
       return <StateIndicator value={resource?.inUse ?? false} />;
     },
     ActionButtons: ({ resource }) => {
-      return <GenericActionBarButtons resource={resource} actions={[DeleteVolumeButton]} />;
+      return <GenericActionBarButtons resource={resource} actions={Object.values(VolumeInfoActions)} />;
     },
   },
 

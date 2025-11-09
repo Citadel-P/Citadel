@@ -3,21 +3,16 @@ import { VolumesTable } from './table';
 import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { ActionBar2 } from '@/components/custom/action-bar';
-import {
-  DeleteVolumeDropdown,
-  DeleteVolumesButtonGroup,
-  InspectVolumeButtonGroup,
-  InspectVolumeDropDown,
-} from './actions';
+import { VolumeDropdownActions, VolumeGroupActions } from './actions';
 
 export const VolumeComponents: RequiredDockerComponents = {
   Icon: <HardDrive className="h-4 w-4" />,
   Table: ({ items, actions, isLoading }) => {
     return <VolumesTable items={items} actions={actions} isLoading={isLoading} />;
   },
-  DropdownActions: { InspectVolumeDropDown, DeleteVolumeDropdown },
+  DropdownActions: VolumeDropdownActions,
   GroupActions: ({ items }) => {
-    return <ActionBar2 type="Volume" items={items} actions={[InspectVolumeButtonGroup, DeleteVolumesButtonGroup]} />;
+    return <ActionBar2 type="Volume" items={items} actions={Object.values(VolumeGroupActions)} />;
   },
 
   useData: function (platformId: string): ResourceDataHookResult<any> {

@@ -106,4 +106,6 @@ export const filterBySplit = <T>(items: T[] | undefined, search: string, extract
   );
 };
 
+export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 export const pluralize = (word: string) => (word.endsWith('y') ? word.slice(0, -1) + 'ies' : word + 's');

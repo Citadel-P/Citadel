@@ -340,7 +340,7 @@ export function useHTTPErrorHandler() {
   useEffect(() => {
     const handleError = (error: ProblemDetails) => {
       if (!error) return;
-      if (error.status != null && (error.status as number) > 400) {
+      if (error.status != null) {
         toast.error(error.status + ' ' + error.title, {
           description: error.detail,
         });
