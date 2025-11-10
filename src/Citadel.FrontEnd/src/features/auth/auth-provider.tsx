@@ -1,35 +1,28 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useApiClientContext } from '@/api/api-client-context';
 import { AuthContext } from './auth-context';
-import { toast } from 'sonner';
-import { ProblemDetails } from '@/api/generated/api.types';
 import { useHTTPErrorHandler, useMutate } from '@/lib/hooks';
+import { ProblemDetails } from '@/api/generated/api.types';
 import { useTokenRefresh } from './hooks/use-token-refresh';
-
-export const ACCESS_TOKEN_KEY = 'access_token';
 
 export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   useHTTPErrorHandler();
   const { apiClient } = useApiClientContext();
   const { mutate: requestLogout } = useMutate('logout');
 
-  const [accessToken, setAccessToken] = useState<string | undefined>(
-    () => sessionStorage.getItem(ACCESS_TOKEN_KEY) ?? undefined,
-  );
+  const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const isAuthenticated = Boolean(accessToken);
 
-  const { token, isSuccess, error, didAttemptRefresh } = useTokenRefresh(accessToken, isAuthenticated);
+  const { token, isSuccess, error, didAttemptRefresh, triggerManualRefresh } = useTokenRefresh(
+    accessToken,
+    isAuthenticated,
+  );
 
+  /** Apply token to ApiClient and state */
   const applyToken = useCallback(
     (token?: string) => {
-      if (token) {
-        apiClient.setSecurityData(token);
-        sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
-      } else {
-        apiClient.setSecurityData(undefined);
-        sessionStorage.removeItem(ACCESS_TOKEN_KEY);
-      }
+      apiClient.setSecurityData(token);
       setAccessToken(token);
     },
     [apiClient],
@@ -40,24 +33,39 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
     applyToken(undefined);
   }, [requestLogout, applyToken]);
 
-  // Restore token on mount
+  /** Bootstrap: attempt silent refresh using cookie */
   useEffect(() => {
-    const storedToken = sessionStorage.getItem(ACCESS_TOKEN_KEY);
-    if (storedToken) apiClient.setSecurityData(storedToken);
-    setIsAuthReady(true);
-  }, [apiClient]);
+    let cancelled = false;
 
-  // Handle token refresh success
+    const init = async () => {
+      try {
+        const refreshed = await triggerManualRefresh();
+        if (!cancelled && refreshed) {
+          applyToken(refreshed);
+        }
+      } catch (err) {
+        console.error('Bootstrap refresh failed:', err);
+      } finally {
+        if (!cancelled) setIsAuthReady(true);
+      }
+    };
+
+    void init();
+    return () => {
+      cancelled = true;
+    };
+  }, [applyToken, triggerManualRefresh]);
+
+  /** Apply new token when periodic refresh succeeds */
   useEffect(() => {
     if (isSuccess && token) {
       applyToken(token);
     }
   }, [isSuccess, token, applyToken]);
 
-  // Handle session expiration
+  /** Handle expired cookie / refresh 401 */
   useEffect(() => {
     if ((error as ProblemDetails)?.status === 401 && didAttemptRefresh.current) {
-      toast.error('Session expired', { description: 'Please login again' });
       logout();
     }
   }, [error, logout, didAttemptRefresh]);

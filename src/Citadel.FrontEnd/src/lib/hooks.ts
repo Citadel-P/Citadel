@@ -15,12 +15,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'reac
 import {
   AnyFn,
   ApiFn,
-  ApiFnMap,
   DockerResourceType,
   KnownResourceName,
   PluralResourceMap,
-  PrimaryArg,
   ResourceResponse,
+  ResourceType,
+  UseMutateVariables,
   UseReadArgs,
 } from '@/api/types';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
@@ -72,12 +72,9 @@ export function useRead<
   });
 }
 
-export function useMutate<
-  TResource extends keyof ApiFnMap,
-  TVariables = PrimaryArg<TResource> | { data: PrimaryArg<TResource>; params?: any },
->(
+export function useMutate<TResource extends KnownResourceName, TVariables = UseMutateVariables<TResource>>(
   resource: TResource,
-  options?: Omit<UseMutationOptions<Awaited<ReturnType<ApiFn<TResource>>>, Error, TVariables>, 'mutationFn'>,
+  options?: Omit<UseMutationOptions<ResourceResponse<TResource>, Error, TVariables>, 'mutationFn'>,
 ) {
   const { apiClient } = useApiClientContext();
   const resDef = resources[resource];
@@ -85,28 +82,36 @@ export function useMutate<
 
   const fn = apiClient.api[resource] as ApiFn<TResource>;
 
-  const mutation = useMutation<Awaited<ReturnType<typeof fn>>, Error, TVariables>({
+  const mutation = useMutation<ResourceResponse<TResource>, Error, TVariables>({
     mutationKey: [resource],
     ...options,
-    mutationFn: ((variables: any) => {
-      let args: any[] = [];
+    mutationFn: ((variables: TVariables) => {
+      const v: any = variables;
+      const paramNames = resDef.params ?? [];
+      const args: any[] = [];
+      const isObject = v !== null && typeof v === 'object';
 
-      const hasAllNamed =
-        variables && typeof variables === 'object' && resDef.params.every((p: string) => p in variables);
-
-      if (hasAllNamed) {
-        args = resDef.params.map((param: string) => (param === 'params' ? (variables[param] ?? {}) : variables[param]));
+      if (isObject && paramNames.some((p: string) => p in v)) {
+        for (const name of paramNames) {
+          if (name === 'params') {
+            args.push(v.params ?? {});
+          } else {
+            args.push(v[name]);
+          }
+        }
+      } else if (isObject && 'data' in v && paramNames[0] === 'data') {
+        args.push(v.data);
+        args.push(v.params ?? {});
       } else {
-        if (variables && typeof variables === 'object' && 'data' in variables) {
-          args = [variables.data, (variables as any).params ?? {}];
-        } else {
-          args = [variables];
-          const fnParamLen = fn.length ?? 1;
-          if (fnParamLen > 1) args.push({});
+        args.push(v);
+        const fnParamLen = fn.length ?? 1;
+        if (fnParamLen > 1) {
+          args.push({});
         }
       }
+
       return fn(...args);
-    }) as MutationFunction<Awaited<ReturnType<typeof fn>>, TVariables>,
+    }) as MutationFunction<ResourceResponse<TResource>, TVariables>,
   });
 
   const validationErrors = useGetValidationErrors(mutation.error);
@@ -114,7 +119,7 @@ export function useMutate<
   return {
     ...mutation,
     validationErrors,
-  } as UseMutationResult<Awaited<ReturnType<typeof fn>>, Error, TVariables, unknown> & {
+  } as UseMutationResult<ResourceResponse<TResource>, Error, TVariables, unknown> & {
     validationErrors: ReturnType<typeof useGetValidationErrors>;
   };
 }
@@ -168,10 +173,11 @@ export function useDeleteDialog<T>({ type, onSuccess }: DeleteDialogOptions) {
   };
 }
 
-export const useDockerResourceParamType = () => {
+export const useResourceParamType = () => {
   const type = useParams().type;
   if (!type) return undefined;
-  return (type[0].toUpperCase() + type.slice(1, -1)) as DockerResourceType;
+  if (type === 'registries') return 'Registry';
+  return (type[0].toUpperCase() + type.slice(1, -1)) as ResourceType;
 };
 
 export function useLocalStorage<T>(key: string, initialValue: T) {
@@ -341,6 +347,7 @@ export function useHTTPErrorHandler() {
     const handleError = (error: ProblemDetails) => {
       if (!error) return;
       if (error.status != null) {
+        if (error.status === 401) return;
         toast.error(error.status + ' ' + error.title, {
           description: error.detail,
         });

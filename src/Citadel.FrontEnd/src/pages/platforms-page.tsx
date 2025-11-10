@@ -1,4 +1,4 @@
-import Platforms from '@/features/platforms/Platforms';
+import Platforms from '@/features/platforms/platforms';
 import { PlatformsProvider } from '@/features/platforms/PlatformsProvider';
 
 export default function PlatformPage() {

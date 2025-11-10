@@ -1,21 +1,22 @@
-import { useCallback, useEffect, useRef } from "react";
-import { jwtDecode } from "jwt-decode";
-import { useInterval } from "@/hooks/useInterval";
-import { useRead } from "@/lib/hooks";
+import { useCallback, useEffect, useRef } from 'react';
+import { jwtDecode } from 'jwt-decode';
+import { useInterval } from '@/hooks/useInterval';
+import { useRead } from '@/lib/hooks';
 
 const EXPIRY_BUFFER_INTERVAL = 30; // seconds before expiry to refresh
 const EXPIRY_BUFFER_ON_FOCUS = 10; // when tab becomes visible
 
-export const useTokenRefresh = (
-  accessToken: string | undefined,
-  isAuthenticated: boolean
-) => {
-  const { data, isSuccess, refetch, error } = useRead("refreshToken", undefined, {
+export const useTokenRefresh = (accessToken: string | undefined, isAuthenticated: boolean) => {
+  const { data, isSuccess, refetch, error } = useRead('refreshToken', undefined, {
     enabled: false,
   });
 
   const isRefreshing = useRef(false);
   const didAttemptRefresh = useRef(false);
+
+  useEffect(() => {
+    isRefreshing.current = false;
+  }, []);
 
   const parseJwt = (token: string) => {
     try {
@@ -25,48 +26,64 @@ export const useTokenRefresh = (
     }
   };
 
-  const triggerRefresh = useCallback(() => {
-    if (isRefreshing.current) return;
+  /** Manual refresh trigger (returns token if successful) */
+  const triggerManualRefresh = useCallback(async (): Promise<string | undefined> => {
+    console.log('triggerManualRefresh');
+    if (isRefreshing.current) {
+      console.log('refresh in progress, skipping');
+      return undefined;
+    }
 
+    console.log('passed the check');
     isRefreshing.current = true;
     didAttemptRefresh.current = true;
 
-    refetch().finally(() => {
+    try {
+      const result = await refetch();
+      const newToken = result.data?.data?.accessToken as string | undefined;
+      return newToken;
+    } catch (err) {
+      console.error('refresh error:', err);
+      return undefined;
+    } finally {
       isRefreshing.current = false;
-    });
+    }
   }, [refetch]);
 
+  /** Periodically check expiry and refresh early */
   const maybeRefreshIfExpiringSoon = useCallback(
-    (bufferSeconds: number) => {
+    async (bufferSeconds: number) => {
       if (!isAuthenticated || !accessToken) return;
       const decoded = parseJwt(accessToken);
       if (!decoded?.exp) return;
 
       const secondsLeft = decoded.exp - Math.floor(Date.now() / 1000);
-      if (secondsLeft < bufferSeconds) triggerRefresh();
+      if (secondsLeft < bufferSeconds) {
+        await triggerManualRefresh();
+      }
     },
-    [accessToken, isAuthenticated, triggerRefresh]
+    [accessToken, isAuthenticated, triggerManualRefresh],
   );
 
   // Periodic refresh check
-  useInterval(() => maybeRefreshIfExpiringSoon(EXPIRY_BUFFER_INTERVAL),
-              isAuthenticated ? 10000 : null);
+  useInterval(() => maybeRefreshIfExpiringSoon(EXPIRY_BUFFER_INTERVAL), isAuthenticated ? 10_000 : null);
 
-  // Refresh when user focuses the tab
+  // Refresh on tab focus
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        maybeRefreshIfExpiringSoon(EXPIRY_BUFFER_ON_FOCUS);
+      if (document.visibilityState === 'visible') {
+        void maybeRefreshIfExpiringSoon(EXPIRY_BUFFER_ON_FOCUS);
       }
     };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [maybeRefreshIfExpiringSoon]);
 
   return {
-    token: data?.data?.accessToken,
+    token: data?.data?.accessToken as string | undefined,
     isSuccess,
     error,
     didAttemptRefresh,
+    triggerManualRefresh,
   };
 };

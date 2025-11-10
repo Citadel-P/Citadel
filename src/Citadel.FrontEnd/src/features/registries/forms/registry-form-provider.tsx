@@ -1,10 +1,10 @@
 import { RegistryInput, RegistryType, RegistryWithConfigView } from '@/api/generated/api.types';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import DockerHubConfiguration from './DockerHubConfiguration';
-import GhcrConfiguration from './GhcrConfiguration';
+import DockerHubConfiguration from './dockerhub-configuration';
+import GhcrConfiguration from './ghcr-configuration';
 import { useNavigate, useParams } from 'react-router';
-import { FormMode, IRegistryProvider, RegistryFormContext } from './RegistryFormContext';
+import { FormMode, IRegistryProvider, RegistryFormContext } from './registry-form-context';
 import { useMutate, useRead } from '@/lib/hooks';
 
 export const RegistryFormProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
@@ -101,8 +101,8 @@ export const RegistryFormProvider: React.FC<{ children?: React.ReactNode }> = ({
         ...data,
         type: registry?.type,
         configuration: { $type: registry?.configuration?.$type, ...data.configuration },
-      };
-      requestPatch({ id: registry?.id ?? '', data: payload as RegistryInput });
+      } as RegistryInput;
+      requestPatch({ id: registry?.id ?? '', data: payload });
     }
   }
 

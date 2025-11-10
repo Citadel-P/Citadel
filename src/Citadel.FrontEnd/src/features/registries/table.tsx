@@ -1,14 +1,15 @@
 import { DataTable } from '@/components/ui/data-table';
 import { RegistryView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
-import { TableDropdown } from './table-dropdown';
 import { ColumnDef, Row } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useRegistriesContext } from './RegistriesContext';
 import { Link } from 'react-router';
 import { InfoIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { DeleteDialog } from './delete-dialog';
+import { ActionData } from '@/pages/types';
+import { useSelectedResources } from '@/lib/atoms';
+import { useMemo } from 'react';
+import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 
 const getNonDefaultRows = (rows: Row<RegistryView>[]) => rows.filter((row) => !row.original.isDefault);
 
@@ -18,7 +19,12 @@ const areAllNonDefaultRowsSelected = (rows: Row<RegistryView>[]) =>
 const areSomeNonDefaultRowsSelected = (rows: Row<RegistryView>[]) =>
   getNonDefaultRows(rows).some((row) => row.getIsSelected());
 
-const columns: ColumnDef<RegistryView>[] = [
+const columns = (
+  actions: Record<
+    string,
+    React.FC<{ resource: RegistryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >,
+): ColumnDef<RegistryView>[] => [
   {
     id: 'select',
     header: ({ table }) => {
@@ -104,32 +110,38 @@ const columns: ColumnDef<RegistryView>[] = [
       if (row.original.isDefault) {
         return <></>;
       }
-      return <TableDropdown registry={row.original} />;
+      return <RowActionMenu resource={row.original} actions={actions} />;
     },
   },
 ];
 
-export const RegistriesTable = () => {
-  const { registries, isLoading, setSelectedRows } = useRegistriesContext();
+export const RegistriesTable = ({
+  items,
+  actions,
+  isLoading,
+}: {
+  items: RegistryView[];
+  isLoading: boolean;
+  actions: Record<
+    string,
+    React.FC<{ resource: RegistryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >;
+}) => {
+  const [_, setSelectedResources] = useSelectedResources<RegistryView>('Registry');
+  const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
-  if (!registries?.length) {
+  if (!items?.length) {
     return null;
   }
 
   return (
     <div className="flex flex-col gap-3">
-      <DataTable
-        columns={columns}
-        data={registries}
-        isLoading={isLoading}
-        onSelectionChange={(ids: string[]) => setSelectedRows(registries.filter((c) => ids.includes(c.id!)))!}
-      />
+      <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
       <div className="text-muted-foreground px-2 py-1 text-xs font-normal ">
         <span>
-          Showing {registries.length} of {registries.length} registries
+          Showing {items.length} of {items.length} registries
         </span>
       </div>
-      <DeleteDialog />
     </div>
   );
 };

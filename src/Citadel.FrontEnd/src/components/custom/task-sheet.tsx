@@ -1,13 +1,13 @@
-import { DockerResourceType } from '@/api/types';
+import { ResourceType } from '@/api/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import CodeHighlight from '@/components/custom/code-highlight';
 import { usePullProgress as useImagePullProgress } from '@/features/docker-resources/images/hooks/usePullProgress';
 import { Clock, LoaderCircle } from 'lucide-react';
 import { useTaskSheet } from '@/lib/atoms';
 import { ReactNode, useMemo } from 'react';
-import { DockerResourceComponents } from '@/features/docker-resources';
+import { ResourceComponents } from '@/features';
 
-export function TaskSheet({ type }: { type: DockerResourceType }) {
+export function TaskSheet({ type }: { type: ResourceType }) {
   const { state, close } = useTaskSheet(type);
 
   if (!state.open || !state.task) return null;
@@ -45,7 +45,7 @@ export function TaskSheet({ type }: { type: DockerResourceType }) {
 }
 
 type PullImageTaskRendererProps = {
-  type: DockerResourceType;
+  type: ResourceType;
   payload: PullImageParams;
   children: (slots: TaskRendererSlots) => ReactNode;
 };
@@ -66,8 +66,8 @@ function PullImageTaskRenderer({ payload, type, children }: PullImageTaskRendere
     <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
       <span className="inline-flex flex-row gap-2 items-center">
         {status === 'pending' && <LoaderCircle className="h-4 w-4 animate-spin" />}
-        {status === 'error' && <span className="text-destructive">{DockerResourceComponents[type].Icon}</span>}
-        {status === 'success' && <span className="text-success">{DockerResourceComponents[type].Icon}</span>}
+        {status === 'error' && <span className="text-destructive">{ResourceComponents[type].Icon}</span>}
+        {status === 'success' && <span className="text-success">{ResourceComponents[type].Icon}</span>}
         <span>{refName}</span>
       </span>
 
@@ -89,7 +89,7 @@ type TaskRendererSlots = {
 };
 type TaskRendererComponent<P> = (props: {
   payload: P;
-  type: DockerResourceType;
+  type: ResourceType;
   children: (slots: TaskRendererSlots) => ReactNode;
 }) => React.ReactElement;
 

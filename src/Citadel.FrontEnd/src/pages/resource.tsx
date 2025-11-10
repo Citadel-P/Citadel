@@ -1,19 +1,20 @@
-import { useDockerResourceParamType } from '@/lib/hooks';
+import { useResourceParamType } from '@/lib/hooks';
 import { useNavigate, useParams } from 'react-router';
 import { RequiredDockerComponents } from './types';
-import { DockerResourceType, PluralResourceMap } from '@/api/types';
+import { PluralResourceMap, ResourceType } from '@/api/types';
 import { SearchField } from '@/components/custom/search-field';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
-import NotFound from './NotFound';
+import NotFound from './not-found';
 import { useMemo, useState } from 'react';
-import { DockerResourceComponents } from '@/features/docker-resources';
+import { ResourceComponents } from '@/features';
 import TaskSheet from '@/components/custom/task-sheet';
 
 const DockerResourcePage = () => {
-  const type = useDockerResourceParamType()!;
+  const type = useResourceParamType()!;
 
-  const Components = DockerResourceComponents[type];
+  const Components = ResourceComponents[type];
+  console.log(type);
   if (!Components) return <NotFound />;
 
   return <ResourceView key={type} Components={Components} type={type} />;
@@ -81,7 +82,7 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
 
 type ResourceViewProps<T = any> = {
   Components: RequiredDockerComponents<T>;
-  type: DockerResourceType;
+  type: ResourceType;
 };
 
 export default DockerResourcePage;

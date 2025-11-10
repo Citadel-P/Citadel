@@ -60,23 +60,12 @@ type RequestParams = {
   query?: Record<string, any>;
   [key: string]: any;
 };
-/**
- * Zip two tuples: names (string literals) and types (tuple of types) -> object.
- * Example:
- *   Zip<['id','query','params'], [string, QueryType | undefined, RequestParams?]>
- *   -> { id: string; query: QueryType | undefined; params: RequestParams | undefined }
- */
+
 type Zip<Names extends readonly string[], Types extends readonly any[]> = {
   [I in keyof Names as Names[I] extends string ? Names[I] : never]: I extends keyof Types ? Types[I] : unknown;
 };
 
-/**
- * Given a resource key K, build a named-args object type from:
- *  - the generated resources[K].params (a readonly string tuple), and
- *  - the positional parameter tuple ResourceParams<K>
- */
 type ArgsFromParams<K extends KnownResourceName> = Zip<
-  // Resources.ts is generated `as const` so the type of resources[K].params is a readonly tuple of literal strings
   (typeof resources)[K]['params'] extends readonly string[] ? (typeof resources)[K]['params'] : readonly string[],
   ResourceParams<K>
 >;
@@ -97,6 +86,14 @@ export type MutateVariables<TResource extends keyof typeof resources> = {
     (typeof resources)[TResource]['requiredParams'][number]
   >]?: any;
 };
+
+type NamedArgsForResource<K extends KnownResourceName> = keyof RequiredArgs<K> extends never
+  ? Partial<ArgsFromParams<K>>
+  : RequiredArgs<K> & Partial<OptionalArgs<K>>;
+
+export type UseMutateVariables<TResource extends KnownResourceName> =
+  | PrimaryArg<TResource>
+  | NamedArgsForResource<TResource>;
 
 export interface Cancellable {
   signal: AbortSignal;

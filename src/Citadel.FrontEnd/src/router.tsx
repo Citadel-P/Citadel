@@ -1,19 +1,17 @@
 import { Navigate, Outlet, useLocation, BrowserRouter, Routes, Route } from 'react-router';
 import Layout from '@/layout/layout';
-import NotFound from '@/pages/NotFound';
+import NotFound from '@/pages/not-found';
 import { useAuthContext } from './features/auth/auth-context';
 import Loader from './components/ui/loader';
 import { lazy, Suspense } from 'react';
 
 const Login = lazy(() => import('@/features/auth/login'));
 const Home = lazy(() => import('@/pages/platforms-page'));
-const Resources = lazy(() => import('@/pages/docker-resource'));
+const Resources = lazy(() => import('@/pages/resource'));
 const ResourceInfo = lazy(() => import('@/pages/docker-resource-info'));
-const Container = lazy(() => import('@/features/docker-resources/containers/container-info/ContainerInfoWrapper'));
 const AddPlatform = lazy(() => import('@/pages/add-platform-page'));
 const AddNetwork = lazy(() => import('@/features/docker-resources/networks/forms/add-network'));
 const AddVolume = lazy(() => import('@/features/docker-resources/volumes/forms/add-volume'));
-const Registries = lazy(() => import('@/pages/registries-page'));
 const AddRegistry = lazy(() => import('@/pages/registry-form-page'));
 const EditRegistry = lazy(() => import('@/pages/registry-form-page'));
 
@@ -28,11 +26,13 @@ export const Router = () => {
           <Route element={<RequireAuth />}>
             <Route path="/" element={<Layout />}>
               <Route path="" element={<Home />} />
-              <Route path="platforms/add" element={<AddPlatform />} />
-              <Route path="platforms/:platformId/:type" element={<Resources />} />
-              <Route path="platforms/:platformId/:type/:resourceId" element={<ResourceInfo />} />
-              <Route path="containers/:containerId" element={<Container />} />
-              <Route path="registries" element={<Registries />} />
+              <Route path="platforms">
+                <Route path="add" element={<AddPlatform />} />
+                <Route path=":platformId/:type" element={<Resources />} />
+                <Route path=":platformId/:type/:resourceId" element={<ResourceInfo />} />
+              </Route>
+              <Route path=":type" element={<Resources />} />
+
               <Route path="registries/add" element={<AddRegistry />} />
               <Route path="registries/edit/:registryId" element={<EditRegistry />} />
               <Route path="deployments" element={<Home />} />

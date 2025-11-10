@@ -2,7 +2,7 @@ import { RegistryConfigurationBaseGitHubRegistry, RegistryType } from '@/api/gen
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { useRegistryFormContext } from '../RegistryFormContext';
+import { useRegistryFormContext } from '../registry-form-context';
 import { Constants } from '@/lib/constants';
 
 export const useGhcrForm = () => {

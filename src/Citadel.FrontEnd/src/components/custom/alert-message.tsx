@@ -51,7 +51,7 @@ interface BaseMessageProps {
 
 const BaseMessage = ({ icon, title, className, children }: BaseMessageProps): JSX.Element => {
   return (
-    <Alert className={cn('border-0 mt-2 mb-4', className)}>
+    <Alert className={cn('border-0 mt-2 mb-2', className)}>
       {icon}
       {title ? (
         <>

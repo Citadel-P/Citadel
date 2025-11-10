@@ -1,17 +1,22 @@
 import { AlertMessage } from '@/components/custom/alert-message';
-import { useDockerHubForm } from './hooks/useDockerHubForm';
+import { useGhcrForm } from './hooks/use-ghcr-form';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle } from 'lucide-react';
-import { useRegistryFormContext } from './RegistryFormContext';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useRegistryFormContext } from './registry-form-context';
 import { FieldChange } from '@/components/ui/field-change';
 import { RegistryInput } from '@/api/generated/api.types';
 import { getEditedFields } from '@/lib/utils';
+import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 
-const DockerHubConfiguration = () => {
-  const { form } = useDockerHubForm();
-  const { saveButtonTitle, onPostForm, isLoading, validationErrors, mode } = useRegistryFormContext();
+const GhcrConfiguration = () => {
+  const { form } = useGhcrForm();
+
+  const [accountType, setAccountType] = useState('Organization');
+  const { saveButtonTitle, onPostForm, isLoading, isLoadingForm, validationErrors, mode } = useRegistryFormContext();
 
   function onSubmit(values: RegistryInput | Partial<RegistryInput>) {
     if (mode === 'edit') {
@@ -20,19 +25,19 @@ const DockerHubConfiguration = () => {
     }
     onPostForm!(values);
   }
-
   return (
     <div>
       <AlertMessage type="info">
-        To generate a DockerHub Access Token, please refer to the official{' '}
+        Provide a Personal Access Token (PAT) that includes the <Badge variant="secondary">read:packages</Badge>. You
+        can refer to the{' '}
         <a
           className="underline"
           target="_blank"
           rel="noreferrer"
-          href="https://docs.docker.com/security/for-developers/access-tokens/">
-          DockerHub documentation
-        </a>
-        .
+          href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic">
+          GitHub documentation
+        </a>{' '}
+        for instructions on how to create one.
       </AlertMessage>
 
       <Form {...form}>
@@ -49,7 +54,7 @@ const DockerHubConfiguration = () => {
                   <FormControl>
                     <Input
                       type="text"
-                      placeholder="my-dockerhub-registry"
+                      placeholder="my-ghcr-registry"
                       className="rounded-sm focus-visible:ring-transparent"
                       {...field}
                     />
@@ -68,7 +73,7 @@ const DockerHubConfiguration = () => {
                 <FormControl className="flex-1">
                   <Input
                     type="text"
-                    placeholder=""
+                    placeholder="https://ghcr.io"
                     disabled
                     className="rounded-sm focus-visible:ring-transparent"
                     {...field}
@@ -81,10 +86,42 @@ const DockerHubConfiguration = () => {
 
           <FormField
             control={form.control}
-            name="configuration.username"
+            name="configuration.type"
             render={({ field }) => (
               <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
-                <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">DockerHub Username</FormLabel>
+                <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">Account type</FormLabel>
+                <div className="flex-1">
+                  <Select
+                    onValueChange={(v) => {
+                      setAccountType(v);
+                      field.onChange(v);
+                    }}
+                    {...field}>
+                    {mode === 'edit' && <FieldChange form={form} fieldName={field.name} />}
+                    <FormControl className="w-full shadow-none">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select your account type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="bg-background">
+                      <SelectItem value="Organization">Organization</SelectItem>
+                      <SelectItem value="User">User</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </div>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="configuration.name"
+            render={({ field }) => (
+              <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
+                <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">
+                  {accountType === 'Organization' ? 'Organization name' : 'User name'}
+                </FormLabel>
                 <div className="flex-1">
                   {mode === 'edit' && <FieldChange form={form} fieldName={field.name} />}
                   <FormControl>
@@ -105,7 +142,7 @@ const DockerHubConfiguration = () => {
             name="configuration.pat"
             render={({ field }) => (
               <FormItem className="flex flex-col sm:flex-row sm:items-baseline">
-                <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">DockerHub PAT</FormLabel>
+                <FormLabel className="flex-none w-full sm:w-36 text-xs mb-2 sm:mb-0">PAT</FormLabel>
                 <div className="flex-1">
                   {mode === 'edit' && <FieldChange form={form} fieldName={field.name} />}
                   <FormControl>
@@ -121,9 +158,9 @@ const DockerHubConfiguration = () => {
               </FormItem>
             )}
           />
-          <Button type="submit" disabled={isLoading || !form.formState.isDirty || !form.formState.isValid}>
+          <Button type="submit" disabled={isLoading || isLoadingForm || !form.formState.isDirty || !form.formState.isValid}>
             <span>{saveButtonTitle}</span>
-            {isLoading && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
+            { (isLoading || isLoadingForm) && <LoaderCircle className="ml-1 h-5 w-5 animate-spin" />}
           </Button>
         </form>
       </Form>
@@ -131,4 +168,4 @@ const DockerHubConfiguration = () => {
   );
 };
 
-export default DockerHubConfiguration;
+export default GhcrConfiguration;

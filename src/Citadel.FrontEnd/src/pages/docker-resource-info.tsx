@@ -1,18 +1,18 @@
-import { useDockerResourceParamType, useLocalStorage, useStickySentinel } from '@/lib/hooks';
+import { useResourceParamType, useLocalStorage, useStickySentinel } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import { useParams } from 'react-router';
 import { RequiredDockerInfoComponents } from './types';
 import { DockerResourceType } from '@/api/types';
-import NotFound from './NotFound';
+import NotFound from './not-found';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Loader from '@/components/ui/loader';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { ProblemDetails } from '@/api/generated/api.types';
-import { DockerResourceInfoComponents } from '@/features/docker-resources';
+import { DockerResourceInfoComponents } from '@/features';
 
 const DockerResourceInfoPage = () => {
-  const type = useDockerResourceParamType()!;
+  const type = useResourceParamType()!;
 
   const Components = DockerResourceInfoComponents[type];
   if (!Components) return <NotFound />;
