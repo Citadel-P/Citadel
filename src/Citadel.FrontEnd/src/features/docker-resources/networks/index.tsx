@@ -1,11 +1,11 @@
 import { Network } from 'lucide-react';
 import { NetworksTable } from './table';
-import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
+import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { NetworkDropdownActions, NetworkGroupActions } from './actions';
 import { ActionBar } from '@/components/custom/action-bar';
 
-export const NetworkComponents: RequiredDockerComponents = {
+export const NetworkComponents: RequiredComponents = {
   Icon: <Network className="h-4 w-4" />,
   Table: ({ items, actions, isLoading }) => {
     return <NetworksTable items={items} actions={actions} isLoading={isLoading} />;

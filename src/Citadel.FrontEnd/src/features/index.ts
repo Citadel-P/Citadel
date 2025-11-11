@@ -1,5 +1,5 @@
 import { DockerResourceType, ResourceType } from '@/api/types';
-import { RequiredDockerComponents, RequiredDockerInfoComponents } from '@/pages/types';
+import { RequiredComponents, RequiredDockerInfoComponents } from '@/pages/types';
 import { ImageComponents } from './docker-resources/images';
 import { VolumeComponents } from './docker-resources/volumes';
 import { NetworkComponents } from './docker-resources/networks';
@@ -12,7 +12,7 @@ import { RegistryComponents } from './registries';
 import { PlatformComponents } from './platforms';
 
 export const ResourceComponents: {
-  [key in ResourceType]: RequiredDockerComponents;
+  [key in ResourceType]: RequiredComponents;
 } = {
   Image: ImageComponents,
   Volume: VolumeComponents,

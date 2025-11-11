@@ -2,7 +2,7 @@
  * Defines the components needed to render a Docker resource page.
  * This single interface can represent either a **single-table resource** or a **tabbed resource**.
  */
-export interface RequiredDockerComponents<T = any> {
+export interface RequiredComponents<T = any> {
   /** Optional configuration for header */
   header?: HeaderOptions;
 

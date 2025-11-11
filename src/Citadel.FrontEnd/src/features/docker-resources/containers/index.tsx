@@ -1,11 +1,11 @@
 import { Box } from 'lucide-react';
 import { ContainersTable } from './table';
-import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
+import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useContainersGroup } from './hooks/useContainersGroup';
 import { ContainerDropdownActions, ContainerGroupActions } from './actions';
 import { ActionBar } from '@/components/custom/action-bar';
 
-export const ContainerComponents: RequiredDockerComponents = {
+export const ContainerComponents: RequiredComponents = {
   Icon: <Box className="h-4 w-4" />,
   Table: ({ items, isLoading, actions }) => {
     return <ContainersTable items={items} isLoading={isLoading} actions={actions} />;

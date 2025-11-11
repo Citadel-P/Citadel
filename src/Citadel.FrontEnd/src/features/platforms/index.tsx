@@ -1,10 +1,10 @@
 import { Layers } from 'lucide-react';
-import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
+import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { usePlatformsGroup } from './hooks/usePlatformsGroup';
 import { Platforms } from './platforms';
 import { PlatformDropdownActions } from './actions';
 
-export const PlatformComponents: RequiredDockerComponents = {
+export const PlatformComponents: RequiredComponents = {
   Icon: <Layers className="h-4 w-4" />,
   Table: ({ items, actions, isLoading, isFiltered }) => {
     return <Platforms items={items} actions={actions} isLoading={isLoading} isFiltered={isFiltered} />;

@@ -1,6 +1,6 @@
 import { useResourceParamType } from '@/lib/hooks';
 import { useNavigate, useParams } from 'react-router';
-import { RequiredDockerComponents } from './types';
+import { RequiredComponents } from './types';
 import { PluralResourceMap, ResourceType } from '@/api/types';
 import { SearchField } from '@/components/custom/search-field';
 import { Button } from '@/components/ui/button';
@@ -85,7 +85,7 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
 };
 
 type ResourceViewProps<T = any> = {
-  Components: RequiredDockerComponents<T>;
+  Components: RequiredComponents<T>;
   type: ResourceType;
 };
 

@@ -15,19 +15,15 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'reac
 import {
   AnyFn,
   ApiFn,
-  DockerResourceType,
   KnownResourceName,
-  PluralResourceMap,
   ResourceResponse,
   ResourceType,
   UseMutateVariables,
   UseReadArgs,
 } from '@/api/types';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
-import { use400ErrorToast } from '@/hooks/use400ErrorToast';
 import { toast } from 'sonner';
 import { useParams } from 'react-router';
-import { useDeleteDialogAtom } from './atoms';
 import { ProblemDetails } from '@/api/generated/api.types';
 
 const EMPTY_ARGS = Object.freeze({});
@@ -125,55 +121,6 @@ export function useMutate<TResource extends KnownResourceName, TVariables = UseM
     validationErrors,
   } as UseMutationResult<ResourceResponse<TResource>, Error, TVariables, unknown> & {
     validationErrors: ReturnType<typeof useGetValidationErrors>;
-  };
-}
-
-export function useDialogState<T>() {
-  const [dialogData, setDialogData] = useState<IDialogData<T>>({ open: false });
-
-  return { dialogData, setDialogData };
-}
-
-export interface IDialogData<T> {
-  open: boolean;
-  currentSelection?: T[];
-}
-
-interface DeleteDialogOptions {
-  type: DockerResourceType;
-  onSuccess?: () => void;
-}
-
-export function useDeleteDialog<T>({ type, onSuccess }: DeleteDialogOptions) {
-  const { state, openDialog, closeDialog } = useDeleteDialogAtom<T>(type);
-  const client = useQueryClient();
-
-  const queryKeyToInvalidate = resources[`list${PluralResourceMap[type]}`].key;
-  const mutationKey = resources[`delete${PluralResourceMap[type]}`].key;
-  const resourceName = type.toLowerCase();
-
-  const { mutate, isPending: deleteIsPending, isSuccess: deleteIsSuccess, error } = useMutate(mutationKey);
-
-  use400ErrorToast(error, `The selected ${resourceName}(s) could not be deleted (status code: 400).`, closeDialog);
-
-  useEffect(() => {
-    if (deleteIsSuccess) {
-      if (queryKeyToInvalidate) client.invalidateQueries({ queryKey: [queryKeyToInvalidate] });
-      onSuccess?.();
-      closeDialog();
-      toast.success(`The selected ${resourceName}(s) have been successfully deleted`);
-    }
-  }, [deleteIsSuccess, client, queryKeyToInvalidate, resourceName, onSuccess, closeDialog]);
-
-  const requestDelete = useCallback((data: any) => mutate(data), [mutate]);
-
-  return {
-    open: state.open,
-    targets: state.targets as T[],
-    openDialog,
-    closeDialog,
-    deleteIsPending,
-    requestDelete,
   };
 }
 

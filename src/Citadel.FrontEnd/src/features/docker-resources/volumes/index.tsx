@@ -1,11 +1,11 @@
 import { HardDrive } from 'lucide-react';
 import { VolumesTable } from './table';
-import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
+import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { ActionBar } from '@/components/custom/action-bar';
 import { VolumeDropdownActions, VolumeGroupActions } from './actions';
 
-export const VolumeComponents: RequiredDockerComponents = {
+export const VolumeComponents: RequiredComponents = {
   Icon: <HardDrive className="h-4 w-4" />,
   Table: ({ items, actions, isLoading }) => {
     return <VolumesTable items={items} actions={actions} isLoading={isLoading} />;

@@ -1,11 +1,11 @@
 import { Cable } from 'lucide-react';
-import { RequiredDockerComponents, ResourceDataHookResult } from '@/pages/types';
+import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { ActionBar } from '@/components/custom/action-bar';
 import { RegistryDropdownActions, RegistryGroupActions } from './actions';
 import { RegistriesTable } from './table';
 
-export const RegistryComponents: RequiredDockerComponents = {
+export const RegistryComponents: RequiredComponents = {
   Icon: <Cable className="h-4 w-4" />,
   Table: ({ items, actions, isLoading }) => {
     return <RegistriesTable items={items} actions={actions} isLoading={isLoading} />;

@@ -8,10 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { useNavigate } from 'react-router';
-import { forwardRef, ReactNode, startTransition, useCallback, useEffect, useRef, useState } from 'react';
-import { DockerResourceType } from '@/api/types';
-import { useDeleteDialog } from '@/lib/hooks';
+import { forwardRef, ReactNode, startTransition, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { toast } from 'sonner';
 import { Input } from '../ui/input';
@@ -61,30 +58,6 @@ export const DropdownActions = ({ items }: DropdownActionsProps) => (
     </DropdownMenuContent>
   </DropdownMenu>
 );
-
-interface CreateDropdownConfig<T> {
-  type: DockerResourceType;
-  actions: (args: {
-    navigate: ReturnType<typeof useNavigate>;
-    openDialog: (targets: T | T[]) => void;
-  }) => DropdownAction[];
-}
-
-export function createTableDropdown<T>({ type, actions }: CreateDropdownConfig<T>) {
-  const navigate = useNavigate();
-  const { openDialog } = useDeleteDialog<T>({ type });
-
-  const handleOpenDialog = useCallback(
-    (targets: T | T[]) => {
-      startTransition(() => openDialog(targets));
-    },
-    [openDialog],
-  );
-
-  const items = actions({ navigate, openDialog: handleOpenDialog });
-
-  return <DropdownActions items={items} />;
-}
 
 export const RowActionMenu = <T extends { id: string; name: string }>({
   actions,
