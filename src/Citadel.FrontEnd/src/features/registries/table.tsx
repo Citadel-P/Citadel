@@ -130,18 +130,5 @@ export const RegistriesTable = ({
   const [_, setSelectedResources] = useSelectedResources<RegistryView>('Registry');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
-  if (!items?.length) {
-    return null;
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
-      <div className="text-muted-foreground px-2 py-1 text-xs font-normal ">
-        <span>
-          Showing {items.length} of {items.length} registries
-        </span>
-      </div>
-    </div>
-  );
+  return <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 };

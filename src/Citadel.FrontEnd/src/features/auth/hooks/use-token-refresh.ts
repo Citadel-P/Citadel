@@ -28,13 +28,11 @@ export const useTokenRefresh = (accessToken: string | undefined, isAuthenticated
 
   /** Manual refresh trigger (returns token if successful) */
   const triggerManualRefresh = useCallback(async (): Promise<string | undefined> => {
-    console.log('triggerManualRefresh');
     if (isRefreshing.current) {
       console.log('refresh in progress, skipping');
       return undefined;
     }
 
-    console.log('passed the check');
     isRefreshing.current = true;
     didAttemptRefresh.current = true;
 

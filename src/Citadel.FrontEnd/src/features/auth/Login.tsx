@@ -17,16 +17,16 @@ export default function Login() {
 
   const { mutate, isSuccess, data, isPending, validationErrors } = useMutate('login');
   const navigate = useNavigate();
-  const { setAccessToken } = useAuthContext();
+  const { setAccessToken, accessToken } = useAuthContext();
 
   useEffect(() => {
-    if (isSuccess && data?.data) {
+    if ((isSuccess && data?.data) || (accessToken) ) {
       setAccessToken(data?.data.accessToken);
       const redirectTo = sessionStorage.getItem(REDIRECT_TO_KEY) ?? '/';
       sessionStorage.removeItem(REDIRECT_TO_KEY);
       navigate(redirectTo, { replace: true });
     }
-  }, [isSuccess, data, setAccessToken, navigate]);
+  }, [isSuccess, data, setAccessToken, accessToken, navigate]);
 
   const onSubmit = (values: LoginRequest) => {
     mutate(values);

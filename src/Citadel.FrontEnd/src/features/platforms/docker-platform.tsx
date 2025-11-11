@@ -1,15 +1,24 @@
 import { PlatformDescriptorDockerPlatformDescriptor, PlatformStatus, PlatformView } from '@/api/generated/api.types';
 import DockerIcon from '@/assets/docker.svg';
 import { Link } from 'react-router';
-import { Power, PowerOff, CirclePause, Pencil, Trash2 } from 'lucide-react';
+import { Power, PowerOff, CirclePause } from 'lucide-react';
 import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { fromNow } from '@/lib/dayjs.helper';
-import { usePlatformsContext } from './PlatformsContext';
+import { ActionData } from '@/pages/types';
+import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 
-const DockerPlatform = ({ platform }: { platform: PlatformView }) => {
-  const { setDialogData } = usePlatformsContext();
+export const DockerPlatform = ({
+  platform,
+  actions,
+}: {
+  platform: PlatformView;
+  actions: Record<
+    string,
+    React.FC<{ resource: PlatformView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >;
+}) => {
   const isPlatfomOnline = platform.status === PlatformStatus.Online;
   const LastSnapshotTooltip = () => {
     const lastSnapshot = platform.stats?.at(0)?.created
@@ -88,10 +97,6 @@ const DockerPlatform = ({ platform }: { platform: PlatformView }) => {
     );
   };
 
-  const handleDeletePlatform = () => {
-    setDialogData({ open: true, currentSelection: [platform] });
-  };
-
   return (
     <div className="flow-root gap-1">
       <ul className="divide-y divide-foreground">
@@ -168,26 +173,10 @@ const DockerPlatform = ({ platform }: { platform: PlatformView }) => {
               </div>
             </div>
 
-            <div className="flex flex-auto items-center">
-              <div className="inline-flex rounded-full invisible group-hover/platform:visible" role="group">
-                <button
-                  className="relative inline-flex items-center rounded-l-full border px-4 py-2 text-xs font-medium  hover:bg-foreground/10"
-                  type="button">
-                  <Pencil className="ml-1 h-3.5 w-3.5" />
-                </button>
-                <button
-                  className="relative -ml-px inline-flex items-center rounded-r-full border px-4 py-2 text-xs font-medium text-red-700 dark:hover:bg-red-300 hover:bg-red-100"
-                  onClick={handleDeletePlatform}
-                  type="button">
-                  <Trash2 className="mr-1 h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
+            <RowActionMenu resource={platform} actions={actions} />
           </div>
         </li>
       </ul>
     </div>
   );
 };
-
-export default DockerPlatform;

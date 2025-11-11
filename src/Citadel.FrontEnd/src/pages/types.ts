@@ -25,6 +25,7 @@ export interface RequiredDockerComponents<T = any> {
     items: any[];
     actions: Record<string, DropdownActionComponent<T>>;
     isLoading: boolean;
+    isFiltered?: boolean;
   }>;
 
   /** Data hook for single-table resources */

@@ -61,11 +61,6 @@ const MenuItems: IMenuItem[] = [
   },
 ];
 
-/**
- * Generates a dynamic menu for Docker platforms.
- * @param platform - The platform object containing `id` and `name`.
- * @returns A submenu item for the platform.
- */
 const DockerPlatformMenu = (platform: { id: string; name: string }): ISubMenuItem => ({
   icon: <DockerIcon />,
   label: platform.name,

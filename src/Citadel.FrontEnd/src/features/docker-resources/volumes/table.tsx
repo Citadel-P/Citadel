@@ -24,27 +24,10 @@ export const VolumesTable = ({
     React.FC<{ resource: DockerVolumeResult; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
 }) => {
-  const rowCount = useMemo(() => items?.length ?? 0, [items]);
   const [_, setSelectedResources] = useSelectedResources<DockerVolumeResult>('Volume');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
-  return (
-    <div className="flex flex-col gap-3">
-      <DataTable
-        columns={cols}
-        data={items ?? []}
-        isLoading={isLoading}
-        onSelectionChange={setSelectedResources}
-      />
-      <div className="text-muted-foreground text-xs p-2 font-normal">
-        {rowCount > 0 && (
-          <span>
-            Showing {rowCount} of {rowCount} volume(s)
-          </span>
-        )}
-      </div>
-    </div>
-  );
+  return <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 };
 
 const columns = (

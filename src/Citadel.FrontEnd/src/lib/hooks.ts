@@ -88,10 +88,14 @@ export function useMutate<TResource extends KnownResourceName, TVariables = UseM
     mutationFn: ((variables: TVariables) => {
       const v: any = variables;
       const paramNames = resDef.params ?? [];
+      const requiredParamNames = resDef.requiredParams ?? [];
       const args: any[] = [];
       const isObject = v !== null && typeof v === 'object';
 
-      if (isObject && paramNames.some((p: string) => p in v)) {
+      const hasAllRequiredNamed =
+        isObject && requiredParamNames.length > 0 && requiredParamNames.every((p: string) => p in v);
+
+      if (hasAllRequiredNamed) {
         for (const name of paramNames) {
           if (name === 'params') {
             args.push(v.params ?? {});
@@ -99,7 +103,7 @@ export function useMutate<TResource extends KnownResourceName, TVariables = UseM
             args.push(v[name]);
           }
         }
-      } else if (isObject && 'data' in v && paramNames[0] === 'data') {
+      } else if (isObject && 'data' in v) {
         args.push(v.data);
         args.push(v.params ?? {});
       } else {
@@ -173,11 +177,10 @@ export function useDeleteDialog<T>({ type, onSuccess }: DeleteDialogOptions) {
   };
 }
 
-export const useResourceParamType = () => {
+export const useResourceParamType = (): ResourceType => {
   const type = useParams().type;
-  if (!type) return undefined;
   if (type === 'registries') return 'Registry';
-  return (type[0].toUpperCase() + type.slice(1, -1)) as ResourceType;
+  return type ? ((type[0].toUpperCase() + type.slice(1, -1)) as ResourceType) : 'Platform';
 };
 
 export function useLocalStorage<T>(key: string, initialValue: T) {

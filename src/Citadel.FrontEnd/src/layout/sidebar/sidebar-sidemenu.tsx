@@ -60,7 +60,7 @@ function SubRow({ sub, toggleMenu }: { sub: ISubMenuItem; toggleMenu: (menu: ISu
   return (
     <Link
       to={sub.route ?? '/'}
-      className={clsx(base, 'w-full px-3 py-2 text-xs font-medium', sub.active && 'text-primary bg-card')}
+      className={clsx(base, 'w-full px-3 py-2 text-xs font-medium', sub.active && 'text-primary hover:text-primary bg-card')}
       onClick={() => toggleMenu(sub)}>
       {sub.label}
     </Link>

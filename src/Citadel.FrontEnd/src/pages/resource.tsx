@@ -10,11 +10,10 @@ import { useMemo, useState } from 'react';
 import { ResourceComponents } from '@/features';
 import TaskSheet from '@/components/custom/task-sheet';
 
-const DockerResourcePage = () => {
+const ResourcePage = () => {
   const type = useResourceParamType()!;
 
   const Components = ResourceComponents[type];
-  console.log(type);
   if (!Components) return <NotFound />;
 
   return <ResourceView key={type} Components={Components} type={type} />;
@@ -69,7 +68,12 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
 
           {/* Table */}
           <div className="rounded-sm border p-1 shadow-xs">
-            <ActiveContent items={filtered} actions={Components.DropdownActions ?? {}} isLoading={isLoading} />
+            <ActiveContent
+              items={filtered}
+              actions={Components.DropdownActions ?? {}}
+              isLoading={isLoading}
+              isFiltered={Boolean(search.trim())}
+            />
           </div>
         </div>
       </div>
@@ -85,4 +89,4 @@ type ResourceViewProps<T = any> = {
   type: ResourceType;
 };
 
-export default DockerResourcePage;
+export default ResourcePage;

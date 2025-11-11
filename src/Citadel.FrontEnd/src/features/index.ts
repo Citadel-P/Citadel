@@ -9,6 +9,7 @@ import { VolumeInfoComponents } from './docker-resources/volumes/volume-info';
 import { ImageInfoComponents } from './docker-resources/images/image-info';
 import { ContainerInfoComponents } from './docker-resources/containers/container-info';
 import { RegistryComponents } from './registries';
+import { PlatformComponents } from './platforms';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredDockerComponents;
@@ -18,6 +19,7 @@ export const ResourceComponents: {
   Network: NetworkComponents,
   Container: ContainerComponents,
 
+  Platform: PlatformComponents,
   Registry: RegistryComponents,
 };
 

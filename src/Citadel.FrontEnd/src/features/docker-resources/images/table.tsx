@@ -28,27 +28,10 @@ export const ImagesTable = ({
     React.FC<{ resource: ImageView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
 }) => {
-  const rowCount = useMemo(() => items?.length ?? 0, [items]);
   const [_, setSelectedResources] = useSelectedResources<ImageView>('Image');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
-  return (
-    <div className="flex flex-col gap-3">
-      <DataTable
-        columns={cols}
-        data={items ?? []}
-        isLoading={isLoading}
-        onSelectionChange={setSelectedResources}
-      />
-      <div className="text-muted-foreground text-xs p-2 font-normal">
-        {rowCount > 0 && (
-          <span>
-            Showing {rowCount} of {rowCount} image(s)
-          </span>
-        )}
-      </div>
-    </div>
-  );
+  return <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
 };
 
 const columns = (

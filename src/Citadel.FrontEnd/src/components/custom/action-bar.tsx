@@ -35,7 +35,6 @@ export const ActionBar = <T,>({
 
 const GenericActionBar = <T,>({ selectedItems, allItems, resource, actions }: ActionBarProps<T>) => {
   const { sidebarMinimized } = useLayoutContext();
-console.log(sidebarMinimized)
   if (!selectedItems?.length) return null;
 
   return (

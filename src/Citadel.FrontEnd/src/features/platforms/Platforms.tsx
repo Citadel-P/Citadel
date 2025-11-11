@@ -1,54 +1,57 @@
 import Loader from '@/components/ui/loader';
 import { useNavigate } from 'react-router';
 import { AlertMessage } from '@/components/custom/alert-message';
-import { usePlatformsContext } from './PlatformsContext';
-import { DeleteDialog } from './delete-dialog';
-import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
-import { PlatformType } from '@/api/generated/api.types';
-import DockerPlatform from './DockerPlatform';
+import { PlatformType, PlatformView } from '@/api/generated/api.types';
+import { DockerPlatform } from './docker-platform';
+import { ActionData } from '@/pages/types';
 
-const Platforms = () => {
-  const { platforms, isLoading } = usePlatformsContext();
+export const Platforms = ({
+  items,
+  actions,
+  isLoading,
+  isFiltered,
+}: {
+  items: PlatformView[];
+  isLoading: boolean;
+  isFiltered?: boolean;
+  actions: Record<
+    string,
+    React.FC<{ resource: PlatformView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >;
+}) => {
   const navigate = useNavigate();
   return (
-    <div className="mx-auto px-4 py-3 lg:container sm:px-6">
-      <div className="w-full rounded-lg border-border bg-background p-4">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h5 className="text-md font-bold text-foreground">Platforms</h5>
+    <>
+      {isLoading && <Loader />}
+      {(!items || !items.length) &&
+        !isLoading &&
+        (isFiltered ? (
+          <div className="flex items-center justify-center p-4">
+            <div className="rounded-full bg-primary/80 text-background text-sm p-2 px-3 text-center">
+              No platforms match your search.
+            </div>
           </div>
-          <Button
-            type="button"
-            onClick={() => navigate('./platforms/add')}
-            className="inline-flex items-center bg-primary hover:bg-primary/80 font-medium rounded-sm text-xs px-2.5 py-2.5">
-            <Plus className="h-3 w-3" /> Add Platform
-          </Button>
-        </div>
-        {isLoading && <Loader />}
-        {(!platforms || !platforms.length) && !isLoading && (
+        ) : (
           <AlertMessage type="info">
-            <span>No platform has been configured yet, please add a new Docker platform</span>
-            <button
-              className="font-semibold underline hover:no-underline ml-1"
-              onClick={() => navigate('/add-docker-platform')}>
-              here
-            </button>
-            .
+            <span>
+              No platform is currently configured. Add a
+              <button
+                className="font-semibold underline hover:no-underline ml-1"
+                onClick={() => navigate('/add-docker-platform')}>
+                new platform
+              </button>
+              to get started.
+            </span>
           </AlertMessage>
-        )}
-        {(platforms ?? []).map(
-          (platform) =>
-            platform.type === PlatformType.Docker && (
-              <div key={`${platform.id}`} className="space-y-1 rounded-sm border p-1 shadow-xs">
-                <DockerPlatform platform={platform} />
-              </div>
-            ),
-        )}
-      </div>
-      <DeleteDialog />
-    </div>
+        ))}
+      {(items ?? []).map(
+        (platform) =>
+          platform.type === PlatformType.Docker && (
+            <div key={`${platform.id}`} className="space-y-1 rounded-sm shadow-xs">
+              <DockerPlatform platform={platform} actions={actions} />
+            </div>
+          ),
+      )}
+    </>
   );
 };
-
-export default Platforms;
