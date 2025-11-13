@@ -1,8 +1,8 @@
 import Loader from '@/components/ui/loader';
 import { useDeploymentFormContext } from './DeploymentFormContext';
-import { Config, ConfigItem } from '@/components/dsl/config';
+import { FormBuilder, FieldRenderer } from '@/components/custom/form-builder';
 import { DeploymentSpec, DeploymentVersion, DeploymentView } from '@/api/generated/api.types';
-import { ResourceSelector } from '@/components/dsl/common';
+import { ResourceSelector } from '@/components/custom/common';
 import { useLocalStorage } from '@/lib/hooks';
 
 const DeploymentForm = () => {
@@ -44,7 +44,7 @@ const DeploymentConfig = () => {
     { id: '3', name: 'p03' },
   ];
   return (
-    <Config
+    <FormBuilder
       titleOther={'hello'}
       disabled={false}
       original={deployment}
@@ -59,7 +59,7 @@ const DeploymentConfig = () => {
             components: {
               name: (name, set) => {
                 return (
-                  <ConfigItem
+                  <FieldRenderer
                     label={name ? <div className="flex gap-3 text-lg font-bold">Name: {name}</div> : 'Enter a name'}
                     description="Type the deployment name.">
                     <ResourceSelector
@@ -69,7 +69,7 @@ const DeploymentConfig = () => {
                       align="start"
                       items={platforms}
                     />
-                  </ConfigItem>
+                  </FieldRenderer>
                 );
               },
             },
@@ -89,14 +89,14 @@ const DeploymentConfig = () => {
             labelHidden: true,
             components: {
               command: (value, set) => (
-                <ConfigItem
+                <FieldRenderer
                   label="Command"
                   boldLabel
                   description={
                     <div className="flex flex-row flex-wrap gap-2">
                       <div>Replace the CMD, or extend the ENTRYPOINT.</div>
                     </div>
-                  }></ConfigItem>
+                  }></FieldRenderer>
               ),
             },
           },

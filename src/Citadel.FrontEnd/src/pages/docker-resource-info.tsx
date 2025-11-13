@@ -14,7 +14,7 @@ import { DockerResourceInfoComponents } from '@/features';
 const DockerResourceInfoPage = () => {
   const type = useResourceParamType()!;
 
-  const Components = DockerResourceInfoComponents[type];
+  const Components = DockerResourceInfoComponents[type as DockerResourceType];
   if (!Components) return <NotFound />;
 
   return <ResourceInfoView key={type} Components={Components} type={type} />;

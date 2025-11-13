@@ -4,6 +4,7 @@ import { useRead } from '@/lib/hooks';
 import { ActionBar } from '@/components/custom/action-bar';
 import { RegistryDropdownActions, RegistryGroupActions } from './actions';
 import { RegistriesTable } from './table';
+import { RegistryForm } from './forms/registry-form';
 
 export const RegistryComponents: RequiredComponents = {
   Icon: <Cable className="h-4 w-4" />,
@@ -28,5 +29,9 @@ export const RegistryComponents: RequiredComponents = {
         v.id?.toLowerCase().includes(s) ||
         v.id?.substring(0, 12).toLowerCase().includes(s),
     );
+  },
+
+  Form: ({ mode, resource }) => {
+    return <RegistryForm mode={mode} resource={resource} />;
   },
 };

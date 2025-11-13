@@ -39,10 +39,10 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
   return (
     <div className="flex-col justify-between relative">
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
-        <div className="w-full rounded-lg border-border bg-background p-4 flex flex-col gap-1">
+        <div className="w-full rounded-lg border-border bg-background p-4 flex flex-col gap-3">
           {/* Header */}
           <div className="sm:flex sm:justify-between">
-            <div className="mb-3 flex items-baseline gap-1">
+            <div className="flex items-center gap-1">
               <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 {Icon}
                 <span className="sr-only">{PluralResourceMap[type]}</span>

@@ -4,6 +4,7 @@ import NotFound from '@/pages/not-found';
 import { useAuthContext } from './features/auth/auth-context';
 import Loader from './components/ui/loader';
 import { lazy, Suspense } from 'react';
+import { ResourceFormPage } from './pages/resource-form-page';
 
 const Login = lazy(() => import('@/features/auth/login'));
 const Resources = lazy(() => import('@/pages/resource'));
@@ -19,31 +20,32 @@ export const REDIRECT_TO_KEY = 'redirectTo';
 export const Router = () => {
   return (
     <Suspense fallback={<Loader />}>
-    <BrowserRouter>
-      <Routes>
-        <Route path="login" element={<Login />} />
+      <BrowserRouter>
+        <Routes>
+          <Route path="login" element={<Login />} />
 
-        <Route element={<RequireAuth />}>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Resources />} />
-
-            <Route path="platforms">
+          <Route element={<RequireAuth />}>
+            <Route path="/" element={<Layout />}>
               <Route index element={<Resources />} />
-              <Route path="add" element={<AddPlatform />} />
-              <Route path=":platformId/:type" element={<Resources />} />
-              <Route path=":platformId/:type/:resourceId" element={<ResourceInfo />} />
-            </Route>
 
-            <Route path=":type" element={<Resources />} />
-            <Route path="registries/add" element={<AddRegistry />} />
-            <Route path="registries/edit/:registryId" element={<EditRegistry />} />
-            <Route path="platforms/:platformId/networks/add" element={<AddNetwork />} />
-            <Route path="platforms/:platformId/volumes/add" element={<AddVolume />} />
-            <Route path="*" element={<NotFound />} />
+              <Route path="platforms">
+                <Route index element={<Resources />} />
+                <Route path="add" element={<AddPlatform />} />
+                <Route path=":platformId/:type" element={<Resources />} />
+                <Route path=":platformId/:type/:resourceId" element={<ResourceInfo />} />
+              </Route>
+
+              <Route path=":type" element={<Resources />} />
+              <Route path=":type/add" element={<ResourceFormPage mode="add" />} />
+              <Route path=":type/edit/:id" element={<ResourceFormPage mode="edit" />} />
+
+              <Route path="platforms/:platformId/networks/add" element={<AddNetwork />} />
+              <Route path="platforms/:platformId/volumes/add" element={<AddVolume />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
           </Route>
-        </Route>
-      </Routes>
-    </BrowserRouter>
+        </Routes>
+      </BrowserRouter>
     </Suspense>
   );
 };

@@ -1,5 +1,5 @@
 /**
- * Defines the components needed to render a Docker resource page.
+ * Defines the components needed to render a resource page.
  * This single interface can represent either a **single-table resource** or a **tabbed resource**.
  */
 export interface RequiredComponents<T = any> {
@@ -33,6 +33,9 @@ export interface RequiredComponents<T = any> {
 
   /** Optional helper to filter items by search term */
   filterItems?: (items: T[], search: string) => T[];
+
+  /** Form data */
+  Form?: React.FC<ResourceFormProps<T>>;
 }
 
 /**
@@ -91,6 +94,11 @@ export type ActionData = {
   onClick?: () => void | Promise<unknown>;
   variant?: 'link' | 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | null | undefined;
 };
+
+export interface ResourceFormProps<T> {
+  mode: 'create' | 'edit';
+  resource?: T;
+}
 
 export type ButtonActionComponent<T = any> = React.FC<{ resource: T }>;
 export type ButtonGroupComponent<T = any> = React.FC<{ resources: T[] }>;

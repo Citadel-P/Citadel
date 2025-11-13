@@ -1,8 +1,8 @@
 import { cn } from '@/lib/utils';
 import { AlertTriangle, History, Settings } from 'lucide-react';
 import { Fragment, ReactNode, SetStateAction } from 'react';
-import { Button } from '../../ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
+import { Button } from '../ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '@/components/ui/input';
 
 const keys = <T extends Record<string, unknown>>(obj: T) => Object.keys(obj) as Array<keyof T>;
@@ -26,7 +26,7 @@ export const ConfigLayout = <T,>({
   selector?: ReactNode;
   titleOther?: ReactNode;
 }) => {
-  const titleProps = titleOther ? { titleOther } : { title: 'Config', icon: <Settings className="w-4 h-4" /> };
+  const titleProps = titleOther ? { titleOther } : {};
   const changesMade = Object.keys(update).length ? true : false;
   return (
     <Section
@@ -66,7 +66,7 @@ export type PrimitiveConfigArgs = {
   description?: ReactNode;
 };
 
-export type ConfigComponent<T> = {
+export type FieldSection<T> = {
   label: string;
   boldLabel?: boolean; // defaults to true
   icon?: ReactNode;
@@ -80,11 +80,12 @@ export type ConfigComponent<T> = {
     [K in keyof Partial<T>]:
       | boolean
       | PrimitiveConfigArgs
-      | ((value: T[K], set: (value: Partial<T>) => void) => ReactNode);
+      | ((value: T[K], set: (value: Partial<T>) => void) => ReactNode)
+      | FieldSection<T[K]>;
   };
 };
 
-export const Config = <T,>({
+export const FormBuilder = <T,>({
   original,
   update,
   disabled,
@@ -105,7 +106,7 @@ export const Config = <T,>({
   titleOther?: ReactNode;
   components: Record<
     string, // sidebar key
-    ConfigComponent<T>[] | false | undefined
+    FieldSection<T>[] | false | undefined
   >;
 }) => {
   const sections = keys(components).filter((section) => !!components[section]);
@@ -221,14 +222,39 @@ export const Config = <T,>({
                             <div className="flex flex-col gap-4">
                               {keys(components).map((key) => {
                                 const renderer = components[key];
+                                const value = (update[key] ?? original[key]) as T[keyof T];
+
                                 if (typeof renderer === 'function') {
-                                  const value = (update[key] ?? original[key]) as T[keyof T];
                                   return (
                                     <Fragment key={key as string}>
-                                      {renderer(value, (newValue) => set((prev) => ({ ...prev, ...newValue })))}
+                                      {renderer(value, (partial) => set((prev) => ({ ...prev, ...partial })))}
                                     </Fragment>
                                   );
                                 }
+
+                                if (renderer && typeof renderer === 'object' && 'components' in renderer) {
+                                  const subConfig = renderer as FieldSection<any>;
+                                  const setChild = (partial: any) =>
+                                    set((prev) => ({
+                                      ...prev,
+                                      [key]: { ...(value || {}), ...partial },
+                                    }));
+
+                                  return (
+                                    <div key={key as string} className="flex flex-col gap-4">
+                                      {Object.entries(subConfig.components).map(([childKey, childRenderer]) => {
+                                        const childValue = (value as any)?.[childKey];
+                                        if (typeof childRenderer === 'function') {
+                                          return (
+                                            <Fragment key={childKey}>{childRenderer(childValue, setChild)}</Fragment>
+                                          );
+                                        }
+                                        return null;
+                                      })}
+                                    </div>
+                                  );
+                                }
+
                                 return null;
                               })}
                             </div>
@@ -324,7 +350,7 @@ export const ConfigInput = ({
   inputLeft?: ReactNode;
   inputRight?: ReactNode;
 }) => (
-  <ConfigItem label={label} boldLabel={boldLabel} description={description}>
+  <FieldRenderer label={label} boldLabel={boldLabel} description={description}>
     {inputLeft || inputRight ? (
       <div className="flex gap-2 items-center">
         {inputLeft}
@@ -350,10 +376,10 @@ export const ConfigInput = ({
         disabled={disabled}
       />
     )}
-  </ConfigItem>
+  </FieldRenderer>
 );
 
-export const ConfigItem = ({
+export const FieldRenderer = ({
   label,
   boldLabel,
   description,
@@ -370,7 +396,7 @@ export const ConfigItem = ({
     {(label || description) && (
       <div>
         {label && typeof label === 'string' && (
-          <div className={cn('capitalize', boldLabel && 'font-bold')}>{label.split('_').join(' ')}</div>
+          <div className={cn('capitalize', boldLabel && 'font-bold', 'text-sm')}>{label.split('_').join(' ')}</div>
         )}
         {label && typeof label !== 'string' && label}
         {description && <div className="text-sm text-muted-foreground">{description}</div>}
@@ -379,3 +405,6 @@ export const ConfigItem = ({
     {children}
   </div>
 );
+export function defineConfigComponent<T>(component: FieldSection<T>): FieldSection<T> {
+  return component;
+}

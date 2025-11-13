@@ -4,7 +4,7 @@ import { useInlineSubHeader, useResourceFilter, useTaskSheet } from '@/lib/atoms
 import { useEffect, useRef, useState } from 'react';
 import autoAnimate from '@formkit/auto-animate';
 import { cn } from '@/lib/utils';
-import { ResourceSelector } from '@/components/dsl/common';
+import { ResourceSelector } from '@/components/custom/common';
 import { Input } from '@/components/ui/input';
 import { RegistryView } from '@/api/generated/api.types';
 
