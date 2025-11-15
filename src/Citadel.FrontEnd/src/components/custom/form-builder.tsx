@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { History, Save } from 'lucide-react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Eye, History, Save } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { MonacoDiff } from '@/lib/monaco';
 
 type Primitive = string | number | boolean | bigint | symbol | null | undefined | Date;
 
@@ -21,30 +22,37 @@ export interface FieldConfig<T> {
   description?: React.ReactElement | string;
   disabled?: boolean;
   validate?: (value: any) => string | null;
-  render: (value: any, set: (partial: Partial<T> | ((prev: Partial<T>) => Partial<T>)) => void) => React.ReactNode;
+  render: (value: any, set: FieldChange<T>) => React.ReactNode;
 }
-
 export interface FieldItemConfig<T> {
   kind: 'field';
   field: FieldConfig<T>;
 }
-
 export interface GroupFieldConfig<T> {
   kind: 'group';
-  id: string; // anchor id for the group
-  label: string; // label for sidebar + group header
+  id: string;
+  label: string;
   description?: React.ReactElement | string;
   fields: FieldConfig<T>[];
 }
-
-export type SectionItemConfig<T> = FieldItemConfig<T> | GroupFieldConfig<T>;
-
 export interface SectionConfig<T> {
   title: string;
   items: SectionItemConfig<T>[];
 }
 
+interface FieldShellProps {
+  label: string;
+  required?: boolean;
+  description?: React.ReactElement | string;
+  edited: boolean;
+  error?: string | null;
+  touched: boolean;
+  children: React.ReactNode;
+}
+
 export type FormSchema<T> = Record<string, SectionConfig<T>>;
+export type SectionItemConfig<T> = FieldItemConfig<T> | GroupFieldConfig<T>;
+type FieldChange<T> = (partial: Partial<T> | ((prev: Partial<T>) => Partial<T>)) => void;
 
 export function defineField<T, K extends Path<T>>(
   config: Omit<FieldConfig<T>, 'key'> & { key: K },
@@ -74,6 +82,29 @@ export function defineSection<T>(config: SectionConfig<T>): SectionConfig<T> {
   return config;
 }
 
+function FieldShell({ label, required, description, edited, error, touched, children }: FieldShellProps) {
+  const showError = touched && error;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <label className="block font-medium text-sm">
+          {label}
+          {required && <span className="text-destructive ml-1">*</span>}
+        </label>
+        {typeof description === 'string' ? <p className="text-sm text-muted-foreground">{description}</p> : description}
+      </div>
+
+      <div className="relative">
+        {edited && <span className="absolute -top-0 right-1 text-[10px] text-primary bg-background px-1">Edited</span>}
+        {children}
+      </div>
+
+      {showError && <p className="text-xs text-destructive mt-1">{error}</p>}
+    </div>
+  );
+}
+
 export function FormShell<T>({
   title,
   schema,
@@ -98,160 +129,135 @@ export function FormShell<T>({
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [dirty, setDirty] = useState<Record<string, boolean>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [previewOpen, setPreviewOpen] = useState(false);
 
-  const merged = useMemo(() => deepMerge<T>(original, update), [original, update]);
+  const merged = useMemo(() => smartMerge<T>(original, update), [original, update]);
   const sections = Object.keys(schema);
 
-  const allKeys = useMemo(() => {
-    const keys: string[] = [];
-    for (const sectionKey of sections) {
+  // Flatten schema → key → FieldConfig
+  const fieldMap = useMemo(() => {
+    const map: Record<string, FieldConfig<T>> = {};
+    for (const sectionKey of Object.keys(schema)) {
       const section = schema[sectionKey];
       for (const item of section.items) {
         if (item.kind === 'field') {
-          keys.push(item.field.key as string);
+          map[item.field.key as string] = item.field;
         } else {
           for (const f of item.fields) {
-            keys.push(f.key as string);
+            map[f.key as string] = f;
           }
         }
       }
     }
-    return keys;
-  }, [sections, schema]);
+    return map;
+  }, [schema]);
 
-  const hasChanges = useMemo(() => Object.keys(update).length > 0, [update]);
-  const isDirty = Object.values(dirty).some(Boolean);
-  const canSave = mode === 'edit' ? isDirty : hasChanges;
-  const isValid = Object.values(errors).every((v) => !v);
+  // Derived flags
+  const hasChanges = useMemo(() => Object.values(dirty).some(Boolean), [dirty]);
+  const isValid = useMemo(() => Object.values(errors).every((v) => !v), [errors]);
+  const canSave = hasChanges;
 
-  const findFieldByKey = (key: string): FieldConfig<T> | undefined => {
-    for (const sectionKey of sections) {
-      const section = schema[sectionKey];
-      for (const item of section.items) {
-        if (item.kind === 'field') {
-          if (item.field.key === key) return item.field;
-        } else {
-          for (const f of item.fields) {
-            if (f.key === key) return f;
-          }
-        }
-      }
-    }
-    return undefined;
-  };
-
-  const validateField = (key: string, value: any) => {
-    const field = findFieldByKey(key);
-    if (!field) return;
-
-    let error: string | null = null;
-    const isEmpty = value === undefined || value === '';
-
-    if (field.required && isEmpty) {
-      error = 'Required';
-    } else if (field.validate) {
-      error = field.validate(value);
-    }
-
-    setErrors((prev) => ({
-      ...prev,
-      [key]: error,
-    }));
-  };
-
-  const validateAll = (mergedValue: T) => {
+  // Recompute dirty + errors whenever merged/original/schema change
+  useEffect(() => {
     const newErrors: Record<string, string | null> = {};
+    const newDirty: Record<string, boolean> = {};
 
-    for (const sectionKey of sections) {
-      const section = schema[sectionKey];
+    for (const [key, field] of Object.entries(fieldMap)) {
+      const val = getValue(merged, key);
+      const originalVal = getValue(original, key);
 
-      for (const item of section.items) {
-        if (item.kind === 'field') {
-          const field = item.field;
-          const key = field.key as string;
-          const val = getValue(mergedValue, key);
-          const isEmpty = val === undefined || val === '';
+      newDirty[key] = val !== originalVal;
 
-          if (field.required && isEmpty) {
-            newErrors[key] = 'Required';
-          } else if (field.validate) {
-            newErrors[key] = field.validate(val);
-          } else {
-            newErrors[key] = null;
-          }
-        } else {
-          for (const field of item.fields) {
-            const key = field.key as string;
-            const val = getValue(mergedValue, key);
-            const isEmpty = val === undefined || val === '';
+      const isEmpty = val === undefined || val === '';
+      let err: string | null = null;
 
-            if (field.required && isEmpty) {
-              newErrors[key] = 'Required';
-            } else if (field.validate) {
-              newErrors[key] = field.validate(val);
-            } else {
-              newErrors[key] = null;
-            }
-          }
-        }
+      if (field.required && isEmpty) {
+        err = 'Required';
+      } else if (field.validate) {
+        err = field.validate(val);
       }
+
+      newErrors[key] = err;
     }
 
-    setErrors(newErrors);
-    setTouched((prev) => {
-      const next: Record<string, boolean> = { ...prev };
-      for (const key of allKeys) {
-        next[key] = true;
-      }
-      return next;
-    });
+    if (!shallowEqual(newDirty, dirty)) {
+      setDirty(newDirty);
+    }
+    if (!shallowEqual(newErrors, errors)) {
+      setErrors(newErrors);
+    }
+  }, [merged, original, fieldMap]);
 
-    return Object.values(newErrors).every((v) => !v);
-  };
+  const handleChange = useCallback(
+    (key: string, partialOrUpdater: Partial<T> | ((prev: Partial<T>) => Partial<T>)) => {
+      if (disabled) return;
 
-  const handleChange = (key: string, partialOrUpdater: Partial<T> | ((prev: Partial<T>) => Partial<T>)) => {
-    if (disabled) return;
+      // mark field as touched
+      setTouched((prev) => {
+        if (prev[key]) return prev;
+        return { ...prev, [key]: true };
+      });
 
-    setUpdate((prev) => {
-      const resolved = typeof partialOrUpdater === 'function' ? partialOrUpdater(prev) : partialOrUpdater;
+      // apply external update
+      setUpdate((prev) => {
+        const current = prev ?? {};
+        const resolved = typeof partialOrUpdater === 'function' ? partialOrUpdater(current) : partialOrUpdater;
+        return smartMerge<Partial<T>>(current, resolved);
+      });
+    },
+    [disabled, setUpdate],
+  );
 
-      const newUpdate = deepMerge<Partial<T>>(prev, resolved);
-      const newMerged = deepMerge<T>(original, newUpdate);
+  const createFieldChangeHandler = useCallback(
+    (key: string): FieldChange<T> =>
+      (partialOrUpdater) =>
+        handleChange(key, partialOrUpdater),
+    [handleChange],
+  );
 
-      const newVal = getValue(newMerged, key);
-      const oldVal = getValue(original, key);
-
-      if (mode === 'edit') {
-        setDirty((d) => ({ ...d, [key]: newVal !== oldVal }));
-      }
-
-      setTouched((t) => ({ ...t, [key]: true }));
-      validateField(key, newVal);
-
-      return newUpdate;
-    });
-  };
-
-  const reset = () => {
+  const reset = useCallback(() => {
     setUpdate({});
     setDirty({});
     setErrors({});
     setTouched({});
-  };
+  }, [setUpdate]);
 
-  const confirm = async () => {
+  const validateAll = useCallback(
+    (mergedValue: T) => {
+      const newErrors: Record<string, string | null> = {};
+
+      for (const [key, field] of Object.entries(fieldMap)) {
+        const val = getValue(mergedValue, key);
+        const isEmpty = val === undefined || val === '';
+
+        let error: string | null = null;
+        if (field.required && isEmpty) {
+          error = 'Required';
+        } else if (field.validate) {
+          error = field.validate(val);
+        }
+        newErrors[key] = error;
+      }
+
+      setErrors(newErrors);
+      setTouched((prev) => {
+        const next: Record<string, boolean> = { ...prev };
+        for (const key of Object.keys(fieldMap)) {
+          next[key] = true;
+        }
+        return next;
+      });
+
+      return Object.values(newErrors).every((v) => !v);
+    },
+    [fieldMap],
+  );
+
+  const confirm = useCallback(async () => {
     const valid = validateAll(merged);
     if (!valid) return;
     await onSave(merged as T);
-    reset();
-  };
-
-  const getGroupDirtyAndError = (group: GroupFieldConfig<T>) => {
-    const fieldKeys = group.fields.map((f) => f.key as string);
-    const groupDirty = fieldKeys.some((k) => dirty[k]);
-    const groupHasError = fieldKeys.some((k) => touched[k] && errors[k]);
-    return { groupDirty, groupHasError };
-  };
+  }, [validateAll, merged, onSave, reset]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -292,15 +298,17 @@ export function FormShell<T>({
                       );
                     }
 
-                    const { groupDirty } = getGroupDirtyAndError(item);
+                    const group = item;
+                    const fieldKeys = group.fields.map((f) => f.key as string);
+                    const groupDirty = fieldKeys.some((k) => dirty[k]);
 
                     return (
-                      <a href={`#${item.id}`} key={item.id}>
+                      <a href={`#${group.id}`} key={group.id}>
                         <Button variant="secondary" size="sm" className="justify-end w-full text-xs bg-accent/60">
                           {mode === 'edit' && groupDirty && (
                             <span className="mr-1 text-[10px] text-destructive">*</span>
                           )}
-                          {item.label}
+                          {group.label}
                         </Button>
                       </a>
                     );
@@ -309,7 +317,7 @@ export function FormShell<T>({
               );
             })}
 
-            {canSave && (
+            {hasChanges && (
               <div className="mt-2 flex flex-col items-center gap-2">
                 {mode === 'edit' && (
                   <Button
@@ -320,6 +328,13 @@ export function FormShell<T>({
                     <History className="w-3 h-3" /> Reset
                   </Button>
                 )}
+                <Button
+                  className="w-full text-xs"
+                  variant="outline"
+                  disabled={!hasChanges}
+                  onClick={() => setPreviewOpen(true)}>
+                  <Eye className="w-3 h-3" /> Preview Changes
+                </Button>
                 <Button
                   className="w-full text-xs"
                   disabled={disabled || !isValid || !canSave || pending}
@@ -346,62 +361,35 @@ export function FormShell<T>({
                     const key = f.key as string;
                     const value = getValue(merged, key);
                     const error = errors[key];
-                    const showError = touched[key] && error;
                     const edited = mode === 'edit' && dirty[key];
                     const fieldDisabled = !!disabled || !!f.disabled;
 
                     return (
                       <fieldset id={key} key={key} disabled={fieldDisabled} className="relative border rounded-md p-6">
-                        <div className="flex flex-col gap-4">
-                          <div>
-                            <label className="block font-medium text-sm">
-                              {f.label}
-                              {f.required && <span className="text-destructive ml-1">*</span>}
-                            </label>
-                            {typeof f.description === 'string' ? (
-                              <p className="text-sm text-muted-foreground">{f.description}</p>
-                            ) : (
-                              f.description
-                            )}
-                          </div>
-
-                          <div className="relative">
-                            {edited && (
-                              <span className="absolute -top-0 right-1 text-[10px] text-primary bg-background px-1">
-                                Edited
-                              </span>
-                            )}
-                            {f.render(value, (p) => handleChange(key, p))}
-                          </div>
-
-                          {showError && <p className="text-xs text-destructive mt-1">{error}</p>}
-                        </div>
+                        <FieldShell
+                          label={f.label}
+                          required={f.required}
+                          description={f.description}
+                          edited={!!edited}
+                          error={error}
+                          touched={!!touched[key]}>
+                          {f.render(value, createFieldChangeHandler(key))}
+                        </FieldShell>
                       </fieldset>
                     );
                   }
 
-                  // Group rendering
                   const group = item;
                   return (
                     <section
                       id={group.id}
                       key={group.id}
                       className="relative border rounded-md p-6 flex flex-col gap-4">
-                      {/* <div>
-                        <h3 className="font-medium text-sm">{group.label}</h3>
-                        {typeof group.description === 'string' ? (
-                          <p className="text-sm text-muted-foreground">{group.description}</p>
-                        ) : (
-                          group.description
-                        )}
-                      </div> */}
-
                       <div className="flex flex-col gap-4">
                         {group.fields.map((f) => {
                           const key = f.key as string;
                           const value = getValue(merged, key);
                           const error = errors[key];
-                          const showError = touched[key] && error;
                           const edited = mode === 'edit' && dirty[key];
                           const fieldDisabled = !!disabled || !!f.disabled;
 
@@ -410,29 +398,15 @@ export function FormShell<T>({
                               key={key}
                               disabled={fieldDisabled}
                               className="relative pb-6 last:pb-0 border-b last:border-b-0">
-                              <div className="flex flex-col gap-4">
-                                <div>
-                                  <label className="block font-medium text-sm">
-                                    {f.label}
-                                    {f.required && <span className="text-destructive ml-1">*</span>}
-                                  </label>
-                                  {typeof f.description === 'string' ? (
-                                    <p className="text-sm text-muted-foreground">{f.description}</p>
-                                  ) : (
-                                    f.description
-                                  )}
-                                </div>
-                                <div className="relative">
-                                  {edited && (
-                                    <span className="absolute -top-0 right-1 text-[10px] text-primary bg-background px-1">
-                                      Edited
-                                    </span>
-                                  )}
-                                  {f.render(value, (p) => handleChange(key, p))}
-                                </div>
-
-                                {showError && <p className="text-xs text-destructive mt-1">{error}</p>}
-                              </div>
+                              <FieldShell
+                                label={f.label}
+                                required={f.required}
+                                description={f.description}
+                                edited={!!edited}
+                                error={error}
+                                touched={!!touched[key]}>
+                                {f.render(value, createFieldChangeHandler(key))}
+                              </FieldShell>
                             </fieldset>
                           );
                         })}
@@ -455,14 +429,32 @@ export function FormShell<T>({
               Reset
             </Button>
           )}
+          <Button variant="outline" size="sm" disabled={!hasChanges} onClick={() => setPreviewOpen(true)}>
+            <Eye className="w-3 h-3" /> Preview Changes
+          </Button>
           <Button size="sm" onClick={confirm} disabled={disabled || !isValid || !canSave || pending}>
             {pending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />} Save
           </Button>
         </div>
       </div>
+
+      {/* --- Preview Modal --- */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent aria-describedby={undefined} className="w-full max-w-[1100px] sm:max-w-[1100px]">
+          <DialogHeader>
+            <DialogTitle>Diff Preview</DialogTitle>
+          </DialogHeader>
+
+          <div className="pt-4">
+            <MonacoDiff original={original} modified={merged} format="yaml" />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+/* ----------------------------- Utilities ----------------------------- */
 
 export const FieldInput = ({
   value,
@@ -491,24 +483,41 @@ function getValue(obj: any, path: string): any {
   return path.split('.').reduce((acc, key) => acc?.[key], obj);
 }
 
-function deepMerge<T>(target: any, source: any): T {
-  const output: any = { ...target };
-  if (isObject(target) && isObject(source)) {
-    Object.keys(source).forEach((key) => {
-      if (isObject(source[key])) {
-        if (!(key in target)) {
-          Object.assign(output, { [key]: source[key] });
-        } else {
-          output[key] = deepMerge(target[key], source[key]);
-        }
-      } else {
-        Object.assign(output, { [key]: source[key] });
+function smartMerge<T>(target: any, source: any): T {
+  if (!isObject(target) || !isObject(source)) return (source ?? target) as T;
+
+  let mutated = false;
+  const output: any = Array.isArray(target) ? [...target] : { ...target };
+
+  for (const key of Object.keys(source)) {
+    const prev = target[key];
+    const next = source[key];
+
+    if (isObject(prev) && isObject(next)) {
+      const nested = smartMerge(prev, next);
+      if (nested !== prev) {
+        mutated = true;
+        output[key] = nested;
       }
-    });
+    } else if (next !== prev) {
+      mutated = true;
+      output[key] = next;
+    }
   }
-  return output;
+
+  return mutated ? output : target;
 }
 
 function isObject(item: any): boolean {
   return item && typeof item === 'object' && !Array.isArray(item);
+}
+
+function shallowEqual(a: Record<string, any>, b: Record<string, any>) {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const k of aKeys) {
+    if (a[k] !== b[k]) return false;
+  }
+  return true;
 }
