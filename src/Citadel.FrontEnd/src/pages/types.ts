@@ -96,7 +96,7 @@ export type ActionData = {
 };
 
 export interface ResourceFormProps<T> {
-  mode: 'create' | 'edit';
+  mode: 'add' | 'edit';
   resource?: T;
 }
 

@@ -21,7 +21,7 @@ import {
   UseMutateVariables,
   UseReadArgs,
 } from '@/api/types';
-import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
+import { useGetValidationErrors, getValidationErrors } from '@/hooks/useGetValidationErrors';
 import { toast } from 'sonner';
 import { useParams } from 'react-router';
 import { ProblemDetails } from '@/api/generated/api.types';
@@ -299,7 +299,7 @@ export function useHTTPErrorHandler() {
       if (error.status != null) {
         if (error.status === 401) return;
         toast.error(error.status + ' ' + error.title, {
-          description: error.detail,
+          description: error.status === 400 ? getValidationErrors(error) : error.detail,
         });
       }
     };

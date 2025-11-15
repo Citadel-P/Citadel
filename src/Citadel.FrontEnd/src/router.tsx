@@ -12,8 +12,6 @@ const ResourceInfo = lazy(() => import('@/pages/docker-resource-info'));
 const AddPlatform = lazy(() => import('@/pages/add-platform-page'));
 const AddNetwork = lazy(() => import('@/features/docker-resources/networks/forms/add-network'));
 const AddVolume = lazy(() => import('@/features/docker-resources/volumes/forms/add-volume'));
-const AddRegistry = lazy(() => import('@/pages/registry-form-page'));
-const EditRegistry = lazy(() => import('@/pages/registry-form-page'));
 
 export const REDIRECT_TO_KEY = 'redirectTo';
 
