@@ -2,13 +2,14 @@ import { useEffect, useState, useCallback } from 'react';
 import { useApiClientContext } from '@/api/api-client-context';
 import { AuthContext } from './auth-context';
 import { useHTTPErrorHandler, useMutate } from '@/lib/hooks';
-import { ProblemDetails } from '@/api/generated/api.types';
+import { LoginRequest, ProblemDetails } from '@/api/generated/api.types';
 import { useTokenRefresh } from './hooks/use-token-refresh';
 
 export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   useHTTPErrorHandler();
   const { apiClient } = useApiClientContext();
   const { mutate: requestLogout } = useMutate('logout');
+  const { mutate: requestLogin, isPending, validationErrors } = useMutate('login');
 
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -19,13 +20,25 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
     isAuthenticated,
   );
 
-  /** Apply token to ApiClient and state */
   const applyToken = useCallback(
     (token?: string) => {
       apiClient.setSecurityData(token);
       setAccessToken(token);
     },
     [apiClient],
+  );
+
+  const login = useCallback(
+    (request: LoginRequest) => {
+      requestLogin(request, {
+        onSuccess: (data) => {
+          if (data?.data?.accessToken) {
+            applyToken(data.data.accessToken);
+          }
+        },
+      });
+    },
+    [requestLogin, applyToken],
   );
 
   const logout = useCallback(() => {
@@ -76,8 +89,10 @@ export const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ childre
         accessToken,
         isAuthenticated,
         isAuthReady,
+        login,
         logout,
-        setAccessToken: applyToken,
+        isPending,
+        validationErrors,
       }}>
       {children}
     </AuthContext.Provider>

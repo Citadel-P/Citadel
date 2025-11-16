@@ -20,7 +20,9 @@ export const Router = () => {
     <Suspense fallback={<Loader />}>
       <BrowserRouter>
         <Routes>
-          <Route path="login" element={<Login />} />
+          <Route element={<RequireNoAuth />}>
+            <Route path="login" element={<Login />} />
+          </Route>
 
           <Route element={<RequireAuth />}>
             <Route path="/" element={<Layout />}>
@@ -60,6 +62,21 @@ const RequireAuth = () => {
     const currentUrl = `${location.pathname}${location.search}${location.hash}`;
     sessionStorage.setItem(REDIRECT_TO_KEY, currentUrl || '/');
     return <Navigate to="/login" replace />;
+  }
+
+  return <Outlet />;
+};
+
+const RequireNoAuth = () => {
+  const { isAuthenticated, isAuthReady } = useAuthContext();
+
+  if (!isAuthReady) {
+    return <Loader />;
+  }
+
+  if (isAuthenticated) {
+    const redirectTo = sessionStorage.getItem(REDIRECT_TO_KEY) ?? '/';
+    return <Navigate to={redirectTo} replace />;
   }
 
   return <Outlet />;

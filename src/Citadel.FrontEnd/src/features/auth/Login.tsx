@@ -6,30 +6,14 @@ import { useLoginForm } from './hooks/use-login-form';
 import { LoginRequest } from '@/api/generated/api.types';
 import { LoaderCircle } from 'lucide-react';
 import { AlertMessage } from '@/components/custom/alert-message';
-import { useEffect } from 'react';
-import { useMutate } from '@/lib/hooks';
-import { REDIRECT_TO_KEY } from '@/router';
-import { useNavigate } from 'react-router';
 import { useAuthContext } from './auth-context';
 
-export default function Login() {
+const Login = () => {
   const { form } = useLoginForm();
+  const { login, isPending, validationErrors } = useAuthContext();
 
-  const { mutate, isSuccess, data, isPending, validationErrors } = useMutate('login');
-  const navigate = useNavigate();
-  const { setAccessToken, accessToken } = useAuthContext();
-
-  useEffect(() => {
-    if ((isSuccess && data?.data) || (accessToken) ) {
-      setAccessToken(data?.data.accessToken);
-      const redirectTo = sessionStorage.getItem(REDIRECT_TO_KEY) ?? '/';
-      sessionStorage.removeItem(REDIRECT_TO_KEY);
-      navigate(redirectTo, { replace: true });
-    }
-  }, [isSuccess, data, setAccessToken, accessToken, navigate]);
-
-  const onSubmit = (values: LoginRequest) => {
-    mutate(values);
+  const onSubmit = (v: LoginRequest) => {
+    login(v);
   };
 
   return (
@@ -98,4 +82,6 @@ export default function Login() {
       </div>
     </div>
   );
-}
+};
+
+export default Login;
