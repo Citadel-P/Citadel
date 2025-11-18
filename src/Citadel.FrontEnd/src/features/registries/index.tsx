@@ -34,4 +34,8 @@ export const RegistryComponents: RequiredComponents = {
   Form: ({ mode, resource }) => {
     return <RegistryForm mode={mode} resource={resource} />;
   },
+  useFormData: function (id: string | undefined) {
+    const { data, isLoading } = useRead('getRegistryWithConfig', { id });
+    return { item: data?.data, isLoading };
+  },
 };

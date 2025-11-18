@@ -1,5 +1,5 @@
-import { DiffEditor } from '@monaco-editor/react';
 import { useEffect, useState } from 'react';
+import { DiffEditor } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
 import yaml from 'js-yaml';
 import { useLayoutContext } from '@/lib/context/layout-context';

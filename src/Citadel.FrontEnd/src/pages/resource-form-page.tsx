@@ -1,5 +1,5 @@
 import { ResourceComponents } from '@/features';
-import { useRead, useResourceParamType } from '@/lib/hooks';
+import { useResourceParamType } from '@/lib/hooks';
 import { useParams } from 'react-router';
 import NotFound from './not-found';
 import { capitalize } from '@/lib/utils';
@@ -8,9 +8,8 @@ import { Pencil, Plus } from 'lucide-react';
 export const ResourceFormPage = ({ mode }: { mode: 'add' | 'edit' }) => {
   const type = useResourceParamType()!;
   const id = useParams().id;
-  const { data } = useRead('getRegistryWithConfig', { id });
   const Components = ResourceComponents[type];
-
+  const { item } = Components.useFormData?.(id) ?? {};
   if (!Components || Components.Form === undefined) return <NotFound />;
 
   return (
@@ -29,7 +28,7 @@ export const ResourceFormPage = ({ mode }: { mode: 'add' | 'edit' }) => {
             </div>
           </div>
 
-          <Components.Form mode={mode} resource={data?.data} />
+          <Components.Form mode={mode} resource={item} />
         </div>
       </div>
     </div>

@@ -36,6 +36,9 @@ export interface RequiredComponents<T = any> {
 
   /** Form data */
   Form?: React.FC<ResourceFormProps<T>>;
+
+  /** Form data hook */
+  useFormData?: (id: string | undefined) => T;
 }
 
 /**

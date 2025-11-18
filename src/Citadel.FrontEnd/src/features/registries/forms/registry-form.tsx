@@ -33,8 +33,8 @@ const GhcrAccountTypeSelector = ({ value, onChange, disabled }: any) => (
       <SelectValue placeholder="Select GitHub account type" />
     </SelectTrigger>
     <SelectContent className="bg-background">
-      <SelectItem value={GhcrAccountType.User}>User</SelectItem>
-      <SelectItem value={GhcrAccountType.Organization}>Organization</SelectItem>
+      <SelectItem value={GhcrAccountType.User}>{GhcrAccountType.User}</SelectItem>
+      <SelectItem value={GhcrAccountType.Organization}>{GhcrAccountType.Organization}</SelectItem>
     </SelectContent>
   </Select>
 );
@@ -82,14 +82,17 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
           defineField({
             key: 'type',
             label: 'Provider',
-            description: 'Select the registry provider to connect to.',
             required: true,
             disabled: mode === 'edit',
             render: (value, set) => (
               <RegistryTypeSelector
                 value={value ?? RegistryType.DockerHub}
-                onChange={(v: RegistryType) => set({ type: v })}
-                disabled={mode === 'edit'}
+                onChange={(v: RegistryType) =>
+                  set(() => ({
+                    type: v,
+                    configuration: undefined, // Reset the form configuration on value change
+                  }))
+                }
               />
             ),
           }),
@@ -266,6 +269,8 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
       setUpdate={setUpdate}
       onSave={handleSave}
       pending={isPending}
+      draftKey={`registry:${id ?? 'new'}`}
+      draftVersion={1}
     />
   );
 };
