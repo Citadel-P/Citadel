@@ -13,5 +13,5 @@ public sealed record RegistryInput(
     RegistryConfigurationBase Configuration
     )
 {
-    internal CreateRegistry ToCreateRegistryCommand() => new(Name, Url, Type, Configuration);
+    internal CreateRegistry ToCommand() => new(Name, Url, Type, Configuration);
 }

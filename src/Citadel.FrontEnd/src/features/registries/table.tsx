@@ -4,12 +4,13 @@ import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef, Row } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Link } from 'react-router';
-import { InfoIcon } from 'lucide-react';
+import { Globe, InfoIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ActionData } from '@/pages/types';
 import { useSelectedResources } from '@/lib/atoms';
 import { useMemo } from 'react';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
+import { DockerIcon, GitHubIcon } from '@/lib/icons';
 
 const getNonDefaultRows = (rows: Row<RegistryView>[]) => rows.filter((row) => !row.original.isDefault);
 
@@ -18,6 +19,23 @@ const areAllNonDefaultRowsSelected = (rows: Row<RegistryView>[]) =>
 
 const areSomeNonDefaultRowsSelected = (rows: Row<RegistryView>[]) =>
   getNonDefaultRows(rows).some((row) => row.getIsSelected());
+
+const providerIcons: Record<string, React.FC<{ className?: string }>> = {
+  Custom: Globe,
+  DockerHub: DockerIcon,
+  GitHub: GitHubIcon,
+};
+
+const RenderProvider = ({ registry }: { registry: RegistryView }) => {
+  const Icon = providerIcons[registry.type];
+
+  return (
+    <div className="flex flex-row gap-1 items-center">
+      {Icon && <Icon className="h-4 w-4 text-foreground/50" />}
+      {registry.type}
+    </div>
+  );
+};
 
 const columns = (
   actions: Record<
@@ -91,7 +109,7 @@ const columns = (
   {
     accessorKey: 'provider',
     header: ({ column }) => <SortableCell cellName="Provider" column={column} />,
-    cell: ({ row }) => <div>{row.original.type}</div>,
+    cell: ({ row }) => <RenderProvider registry={row.original} />,
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
       return rowA.original.type.localeCompare(rowB.original.type);
     },

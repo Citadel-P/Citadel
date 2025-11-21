@@ -1460,6 +1460,10 @@ export type RegistryConfigurationBase = BaseRegistryConfigurationBase &
         "GitHub",
         RegistryConfigurationBaseGitHubRegistry
       >
+    | BaseRegistryConfigurationBaseTypeMapping<
+        "Custom",
+        RegistryConfigurationBaseCustomRegistry
+      >
   );
 
 export interface RegistryConfigurationBaseAWSRegistry {
@@ -1474,6 +1478,14 @@ export interface RegistryConfigurationBaseAzureRegistry {
   $type?: "Azure";
   userName: string;
   password: string;
+}
+
+export interface RegistryConfigurationBaseCustomRegistry {
+  $type?: "Custom";
+  /** @default false */
+  authEnabled?: null | boolean;
+  userName?: null | string;
+  password?: null | string;
 }
 
 export interface RegistryConfigurationBaseDockerHubRegistry {

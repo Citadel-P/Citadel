@@ -10,6 +10,7 @@ namespace Domain.Entities.Registries;
 [JsonDerivedType(typeof(GitlabRegistry), nameof(RegistryType.Gitlab))]
 [JsonDerivedType(typeof(DockerHubRegistry), nameof(RegistryType.DockerHub))]
 [JsonDerivedType(typeof(GitHubRegistry), nameof(RegistryType.GitHub))]
+[JsonDerivedType(typeof(CustomRegistry), nameof(RegistryType.Custom))]
 public abstract record RegistryConfigurationBase
 {
     public virtual string GetRegistryAuth(string registryUrl) 

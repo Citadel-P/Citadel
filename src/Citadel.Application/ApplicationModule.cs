@@ -54,6 +54,7 @@ public static class ApplicationModule
             .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>()
             .AddScoped<GitHubConnectorStrategy>()
             .AddScoped<DockerHubConnectorStrategy>()
+            .AddScoped<CustomRegistryConnectorStrategy>()
             .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>();
 
     private static IServiceCollection AddSignalRServices(this IServiceCollection services) =>

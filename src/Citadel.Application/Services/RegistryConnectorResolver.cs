@@ -17,6 +17,7 @@ internal class RegistryConnectorResolver(IServiceProvider provider) : IRegistryC
     {
         return type switch
         {
+            RegistryType.Custom => provider.GetService<CustomRegistryConnectorStrategy>(),
             RegistryType.DockerHub => provider.GetService<DockerHubConnectorStrategy>(),
             RegistryType.GitHub => provider.GetService<GitHubConnectorStrategy>(),
             _ => null

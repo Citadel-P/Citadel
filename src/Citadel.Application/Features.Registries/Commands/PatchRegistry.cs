@@ -37,7 +37,7 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
 
             When(x => x.Configuration is not DockerHubRegistry && x.Configuration is not GitHubRegistry, () =>
             {
-                When(s => s.Name != null, () => RuleFor(x => x.Url).Matches(Validators.UrlRegex).WithMessage("Please provide a valid URL"));
+                When(s => s.Name != null, () => RuleFor(x => x.Url).Matches(Validators.RegistryUrlRegex).WithMessage("Please provide a valid URL"));
             });
             When(x => x.Configuration is DockerHubRegistry, () =>
             {
@@ -58,6 +58,10 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
             When(x => x.Configuration is GitHubRegistry, () =>
             {
                 RuleFor(x => x.Configuration as GitHubRegistry).SetValidator(new GitHubRegistryValidator()!);
+            });
+            When(x => x.Configuration is CustomRegistry, () =>
+            {
+                RuleFor(x => x.Configuration as CustomRegistry).SetValidator(new CustomRegistryValidator()!);
             });
         }
     }
@@ -106,6 +110,18 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
         {
             When(s => s.PAT != null, () => RuleFor(x => x.PAT).NotEmpty().MinimumLength(10));
             When(s => s.Name != null, () => RuleFor(x => x.Name).NotEmpty().MinimumLength(5));
+        }
+    }
+
+    internal sealed class CustomRegistryValidator : AbstractValidator<CustomRegistry>
+    {
+        public CustomRegistryValidator()
+        {
+            When(x => x.AuthEnabled == true, () =>
+            {
+                RuleFor(x => x.UserName).NotEmpty().MinimumLength(3);
+                RuleFor(x => x.Password).NotEmpty().MinimumLength(6);
+            });
         }
     }
 }

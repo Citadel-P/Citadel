@@ -15,7 +15,7 @@ public static class Registries
 {
     public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] RegistryInput request, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(request.ToCreateRegistryCommand(), cancellationToken);
+        var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResult(result, RegistryView.Map);
     }
 

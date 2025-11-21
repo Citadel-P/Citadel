@@ -45,6 +45,12 @@ internal static class Examples
                     GitHubRegistry.Create("organization or user name", "", GhcrAccountType.Organization));
                 return new OpenApiExample() { Value = JsonNode.Parse(JsonSerializer.Serialize(registry, typeof(RegistryInput), GetJsonContext())) };
             }
+            internal static OpenApiExample CreateCustomRegistryExample()
+            {
+                var registry = new RegistryInput(Name: "my-custom-registry", Url: "localhost:9965", Type: RegistryType.Custom,
+                    CustomRegistry.Create(true, "fake-user", "fake-password"));
+                return new OpenApiExample() { Value = JsonNode.Parse(JsonSerializer.Serialize(registry, typeof(RegistryInput), GetJsonContext())) };
+            }
         }
         internal static class Update
         {
@@ -75,6 +81,12 @@ internal static class Examples
             {
                 var registry = new RegistryInput(Name: "my-custom-registry", Url: "", Type: RegistryType.GitHub,
                     GitHubRegistry.Create("organization or user name", "", GhcrAccountType.Organization));
+                return new OpenApiExample() { Value = JsonNode.Parse(JsonSerializer.Serialize(registry, typeof(RegistryInput), GetJsonContext())) };
+            }
+            internal static OpenApiExample UpdateCustomRegistryExample()
+            {
+                var registry = new RegistryInput(Name: "my-custom-registry", Url: "localhost:9965", Type: RegistryType.Custom,
+                    CustomRegistry.Create(true, "fake-user", "fake-password"));
                 return new OpenApiExample() { Value = JsonNode.Parse(JsonSerializer.Serialize(registry, typeof(RegistryInput), GetJsonContext())) };
             }
         }

@@ -30,7 +30,7 @@ public sealed record CreateRegistry(
 
             When(x => x.Configuration is not DockerHubRegistry && x.Configuration is not GitHubRegistry, () =>
             {
-                RuleFor(x => x.Url).Matches(Validators.UrlRegex).WithMessage("Please provide a valid URL");
+                RuleFor(x => x.Url).Matches(Validators.RegistryUrlRegex).WithMessage("Please provide a valid URL");
             });
             When(x => x.Configuration is DockerHubRegistry, () =>
             {
@@ -52,6 +52,10 @@ public sealed record CreateRegistry(
             {
                 RuleFor(x => x.Configuration as GitHubRegistry).SetValidator(new GitHubRegistryValidator()!);
             });
+            When(x => x.Configuration is CustomRegistry, () =>
+            {
+                RuleFor(x => x.Configuration as CustomRegistry).SetValidator(new CustomRegistryValidator()!);
+            });
         }
     }
 
@@ -70,6 +74,18 @@ public sealed record CreateRegistry(
         {
             RuleFor(x => x.PAT).NotEmpty().MinimumLength(10);
             RuleFor(x => x.UserName).NotEmpty().MinimumLength(4);
+        }
+    }
+
+    internal sealed class CustomRegistryValidator : AbstractValidator<CustomRegistry>
+    {
+        public CustomRegistryValidator()
+        {
+            When(x => x.AuthEnabled == true, () =>
+            {
+                RuleFor(x => x.UserName).NotEmpty().MinimumLength(3);
+                RuleFor(x => x.Password).NotEmpty().MinimumLength(6);
+            });
         }
     }
 

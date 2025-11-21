@@ -3,8 +3,8 @@
   title: One or more validation errors occurred.,
   status: 400,
   errors: {
-    Url: [
-      Please provide a valid URL
+    0: [
+      Unsupported Registry Type
     ]
   },
   traceId: {Scrubbed}

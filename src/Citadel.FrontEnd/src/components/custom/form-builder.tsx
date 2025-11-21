@@ -294,6 +294,7 @@ export function FormShell<T>({
   pending = false,
   draftKey,
   draftVersion,
+  onReset,
 }: {
   title?: string;
   schema: FormSchema<T>;
@@ -306,6 +307,7 @@ export function FormShell<T>({
   pending?: boolean;
   draftKey?: string;
   draftVersion?: string | number;
+  onReset?: () => void;
 }) {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -379,14 +381,18 @@ export function FormShell<T>({
   );
 
   const reset = useCallback(() => {
-    setUpdate({});
+    if (onReset) {
+      onReset();
+    } else {
+      setUpdate({});
+    }
     setTouched({});
     if (draftKey && typeof window !== 'undefined') {
       clearDraft(draftKey);
       setDraftInfo({ hasDraft: false, savedAt: undefined });
       setDraftLoadedBanner(false);
     }
-  }, [setUpdate, draftKey]);
+  }, [onReset, setUpdate, draftKey]);
 
   const validateAll = useCallback(
     (value: T) => {

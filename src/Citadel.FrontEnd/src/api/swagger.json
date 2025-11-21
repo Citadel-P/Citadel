@@ -1793,6 +1793,19 @@
                       "Type": "Organization"
                     }
                   }
+                },
+                "Custom": {
+                  "value": {
+                    "Name": "my-custom-registry",
+                    "Url": "localhost:9965",
+                    "Type": "Custom",
+                    "Configuration": {
+                      "$type": "Custom",
+                      "AuthEnabled": true,
+                      "UserName": "fake-user",
+                      "Password": "fake-password"
+                    }
+                  }
                 }
               }
             }
@@ -2121,6 +2134,19 @@
                       "Type": "Organization"
                     }
                   }
+                },
+                "Custom": {
+                  "value": {
+                    "Name": "my-custom-registry",
+                    "Url": "localhost:9965",
+                    "Type": "Custom",
+                    "Configuration": {
+                      "$type": "Custom",
+                      "AuthEnabled": true,
+                      "UserName": "fake-user",
+                      "Password": "fake-password"
+                    }
+                  }
                 }
               }
             },
@@ -2190,6 +2216,19 @@
                       "Name": "organization or user name",
                       "PAT": "",
                       "Type": "Organization"
+                    }
+                  }
+                },
+                "Custom": {
+                  "value": {
+                    "Name": "my-custom-registry",
+                    "Url": "localhost:9965",
+                    "Type": "Custom",
+                    "Configuration": {
+                      "$type": "Custom",
+                      "AuthEnabled": true,
+                      "UserName": "fake-user",
+                      "Password": "fake-password"
                     }
                   }
                 }
@@ -9179,6 +9218,9 @@
           },
           {
             "$ref": "#/components/schemas/RegistryConfigurationBaseGitHubRegistry"
+          },
+          {
+            "$ref": "#/components/schemas/RegistryConfigurationBaseCustomRegistry"
           }
         ],
         "discriminator": {
@@ -9188,7 +9230,8 @@
             "Azure": "#/components/schemas/RegistryConfigurationBaseAzureRegistry",
             "Gitlab": "#/components/schemas/RegistryConfigurationBaseGitlabRegistry",
             "DockerHub": "#/components/schemas/RegistryConfigurationBaseDockerHubRegistry",
-            "GitHub": "#/components/schemas/RegistryConfigurationBaseGitHubRegistry"
+            "GitHub": "#/components/schemas/RegistryConfigurationBaseGitHubRegistry",
+            "Custom": "#/components/schemas/RegistryConfigurationBaseCustomRegistry"
           }
         }
       },
@@ -9237,6 +9280,35 @@
           },
           "password": {
             "type": "string"
+          }
+        }
+      },
+      "RegistryConfigurationBaseCustomRegistry": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "Custom"
+            ],
+            "type": "string"
+          },
+          "authEnabled": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "default": false
+          },
+          "userName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "password": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

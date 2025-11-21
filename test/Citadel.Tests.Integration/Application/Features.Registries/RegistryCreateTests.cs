@@ -61,6 +61,47 @@ public class RegistryCreateTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Create_CustomRegistry_ReturnsSuccess()
+    {
+        // Arrange
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryType>()))
+           .Returns(registryConnectorMock.Object);
+
+        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((true, null));
+
+        var createJson = """
+        {
+          "name": "R-NEW",
+          "url": "https://registry123:9999",
+          "type": "Custom",
+          "configuration": {
+            "$type": "Custom",
+            "authEnabled": true,
+            "userName": "dummy-user",
+            "password": "dummy-pat123"
+          }
+        }
+        """;
+        var content = new StringContent(createJson, Encoding.UTF8, "application/json");
+
+        // Act
+        var response = await Client.PostAsync("/api/v1/registries", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        // Check DB
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var registries = await uow.Registries.GetAllAsync(TestContext.Current.CancellationToken);
+
+        Assert.Contains(registries, r => r.Name == "R-NEW");
+        await VerifyJson(responseBody);
+    }
+
+    [Fact]
     public async Task Create_GitHubRegistry_ReturnsSuccess()
     {
         // Arrange

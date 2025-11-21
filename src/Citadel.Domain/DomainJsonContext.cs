@@ -36,6 +36,7 @@ public partial class PlatformJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(AWSRegistry))]
 [JsonSerializable(typeof(AzureRegistry))]
 [JsonSerializable(typeof(GitlabRegistry))]
+[JsonSerializable(typeof(CustomRegistry))]
 [JsonSerializable(typeof(DockerHubRegistry))]
 [JsonSerializable(typeof(GitHubRegistry))]
 [JsonSerializable(typeof(RegistryConfigurationBase))]
