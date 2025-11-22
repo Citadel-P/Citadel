@@ -8,7 +8,7 @@ import { RegistryForm } from './form';
 
 export const RegistryComponents: RequiredComponents = {
   Icon: <Cable className="h-4 w-4" />,
-  Table: ({ items, actions, isLoading }) => {
+  Content: ({ items, actions, isLoading }) => {
     return <RegistriesTable items={items} actions={actions} isLoading={isLoading} />;
   },
   DropdownActions: RegistryDropdownActions,

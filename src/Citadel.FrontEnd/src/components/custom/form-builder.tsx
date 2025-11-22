@@ -5,6 +5,9 @@ import { Loader2, Eye, History, Save, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MonacoDiff } from '@/lib/monaco';
 import { fromNow } from '@/lib/dayjs.helper';
+import { Switch } from '../ui/switch';
+import { Label } from '../ui/label';
+import { cn } from '@/lib/utils';
 
 type Primitive = string | number | boolean | bigint | symbol | null | undefined | Date;
 
@@ -149,6 +152,26 @@ export const FieldInput = ({
     placeholder={placeholder}
     className="max-w-[400px]"
   />
+);
+
+export const FieldSwitch = ({
+  checked,
+  id,
+  onChange,
+}: {
+  checked: boolean;
+  id: string;
+  onChange: (v: boolean) => void;
+}) => (
+  <div className="flex items-center gap-2">
+    <Switch checked={checked ?? false} id={id} onCheckedChange={onChange} />
+
+    <Label
+      htmlFor={id}
+      className={cn('text-sm transition-colors font-normal', checked ? 'text-green-600/80' : 'text-muted-foreground')}>
+      {checked ? 'On' : 'Off'}
+    </Label>
+  </div>
 );
 
 /* -------------------------------------------------------------------------- */

@@ -7,7 +7,7 @@ import { VolumeDropdownActions, VolumeGroupActions } from './actions';
 
 export const VolumeComponents: RequiredComponents = {
   Icon: <HardDrive className="h-4 w-4" />,
-  Table: ({ items, actions, isLoading }) => {
+  Content: ({ items, actions, isLoading }) => {
     return <VolumesTable items={items} actions={actions} isLoading={isLoading} />;
   },
   DropdownActions: VolumeDropdownActions,

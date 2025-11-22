@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
-import { ChevronsUpDown, SearchX } from 'lucide-react';
+import { Check, ChevronsUpDown, SearchX } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 import { cn, filterBySplit } from '@/lib/utils';
 import { PluralResourceMap, ResourceType } from '@/api/types';
@@ -13,7 +13,7 @@ export const ResourceSelector = <T extends { id: string; name: string }>({
   selected,
   onSelect,
   disabled,
-  align,
+  align = 'start',
   placeholder,
   className,
 }: {
@@ -48,13 +48,15 @@ export const ResourceSelector = <T extends { id: string; name: string }>({
     }
   });
 
+  const isNoneSelected = !selectedItem;
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
           className={cn(
-            `flex justify-start gap-2 w-fit max-w-[350px] bg-accent/60 hover:bg-accent/80 shadow-none`,
+            `flex justify-between gap-2 w-full max-w-[200px] bg-accent/60 hover:bg-accent/80 shadow-none`,
             className,
           )}
           disabled={disabled}>
@@ -72,7 +74,7 @@ export const ResourceSelector = <T extends { id: string; name: string }>({
           />
           <CommandList>
             <CommandEmpty className="flex justify-evenly items-center pt-3 pb-2">
-              {`No ${type}s Found`}
+              {`No ${PluralResourceMap[type]} Found`}
               <SearchX className="w-3 h-3" />
             </CommandEmpty>
 
@@ -84,23 +86,44 @@ export const ResourceSelector = <T extends { id: string; name: string }>({
                     setFilter(null);
                     setOpen(false);
                   }}
-                  className="flex items-center justify-between cursor-pointer">
-                  <div className={cn(`p-1`, className)}>None</div>
+                  role="option"
+                  aria-selected={isNoneSelected}
+                  className={cn(
+                    'flex items-center justify-between cursor-pointer my-0.5 rounded-sm',
+                    isNoneSelected && 'bg-accent/80',
+                  )}>
+                  <div className={cn('p-1', className)}>None</div>
+                  <Check
+                    className={cn('ml-2 h-4 w-4', isNoneSelected ? 'opacity-100' : 'opacity-0')}
+                    aria-hidden="true"
+                  />
                 </CommandItem>
               )}
-              {filtered.map((resource) => (
-                <CommandItem
-                  key={resource.id}
-                  onSelect={() => {
-                    setFilter({ item: resource });
+              {filtered.map((resource) => {
+                const isSelected = selectedItem?.id === resource.id;
 
-                    onSelect && onSelect(resource);
-                    setOpen(false);
-                  }}
-                  className="flex items-center justify-between cursor-pointer ">
-                  <div className={cn(`p-1`, className)}>{resource.name}</div>
-                </CommandItem>
-              ))}
+                return (
+                  <CommandItem
+                    key={resource.id}
+                    onSelect={() => {
+                      setFilter({ item: resource });
+                      onSelect && onSelect(resource);
+                      setOpen(false);
+                    }}
+                    role="option"
+                    aria-selected={isSelected}
+                    className={cn(
+                      'flex items-center justify-between cursor-pointer my-0.5 rounded-sm',
+                      isSelected && 'bg-accent/80',
+                    )}>
+                    <div className={cn('p-1', className)}>{resource.name}</div>
+                    <Check
+                      className={cn('ml-2 h-4 w-4', isSelected ? 'opacity-100' : 'opacity-0')}
+                      aria-hidden="true"
+                    />
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
           </CommandList>
         </Command>

@@ -7,7 +7,7 @@ import { ActionBar } from '@/components/custom/action-bar';
 
 export const NetworkComponents: RequiredComponents = {
   Icon: <Network className="h-4 w-4" />,
-  Table: ({ items, actions, isLoading }) => {
+  Content: ({ items, actions, isLoading }) => {
     return <NetworksTable items={items} actions={actions} isLoading={isLoading} />;
   },
   DropdownActions: NetworkDropdownActions,

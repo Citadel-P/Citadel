@@ -6,7 +6,14 @@ import {
   RegistryConfigurationBaseCustomRegistry,
   RegistryConfigurationBaseDockerHubRegistry,
 } from '@/api/generated/api.types';
-import { FormShell, defineField, defineGroupField, defineSection, FieldInput } from '@/components/custom/form-builder';
+import {
+  FormShell,
+  defineField,
+  defineGroupField,
+  defineSection,
+  FieldInput,
+  FieldSwitch,
+} from '@/components/custom/form-builder';
 import { Constants } from '@/lib/constants';
 import { useState, useMemo } from 'react';
 import { useMutate } from '@/lib/hooks';
@@ -15,7 +22,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { useParams, useNavigate } from 'react-router';
 import { Globe, MoveUpRight } from 'lucide-react';
-import { Switch } from '@/components/ui/switch';
 import { DockerIcon, GitHubIcon } from '@/lib/icons';
 
 const registryInfo = {
@@ -347,14 +353,15 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                       label: 'Authentication',
                       description: 'Enable this option if you need to specify credentials to connect to this registry.',
                       render: (value, set) => (
-                        <Switch
+                        <FieldSwitch
                           checked={value ?? false}
-                          onCheckedChange={(checked) =>
+                          id="configuration.authEnabled"
+                          onChange={(value) =>
                             set((prev) => ({
                               configuration: {
                                 $type: 'Custom',
                                 ...((prev.configuration ?? {}) as RegistryConfigurationBaseCustomRegistry),
-                                authEnabled: checked,
+                                authEnabled: value,
                               } satisfies RegistryConfigurationBaseCustomRegistry,
                             }))
                           }

@@ -33,7 +33,7 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
     [items, search, Components],
   );
 
-  const ActiveContent = Components.Table!;
+  const ActiveContent = Components.Content!;
   const Icon = Components.Icon;
 
   return (

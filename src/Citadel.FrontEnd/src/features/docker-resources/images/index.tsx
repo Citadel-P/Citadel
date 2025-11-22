@@ -8,7 +8,7 @@ import PullImageForm, { PullButton } from './pull-image';
 
 export const ImageComponents: RequiredComponents = {
   Icon: <HardDrive className="h-4 w-4" />,
-  Table: ImagesTable,
+  Content: ImagesTable,
   useData: function (platformId: string): ResourceDataHookResult<any> {
     const { imagesInfo, isLoading } = useImagesGroup(platformId);
     return { items: imagesInfo?.images ?? [], isLoading };

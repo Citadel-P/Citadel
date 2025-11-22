@@ -7,7 +7,7 @@ import { ActionBar } from '@/components/custom/action-bar';
 
 export const ContainerComponents: RequiredComponents = {
   Icon: <Box className="h-4 w-4" />,
-  Table: ({ items, isLoading, actions }) => {
+  Content: ({ items, isLoading, actions }) => {
     return <ContainersTable items={items} isLoading={isLoading} actions={actions} />;
   },
 

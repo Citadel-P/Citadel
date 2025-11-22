@@ -1,6 +1,5 @@
 /**
- * Defines the components needed to render a resource page.
- * This single interface can represent either a **single-table resource** or a **tabbed resource**.
+ * Defines the components needed to render a page.
  */
 export interface RequiredComponents<T = any> {
   /** Optional configuration for header */
@@ -20,21 +19,21 @@ export interface RequiredComponents<T = any> {
   /** Group actions for the action bar */
   GroupActions?: React.FC<{ items: any[] }>;
 
-  /** Table component for single-table resources */
-  Table?: React.FC<{
+  /** The main content component */
+  Content?: React.FC<{
     items: any[];
     actions: Record<string, DropdownActionComponent<T>>;
     isLoading: boolean;
     isFiltered?: boolean;
   }>;
 
-  /** Data hook for single-table resources */
+  /** Data hook for the resource */
   useData?: (platformId: string) => ResourceDataHookResult<T>;
 
   /** Optional helper to filter items by search term */
   filterItems?: (items: T[], search: string) => T[];
 
-  /** Form data */
+  /** Form data (edit/add) */
   Form?: React.FC<ResourceFormProps<T>>;
 
   /** Form data hook */
