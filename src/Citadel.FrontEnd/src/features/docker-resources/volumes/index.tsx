@@ -4,6 +4,7 @@ import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { ActionBar } from '@/components/custom/action-bar';
 import { VolumeDropdownActions, VolumeGroupActions } from './actions';
+import VolumeForm from './form';
 
 export const VolumeComponents: RequiredComponents = {
   Icon: <HardDrive className="h-4 w-4" />,
@@ -28,5 +29,11 @@ export const VolumeComponents: RequiredComponents = {
         v.id?.toLowerCase().includes(s) ||
         v.id?.substring(0, 12).toLowerCase().includes(s),
     );
+  },
+  Form: ({ mode }) => {
+    return <VolumeForm mode={mode} />;
+  },
+  useFormData: function (_: string | undefined) {
+    return {};
   },
 };

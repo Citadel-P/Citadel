@@ -8,6 +8,7 @@ import { StateIndicator } from '@/components/custom/state-indicator';
 import { RequiredDockerInfoComponents } from '@/pages/types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { NetworkInfoActions } from './actions';
+import { DockerLabelsSection, KeyPairEntries, Section } from '@/components/custom/common';
 
 export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDetails> = {
   Header: {
@@ -49,38 +50,21 @@ export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDe
 const InspectNetworkWrapper = ({ resource }: { resource: DockerNetworkDetails }) => {
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-row items-center gap-2">
-          <Info width={14} height={14} className="text-muted-foreground" />
-          <div className="text-sm font-semibold text-muted-foreground leading-none">Details</div>
-        </div>
-        <div className="space-y-1 rounded-sm border p-1 shadow-xs">
-          <NetworkInfoTable network={resource} />
-        </div>
-      </div>
+      <Section title="Details" Icon={Info}>
+        <NetworkInfoTable network={resource} />
+      </Section>
       {Object.keys(resource?.containers ?? {}).length !== 0 && (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-row items-center gap-2">
-            <Box width={14} height={14} className="text-muted-foreground" />
-            <div className="text-sm font-semibold text-muted-foreground leading-none">Containers in this network</div>
-          </div>
-          <div className="space-y-1 rounded-sm border p-1 shadow-xs">
-            <ContainerInfoTable network={resource} />
-          </div>
-        </div>
+        <Section title="Containers in this network" Icon={Box}>
+          <ContainerInfoTable network={resource} />
+          <KeyPairEntries items={resource?.options} />
+        </Section>
       )}
-
       {resource?.ipam?.config?.length !== 0 && (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-row items-center gap-2">
-            <Share2 width={14} height={14} className="text-muted-foreground" />
-            <div className="text-sm font-semibold text-muted-foreground leading-none">IPAM</div>
-          </div>
-          <div className="space-y-1 rounded-sm border p-1 shadow-xs">
-            <IPAMInfoTable ipam={resource?.ipam ?? undefined} />
-          </div>
-        </div>
+        <Section title="IPAM" Icon={Share2}>
+          <IPAMInfoTable ipam={resource?.ipam ?? undefined} />
+        </Section>
       )}
+      <DockerLabelsSection labels={resource?.labels} />
     </div>
   );
 };

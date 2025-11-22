@@ -136,7 +136,7 @@ export const ActionWithDialog = ({
               navigator.clipboard.writeText(name);
               toast(`Copied "${name}" to clipboard!`);
             }}
-            className="cursor-pointer">
+            className="cursor-pointer break-all">
             Please enter <b>{name}</b> below to confirm this action.
             <br />
             <span className="text-xs text-muted-foreground">You may click the name in bold to copy it</span>
@@ -238,7 +238,7 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
         <DialogHeader>
           <DialogTitle>Group Execute - {title}</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col gap-4 my-4">
+        <div className="flex flex-col gap-4 my-4 whitespace-nowrap overflow-x-auto">
           <ul className="p-4 bg-accent text-sm list-disc list-inside max-h-[300px] overflow-y-auto">
             {selected.map((resource, i) => (
               <li key={i}>{resource.name}</li>
@@ -254,8 +254,14 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
             <br />
             <span className="text-xs text-muted-foreground">You may click the name in bold to copy it</span>
           </p>
-          <Input value={input} onChange={(e) => setInput(e.target.value)} className="focus-visible:ring-1" />
-          {additional}
+          <div className="p-1">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              className="focus-visible:ring-1 shadow-xs"
+            />
+            {additional}
+          </div>
         </div>
         <DialogFooter>
           <ConfirmButton

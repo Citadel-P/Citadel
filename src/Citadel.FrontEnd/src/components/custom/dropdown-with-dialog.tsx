@@ -166,7 +166,7 @@ const ActionDialog = ({
               navigator.clipboard.writeText(name);
               toast(`Copied "${name}" to clipboard!`);
             }}
-            className="cursor-pointer">
+            className="cursor-pointer break-all">
             Please enter <b>{name}</b> below to confirm this action.
             <br />
             <span className="text-xs text-muted-foreground">You may click the name in bold to copy it</span>

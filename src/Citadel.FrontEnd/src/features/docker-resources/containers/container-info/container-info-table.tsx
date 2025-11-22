@@ -108,7 +108,7 @@ export const ContainerInfoTable = ({ container }: { container: DockerContainerVi
   if (isLoading || !containerInfo) return null;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="rounded-sm border p-1 shadow-xs">
       <DataTable columns={cols} data={[{ id: containerInfo.containerId, ...containerInfo }]} isLoading={isLoading} />
     </div>
   );

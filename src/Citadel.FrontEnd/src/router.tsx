@@ -11,7 +11,6 @@ const Resources = lazy(() => import('@/pages/resource'));
 const ResourceInfo = lazy(() => import('@/pages/docker-resource-info'));
 const AddPlatform = lazy(() => import('@/pages/add-platform-page'));
 const AddNetwork = lazy(() => import('@/features/docker-resources/networks/forms/add-network'));
-const AddVolume = lazy(() => import('@/features/docker-resources/volumes/forms/add-volume'));
 
 export const REDIRECT_TO_KEY = 'redirectTo';
 
@@ -32,6 +31,7 @@ export const Router = () => {
                 <Route index element={<Resources />} />
                 <Route path="add" element={<AddPlatform />} />
                 <Route path=":platformId/:type" element={<Resources />} />
+                <Route path=":platformId/:type/add" element={<ResourceFormPage mode="add" />} />
                 <Route path=":platformId/:type/:resourceId" element={<ResourceInfo />} />
               </Route>
 
@@ -40,7 +40,6 @@ export const Router = () => {
               <Route path=":type/edit/:id" element={<ResourceFormPage mode="edit" />} />
 
               <Route path="platforms/:platformId/networks/add" element={<AddNetwork />} />
-              <Route path="platforms/:platformId/volumes/add" element={<AddVolume />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Route>

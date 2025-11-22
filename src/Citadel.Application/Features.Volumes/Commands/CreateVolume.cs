@@ -20,7 +20,7 @@ public sealed record CreateVolume(
     {
         public Validator()
         {
-            RuleFor(s => s.Name).ValidNameIdentifier();
+            When(s => s.Name is not null, () => RuleFor(s => s.Name).ValidNameIdentifier());
             When(s => s.Driver is not null, () =>
             {
                 RuleFor(s => s.Driver)

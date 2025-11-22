@@ -64,7 +64,7 @@ export const ContainerInfoTable = ({ network }: { network: DockerNetworkDetails 
   );
   if (!network) return <></>;
   return (
-    <div className="flex flex-col gap-3">
+    <div className="rounded-sm border p-1 shadow-xs">
       <DataTable columns={columns(currentPlatform?.id)} data={containers} isLoading={false} />
     </div>
   );

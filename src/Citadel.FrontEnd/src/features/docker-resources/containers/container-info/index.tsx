@@ -22,11 +22,7 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<DockerContain
     },
   },
   SubHeader: ({ resource }) => {
-    return (
-      <div className="space-y-1 rounded-sm border p-1 shadow-xs">
-        <ContainerInfoTable container={resource} />
-      </div>
-    );
+    return <ContainerInfoTable container={resource} />;
   },
   Tabs: [
     {

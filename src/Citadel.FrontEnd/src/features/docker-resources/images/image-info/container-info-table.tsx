@@ -61,7 +61,7 @@ export const ContainerInfoTable = ({ image }: { image: InspectImageView | undefi
   const { currentPlatform } = useAppContext();
   if (!image) return <></>;
   return (
-    <div className="flex flex-col gap-3">
+    <div className="rounded-sm border p-1 shadow-xs">
       <DataTable columns={columns(currentPlatform)} data={image.containers} isLoading={false} />
     </div>
   );

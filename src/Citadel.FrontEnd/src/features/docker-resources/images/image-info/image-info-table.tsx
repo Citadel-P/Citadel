@@ -47,7 +47,7 @@ const columns: ColumnDef<InspectImageView>[] = [
 export const ImageInfoTable = ({ image }: { image: InspectImageView | undefined }) => {
   if (!image) return <></>;
   return (
-    <div className="flex flex-col gap-3">
+    <div className="rounded-sm border p-1 shadow-xs">
       <DataTable columns={columns} data={image ? [{ ...image }] : []} isLoading={false} />
     </div>
   );

@@ -33,7 +33,7 @@ const columns: ColumnDef<DockerNetworkDetails>[] = [
 export const NetworkInfoTable = ({ network }: { network: DockerNetworkDetails | undefined }) => {
   if (!network) return <></>;
   return (
-    <div className="flex flex-col gap-3">
+    <div className="rounded-sm border p-1 shadow-xs">
       <DataTable columns={columns} data={network ? [{ ...network }] : []} isLoading={false} />
     </div>
   );

@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Button } from '../ui/button';
-import { Check, ChevronsUpDown, SearchX } from 'lucide-react';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { Command, CommandInput, CommandList, CommandGroup, CommandItem, CommandEmpty } from '@/components/ui/command';
+import { Check, ChevronsUpDown, LucideIcon, Tags } from 'lucide-react';
 import { cn, filterBySplit } from '@/lib/utils';
 import { PluralResourceMap, ResourceType } from '@/api/types';
 import { useRead } from '@/lib/hooks';
 import { useResourceFilter } from '@/lib/atoms';
+import { Badge } from '../ui/badge';
 
-export const ResourceSelector = <T extends { id: string; name: string }>({
+export function ResourceSelector<T extends { id: string; name: string }>({
   type,
   selected,
   onSelect,
@@ -24,103 +25,74 @@ export const ResourceSelector = <T extends { id: string; name: string }>({
   align?: 'start' | 'center' | 'end';
   placeholder?: string;
   className?: string;
-}) => {
+}) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+
   const resourceName = PluralResourceMap[type];
   const [filter, setFilter] = useResourceFilter<{ item: T }>(type);
 
-  const items = Object.values(useRead(`list${resourceName}`).data?.data ?? {}).at(0) as T[];
+  const read = useRead(`list${resourceName}`);
+  const items = (Object.values(read.data?.data ?? {}).at(0) as T[]) ?? [];
 
-  const selectedItem = filter?.item ?? selected;
+  if (!items.length) return null;
 
-  const name = items?.find((r) => r.id === selectedItem?.id)?.name;
+  const selectedItem = filter?.item ?? selected ?? undefined;
 
-  if (!items) return null;
+  const filtered = filterBySplit(items, search, (i) => i.name).sort((a, b) => a.name.localeCompare(b.name));
 
-  const filtered = filterBySplit(items, search, (item) => item.name).sort((a, b) => {
-    if (a.name > b.name) {
-      return 1;
-    } else if (a.name < b.name) {
-      return -1;
-    } else {
-      return 0;
-    }
-  });
-
-  const isNoneSelected = !selectedItem;
+  const handleSelect = (item: T | undefined) => {
+    setFilter(item ? { item } : null);
+    onSelect?.(item);
+    setOpen(false);
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          disabled={disabled}
           variant="ghost"
+          role="combobox"
+          aria-expanded={open}
           className={cn(
-            `flex justify-between gap-2 w-full max-w-[200px] bg-accent/60 hover:bg-accent/80 shadow-none`,
+            'flex justify-between gap-2 w-full max-w-[300px] bg-accent/60 hover:bg-accent/80 shadow-none',
             className,
-          )}
-          disabled={disabled}>
-          {name || (placeholder ?? `Select the resource`)}
-          {!disabled && <ChevronsUpDown className="w-3 h-3" />}
+          )}>
+          {selectedItem?.name ?? placeholder}
+          <ChevronsUpDown className="h-4 w-4 opacity-60" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] max-h-[300px] p-0 bg-background" align={align}>
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder={`Search ${PluralResourceMap[type]}`}
-            className={cn(`h-9`, className)}
-            value={search}
-            onValueChange={setSearch}
-          />
+
+      <PopoverContent className="w-[300px] p-0 bg-background" align={align}>
+        <Command shouldFilter={false} defaultValue={selectedItem?.name ?? '__none__'}>
+          <CommandInput placeholder={`Search ${PluralResourceMap[type]}`} value={search} onValueChange={setSearch} />
+
           <CommandList>
-            <CommandEmpty className="flex justify-evenly items-center pt-3 pb-2">
-              {`No ${PluralResourceMap[type]} Found`}
-              <SearchX className="w-3 h-3" />
-            </CommandEmpty>
+            <CommandEmpty>No results found.</CommandEmpty>
 
             <CommandGroup>
               {!search && (
                 <CommandItem
-                  onSelect={() => {
-                    onSelect && onSelect(undefined);
-                    setFilter(null);
-                    setOpen(false);
-                  }}
-                  role="option"
-                  aria-selected={isNoneSelected}
-                  className={cn(
-                    'flex items-center justify-between cursor-pointer my-0.5 rounded-sm',
-                    isNoneSelected && 'bg-accent/80',
-                  )}>
-                  <div className={cn('p-1', className)}>None</div>
-                  <Check
-                    className={cn('ml-2 h-4 w-4', isNoneSelected ? 'opacity-100' : 'opacity-0')}
-                    aria-hidden="true"
-                  />
+                  value="__none__"
+                  onSelect={() => handleSelect(undefined)}
+                  className="flex items-center justify-between cursor-pointer my-0.5 px-2 py-2 rounded-sm">
+                  <span>None</span>
+                  <Check className={cn('h-4 w-4 transition-opacity', !selectedItem ? 'opacity-100' : 'opacity-0')} />
                 </CommandItem>
               )}
-              {filtered.map((resource) => {
-                const isSelected = selectedItem?.id === resource.id;
+
+              {filtered.map((item) => {
+                const isSelected = selectedItem?.id === item.id;
 
                 return (
                   <CommandItem
-                    key={resource.id}
-                    onSelect={() => {
-                      setFilter({ item: resource });
-                      onSelect && onSelect(resource);
-                      setOpen(false);
-                    }}
-                    role="option"
-                    aria-selected={isSelected}
-                    className={cn(
-                      'flex items-center justify-between cursor-pointer my-0.5 rounded-sm',
-                      isSelected && 'bg-accent/80',
-                    )}>
-                    <div className={cn('p-1', className)}>{resource.name}</div>
-                    <Check
-                      className={cn('ml-2 h-4 w-4', isSelected ? 'opacity-100' : 'opacity-0')}
-                      aria-hidden="true"
-                    />
+                    key={item.id}
+                    value={item.name}
+                    onSelect={() => handleSelect(item)}
+                    className="flex items-center justify-between cursor-pointer my-0.5 px-2 py-2 rounded-sm">
+                    <span>{item.name}</span>
+                    <Check className={cn('h-4 w-4 transition-opacity', isSelected ? 'opacity-100' : 'opacity-0')} />
                   </CommandItem>
                 );
               })}
@@ -129,5 +101,49 @@ export const ResourceSelector = <T extends { id: string; name: string }>({
         </Command>
       </PopoverContent>
     </Popover>
+  );
+}
+
+export const DockerLabelsSection = ({ labels }: { labels: Record<string, string> | undefined }) => {
+  if (!labels) return null;
+  const entries = Object.entries(labels);
+  if (entries.length === 0) return null;
+  return (
+    <Section title="Labels" Icon={Tags}>
+      <div className="flex gap-2 flex-wrap">
+        <KeyPairEntries items={labels} />
+      </div>
+    </Section>
+  );
+};
+
+export const KeyPairEntries = ({ items }: { items: Record<string, string> | undefined }) => {
+  if (!items) return null;
+  const entries = Object.entries(items);
+  if (entries.length === 0) return null;
+  return (
+    <div className="flex gap-2 flex-wrap">
+      {entries.map(([key, value]) => (
+        <Badge key={key} variant="secondary" className="flex gap-1">
+          <span className="text-muted-foreground">{key}</span>
+          <span className="text-muted-foreground">=</span>
+          <span title={value} className="font-medium text-nowrap max-w-[200px] overflow-hidden text-ellipsis">
+            {value}
+          </span>
+        </Badge>
+      ))}
+    </div>
+  );
+};
+
+export const Section = ({ Icon, title, children }: { Icon: LucideIcon; title: string; children: React.ReactNode }) => {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-row items-center gap-2">
+        <Icon width={14} height={14} className="text-muted-foreground" />
+        <div className="text-sm font-semibold text-muted-foreground leading-none">{title}</div>
+      </div>
+      {children}
+    </div>
   );
 };

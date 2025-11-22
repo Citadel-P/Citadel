@@ -47,6 +47,16 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
                         Tag: ImageTag,
                         Auth: ghCfg.GetRegistryAuth(registry.Url)
                     );
+            
+            case CustomRegistry customCfg:
+                return new PullImageCommand
+                (
+                    PlatformAddress: platformAddress,
+                    FromImage: $"{domainName}/{ImageTag}".ToLower(),
+                    Repo: $"{domainName}".ToLower(),
+                    FromSrc: registry.Url,
+                    Auth: customCfg.AuthEnabled == true ? customCfg.GetRegistryAuth(registry.Url) : null
+                );
 
             case DockerHubRegistry dockerCfg:
                 if (RegistryName == Registry.DefaultRegistryName)

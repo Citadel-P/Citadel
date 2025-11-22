@@ -7,6 +7,7 @@ import { RequiredDockerInfoComponents } from '@/pages/types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { VolumeInfoTable } from './volume-info-table';
 import { VolumeInfoActions } from './actions';
+import { DockerLabelsSection, KeyPairEntries, Section } from '@/components/custom/common';
 
 export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResult> = {
   Header: {
@@ -37,26 +38,16 @@ export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResu
 const InspectVolumeWrapper = ({ resource }: { resource: DockerVolumeResult }) => {
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-row items-center gap-2">
-          <Info width={14} height={14} className="text-muted-foreground" />
-          <div className="text-sm font-semibold text-muted-foreground leading-none">Details</div>
-        </div>
-        <div className="space-y-1 rounded-sm border p-1 shadow-xs">
-          <VolumeInfoTable volume={resource} />
-        </div>
-      </div>
+      <Section title="Details" Icon={Info}>
+        <VolumeInfoTable volume={resource} />
+        <KeyPairEntries items={resource?.options} />
+      </Section>
       {Object.keys(resource?.containers ?? {}).length !== 0 && (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-row items-center gap-2">
-            <Box width={14} height={14} className="text-muted-foreground" />
-            <div className="text-sm font-semibold text-muted-foreground leading-none">Containers using this volume</div>
-          </div>
-          <div className="space-y-1 rounded-sm border p-1 shadow-xs">
-            <ContainerInfoTable volume={resource} />
-          </div>
-        </div>
+        <Section title="Containers" Icon={Box}>
+          <ContainerInfoTable volume={resource} />
+        </Section>
       )}
+      <DockerLabelsSection labels={resource?.labels} />
     </div>
   );
 };
