@@ -17,7 +17,7 @@ public class RegistryDeleteTests : IntegrationTestBase
         var registry = new Registry("fake", "http://registry1", RegistryType.GitHub,
                 new GitHubRegistry("ghcr1", "pat1", GhcrAccountType.User));
         await uow.Registries.AddAsync(registry, TestContext.Current.CancellationToken);
-        await uow.CommitAsync();
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
         registryId = registry.Id;
     }
 

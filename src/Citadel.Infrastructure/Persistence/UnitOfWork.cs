@@ -1,6 +1,7 @@
-﻿using System.Data;
-using Domain.Contracts.Interfaces;
+﻿using Domain.Contracts.Interfaces;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using System.Data;
 
 namespace Infrastructure.Persistence;
 
@@ -55,31 +56,40 @@ internal class UnitOfWork : IUnitOfWork
         return transaction;
     }
 
-    public async Task CommitAsync()
+    public async Task CommitAsync(CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         if (transaction == null) return;
 
-        try
+        await DbRetryPolicies.RetryOnBusy.ExecuteAsync(async ct =>
         {
-            if (transaction is IAsyncDisposable asyncDisposableTransaction)
+            try
             {
-                transaction.Commit();
-                await asyncDisposableTransaction.DisposeAsync();
+                if (transaction is IAsyncDisposable asyncDisposableTransaction)
+                {
+                    transaction.Commit();
+                    await asyncDisposableTransaction.DisposeAsync();
+                }
+                else
+                {
+                    transaction.Commit();
+                    transaction.Dispose();
+                }
+
+                transaction = null;
             }
-            else
+            catch (SqliteException ex) when (DbRetryPolicies.IsBusy(ex))
             {
-                transaction.Commit();
-                transaction.Dispose();
+                logger.LogWarning(ex, "SQLite busy/locked during commit. Will retry.");
+                throw;
             }
-            transaction = null;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error committing transaction");
-            await RollbackAsync();
-            throw;
-        }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error committing transaction");
+                await RollbackAsync();
+                throw;
+            }
+        }, cancellationToken);
     }
 
     public async Task RollbackAsync()

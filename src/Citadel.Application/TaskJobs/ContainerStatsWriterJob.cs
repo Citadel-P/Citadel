@@ -1,23 +1,24 @@
-﻿using System.Threading.Channels;
-using Application.Configs;
+﻿using Application.Configs;
 using Application.Services.SignalR;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Threading.Channels;
 
 namespace Application.TaskJobs;
 
 internal class ContainerStatsWriterJob(
-    IServiceScopeFactory scopeFactory,
+    IDbWorkQueue dbQueue,
+    INotificationQueue notificationQueue,
     IOptions<JobConfiguration> options,
     ChannelReader<ContainersStatBatch> reader,
     IContainerStreamManager containersStreamManager,
-    ILogger<ContainerStatsWriterJob> logger) : BackgroundService
+    ILogger<ContainerStatsWriterJob> logger
+) : BackgroundService
 {
-    private readonly Dictionary<Guid, List<ContainerStat>> buffer = [];  // Key: PlatformId
+    private readonly Dictionary<Guid, List<ContainerStat>> _buffer = [];
     private DateTime _lastFlush = DateTime.UtcNow;
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
@@ -26,79 +27,88 @@ internal class ContainerStatsWriterJob(
         {
             await foreach (var batch in reader.ReadAllAsync(cancellationToken))
             {
-                AccumulateBatchStats(batch);
-                await NotifyClients(batch);
+                Accumulate(batch);
+
+                // Push to notification queue
+                var notificationWorkItem = new SendContainersNotificationWorkItem(containersStreamManager, batch);
+                await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
 
                 if (ShouldFlush())
-                {
-                    await FlushToDatabase(cancellationToken);
-                }
+                    await FlushAsync(cancellationToken);
             }
         }
-        catch (OperationCanceledException)
-        {
-            // Expected when service stops
-        }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             logger.LogError(ex, $"Error in {nameof(ContainerStatsWriterJob)}");
         }
 
-        // Final flush if needed
-        if (buffer.Count > 0)
-        {
-            await FlushToDatabase(cancellationToken);
-        }
+        // final flush
+        if (_buffer.Count > 0)
+            await FlushAsync(CancellationToken.None);
     }
 
-    private void AccumulateBatchStats(ContainersStatBatch batch)
+    private void Accumulate(ContainersStatBatch batch)
     {
-        if (!buffer.TryGetValue(batch.PlatformId, out var list))
-        {
-            buffer.TryAdd(batch.PlatformId, list = []);
-        }
+        if (!_buffer.TryGetValue(batch.PlatformId, out var list))
+            _buffer[batch.PlatformId] = list = [];
 
         list.AddRange(batch.Stats);
     }
 
     private bool ShouldFlush()
     {
-        int totalCount = buffer.Sum(kvp => kvp.Value.Count);
-        return totalCount >= options.Value?.BatchSize ||
-               (DateTime.UtcNow - _lastFlush) >= TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60);
+        int count = _buffer.Sum(kvp => kvp.Value.Count);
+
+        return count >= options.Value?.BatchSize ||
+               (DateTime.UtcNow - _lastFlush) >=
+                 TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60);
     }
 
-    private async Task FlushToDatabase(CancellationToken cancellationToken)
+    private async Task FlushAsync(CancellationToken ct)
     {
         try
         {
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            // snapshot the buffer to avoid mutation while queued
+            var snapshot = _buffer.ToDictionary(
+                kvp => kvp.Key,
+                kvp => kvp.Value.ToList()
+            );
 
-            var stats = buffer.SelectMany(s => s.Value);
-            await uow.ContainerStats.BulkInsertAsync(stats, cancellationToken);
-            await uow.CommitAsync();
+            await dbQueue.EnqueueAsync(new ContainerStatsBatchWorkItem(snapshot, logger), ct);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to save container stats to the database.");
+            logger.LogError(ex, "Failed to enqueue container stats batch.");
         }
         finally
         {
-            buffer.Clear();
+            _buffer.Clear();
             _lastFlush = DateTime.UtcNow;
         }
     }
+}
 
-    private async ValueTask NotifyClients(ContainersStatBatch batch)
+internal sealed class ContainerStatsBatchWorkItem(IReadOnlyDictionary<Guid, List<ContainerStat>> batch, ILogger logger) : IDbWorkItem
+{
+    public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken token)
     {
         try
         {
-            await containersStreamManager.SendContainersStats(batch.PlatformId, batch.Stats);
+            var flatList = batch.SelectMany(x => x.Value);
+
+            await uow.ContainerStats.BulkInsertAsync(flatList, token);
+            await uow.CommitAsync(token);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to notify clients about container stats for platform {PlatformId}", batch.PlatformId);
+            logger.LogError(ex, "Failed to persist container stats batch.");
         }
     }
+}
+
+internal class SendContainersNotificationWorkItem(IContainerStreamManager containersStreamManager, ContainersStatBatch batch): INotificationWorkItem
+{
+    public Task ExecuteAsync(CancellationToken cancellationToken)
+        => containersStreamManager.SendContainersStats(batch.PlatformId, batch.Stats);
 }

@@ -59,7 +59,7 @@ public class ContainerStatsStreamerJobTests : IntegrationTestBase
                 state: ContainerStateStatus.Running), TestContext.Current.CancellationToken);
         }
 
-        await uow.CommitAsync();
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
         _platformId = platform.Id;
     }
 

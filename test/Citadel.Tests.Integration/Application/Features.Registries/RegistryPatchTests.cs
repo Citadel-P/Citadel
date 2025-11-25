@@ -24,7 +24,7 @@ public class RegistryPatchTests : IntegrationTestBase
         );
 
         await uow.Registries.AddAsync(registry, TestContext.Current.CancellationToken);
-        await uow.CommitAsync();
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         registryId = registry.Id;
     }

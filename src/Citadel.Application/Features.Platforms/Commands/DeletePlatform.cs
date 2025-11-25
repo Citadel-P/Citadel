@@ -35,7 +35,7 @@ internal class DeletePlatformHandler(
             }
 
             await unitOfWork.Platforms.DeleteAsync(platformId, cancellationToken);
-            await unitOfWork.CommitAsync();
+            await unitOfWork.CommitAsync(cancellationToken);
 
             await platformHealthMonitorJob.UntrackPlatform(platform.Address, cancellationToken);
 

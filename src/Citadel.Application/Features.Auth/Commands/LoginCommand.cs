@@ -57,7 +57,7 @@ internal sealed class LoginCommandHandler(IUnitOfWork unitOfWork, IJwtService jw
             await unitOfWork.RefreshTokens.DeleteOldestTokensAsync(userAuthInfo.Id, tokensCount - maxTokensPerUser, cancellationToken);
         }
 
-        await unitOfWork.CommitAsync();
+        await unitOfWork.CommitAsync(cancellationToken);
         return (accessToken, refreshToken);
     }
 

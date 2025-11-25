@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using Application.Features.Containers.Commands;
+﻿using Application.Features.Containers.Commands;
 using Application.Features.Images.Commands;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Compose;
@@ -11,6 +8,10 @@ using FluentValidation;
 using Hosting.Common;
 using LightResults;
 using Mediator;
+using Microsoft.Extensions.DependencyInjection;
+using System;
+using System.Collections.Generic;
+using System.Text;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Application.Features.Compose.Commands;
@@ -29,7 +30,7 @@ public sealed record ComposeUp(Guid PlatformId, string RegistryName, string Repo
     }
 }
 
-internal sealed class ComposeUpHandler(IUnitOfWork unitOfWork, IPlatformContainerCache platformContainerCache, IConnectorFactory<IComposeConnector> connectorFactory)
+internal sealed class ComposeUpHandler(IServiceScopeFactory scopeFactory, IPlatformContainerCache platformContainerCache, IConnectorFactory<IComposeConnector> connectorFactory)
     : IStreamCommandHandler<ComposeUp, ComposeDeploymentEvent>
 {
     public async IAsyncEnumerable<ComposeDeploymentEvent> Handle(ComposeUp command, CancellationToken cancellationToken)
@@ -40,9 +41,17 @@ internal sealed class ComposeUpHandler(IUnitOfWork unitOfWork, IPlatformContaine
             yield break;
         }
 
-        var registry = command.RegistryName == Registry.DefaultRegistryName
-            ? Registry.DefaultRegistry() // Public Docker registry
-            : await unitOfWork.Registries.GetByNameAsync(command.RegistryName, cancellationToken);
+        Registry? registry;
+        if (command.RegistryName == Registry.DefaultRegistryName)
+        {
+            registry = Registry.DefaultRegistry();
+        }
+        else
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            registry = await uow.Registries.GetByNameAsync(command.RegistryName, cancellationToken);
+        }
 
         if (registry == null)
         {

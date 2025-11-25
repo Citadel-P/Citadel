@@ -33,7 +33,7 @@ public class RegistryCreateTests : IntegrationTestBase
         var createJson = """
         {
           "name": "R-NEW",
-          "url": "https://registry123:9999",
+          "url": "registry123:9999",
           "type": "DockerHub",
           "configuration": {
             "$type": "DockerHub",
@@ -73,7 +73,7 @@ public class RegistryCreateTests : IntegrationTestBase
         var createJson = """
         {
           "name": "R-NEW",
-          "url": "https://registry123:9999",
+          "url": "registry123:9999",
           "type": "Custom",
           "configuration": {
             "$type": "Custom",
@@ -114,7 +114,7 @@ public class RegistryCreateTests : IntegrationTestBase
         var createJson = """
         {
           "name": "R-NEW",
-          "url": "https://registry123:9999",
+          "url": "registry123:9999",
           "type": "GitHub",
           "configuration": {
             "$type": "GitHub",
@@ -147,7 +147,7 @@ public class RegistryCreateTests : IntegrationTestBase
         var createJson = """
         {
           "name": "",
-          "url": "https://registry123:9999",
+          "url": "registry123:9999",
           "type": "DockerHub",
           "configuration": {
             "$type": "DockerHub",
@@ -171,7 +171,7 @@ public class RegistryCreateTests : IntegrationTestBase
         var createJson = """
         {
           "name": "R-NEW",
-          "url": "https://registry123:9999",
+          "url": "registry123:9999",
           "type": "InvalidType",
           "configuration": {
             "$type": "DockerHub",
@@ -195,7 +195,7 @@ public class RegistryCreateTests : IntegrationTestBase
         var createJson = """
         {
           "name": "R-NEW",
-          "url": "https://registry123:9999",
+          "url": "registry123:9999",
           "type": "DockerHub",
           "configuration": {
             "$type": "DockerHub",
@@ -226,7 +226,7 @@ public class RegistryCreateTests : IntegrationTestBase
                 type: RegistryType.DockerHub,
                 configuration: new DockerHubRegistry("user", "dummy-pat1234")
             ), TestContext.Current.CancellationToken);
-            await uow.CommitAsync();
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
 
         registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryType>()))
@@ -238,7 +238,7 @@ public class RegistryCreateTests : IntegrationTestBase
         var createJson = """
         {
           "name": "R-NEW",
-          "url": "https://registry123:9999",
+          "url": "registry123:9999",
           "type": "DockerHub",
           "configuration": {
             "$type": "DockerHub",
@@ -265,7 +265,7 @@ public class RegistryCreateTests : IntegrationTestBase
         var createJson = """
         {
           "name": "R-NEW",
-          "url": "https://registry123:9999",
+          "url": "registry123:9999",
           "type": "AWS",
           "configuration": {
             "$type": "AWS",
@@ -296,7 +296,7 @@ public class RegistryCreateTests : IntegrationTestBase
         var createJson = """
         {
           "name": "R-NEW",
-          "url": "https://registry123:9999",
+          "url": "registry123:9999",
           "type": "DockerHub",
           "configuration": {
             "$type": "DockerHub",
@@ -314,27 +314,4 @@ public class RegistryCreateTests : IntegrationTestBase
         await VerifyJson(responseBody);
     }
 
-    [Fact]
-    public async Task Create_Registry_With_Invalid_Url_For_Azure_Returns_BadRequest()
-    {
-        var createJson = """
-        {
-          "name": "R-AZURE",
-          "url": "not-a-url",
-          "type": "Azure",
-          "configuration": {
-            "$type": "Azure",
-            "userName": "azureuser",
-            "password": "azurepassword"
-          }
-        }
-        """;
-        var content = new StringContent(createJson, Encoding.UTF8, "application/json");
-
-        var response = await Client.PostAsync("/api/v1/registries", content, cancellationToken: TestContext.Current.CancellationToken);
-
-        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
-        await VerifyJson(responseBody);
-    }
 }

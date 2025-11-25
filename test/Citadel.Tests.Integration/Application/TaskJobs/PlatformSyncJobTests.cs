@@ -1,6 +1,4 @@
-﻿using System.Text.Json;
-using System.Text.Json.Serialization;
-using Application.Services;
+﻿using Application.Services;
 using Application.Services.Abstractions;
 using Application.Services.SignalR;
 using Application.TaskJobs;
@@ -9,11 +7,14 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Platforms;
+using Infrastructure.Repositories.DbQueue;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Moq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
@@ -32,6 +33,8 @@ public class PlatformSyncJobTests : IntegrationTestBase
         // Remove all existing hosted services to ensure only PlatformSyncJob handles platform health events
         services.RemoveAll<IHostedService>();
         services.AddHostedService<PlatformSyncJob>();
+        services.AddHostedService<DbWriteWorker>();
+        services.AddHostedService<NotificationWorker>();
         services.AddSingleton(_ => hubManagerMock.Object);
         services.AddSingleton(_ => connectorMock.Object);
         services.AddSingleton(_ => platformConnector.Object);
@@ -63,7 +66,7 @@ public class PlatformSyncJobTests : IntegrationTestBase
             platformDescriptor: platformDescriptor
         );
         await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
-        await uow.CommitAsync();
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         platformName = platform.Name;
         platformId = platform.Id;

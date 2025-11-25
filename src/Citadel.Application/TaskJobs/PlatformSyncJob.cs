@@ -1,13 +1,14 @@
-﻿using System.Threading.Channels;
-using Application.Services;
+﻿using Application.Services;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Entities;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Threading.Channels;
 
 namespace Application.TaskJobs;
 
@@ -15,16 +16,19 @@ namespace Application.TaskJobs;
 /// Synchronizes platform state.
 /// </summary>
 internal class PlatformSyncJob(
+    IDbWorkQueue dbWorkQueue,
+    INotificationQueue notifQueue,
     IServiceScopeFactory scopeFactory,
     IPlatformStreamManager platformStreamManager,
     IPlatformContainerCache platformContainerCache,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IConnectorFactory<IPlatformConnector> connectorFactory,
-    ILogger<PlatformSyncJob> logger) : BackgroundService
+    ILogger<PlatformSyncJob> logger
+) : BackgroundService
 {
     private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.AddSubscriber();
-    private static readonly TimeSpan SyncInterval = TimeSpan.FromHours(12);
-    
+    private static readonly TimeSpan SyncInterval = TimeSpan.FromHours(6);
+
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation("{PlatformSyncJob} started. Running every {Hours} hours.", nameof(PlatformSyncJob), SyncInterval.TotalHours);
@@ -45,7 +49,14 @@ internal class PlatformSyncJob(
     {
         await foreach (var evt in platformHealthReader.ReadAllAsync(cancellationToken))
         {
-            await SyncPlatform(evt, cancellationToken);
+            try
+            {
+                await SyncPlatform(evt, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error while synchronizing platform {Address}", evt.Address);
+            }
         }
     }
 
@@ -62,7 +73,7 @@ internal class PlatformSyncJob(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error during periodic container synchronization.");
+                logger.LogError(ex, "Error during periodic platform synchronization.");
             }
 
             await Task.Delay(SyncInterval, cancellationToken);
@@ -70,15 +81,16 @@ internal class PlatformSyncJob(
     }
 
     /// <summary>
-    /// Fetches all platforms from the database and syncs them.
+    /// Fetches all platforms from the cache and syncs them.
     /// </summary>
     private async Task SyncAllPlatforms(CancellationToken cancellationToken)
     {
-        if (platformContainerCache.TryGetCacheEntries(out var platforms, out var _))
+        if (platformContainerCache.TryGetCacheEntries(out var platforms, out _))
         {
             foreach (var platform in platforms)
             {
-                if (cancellationToken.IsCancellationRequested) break;
+                if (cancellationToken.IsCancellationRequested)
+                    break;
 
                 try
                 {
@@ -93,67 +105,154 @@ internal class PlatformSyncJob(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Error syncing containers for platform {PlatformId}", platform.Id);
+                    logger.LogError(ex, "Error syncing platform {PlatformId}", platform.Id);
                 }
             }
         }
     }
 
     /// <summary>
-    /// Core logic to synchronize containers for a single platform.
+    /// Core logic to synchronize a single platform.
     /// </summary>
     private async Task SyncPlatform(PlatformHealth evt, CancellationToken cancellationToken)
     {
         try
         {
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            var platform = await uow.Platforms.GetByIdAsync(evt.Id, cancellationToken);
-            if (platform == null)
-            {
-                logger.LogError("Platform with address {Address} not found for synchronization.", evt.Address);
-                return;
-            }
+            // --------  Short db read: get current platform --------
+            string? platformName;
+            string? platformAddress;
 
-            if (evt.IsOnLine)
+            await using (var scope = scopeFactory.CreateAsyncScope())
             {
-                var param = new GetPlatformCommand
-                (
-                    PlatformName: platform.Name,
-                    PlatformAddress: platform.Address
-                );
-                var platformResult = await connectorFactory.GetConnector(evt.Type).GetPlatformAsync(param, cancellationToken);
-                if (!platformResult.IsSuccess(out var platformInfo, out var error))
+                var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+                var platform = await uow.Platforms.GetByIdAsync(evt.Id, cancellationToken);
+
+                if (platform is null)
                 {
-                    logger.LogError("Failed to get platform info for {Address}: {Error}", platform.Address, error?.Message);
+                    logger.LogError("Platform with id {PlatformId} not found for synchronization.", evt.Id);
                     return;
                 }
 
-                // Update platform
-                platform.PartialUpdate(
-                    platformStatus: PlatformStatus.Online,
-                    networkCount: platformInfo.NetworkCount,
-                    volumeCount: platformInfo.VolumeCount,
-                    imageCount: platformInfo.ImageCount,
-                    memTotal: platformInfo.MemTotal,
-                    serverVersion: platformInfo.ServerVersion,
-                    agentVersion: platformInfo.AgentVersion,
-                    cpuCount: platformInfo.CpuCount,
-                    descriptor: platformInfo.Descriptor);
+                platformName = platform.Name;
+                platformAddress = platform.Address;
             }
-            else
+
+            if (!evt.IsOnLine)
             {
-                platform.PartialUpdate(platformStatus: PlatformStatus.Offline);
+                var offlineItem = new PlatformOfflineSyncWorkItem(platformStreamManager, notifQueue, evt.Id, logger);
+                await dbWorkQueue.EnqueueAsync(offlineItem, cancellationToken);
+                return;
             }
 
-            await uow.Platforms.UpdatePlatformAsync(platform, cancellationToken);
-            await uow.CommitAsync();
+            // Platform is online, fetch latest info from platform connector
+            var param = new GetPlatformCommand(
+                PlatformName: platformName!,
+                PlatformAddress: platformAddress!
+            );
 
-            await platformStreamManager.PushPlatformUpdate(platform);
+            var result = await connectorFactory
+                .GetConnector(evt.Type)
+                .GetPlatformAsync(param, cancellationToken);
+
+            if (!result.IsSuccess(out var platformInfo, out var error))
+            {
+                logger.LogError(
+                    "Failed to get platform info for {Address}: {Error}",
+                    platformAddress,
+                    error?.Message
+                );
+                return;
+            }
+
+            // Enqueue DB work item to apply updates
+            var workItem = new PlatformOnlineSyncWorkItem(platformStreamManager, notifQueue, platformInfo, evt.Id, logger);
+            await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error while synchronizing platform {Address}", evt.Address);
         }
     }
+}
+
+internal sealed class PlatformOnlineSyncWorkItem(
+    IPlatformStreamManager platformStreamManager,
+    INotificationQueue notificationQueue, 
+    PlatformResult platformInfo, 
+    Guid platformId,
+    ILogger logger) : IDbWorkItem
+{
+    public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var platform = await uow.Platforms.GetByIdAsync(platformId, cancellationToken);
+            if (platform is null)
+            {
+                logger.LogWarning("Platform {PlatformId} not found during online sync write.", platformId);
+                return;
+            }
+
+            // Apply updates from platformInfo
+            platform.PartialUpdate(
+                platformStatus: PlatformStatus.Online,
+                networkCount: platformInfo.NetworkCount,
+                volumeCount: platformInfo.VolumeCount,
+                imageCount: platformInfo.ImageCount,
+                memTotal: platformInfo.MemTotal,
+                serverVersion: platformInfo.ServerVersion,
+                agentVersion: platformInfo.AgentVersion,
+                cpuCount: platformInfo.CpuCount,
+                descriptor: platformInfo.Descriptor
+            );
+
+            await uow.Platforms.UpdatePlatformAsync(platform, cancellationToken);
+            await uow.CommitAsync(cancellationToken);
+
+            // Notify clients
+            var notificationWorkItem = new PushPlatformUpdateNotificationWorkItem(platformStreamManager, platform);
+            await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error during PlatformOnlineSyncWorkItem for {PlatformId}", platformId);
+        }
+    }
+}
+
+internal sealed class PlatformOfflineSyncWorkItem(
+    IPlatformStreamManager platformStreamManager, 
+    INotificationQueue notificationQueue, 
+    Guid PlatformId, ILogger logger) : IDbWorkItem
+{
+    public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var platform = await uow.Platforms.GetByIdAsync(PlatformId, cancellationToken);
+            if (platform is null)
+            {
+                logger.LogWarning("Platform {PlatformId} not found during offline sync write.", PlatformId);
+                return;
+            }
+
+            platform.PartialUpdate(platformStatus: PlatformStatus.Offline);
+
+            await uow.Platforms.UpdatePlatformAsync(platform, cancellationToken);
+            await uow.CommitAsync(cancellationToken);
+
+            var notificationWorkItem = new PushPlatformUpdateNotificationWorkItem(platformStreamManager, platform);
+            await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error during PlatformOfflineSyncWorkItem for {PlatformId}", PlatformId);
+        }
+    }
+}
+
+internal class PushPlatformUpdateNotificationWorkItem(IPlatformStreamManager platformStreamManager, Platform platform) : INotificationWorkItem
+{
+    public Task ExecuteAsync(CancellationToken cancellationToken)
+        => platformStreamManager.PushPlatformUpdate(platform);
 }

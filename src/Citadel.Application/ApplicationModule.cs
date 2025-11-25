@@ -48,7 +48,6 @@ public static class ApplicationModule
         => services
             .AddSingleton<IJwtService, JwtService>()
             .AddSingleton<ISyncBarrier, SyncBarrier>()
-            .AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>()
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>()
             .AddSingleton<IContainerEventBroadcaster, ContainerEventBroadcaster>()
             .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>()
@@ -83,7 +82,6 @@ public static class ApplicationModule
             .AddHostedService<ContainerStatsWriterJob>()
             .AddHostedService<ContainerSyncJob>()
             .AddHostedService<ImageSyncJob>()
-            .AddHostedService<QueuedHostedService>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services
             .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()

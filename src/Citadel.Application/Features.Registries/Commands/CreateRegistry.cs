@@ -143,7 +143,7 @@ internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorR
 
         var registry = new Registry(name: command.Name, url: command.Url, type: command.Type, configuration: command.Configuration);
         await unitOfWork.Registries.AddAsync(registry, cancellationToken);
-        await unitOfWork.CommitAsync();
+        await unitOfWork.CommitAsync(cancellationToken);
 
         return registry;
     }

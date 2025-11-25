@@ -1,16 +1,17 @@
-﻿using System.Threading.Channels;
-using Application.Configs;
+﻿using Application.Configs;
 using Application.Services;
 using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
+using Infrastructure.Repositories.DbQueue;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Moq;
+using System.Threading.Channels;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
@@ -34,6 +35,8 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
 
         services.AddHostedService<PlatformStatsWriterJob>();
         services.AddHostedService<PlatformStatsStreamerJob>();
+        services.AddHostedService<DbWriteWorker>();
+        services.AddHostedService<NotificationWorker>();
         services.AddSingleton(_channel);
         services.AddSingleton(_ => _streamManagerMock.Object);
         services.AddSingleton(_ => _configMock.Object);
@@ -49,7 +52,7 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
         var platform = Fakes.GetDummyPlatform();
 
         await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
-        await uow.CommitAsync();
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         _platformId = platform.Id;
     }

@@ -25,7 +25,7 @@ internal sealed class LogoutCommandHandler(IUnitOfWork unitOfWork, IJwtService j
             return Result.Success();
 
         await unitOfWork.RefreshTokens.DeleteAsync(tokenId, cancellationToken);
-        await unitOfWork.CommitAsync();
+        await unitOfWork.CommitAsync(cancellationToken);
 
         return Result.Success();
     }

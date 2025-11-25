@@ -16,6 +16,7 @@ using Infrastructure.GithubCr;
 using Infrastructure.HttpClients.Serializer;
 using Infrastructure.Persistence;
 using Infrastructure.Repositories;
+using Infrastructure.Repositories.DbQueue;
 using Infrastructure.Repositories.Security.Grpc;
 using Infrastructure.TypeHandlers;
 using Microsoft.AspNetCore.Hosting;
@@ -63,6 +64,10 @@ public static class InfrastructureModule
         => services
             .AddSingleton<IGitHubCrRepository, GitHubCrRepository>()
             .AddSingleton<IDockerHubRegistryRepository, DockerHubRegistryRepository>()
+            .AddSingleton<IDbWorkQueue, DbWorkQueue>()
+            .AddSingleton<INotificationQueue, NotificationQueue>()
+            .AddHostedService<DbWriteWorker>()
+            .AddHostedService<NotificationWorker>()
             .AddSingleton<AgentImageConnector>()
             .AddSingleton<LocalImageConnector>()
             .AddSingleton<AgentVolumeConnector>()

@@ -99,7 +99,7 @@ internal class PatchPlatformHandler(
                     descriptor: platformInfo.Descriptor);
 
                 await unitOfWork.Platforms.UpdatePlatformAsync(platform, cancellationToken);
-                await unitOfWork.CommitAsync();
+                await unitOfWork.CommitAsync(cancellationToken);
 
                 await UpdatePlatformTracking(platform.Id, platform.Address, platform.ConnectorType, oldPlatformAddress, cancellationToken);
                 logger.LogInformation("The platform with id = {PlatformId} has been updated", platform.Id);

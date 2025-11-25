@@ -1,7 +1,7 @@
 ﻿{
   id: Guid_1,
   name: R-NEW,
-  url: https://registry123:9999,
+  url: registry123:9999,
   type: Custom,
   created: DateTimeOffset_1,
   isDefault: false

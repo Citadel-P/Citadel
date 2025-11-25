@@ -52,7 +52,7 @@ public class ApplicationHubTests : IntegrationTestBase
         await uow.Images.BulkUpsertAsync(images, TestContext.Current.CancellationToken);
         await uow.Containers.BulkUpsertAsync(containers, TestContext.Current.CancellationToken);
 
-        await uow.CommitAsync();
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         platformId = platform.Id;
     }

@@ -30,7 +30,7 @@ internal class CleanupStatsJob(IServiceScopeFactory scopeFactory, ILogger<Cleanu
 
                 await uow.ContainerStats.RemoveOlderThanAsync(thresholdEpochSeconds, cancellationToken);
                 await uow.PlatformStats.RemoveOlderThanAsync(thresholdEpochSeconds, cancellationToken);
-                await uow.CommitAsync();
+                await uow.CommitAsync(cancellationToken);
 
                 logger.LogInformation("Removed statistics entries older than {PurgeDays} days.", purgeDays);
             }

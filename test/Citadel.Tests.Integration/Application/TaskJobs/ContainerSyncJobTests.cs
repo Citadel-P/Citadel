@@ -6,6 +6,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using Infrastructure.Repositories.DbQueue;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -35,6 +36,8 @@ public class ContainerSyncJobTests : IntegrationTestBase
         services.RemoveAll<IHostedService>();
 
         services.AddHostedService<ContainerSyncJob>();
+        services.AddHostedService<DbWriteWorker>();
+        services.AddHostedService<NotificationWorker>();
 
         services.AddSingleton(syncBarrierMock.Object);
         services.AddSingleton(configMock.Object);
@@ -66,7 +69,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
                 , TestContext.Current.CancellationToken);
         }
 
-        await uow.CommitAsync();
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         platformId = platform.Id;
     }
@@ -117,7 +120,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         await uow.Containers.AddAsync(staleContainer, TestContext.Current.CancellationToken);
-        await uow.CommitAsync();
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         // Return fresh containers
         syncBarrierMock.Setup(x => x.WaitForAsync<ImageSyncJob>(It.IsAny<CancellationToken>())).Returns(ValueTask.CompletedTask);
@@ -185,7 +188,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
         await using (var uow = Services.GetRequiredService<IUnitOfWork>())
         {
             await uow.Containers.AddAsync(oldContainer, TestContext.Current.CancellationToken);
-            await uow.CommitAsync();
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
 
         var updatedDockerContainer = new DockerContainer(

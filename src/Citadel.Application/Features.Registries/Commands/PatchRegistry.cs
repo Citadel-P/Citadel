@@ -160,7 +160,7 @@ internal class PatchRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorRe
 
         registry.PartialUpdate(name: patchedRegistry.Name, url: patchedRegistry.Url, configuration: patchedRegistry.Configuration);
         await unitOfWork.Registries.UpdateAsync(registry, cancellationToken);
-        await unitOfWork.CommitAsync();
+        await unitOfWork.CommitAsync(cancellationToken);
 
         return registry;
     }

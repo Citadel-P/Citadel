@@ -7,12 +7,14 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Images;
 using Domain.Entities;
+using Infrastructure.Repositories.DbQueue;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Moq;
+using System.Threading;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
@@ -34,7 +36,10 @@ public class ImageSyncJobTests : IntegrationTestBase
         // Remove all existing hosted services
         services.RemoveAll<IHostedService>();
 
-        services.AddHostedService<ImageSyncJob>();
+        services
+            .AddHostedService<DbWriteWorker>()
+            .AddHostedService<NotificationWorker>()
+            .AddHostedService<ImageSyncJob>();
 
         services.AddSingleton(streamManagerMock.Object);
         services.AddSingleton(configMock.Object);
@@ -67,7 +72,7 @@ public class ImageSyncJobTests : IntegrationTestBase
                 ), TestContext.Current.CancellationToken);
         }
 
-        await uow.CommitAsync();
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         platformId = platform.Id;
     }
@@ -116,7 +121,7 @@ public class ImageSyncJobTests : IntegrationTestBase
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         await uow.Images.AddAsync(staleImage, TestContext.Current.CancellationToken);
-        await uow.CommitAsync();
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         // Return fresh images
         imageFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(imageConnector.Object);
@@ -186,7 +191,7 @@ public class ImageSyncJobTests : IntegrationTestBase
         await using (var uow = Services.GetRequiredService<IUnitOfWork>())
         {
             await uow.Images.AddAsync(oldImage, TestContext.Current.CancellationToken);
-            await uow.CommitAsync();
+            await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
 
         var updatedDockerContainer = new ImageResult(

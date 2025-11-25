@@ -91,7 +91,7 @@ internal sealed class CreatePlatformHandler(
             await unitOfWork.Containers.BulkUpsertAsync(containers, cancellationToken);
         }
         // Commit
-        await unitOfWork.CommitAsync();
+        await unitOfWork.CommitAsync(cancellationToken);
 
         // Start tracking the platform
         platformHealthMonitorJob.TrackPlatform(platform.Address, platform.Id, platform.ConnectorType);

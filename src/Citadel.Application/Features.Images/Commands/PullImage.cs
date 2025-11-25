@@ -1,6 +1,5 @@
 ﻿using Application.Mappers;
 using Application.Services.SignalR;
-using Application.TaskJobs;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Images;
@@ -73,8 +72,8 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
                     return new PullImageCommand
                         (
                             PlatformAddress: platformAddress,
-                            FromImage: $"{domainName}/{dockerCfg.UserName}/{RepositoryName}:{ImageTag}".ToLower(),
-                            Repo: $"{domainName}/{dockerCfg.UserName}/{RepositoryName}".ToLower(),
+                            FromImage: $"{domainName}/{dockerCfg.UserName}/{ImageTag}".ToLower(),
+                            Repo: $"{domainName}/{dockerCfg.UserName}".ToLower(),
                             FromSrc: registry.Url,
                             Auth: dockerCfg.GetRegistryAuth(registry.Url)
                         );
@@ -86,55 +85,101 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
     }
 }
 
-internal sealed class PullImageHandler(IConnectorFactory<IImageConnector> connectorFactory, IImageStreamManager imageStream, IUnitOfWork unitOfWork, 
-    IPlatformContainerCache platformContainerCache, IBackgroundTaskQueue backgroundTaskQueue, IServiceScopeFactory scopeFactory, ILogger<PullImageHandler> logger) : IStreamCommandHandler<PullImage, PullImageResult>
+internal sealed class PullImageHandler(
+    IConnectorFactory<IImageConnector> connectorFactory, 
+    IImageStreamManager imageStream, 
+    IPlatformContainerCache platformContainerCache, 
+    INotificationQueue notificationQueue, 
+    IDbWorkQueue dbWorkQueue,
+    IServiceScopeFactory scopeFactory,
+    ILogger<PullImage> logger) : IStreamCommandHandler<PullImage, PullImageResult>
 {
-    public async IAsyncEnumerable<PullImageResult> Handle(PullImage command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<PullImageResult> Handle(
+    PullImage command,
+    [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform, out var _))
+        if (!platformContainerCache.TryGetCacheEntry(command.PlatformId, out var platform, out _))
         {
-            var message = $"Platform with ID {command.PlatformId} not found or not available.";
+            var message = $"Platform with ID {command.PlatformId} not found.";
             yield return new PullImageResult(ErrorMessage: message, Error: new ImagePullError(404, message));
             yield break;
         }
 
-        var registry = command.RegistryName == Registry.DefaultRegistryName
-            ? Registry.DefaultRegistry() // Public Docker registry
-            : await unitOfWork.Registries.GetByNameAsync(command.RegistryName, cancellationToken);
+        Registry? registry;
+        if (command.RegistryName == Registry.DefaultRegistryName)
+        {
+            registry = Registry.DefaultRegistry();
+        }
+        else
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            registry = await uow.Registries.GetByNameAsync(command.RegistryName, cancellationToken);
+        }
 
         if (registry == null)
         {
-            var message = $"Registry configuration for '{command.RegistryName}' not found.";
+            var message = $"Registry '{command.RegistryName}' not found.";
             yield return new PullImageResult(ErrorMessage: message, Error: new ImagePullError(404, message));
             yield break;
         }
 
         var connector = connectorFactory.GetConnector(platform.ConnectorType);
-        await foreach (var reply in connector.PullImageProgressStreamAsync(command.ToConnectorCommand(platform.Address, registry), cancellationToken))
+
+        await foreach (var reply in connector.PullImageProgressStreamAsync(
+            command.ToConnectorCommand(platform.Address, registry), cancellationToken))
         {
             yield return reply;
         }
 
-        backgroundTaskQueue.Enqueue(ct => PersistPulledImage(connector, scopeFactory, platform, registry, command.ImageTag, logger, ct));
+        var workItem = new PersistPulledImageWorkItem(
+            platform,
+            registry,
+            command.ImageTag,
+            connector,
+            imageStream,
+            notificationQueue,
+            logger
+        );
+
+        await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }
 
-    private async Task PersistPulledImage(IImageConnector connector, IServiceScopeFactory scopeFactory, PlatformCacheEntry paltform, Registry registry, string imageName, ILogger logger, CancellationToken cancellationToken)
+    internal sealed class PersistPulledImageWorkItem(
+        PlatformCacheEntry platform,
+        Registry registry,
+        string imageName,
+        IImageConnector connector,
+        IImageStreamManager imageStream, 
+        INotificationQueue notificationQueue,
+        ILogger logger)
+        : IDbWorkItem
     {
-        var imageResult = await connector.GetAsync(paltform.Address, imageName, cancellationToken);
-        if (imageResult.IsSuccess(out var image, out var error))
+        public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
         {
-            var imageEntity = image.Map(paltform.Id, registry);
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            // Fetch metadata
+            var imageResult = await connector.GetAsync(platform.Address, imageName, ct);
+            if (!imageResult.IsSuccess(out var image, out var error))
+            {
+                logger.LogError("Pull completed, but failed to retrieve image info: {Error}", error?.Message);
+                return;
+            }
 
-            await uow.Images.AddOrUpdateAsync(imageEntity, cancellationToken);
-            await uow.CommitAsync();
+            var imageEntity = image.Map(platform.Id, registry);
 
-            await imageStream.SendImageInfo(paltform.Id, imageEntity);
+            // Write to DB
+            await uow.Images.AddOrUpdateAsync(imageEntity, ct);
+            await uow.CommitAsync(ct);
+
+            // Notify clients
+            var imageNotification = new SendImageNotificationWorkItem(imageStream, imageEntity, platform.Id);
+            await notificationQueue.EnqueueAsync(imageNotification, ct);
         }
-        else
-        {
-            logger.LogError("Failed to retrieve image info after pull: {Error}", error?.Message);
-        }
+    }
+
+    internal class SendImageNotificationWorkItem(IImageStreamManager imageStream, Image image, Guid platformId) : INotificationWorkItem
+    {
+        public Task ExecuteAsync(CancellationToken cancellationToken)
+            => imageStream.SendImageInfo(platformId, image);
     }
 }

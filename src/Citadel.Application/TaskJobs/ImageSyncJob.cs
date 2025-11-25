@@ -1,13 +1,13 @@
-﻿using System.Threading.Channels;
-using Application.Mappers;
+﻿using Application.Mappers;
 using Application.Services;
 using Application.Services.SignalR;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Images;
 using Domain.Entities;
 using Hosting.Common;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Threading.Channels;
 
 namespace Application.TaskJobs;
 
@@ -16,11 +16,12 @@ namespace Application.TaskJobs;
 /// The job ensures that new images are added, updated images are refreshed, and stale images are removed from the local database.
 /// Synchronization occurs in two scenarios:
 /// 1. Whenever a platform's status changes (e.g., from offline to online or during recovery).
-/// 2. Periodically, every 12 hours, to ensure the local image state remains consistent with the platform state.
+/// 2. Periodically, every 6 hours, to ensure the local image state remains consistent with the platform state.
 /// </summary>
 internal class ImageSyncJob(
+    IDbWorkQueue dbQueue,
     ISyncBarrier syncBarrier,
-    IServiceScopeFactory scopeFactory,
+    INotificationQueue notifQueue,
     IImageStreamManager imageStreamManager,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IConnectorFactory<IImageConnector> connectorFactory,
@@ -29,157 +30,128 @@ internal class ImageSyncJob(
 ) : BackgroundService
 {
     private readonly ChannelReader<PlatformHealth> _platformHealthReader = platformHealthBroadCaster.AddSubscriber();
-    private static readonly TimeSpan SyncInterval = TimeSpan.FromHours(12);
+    private static readonly TimeSpan SyncInterval = TimeSpan.FromHours(6);
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("{ImageSyncJob} started. Running every {Hours} hours.", nameof(ImageSyncJob), SyncInterval.TotalHours);
+        logger.LogInformation("{ImageSyncJob} started. Runs every {Hours} hours.",
+            nameof(ImageSyncJob), SyncInterval.TotalHours);
 
-        // Event-driven sync starts immediately
-        var eventDrivenTask = RunEventDrivenSync(cancellationToken);
+        var eventDriven = RunEventDrivenSync(cancellationToken);
+        var periodic = Helpers.DelayWithJitterFor(RunPeriodicSync, cancellationToken: cancellationToken);
 
-        // Periodic sync starts with jitter
-        var periodicTask = Helpers.DelayWithJitterFor(RunPeriodicSync, cancellationToken: cancellationToken);
-
-        await Task.WhenAll(eventDrivenTask, periodicTask);
+        await Task.WhenAll(eventDriven, periodic);
     }
 
-    /// <summary>
-    /// Reacts to platform health events and syncs images for platforms as they change state.
-    /// </summary>
-    private async Task RunEventDrivenSync(CancellationToken cancellationToken)
+    private async Task RunEventDrivenSync(CancellationToken ct)
     {
-        await foreach (var platformEvent in _platformHealthReader.ReadAllAsync(cancellationToken))
+        await foreach (var platform in _platformHealthReader.ReadAllAsync(ct))
         {
             try
             {
-                await SyncImagesForPlatform(platformEvent, cancellationToken);
+                // Schedule sync via DB queue
+                var result = await connectorFactory.GetConnector(platform.Type).ListImagesAsync(platform.Address, cancellationToken: ct);
+                if (!result.IsSuccess(out var freshImages, out var error))
+                {
+                    logger.LogError("failed to list images for {Platform}", platform.Address);
+                    continue;
+                }
+                await dbQueue.EnqueueAsync(new ImageSyncWorkItem(freshImages, imageStreamManager, notifQueue, syncBarrier, platform, logger), ct);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error while syncing images for {Address}", platformEvent.Address);
+                logger.LogError(ex, "image sync schedule failed");
             }
         }
     }
 
-    /// <summary>
-    /// Periodically syncs all platforms every 12 hours.
-    /// </summary>
-    private async Task RunPeriodicSync(CancellationToken cancellationToken)
+    private async Task RunPeriodicSync(CancellationToken ct)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        while (!ct.IsCancellationRequested)
         {
             try
             {
-                await SyncAllPlatforms(cancellationToken);
+                if (platformContainerCache.TryGetCacheEntries(out var platforms, out _))
+                {
+                    foreach (var p in platforms)
+                    {
+                        // Fetch images from Docker
+                        var result = await connectorFactory.GetConnector(p.ConnectorType).ListImagesAsync(p.Address, cancellationToken: ct);
+                        if (!result.IsSuccess(out var freshImages, out var error))
+                        {
+                            logger.LogError("failed to list images for {Platform}", p.Address);
+                            continue;
+                        }
+                        if (ct.IsCancellationRequested) break;
+                        await dbQueue.EnqueueAsync(new ImageSyncWorkItem(freshImages, imageStreamManager, notifQueue, syncBarrier, new PlatformHealth(p.Id, p.Address, p.ConnectorType, true), logger), ct);
+                    }
+                }
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error during periodic image synchronization.");
+                logger.LogError(ex, "periodic image sync failed");
             }
 
-            await Task.Delay(SyncInterval, cancellationToken);
+            await Task.Delay(SyncInterval, ct);
         }
     }
+}
 
-    /// <summary>
-    /// Fetches all platforms from the database and syncs them.
-    /// </summary>
-    private async Task SyncAllPlatforms(CancellationToken cancellationToken)
+internal sealed class ImageSyncWorkItem(
+    IEnumerable<ImageResult> freshImages,
+    IImageStreamManager imageStreamManager,
+    INotificationQueue notificationQueue,
+    ISyncBarrier syncBarrier,
+    PlatformHealth platform,
+    ILogger logger
+) : IDbWorkItem
+{
+    public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
-        if (platformContainerCache.TryGetCacheEntries(out var platforms, out var _))
+        var images = await uow.Images.GetByPlatformIdAsync(platform.Id, ct);
+        var existing = images.ToDictionary(x => x.DockerImageId);
+
+        var upserts = new List<Image>();
+
+        foreach (var fresh in freshImages)
         {
-            foreach (var platform in platforms)
+            if (existing.TryGetValue(fresh.Id, out var dbImage))
             {
-                if (cancellationToken.IsCancellationRequested) break;
-
-                try
-                {
-                    var platformEvent = new PlatformHealth(
-                        Id: platform.Id,
-                        Type: platform.ConnectorType,
-                        Address: platform.Address,
-                        IsOnLine: true
-                    );
-
-                    await SyncImagesForPlatform(platformEvent, cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Error syncing images for platform {PlatformId}", platform.Id);
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Core logic to synchronize images for a single platform.
-    /// </summary>
-    private async Task SyncImagesForPlatform(PlatformHealth platformEvent, CancellationToken cancellationToken)
-    {
-        if (platformEvent.IsOnLine)
-        {
-            logger.LogInformation("Synchronizing images for platform {PlatformId} at {Address}...", platformEvent.Id, platformEvent.Address);
-            var syncedImages = await SyncOnlinePlatformImages(platformEvent, cancellationToken);
-            
-            await imageStreamManager.SendImagesInfo(platformEvent.Id, syncedImages);
-            logger.LogInformation("Synchronized {Count} images for platform {PlatformId}.", syncedImages.Count, platformEvent.Id);
-        }
-    }
-
-    private async Task<List<Image>> SyncOnlinePlatformImages(PlatformHealth platformEvent, CancellationToken cancellationToken)
-    {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-        var result = await connectorFactory
-            .GetConnector(platformEvent.Type)
-            .ListImagesAsync(platformEvent.Address, cancellationToken: cancellationToken);
-
-        if (!result.IsSuccess(out var freshImages, out var error))
-        {
-            logger.LogError("Error retrieving image list for platform {PlatformId} at {Address}: {Error}", platformEvent.Id, platformEvent.Address, error);
-            return [];
-        }
-
-        var images = await uow.Images.GetByPlatformIdAsync(platformEvent.Id, cancellationToken);
-        var existingImagesInDb = images.ToDictionary(c => c.DockerImageId, c => c);
-
-        var currentActiveImages = new List<Image>();
-        foreach (var freshImage in freshImages)
-        {
-            if (existingImagesInDb.TryGetValue(freshImage.Id, out var existingDbImage))
-            {
-                existingDbImage.PartialUpdate(
-                    dockerImageId: freshImage.Id,
-                    containers: freshImage.Containers,
-                    tag: freshImage.RepoTags?.Count > 0 ?  freshImage.RepoTags[0] : "",
-                    size: freshImage.Size
+                dbImage.PartialUpdate(
+                    dockerImageId: fresh.Id,
+                    containers: fresh.Containers,
+                    tag: fresh.RepoTags?.FirstOrDefault() ?? "",
+                    size: fresh.Size
                 );
-                currentActiveImages.Add(existingDbImage);
+                upserts.Add(dbImage);
             }
             else
             {
-                currentActiveImages.Add(freshImage.Map(platformEvent.Id));
+                upserts.Add(fresh.Map(platform.Id));
             }
         }
 
-        await uow.Images.BulkUpsertAsync(currentActiveImages, cancellationToken);
+        await uow.Images.BulkUpsertAsync(upserts, ct);
 
-        // Remove stale images
+        // Delete stale
         var freshIds = freshImages.Select(f => f.Id).ToHashSet();
-        var staleImages = existingImagesInDb.Values.Where(c => !freshIds.Contains(c.DockerImageId)).ToArray();
-        if (staleImages.Length > 0)
-        {
-            logger.LogInformation("Removing {Count} stale images for platform {PlatformId}", staleImages.Length, platformEvent.Id);
-            await uow.Images.DeleteAsync(staleImages.Select(s => s.Id), cancellationToken);
-        }
+        var stale = existing.Values.Where(x => !freshIds.Contains(x.DockerImageId)).ToArray();
 
-        await uow.CommitAsync();
+        if (stale.Length > 0)
+            await uow.Images.DeleteAsync(stale.Select(s => s.Id), ct);
 
-        // Signal that the job has completed its first run
+        await uow.CommitAsync(ct);
+
+        // Notify clients
+        await notificationQueue.EnqueueAsync(new SendImagesNotificationWorkItem(imageStreamManager, upserts, platform.Id), ct);
+
+        // Mark first successful sync
         syncBarrier.MarkSynced<ImageSyncJob>();
-
-        return currentActiveImages;
     }
+}
+
+internal sealed class SendImagesNotificationWorkItem(IImageStreamManager imageStreamManager, IEnumerable<Image> images, Guid platformId) : INotificationWorkItem
+{
+    public Task ExecuteAsync(CancellationToken ct)
+        => imageStreamManager.SendImagesInfo(platformId, images);
 }

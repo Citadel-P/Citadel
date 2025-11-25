@@ -17,7 +17,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IContainerStatRepository ContainerStats { get; }
     IPlatformStatRepository PlatformStats { get; }
 
-    Task CommitAsync();
+    Task CommitAsync(CancellationToken cancellationToken);
     Task RollbackAsync();
 }
 

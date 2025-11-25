@@ -1,10 +1,8 @@
-﻿using Application.Mappers;
-using Application.Services;
+﻿using Application.Services;
 using Application.Services.SignalR;
+using Application.TaskJobs.WorkItems;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
-using Domain.Entities;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
@@ -13,13 +11,14 @@ using System.Threading.Channels;
 namespace Application.TaskJobs;
 
 internal sealed class DockerDaemonEventJob(
-    IServiceScopeFactory scopeFactory,
     ILogger<DockerDaemonEventJob> logger,
     IDockerDaemonStreamManager dockerDaemonHub,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IPlatformConnector> connectorFactory,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
-    IContainerEventBroadcaster containerEventBroadcaster) : BackgroundService
+    IContainerEventBroadcaster containerEventBroadcaster,
+    INotificationQueue notificationQueue,
+    IDbWorkQueue dbWorkQueue) : BackgroundService
 {
     private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
     private readonly ChannelReader<PlatformHealth> platformHealthReader = platformHealthBroadCaster.AddSubscriber();
@@ -69,7 +68,10 @@ internal sealed class DockerDaemonEventJob(
             try
             {
                 var command = new StreamDaemonEventCommand(platform.Address);
-                await foreach (var reply in connectorFactory.GetConnector(platform.Type).StreamDaemonEventAsync(command, cancellationToken))
+
+                await foreach (var reply in connectorFactory
+                               .GetConnector(platform.Type)
+                               .StreamDaemonEventAsync(command, cancellationToken))
                 {
                     if (reply is DaemonContainerEventInfo containerEvent)
                     {
@@ -88,15 +90,17 @@ internal sealed class DockerDaemonEventJob(
                     }
                     else if (reply is DaemonImageEventInfo imageEvent)
                     {
-                        switch (reply.Action)
+                        if (reply.Action == "delete")
                         {
-                            case "delete":
-                                await OnImageDeleted(imageEvent, platform.Id, cancellationToken);
-                                break;
+                            await OnImageDeleted(imageEvent, platform.Id, cancellationToken);
                         }
                     }
-
                 }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // normal shutdown
+                break;
             }
             catch (Exception ex)
             {
@@ -106,120 +110,45 @@ internal sealed class DockerDaemonEventJob(
         }
     }
 
-    private async Task OnContainerCreated(DaemonContainerEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
+    private ValueTask OnContainerCreated(DaemonContainerEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
     {
-        if (eventInfo.Container is null) return;
+        if (eventInfo.Container is null) return ValueTask.CompletedTask;
 
-        
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var dbItem = new ContainerCreatedWorkItem(
+            eventInfo,
+            platformId,
+            notificationQueue,
+            dockerDaemonHub,
+            platformContainerCache,
+            containerEventBroadcaster, logger);
 
-        var image = await uow.Images.GetByImageIdAsync(eventInfo.Container.ImageId, platformId, cancellationToken);
-        var container = eventInfo.Container.Map(platformId, image?.Id);
-        platformContainerCache.TryAddContainer(platformId, container.DockerContainerId, container.Id);
-
-
-        await uow.Containers.AddAsync(container, cancellationToken);
-        await uow.CommitAsync();
-
-        await SendContainerEventChanges(container, eventInfo.Action);
-
-        await UpdateImageStatus(uow, platformId, container?.DockerImageId, eventInfo.Action, cancellationToken);
+        return dbWorkQueue.EnqueueAsync(dbItem, cancellationToken);
     }
 
-    private async Task OnContainerUpdated(DaemonContainerEventInfo eventInfo, CancellationToken cancellationToken)
+    private ValueTask OnContainerUpdated(DaemonContainerEventInfo eventInfo, CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var item = new ContainerUpdatedWorkItem(eventInfo, notificationQueue, dockerDaemonHub, logger);
 
-        var existing = await uow.Containers.GetContainerWithImageByIdAsync(eventInfo.ContainerId, cancellationToken);
-        if (existing != null)
-        {
-            existing.PartialUpdate(state: eventInfo.Container?.State, ports: eventInfo.Container?.Ports);
-            await uow.Containers.UpdateAsync(existing, cancellationToken);
-            await uow.CommitAsync();
-            await SendContainerEventChanges(existing, eventInfo.Action);
-        }
+        return dbWorkQueue.EnqueueAsync(item, cancellationToken);
     }
 
-    private async Task OnContainerDestroyed(DaemonContainerEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
+    private ValueTask OnContainerDestroyed(DaemonContainerEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var item = new ContainerDestroyedWorkItem(
+            platformId,
+            eventInfo,
+            notificationQueue,
+            dockerDaemonHub,
+            platformContainerCache,
+            containerEventBroadcaster, logger);
 
-        var existingDestroy = await uow.Containers.GetByIdAsync(eventInfo.ContainerId, cancellationToken);
-        if (existingDestroy != null)
-        {
-            platformContainerCache.TryRemoveContainer(platformId, existingDestroy.DockerContainerId);
-
-            await uow.Containers.DeleteAsync([existingDestroy.Id], cancellationToken);
-            await uow.CommitAsync();
-
-            await SendContainerEventChanges(existingDestroy, eventInfo.Action);
-
-            await UpdateImageStatus(uow, platformId, existingDestroy?.DockerImageId, eventInfo.Action, cancellationToken);
-        }
+        return dbWorkQueue.EnqueueAsync(item, cancellationToken);
     }
 
-    private async Task OnImageDeleted(DaemonImageEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
+    private ValueTask OnImageDeleted(DaemonImageEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var item = new ImageDeletedWorkItem(platformId, eventInfo, notificationQueue, dockerDaemonHub, logger);
 
-        var existing = await uow.Images.GetByImageIdAsync(eventInfo.ImageId, platformId, cancellationToken);
-        if (existing != null)
-        {
-            await uow.Images.DeleteAsync([existing.Id], cancellationToken);
-            await uow.CommitAsync();
-
-            await SendImageEventChanges(existing, eventInfo.Action);
-        }
-    }
-
-    private async Task UpdateImageStatus(IUnitOfWork uow, Guid platformId, string imageId, string action, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrEmpty(imageId)) return;
-
-        var image = await uow.Images.GetByImageIdAsync(imageId, platformId, cancellationToken);
-        if (image == null) return;
-
-        if (action == "create")
-        {
-            image.PartialUpdate(containers: image.Containers + 1);
-        }
-        else if (action == "destroy")
-        {
-            image.PartialUpdate(containers: image.Containers - 1);
-        }
-
-        await uow.Images.AddOrUpdateAsync(image, cancellationToken);
-        await uow.CommitAsync();
-
-        await SendImageEventChanges(image, "update");
-    }
-
-    private async Task SendContainerEventChanges(Container container, string action)
-    {
-        try
-        {
-            await dockerDaemonHub.SendContainerEvent(container, action);
-            await containerEventBroadcaster.PublishAsync(new ContainerEvent(container.PlatformId, container.DockerContainerId, action));
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to notify clients about container stats for platform {PlatformId}", container.PlatformId);
-        }
-    }
-
-    private async Task SendImageEventChanges(Image image, string action)
-    {
-        try
-        {
-            await dockerDaemonHub.SendImageEvent(image, action);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to notify clients about image event for platform {PlatformId}", image.PlatformId);
-        }
+        return dbWorkQueue.EnqueueAsync(item, cancellationToken);
     }
 }

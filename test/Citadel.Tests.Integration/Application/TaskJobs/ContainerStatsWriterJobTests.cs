@@ -1,4 +1,3 @@
-using System.Threading.Channels;
 using Application.Configs;
 using Application.Services;
 using Application.Services.SignalR;
@@ -6,11 +5,13 @@ using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
+using Infrastructure.Repositories.DbQueue;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Moq;
+using System.Threading.Channels;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
@@ -30,7 +31,10 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
     protected override void ConfigureTestServices(IServiceCollection services)
     {
         services.RemoveAll<IHostedService>();
-        services.AddHostedService<ContainerStatsWriterJob>();
+        services
+            .AddHostedService<DbWriteWorker>()
+            .AddHostedService<NotificationWorker>()
+            .AddHostedService<ContainerStatsWriterJob>();
 
         services.AddSingleton(_channel);
         services.AddSingleton(_configMock.Object);
@@ -56,7 +60,7 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
                 state: ContainerStateStatus.Running);
         await uow.Containers.AddAsync(container, TestContext.Current.CancellationToken);
         
-        await uow.CommitAsync();
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
         _platformId = platform.Id;
         _containerId = container.Id;
     }
@@ -81,7 +85,7 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
 
         // Assert
         _containerStreamManagerMock.Verify(d => d.SendContainersStats(_platformId, It.IsAny<IEnumerable<ContainerStat>>()), Times.Once);
-        
+
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var containers = await db.ContainerStats.GetStatsAggregatedLast24HoursAsync("container-id-1", TestContext.Current.CancellationToken);
@@ -110,7 +114,7 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
 
         // Assert
         _containerStreamManagerMock.Verify(d => d.SendContainersStats(_platformId, It.IsAny<IEnumerable<ContainerStat>>()), Times.Once);
-        
+
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var containers = await db.ContainerStats.GetStatsAggregatedLast24HoursAsync("container-id-1", TestContext.Current.CancellationToken);

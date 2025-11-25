@@ -12,7 +12,7 @@ internal class DeleteRegistriesHandler(IUnitOfWork unitOfWork) : ICommandHandler
     public async ValueTask<Result> Handle(DeleteRegistries command, CancellationToken cancellationToken)
     {
         var result = await unitOfWork.Registries.RemoveRangeAsync(command.Ids, cancellationToken);
-        await unitOfWork.CommitAsync();
+        await unitOfWork.CommitAsync(cancellationToken);
 
         return result > 0
             ? Result.Success()

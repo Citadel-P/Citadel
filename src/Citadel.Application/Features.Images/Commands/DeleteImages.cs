@@ -58,7 +58,7 @@ internal sealed class DeleteImagesHandler(
                 await dockerDaemonHub.SendImageEvent(existing, "delete");
 
             }
-            await unitOfWork.CommitAsync();
+            await unitOfWork.CommitAsync(cancellationToken);
         }
 
         return result;

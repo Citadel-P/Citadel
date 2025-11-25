@@ -1,15 +1,14 @@
-﻿using System.Threading.Channels;
-using Application.Configs;
+﻿using Application.Configs;
 using Application.Mappers;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Platforms;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Threading.Channels;
 
 namespace Application.TaskJobs;
 
@@ -18,11 +17,13 @@ namespace Application.TaskJobs;
 /// periodically flushing them to the database and notifying connected clients with the latest platformStat updates.
 /// </summary>
 internal class PlatformStatsWriterJob(
-    IServiceScopeFactory scopeFactory,
-    IOptions<JobConfiguration> options,
+    IDbWorkQueue dbQueue,
+    INotificationQueue notificationQueue,
     IPlatformStreamManager platformStreamManager,
     ChannelReader<(Guid Id, PlatformStatsResult Stats)> reader,
-    ILogger<PlatformStatsWriterJob> logger) : BackgroundService
+    IOptions<JobConfiguration> options,
+    ILogger<PlatformStatsWriterJob> logger
+) : BackgroundService
 {
     private readonly Dictionary<Guid, List<PlatformStatsResult>> _buffer = [];
     private DateTime _lastFlush = DateTime.UtcNow;
@@ -31,56 +32,51 @@ internal class PlatformStatsWriterJob(
     {
         try
         {
-            await foreach (var (platformId, platformStat) in reader.ReadAllAsync(cancellationToken))
+            await foreach (var (platformId, stat) in reader.ReadAllAsync(cancellationToken))
             {
-                AccumulateBatchStats(platformId, platformStat);
-                await platformStreamManager.PushPlatformStats(platformId, platformStat);
+                Accumulate(platformId, stat);
+
+                // Push to notification queue
+                var notificationWorkItem = new SendPlatformNotificationWorkItem(platformStreamManager, stat, platformId);
+                await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
 
                 if (ShouldFlush())
                 {
-                    await FlushToDatabase(cancellationToken);
+                    await FlushAsync(cancellationToken);
                 }
             }
         }
-        catch (OperationCanceledException)
-        {
-            // expected when service is stopping
-        }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Error in {nameof(PlatformStatsWriterJob)}");
+            logger.LogError(ex, "Error in PlatformStatsWriterJob");
         }
 
-        // Final flush
         if (_buffer.Count > 0)
-        {
-            await SaveBatchToDb(CancellationToken.None);
-        }
+            await FlushAsync(CancellationToken.None);
     }
 
-    private void AccumulateBatchStats(Guid platformId, PlatformStatsResult stat)
+    private void Accumulate(Guid id, PlatformStatsResult stat)
     {
-        if (!_buffer.TryGetValue(platformId, out var list))
-        {
-            _buffer[platformId] = list = [];
-        }
+        if (!_buffer.TryGetValue(id, out var list))
+            _buffer[id] = list = [];
 
         list.Add(stat);
     }
 
     private bool ShouldFlush()
     {
-        int totalCount = _buffer.Sum(kvp => kvp.Value.Count);
-
-        return totalCount >= options.Value?.BatchSize ||
+        var count = _buffer.Sum(x => x.Value.Count);
+        return count >= options.Value?.BatchSize ||
                (DateTime.UtcNow - _lastFlush) >= TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60);
     }
 
-    private async Task FlushToDatabase(CancellationToken cancellationToken)
+    private async Task FlushAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await SaveBatchToDb(cancellationToken);
+            var copy = new Dictionary<Guid, List<PlatformStatsResult>>(_buffer);
+            await dbQueue.EnqueueAsync(new PersistPlatformStatsWorkItem(copy, logger), cancellationToken);
         }
         finally
         {
@@ -88,49 +84,45 @@ internal class PlatformStatsWriterJob(
             _lastFlush = DateTime.UtcNow;
         }
     }
+}
 
-    private async Task SaveBatchToDb(CancellationToken cancellationToken)
+
+internal sealed class PersistPlatformStatsWorkItem(Dictionary<Guid, List<PlatformStatsResult>> buffer, ILogger logger) : IDbWorkItem
+{
+    public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-        foreach (var (platformId, stats) in _buffer)
+        foreach (var (platformId, stats) in buffer)
         {
             var existing = await uow.Platforms.GetByIdAsync(platformId, cancellationToken);
             if (existing == null)
             {
-                logger.LogWarning("Platform with ID {PlatformId} not found in the database.", platformId);
+                logger.LogWarning("Platform with ID {PlatformId} not found in DB.", platformId);
                 continue;
             }
 
-            var lastBatch = stats.LastOrDefault();
-            if (lastBatch == null)
-                continue;
+            var last = stats.LastOrDefault();
+            if (last == null) continue;
 
-            PlatformDescriptor? descriptor = null;
-            if (existing.PlatformDescriptor is DockerPlatformDescriptor dockerPlatform)
+            PlatformDescriptor? descriptor = existing.PlatformDescriptor switch
             {
-                descriptor = dockerPlatform.Create(
-                    containerCount: lastBatch.PlatformStat.ContainerCount,
-                    containersRunning: lastBatch.PlatformStat.ContainersRunning,
-                    containersPaused: lastBatch.PlatformStat.ContainersPaused,
-                    containersStopped: lastBatch.PlatformStat.ContainersStopped);
-            }
-            else if (existing.PlatformDescriptor is DockerSwarmPlatformDescriptor)
-            {
-                // Todo
-            }
-            else if (existing.PlatformDescriptor is KubernetesPlatformDescriptor)
-            {
-                // Todo
-            }
+                DockerSwarmPlatformDescriptor => null, // TODO
+                KubernetesPlatformDescriptor => null,  // TODO
+                DockerPlatformDescriptor docker => docker.Create(
+                    containerCount: last.PlatformStat.ContainerCount,
+                    containersRunning: last.PlatformStat.ContainersRunning,
+                    containersPaused: last.PlatformStat.ContainersPaused,
+                    containersStopped: last.PlatformStat.ContainersStopped
+                ),
+                
+                _ => null
+            };
 
             existing.PartialUpdate(
                 platformStatus: PlatformStatus.Online,
-                networkCount: lastBatch.NetworkCount,
-                volumeCount: lastBatch.VolumeCount,
-                imageCount: lastBatch.ImageCount,
-                memTotal: lastBatch.MemTotal,
+                networkCount: last.NetworkCount,
+                volumeCount: last.VolumeCount,
+                imageCount: last.ImageCount,
+                memTotal: last.MemTotal,
                 descriptor: descriptor);
 
             await uow.Platforms.UpdatePlatformAsync(existing, cancellationToken);
@@ -138,16 +130,20 @@ internal class PlatformStatsWriterJob(
 
         try
         {
-            var mappedStats = _buffer.Map();
-            await uow.PlatformStats.BulkInsertAsync(mappedStats, cancellationToken);
-            await uow.CommitAsync();
+            var mapped = buffer.Map();
+            await uow.PlatformStats.BulkInsertAsync(mapped, cancellationToken);
+            await uow.CommitAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            logger.LogError(
-                ex,
-                "An error occurred while persisting the platform statistics batch to the database. Total stats in batch: {BatchSize}",
-                _buffer.Sum(s => s.Value.Count));
+            logger.LogError(ex, "Error while persisting PlatformStats batch (size: {Size})",
+                buffer.Sum(s => s.Value.Count));
         }
     }
+}
+
+internal class SendPlatformNotificationWorkItem(IPlatformStreamManager platformStreamManager, PlatformStatsResult stat, Guid platformId) : INotificationWorkItem
+{
+    public Task ExecuteAsync(CancellationToken cancellationToken)
+        => platformStreamManager.PushPlatformStats(platformId, stat);
 }
