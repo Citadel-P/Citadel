@@ -40,7 +40,6 @@ public static class ApplicationModule
             .AddSingleton<IValidatorMetadataProvider, ValidatorMetadataProvider>()
             .AddSingleton<IPermissionMetadataProvider, PermissionMetadataProvider>();
 
-        EnsureDefaultImagesDefinitionsExists();
         return services;
     }
 
@@ -93,22 +92,6 @@ public static class ApplicationModule
             .AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Reader);
 
         return services;
-    }
-
-    private static void EnsureDefaultImagesDefinitionsExists()
-    {
-        if (!File.Exists(Constants.DefaultImagesDefinitionsPath))
-        {
-            string sourcePath = Path.Combine(AppContext.BaseDirectory, "Features.Images/default.docker.images.json");
-            try
-            {
-                File.Copy(sourcePath, Constants.DefaultImagesDefinitionsPath);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-            }
-        }
     }
 
     private static IServiceCollection AddPermissions(this IServiceCollection services)

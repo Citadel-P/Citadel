@@ -9,7 +9,6 @@ using FluentValidation;
 using Hosting.Common;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
 
 namespace Application.Features.Images.Commands;
@@ -32,39 +31,32 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
 
     internal PullImageCommand ToConnectorCommand(string platformAddress, Registry registry)
     {
-        string domainName = registry.Url.Replace("https://", "");
+        string domainName = registry.Url.Replace("https://", "").ToLower();
         switch (registry.Configuration)
         {
             case GitHubRegistry ghCfg:
                 return new PullImageCommand
                     (
                         PlatformAddress: platformAddress,
-                        RegistryName: RegistryName,
-                        FromImage: $"{domainName}/{ghCfg.Name}/{RepositoryName}@{ImageTag}".ToLower(),
-                        Repo: $"{domainName}/{ghCfg.Name}/{RepositoryName}@{ImageTag}".ToLower(),
-                        FromSrc: registry.Url,
-                        Tag: ImageTag,
-                        Auth: ghCfg.GetRegistryAuth(registry.Url)
+                        FromImage: $"{domainName}/{ghCfg.Name}/{BuildImageAndTag()}",
+                        Auth: ghCfg.GetRegistryAuth(domainName)
                     );
             
             case CustomRegistry customCfg:
                 return new PullImageCommand
                 (
                     PlatformAddress: platformAddress,
-                    FromImage: $"{domainName}/{ImageTag}".ToLower(),
-                    Repo: $"{domainName}".ToLower(),
-                    FromSrc: registry.Url,
-                    Auth: customCfg.AuthEnabled == true ? customCfg.GetRegistryAuth(registry.Url) : null
+                    FromImage: $"{domainName}/{BuildImageAndTag()}",
+                    Auth: customCfg.AuthEnabled == true ? customCfg.GetRegistryAuth(domainName) : null
                 );
 
             case DockerHubRegistry dockerCfg:
                 if (RegistryName == Registry.DefaultRegistryName)
                 {
-                    var imageDefaultTag = ImageTag.Split(':').Length == 1 ? $"{ImageTag}:latest" : ImageTag;
                     return new PullImageCommand
                         (
                             PlatformAddress: platformAddress,
-                            FromImage: imageDefaultTag.ToLower()
+                            FromImage: BuildImageAndTag()
                         );
                 }
                 else
@@ -73,9 +65,7 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
                         (
                             PlatformAddress: platformAddress,
                             FromImage: $"{domainName}/{dockerCfg.UserName}/{ImageTag}".ToLower(),
-                            Repo: $"{domainName}/{dockerCfg.UserName}".ToLower(),
-                            FromSrc: registry.Url,
-                            Auth: dockerCfg.GetRegistryAuth(registry.Url)
+                            Auth: dockerCfg.GetRegistryAuth(domainName)
                         );
                 }
 
@@ -83,16 +73,19 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
                 throw new NotSupportedException("Unsupported registry configuration");
         }
     }
+
+    private string BuildImageAndTag()
+        => (ImageTag.Split(':').Length == 1 ? $"{ImageTag}:latest" : ImageTag).ToLower();
 }
 
 internal sealed class PullImageHandler(
-    IConnectorFactory<IImageConnector> connectorFactory, 
-    IImageStreamManager imageStream, 
-    IPlatformContainerCache platformContainerCache, 
-    INotificationQueue notificationQueue, 
     IDbWorkQueue dbWorkQueue,
-    IServiceScopeFactory scopeFactory,
-    ILogger<PullImage> logger) : IStreamCommandHandler<PullImage, PullImageResult>
+    IImageStreamManager imageStream, 
+    INotificationQueue notificationQueue, 
+    IPlatformContainerCache platformContainerCache, 
+    IConnectorFactory<IImageConnector> connectorFactory, 
+    IServiceScopeFactory scopeFactory) 
+    : IStreamCommandHandler<PullImage, PullImageResult>
 {
     public async IAsyncEnumerable<PullImageResult> Handle(
     PullImage command,
@@ -115,6 +108,7 @@ internal sealed class PullImageHandler(
             await using var scope = scopeFactory.CreateAsyncScope();
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             registry = await uow.Registries.GetByNameAsync(command.RegistryName, cancellationToken);
+            
         }
 
         if (registry == null)
@@ -125,55 +119,49 @@ internal sealed class PullImageHandler(
         }
 
         var connector = connectorFactory.GetConnector(platform.ConnectorType);
-
-        await foreach (var reply in connector.PullImageProgressStreamAsync(
-            command.ToConnectorCommand(platform.Address, registry), cancellationToken))
+        var streamCmd = command.ToConnectorCommand(platform.Address, registry);
+        await foreach (var reply in connector.PullImageProgressStreamAsync(streamCmd, cancellationToken))
         {
             yield return reply;
         }
 
+        // Fetch metadata
+        var imageResult = await connector.GetAsync(platform.Address, streamCmd.FromImage, cancellationToken);
+        if (!imageResult.IsSuccess(out var image, out var error))
+        {
+            var message = $"Pull completed, but failed to retrieve image info: {error?.Message}.";
+            yield return new PullImageResult(ErrorMessage: message, Error: new ImagePullError(404, message));
+            yield break;
+        }
+
+        var imageEntity = image.Map(platform.Id, registry);
+
         var workItem = new PersistPulledImageWorkItem(
+            imageEntity,
             platform,
-            registry,
-            command.ImageTag,
-            connector,
             imageStream,
-            notificationQueue,
-            logger
+            notificationQueue
         );
 
         await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }
 
     internal sealed class PersistPulledImageWorkItem(
+        Image imageEntity,
         PlatformCacheEntry platform,
-        Registry registry,
-        string imageName,
-        IImageConnector connector,
         IImageStreamManager imageStream, 
-        INotificationQueue notificationQueue,
-        ILogger logger)
+        INotificationQueue notificationQueue)
         : IDbWorkItem
     {
-        public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
+        public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
         {
-            // Fetch metadata
-            var imageResult = await connector.GetAsync(platform.Address, imageName, ct);
-            if (!imageResult.IsSuccess(out var image, out var error))
-            {
-                logger.LogError("Pull completed, but failed to retrieve image info: {Error}", error?.Message);
-                return;
-            }
-
-            var imageEntity = image.Map(platform.Id, registry);
-
             // Write to DB
-            await uow.Images.AddOrUpdateAsync(imageEntity, ct);
-            await uow.CommitAsync(ct);
+            await uow.Images.AddOrUpdateAsync(imageEntity, cancellationToken);
+            await uow.CommitAsync(cancellationToken);
 
             // Notify clients
             var imageNotification = new SendImageNotificationWorkItem(imageStream, imageEntity, platform.Id);
-            await notificationQueue.EnqueueAsync(imageNotification, ct);
+            await notificationQueue.EnqueueAsync(imageNotification, cancellationToken);
         }
     }
 

@@ -339,13 +339,6 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getDockerHubRepositoryTags");
 
-        images.MapGet("/dockerhub", Images.GetDockerHubPublicImages)
-            .WithSummary("Search for DockerHub public images. If the image name is empty, a default list of Docker images will be returned.")
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status403Forbidden)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .WithName("getDockerHubPublicImages");
-
         images.MapGet("{platformId}/{imageId}", Images.Inspect)
            .WithSummary("Inspect an image")
            .ProducesValidationProblem()

@@ -6,7 +6,6 @@ public record PullImageCommand(
     string? FromSrc = null,
     string? Repo = null,
     string? Auth = null,
-    string? Tag = null,
-    string? RegistryName = null
+    string? Tag = null
 );
 
