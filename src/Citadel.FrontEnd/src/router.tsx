@@ -10,7 +10,6 @@ const Login = lazy(() => import('@/features/auth/login'));
 const Resources = lazy(() => import('@/pages/resource'));
 const ResourceInfo = lazy(() => import('@/pages/docker-resource-info'));
 const AddPlatform = lazy(() => import('@/pages/add-platform-page'));
-const AddNetwork = lazy(() => import('@/features/docker-resources/networks/forms/add-network'));
 
 export const REDIRECT_TO_KEY = 'redirectTo';
 
@@ -39,7 +38,6 @@ export const Router = () => {
               <Route path=":type/add" element={<ResourceFormPage mode="add" />} />
               <Route path=":type/edit/:id" element={<ResourceFormPage mode="edit" />} />
 
-              <Route path="platforms/:platformId/networks/add" element={<AddNetwork />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Route>

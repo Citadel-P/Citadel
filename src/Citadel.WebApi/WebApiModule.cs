@@ -1,14 +1,15 @@
-﻿using System.Text;
-using System.Text.Json.Serialization;
-using Application.Services.Abstractions;
+﻿using Application.Services.Abstractions;
 using Hosting.OpenApi;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 using Nerdbank.MessagePack;
 using Nerdbank.MessagePack.SignalR;
+using System.Text;
+using System.Text.Json.Serialization;
 using WebApi.Hubs;
 using WebApi.Middlewares;
 using WebApi.Routes;
@@ -23,7 +24,7 @@ internal static class WebApiModule
         services
             .AddOpenApi(options =>
             {
-                options.AddSchemaTransformer<EnumSchemaFilter>();
+                options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_1; 
                 options.AddDocumentTransformer<ServerTransformer>();
                 options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
                 options.AddOperationTransformer<AddCookieOperationTransformer>();

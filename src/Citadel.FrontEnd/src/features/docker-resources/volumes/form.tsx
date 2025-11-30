@@ -3,15 +3,14 @@ import { useAppContext } from '@/lib/context/app-context';
 import { useMutate } from '@/lib/hooks';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
-
 import { FormShell, defineSection, defineField } from '@/components/custom/form-builder';
-
 import { FieldInput } from '@/components/custom/form-builder';
-import { KeyValuePairInput } from '@/components/custom/key-value-pair-input';
-
 import { CreateVolumeInput } from '@/api/generated/api.types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Constants } from '@/lib/constants';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { HelpCircle } from 'lucide-react';
+import { KeyValuePairInput } from '@/components/custom/key-value-pair-input';
 
 const driverOptions = [{ value: 'local', label: 'Local' }];
 
@@ -25,7 +24,7 @@ export default function VolumeForm({ mode }: { mode: 'add' | 'edit' }) {
     platformId: currentPlatform?.id ?? '',
   });
 
-  const original = {} as CreateVolumeInput;
+  const original = { platformId: currentPlatform?.id ?? '' } as CreateVolumeInput;
 
   const onSave = async (merged: CreateVolumeInput) => {
     const payload = {
@@ -101,9 +100,9 @@ export default function VolumeForm({ mode }: { mode: 'add' | 'edit' }) {
         defineField({
           key: 'labels',
           label: 'Labels',
+          description: 'User-defined key/value metadata.',
           render: (value, set) => (
             <KeyValuePairInput
-              label="User-defined key/value metadata."
               value={value ?? []}
               onChange={(next) => set({ labels: next })}
               addButtonLabel="Add label"
@@ -116,15 +115,29 @@ export default function VolumeForm({ mode }: { mode: 'add' | 'edit' }) {
         defineField({
           key: 'options',
           label: 'Driver Options',
+          description: (
+            <div className="flex flex-row gap-1 items-center text-sm text-muted-foreground">
+              A mapping of driver options and values{' '}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HelpCircle className="w-3.5 h-3.5 text-muted-foreground cursor-pointer" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    Handles how the volume&apos;s storage is managed on the underlying system or a remote storage
+                    provider, such as NFS, CIFS, or cloud services.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          ),
           render: (value, set) => (
             <KeyValuePairInput
-              label="A mapping of driver options and values"
               value={value ?? []}
               onChange={(next) => set({ options: next })}
               addButtonLabel="Add driver option"
               keyPlaceHolder="type"
               valuePlaceHolder="nfs"
-              helpText="Handles how the volume's storage is managed on the underlying system or a remote storage provider, such as NFS, CIFS, or cloud services."
             />
           ),
         }),

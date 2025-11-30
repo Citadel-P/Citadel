@@ -32,7 +32,6 @@ export const resources = {
   getGhcrPackageVersions: { method: "GET", key: "getGhcrPackageVersions", params: ["registryName","packageName","params"], requiredParams: ["registryName","packageName"], queryParams: [] },
   getDockerHubRepositories: { method: "GET", key: "getDockerHubRepositories", params: ["registryName","params"], requiredParams: ["registryName"], queryParams: [] },
   getDockerHubRepositoryTags: { method: "GET", key: "getDockerHubRepositoryTags", params: ["registryName","repositoryName","params"], requiredParams: ["registryName","repositoryName"], queryParams: [] },
-  getDockerHubPublicImages: { method: "GET", key: "getDockerHubPublicImages", params: ["query","params"], requiredParams: [], queryParams: ["imageName"] },
   inspectImage: { method: "GET", key: "inspectImage", params: ["platformId","imageId","params"], requiredParams: ["platformId","imageId"], queryParams: [] },
   getImageInfo: { method: "GET", key: "getImageInfo", params: ["platformId","imageId","params"], requiredParams: ["platformId","imageId"], queryParams: [] },
   pullImage: { method: "POST", key: "pullImage", params: ["data","params"], requiredParams: [], queryParams: [] },

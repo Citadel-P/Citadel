@@ -4862,8 +4862,7 @@
           "Always",
           "OnFailure",
           "UnlessStopped"
-        ],
-        "type": "string"
+        ]
       },
       "ContainerRuntimeState": {
         "required": [
@@ -5039,8 +5038,7 @@
           "Removing",
           "Dead",
           "Offline"
-        ],
-        "type": "string"
+        ]
       },
       "ContainerStatsView": {
         "required": [
@@ -5844,8 +5842,7 @@
           "Git",
           "API",
           "CLI"
-        ],
-        "type": "string"
+        ]
       },
       "DeploymentSpec": {
         "required": [
@@ -6078,8 +6075,7 @@
           "Succeeded",
           "Paused",
           "RolledBack"
-        ],
-        "type": "string"
+        ]
       },
       "DeploymentTarget": {
         "required": [
@@ -6251,8 +6247,7 @@
         "enum": [
           "Active",
           "Inactive"
-        ],
-        "type": "string"
+        ]
       },
       "DockerHubImageView": {
         "required": [
@@ -6340,8 +6335,7 @@
         "enum": [
           "Active",
           "Inactive"
-        ],
-        "type": "string"
+        ]
       },
       "DockerHubTagView": {
         "required": [
@@ -6851,8 +6845,7 @@
         "enum": [
           "Organization",
           "User"
-        ],
-        "type": "string"
+        ]
       },
       "GitHubCrPackageVersion": {
         "required": [
@@ -8128,8 +8121,7 @@
           "awslogs",
           "splunk",
           "etwlogs"
-        ],
-        "type": "string"
+        ]
       },
       "LoginRequest": {
         "required": [
@@ -8426,8 +8418,7 @@
           "Unknown",
           "Local",
           "Agent"
-        ],
-        "type": "string"
+        ]
       },
       "PlatformDescriptor": {
         "required": [
@@ -8780,16 +8771,14 @@
         "enum": [
           "Offline",
           "Online"
-        ],
-        "type": "string"
+        ]
       },
       "PlatformType": {
         "enum": [
           "Docker",
           "DockerSwarm",
           "Kubernetes"
-        ],
-        "type": "string"
+        ]
       },
       "PlatformView": {
         "required": [
@@ -9280,8 +9269,7 @@
           "AWS",
           "Gitlab",
           "GitHub"
-        ],
-        "type": "string"
+        ]
       },
       "RegistryView": {
         "required": [
@@ -9427,8 +9415,7 @@
         "enum": [
           "RollingUpdate",
           "Recreate"
-        ],
-        "type": "string"
+        ]
       },
       "SecurityConfig": {
         "required": [
@@ -9664,8 +9651,7 @@
         "enum": [
           "Single",
           "Multi"
-        ],
-        "type": "string"
+        ]
       },
       "VolumeSecret": {
         "required": [
@@ -9688,8 +9674,7 @@
           "ReadOnly",
           "OneWriter",
           "All"
-        ],
-        "type": "string"
+        ]
       },
       "VolumeSpecification": {
         "required": [

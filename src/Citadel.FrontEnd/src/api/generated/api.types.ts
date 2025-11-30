@@ -638,24 +638,6 @@ export interface DeploymentsView {
   deployments: DeploymentInfoView[];
 }
 
-export interface DockerHubImageResult {
-  name: null | string;
-  description: null | string;
-  isOfficial: boolean;
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  starCount: number | string;
-  /**
-   * @format int64
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  pullCount: number | string;
-  url?: null | string;
-  icon?: null | string;
-}
-
 export interface DockerHubImageView {
   architecture: string;
   digest: string;
@@ -2768,38 +2750,6 @@ export class Api<
       >({
         path: `/api/v1/images/dockerhub/${registryName}/${repositoryName}/tags`,
         method: "GET",
-        secure: true,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Images
-     * @name GetDockerHubPublicImages
-     * @summary Search for DockerHub public images. If the image name is empty, a default list of Docker images will be returned.
-     * @request GET:/api/v1/images/dockerhub
-     * @secure
-     * @response `200` `(DockerHubImageResult)[]` OK
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    getDockerHubPublicImages: (
-      query?: {
-        imageName?: string;
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<
-        DockerHubImageResult[],
-        HttpValidationProblemDetails | ProblemDetails
-      >({
-        path: `/api/v1/images/dockerhub`,
-        method: "GET",
-        query: query,
         secure: true,
         format: "json",
         ...params,

@@ -4,6 +4,7 @@ import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { NetworkDropdownActions, NetworkGroupActions } from './actions';
 import { ActionBar } from '@/components/custom/action-bar';
+import NetworkForm from './form';
 
 export const NetworkComponents: RequiredComponents = {
   Icon: <Network className="h-4 w-4" />,
@@ -28,4 +29,10 @@ export const NetworkComponents: RequiredComponents = {
         v.id?.substring(0, 12).toLowerCase().includes(s),
     );
   },
+  Form: ({ mode }) => {
+      return <NetworkForm mode={mode} />;
+    },
+    useFormData: function (_: string | undefined) {
+      return {};
+    },
 };

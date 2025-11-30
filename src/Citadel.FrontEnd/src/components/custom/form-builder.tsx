@@ -538,21 +538,24 @@ export function FormShell<T>({
             {hasChanges && (
               <div className="mt-2 flex flex-col items-center gap-2">
                 {mode === 'edit' && (
-                  <Button
-                    className="w-full text-xs"
-                    variant="outline"
-                    onClick={reset}
-                    disabled={disabled || !hasChanges}>
-                    <History className="w-3 h-3" /> Reset
-                  </Button>
+                  <>
+                    <Button
+                      className="w-full text-xs"
+                      variant="outline"
+                      onClick={reset}
+                      disabled={disabled || !hasChanges}>
+                      <History className="w-3 h-3" /> Reset
+                    </Button>
+
+                    <Button
+                      className="w-full text-xs"
+                      variant="outline"
+                      disabled={!hasChanges}
+                      onClick={() => setPreviewOpen(true)}>
+                      <Eye className="w-3 h-3" /> Preview Changes
+                    </Button>
+                  </>
                 )}
-                <Button
-                  className="w-full text-xs"
-                  variant="outline"
-                  disabled={!hasChanges}
-                  onClick={() => setPreviewOpen(true)}>
-                  <Eye className="w-3 h-3" /> Preview Changes
-                </Button>
                 <Button
                   className="w-full text-xs"
                   disabled={disabled || !isValid || !canSave || pending}
@@ -642,14 +645,17 @@ export function FormShell<T>({
       <div className="xl:hidden sticky bottom-0 bg-background border-t pt-3 pb-3 mt-2">
         <div className="flex justify-end gap-2">
           {mode === 'edit' && (
-            <Button variant="outline" size="sm" onClick={reset} disabled={disabled || !hasChanges}>
-              <History className="w-4 h-4 mr-1" />
-              Reset
-            </Button>
+            <>
+              <Button variant="outline" size="sm" onClick={reset} disabled={disabled || !hasChanges}>
+                <History className="w-4 h-4 mr-1" />
+                Reset
+              </Button>
+
+              <Button variant="outline" size="sm" disabled={!hasChanges} onClick={() => setPreviewOpen(true)}>
+                <Eye className="w-3 h-3" /> Preview Changes
+              </Button>
+            </>
           )}
-          <Button variant="outline" size="sm" disabled={!hasChanges} onClick={() => setPreviewOpen(true)}>
-            <Eye className="w-3 h-3" /> Preview Changes
-          </Button>
           <Button size="sm" onClick={confirm} disabled={disabled || !isValid || !canSave || pending}>
             {pending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />} Save
           </Button>

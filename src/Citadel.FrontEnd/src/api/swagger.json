@@ -2820,84 +2820,6 @@
         ]
       }
     },
-    "/api/v1/images/dockerhub": {
-      "get": {
-        "tags": [
-          "Images"
-        ],
-        "summary": "Search for DockerHub public images. If the image name is empty, a default list of Docker images will be returned.",
-        "operationId": "getDockerHubPublicImages",
-        "parameters": [
-          {
-            "name": "imageName",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/DockerHubImageResult"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
     "/api/v1/images/{platformId}/{imageId}": {
       "get": {
         "tags": [
@@ -4940,8 +4862,7 @@
           "Always",
           "OnFailure",
           "UnlessStopped"
-        ],
-        "type": "string"
+        ]
       },
       "ContainerRuntimeState": {
         "required": [
@@ -5117,8 +5038,7 @@
           "Removing",
           "Dead",
           "Offline"
-        ],
-        "type": "string"
+        ]
       },
       "ContainerStatsView": {
         "required": [
@@ -5922,8 +5842,7 @@
           "Git",
           "API",
           "CLI"
-        ],
-        "type": "string"
+        ]
       },
       "DeploymentSpec": {
         "required": [
@@ -6156,8 +6075,7 @@
           "Succeeded",
           "Paused",
           "RolledBack"
-        ],
-        "type": "string"
+        ]
       },
       "DeploymentTarget": {
         "required": [
@@ -6325,67 +6243,11 @@
           }
         }
       },
-      "DockerHubImageResult": {
-        "required": [
-          "name",
-          "description",
-          "isOfficial",
-          "starCount",
-          "pullCount"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "description": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "isOfficial": {
-            "type": "boolean"
-          },
-          "starCount": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int64"
-          },
-          "pullCount": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int64"
-          },
-          "url": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "icon": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      },
       "DockerHubImageStatus": {
         "enum": [
           "Active",
           "Inactive"
-        ],
-        "type": "string"
+        ]
       },
       "DockerHubImageView": {
         "required": [
@@ -6473,8 +6335,7 @@
         "enum": [
           "Active",
           "Inactive"
-        ],
-        "type": "string"
+        ]
       },
       "DockerHubTagView": {
         "required": [
@@ -6984,8 +6845,7 @@
         "enum": [
           "Organization",
           "User"
-        ],
-        "type": "string"
+        ]
       },
       "GitHubCrPackageVersion": {
         "required": [
@@ -8261,8 +8121,7 @@
           "awslogs",
           "splunk",
           "etwlogs"
-        ],
-        "type": "string"
+        ]
       },
       "LoginRequest": {
         "required": [
@@ -8559,8 +8418,7 @@
           "Unknown",
           "Local",
           "Agent"
-        ],
-        "type": "string"
+        ]
       },
       "PlatformDescriptor": {
         "required": [
@@ -8913,16 +8771,14 @@
         "enum": [
           "Offline",
           "Online"
-        ],
-        "type": "string"
+        ]
       },
       "PlatformType": {
         "enum": [
           "Docker",
           "DockerSwarm",
           "Kubernetes"
-        ],
-        "type": "string"
+        ]
       },
       "PlatformView": {
         "required": [
@@ -9413,8 +9269,7 @@
           "AWS",
           "Gitlab",
           "GitHub"
-        ],
-        "type": "string"
+        ]
       },
       "RegistryView": {
         "required": [
@@ -9560,8 +9415,7 @@
         "enum": [
           "RollingUpdate",
           "Recreate"
-        ],
-        "type": "string"
+        ]
       },
       "SecurityConfig": {
         "required": [
@@ -9797,8 +9651,7 @@
         "enum": [
           "Single",
           "Multi"
-        ],
-        "type": "string"
+        ]
       },
       "VolumeSecret": {
         "required": [
@@ -9821,8 +9674,7 @@
           "ReadOnly",
           "OneWriter",
           "All"
-        ],
-        "type": "string"
+        ]
       },
       "VolumeSpecification": {
         "required": [
