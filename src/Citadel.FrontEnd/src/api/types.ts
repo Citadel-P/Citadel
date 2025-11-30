@@ -133,3 +133,9 @@ export interface DeleteDialogConfig<TItem, TRequest> {
     default?: boolean;
   }[];
 }
+
+export const ReversePluralResourceMap = Object.fromEntries(
+  Object.entries(PluralResourceMap).map(([k, v]) => [v, k]),
+) as {
+  [V in (typeof PluralResourceMap)[keyof typeof PluralResourceMap]]: keyof typeof PluralResourceMap;
+};

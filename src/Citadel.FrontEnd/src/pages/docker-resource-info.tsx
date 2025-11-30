@@ -10,6 +10,8 @@ import Loader from '@/components/ui/loader';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { ProblemDetails } from '@/api/generated/api.types';
 import { DockerResourceInfoComponents } from '@/features';
+import { useSegmentTitle } from '@/lib/atoms';
+import { useEffect } from 'react';
 
 const DockerResourceInfoPage = () => {
   const type = useResourceParamType()!;
@@ -17,7 +19,7 @@ const DockerResourceInfoPage = () => {
   const Components = DockerResourceInfoComponents[type as DockerResourceType];
   if (!Components) return <NotFound />;
 
-  return <ResourceInfoView key={type} Components={Components} type={type} />;
+  return <ResourceInfoView key={type} Components={Components} type={type as DockerResourceType} />;
 };
 
 const ResourceInfoView = <T extends { id: string; name: string }>({ Components, type }: ResourceInfoViewProps<T>) => {
@@ -27,6 +29,14 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
   }>();
 
   const { resource, isLoading, error } = Components.useData(platformId, resourceId);
+  const [_, setSegmentTitle] = useSegmentTitle();
+
+  useEffect(() => {
+    if (resource?.name) {
+      setSegmentTitle({ action: 'inspect', name: resource?.name });
+    }
+  }, [resource?.name, setSegmentTitle]);
+
   const tabs = Components.Tabs ?? [];
   const Header = Components.Header;
 
@@ -78,7 +88,7 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
                 <div ref={sentinelRef} aria-hidden className="h-px" />
                 <div
                   className={cn(
-                    'sticky top-8 z-30 bg-background left-0 right-0 transition-all duration-200',
+                    'sticky top-11.5 z-30 bg-background left-0 right-0 transition-all duration-200',
                     isStuck ? '-mx-4' : 'mx-0',
                   )}>
                   <TabsList className={cn('w-full overflow-x-auto', isStuck && 'border-b rounded-none py-2')}>

@@ -3,8 +3,8 @@ import { useLayoutContext } from '../lib/context/layout-context';
 import { LayoutProvider } from '../lib/context/layout.provider';
 import { AppProvider } from '@/lib/context/app-provider';
 import { useEffect, useRef, useState } from 'react';
-import { Sidebar } from './sidebar/Sidebar';
-import Breadcrumb from './breadcrumb/Breadcrumb';
+import { Sidebar } from './sidebar/sidebar';
+import Breadcrumb from './breadcrumb';
 
 const LayoutPage = () => {
   const breadcrumbRef = useRef<HTMLDivElement>(null);

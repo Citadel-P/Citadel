@@ -3,15 +3,16 @@ import { atom, useAtom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
 import { TaskSpec, TaskSheetState } from '@/components/custom/task-sheet';
 
-export interface DialogState<T> {
-  open: boolean;
-  targets: T[];
-}
-
+const segmentTitleAtom = atom<{ action: string; name: string } | null>(null);
 const taskSheetAtom = atomFamily((_: ResourceType) => atom<TaskSheetState>({ open: false }));
 const selectedResourcesAtoms = atomFamily((_: string) => atom<any[]>([]));
 const resourceFilterAtom = atomFamily((_: ResourceType) => atom<{ item: any } | null>(null));
 const inlineSubHeaderAtom = atomFamily((_: ResourceType) => atom<boolean>(false));
+
+export function useSegmentTitle() {
+  const [segmentTitle, setSegmentTitle] = useAtom(segmentTitleAtom);
+  return [segmentTitle, setSegmentTitle] as const;
+}
 
 export function useSelectedResources<T>(key: ResourceType) {
   const [selected, setSelected] = useAtom(selectedResourcesAtoms(key));
