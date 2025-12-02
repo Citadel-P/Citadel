@@ -23,16 +23,16 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     {
         const string sql = """
             INSERT INTO Registries (
-                Id, Name, Url, Created, Type, Configuration)
+                Id, Name, RegistryHost, Created, Type, Configuration)
             VALUES (
-                @Id, @Name, @Url, @Created, @Type, @Configuration)
+                @Id, @Name, @RegistryHost, @Created, @Type, @Configuration)
         """;
 
         return db.ExecuteAsync(sql, new
         {
             Id = registry.Id.Format(),
-            Name = registry.Name, 
-            Url = registry.Url, 
+            Name = registry.Name,
+            RegistryHost = registry.RegistryHost, 
             Created = registry.Created.ToString(), 
             Type = EnumFormatter<RegistryType>.GetValue(registry.Type),
             Configuration = JsonSerializer.Serialize(registry.Configuration, RegistryJsonContext.Default.RegistryConfigurationBase),
@@ -70,14 +70,14 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     {
         const string sql = """
             UPDATE Registries
-            SET Name = @Name, Url = @Url, Type = @Type, Configuration = @Configuration
+            SET Name = @Name, RegistryHost = @RegistryHost, Type = @Type, Configuration = @Configuration
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
         {
             Id = registry.Id.Format(),
             Name = registry.Name,
-            Url = registry.Url,
+            RegistryHost = registry.RegistryHost,
             Created = registry.Created.ToString(),
             Type = EnumFormatter<RegistryType>.GetValue(registry.Type),
             Configuration = JsonSerializer.Serialize(registry.Configuration, RegistryJsonContext.Default.RegistryConfigurationBase),

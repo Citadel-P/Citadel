@@ -222,7 +222,7 @@ public class RegistryCreateTests : IntegrationTestBase
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             await uow.Registries.AddAsync(new Domain.Entities.Registry(
                 name: "R-NEW",
-                url: "https://existing.url",
+                registryHost: "https://existing.url",
                 type: RegistryType.DockerHub,
                 configuration: new DockerHubRegistry("user", "dummy-pat1234")
             ), TestContext.Current.CancellationToken);

@@ -22,11 +22,6 @@ export enum VolumeScope {
   Multi = "Multi",
 }
 
-export enum ScalingStrategy {
-  RollingUpdate = "RollingUpdate",
-  Recreate = "Recreate",
-}
-
 export enum RegistryType {
   Custom = "Custom",
   DockerHub = "DockerHub",
@@ -84,11 +79,10 @@ export enum DockerHubImageStatus {
 export enum DeploymentStatus {
   Created = "Created",
   Pending = "Pending",
-  Deploying = "Deploying",
-  Running = "Running",
+  Applying = "Applying",
+  Healthy = "Healthy",
+  Degraded = "Degraded",
   Failed = "Failed",
-  Succeeded = "Succeeded",
-  Paused = "Paused",
   RolledBack = "RolledBack",
 }
 
@@ -496,48 +490,8 @@ export interface DeleteVolumesInput {
   force: null | boolean;
 }
 
-export interface DeploymentInfoView {
-  /** @format uuid */
-  id: string;
-  name: string;
-  description: null | string;
-  /** @format date-time */
-  createdAt: any;
-  /** @format date-time */
-  updatedAt: any;
-  /** @format uuid */
-  createdBy: string;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  activeVersion: number | string;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  versionCount: number | string;
-}
-
-export interface DeploymentScaling {
-  strategy: ScalingStrategy;
-  /**
-   * @format int32
-   * @default 1
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  replicas?: number | string;
-  /**
-   * @format int32
-   * @default 1
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  maxParallel?: number | string;
-}
-
 export interface DeploymentSpec {
   imageId: string;
-  target: DeploymentTarget;
   name: null | string;
   workingDir: null | string;
   user: null | string;
@@ -572,47 +526,43 @@ export interface DeploymentSpec {
   command: null | any[];
   hostname?: null | string;
   dns?: null | any[];
-  deploymentScaling?: null | DeploymentScaling;
   security?: null | SecurityConfig;
   loggingConfig?: null | LoggingConfig;
   healthCheck?: null | HealthCheckConfig;
   metadata?: null | object;
 }
 
-export interface DeploymentTarget {
+export interface DeploymentVersionView {
   /** @format uuid */
-  platformId: string;
-  platformName: null | string;
-  /**
-   * @format int32
-   * @default 1
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  replicas?: number | string;
-}
-
-export interface DeploymentVersion {
+  id: string;
+  /** @format uuid */
+  deploymentId: string;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   version: number | string;
   /** @format uuid */
-  createdBy: string;
+  platformId: string;
   spec: DeploymentSpec;
   status: DeploymentStatus;
   source: DeploymentSource;
+  /** @format uuid */
+  createdBy: string;
+  /** @format date-time */
+  createdAt: any;
+  /** @format date-time */
+  updatedAt: any;
+  /** @format uuid */
+  updatedBy: null | string;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
-  rolledBackFromVersion?: null | number | string;
-  gitRepoUrl?: null | string;
-  gitPath?: null | string;
-  gitCommitHash?: null | string;
-  annotations?: null | object;
-  /** @format date-time */
-  createdAt?: any;
+  rolledBackFromVersion: null | number | string;
+  gitRepoUrl: null | string;
+  gitPath: null | string;
+  gitCommitHash: null | string;
 }
 
 export interface DeploymentView {
@@ -626,16 +576,13 @@ export interface DeploymentView {
   updatedAt: any;
   /** @format uuid */
   createdBy: string;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  activeVersion: number | string;
-  versions: DeploymentVersion[];
+  /** @format uuid */
+  updatedBy: null | string;
+  activeVersion: null | DeploymentVersionView;
 }
 
 export interface DeploymentsView {
-  deployments: DeploymentInfoView[];
+  deployments: DeploymentView[];
 }
 
 export interface DockerHubImageView {
@@ -1492,7 +1439,7 @@ export interface RegistryConfigurationBaseGitlabRegistry {
 
 export interface RegistryInput {
   name: string;
-  url: string;
+  registryHost: string;
   type: RegistryType;
   configuration: RegistryConfigurationBase;
 }
@@ -1501,7 +1448,7 @@ export interface RegistryView {
   /** @format uuid */
   id: string;
   name: string;
-  url: string;
+  registryHost: string;
   type: RegistryType;
   /** @format date-time */
   created: any;
@@ -1512,7 +1459,7 @@ export interface RegistryWithConfigView {
   /** @format uuid */
   id: string;
   name: string;
-  url: string;
+  registryHost: string;
   type: RegistryType;
   /** @format date-time */
   created: any;

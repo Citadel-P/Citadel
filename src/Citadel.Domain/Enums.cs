@@ -184,13 +184,30 @@ public enum LoggingDriverType
 
 public enum DeploymentStatus
 {
+    /// <summary>
+    /// Spec written but not applied
+    /// </summary>
     Created,
+    /// <summary>
+    /// Queued to be applied
+    /// </summary>
     Pending,
-    Deploying,
-    Running,
+    /// <summary>
+    /// Actively applying
+    /// </summary>
+    Applying,
+    /// <summary>
+    /// Running OK
+    /// </summary>
+    Healthy,
+    /// <summary>
+    /// Drift / errors
+    /// </summary>
+    Degraded,
     Failed,
-    Succeeded,
-    Paused,
+    /// <summary>
+    /// Replaced by older version
+    /// </summary>
     RolledBack
 }
 

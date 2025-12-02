@@ -1,7 +1,7 @@
 ﻿{
   id: Guid_1,
   name: UpdatedName,
-  url: https://original.url,
+  registryHost: https://original.url,
   type: DockerHub,
   created: DateTimeOffset_1,
   isDefault: false

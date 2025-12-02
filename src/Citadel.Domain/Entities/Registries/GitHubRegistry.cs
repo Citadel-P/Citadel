@@ -8,6 +8,6 @@ public record GitHubRegistry(string Name, string PAT, GhcrAccountType Type) : Re
     public static GitHubRegistry Create(string name, string PAT, GhcrAccountType type) =>
         new (name, PAT, type);
 
-    public override string GetRegistryAuth(string registryUrl) => new RegistryAuth(Name, PAT, registryUrl).GetAuth();
+    public override string GetRegistryAuth(string registryHost) => new RegistryAuth(Name, PAT, registryHost).GetAuth();
 }
 

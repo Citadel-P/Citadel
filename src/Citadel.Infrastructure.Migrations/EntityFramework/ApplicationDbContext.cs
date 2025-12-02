@@ -23,6 +23,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .RoleConfiguration()
             .UserTeamConfiguration()
             .DeploymentConfiguration()
+            .DeploymentVersionConfiguration()
             .ImageConfiguration();
 
         SeedDb(modelBuilder);
@@ -34,8 +35,8 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
         {
             Id = Guid.Parse("bdde9601-3b03-1275-a11b-98533d063a04"),
             Name = "Admin",
-            CreatedAt = "2026-01-01 00:00:00",
-            UpdatedAt = "2026-01-01 00:00:00"
+            CreatedAt = DateTime.Parse("2026-01-01"),
+            UpdatedAt = DateTime.Parse("2026-01-01 00:00:00")
         });
 
         // --- Users ---
@@ -45,8 +46,8 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             Name = "admin",
             Email = "admin@admin.com",
             Password = "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1",
-            CreatedAt = "2026-01-01 00:00:00",
-            UpdatedAt = "2026-01-01 00:00:00"
+            CreatedAt = DateTime.Parse("2026-01-01"),
+            UpdatedAt = DateTime.Parse("2026-01-01")
         });
 
         // --- Teams ---
@@ -153,8 +154,6 @@ internal static class Configuration
         var tableName = "ContainerStats";
         var stat = builder.Entity("ContainerStat");
 
-        stat.ToTable("ContainerStats");
-
         stat.ToTable(tableName);
 
         stat.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
@@ -221,7 +220,7 @@ internal static class Configuration
         registry.HasKey("Id");
 
         registry.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        registry.Property<string>("Url").HasColumnType("TEXT").IsRequired();
+        registry.Property<string?>("RegistryHost").HasColumnType("TEXT").IsRequired();
         registry.Property<long>("Created").HasColumnType("TEXT").IsRequired();
         registry.Property<string>("Type").HasColumnType("TEXT").IsRequired();
         registry.Property<string>("Configuration").HasColumnType("TEXT").IsRequired();
@@ -267,8 +266,8 @@ internal static class Configuration
         user.Property<string>("Name").HasColumnType("TEXT").IsRequired();
         user.Property<string>("Email").HasColumnType("TEXT").IsRequired();
         user.Property<string>("Password").HasColumnType("TEXT").IsRequired();
-        user.Property<string>("CreatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValue("2000-01-01 00:00:00");
-        user.Property<string>("UpdatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValue("2000-01-01 00:00:00");
+        user.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValue("2000-01-01 00:00:00");
+        user.Property<DateTime>("UpdatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValue("2000-01-01 00:00:00");
         user.HasIndex("Email").IsUnique().HasDatabaseName($"IX_{tableName}_Email");
 
         return builder;
@@ -332,8 +331,8 @@ internal static class Configuration
         role.HasKey("Id");
 
         role.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        role.Property<string>("CreatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValue("2000-01-01 00:00:00");
-        role.Property<string>("UpdatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValue("2000-01-01 00:00:00");
+        role.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValue("2000-01-01 00:00:00");
+        role.Property<DateTime>("UpdatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValue("2000-01-01 00:00:00");
 
         return builder;
     }
@@ -374,20 +373,83 @@ internal static class Configuration
         deployment.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         deployment.HasKey("Id");
 
-        deployment.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         deployment.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        deployment.Property<string>("ConfigJson").HasColumnType("TEXT").IsRequired();
-        deployment.Property<int>("Version").HasColumnType("INTEGER").IsRequired();
-        deployment.Property<string>("Created").HasColumnType("TEXT").IsRequired();
-        deployment.Property<string>("Updated").HasColumnType("TEXT").IsRequired();
+        deployment.Property<string>("Description").HasColumnType("TEXT").IsRequired(false);
+        deployment.Property<Guid?>("ActiveVersionId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
+        deployment.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired();
+        deployment.Property<DateTime?>("UpdatedAt").HasColumnType("TEXT").IsRequired();
+        deployment.Property<Guid>("CreatedBy").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        deployment.Property<Guid?>("UpdatedBy").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
 
         deployment
+            .HasOne("User")
+            .WithMany()
+            .HasForeignKey("CreatedBy")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        deployment
+            .HasOne("User")
+            .WithMany()
+            .HasForeignKey("UpdatedBy")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        deployment.HasIndex("CreatedBy").HasDatabaseName($"IX_{tableName}_CreatedBy");
+        deployment.HasIndex("UpdatedBy").HasDatabaseName($"IX_{tableName}_UpdatedBy");
+
+        return builder;
+    }
+
+    public static ModelBuilder DeploymentVersionConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "DeploymentVersions";
+        var deploymentVersion = builder.Entity("DeploymentVersion");
+
+        deploymentVersion.ToTable(tableName);
+
+        deploymentVersion.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        deploymentVersion.HasKey("Id");
+
+        deploymentVersion.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        deploymentVersion.Property<int>("Version").HasColumnType("INTEGER").IsRequired();
+        deploymentVersion.Property<int?>("RolledBackFromVersion").HasColumnType("INTEGER").IsRequired(false);
+        deploymentVersion.Property<string>("Spec").HasColumnType("TEXT").IsRequired();
+        deploymentVersion.Property<string>("Status").HasColumnType("TEXT").IsRequired();
+        deploymentVersion.Property<string>("Source").HasColumnType("TEXT").IsRequired();
+        deploymentVersion.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired();
+        deploymentVersion.Property<DateTime?>("UpdatedAt").HasColumnType("TEXT").IsRequired();
+        deploymentVersion.Property<Guid>("CreatedBy").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        deploymentVersion.Property<Guid?>("UpdatedBy").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
+        deploymentVersion.Property<string>("GitRepoUrl").HasColumnType("TEXT");
+        deploymentVersion.Property<string>("GitPath").HasColumnType("TEXT");
+        deploymentVersion.Property<string>("GitCommitHash").HasColumnType("TEXT");
+
+        deploymentVersion
             .HasOne("Platform")
             .WithMany()
             .HasForeignKey("PlatformId")
             .OnDelete(DeleteBehavior.Cascade);
 
-        deployment.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
+        deploymentVersion
+            .HasOne("User")
+            .WithMany()
+            .HasForeignKey("CreatedBy")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        deploymentVersion
+           .HasOne("User")
+           .WithMany()
+           .HasForeignKey("UpdatedBy")
+           .OnDelete(DeleteBehavior.Restrict);
+
+        deploymentVersion
+            .HasOne("Deployment")
+            .WithMany("Versions")
+            .HasForeignKey("DeploymentId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        deploymentVersion.HasIndex("CreatedBy").HasDatabaseName($"IX_{tableName}_CreatedBy");
+        deploymentVersion.HasIndex("UpdatedBy").HasDatabaseName($"IX_{tableName}_UpdatedBy");
+        deploymentVersion.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
 
         return builder;
     }
@@ -435,6 +497,5 @@ internal static class Configuration
     private static readonly ValueConverter<Guid, string> GuidConverter = new(
        g => g.ToString("D").ToLowerInvariant(),
        s => Guid.Parse(s)
-    );
+    );    
 }
-

@@ -329,8 +329,8 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                   label: 'General',
                   fields: [
                     defineField({
-                      key: 'url',
-                      label: 'Registry URL',
+                      key: 'registryHost',
+                      label: 'Registry Host',
                       required: true,
                       description: (
                         <div className="flex flex-row flex-wrap text-sm gap-1 text-muted-foreground">
@@ -338,12 +338,12 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                           only — no protocol.
                         </div>
                       ),
-                      validate: (v) => (!new RegExp(Constants.validHostOrIp).test(v) ? 'Invalid url or ip' : null),
+                      validate: (v) => (!new RegExp(Constants.validHostOrIp).test(v) ? 'Invalid host' : null),
                       render: (value, set) => (
                         <FieldInput
                           value={value ?? ''}
                           placeholder="myregistry.example"
-                          onChange={(v) => set({ url: v })}
+                          onChange={(v) => set({ registryHost: v })}
                         />
                       ),
                     }),

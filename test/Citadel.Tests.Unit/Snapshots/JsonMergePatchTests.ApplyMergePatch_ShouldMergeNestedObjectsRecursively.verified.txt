@@ -1,7 +1,7 @@
 ﻿{
   Id: Guid_1,
   Name: MyRegistry,
-  Url: http://localhost:1234/registry,
+  RegistryHost: http://localhost:1234/registry,
   Created: DateTime_1,
   Type: DockerHub,
   Configuration: {

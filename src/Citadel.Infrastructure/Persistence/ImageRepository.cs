@@ -30,7 +30,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.RegistryId,
                 r.Name AS RegistryName,
                 r.Type AS RegistryType,
-                r.Url AS RegistryUrl,
+                r.RegistryHost AS RegistryHost,
                 r.Created As RegistryCreated
             FROM Images i
             LEFT JOIN Registries r
@@ -61,7 +61,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.RegistryId,
                 r.Name AS RegistryName,
                 r.Type AS RegistryType,
-                r.Url AS RegistryUrl,
+                r.RegistryHost AS RegistryHost,
                 r.Created As RegistryCreated
             FROM Images i
             LEFT JOIN Registries r

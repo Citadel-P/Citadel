@@ -115,11 +115,11 @@ const columns = (
     },
   },
   {
-    accessorKey: 'url',
-    header: ({ column }) => <SortableCell cellName="Url" column={column} />,
-    cell: ({ row }) => <div>{row.original.url}</div>,
+    accessorKey: 'registryHost',
+    header: ({ column }) => <SortableCell cellName="Host" column={column} />,
+    cell: ({ row }) => <div>{row.original.registryHost}</div>,
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
-      return rowA.original.url.localeCompare(rowB.original.url);
+      return rowA.original.registryHost.localeCompare(rowB.original.registryHost);
     },
   },
   {

@@ -15,8 +15,14 @@ export function RegistryDisplay({ registry }: { registry: RegistryView | undefin
         <HoverCardContent className="flex flex-col gap-3 p-3 text-sm bg-background w-fit">
           <div
             className="flex items-center justify-center gap-1 hover:underline cursor-pointer"
-            onClick={() => window.open(registry.url == '' ? 'https://hub.docker.com' : registry.url, '_blank')}>
-            <Link width={12} height={10} /> {registry.url == '' ? 'https://hub.docker.com' : registry.url}
+            onClick={() =>
+              window.open(
+                registry.registryHost == '' ? 'https://hub.docker.com' : 'https://' + registry.registryHost,
+                '_blank',
+              )
+            }>
+            <Link width={12} height={10} />{' '}
+            {registry.registryHost == '' ? 'https://hub.docker.com' : 'https://' + registry.registryHost}
           </div>
           <span className="text-foreground/75">Provider: {registry.type}</span>
         </HoverCardContent>

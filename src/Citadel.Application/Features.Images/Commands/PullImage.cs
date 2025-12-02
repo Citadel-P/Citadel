@@ -31,7 +31,7 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
 
     internal PullImageCommand ToConnectorCommand(string platformAddress, Registry registry)
     {
-        string domainName = registry.Url.Replace("https://", "").ToLower();
+        string domainName = registry.RegistryHost.Replace("https://", "").ToLower();
         switch (registry.Configuration)
         {
             case GitHubRegistry ghCfg:

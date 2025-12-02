@@ -55,3 +55,12 @@ public partial class ContainerPortsContext : JsonSerializerContext
 public partial class ImagTagsContext : JsonSerializerContext
 {
 }
+
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
+[JsonSerializable(typeof(DeploymentSpec))]
+[JsonSerializable(typeof(SecurityConfig))]
+[JsonSerializable(typeof(LoggingConfig))]
+[JsonSerializable(typeof(HealthCheckConfig))]
+public partial class  DeploymentContext: JsonSerializerContext
+{ 
+}

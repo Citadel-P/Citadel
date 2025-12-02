@@ -27,7 +27,7 @@ internal static class ImageMappers
                     id: image?.RegistryId ?? Guid.Empty,
                     name: image?.RegistryName ?? "",
                     type: image?.RegistryType == null ? RegistryType.DockerHub : Enum.Parse <RegistryType>(image.RegistryType),
-                    url: image?.RegistryUrl ?? "",
+                    registryHost: image?.RegistryHost ?? "",
                     created: image?.RegistryCreated ?? DateTime.MinValue,
                     configuration: null)
             );

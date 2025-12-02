@@ -9,7 +9,7 @@ public record AWSRegistry(string AccessKey, bool AuthenticationRequired, string 
     public static AWSRegistry Create(bool authenticationRequired, string accessKey, string secretAccessKey, string region)
         => new (accessKey, authenticationRequired, secretAccessKey, region);
 
-    public override string GetRegistryAuth(string registryUrl)
+    public override string GetRegistryAuth(string registryHost)
     {
         throw new NotImplementedException();
     }

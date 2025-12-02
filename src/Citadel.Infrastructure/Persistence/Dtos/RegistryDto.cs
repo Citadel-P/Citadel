@@ -3,7 +3,7 @@
 internal sealed record RegistryDto(
     Guid Id,
     string Name,
-    string Url,
+    string RegistryHost,
     string Created, // DateTime
     string Type, // RegistryType
     string Configuration // RegistryConfigurationBase

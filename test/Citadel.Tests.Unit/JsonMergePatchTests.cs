@@ -49,7 +49,7 @@ public class JsonMergePatchTests
         // Arrange
         var original = new Registry(
             name: "MyRegistry",
-            url: "http://localhost:1234/registry",
+            registryHost: "http://localhost:1234/registry",
             type: RegistryType.DockerHub,
             configuration: new DockerHubRegistry(
                 UserName: "username-1",

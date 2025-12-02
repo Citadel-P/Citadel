@@ -13,7 +13,7 @@ namespace Domain.Entities.Registries;
 [JsonDerivedType(typeof(CustomRegistry), nameof(RegistryType.Custom))]
 public abstract record RegistryConfigurationBase
 {
-    public virtual string GetRegistryAuth(string registryUrl) 
+    public virtual string GetRegistryAuth(string registryHost)
     {
         return string.Empty;
     }

@@ -18,7 +18,7 @@ public class RegistryPatchTests : IntegrationTestBase
     {
         var registry = new Registry(
             name: "OriginalName",
-            url: "https://original.url",
+            registryHost: "https://original.url",
             type: RegistryType.DockerHub,
             configuration: new DockerHubRegistry("original-user", "pat123")
         );

@@ -19,7 +19,6 @@ public class Platform(
     PlatformDescriptor platformDescriptor)
 {
     private readonly List<PlatformStat> stats = [];
-
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public string Name { get; internal set; } = name;
     public string Address { get; internal set; } = address;

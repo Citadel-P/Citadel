@@ -7,11 +7,25 @@ namespace WebApi.Routes.Endpoints.Resources.Registries;
 
 public sealed record RegistryInput(
     string Name, 
-    string Url,
+    string RegistryHost,
     [property: JsonConverter(typeof(Citadel.GeneratedConverters.SafeRegistryTypeConverter))]
     RegistryType Type,
     RegistryConfigurationBase Configuration
     )
 {
-    internal CreateRegistry ToCommand() => new(Name, Url, Type, Configuration);
+    internal CreateRegistry ToCommand() => new(Name, GetRegistryHost(), Type, Configuration);
+
+    private string GetRegistryHost()
+    {
+        if (Type == RegistryType.DockerHub)
+        {
+            return "docker.io";
+        }
+        else if (Type == RegistryType.GitHub)
+        {
+            return "ghcr.io";
+        }
+
+        return RegistryHost;
+    }
 }

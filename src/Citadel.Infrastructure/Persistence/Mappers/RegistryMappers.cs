@@ -15,7 +15,7 @@ internal static class RegistryMappers
         return Registry.FromPersistence(
             id: dto.Id,
             name: dto.Name,
-            url: dto.Url,
+            registryHost: dto.RegistryHost,
             created: DateTime.Parse(dto.Created),
             type: Enum.Parse<RegistryType>(dto.Type),
             configuration: JsonSerializer.Deserialize(dto.Configuration, RegistryJsonContext.Default.RegistryConfigurationBase)

@@ -1733,7 +1733,7 @@
                 "Azure": {
                   "value": {
                     "Name": "my-azure-registry",
-                    "Url": "myproject.azurecr.io",
+                    "RegistryHost": "myproject.azurecr.io",
                     "Type": "Azure",
                     "Configuration": {
                       "$type": "Azure",
@@ -1745,7 +1745,7 @@
                 "AWS": {
                   "value": {
                     "Name": "my-ecr-registry",
-                    "Url": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
+                    "RegistryHost": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
                     "Type": "AWS",
                     "Configuration": {
                       "$type": "AWS",
@@ -1759,7 +1759,7 @@
                 "Gitlab": {
                   "value": {
                     "Name": "",
-                    "Url": "https://registry.gitlab.com",
+                    "RegistryHost": "https://registry.gitlab.com",
                     "Type": "Gitlab",
                     "Configuration": {
                       "$type": "Gitlab",
@@ -1772,7 +1772,7 @@
                 "DockerHub": {
                   "value": {
                     "Name": "my-custom-registry",
-                    "Url": "",
+                    "RegistryHost": "",
                     "Type": "DockerHub",
                     "Configuration": {
                       "$type": "DockerHub",
@@ -1784,7 +1784,7 @@
                 "GitHub": {
                   "value": {
                     "Name": "my-custom-registry",
-                    "Url": "",
+                    "RegistryHost": "",
                     "Type": "GitHub",
                     "Configuration": {
                       "$type": "GitHub",
@@ -1797,7 +1797,7 @@
                 "Custom": {
                   "value": {
                     "Name": "my-custom-registry",
-                    "Url": "localhost:9965",
+                    "RegistryHost": "localhost:9965",
                     "Type": "Custom",
                     "Configuration": {
                       "$type": "Custom",
@@ -2074,7 +2074,7 @@
                 "Azure": {
                   "value": {
                     "Name": "my-azure-registry",
-                    "Url": "myproject.azurecr.io",
+                    "RegistryHost": "myproject.azurecr.io",
                     "Type": "Azure",
                     "Configuration": {
                       "$type": "Azure",
@@ -2086,7 +2086,7 @@
                 "AWS": {
                   "value": {
                     "Name": "my-ecr-registry",
-                    "Url": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
+                    "RegistryHost": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
                     "Type": "AWS",
                     "Configuration": {
                       "$type": "AWS",
@@ -2100,7 +2100,7 @@
                 "Gitlab": {
                   "value": {
                     "Name": "",
-                    "Url": "https://registry.gitlab.com",
+                    "RegistryHost": "https://registry.gitlab.com",
                     "Type": "Gitlab",
                     "Configuration": {
                       "$type": "Gitlab",
@@ -2113,7 +2113,7 @@
                 "DockerHub": {
                   "value": {
                     "Name": "my-custom-registry",
-                    "Url": "",
+                    "RegistryHost": "",
                     "Type": "DockerHub",
                     "Configuration": {
                       "$type": "DockerHub",
@@ -2125,7 +2125,7 @@
                 "GitHub": {
                   "value": {
                     "Name": "my-custom-registry",
-                    "Url": "",
+                    "RegistryHost": "",
                     "Type": "GitHub",
                     "Configuration": {
                       "$type": "GitHub",
@@ -2138,7 +2138,7 @@
                 "Custom": {
                   "value": {
                     "Name": "my-custom-registry",
-                    "Url": "localhost:9965",
+                    "RegistryHost": "localhost:9965",
                     "Type": "Custom",
                     "Configuration": {
                       "$type": "Custom",
@@ -2158,7 +2158,7 @@
                 "Azure": {
                   "value": {
                     "Name": "my-azure-registry",
-                    "Url": "myproject.azurecr.io",
+                    "RegistryHost": "myproject.azurecr.io",
                     "Type": "Azure",
                     "Configuration": {
                       "$type": "Azure",
@@ -2170,7 +2170,7 @@
                 "AWS": {
                   "value": {
                     "Name": "my-ecr-registry",
-                    "Url": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
+                    "RegistryHost": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
                     "Type": "AWS",
                     "Configuration": {
                       "$type": "AWS",
@@ -2184,7 +2184,7 @@
                 "Gitlab": {
                   "value": {
                     "Name": "",
-                    "Url": "https://registry.gitlab.com",
+                    "RegistryHost": "https://registry.gitlab.com",
                     "Type": "Gitlab",
                     "Configuration": {
                       "$type": "Gitlab",
@@ -2197,7 +2197,7 @@
                 "DockerHub": {
                   "value": {
                     "Name": "my-custom-registry",
-                    "Url": "",
+                    "RegistryHost": "",
                     "Type": "DockerHub",
                     "Configuration": {
                       "$type": "DockerHub",
@@ -2209,7 +2209,7 @@
                 "GitHub": {
                   "value": {
                     "Name": "my-custom-registry",
-                    "Url": "",
+                    "RegistryHost": "",
                     "Type": "GitHub",
                     "Configuration": {
                       "$type": "GitHub",
@@ -2222,7 +2222,7 @@
                 "Custom": {
                   "value": {
                     "Name": "my-custom-registry",
-                    "Url": "localhost:9965",
+                    "RegistryHost": "localhost:9965",
                     "Type": "Custom",
                     "Configuration": {
                       "$type": "Custom",
@@ -5753,89 +5753,6 @@
           }
         }
       },
-      "DeploymentInfoView": {
-        "required": [
-          "id",
-          "name",
-          "description",
-          "createdAt",
-          "updatedAt",
-          "createdBy",
-          "activeVersion",
-          "versionCount"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "createdAt": {
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "format": "date-time"
-          },
-          "createdBy": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "activeVersion": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
-          "versionCount": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          }
-        }
-      },
-      "DeploymentScaling": {
-        "required": [
-          "strategy"
-        ],
-        "type": "object",
-        "properties": {
-          "strategy": {
-            "$ref": "#/components/schemas/ScalingStrategy"
-          },
-          "replicas": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32",
-            "default": 1
-          },
-          "maxParallel": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32",
-            "default": 1
-          }
-        }
-      },
       "DeploymentSource": {
         "enum": [
           "UI",
@@ -5847,7 +5764,6 @@
       "DeploymentSpec": {
         "required": [
           "imageId",
-          "target",
           "name",
           "workingDir",
           "user",
@@ -5869,9 +5785,6 @@
         "properties": {
           "imageId": {
             "type": "string"
-          },
-          "target": {
-            "$ref": "#/components/schemas/DeploymentTarget"
           },
           "name": {
             "type": [
@@ -6014,16 +5927,6 @@
               "type": "string"
             }
           },
-          "deploymentScaling": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/DeploymentScaling"
-              }
-            ]
-          },
           "security": {
             "oneOf": [
               {
@@ -6069,52 +5972,41 @@
         "enum": [
           "Created",
           "Pending",
-          "Deploying",
-          "Running",
+          "Applying",
+          "Healthy",
+          "Degraded",
           "Failed",
-          "Succeeded",
-          "Paused",
           "RolledBack"
         ]
       },
-      "DeploymentTarget": {
+      "DeploymentVersionView": {
         "required": [
+          "id",
+          "deploymentId",
+          "version",
           "platformId",
-          "platformName"
+          "spec",
+          "status",
+          "source",
+          "createdBy",
+          "createdAt",
+          "updatedAt",
+          "updatedBy",
+          "rolledBackFromVersion",
+          "gitRepoUrl",
+          "gitPath",
+          "gitCommitHash"
         ],
         "type": "object",
         "properties": {
-          "platformId": {
+          "id": {
             "type": "string",
             "format": "uuid"
           },
-          "platformName": {
-            "type": [
-              "null",
-              "string"
-            ]
+          "deploymentId": {
+            "type": "string",
+            "format": "uuid"
           },
-          "replicas": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32",
-            "default": 1
-          }
-        }
-      },
-      "DeploymentVersion": {
-        "required": [
-          "version",
-          "createdBy",
-          "spec",
-          "status",
-          "source"
-        ],
-        "type": "object",
-        "properties": {
           "version": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
@@ -6123,7 +6015,7 @@
             ],
             "format": "int32"
           },
-          "createdBy": {
+          "platformId": {
             "type": "string",
             "format": "uuid"
           },
@@ -6135,6 +6027,23 @@
           },
           "source": {
             "$ref": "#/components/schemas/DeploymentSource"
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "format": "date-time"
+          },
+          "updatedBy": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           },
           "rolledBackFromVersion": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -6162,18 +6071,6 @@
               "null",
               "string"
             ]
-          },
-          "annotations": {
-            "type": [
-              "null",
-              "object"
-            ],
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "createdAt": {
-            "format": "date-time"
           }
         }
       },
@@ -6185,8 +6082,8 @@
           "createdAt",
           "updatedAt",
           "createdBy",
-          "activeVersion",
-          "versions"
+          "updatedBy",
+          "activeVersion"
         ],
         "type": "object",
         "properties": {
@@ -6213,19 +6110,22 @@
             "type": "string",
             "format": "uuid"
           },
-          "activeVersion": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
+          "updatedBy": {
             "type": [
-              "integer",
+              "null",
               "string"
             ],
-            "format": "int32"
+            "format": "uuid"
           },
-          "versions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DeploymentVersion"
-            }
+          "activeVersion": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DeploymentVersionView"
+              }
+            ]
           }
         }
       },
@@ -6238,7 +6138,7 @@
           "deployments": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/DeploymentInfoView"
+              "$ref": "#/components/schemas/DeploymentView"
             }
           }
         }
@@ -9241,7 +9141,7 @@
       "RegistryInput": {
         "required": [
           "name",
-          "url",
+          "registryHost",
           "type",
           "configuration"
         ],
@@ -9250,7 +9150,7 @@
           "name": {
             "type": "string"
           },
-          "url": {
+          "registryHost": {
             "type": "string"
           },
           "type": {
@@ -9275,7 +9175,7 @@
         "required": [
           "id",
           "name",
-          "url",
+          "registryHost",
           "type",
           "created"
         ],
@@ -9288,7 +9188,7 @@
           "name": {
             "type": "string"
           },
-          "url": {
+          "registryHost": {
             "type": "string"
           },
           "type": {
@@ -9306,7 +9206,7 @@
         "required": [
           "id",
           "name",
-          "url",
+          "registryHost",
           "type",
           "created",
           "configuration"
@@ -9320,7 +9220,7 @@
           "name": {
             "type": "string"
           },
-          "url": {
+          "registryHost": {
             "type": "string"
           },
           "type": {
@@ -9410,12 +9310,6 @@
             "format": "double"
           }
         }
-      },
-      "ScalingStrategy": {
-        "enum": [
-          "RollingUpdate",
-          "Recreate"
-        ]
       },
       "SecurityConfig": {
         "required": [

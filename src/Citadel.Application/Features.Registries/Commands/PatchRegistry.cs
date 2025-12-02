@@ -34,11 +34,8 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
             RuleFor(x => x.Type)
                 .Must(d => Enum.IsDefined(d))
                 .WithMessage("'{PropertyName}' must be a valid type");
+            When(s => s.Name != null, () => RuleFor(x => x.RegistryHost).Matches(Validators.RegistryUrlRegex).WithMessage("Please provide a valid host name eg: ghcr.io"));
 
-            When(x => x.Configuration is not DockerHubRegistry && x.Configuration is not GitHubRegistry, () =>
-            {
-                When(s => s.Name != null, () => RuleFor(x => x.Url).Matches(Validators.RegistryUrlRegex).WithMessage("Please provide a valid URL"));
-            });
             When(x => x.Configuration is DockerHubRegistry, () =>
             {
                 RuleFor(x => x.Configuration as DockerHubRegistry).SetValidator(new DockerHubRegistryValidator()!);
@@ -158,7 +155,7 @@ internal class PatchRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorRe
             return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
         }
 
-        registry.PartialUpdate(name: patchedRegistry.Name, url: patchedRegistry.Url, configuration: patchedRegistry.Configuration);
+        registry.PartialUpdate(name: patchedRegistry.Name, registryHost: patchedRegistry.RegistryHost, configuration: patchedRegistry.Configuration);
         await unitOfWork.Registries.UpdateAsync(registry, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 

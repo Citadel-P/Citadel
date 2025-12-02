@@ -15,7 +15,7 @@ namespace Application.Features.Registries.Commands;
 [RequirePermission(nameof(AppPermission.Registry_Create))]
 public sealed record CreateRegistry(
     string Name, 
-    string Url, 
+    string RegistryHost, 
     RegistryType Type, 
     RegistryConfigurationBase Configuration) : ICommand<Result<Registry>>
 {
@@ -28,10 +28,8 @@ public sealed record CreateRegistry(
                 .Must(d => Enum.IsDefined(d))
                 .WithMessage("'{PropertyName}' must be a valid type");
 
-            When(x => x.Configuration is not DockerHubRegistry && x.Configuration is not GitHubRegistry, () =>
-            {
-                RuleFor(x => x.Url).Matches(Validators.RegistryUrlRegex).WithMessage("Please provide a valid URL");
-            });
+            RuleFor(x => x.RegistryHost).Matches(Validators.RegistryUrlRegex).WithMessage("Please provide a valid host name eg: ghcr.io");
+
             When(x => x.Configuration is DockerHubRegistry, () =>
             {
                 RuleFor(x => x.Configuration as DockerHubRegistry).SetValidator(new DockerHubRegistryValidator()!);
@@ -141,7 +139,7 @@ internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorR
             return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
         }
 
-        var registry = new Registry(name: command.Name, url: command.Url, type: command.Type, configuration: command.Configuration);
+        var registry = new Registry(name: command.Name, registryHost: command.RegistryHost, type: command.Type, configuration: command.Configuration);
         await unitOfWork.Registries.AddAsync(registry, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 

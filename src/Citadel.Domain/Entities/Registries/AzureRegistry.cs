@@ -8,7 +8,7 @@ public record AzureRegistry(string UserName, string Password) : RegistryConfigur
     public static AzureRegistry Create(string userName, string password) => 
         new (userName, password);
 
-    public override string GetRegistryAuth(string registryUrl)
+    public override string GetRegistryAuth(string registryHost)
     {
         throw new NotImplementedException();
     }
