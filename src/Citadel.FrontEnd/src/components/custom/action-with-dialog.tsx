@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { useSelectedResources } from '@/lib/atoms';
 import { ResourceType } from '@/api/types';
-import { useConfirmByName } from '@/lib/hooks';
+import { useConfirmByName, useDialogHotkeys } from '@/lib/hooks';
 
 export const ActionButton = forwardRef<
   HTMLButtonElement,
@@ -105,6 +105,14 @@ export const ActionWithDialog = ({
     onConfirm: onClick,
     onClose: () => setOpen(false),
     hotkeysEnabled: open,
+  });
+
+  useDialogHotkeys({
+    enabled: open,
+    onConfirm: handleConfirm,
+    onCancel: () => setOpen(false),
+    confirmDisabled: isConfirmDisabled,
+    confirmButtonRef,
   });
 
   return (
@@ -214,6 +222,13 @@ export const GroupActionWithDialog = <T extends { id: string; name: string }>({
     onConfirm: onClick,
     onClose: () => setOpen(false),
     hotkeysEnabled: open,
+  });
+  useDialogHotkeys({
+    enabled: open,
+    onConfirm: handleConfirm,
+    onCancel: () => setOpen(false),
+    confirmDisabled: isConfirmDisabled,
+    confirmButtonRef,
   });
   return (
     <Dialog

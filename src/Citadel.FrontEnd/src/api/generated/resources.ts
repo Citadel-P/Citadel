@@ -46,6 +46,8 @@ export const resources = {
   deleteVolumes: { method: "DELETE", key: "deleteVolumes", params: ["params"], requiredParams: [], queryParams: [] },
   composeUp: { method: "POST", key: "composeUp", params: ["data","params"], requiredParams: [], queryParams: [] },
   listDeployments: { method: "GET", key: "listDeployments", params: ["params"], requiredParams: [], queryParams: [] },
+  createDeployment: { method: "POST", key: "createDeployment", params: ["data","params"], requiredParams: [], queryParams: [] },
+  deleteDeployments: { method: "DELETE", key: "deleteDeployments", params: ["params"], requiredParams: [], queryParams: [] },
   getDeployment: { method: "GET", key: "getDeployment", params: ["deploymentId","params"], requiredParams: ["deploymentId"], queryParams: [] },
 } as const;
 

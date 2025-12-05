@@ -451,6 +451,10 @@ export interface DeleteContainersRequest {
   link?: null | boolean;
 }
 
+export interface DeleteDeploymentsInput {
+  ids: string[];
+}
+
 export interface DeleteImageResponseItem {
   result: Record<string, string>;
 }
@@ -488,6 +492,14 @@ export interface DeleteVolumesInput {
   platformId: string;
   names: string[];
   force: null | boolean;
+}
+
+export interface DeploymentInput {
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  description: null | string;
+  spec: DeploymentSpec;
 }
 
 export interface DeploymentSpec {
@@ -3113,6 +3125,63 @@ export class Api<
         method: "GET",
         secure: true,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name CreateDeployment
+     * @summary Create a deployment
+     * @request POST:/api/v1/deployments
+     * @secure
+     * @response `200` `DeploymentView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createDeployment: (data: DeploymentInput, params: RequestParams = {}) =>
+      this.request<
+        DeploymentView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/deployments`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name DeleteDeployments
+     * @summary Delete deployments
+     * @request DELETE:/api/v1/deployments
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteDeployments: (
+      data: DeleteDeploymentsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/deployments`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         ...params,
       }),
 

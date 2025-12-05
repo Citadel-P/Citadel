@@ -10,6 +10,7 @@ import { ImageInfoComponents } from './docker-resources/images/image-info';
 import { ContainerInfoComponents } from './docker-resources/containers/container-info';
 import { RegistryComponents } from './registries';
 import { PlatformComponents } from './platforms';
+import { DeploymentComponents } from './deployments';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
@@ -21,6 +22,7 @@ export const ResourceComponents: {
 
   Platform: PlatformComponents,
   Registry: RegistryComponents,
+  Deployment: DeploymentComponents,
 };
 
 export const DockerResourceInfoComponents: {

@@ -16,6 +16,7 @@ import { ConfirmButton } from './action-with-dialog';
 import React from 'react';
 import { ActionData, DropdownActionComponent } from '@/pages/types';
 import { ProblemDetails } from '@/api/generated/api.types';
+import { useDialogHotkeys } from '@/lib/hooks';
 
 export interface DropdownAction {
   id: string;
@@ -112,50 +113,55 @@ export const RowActionDropdown = <T,>({
   );
 };
 
-const ActionDialog = ({
-  action,
-  onClose,
-}: {
-  action: { key: string; data?: ActionData } | null;
-  onClose: () => void;
-}) => {
-  const [input, setInput] = useState('');
-  const [loading, setIsLoading] = useState(false);
-  const confirmButtonRef = useRef<HTMLButtonElement>(null);
+const ActionDialog = ({ action, onClose }: { action: { key: string; data?: ActionData } | null; onClose: () => void }) => {
+  const [input, setInput] = useState('')
+  const [loading, setIsLoading] = useState(false)
+  const confirmButtonRef = useRef<HTMLButtonElement>(null)
 
-  useEffect(() => {
-    if (action) {
-      setInput('');
-      setIsLoading(false);
-    }
-  }, [action]);
-
-  if (!action?.data) return null;
-
-  const { name, title, icon, disabled = false, onClick, variant } = action.data;
+  const hasData = !!action?.data
+  const isConfirmDisabled = action?.data ? (action.data.disabled || action.data.name !== input || loading) : true
 
   const handleConfirm = () => {
+    if (!action?.data) return
     try {
-      setIsLoading(true);
-      const maybePromise = onClick?.();
+      setIsLoading(true)
+      const maybePromise = action.data.onClick?.()
       Promise.resolve(maybePromise)
         .catch((err) => {
-          const problem = (err as any)?.error as ProblemDetails;
+          const problem = (err as any)?.error as ProblemDetails
           if (problem && problem.status === 400) {
             toast.error(`400: ${problem.title ?? 'Bad Request'}`, {
               description: problem?.detail,
-            });
+            })
           }
         })
-        .finally(() => setIsLoading(false));
+        .finally(() => setIsLoading(false))
     } catch {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
-  const isConfirmDisabled = disabled || name !== input || loading;
+  useEffect(() => {
+    if (hasData) {
+      setInput('')
+      setIsLoading(false)
+    }
+  }, [hasData])
+
+  useDialogHotkeys({
+    enabled: hasData,
+    onConfirm: handleConfirm,
+    onCancel: onClose,
+    confirmDisabled: isConfirmDisabled,
+    confirmButtonRef,
+  })
+
+  if (!hasData) return null
+
+  const { name, title, icon, variant } = action.data!;
+
   return (
-    <Dialog open={!!action} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={hasData} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Confirm {title}</DialogTitle>
@@ -163,8 +169,8 @@ const ActionDialog = ({
         <div className="flex flex-col gap-4 my-4">
           <p
             onClick={() => {
-              navigator.clipboard.writeText(name);
-              toast(`Copied "${name}" to clipboard!`);
+              navigator.clipboard.writeText(name)
+              toast(`Copied "${name}" to clipboard!`)
             }}
             className="cursor-pointer break-all">
             Please enter <b>{name}</b> below to confirm this action.
@@ -186,8 +192,8 @@ const ActionDialog = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-};
+  )
+}
 
 export const DropdownActionButton = forwardRef<
   HTMLDivElement,

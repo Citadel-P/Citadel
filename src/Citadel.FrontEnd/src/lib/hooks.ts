@@ -321,3 +321,43 @@ export function useHTTPErrorHandler() {
     };
   }, [client]);
 }
+interface DialogHotkeysOptions {
+  enabled?: boolean;
+  confirmDisabled?: boolean;
+  onConfirm?: () => void;
+  onCancel?: () => void;
+  confirmButtonRef?: React.RefObject<HTMLButtonElement | null>;
+}
+
+export function useDialogHotkeys({
+  enabled = true,
+  confirmButtonRef,
+  onConfirm,
+  onCancel,
+  confirmDisabled = false,
+}: DialogHotkeysOptions) {
+  useEffect(() => {
+    if (!enabled) return;
+
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        if (!confirmDisabled) {
+          e.preventDefault();
+          if (confirmButtonRef?.current) {
+            confirmButtonRef.current.click();
+          } else {
+            onConfirm?.();
+          }
+        }
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCancel?.();
+      }
+    };
+
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [enabled, confirmDisabled, onConfirm, onCancel, confirmButtonRef]);
+}

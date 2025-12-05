@@ -1,6 +1,6 @@
-﻿using Hosting.Common;
+﻿using Domain;
+using Hosting.Common;
 using Hosting.OpenApi;
-using Domain;
 using WebApi.Routes.Endpoints;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Platforms;
@@ -469,5 +469,21 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getDeployment");
+
+        deployment.MapPost("/", Deployments.Create)
+            .WithSummary("Create a deployment")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("createDeployment");
+
+        deployment.MapDelete("/", Deployments.Delete)
+            .WithSummary("Delete deployments")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("deleteDeployments");
     }
 }

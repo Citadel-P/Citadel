@@ -3,7 +3,7 @@ import { ResourceName, resources } from '@/api/generated/resources';
 import { useApiClientContext } from '@/api/api-client-context';
 
 export type DockerResourceType = 'Network' | 'Volume' | 'Image' | 'Container';
-export type ResourceType = DockerResourceType | 'Registry' | 'Platform';
+export type ResourceType = DockerResourceType | 'Registry' | 'Platform' | 'Deployment';
 export const PluralResourceMap = {
   Network: 'Networks',
   Volume: 'Volumes',
@@ -11,6 +11,7 @@ export const PluralResourceMap = {
   Container: 'Containers',
   Registry: 'Registries',
   Platform: 'Platforms',
+  Deployment: 'Deployments',
 } as const satisfies Record<ResourceType, string>;
 
 export type AnyFn = (...args: any[]) => Promise<any>;
