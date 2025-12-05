@@ -151,65 +151,6 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
   return [value, setValue] as const;
 }
 
-export const usePromptHotkeys = ({
-  enabled = true,
-  onConfirm,
-  onCancel,
-  ignoreInputs = true,
-  confirmDisabled = false,
-}: PromptHotkeysConfig) => {
-  useEffect(() => {
-    if (!enabled) return;
-
-    const findConfirmButton = (): HTMLButtonElement | null => {
-      const dialogContainers = document.querySelectorAll('[role="dialog"], [data-state="open"], .dialog-content');
-      for (const container of dialogContainers) {
-        const button = container.querySelector('[data-confirm-button]:not([disabled])') as HTMLButtonElement;
-        if (button) return button;
-      }
-
-      return document.querySelector('[data-confirm-button]:not([disabled])') as HTMLButtonElement;
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (ignoreInputs) {
-        const target = e.target as HTMLElement;
-        if (
-          target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable
-        ) {
-          return;
-        }
-      }
-
-      switch (e.key) {
-        case 'Enter':
-          if (onConfirm && !confirmDisabled) {
-            e.preventDefault();
-            const confirmButton = findConfirmButton();
-            if (confirmButton) {
-              confirmButton.click();
-            } else {
-              onConfirm();
-            }
-          }
-          break;
-        case 'Escape':
-          if (onCancel) {
-            e.preventDefault();
-            onCancel();
-          }
-          break;
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [enabled, onConfirm, onCancel, ignoreInputs, confirmDisabled]);
-};
-
 export function useConfirmByName(args: {
   name: string;
   disabled?: boolean;
@@ -217,7 +158,7 @@ export function useConfirmByName(args: {
   onClose?: () => void;
   hotkeysEnabled?: boolean;
 }) {
-  const { name, disabled, onConfirm, onClose, hotkeysEnabled } = args;
+  const { name, disabled, onConfirm, onClose } = args;
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -238,15 +179,6 @@ export function useConfirmByName(args: {
       setIsLoading(false);
     }
   }, [onConfirm, onClose]);
-
-  usePromptHotkeys({
-    onConfirm: () => {
-      if (name === input && !disabled && !isLoading) handleConfirm();
-    },
-    onCancel: () => onClose?.(),
-    enabled: !!hotkeysEnabled,
-    confirmDisabled: !!disabled || name !== input || isLoading,
-  });
 
   const isConfirmDisabled = !!disabled || name !== input || isLoading;
   const reset = () => setInput('');
