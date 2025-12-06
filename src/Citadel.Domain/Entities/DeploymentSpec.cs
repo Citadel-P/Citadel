@@ -1,7 +1,10 @@
-﻿namespace Domain.Entities;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
+
+namespace Domain.Entities;
 
 public sealed record DeploymentSpec(
-    string ImageId,
+    DeploymentImageInfo Image,
     string? Name,
     string? WorkingDir,
     string? User,
@@ -25,6 +28,24 @@ public sealed record DeploymentSpec(
     HealthCheckConfig? HealthCheck = null,
     Dictionary<string, string>? Metadata = null
     );
+
+[JsonPolymorphic]
+[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+[JsonDerivedType(typeof(LocalImage), nameof(ImageSource.Local))]
+[JsonDerivedType(typeof(ExternalImage), nameof(ImageSource.External))]
+public abstract record DeploymentImageInfo
+{
+    public abstract ImageSource Source { get; }
+}
+
+public sealed record LocalImage(string ImageId) : DeploymentImageInfo
+{
+    public override ImageSource Source => ImageSource.Local;
+}
+public sealed record ExternalImage(string RegistryId, string ImageName) : DeploymentImageInfo
+{
+    public override ImageSource Source => ImageSource.External;
+}
 
 public sealed record HealthCheckConfig(
     IEnumerable<string> Test,

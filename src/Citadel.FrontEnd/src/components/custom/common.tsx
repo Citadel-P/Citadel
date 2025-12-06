@@ -9,7 +9,7 @@ import { useRead } from '@/lib/hooks';
 import { useResourceFilter } from '@/lib/atoms';
 import { Badge } from '../ui/badge';
 
-export function ResourceSelector<T extends { id: string; name: string }>({
+export function ResourceSelectorField<T extends { id: string; name: string }>({
   type,
   selected,
   onSelect,
@@ -19,7 +19,7 @@ export function ResourceSelector<T extends { id: string; name: string }>({
   className,
 }: {
   type: ResourceType;
-  selected?: T | undefined;
+  selected?: T | string | undefined;
   onSelect?: (item: T | undefined) => void;
   disabled?: boolean;
   align?: 'start' | 'center' | 'end';
@@ -37,7 +37,8 @@ export function ResourceSelector<T extends { id: string; name: string }>({
 
   if (!items.length) return null;
 
-  const selectedItem = filter?.item ?? selected ?? undefined;
+  const selectedItem =
+    filter?.item ?? (typeof selected === 'string' ? items.find((i) => i.id === selected) : selected) ?? undefined;
 
   const filtered = filterBySplit(items, search, (i) => i.name).sort((a, b) => a.name.localeCompare(b.name));
 

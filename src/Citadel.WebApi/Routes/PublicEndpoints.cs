@@ -3,6 +3,7 @@ using Hosting.Common;
 using Hosting.OpenApi;
 using WebApi.Routes.Endpoints;
 using WebApi.Routes.Endpoints.Resources;
+using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 
@@ -477,6 +478,16 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("createDeployment");
+
+        deployment.MapPatch("{id}", Deployments.Patch)
+            .WithSummary("Update a deployment")
+            .Accepts<DeploymentInput>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateDeployment");
 
         deployment.MapDelete("/", Deployments.Delete)
             .WithSummary("Delete deployments")

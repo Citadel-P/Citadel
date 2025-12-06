@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
 using WebApi.Routes.Endpoints.Resources.Deployments;
-using WebApi.Routes.Endpoints.Resources.Registries;
 
 namespace WebApi.Routes.Endpoints;
 
@@ -36,5 +35,17 @@ public static class Deployments
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
+    }
+
+    public static async Task<Results<Ok<DeploymentView>, ProblemHttpResult>> Patch(
+        IMediator mediator,
+        [FromRoute][Description("Deployment ID")] Guid id,
+        DeploymentInputPatchDocument patchInput,
+        CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+        //var mapped = patchInput.Map<RegistryInput, Registry>();
+        //var result = await mediator.Send(new PatchRegistry(id, mapped), cancellationToken);
+        //return EndpointHandlers.HandleResult(result, RegistryView.Map);
     }
 }

@@ -8,6 +8,7 @@ import { fromNow } from '@/lib/dayjs.helper';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { cn } from '@/lib/utils';
+import { Textarea } from '../ui/textarea';
 
 type Primitive = string | number | boolean | bigint | symbol | null | undefined | Date;
 
@@ -151,6 +152,27 @@ export const FieldInput = ({
     onChange={(e) => onChange(e.target.value)}
     placeholder={placeholder}
     className="max-w-[400px]"
+  />
+);
+
+export const FieldTextArea = ({
+  value,
+  onChange,
+  placeholder,
+  disabled,
+}: {
+  value?: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  disabled?: boolean;
+}) => (
+  <Textarea
+    disabled={disabled}
+    value={value ?? ''}
+    onChange={(e) => onChange(e.target.value)}
+    placeholder={placeholder}
+    className="max-w-full focus-visible:ring-0"
   />
 );
 

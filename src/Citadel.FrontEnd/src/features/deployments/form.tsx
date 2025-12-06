@@ -5,6 +5,7 @@ import {
   RegistryConfigurationBaseCustomRegistry,
   RegistryConfigurationBaseDockerHubRegistry,
   DeploymentInput,
+  PlatformView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -13,6 +14,7 @@ import {
   defineSection,
   FieldInput,
   FieldSwitch,
+  FieldTextArea,
 } from '@/components/custom/form-builder';
 import { Constants } from '@/lib/constants';
 import { useState, useMemo } from 'react';
@@ -23,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { useParams, useNavigate } from 'react-router';
 import { Globe, MoveUpRight } from 'lucide-react';
 import { DockerIcon, GitHubIcon } from '@/lib/icons';
+import { ResourceSelectorField } from '@/components/custom/common';
 
 const registryInfo = {
   DockerHub: {
@@ -42,6 +45,17 @@ const registryInfo = {
   },
 } as const;
 
+const imageSource = {
+  Local: {
+    label: 'Local',
+    description: 'Use an image already pulled to the deployment host/platform'
+  },
+  External: {
+    label: 'External',
+    description: 'Pull an image from a remote registry (Docker Hub, GitHub, etc.)'
+  }
+}
+
 const RegistryTypeSelector = ({ value, onChange, disabled }: any) => {
   const selected = registryInfo[value as keyof typeof registryInfo];
 
@@ -56,6 +70,40 @@ const RegistryTypeSelector = ({ value, onChange, disabled }: any) => {
             </div>
           ) : (
             'Select registry type'
+          )}
+        </SelectValue>
+      </SelectTrigger>
+
+      <SelectContent className="bg-background">
+        {Object.entries(registryInfo).map(([key, info]) => (
+          <SelectItem key={key} value={key}>
+            <div className="flex items-center gap-2">
+              <info.icon className="w-4 h-4" />
+              <div className="flex flex-col">
+                <span className="font-medium">{info.label}</span>
+                <span className="text-xs text-muted-foreground">{info.description}</span>
+              </div>
+            </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+};
+
+const ImageSourceSelector = ({ value, onChange, disabled }: any) => {
+  const selected = imageSource[value as keyof typeof imageSource];
+
+  return (
+    <Select value={value} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger className="w-full max-w-[400px]">
+        <SelectValue>
+          {selected ? (
+            <div className="flex items-center gap-2">
+              <span>{selected.label}</span>
+            </div>
+          ) : (
+            'Select image source'
           )}
         </SelectValue>
       </SelectTrigger>
@@ -130,28 +178,79 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
 
   const schema = useMemo(
     () => ({
-      '': defineSection<DeploymentInput>({
+      general: defineSection<DeploymentInput>({
         title: '',
         items: [
+          defineGroupField({
+            id: 'details',
+            label: 'Details',
+            fields: [
+              defineField({
+                key: 'name',
+                label: 'Name',
+                required: true,
+                description: 'Internal identifier for this workload.',
+                validate: (v) => (!v ? 'Name is required' : null),
+                render: (val, set) => (
+                  <FieldInput value={val} onChange={(v) => set({ name: v })} placeholder="e.g. production-web-server" />
+                ),
+              }),
+
+              defineField({
+                key: 'description',
+                label: 'Description',
+                required: false,
+                description: 'Optional description of this workload.',
+                render: (val, set) => <FieldTextArea value={val} onChange={(v) => set({ description: v })} />,
+              }),
+            ],
+          }),
           defineField({
-            key: 'type',
-            label: 'Provider',
+            key: 'platformId',
+            label: 'Platform',
             required: true,
-            disabled: mode === 'edit',
+            disabled: false,
+            description: 'Select the platform to deploy on.',
             render: (value, set) => (
-              <RegistryTypeSelector
-                value={value ?? RegistryType.DockerHub}
-                disabled={mode === 'edit'}
-                onChange={(v: RegistryType) =>
-                  set(() => ({
-                    type: v,
-                    configuration: undefined, // Reset the form configuration on value change
-                  }))
-                }
+              <ResourceSelectorField
+                type="Platform"
+                selected={value}
+                onSelect={(v: PlatformView | undefined) => set({ platformId: v?.id })}
+                placeholder="Select Platform"
+                className="text-sm"
               />
             ),
           }),
+          defineGroupField({
+            id: 'image',
+            label: 'Image',
+            fields: [
+              defineField({
+                key: 'name',
+                label: 'Source',
+                required: true,
+                validate: (v) => (!v ? 'Source is required' : null),
+                render: (val, set) => {
+                  return (
+                    <ImageSourceSelector 
+                  <FieldInput value={val} onChange={(v) => set({ name: v })} placeholder="e.g. production-web-server" />
+                )},
+              }),
 
+              defineField({
+                key: 'description',
+                label: 'Description',
+                required: false,
+                description: 'Optional description of this workload.',
+                render: (val, set) => <FieldTextArea value={val} onChange={(v) => set({ description: v })} />,
+              }),
+            ],
+          }),
+        ],
+      }),
+      '': defineSection<DeploymentInput>({
+        title: '',
+        items: [
           defineField({
             key: 'name',
             label: 'Name',

@@ -224,3 +224,9 @@ public enum ScalingStrategy
     RollingUpdate, 
     Recreate
 }
+
+public enum ImageSource
+{
+    Local,
+    External
+}

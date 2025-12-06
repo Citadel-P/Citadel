@@ -49,6 +49,7 @@ export const resources = {
   createDeployment: { method: "POST", key: "createDeployment", params: ["data","params"], requiredParams: [], queryParams: [] },
   deleteDeployments: { method: "DELETE", key: "deleteDeployments", params: ["params"], requiredParams: [], queryParams: [] },
   getDeployment: { method: "GET", key: "getDeployment", params: ["deploymentId","params"], requiredParams: ["deploymentId"], queryParams: [] },
+  updateDeployment: { method: "PATCH", key: "updateDeployment", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
 } as const;
 
 export type ResourceName = keyof typeof resources;

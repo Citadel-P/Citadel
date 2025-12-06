@@ -4,9 +4,9 @@ import { useInlineSubHeader, useResourceFilter, useTaskSheet } from '@/lib/atoms
 import { useEffect, useRef, useState } from 'react';
 import autoAnimate from '@formkit/auto-animate';
 import { cn } from '@/lib/utils';
-import { ResourceSelector } from '@/components/custom/common';
 import { Input } from '@/components/ui/input';
 import { RegistryView } from '@/api/generated/api.types';
+import { ResourceSelectorField } from '@/components/custom/common';
 
 export const PullButton = () => {
   const { open, toggle } = useInlineSubHeader('Image');
@@ -80,11 +80,11 @@ export default function PullImageForm() {
 
             <div className="flex flex-col sm:flex-row sm:items-baseline">
               <div className="flex-none w-full sm:w-36 text-sm font-medium">Registry</div>
-              <ResourceSelector
+              <ResourceSelectorField
                 type={'Registry'}
                 selected={registry}
+                onSelect={setRegistry}
                 placeholder="Select Registry"
-                onSelect={(item) => setRegistry(item)}
                 className="text-sm"
               />
             </div>
