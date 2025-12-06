@@ -25,8 +25,7 @@ CREATE TABLE "Registries" (
     "Configuration" TEXT NOT NULL,
     "Created" TEXT NOT NULL,
     "Name" TEXT NOT NULL,
-    "RegistryHost" TEXT NOT NULL,
-    "Type" TEXT NOT NULL
+    "RegistryHost" TEXT NOT NULL
 );
 
 CREATE TABLE "Roles" (
@@ -236,7 +235,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20251202204052_migration0001', '10.0.0');
+VALUES ('20251206125101_migration0001', '10.0.0');
 
 COMMIT;
 

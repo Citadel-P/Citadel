@@ -1,8 +1,7 @@
 ﻿{
   id: Guid_1,
   name: R-NEW,
-  registryHost: registry123:9999,
-  type: DockerHub,
+  registryHost: docker.io,
   created: DateTimeOffset_1,
   isDefault: false
 }

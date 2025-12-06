@@ -1,25 +1,25 @@
-﻿using Domain;
+﻿using Domain.Entities.Registries;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Application.Services;
 
 /// <summary>
-/// Factory interface for resolving registry connector strategies based on registry type.
+/// Factory interface for resolving registry connector strategies based on registry baseType.
 /// </summary>
 internal interface IRegistryConnectorResolver
 {
-    IRegistryConnectorStrategy? Resolve(RegistryType type);
+    IRegistryConnectorStrategy? Resolve(RegistryConfigurationBase baseType);
 }
 
 internal class RegistryConnectorResolver(IServiceProvider provider) : IRegistryConnectorResolver
 {
-    public IRegistryConnectorStrategy? Resolve(RegistryType type)
+    public IRegistryConnectorStrategy? Resolve(RegistryConfigurationBase baseType)
     {
-        return type switch
+        return baseType switch
         {
-            RegistryType.Custom => provider.GetService<CustomRegistryConnectorStrategy>(),
-            RegistryType.DockerHub => provider.GetService<DockerHubConnectorStrategy>(),
-            RegistryType.GitHub => provider.GetService<GitHubConnectorStrategy>(),
+            CustomRegistry => provider.GetService<CustomRegistryConnectorStrategy>(),
+            DockerHubRegistry => provider.GetService<DockerHubConnectorStrategy>(),
+            GitHubRegistry => provider.GetService<GitHubConnectorStrategy>(),
             _ => null
         };
     }

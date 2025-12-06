@@ -13,7 +13,6 @@ internal sealed record ImageDto(
     DateTime? UpdatedAt = null,
     Guid? RegistryId = null,
     string? RegistryName = null,
-    string? RegistryType = null,
     string? RegistryHost = null,
     DateTime? RegistryCreated = null
     );

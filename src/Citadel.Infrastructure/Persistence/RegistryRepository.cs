@@ -23,9 +23,9 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     {
         const string sql = """
             INSERT INTO Registries (
-                Id, Name, RegistryHost, Created, Type, Configuration)
+                Id, Name, RegistryHost, Created, Configuration)
             VALUES (
-                @Id, @Name, @RegistryHost, @Created, @Type, @Configuration)
+                @Id, @Name, @RegistryHost, @Created, @Configuration)
         """;
 
         return db.ExecuteAsync(sql, new
@@ -34,7 +34,6 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             Name = registry.Name,
             RegistryHost = registry.RegistryHost, 
             Created = registry.Created.ToString(), 
-            Type = EnumFormatter<RegistryType>.GetValue(registry.Type),
             Configuration = JsonSerializer.Serialize(registry.Configuration, RegistryJsonContext.Default.RegistryConfigurationBase),
         }, transaction: tx());
     }
@@ -70,7 +69,7 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     {
         const string sql = """
             UPDATE Registries
-            SET Name = @Name, RegistryHost = @RegistryHost, Type = @Type, Configuration = @Configuration
+            SET Name = @Name, RegistryHost = @RegistryHost, Configuration = @Configuration
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
@@ -79,7 +78,6 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             Name = registry.Name,
             RegistryHost = registry.RegistryHost,
             Created = registry.Created.ToString(),
-            Type = EnumFormatter<RegistryType>.GetValue(registry.Type),
             Configuration = JsonSerializer.Serialize(registry.Configuration, RegistryJsonContext.Default.RegistryConfigurationBase),
         }, transaction: tx());
     }

@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251202204052_migration0001")]
+    [Migration("20251206125101_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -447,10 +447,6 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("RegistryHost")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("TEXT");
 

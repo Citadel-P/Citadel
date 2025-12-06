@@ -2,7 +2,6 @@
   id: Guid_1,
   name: R-NEW,
   registryHost: registry123:9999,
-  type: Custom,
   created: DateTimeOffset_1,
   isDefault: false
 }

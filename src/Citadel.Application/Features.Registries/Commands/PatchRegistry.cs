@@ -31,9 +31,7 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
         {
             RuleFor(x => x.Id).NotEmpty().NotNull();
             When(s => s.Name != null, () => RuleFor(x => x.Name).NotEmpty().MinimumLength(3));
-            RuleFor(x => x.Type)
-                .Must(d => Enum.IsDefined(d))
-                .WithMessage("'{PropertyName}' must be a valid type");
+
             When(s => s.Name != null, () => RuleFor(x => x.RegistryHost).Matches(Validators.RegistryUrlRegex).WithMessage("Please provide a valid host name eg: ghcr.io"));
 
             When(x => x.Configuration is DockerHubRegistry, () =>
@@ -143,7 +141,7 @@ internal class PatchRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorRe
             }
         }
 
-        var strategy = registryResolver.Resolve(patchedRegistry.Type);
+        var strategy = registryResolver.Resolve(patchedRegistry.Configuration);
         if (strategy is null)
         {
             return Result.Failure<Registry>(new BadRequestError("Unsupported Registry Type"));

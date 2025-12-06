@@ -7,7 +7,6 @@ namespace Domain.Entities;
 public class Registry(
     string name,
     string registryHost,
-    RegistryType type,
     RegistryConfigurationBase configuration)
 {
     public static readonly string DefaultRegistryName = "Docker Hub";
@@ -15,7 +14,6 @@ public class Registry(
     public string Name { get; private set; } = name;
     public string RegistryHost { get; private set; } = registryHost;
     public DateTime Created { get; private set; } = DateTime.UtcNow;
-    public RegistryType Type { get; private set; } = type;
     public RegistryConfigurationBase Configuration { get; private set; } = configuration;
 
     public void PartialUpdate(string? name = null, string? registryHost = null, RegistryConfigurationBase? configuration = null)
@@ -30,10 +28,9 @@ public class Registry(
         string name,
         string registryHost,
         DateTime created, 
-        RegistryType type,
         RegistryConfigurationBase configuration)
     {
-        return new Registry(name, registryHost, type, configuration)
+        return new Registry(name, registryHost, configuration)
         {
             Id = id,
             Created = created
@@ -45,7 +42,6 @@ public class Registry(
         var registry = new Registry(
             name: DefaultRegistryName,
             registryHost: "hub.docker.com",
-            type: RegistryType.DockerHub,
             configuration: new DockerHubRegistry())
         {
             Id = Guid.Empty,

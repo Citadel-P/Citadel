@@ -50,7 +50,6 @@ public class JsonMergePatchTests
         var original = new Registry(
             name: "MyRegistry",
             registryHost: "http://localhost:1234/registry",
-            type: RegistryType.DockerHub,
             configuration: new DockerHubRegistry(
                 UserName: "username-1",
                 PAT: "fake-pat-1")

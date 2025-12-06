@@ -3,7 +3,6 @@
   Name: MyRegistry,
   RegistryHost: http://localhost:1234/registry,
   Created: DateTime_1,
-  Type: DockerHub,
   Configuration: {
     UserName: username-2,
     PAT: fake-pat-1

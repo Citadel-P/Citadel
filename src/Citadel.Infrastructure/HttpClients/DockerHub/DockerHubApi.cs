@@ -3120,7 +3120,7 @@ namespace Infrastructure.DockerHub
         public string Email { get; set; }
 
         /// <summary>
-        /// Type of the member
+        /// Kind of the member
         /// </summary>
 
         [JsonPropertyName("Type")]

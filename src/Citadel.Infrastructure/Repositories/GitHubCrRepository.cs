@@ -13,7 +13,7 @@ internal class GitHubCrRepository(IGithubCrApi gitHubCrApi) : IGitHubCrRepositor
     {
         try
         {
-            var packages = gitHubRegistry.Type == GhcrAccountType.Organization
+            var packages = gitHubRegistry.AccountType == GhcrAccountType.Organization
                     ? await gitHubCrApi.ListOrgPackages(gitHubRegistry.Name, gitHubRegistry.PAT, gitHubRegistry.Name, cancellationToken)
                     : await gitHubCrApi.ListUserPackages(gitHubRegistry.Name, gitHubRegistry.PAT, gitHubRegistry.Name, cancellationToken);
             return (true, null);
@@ -31,7 +31,7 @@ internal class GitHubCrRepository(IGithubCrApi gitHubCrApi) : IGitHubCrRepositor
     {
         try
         {
-            var packages = gitHubRegistry.Type == GhcrAccountType.User
+            var packages = gitHubRegistry.AccountType == GhcrAccountType.User
                 ? await gitHubCrApi.ListUserPackages(gitHubRegistry.Name, gitHubRegistry.PAT, gitHubRegistry.Name, cancellationToken)
                 : await gitHubCrApi.ListOrgPackages(gitHubRegistry.Name, gitHubRegistry.PAT, gitHubRegistry.Name, cancellationToken);
             return (packages.Map(), null);
@@ -49,7 +49,7 @@ internal class GitHubCrRepository(IGithubCrApi gitHubCrApi) : IGitHubCrRepositor
     {
         try
         {
-            var versions = gitHubRegistry.Type == GhcrAccountType.User
+            var versions = gitHubRegistry.AccountType == GhcrAccountType.User
                         ? await gitHubCrApi.ListPackageVersionsForUser(packageName, gitHubRegistry.PAT, gitHubRegistry.Name, cancellationToken: cancellationToken)
                         : await gitHubCrApi.ListPackageVersionsForOrg(gitHubRegistry.Name, packageName, gitHubRegistry.PAT, gitHubRegistry.Name, cancellationToken: cancellationToken);
             return (versions.Map(), null);

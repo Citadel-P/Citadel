@@ -232,7 +232,7 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                 validate: (v) => (!v ? 'Source is required' : null),
                 render: (val, set) => {
                   return (
-                    <ImageSourceSelector 
+                    // <ImageSourceSelector 
                   <FieldInput value={val} onChange={(v) => set({ name: v })} placeholder="e.g. production-web-server" />
                 )},
               }),

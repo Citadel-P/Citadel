@@ -222,7 +222,6 @@ internal static class Configuration
         registry.Property<string>("Name").HasColumnType("TEXT").IsRequired();
         registry.Property<string?>("RegistryHost").HasColumnType("TEXT").IsRequired();
         registry.Property<long>("Created").HasColumnType("TEXT").IsRequired();
-        registry.Property<string>("Type").HasColumnType("TEXT").IsRequired();
         registry.Property<string>("Configuration").HasColumnType("TEXT").IsRequired();
         registry.HasIndex("Name").IsUnique().HasDatabaseName($"IX_{tableName}_Name");
 

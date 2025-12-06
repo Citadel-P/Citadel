@@ -2,5 +2,5 @@
   $type: GitHub,
   Name: username-1,
   PAT: fake-pat-1,
-  Type: User
+  AccountType: User
 }

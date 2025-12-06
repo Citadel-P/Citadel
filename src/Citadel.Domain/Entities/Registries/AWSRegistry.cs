@@ -6,12 +6,8 @@ namespace Domain.Entities.Registries;
 public record AWSRegistry(string AccessKey, bool AuthenticationRequired, string SecretAccessKey, string Region) 
     : RegistryConfigurationBase
 {
+    public override string GetRegistryAuth(string registryHost) => throw new NotImplementedException();
     public static AWSRegistry Create(bool authenticationRequired, string accessKey, string secretAccessKey, string region)
         => new (accessKey, authenticationRequired, secretAccessKey, region);
-
-    public override string GetRegistryAuth(string registryHost)
-    {
-        throw new NotImplementedException();
-    }
 }
 

@@ -5,6 +5,5 @@ internal sealed record RegistryDto(
     string Name,
     string RegistryHost,
     string Created, // DateTime
-    string Type, // RegistryType
     string Configuration // RegistryConfigurationBase
     );

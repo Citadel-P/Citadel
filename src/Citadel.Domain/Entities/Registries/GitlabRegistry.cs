@@ -7,10 +7,6 @@ public record GitlabRegistry(string UserName, string PAT, string InstanceUrl) : 
 {
     public static GitlabRegistry Create(string userName, string PAT, string instanceUrl) 
         => new (userName, PAT, instanceUrl);
-
-    public override string GetRegistryAuth(string registryHost)
-    {
-        throw new NotImplementedException();
-    }
+    public override string GetRegistryAuth(string registryHost) => throw new NotImplementedException();
 }
 

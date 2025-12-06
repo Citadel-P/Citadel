@@ -107,15 +107,9 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
   const { mutateAsync: updateRegistry } = useMutate('updateRegistry');
 
   const original = resource ?? ({} as RegistryInput);
-  const provider = update.type ?? resource?.type ?? RegistryType.DockerHub;
+  const provider = update.configuration?.$type ?? resource?.configuration?.$type ?? RegistryType.DockerHub;
 
   const handleSave = async (payload: RegistryInput) => {
-    if (payload.type === RegistryType.Custom && !payload.configuration) {
-      payload.configuration = {
-        $type: 'Custom',
-        authEnabled: false,
-      } satisfies RegistryConfigurationBaseCustomRegistry;
-    }
     setIsPending(true);
     try {
       if (mode === 'edit') await updateRegistry({ id, data: payload });
@@ -134,7 +128,7 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
         title: '',
         items: [
           defineField({
-            key: 'type',
+            key: 'configuration.$type',
             label: 'Provider',
             required: true,
             disabled: mode === 'edit',
@@ -144,8 +138,9 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                 disabled={mode === 'edit'}
                 onChange={(v: RegistryType) =>
                   set(() => ({
-                    type: v,
-                    configuration: undefined, // Reset the form configuration on value change
+                    configuration: {
+                      $type: v,
+                    } as any,
                   }))
                 }
               />
@@ -175,7 +170,7 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                   label: 'Account Info',
                   fields: [
                     defineField({
-                      key: 'configuration.type',
+                      key: 'configuration.accountType',
                       label: 'Account Type',
                       description: 'Select your account type',
                       required: true,
@@ -188,7 +183,7 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                               configuration: {
                                 $type: 'GitHub',
                                 ...((prev.configuration as RegistryConfigurationBaseGitHubRegistry) ?? {}),
-                                type: v,
+                                accountType: v,
                               } satisfies RegistryConfigurationBaseGitHubRegistry,
                             }))
                           }
@@ -199,7 +194,7 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                     defineField({
                       key: 'configuration.name',
                       label:
-                        (update.configuration as RegistryConfigurationBaseGitHubRegistry)?.type ===
+                        (update.configuration as RegistryConfigurationBaseGitHubRegistry)?.accountType ===
                         GhcrAccountType.Organization
                           ? 'Organization Name'
                           : 'User Name',
@@ -343,7 +338,7 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                         <FieldInput
                           value={value ?? ''}
                           placeholder="myregistry.example"
-                          onChange={(v) => set({ registryHost: v })}
+                          onChange={(v) => set({ registryHost: v, configuration: { $type: 'Custom' } })}
                         />
                       ),
                     }),
@@ -446,13 +441,6 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
       pending={isPending}
       draftKey={`registry:${id ?? 'new'}`}
       draftVersion={1}
-      onReset={() =>
-        setUpdate((prev) => {
-          // Preserve the selected registry provider
-          const type = prev?.type ?? provider;
-          return type ? { type } : {};
-        })
-      }
     />
   );
 };

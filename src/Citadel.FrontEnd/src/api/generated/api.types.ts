@@ -61,6 +61,11 @@ export enum LoggingDriverType {
   Etwlogs = "etwlogs",
 }
 
+export enum ImageSource {
+  Local = "Local",
+  External = "External",
+}
+
 export enum GhcrAccountType {
   Organization = "Organization",
   User = "User",
@@ -494,6 +499,28 @@ export interface DeleteVolumesInput {
   force: null | boolean;
 }
 
+export type DeploymentImageInfo = BaseDeploymentImageInfo &
+  (
+    | BaseDeploymentImageInfoTypeMapping<"Local", DeploymentImageInfoLocalImage>
+    | BaseDeploymentImageInfoTypeMapping<
+        "External",
+        DeploymentImageInfoExternalImage
+      >
+  );
+
+export interface DeploymentImageInfoExternalImage {
+  $type?: "External";
+  registryId: string;
+  imageName: string;
+  source?: ImageSource;
+}
+
+export interface DeploymentImageInfoLocalImage {
+  $type?: "Local";
+  imageId: string;
+  source?: ImageSource;
+}
+
 export interface DeploymentInput {
   name: string;
   /** @format uuid */
@@ -503,7 +530,7 @@ export interface DeploymentInput {
 }
 
 export interface DeploymentSpec {
-  imageId: string;
+  image: DeploymentImageInfo;
   name: null | string;
   workingDir: null | string;
   user: null | string;
@@ -1439,7 +1466,7 @@ export interface RegistryConfigurationBaseGitHubRegistry {
   $type?: "GitHub";
   name: string;
   pat: string;
-  type: GhcrAccountType;
+  accountType: GhcrAccountType;
 }
 
 export interface RegistryConfigurationBaseGitlabRegistry {
@@ -1452,7 +1479,6 @@ export interface RegistryConfigurationBaseGitlabRegistry {
 export interface RegistryInput {
   name: string;
   registryHost: string;
-  type: RegistryType;
   configuration: RegistryConfigurationBase;
 }
 
@@ -1472,7 +1498,6 @@ export interface RegistryWithConfigView {
   id: string;
   name: string;
   registryHost: string;
-  type: RegistryType;
   /** @format date-time */
   created: any;
   configuration: null | RegistryConfigurationBase;
@@ -1602,6 +1627,12 @@ export interface VolumeVersionInfo {
 export interface VolumesView {
   volumes: DockerVolumeResult[];
 }
+
+type BaseDeploymentImageInfo = object;
+
+type BaseDeploymentImageInfoTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
 
 type BaseIImageRepository = object;
 

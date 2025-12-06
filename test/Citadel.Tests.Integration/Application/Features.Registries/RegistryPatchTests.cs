@@ -19,7 +19,6 @@ public class RegistryPatchTests : IntegrationTestBase
         var registry = new Registry(
             name: "OriginalName",
             registryHost: "https://original.url",
-            type: RegistryType.DockerHub,
             configuration: new DockerHubRegistry("original-user", "pat123")
         );
 
@@ -40,7 +39,7 @@ public class RegistryPatchTests : IntegrationTestBase
     public async Task Patch_Registry_Should_Apply_MergePatch()
     {
         // Arrange
-        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryType>()))
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfigurationBase>()))
             .Returns(registryConnectorMock.Object);
 
         registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
@@ -49,7 +48,7 @@ public class RegistryPatchTests : IntegrationTestBase
         var patchJson = """
         {
           "name": "UpdatedName",
-          "type": "DockerHub",
+          "$type": "DockerHub",
           "configuration": {
             "$type": "DockerHub",
             "userName": "patched-user"
@@ -110,7 +109,7 @@ public class RegistryPatchTests : IntegrationTestBase
     public async Task Patch_Should_Return_Forbidden_If_User_Lacks_Permission()
     {
         // Arrange
-        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryType>()))
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfigurationBase>()))
             .Returns(registryConnectorMock.Object);
 
         registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
@@ -119,7 +118,7 @@ public class RegistryPatchTests : IntegrationTestBase
         var patchJson = """
         {
           "name": "UpdatedName",
-          "type": "DockerHub",
+          "$type": "DockerHub",
           "configuration": {
             "$type": "DockerHub",
             "userName": "patched-user"

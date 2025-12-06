@@ -42,8 +42,7 @@ namespace Infrastructure.Migrations.Migrations
                     Configuration = table.Column<string>(type: "TEXT", nullable: false),
                     Created = table.Column<long>(type: "TEXT", nullable: false),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
-                    RegistryHost = table.Column<string>(type: "TEXT", nullable: false),
-                    Type = table.Column<string>(type: "TEXT", nullable: false)
+                    RegistryHost = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {

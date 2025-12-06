@@ -15,8 +15,7 @@ namespace Application.Features.Registries.Commands;
 [RequirePermission(nameof(AppPermission.Registry_Create))]
 public sealed record CreateRegistry(
     string Name, 
-    string RegistryHost, 
-    RegistryType Type, 
+    string RegistryHost,
     RegistryConfigurationBase Configuration) : ICommand<Result<Registry>>
 {
     internal sealed class Validator : AbstractValidator<CreateRegistry>
@@ -24,11 +23,9 @@ public sealed record CreateRegistry(
         public Validator()
         {
             RuleFor(x => x.Name).NotEmpty().MinimumLength(3);
-            RuleFor(x => x.Type)
-                .Must(d => Enum.IsDefined(d))
-                .WithMessage("'{PropertyName}' must be a valid type");
 
-            RuleFor(x => x.RegistryHost).Matches(Validators.RegistryUrlRegex).WithMessage("Please provide a valid host name eg: ghcr.io");
+            RuleFor(x => x.RegistryHost).NotNull().NotEmpty()
+                .Matches(Validators.RegistryUrlRegex).WithMessage("Please provide a valid host name eg: ghcr.io");
 
             When(x => x.Configuration is DockerHubRegistry, () =>
             {
@@ -127,7 +124,7 @@ internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorR
             return Result.Failure<Registry>(new ConflictError("Name already exists"));
         }
 
-        var strategy = registryResolver.Resolve(command.Type);
+        var strategy = registryResolver.Resolve(command.Configuration);
         if (strategy is null)
         {
             return Result.Failure<Registry>(new BadRequestError("Unsupported Registry Type"));
@@ -139,7 +136,7 @@ internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorR
             return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
         }
 
-        var registry = new Registry(name: command.Name, registryHost: command.RegistryHost, type: command.Type, configuration: command.Configuration);
+        var registry = new Registry(name: command.Name, registryHost: command.RegistryHost, configuration: command.Configuration);
         await unitOfWork.Registries.AddAsync(registry, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 

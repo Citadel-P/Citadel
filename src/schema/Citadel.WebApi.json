@@ -1734,7 +1734,6 @@
                   "value": {
                     "Name": "my-azure-registry",
                     "RegistryHost": "myproject.azurecr.io",
-                    "Type": "Azure",
                     "Configuration": {
                       "$type": "Azure",
                       "UserName": "johnDoe",
@@ -1746,7 +1745,6 @@
                   "value": {
                     "Name": "my-ecr-registry",
                     "RegistryHost": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
-                    "Type": "AWS",
                     "Configuration": {
                       "$type": "AWS",
                       "AccessKey": "",
@@ -1760,7 +1758,6 @@
                   "value": {
                     "Name": "",
                     "RegistryHost": "https://registry.gitlab.com",
-                    "Type": "Gitlab",
                     "Configuration": {
                       "$type": "Gitlab",
                       "UserName": "",
@@ -1773,7 +1770,6 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "",
-                    "Type": "DockerHub",
                     "Configuration": {
                       "$type": "DockerHub",
                       "UserName": "",
@@ -1785,12 +1781,11 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "",
-                    "Type": "GitHub",
                     "Configuration": {
                       "$type": "GitHub",
                       "Name": "organization or user name",
                       "PAT": "",
-                      "Type": "Organization"
+                      "AccountType": "Organization"
                     }
                   }
                 },
@@ -1798,7 +1793,6 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "localhost:9965",
-                    "Type": "Custom",
                     "Configuration": {
                       "$type": "Custom",
                       "AuthEnabled": true,
@@ -2075,7 +2069,6 @@
                   "value": {
                     "Name": "my-azure-registry",
                     "RegistryHost": "myproject.azurecr.io",
-                    "Type": "Azure",
                     "Configuration": {
                       "$type": "Azure",
                       "UserName": "johnDoe",
@@ -2087,7 +2080,6 @@
                   "value": {
                     "Name": "my-ecr-registry",
                     "RegistryHost": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
-                    "Type": "AWS",
                     "Configuration": {
                       "$type": "AWS",
                       "AccessKey": "",
@@ -2101,7 +2093,6 @@
                   "value": {
                     "Name": "",
                     "RegistryHost": "https://registry.gitlab.com",
-                    "Type": "Gitlab",
                     "Configuration": {
                       "$type": "Gitlab",
                       "UserName": "",
@@ -2114,7 +2105,6 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "",
-                    "Type": "DockerHub",
                     "Configuration": {
                       "$type": "DockerHub",
                       "UserName": "",
@@ -2126,12 +2116,11 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "",
-                    "Type": "GitHub",
                     "Configuration": {
                       "$type": "GitHub",
                       "Name": "organization or user name",
                       "PAT": "",
-                      "Type": "Organization"
+                      "AccountType": "Organization"
                     }
                   }
                 },
@@ -2139,7 +2128,6 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "localhost:9965",
-                    "Type": "Custom",
                     "Configuration": {
                       "$type": "Custom",
                       "AuthEnabled": true,
@@ -2159,7 +2147,6 @@
                   "value": {
                     "Name": "my-azure-registry",
                     "RegistryHost": "myproject.azurecr.io",
-                    "Type": "Azure",
                     "Configuration": {
                       "$type": "Azure",
                       "UserName": "johnDoe",
@@ -2171,7 +2158,6 @@
                   "value": {
                     "Name": "my-ecr-registry",
                     "RegistryHost": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
-                    "Type": "AWS",
                     "Configuration": {
                       "$type": "AWS",
                       "AccessKey": "",
@@ -2185,7 +2171,6 @@
                   "value": {
                     "Name": "",
                     "RegistryHost": "https://registry.gitlab.com",
-                    "Type": "Gitlab",
                     "Configuration": {
                       "$type": "Gitlab",
                       "UserName": "",
@@ -2198,7 +2183,6 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "",
-                    "Type": "DockerHub",
                     "Configuration": {
                       "$type": "DockerHub",
                       "UserName": "",
@@ -2210,12 +2194,11 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "",
-                    "Type": "GitHub",
                     "Configuration": {
                       "$type": "GitHub",
                       "Name": "organization or user name",
                       "PAT": "",
-                      "Type": "Organization"
+                      "AccountType": "Organization"
                     }
                   }
                 },
@@ -2223,7 +2206,6 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "localhost:9965",
-                    "Type": "Custom",
                     "Configuration": {
                       "$type": "Custom",
                       "AuthEnabled": true,
@@ -6042,6 +6024,69 @@
           }
         }
       },
+      "DeploymentImageInfo": {
+        "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/DeploymentImageInfoLocalImage"
+          },
+          {
+            "$ref": "#/components/schemas/DeploymentImageInfoExternalImage"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "Local": "#/components/schemas/DeploymentImageInfoLocalImage",
+            "External": "#/components/schemas/DeploymentImageInfoExternalImage"
+          }
+        }
+      },
+      "DeploymentImageInfoExternalImage": {
+        "required": [
+          "registryId",
+          "imageName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "External"
+            ],
+            "type": "string"
+          },
+          "registryId": {
+            "type": "string"
+          },
+          "imageName": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ImageSource"
+          }
+        }
+      },
+      "DeploymentImageInfoLocalImage": {
+        "required": [
+          "imageId"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Local"
+            ],
+            "type": "string"
+          },
+          "imageId": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ImageSource"
+          }
+        }
+      },
       "DeploymentInput": {
         "required": [
           "name",
@@ -6079,7 +6124,7 @@
       },
       "DeploymentSpec": {
         "required": [
-          "imageId",
+          "image",
           "name",
           "workingDir",
           "user",
@@ -6099,8 +6144,8 @@
         ],
         "type": "object",
         "properties": {
-          "imageId": {
-            "type": "string"
+          "image": {
+            "$ref": "#/components/schemas/DeploymentImageInfo"
           },
           "name": {
             "type": [
@@ -8010,6 +8055,12 @@
           }
         }
       },
+      "ImageSource": {
+        "enum": [
+          "Local",
+          "External"
+        ]
+      },
       "ImageView": {
         "required": [
           "id",
@@ -9410,7 +9461,7 @@
         "required": [
           "name",
           "pat",
-          "type"
+          "accountType"
         ],
         "properties": {
           "$type": {
@@ -9425,7 +9476,7 @@
           "pat": {
             "type": "string"
           },
-          "type": {
+          "accountType": {
             "$ref": "#/components/schemas/GhcrAccountType"
           }
         }
@@ -9458,7 +9509,6 @@
         "required": [
           "name",
           "registryHost",
-          "type",
           "configuration"
         ],
         "type": "object",
@@ -9468,9 +9518,6 @@
           },
           "registryHost": {
             "type": "string"
-          },
-          "type": {
-            "$ref": "#/components/schemas/RegistryType"
           },
           "configuration": {
             "$ref": "#/components/schemas/RegistryConfigurationBase"
@@ -9523,7 +9570,6 @@
           "id",
           "name",
           "registryHost",
-          "type",
           "created",
           "configuration"
         ],
@@ -9538,9 +9584,6 @@
           },
           "registryHost": {
             "type": "string"
-          },
-          "type": {
-            "$ref": "#/components/schemas/RegistryType"
           },
           "created": {
             "format": "date-time"

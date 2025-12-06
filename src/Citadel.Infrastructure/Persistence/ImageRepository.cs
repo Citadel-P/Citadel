@@ -29,7 +29,6 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.UpdatedAt,
                 i.RegistryId,
                 r.Name AS RegistryName,
-                r.Type AS RegistryType,
                 r.RegistryHost AS RegistryHost,
                 r.Created As RegistryCreated
             FROM Images i
@@ -60,7 +59,6 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.UpdatedAt,
                 i.RegistryId,
                 r.Name AS RegistryName,
-                r.Type AS RegistryType,
                 r.RegistryHost AS RegistryHost,
                 r.Created As RegistryCreated
             FROM Images i
