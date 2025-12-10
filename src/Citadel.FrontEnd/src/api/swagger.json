@@ -2897,13 +2897,13 @@
         ]
       }
     },
-    "/api/v1/images/{platformId}/{imageId}/_info": {
+    "/api/v1/images/{platformId}/{imageId}/_ports": {
       "get": {
         "tags": [
           "Images"
         ],
-        "summary": "Get image info",
-        "operationId": "getImageInfo",
+        "summary": "Get image ports",
+        "operationId": "getExposedPorts",
         "parameters": [
           {
             "name": "platformId",
@@ -2919,7 +2919,8 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -2939,7 +2940,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RunImageInfoResult"
+                  "$ref": "#/components/schemas/ExposedPortsResult"
                 }
               }
             }
@@ -6048,7 +6049,7 @@
       "DeploymentImageInfoExternalImage": {
         "required": [
           "registryId",
-          "imageName"
+          "imageTag"
         ],
         "properties": {
           "$type": {
@@ -6060,11 +6061,8 @@
           "registryId": {
             "type": "string"
           },
-          "imageName": {
+          "imageTag": {
             "type": "string"
-          },
-          "source": {
-            "$ref": "#/components/schemas/ImageSource"
           }
         }
       },
@@ -6081,9 +6079,6 @@
           },
           "imageId": {
             "type": "string"
-          },
-          "source": {
-            "$ref": "#/components/schemas/ImageSource"
           }
         }
       },
@@ -7102,6 +7097,20 @@
           }
         }
       },
+      "ExposedPortsResult": {
+        "required": [
+          "ports"
+        ],
+        "type": "object",
+        "properties": {
+          "ports": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "GhcrAccountType": {
         "enum": [
           "Organization",
@@ -8054,12 +8063,6 @@
             "format": "int64"
           }
         }
-      },
-      "ImageSource": {
-        "enum": [
-          "Local",
-          "External"
-        ]
       },
       "ImageView": {
         "required": [
@@ -9621,52 +9624,6 @@
               "string"
             ],
             "format": "int32"
-          }
-        }
-      },
-      "RunImageInfoResult": {
-        "required": [
-          "volumes",
-          "networks",
-          "exposedPorts",
-          "memTotal",
-          "cpuCount"
-        ],
-        "type": "object",
-        "properties": {
-          "volumes": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "networks": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "exposedPorts": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "memTotal": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
-            "format": "double"
-          },
-          "cpuCount": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
-            "format": "double"
           }
         }
       },

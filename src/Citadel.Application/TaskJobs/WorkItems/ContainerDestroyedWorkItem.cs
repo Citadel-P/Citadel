@@ -30,7 +30,7 @@ internal sealed class ContainerDestroyedWorkItem(
             // update image containers count if any
             if (!string.IsNullOrEmpty(existing.DockerImageId))
             {
-                var image = await uow.Images.GetByImageIdAsync(existing.DockerImageId, platformId, cancellationToken);
+                var image = await uow.Images.GetByDockerImageIdAsync(existing.DockerImageId, platformId, cancellationToken);
                 if (image != null)
                 {
                     image.PartialUpdate(containers: image.Containers - 1);

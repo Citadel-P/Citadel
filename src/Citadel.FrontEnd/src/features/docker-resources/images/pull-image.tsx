@@ -95,7 +95,7 @@ export default function PullImageForm() {
                 placeholder="e.g. nginx:latest or my-app:1.0"
                 value={image}
                 onChange={(e) => setImage(e.target.value)}
-                className="text-sm w-full max-w-[600px]"
+                className="text-sm w-full max-w-[400px]"
               />
             </div>
 

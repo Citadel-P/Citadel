@@ -52,7 +52,7 @@ internal sealed class DeleteImagesHandler(
             // Todo: handle bulk delete
             foreach (var id in command.Ids)
             {
-                var existing = await unitOfWork.Images.GetByImageIdAsync(id, command.PlatformId, cancellationToken);
+                var existing = await unitOfWork.Images.GetByDockerImageIdAsync(id, command.PlatformId, cancellationToken);
                 if (existing == null) continue;
                 await unitOfWork.Images.DeleteAsync([existing.Id], cancellationToken);
                 await dockerDaemonHub.SendImageEvent(existing, "delete");

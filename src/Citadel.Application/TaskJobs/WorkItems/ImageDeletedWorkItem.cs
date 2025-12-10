@@ -16,7 +16,7 @@ internal sealed class ImageDeletedWorkItem(
     {
         try
         {
-            var existing = await uow.Images.GetByImageIdAsync(eventInfo.ImageId, platformId, cancellationToken);
+            var existing = await uow.Images.GetByDockerImageIdAsync(eventInfo.ImageId, platformId, cancellationToken);
             if (existing is null) return;
 
             await uow.Images.DeleteAsync([existing.Id], cancellationToken);

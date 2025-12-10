@@ -43,7 +43,35 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
         return images?.ToDomain() ?? [];
     }
 
-    public async Task<Image?> GetByImageIdAsync(string dockerImageId, Guid platformId, CancellationToken cancellationToken)
+    public async Task<Image?> GetByImageIdAsync(Guid id, Guid platformId, CancellationToken cancellationToken)
+    {
+        var sql = """
+            SELECT 
+                i.Id,
+                i.Name AS Name,
+                i.Tags,
+                i.DockerImageId,
+                i.Size,
+                i.Containers,
+                i.PlatformId,
+                i.CreatedAt,
+                i.IsUpToDate,
+                i.UpdatedAt,
+                i.RegistryId,
+                r.Name AS RegistryName,
+                r.RegistryHost AS RegistryHost,
+                r.Created As RegistryCreated
+            FROM Images i
+            LEFT JOIN Registries r
+            ON i.RegistryId = r.Id
+            WHERE PlatformId = @PlatformId AND i.Id = @Id
+            LIMIT 1
+            """;
+        var result = await db.QuerySingleOrDefaultAsync<ImageDto>(sql, new { Id = id.Format(), PlatformId = platformId.Format() }, transaction: tx());
+        return result?.ToDomain();
+    }
+
+    public async Task<Image?> GetByDockerImageIdAsync(string dockerImageId, Guid platformId, CancellationToken cancellationToken)
     {
         var sql = """
             SELECT 

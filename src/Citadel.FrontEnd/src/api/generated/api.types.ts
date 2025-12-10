@@ -61,11 +61,6 @@ export enum LoggingDriverType {
   Etwlogs = "etwlogs",
 }
 
-export enum ImageSource {
-  Local = "Local",
-  External = "External",
-}
-
 export enum GhcrAccountType {
   Organization = "Organization",
   User = "User",
@@ -511,14 +506,12 @@ export type DeploymentImageInfo = BaseDeploymentImageInfo &
 export interface DeploymentImageInfoExternalImage {
   $type?: "External";
   registryId: string;
-  imageName: string;
-  source?: ImageSource;
+  imageTag: string;
 }
 
 export interface DeploymentImageInfoLocalImage {
   $type?: "Local";
   imageId: string;
-  source?: ImageSource;
 }
 
 export interface DeploymentInput {
@@ -766,6 +759,10 @@ export interface EndpointSettingsInfo {
   globalIPv6PrefixLen: null | number | string;
   driverOpts: Record<string, string>;
   dnsNames: string[];
+}
+
+export interface ExposedPortsResult {
+  ports: string[];
 }
 
 export interface GitHubCrPackageVersion {
@@ -1510,22 +1507,6 @@ export interface RestartPolicy {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   maximumRetryCount: null | number | string;
-}
-
-export interface RunImageInfoResult {
-  volumes: string[];
-  networks: string[];
-  exposedPorts: string[];
-  /**
-   * @format double
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  memTotal: number | string;
-  /**
-   * @format double
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  cpuCount: number | string;
 }
 
 export interface SecurityConfig {
@@ -2780,27 +2761,27 @@ export class Api<
      * No description
      *
      * @tags Images
-     * @name GetImageInfo
-     * @summary Get image info
-     * @request GET:/api/v1/images/{platformId}/{imageId}/_info
+     * @name GetExposedPorts
+     * @summary Get image ports
+     * @request GET:/api/v1/images/{platformId}/{imageId}/_ports
      * @secure
-     * @response `200` `RunImageInfoResult` OK
+     * @response `200` `ExposedPortsResult` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    getImageInfo: (
+    getExposedPorts: (
       platformId: string,
       imageId: string,
       params: RequestParams = {},
     ) =>
       this.request<
-        RunImageInfoResult,
+        ExposedPortsResult,
         HttpValidationProblemDetails | ProblemDetails
       >({
-        path: `/api/v1/images/${platformId}/${imageId}/_info`,
+        path: `/api/v1/images/${platformId}/${imageId}/_ports`,
         method: "GET",
         secure: true,
         format: "json",

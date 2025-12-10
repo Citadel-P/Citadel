@@ -10,7 +10,7 @@ import {
   UseQueryResult,
 } from '@tanstack/react-query';
 import { useApiClientContext } from '@/api/api-client-context';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
   AnyFn,
@@ -292,4 +292,26 @@ export function useDialogHotkeys({
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [enabled, confirmDisabled, onConfirm, onCancel, confirmButtonRef]);
+}
+
+export function useMeasuredWidth(max = 400) {
+  const ref = useRef<HTMLElement | null>(null);
+  const [width, setWidth] = useState<number | undefined>(undefined);
+
+  const measure = useCallback(() => {
+    const w = ref.current?.getBoundingClientRect().width;
+    setWidth(w ? Math.min(w, max) : undefined);
+  }, [max]);
+
+  useLayoutEffect(() => {
+    measure();
+  }, [measure]);
+
+  useEffect(() => {
+    const onResize = () => measure();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [measure]);
+
+  return { ref, width, measure };
 }

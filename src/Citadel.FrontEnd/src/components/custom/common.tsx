@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useMemo, useState, useLayoutEffect } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem, CommandEmpty } from '@/components/ui/command';
-import { Check, ChevronsUpDown, LucideIcon, Tags } from 'lucide-react';
+import { Check, ChevronDown, LucideIcon, Tags, X } from 'lucide-react';
 import { cn, filterBySplit } from '@/lib/utils';
 import { PluralResourceMap, ResourceType } from '@/api/types';
-import { useRead } from '@/lib/hooks';
+import { useMeasuredWidth, useRead } from '@/lib/hooks';
 import { useResourceFilter } from '@/lib/atoms';
 import { Badge } from '../ui/badge';
+import { MultiSelect, MultiSelectOption } from '../ui/multi-select';
 
 export function ResourceSelectorField<T extends { id: string; name: string }>({
   type,
@@ -17,6 +18,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   align = 'start',
   placeholder,
   className,
+  platformId,
 }: {
   type: ResourceType;
   selected?: T | string | undefined;
@@ -25,17 +27,18 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   align?: 'start' | 'center' | 'end';
   placeholder?: string;
   className?: string;
+  platformId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
+  const { ref: triggerRef, width: contentWidth, measure } = useMeasuredWidth(400);
+
   const resourceName = PluralResourceMap[type];
   const [filter, setFilter] = useResourceFilter<{ item: T }>(type);
 
-  const read = useRead(`list${resourceName}`);
+  const read = useRead(`list${resourceName}`, { platformId });
   const items = (Object.values(read.data?.data ?? {}).at(0) as T[]) ?? [];
-
-  if (!items.length) return null;
 
   const selectedItem =
     filter?.item ?? (typeof selected === 'string' ? items.find((i) => i.id === selected) : selected) ?? undefined;
@@ -48,24 +51,33 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
     setOpen(false);
   };
 
+  useLayoutEffect(() => {
+    if (open) measure();
+  }, [open, selectedItem, measure]);
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          ref={triggerRef as any}
           disabled={disabled}
           variant="ghost"
           role="combobox"
           aria-expanded={open}
+          data-placeholder={selectedItem ? undefined : ''}
           className={cn(
-            'flex justify-between gap-2 w-full max-w-[300px] bg-accent/60 hover:bg-accent/80 shadow-none',
+            'flex justify-between gap-2 w-full max-w-[400px] font-normal data-[placeholder]:text-muted-foreground text-sm bg-background hover:bg-background shadow-xs border',
             className,
           )}>
           {selectedItem?.name ?? placeholder}
-          <ChevronsUpDown className="h-4 w-4 opacity-60" />
+          <ChevronDown className="h-4 w-4 opacity-60" />
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent className="w-[300px] p-0 bg-background" align={align}>
+      <PopoverContent
+        align={align}
+        className="w-full max-w-[400px] p-0 bg-background"
+        style={contentWidth ? { width: `${contentWidth}px` } : undefined}>
         <Command shouldFilter={false} defaultValue={selectedItem?.name ?? '__none__'}>
           <CommandInput placeholder={`Search ${PluralResourceMap[type]}`} value={search} onValueChange={setSearch} />
 
@@ -102,6 +114,70 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
         </Command>
       </PopoverContent>
     </Popover>
+  );
+}
+
+export function MultiResourceSelectorField<T extends { id: string; name: string }>({
+  type,
+  selected,
+  onSelect,
+  disabled,
+  placeholder,
+  platformId,
+  className,
+}: {
+  type: ResourceType;
+  selected?: string[] | T[];
+  onSelect?: (items: T[]) => void;
+  disabled?: boolean;
+  align?: 'start' | 'center' | 'end';
+  placeholder?: string;
+  platformId?: string;
+  className?: string;
+}) {
+  const resourceName = PluralResourceMap[type];
+
+  const read = useRead(`list${resourceName}`, { platformId });
+  const items = (Object.values(read.data?.data ?? {}).at(0) as T[]) ?? [];
+
+  const options: MultiSelectOption[] = useMemo(
+    () =>
+      items
+        .map((item) => ({
+          label: item.name,
+          value: item.id,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [items],
+  );
+
+  const selectedIds = useMemo(() => {
+    if (!selected) return [];
+    return selected.map((s) => (typeof s === 'string' ? s : s.id));
+  }, [selected]);
+
+  const handleValueChange = (newIds: string[]) => {
+    const newSelectedItems = items.filter((item) => newIds.includes(item.id));
+    onSelect?.(newSelectedItems);
+  };
+
+  return (
+    <MultiSelect
+      options={options}
+      defaultValue={selectedIds}
+      onValueChange={handleValueChange}
+      placeholder={read.isLoading ? 'Loading...' : (placeholder ?? `Select ${resourceName}...`)}
+      disabled={disabled || read.isLoading}
+      maxWidth="400px"
+      className={cn(
+        'flex justify-between w-full text-sm bg-background font-normal hover:bg-background shadow-xs border',
+        className,
+      )}
+      searchable={true}
+      maxCount={3}
+      resetOnDefaultValueChange={true}
+      animation={0}
+    />
   );
 }
 

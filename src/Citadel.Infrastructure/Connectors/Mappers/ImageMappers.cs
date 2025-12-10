@@ -381,8 +381,8 @@ internal static class ImageMappers
     internal static Domain.Contracts.Resources.Images.HistoryImageResult Map(this Citadel.Agent.Images.V1.HistoryImageResult item) => new(
         Id: item.Id, Created: item.Created, CreatedBy: item.CreatedBy, Size: item.Size, Comment: item.Comment);
 
-    internal static RunImageInfoResult Map(this Hosting.DockerClient.Models.Images.RunImageInfoResult info) =>
-        new(Volumes: info.Volumes, Networks: info.Networks, ExposedPorts: info.ExposedPorts, 0, 0);
+    internal static ExposedPortsResult Map(this Hosting.DockerClient.Models.Images.ExposedPortsResult info) =>
+        new(Ports: info.Ports);
 
     internal static List<Domain.Contracts.Resources.Images.HistoryImageResult> Map(this HistoryImageResponse histories) 
         => [.. histories.Items.Select(Map)];

@@ -1,11 +1,10 @@
 import {
-  RegistryType,
-  GhcrAccountType,
-  RegistryConfigurationBaseGitHubRegistry,
-  RegistryConfigurationBaseCustomRegistry,
-  RegistryConfigurationBaseDockerHubRegistry,
   DeploymentInput,
   PlatformView,
+  ImageView,
+  DeploymentImageInfoExternalImage,
+  DeploymentImageInfoLocalImage,
+  DockerNetworkResult,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -13,89 +12,39 @@ import {
   defineGroupField,
   defineSection,
   FieldInput,
-  FieldSwitch,
   FieldTextArea,
+  defineRowField,
+  PortMappingField,
 } from '@/components/custom/form-builder';
 import { Constants } from '@/lib/constants';
-import { useState, useMemo } from 'react';
-import { useMutate } from '@/lib/hooks';
+import { useState, useMemo, useEffect } from 'react';
+import { useMutate, useRead } from '@/lib/hooks';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { useParams, useNavigate } from 'react-router';
-import { Globe, MoveUpRight } from 'lucide-react';
-import { DockerIcon, GitHubIcon } from '@/lib/icons';
-import { ResourceSelectorField } from '@/components/custom/common';
+import { MultiResourceSelectorField, ResourceSelectorField } from '@/components/custom/common';
 
-const registryInfo = {
-  DockerHub: {
-    icon: DockerIcon,
-    label: 'DockerHub',
-    description: 'Private DockerHub registry',
-  },
-  GitHub: {
-    icon: GitHubIcon,
-    label: 'GitHub',
-    description: 'GitHub Container Registry (GHCR)',
-  },
-  Custom: {
-    icon: Globe,
-    label: 'Custom',
-    description: 'Define your own OCI-compatible registry',
-  },
-} as const;
+const enum ImageSource {
+  Local = 'Local',
+  External = 'External',
+}
 
 const imageSource = {
   Local: {
-    label: 'Local',
-    description: 'Use an image already pulled to the deployment host/platform'
+    label: ImageSource.Local,
+    description: 'Use an image that already exists on the target Docker host.',
   },
   External: {
-    label: 'External',
-    description: 'Pull an image from a remote registry (Docker Hub, GitHub, etc.)'
-  }
-}
-
-const RegistryTypeSelector = ({ value, onChange, disabled }: any) => {
-  const selected = registryInfo[value as keyof typeof registryInfo];
-
-  return (
-    <Select value={value} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger className="w-full max-w-[400px]">
-        <SelectValue>
-          {selected ? (
-            <div className="flex items-center gap-2">
-              <selected.icon className="w-4 h-4" />
-              <span>{selected.label}</span>
-            </div>
-          ) : (
-            'Select registry type'
-          )}
-        </SelectValue>
-      </SelectTrigger>
-
-      <SelectContent className="bg-background">
-        {Object.entries(registryInfo).map(([key, info]) => (
-          <SelectItem key={key} value={key}>
-            <div className="flex items-center gap-2">
-              <info.icon className="w-4 h-4" />
-              <div className="flex flex-col">
-                <span className="font-medium">{info.label}</span>
-                <span className="text-xs text-muted-foreground">{info.description}</span>
-              </div>
-            </div>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
+    label: ImageSource.External,
+    description: 'Pull an image from a remote registry (Docker Hub, GitHub, etc.)',
+  },
 };
 
 const ImageSourceSelector = ({ value, onChange, disabled }: any) => {
-  const selected = imageSource[value as keyof typeof imageSource];
-
+  const finalValue = value ?? ImageSource.Local;
+  const selected = imageSource[finalValue as keyof typeof imageSource];
   return (
-    <Select value={value} onValueChange={onChange} disabled={disabled}>
+    <Select value={finalValue} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger className="w-full max-w-[400px]">
         <SelectValue>
           {selected ? (
@@ -109,10 +58,9 @@ const ImageSourceSelector = ({ value, onChange, disabled }: any) => {
       </SelectTrigger>
 
       <SelectContent className="bg-background">
-        {Object.entries(registryInfo).map(([key, info]) => (
+        {Object.entries(imageSource).map(([key, info]) => (
           <SelectItem key={key} value={key}>
             <div className="flex items-center gap-2">
-              <info.icon className="w-4 h-4" />
               <div className="flex flex-col">
                 <span className="font-medium">{info.label}</span>
                 <span className="text-xs text-muted-foreground">{info.description}</span>
@@ -125,52 +73,46 @@ const ImageSourceSelector = ({ value, onChange, disabled }: any) => {
   );
 };
 
-const GhcrAccountTypeSelector = ({ value, onChange, disabled }: any) => (
-  <Select value={value} onValueChange={onChange} disabled={disabled}>
-    <SelectTrigger className="w-full max-w-[400px]">
-      <SelectValue placeholder="Select GitHub account type" />
-    </SelectTrigger>
-    <SelectContent className="bg-background">
-      <SelectItem value={GhcrAccountType.User}>{GhcrAccountType.User}</SelectItem>
-      <SelectItem value={GhcrAccountType.Organization}>{GhcrAccountType.Organization}</SelectItem>
-    </SelectContent>
-  </Select>
-);
-
-const HelperLink = ({ href, info }: { href: string; info: string }) => (
-  <a className="underline decoration-dotted hover:text-primary" href={href} target="_blank" rel="noreferrer">
-    <span className="flex flex-row gap-1 justify-baseline items-center">
-      {info} <MoveUpRight className="h-3.5 w-3.5" />
-    </span>
-  </a>
-);
-
 export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: DeploymentInput }) => {
   const id = useParams().id;
   const navigate = useNavigate();
   const [update, setUpdate] = useState<Partial<DeploymentInput>>({});
   const [isPending, setIsPending] = useState(false);
 
-  const { mutateAsync: createRegistry } = useMutate('createDeployment');
-  const { mutateAsync: updateRegistry } = useMutate('updateDeployment');
+  const { data, isSuccess: imageInfoIsSuccess } = useRead('getExposedPorts', {
+    platformId: update.platformId,
+    imageId: (update.spec?.image as DeploymentImageInfoLocalImage)?.imageId,
+  });
+
+  useEffect(() => {
+    if (imageInfoIsSuccess && data?.data?.ports !== undefined) {
+      setUpdate(
+        (prev) =>
+          ({
+            ...prev,
+            spec: {
+              ...(prev.spec ?? {}),
+              ports: data.data.ports,
+            },
+          }) as Partial<DeploymentInput>,
+      );
+    }
+  }, [imageInfoIsSuccess, data?.data?.ports]);
+
+  const { mutateAsync: createDeployment } = useMutate('createDeployment');
+  const { mutateAsync: updateDeployment } = useMutate('updateDeployment');
 
   const original = resource ?? ({} as DeploymentInput);
-  const provider = update.type ?? resource?.type ?? RegistryType.DockerHub;
+  const provider = update.spec?.image?.$type;
 
   const handleSave = async (payload: DeploymentInput) => {
-    if (payload.type === RegistryType.Custom && !payload.configuration) {
-      payload.configuration = {
-        $type: 'Custom',
-        authEnabled: false,
-      } satisfies RegistryConfigurationBaseCustomRegistry;
-    }
     setIsPending(true);
     try {
-      if (mode === 'edit') await updateRegistry({ id, data: payload });
-      else await createRegistry({ data: payload });
+      if (mode === 'edit') await updateDeployment({ id, data: payload });
+      else await createDeployment({ data: payload });
 
-      toast.success(`Registry "${payload.name}" saved successfully`);
-      navigate('/registries');
+      toast.success(`Deployment "${payload.name}" saved successfully`);
+      navigate('/deployments');
     } finally {
       setIsPending(false);
     }
@@ -184,7 +126,7 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
           defineGroupField({
             id: 'details',
             label: 'Details',
-            fields: [
+            items: [
               defineField({
                 key: 'name',
                 label: 'Name',
@@ -217,32 +159,163 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                 selected={value}
                 onSelect={(v: PlatformView | undefined) => set({ platformId: v?.id })}
                 placeholder="Select Platform"
-                className="text-sm"
               />
             ),
           }),
-          defineGroupField({
+          defineGroupField<DeploymentInput>({
             id: 'image',
             label: 'Image',
-            fields: [
+            items: [
               defineField({
-                key: 'name',
-                label: 'Source',
+                label: 'Image Source',
+                key: 'spec.image.$type',
+                description: 'Select the image source.',
                 required: true,
                 validate: (v) => (!v ? 'Source is required' : null),
-                render: (val, set) => {
-                  return (
-                    // <ImageSourceSelector 
-                  <FieldInput value={val} onChange={(v) => set({ name: v })} placeholder="e.g. production-web-server" />
-                )},
+                render: (val, set) => (
+                  <ImageSourceSelector
+                    value={val}
+                    onChange={(v: ImageSource) => set({ spec: { image: { $type: v } } as any })}
+                  />
+                ),
               }),
 
+              provider === ImageSource.External
+                ? defineRowField({
+                    id: 'imageRow',
+                    gap: 'gap-8',
+                    fields: [
+                      defineField({
+                        key: 'spec.image.registryId',
+                        label: 'Registry',
+                        required: true,
+                        description: 'Select the registry to pull the image from.',
+                        render: (val, set) => {
+                          return (
+                            <ResourceSelectorField
+                              type="Registry"
+                              selected={val}
+                              platformId={update.platformId}
+                              onSelect={(v: ImageView | undefined) =>
+                                set((prev) => ({
+                                  spec: {
+                                    ...prev.spec!,
+                                    image: {
+                                      $type: 'External',
+                                      ...((prev.spec?.image as DeploymentImageInfoExternalImage) ?? {}),
+                                      registryId: v?.id ?? '',
+                                    } satisfies DeploymentImageInfoExternalImage,
+                                  },
+                                }))
+                              }
+                              placeholder="Select Registry"
+                              className="sm:min-w-[400px]"
+                            />
+                          );
+                        },
+                      }),
+                      defineField({
+                        key: 'spec.image.imageTag',
+                        label: ' ',
+                        required: true,
+                        description: 'Enter the image reference.',
+                        render: (val, set) => {
+                          return (
+                            <FieldInput
+                              value={val}
+                              onChange={(v) =>
+                                set((prev) => ({
+                                  spec: {
+                                    ...prev.spec!,
+                                    image: {
+                                      $type: 'External',
+                                      ...((prev.spec?.image as DeploymentImageInfoExternalImage) ?? {}),
+                                      imageTag: v,
+                                    } satisfies DeploymentImageInfoExternalImage,
+                                  },
+                                }))
+                              }
+                              placeholder="e.g. nginx:latest "
+                              className="w-full max-w-full"
+                            />
+                          );
+                        },
+                      }),
+                    ],
+                  })
+                : defineField({
+                    key: 'spec.image.imageId',
+                    label: `Local Image`,
+                    required: true,
+                    description: 'These images are immediately available for deployment without a remote pull.',
+                    render: (val, set) => (
+                      <ResourceSelectorField
+                        type="Image"
+                        selected={val}
+                        platformId={update.platformId}
+                        onSelect={(v: ImageView | undefined) =>
+                          set((prev) => ({
+                            spec: {
+                              ...prev.spec!,
+                              image: {
+                                $type: 'Local',
+                                ...((prev.spec?.image as DeploymentImageInfoLocalImage) ?? {}),
+                                imageId: v?.id ?? '',
+                              } satisfies DeploymentImageInfoLocalImage,
+                            },
+                          }))
+                        }
+                        placeholder="Select Image"
+                      />
+                    ),
+                  }),
+            ],
+          }),
+          defineGroupField<DeploymentInput>({
+            id: 'networks',
+            label: 'Networks',
+            items: [
               defineField({
-                key: 'description',
-                label: 'Description',
+                label: 'Networks',
+                key: 'spec.networks',
+                description: 'Select the Docker networks that this container will attach to.',
+                required: true,
+                validate: (v) => (!v ? 'Source is required' : null),
+                render: (value, set) => (
+                  <MultiResourceSelectorField
+                    type="Network"
+                    selected={value}
+                    onSelect={(v: DockerNetworkResult[] | undefined) =>
+                      set((prev) => ({
+                        spec: {
+                          ...prev.spec!,
+                          networks: v?.map((s) => s.id) ?? [],
+                        },
+                      }))
+                    }
+                    placeholder="Select Network(s)"
+                    platformId={update.platformId}
+                  />
+                ),
+              }),
+              defineField({
+                label: 'Ports',
+                key: 'spec.ports',
+                description: 'Configure port mappings.',
                 required: false,
-                description: 'Optional description of this workload.',
-                render: (val, set) => <FieldTextArea value={val} onChange={(v) => set({ description: v })} />,
+                render: (value, set) => (
+                  <PortMappingField
+                    ports={value ?? []}
+                    set={(v: string[] | undefined) =>
+                      set((prev) => ({
+                        spec: {
+                          ...prev.spec!,
+                          ports: v?.map((s) => s) ?? [],
+                        },
+                      }))
+                    }
+                  />
+                ),
               }),
             ],
           }),
@@ -263,275 +336,8 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
           }),
         ],
       }),
-
-      ...(provider === RegistryType.GitHub
-        ? {
-            GitHub: defineSection<DeploymentInput>({
-              title: 'GitHub',
-              items: [
-                defineGroupField<DeploymentInput>({
-                  id: 'account-info',
-                  label: 'Account Info',
-                  fields: [
-                    defineField({
-                      key: 'configuration.type',
-                      label: 'Account Type',
-                      description: 'Select your account type',
-                      required: true,
-                      validate: (v) => (!v || v.length < 3 ? 'Account name too short' : null),
-                      render: (value, set) => (
-                        <GhcrAccountTypeSelector
-                          value={value ?? GhcrAccountType.User}
-                          onChange={(v: GhcrAccountType) =>
-                            set((prev) => ({
-                              configuration: {
-                                $type: 'GitHub',
-                                ...((prev.configuration as RegistryConfigurationBaseGitHubRegistry) ?? {}),
-                                type: v,
-                              } satisfies RegistryConfigurationBaseGitHubRegistry,
-                            }))
-                          }
-                        />
-                      ),
-                    }),
-
-                    defineField({
-                      key: 'configuration.name',
-                      label:
-                        (update.configuration as RegistryConfigurationBaseGitHubRegistry)?.type ===
-                        GhcrAccountType.Organization
-                          ? 'Organization Name'
-                          : 'User Name',
-                      required: true,
-                      validate: (v) => (!v || v.length < 3 ? 'Account name too short' : null),
-                      render: (value, set) => (
-                        <FieldInput
-                          value={value ?? ''}
-                          onChange={(v) =>
-                            set((prev) => ({
-                              configuration: {
-                                $type: 'GitHub',
-                                ...((prev.configuration as RegistryConfigurationBaseGitHubRegistry) ?? {}),
-                                name: v,
-                              } satisfies RegistryConfigurationBaseGitHubRegistry,
-                            }))
-                          }
-                        />
-                      ),
-                    }),
-                  ],
-                }),
-                defineField({
-                  key: 'configuration.pat',
-                  label: 'PAT',
-                  required: true,
-                  validate: (v) => (!v || v.length < 10 ? 'PAT must be at least 10 chars' : null),
-                  description: (
-                    <div className="flex flex-row flex-wrap text-sm gap-1 text-muted-foreground">
-                      Provide a Personal Access Token with the <Badge variant="secondary">read:packages</Badge> scope.
-                      More info in the{' '}
-                      <HelperLink
-                        href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic"
-                        info="GitHub documentation"
-                      />
-                    </div>
-                  ),
-                  render: (value, set) => (
-                    <FieldInput
-                      type="password"
-                      value={value ?? ''}
-                      onChange={(v) =>
-                        set((prev) => ({
-                          configuration: {
-                            $type: 'GitHub',
-                            ...((prev.configuration as RegistryConfigurationBaseGitHubRegistry) ?? {}),
-                            pat: v,
-                          } satisfies RegistryConfigurationBaseGitHubRegistry,
-                        }))
-                      }
-                    />
-                  ),
-                }),
-              ],
-            }),
-          }
-        : {}),
-
-      ...(provider === RegistryType.DockerHub
-        ? {
-            DockerHub: defineSection<DeploymentInput>({
-              title: 'DockerHub',
-              items: [
-                defineField({
-                  key: 'configuration.userName',
-                  label: 'Username',
-                  required: true,
-                  validate: (v) => (!v || v.length < 3 ? 'DockerHub Username too short' : null),
-                  render: (value, set) => (
-                    <FieldInput
-                      value={value ?? ''}
-                      onChange={(v) =>
-                        set((prev) => ({
-                          configuration: {
-                            $type: 'DockerHub',
-                            ...((prev.configuration as RegistryConfigurationBaseDockerHubRegistry) ?? {}),
-                            userName: v,
-                          } satisfies RegistryConfigurationBaseDockerHubRegistry,
-                        }))
-                      }
-                    />
-                  ),
-                }),
-
-                defineField({
-                  key: 'configuration.pat',
-                  label: 'PAT',
-                  required: true,
-                  validate: (v) => (!v || v.length < 10 ? 'PAT must be at least 10 chars' : null),
-                  description: (
-                    <div className="flex flex-row text-sm text-muted-foreground gap-1">
-                      To create a DockerHub personal access token, follow the{' '}
-                      <HelperLink
-                        href="https://docs.docker.com/security/for-developers/access-tokens/"
-                        info="official DockerHub guide"
-                      />
-                    </div>
-                  ),
-                  render: (value, set) => (
-                    <FieldInput
-                      type="password"
-                      value={value ?? ''}
-                      onChange={(v) =>
-                        set((prev) => ({
-                          configuration: {
-                            $type: 'DockerHub',
-                            ...((prev.configuration as RegistryConfigurationBaseDockerHubRegistry) ?? {}),
-                            pat: v,
-                          } satisfies RegistryConfigurationBaseDockerHubRegistry,
-                        }))
-                      }
-                    />
-                  ),
-                }),
-              ],
-            }),
-          }
-        : {}),
-
-      ...(provider === RegistryType.Custom
-        ? {
-            Custom: defineSection<DeploymentInput>({
-              title: 'Custom Settings',
-              items: [
-                defineGroupField<DeploymentInput>({
-                  id: 'custom-general',
-                  label: 'General',
-                  fields: [
-                    defineField({
-                      key: 'registryHost',
-                      label: 'Registry Host',
-                      required: true,
-                      description: (
-                        <div className="flex flex-row flex-wrap text-sm gap-1 text-muted-foreground">
-                          Host or IP of the Docker registry. Use <Badge variant="secondary">host:port</Badge> format
-                          only — no protocol.
-                        </div>
-                      ),
-                      validate: (v) => (!new RegExp(Constants.validHostOrIp).test(v) ? 'Invalid host' : null),
-                      render: (value, set) => (
-                        <FieldInput
-                          value={value ?? ''}
-                          placeholder="myregistry.example"
-                          onChange={(v) => set({ registryHost: v })}
-                        />
-                      ),
-                    }),
-
-                    defineField({
-                      key: 'configuration.authEnabled',
-                      label: 'Authentication',
-                      description: 'Enable this option if you need to specify credentials to connect to this registry.',
-                      render: (value, set) => (
-                        <FieldSwitch
-                          checked={value ?? false}
-                          id="configuration.authEnabled"
-                          onChange={(value) =>
-                            set((prev) => ({
-                              configuration: {
-                                $type: 'Custom',
-                                ...((prev.configuration ?? {}) as RegistryConfigurationBaseCustomRegistry),
-                                authEnabled: value,
-                              } satisfies RegistryConfigurationBaseCustomRegistry,
-                            }))
-                          }
-                        />
-                      ),
-                    }),
-                  ],
-                }),
-
-                /* CREDENTIALS GROUP — only if enabled */
-                ...(((update.configuration as RegistryConfigurationBaseCustomRegistry)?.authEnabled ??
-                (original.configuration as RegistryConfigurationBaseCustomRegistry)?.authEnabled)
-                  ? [
-                      defineGroupField<DeploymentInput>({
-                        id: 'custom-auth',
-                        label: 'Credentials',
-                        fields: [
-                          defineField({
-                            key: 'configuration.userName',
-                            label: 'Username',
-                            required: true,
-                            validate: (v) => (!v || v.length < 3 ? 'Username too short' : null),
-                            render: (value, set) => (
-                              <FieldInput
-                                value={value ?? ''}
-                                placeholder="username"
-                                onChange={(v) =>
-                                  set((prev) => ({
-                                    configuration: {
-                                      $type: 'Custom',
-                                      ...((prev.configuration ?? {}) as RegistryConfigurationBaseCustomRegistry),
-                                      userName: v,
-                                    } satisfies RegistryConfigurationBaseCustomRegistry,
-                                  }))
-                                }
-                              />
-                            ),
-                          }),
-
-                          defineField({
-                            key: 'configuration.password',
-                            label: 'Password',
-                            required: true,
-                            validate: (v) => (!v || v.length < 4 ? 'Password too short' : null),
-                            render: (value, set) => (
-                              <FieldInput
-                                type="password"
-                                value={value ?? ''}
-                                placeholder="password"
-                                onChange={(v) =>
-                                  set((prev) => ({
-                                    configuration: {
-                                      $type: 'Custom',
-                                      ...((prev.configuration ?? {}) as RegistryConfigurationBaseCustomRegistry),
-                                      password: v,
-                                    },
-                                  }))
-                                }
-                              />
-                            ),
-                          }),
-                        ],
-                      }),
-                    ]
-                  : []),
-              ],
-            }),
-          }
-        : {}),
     }),
-    [mode, provider, update.configuration, original.configuration],
+    [provider, update.platformId],
   );
 
   return (
@@ -543,15 +349,8 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
       setUpdate={setUpdate}
       onSave={handleSave}
       pending={isPending}
-      draftKey={`registry:${id ?? 'new'}`}
+      draftKey={`deployment:${id ?? 'new'}`}
       draftVersion={1}
-      onReset={() =>
-        setUpdate((prev) => {
-          // Preserve the selected registry provider
-          const type = prev?.type ?? provider;
-          return type ? { type } : {};
-        })
-      }
     />
   );
 };

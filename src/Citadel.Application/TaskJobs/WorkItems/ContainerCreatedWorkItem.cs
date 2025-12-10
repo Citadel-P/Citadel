@@ -23,7 +23,7 @@ internal sealed class ContainerCreatedWorkItem(
 
         try
         {
-            var image = await uow.Images.GetByImageIdAsync(
+            var image = await uow.Images.GetByDockerImageIdAsync(
                 eventInfo.Container.ImageId,
                 platformId,
                 cancellationToken);
@@ -38,7 +38,7 @@ internal sealed class ContainerCreatedWorkItem(
             // update image status
             if (!string.IsNullOrEmpty(container.DockerImageId))
             {
-                var imageToUpdate = await uow.Images.GetByImageIdAsync(
+                var imageToUpdate = await uow.Images.GetByDockerImageIdAsync(
                     container.DockerImageId,
                     platformId,
                     cancellationToken);

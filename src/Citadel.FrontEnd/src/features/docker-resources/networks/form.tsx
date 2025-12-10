@@ -140,7 +140,7 @@ export default function AddNetwork() {
         defineGroupField({
           id: 'ipv4',
           label: 'IPv4 Configuration',
-          fields: [
+          items: [
             defineField({
               key: 'enableIPv4',
               label: 'Enable IPv4',
@@ -226,7 +226,7 @@ export default function AddNetwork() {
         defineGroupField({
           id: 'ipv6',
           label: 'IPv6 Configuration',
-          fields: [
+          items: [
             defineField({
               key: 'enableIPv6',
               label: 'Enable IPv6',
@@ -365,7 +365,6 @@ export default function AddNetwork() {
       draftKey={`network:new:${currentPlatform?.id}`}
       draftVersion={1}
       pending={isPending}
-      title="Create Network"
     />
   );
 }

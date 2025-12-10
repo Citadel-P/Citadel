@@ -305,7 +305,7 @@ public static class PublicEndpoints
 
     private static void MapImageEndpoints(RouteGroupBuilder images)
     {
-        images.MapGet("{platformId}", Images.ListLocalImages)
+        images.MapGet("{platformId}", Images.ListImages)
             .WithSummary("Get all local images for the given platform")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -348,13 +348,13 @@ public static class PublicEndpoints
            .ProducesProblem(StatusCodes.Status404NotFound)
            .WithName("inspectImage");
 
-        images.MapGet("{platformId}/{imageId}/_info", Images.GetImageInfo)
-           .WithSummary("Get image info")
+        images.MapGet("{platformId}/{imageId}/_ports", Images.GetExposedPorts)
+           .WithSummary("Get image ports")
            .ProducesValidationProblem()
            .ProducesProblem(StatusCodes.Status403Forbidden)
            .ProducesProblem(StatusCodes.Status401Unauthorized)
            .ProducesProblem(StatusCodes.Status404NotFound)
-           .WithName("getImageInfo");
+           .WithName("getExposedPorts");
 
         images.MapPost("/pull", Images.PullImage)
             .WithSummary("Pull an image from a registry and returns logs as a stream")

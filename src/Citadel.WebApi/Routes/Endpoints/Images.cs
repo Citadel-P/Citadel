@@ -14,7 +14,7 @@ namespace WebApi.Routes.Endpoints;
 
 public static class Images
 {
-    public static async Task<Results<Ok<ImagesView>, ProblemHttpResult>> ListLocalImages(IMediator mediator, [Description("The platform id")] Guid platformId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<ImagesView>, ProblemHttpResult>> ListImages(IMediator mediator, [Description("The platform id")] Guid platformId, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAllLocalImages(platformId), cancellationToken);
         return EndpointHandlers.HandleResult(result, ImagesView.Map);
@@ -64,9 +64,9 @@ public static class Images
         return EndpointHandlers.HandleResult(result, InspectImageView.Map);
     }
 
-    public static async Task<Results<Ok<RunImageInfoResult>, ProblemHttpResult>> GetImageInfo(IMediator mediator, Guid platformId, string imageId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<ExposedPortsResult>, ProblemHttpResult>> GetExposedPorts(IMediator mediator, Guid platformId, Guid imageId, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetRunImageInfo(platformId, imageId), cancellationToken);
+        var result = await mediator.Send(new GetExposedPorts(platformId, imageId), cancellationToken);
         return EndpointHandlers.HandleResult(result, v => v);
     }
 

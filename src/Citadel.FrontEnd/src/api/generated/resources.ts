@@ -33,7 +33,7 @@ export const resources = {
   getDockerHubRepositories: { method: "GET", key: "getDockerHubRepositories", params: ["registryName","params"], requiredParams: ["registryName"], queryParams: [] },
   getDockerHubRepositoryTags: { method: "GET", key: "getDockerHubRepositoryTags", params: ["registryName","repositoryName","params"], requiredParams: ["registryName","repositoryName"], queryParams: [] },
   inspectImage: { method: "GET", key: "inspectImage", params: ["platformId","imageId","params"], requiredParams: ["platformId","imageId"], queryParams: [] },
-  getImageInfo: { method: "GET", key: "getImageInfo", params: ["platformId","imageId","params"], requiredParams: ["platformId","imageId"], queryParams: [] },
+  getExposedPorts: { method: "GET", key: "getExposedPorts", params: ["platformId","imageId","params"], requiredParams: ["platformId","imageId"], queryParams: [] },
   pullImage: { method: "POST", key: "pullImage", params: ["data","params"], requiredParams: [], queryParams: [] },
   deleteImages: { method: "DELETE", key: "deleteImages", params: ["params"], requiredParams: [], queryParams: [] },
   listNetworks: { method: "GET", key: "listNetworks", params: ["platformId","query","params"], requiredParams: ["platformId"], queryParams: ["Dangling","Driver","Id","Name"] },

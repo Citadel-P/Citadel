@@ -34,7 +34,7 @@ internal sealed class InspectImageHandler(IPlatformContainerCache platformContai
         
         if (result.IsSuccess(out var inspectResult))
         {
-            var image = await unitOfWork.Images.GetByImageIdAsync(inspectResult.Id, query.PlatformId, cancellationToken);
+            var image = await unitOfWork.Images.GetByDockerImageIdAsync(inspectResult.Id, query.PlatformId, cancellationToken);
             if (image != null)
             {
                 inspectResult.Registry = image.Registry;

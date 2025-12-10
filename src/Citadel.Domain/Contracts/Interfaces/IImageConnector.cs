@@ -11,7 +11,7 @@ public interface IImageConnector
     Task<Result<ImageResult>> GetAsync(string platformAddress, string imageId, CancellationToken cancellationToken);
     Task<Result<IReadOnlyList<ImageResult>>> ListImagesAsync(string platformAddress, CancellationToken cancellationToken);
     Task<Result<InspectImageResult>> InspectImageAsync(InspectImageCommand inspectImageCommand, CancellationToken cancellationToken);
-    Task<Result<RunImageInfoResult>> GetRunImageInfoAsync(RunImageInfoCommand runImageInfoCommand, CancellationToken cancellationToken);
+    Task<Result<ExposedPortsResult>> GetRunImageInfoAsync(RunImageInfoCommand runImageInfoCommand, CancellationToken cancellationToken);
     Task<Result<IEnumerable<HistoryImageResult>>> HistoryImageAsync(HistoryImageCommand command, CancellationToken cancellationToken);
     Task<Result<DeleteImageResult>> DeleteImageAsync(DeleteImageCommand deleteImageCommand, CancellationToken cancellationToken);
     IAsyncEnumerable<PullImageResult> PullImageProgressStreamAsync(PullImageCommand pullImageCommand, CancellationToken cancellationToken);

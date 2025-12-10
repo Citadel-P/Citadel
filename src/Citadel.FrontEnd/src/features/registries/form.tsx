@@ -168,7 +168,7 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                 defineGroupField<RegistryInput>({
                   id: 'account-info',
                   label: 'Account Info',
-                  fields: [
+                  items: [
                     defineField({
                       key: 'configuration.accountType',
                       label: 'Account Type',
@@ -322,7 +322,7 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                 defineGroupField<RegistryInput>({
                   id: 'custom-general',
                   label: 'General',
-                  fields: [
+                  items: [
                     defineField({
                       key: 'registryHost',
                       label: 'Registry Host',
@@ -373,7 +373,7 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                       defineGroupField<RegistryInput>({
                         id: 'custom-auth',
                         label: 'Credentials',
-                        fields: [
+                        items: [
                           defineField({
                             key: 'configuration.userName',
                             label: 'Username',

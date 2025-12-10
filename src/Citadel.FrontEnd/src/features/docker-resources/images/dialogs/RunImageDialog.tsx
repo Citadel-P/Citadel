@@ -242,7 +242,7 @@ export const RunImageDialog = ({
                                       }))}
                                       onValueChange={field.onChange}
                                       value={field.value ?? []}
-                                      placeholder="Select networks to connect this container to…"
+                                      placeholder="Select networks to connect this deployment to…"
                                     />
                                     <FormMessage />
                                   </FormItem>

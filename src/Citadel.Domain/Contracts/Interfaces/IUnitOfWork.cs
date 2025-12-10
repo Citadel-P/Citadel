@@ -101,7 +101,8 @@ public interface IPlatformRepository
 
 public interface IImageRepository
 {
-    Task<Image?> GetByImageIdAsync(string dockerImageId, Guid platformId, CancellationToken cancellationToken);
+    Task<Image?> GetByImageIdAsync(Guid id, Guid platformId, CancellationToken cancellationToken);
+    Task<Image?> GetByDockerImageIdAsync(string dockerImageId, Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<Image>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
 
     Task<int> AddAsync(Image image, CancellationToken cancellationToken);

@@ -117,7 +117,7 @@ internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageCon
         }
     }
 
-    public async Task<Result<RunImageInfoResult>> GetRunImageInfoAsync(RunImageInfoCommand command, CancellationToken cancellationToken)
+    public async Task<Result<ExposedPortsResult>> GetRunImageInfoAsync(RunImageInfoCommand command, CancellationToken cancellationToken)
     {
         try
         {
@@ -128,15 +128,11 @@ internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageCon
             };
 
             var response = await client.GetRunImageInfoAsyncAsync(request, cancellationToken: cancellationToken);
-            return new RunImageInfoResult(
-                Volumes: response.Volumes,
-                Networks: response.Networks,
-                ExposedPorts: response.ExposedPorts, 
-                0, 0);
+            return new ExposedPortsResult(Ports: response.ExposedPorts);
         }
         catch (RpcException ex)
         {
-            return Result.Failure<RunImageInfoResult>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+            return Result.Failure<ExposedPortsResult>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
 }

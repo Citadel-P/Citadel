@@ -35,21 +35,30 @@ export interface FieldItemConfig<T> {
   field: FieldConfig<T>;
 }
 
+export interface RowFieldConfig<T> {
+  kind: 'row';
+  id: string;
+  fields: FieldConfig<T>[];
+  gap?: string;
+  className?: string;
+}
+
 export interface GroupFieldConfig<T> {
   kind: 'group';
   id: string;
   label: string;
   description?: React.ReactElement | string;
-  fields: FieldConfig<T>[];
+  items: Array<FieldItemConfig<T> | RowFieldConfig<T>>;
+  direction?: 'vertical' | 'horizontal';
 }
 
 export interface SectionConfig<T> {
-  title: string;
+  title?: string;
   items: SectionItemConfig<T>[];
 }
 
 export type FormSchema<T> = Record<string, SectionConfig<T>>;
-export type SectionItemConfig<T> = FieldItemConfig<T> | GroupFieldConfig<T>;
+export type SectionItemConfig<T> = FieldItemConfig<T> | GroupFieldConfig<T> | RowFieldConfig<T>;
 export type FieldChange<T> = (partial: Partial<T> | ((prev: Partial<T>) => Partial<T>)) => void;
 
 interface FieldShellProps {
@@ -86,18 +95,38 @@ export function defineField<T, K extends Path<T>>(
   };
 }
 
+export function defineRowField<T>(config: {
+  id: string;
+  fields: Array<FieldItemConfig<T> | FieldConfig<T>>;
+  gap?: string;
+  className?: string;
+}): RowFieldConfig<T> {
+  const normalizedFields = config.fields.map((f) =>
+    'kind' in f && f.kind === 'field' ? f.field : (f as FieldConfig<T>),
+  );
+  return {
+    kind: 'row',
+    id: config.id,
+    fields: normalizedFields,
+    gap: config.gap,
+    className: config.className,
+  };
+}
+
 export function defineGroupField<T>(config: {
   id: string;
   label: string;
   description?: React.ReactElement | string;
-  fields: Array<FieldItemConfig<T>>;
+  items: Array<FieldItemConfig<T> | RowFieldConfig<T>>;
+  direction?: 'vertical' | 'horizontal';
 }): GroupFieldConfig<T> {
   return {
     kind: 'group',
     id: config.id,
     label: config.label,
     description: config.description,
-    fields: config.fields.map((f) => f.field),
+    items: config.items,
+    direction: config.direction ?? 'vertical',
   };
 }
 
@@ -138,12 +167,14 @@ export const FieldInput = ({
   placeholder,
   type,
   disabled,
+  className,
 }: {
   value?: string;
   onChange: (v: string) => void;
   placeholder?: string;
   type?: string;
   disabled?: boolean;
+  className?: string;
 }) => (
   <Input
     disabled={disabled}
@@ -151,7 +182,7 @@ export const FieldInput = ({
     value={value ?? ''}
     onChange={(e) => onChange(e.target.value)}
     placeholder={placeholder}
-    className="max-w-[400px]"
+    className={cn('max-w-[400px] max-h-[36px]', className)}
   />
 );
 
@@ -196,6 +227,59 @@ export const FieldSwitch = ({
   </div>
 );
 
+export function PortMappingField({
+  set,
+  ports,
+  disabled,
+}: {
+  set: (v: string[]) => void;
+  ports: string[];
+  disabled?: boolean;
+}) {
+  return (
+    <div className="col-span-2 ">
+      <div className="space-y-2 flex flex-col gap-2">
+        {ports.length === 0 && <span className="text-xs text-muted">No ports exposed in this image</span>}
+
+        {ports.map((value, idx) => {
+          const hasMapping = value.includes('-');
+          const [hostPort, containerPort] = hasMapping ? value.split('-') : ['', value];
+
+          return (
+            <div
+              key={idx}
+              className="flex flex-col sm:flex-row gap-2 items-start sm:items-center max-w-[400px] max-h-[36px]">
+              <div className="flex flex-1 w-full">
+                <Input
+                  placeholder="Host port"
+                  className="rounded-r-none! focus-visible:ring-transparent"
+                  type="number"
+                  min="0"
+                  max="65535"
+                  value={hostPort}
+                  disabled={disabled}
+                  onChange={(e) => {
+                    const newHost = e.target.value;
+                    const updated = [...ports];
+
+                    updated[idx] = newHost ? `${newHost}-${containerPort}` : containerPort; 
+
+                    set(updated);
+                  }}
+                />
+
+                <span className="flex z-10 items-center justify-center w-[80px] shadow-xs flex-shrink-0 bg-accent/60 border-r rounded-r-sm border-y border-border text-xs">
+                  :{containerPort}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                 Form logic                                 */
 /* -------------------------------------------------------------------------- */
@@ -235,9 +319,19 @@ function extractFieldMap<T>(schema: FormSchema<T>): Record<string, FieldConfig<T
     for (const item of section.items) {
       if (item.kind === 'field') {
         map[item.field.key as string] = item.field;
-      } else {
+      } else if (item.kind === 'row') {
         for (const f of item.fields) {
           map[f.key as string] = f;
+        }
+      } else if (item.kind === 'group') {
+        for (const sub of item.items) {
+          if (sub.kind === 'field') {
+            map[sub.field.key as string] = sub.field;
+          } else if (sub.kind === 'row') {
+            for (const f of sub.fields) {
+              map[f.key as string] = f;
+            }
+          }
         }
       }
     }
@@ -531,16 +625,44 @@ export function FormShell<T>({
                             className={`justify-end w-full text-xs ${hasError ? '' : 'bg-accent/60'}`}>
                             {mode === 'edit' && isDirtyField && (
                               <span className="mr-1 text-[10px] text-destructive">*</span>
-                            )}
+                            )}{' '}
                             {f.label}
                           </Button>
                         </a>
                       );
                     }
 
+                    if (item.kind === 'row') {
+                      return (
+                        <a href={`#${item.id}`} key={item.id}>
+                          <Button variant="secondary" size="sm" className="justify-end w-full text-xs bg-accent/60">
+                            {item.id}
+                          </Button>
+                        </a>
+                      );
+                    }
+
                     const group = item;
-                    const fieldKeys = group.fields.map((f) => f.key as string);
-                    const groupDirty = fieldKeys.some((k) => dirty[k]);
+                    // compute if any child field is dirty
+                    let groupDirty = false;
+                    for (const sub of group.items) {
+                      if (sub.kind === 'field') {
+                        const k = sub.field.key as string;
+                        if (dirty[k]) {
+                          groupDirty = true;
+                          break;
+                        }
+                      } else if (sub.kind === 'row') {
+                        for (const f of sub.fields) {
+                          const k = f.key as string;
+                          if (dirty[k]) {
+                            groupDirty = true;
+                            break;
+                          }
+                        }
+                        if (groupDirty) break;
+                      }
+                    }
 
                     return (
                       <a href={`#${group.id}`} key={group.id}>
@@ -622,35 +744,105 @@ export function FormShell<T>({
                     );
                   }
 
+                  if (item.kind === 'row') {
+                    // Row at section level
+                    return (
+                      <section id={item.id} key={item.id} className={`relative border rounded-md p-6`}>
+                        <div className={cn('flex flex-row w-full', item.gap ?? 'gap-4', item.className)}>
+                          {item.fields.map((f) => {
+                            const key = f.key as string;
+                            const value = getValue(merged, key);
+                            const error = errors[key];
+                            const edited = mode === 'edit' && dirty[key];
+                            const fieldDisabled = !!disabled || !!f.disabled;
+
+                            return (
+                              <fieldset key={key} disabled={fieldDisabled} className={`relative pb-0 last:pb-0 flex-1`}>
+                                <FieldShell
+                                  label={f.label}
+                                  required={f.required}
+                                  description={f.description}
+                                  edited={!!edited}
+                                  error={error}
+                                  touched={!!touched[key]}>
+                                  {f.render(value, createFieldChangeHandler(key))}
+                                </FieldShell>
+                              </fieldset>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    );
+                  }
+
+                  // Group
                   const group = item;
                   return (
                     <section
                       id={group.id}
                       key={group.id}
-                      className="relative border rounded-md p-6 flex flex-col gap-4">
-                      <div className="flex flex-col gap-4">
-                        {group.fields.map((f) => {
-                          const key = f.key as string;
-                          const value = getValue(merged, key);
-                          const error = errors[key];
-                          const edited = mode === 'edit' && dirty[key];
-                          const fieldDisabled = !!disabled || !!f.disabled;
+                      className={`relative border rounded-md p-6 flex gap-4 ${group.direction === 'horizontal' ? 'flex-row' : 'flex-col'}`}>
+                      <div className="flex flex-col gap-4 w-full">
+                        {group.items.map((sub) => {
+                          if (sub.kind === 'field') {
+                            const f = sub.field;
+                            const key = f.key as string;
+                            const value = getValue(merged, key);
+                            const error = errors[key];
+                            const edited = mode === 'edit' && dirty[key];
+                            const fieldDisabled = !!disabled || !!f.disabled;
 
+                            return (
+                              <fieldset
+                                key={key}
+                                disabled={fieldDisabled}
+                                className={`relative pb-6 last:pb-0 ${group.direction === 'horizontal' ? 'flex-1' : 'block border-b last:border-b-0'}`}>
+                                <FieldShell
+                                  label={f.label}
+                                  required={f.required}
+                                  description={f.description}
+                                  edited={!!edited}
+                                  error={error}
+                                  touched={!!touched[key]}>
+                                  {f.render(value, createFieldChangeHandler(key))}
+                                </FieldShell>
+                              </fieldset>
+                            );
+                          }
+
+                          const row = sub;
                           return (
-                            <fieldset
-                              key={key}
-                              disabled={fieldDisabled}
-                              className="relative pb-6 last:pb-0 border-b last:border-b-0">
-                              <FieldShell
-                                label={f.label}
-                                required={f.required}
-                                description={f.description}
-                                edited={!!edited}
-                                error={error}
-                                touched={!!touched[key]}>
-                                {f.render(value, createFieldChangeHandler(key))}
-                              </FieldShell>
-                            </fieldset>
+                            <div
+                              key={row.id}
+                              id={row.id}
+                              className={`w-full ${group.direction === 'horizontal' ? 'flex-1' : ''} rounded-md`}>
+                              <div
+                                className={cn('flex flex-col sm:flex-row w-full', row.gap ?? 'gap-4', row.className)}>
+                                {row.fields.map((f) => {
+                                  const key = f.key as string;
+                                  const value = getValue(merged, key);
+                                  const error = errors[key];
+                                  const edited = mode === 'edit' && dirty[key];
+                                  const fieldDisabled = !!disabled || !!f.disabled;
+                                  return (
+                                    <fieldset
+                                      key={key}
+                                      disabled={fieldDisabled}
+                                      className={` pb-1 last:pb-1  last:flex-1`}>
+                                      <FieldShell
+                                        label={f.label}
+                                        required={f.required}
+                                        description={f.description}
+                                        edited={!!edited}
+                                        error={error}
+                                        touched={!!touched[key]}>
+                                        {f.render(value, createFieldChangeHandler(key))}
+                                      </FieldShell>
+                                    </fieldset>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           );
                         })}
                       </div>

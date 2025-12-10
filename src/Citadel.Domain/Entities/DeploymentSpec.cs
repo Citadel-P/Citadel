@@ -33,19 +33,10 @@ public sealed record DeploymentSpec(
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 [JsonDerivedType(typeof(LocalImage), nameof(ImageSource.Local))]
 [JsonDerivedType(typeof(ExternalImage), nameof(ImageSource.External))]
-public abstract record DeploymentImageInfo
-{
-    public abstract ImageSource Source { get; }
-}
+public abstract record DeploymentImageInfo;
 
-public sealed record LocalImage(string ImageId) : DeploymentImageInfo
-{
-    public override ImageSource Source => ImageSource.Local;
-}
-public sealed record ExternalImage(string RegistryId, string ImageName) : DeploymentImageInfo
-{
-    public override ImageSource Source => ImageSource.External;
-}
+public sealed record LocalImage(string ImageId) : DeploymentImageInfo;
+public sealed record ExternalImage(string RegistryId, string ImageTag) : DeploymentImageInfo;
 
 public sealed record HealthCheckConfig(
     IEnumerable<string> Test,
