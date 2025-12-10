@@ -41,7 +41,7 @@ internal sealed class GetRunImageInfoHandler(IPlatformContainerCache platformCon
             ImageId: image.DockerImageId
         );
 
-        var portsResult = await imgConnectorFactory.GetConnector(platform.ConnectorType).GetRunImageInfoAsync(args, cancellationToken: cancellationToken);
+        var portsResult = await imgConnectorFactory.GetConnector(platform.ConnectorType).GetExposedPortsAsync(args, cancellationToken: cancellationToken);
         if (portsResult.IsFailure(out var imgError, out var result))
         {
             return Result.Failure<ExposedPortsResult>(imgError);

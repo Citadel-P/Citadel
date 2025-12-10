@@ -117,18 +117,18 @@ internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageCon
         }
     }
 
-    public async Task<Result<ExposedPortsResult>> GetRunImageInfoAsync(RunImageInfoCommand command, CancellationToken cancellationToken)
+    public async Task<Result<ExposedPortsResult>> GetExposedPortsAsync(RunImageInfoCommand command, CancellationToken cancellationToken)
     {
         try
         {
             var client = clientFactory.GetImageClient(command.PlatformAddress);
-            var request = new GetRunImageInfoRequest
+            var request = new GetExposedPortsRequest
             {
                 Id = command.ImageId
             };
 
-            var response = await client.GetRunImageInfoAsyncAsync(request, cancellationToken: cancellationToken);
-            return new ExposedPortsResult(Ports: response.ExposedPorts);
+            var response = await client.GetExposedportsAsync(request, cancellationToken: cancellationToken);
+            return new ExposedPortsResult(Ports: response.Ports);
         }
         catch (RpcException ex)
         {
