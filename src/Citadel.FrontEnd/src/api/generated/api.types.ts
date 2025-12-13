@@ -528,40 +528,22 @@ export interface DeploymentSpec {
   workingDir: null | string;
   user: null | string;
   /**
-   * @format float
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  memoryLimit: null | number | string;
-  /**
-   * @format float
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  cpuLimit: null | number | string;
-  /**
-   * @format float
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  memoryReservation: null | number | string;
-  autoRemove: null | boolean;
-  /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   stopTimeout: null | number | string;
+  resourceSpec: null | ResourceSpec;
   restartPolicy: ContainerRestartPolicy;
   labels: null | object;
-  envVars: null | any[];
   ports: null | any[];
+  envVars: null | any[];
   volumes: null | any[];
   networks: null | any[];
   entryPoint: null | any[];
   command: null | any[];
-  hostname?: null | string;
-  dns?: null | any[];
   security?: null | SecurityConfig;
   loggingConfig?: null | LoggingConfig;
   healthCheck?: null | HealthCheckConfig;
-  metadata?: null | object;
 }
 
 export interface DeploymentVersionView {
@@ -1500,6 +1482,24 @@ export interface RegistryWithConfigView {
   configuration: null | RegistryConfigurationBase;
 }
 
+export interface ResourceSpec {
+  /**
+   * @format float
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  cpuLimit: null | number | string;
+  /**
+   * @format float
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  memoryLimit: null | number | string;
+  /**
+   * @format float
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  memoryReservation: null | number | string;
+}
+
 export interface RestartPolicy {
   name: null | string;
   /**
@@ -1510,11 +1510,12 @@ export interface RestartPolicy {
 }
 
 export interface SecurityConfig {
-  privileged: boolean;
-  capAdd: string[];
-  capDrop: string[];
-  readOnlyRootFs: boolean;
-  securityOpt: string[];
+  /** @default false */
+  privileged?: boolean;
+  capAdd?: null | any[];
+  capDrop?: null | any[];
+  readOnlyRootFs?: null | boolean;
+  securityOpt?: null | any[];
 }
 
 export interface SwarmPeer {

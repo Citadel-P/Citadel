@@ -127,7 +127,7 @@ internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageCon
                 Id = command.ImageId
             };
 
-            var response = await client.GetExposedportsAsync(request, cancellationToken: cancellationToken);
+            var response = await client.GetExposedPortsAsync(request, cancellationToken: cancellationToken);
             return new ExposedPortsResult(Ports: response.Ports);
         }
         catch (RpcException ex)

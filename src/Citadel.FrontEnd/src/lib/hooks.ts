@@ -315,3 +315,25 @@ export function useMeasuredWidth(max = 400) {
 
   return { ref, width, measure };
 }
+
+export type Dimensions = { width: number; height: number };
+export const useWindowDimensions = () => {
+  const [dimensions, setDimensions] = useState<Dimensions>({
+    width: 0,
+    height: 0,
+  });
+  useEffect(() => {
+    const callback = () => {
+      setDimensions({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+    callback();
+    window.addEventListener('resize', callback);
+    return () => {
+      window.removeEventListener('resize', callback);
+    };
+  }, []);
+  return dimensions;
+};

@@ -6123,15 +6123,12 @@
           "name",
           "workingDir",
           "user",
-          "memoryLimit",
-          "cpuLimit",
-          "memoryReservation",
-          "autoRemove",
           "stopTimeout",
+          "resourceSpec",
           "restartPolicy",
           "labels",
-          "envVars",
           "ports",
+          "envVars",
           "volumes",
           "networks",
           "entryPoint",
@@ -6160,39 +6157,6 @@
               "string"
             ]
           },
-          "memoryLimit": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
-            "format": "float"
-          },
-          "cpuLimit": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
-            "format": "float"
-          },
-          "memoryReservation": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
-            "format": "float"
-          },
-          "autoRemove": {
-            "type": [
-              "null",
-              "boolean"
-            ]
-          },
           "stopTimeout": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
@@ -6201,6 +6165,16 @@
               "string"
             ],
             "format": "int32"
+          },
+          "resourceSpec": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceSpec"
+              }
+            ]
           },
           "restartPolicy": {
             "$ref": "#/components/schemas/ContainerRestartPolicy"
@@ -6214,7 +6188,7 @@
               "type": "string"
             }
           },
-          "envVars": {
+          "ports": {
             "type": [
               "null",
               "array"
@@ -6223,7 +6197,7 @@
               "type": "string"
             }
           },
-          "ports": {
+          "envVars": {
             "type": [
               "null",
               "array"
@@ -6268,21 +6242,6 @@
               "type": "string"
             }
           },
-          "hostname": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "dns": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
           "security": {
             "oneOf": [
               {
@@ -6312,15 +6271,6 @@
                 "$ref": "#/components/schemas/HealthCheckConfig"
               }
             ]
-          },
-          "metadata": {
-            "type": [
-              "null",
-              "object"
-            ],
-            "additionalProperties": {
-              "type": "string"
-            }
           }
         }
       },
@@ -9603,6 +9553,43 @@
           }
         }
       },
+      "ResourceSpec": {
+        "required": [
+          "cpuLimit",
+          "memoryLimit",
+          "memoryReservation"
+        ],
+        "type": "object",
+        "properties": {
+          "cpuLimit": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "float"
+          },
+          "memoryLimit": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "float"
+          },
+          "memoryReservation": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "float"
+          }
+        }
+      },
       "RestartPolicy": {
         "required": [
           "name",
@@ -9628,35 +9615,41 @@
         }
       },
       "SecurityConfig": {
-        "required": [
-          "privileged",
-          "capAdd",
-          "capDrop",
-          "readOnlyRootFs",
-          "securityOpt"
-        ],
         "type": "object",
         "properties": {
           "privileged": {
-            "type": "boolean"
+            "type": "boolean",
+            "default": false
           },
           "capAdd": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "type": "string"
             }
           },
           "capDrop": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "type": "string"
             }
           },
           "readOnlyRootFs": {
-            "type": "boolean"
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "securityOpt": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "type": "string"
             }

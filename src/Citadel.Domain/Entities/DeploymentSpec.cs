@@ -8,25 +8,19 @@ public sealed record DeploymentSpec(
     string? Name,
     string? WorkingDir,
     string? User,
-    float? MemoryLimit,
-    float? CpuLimit,
-    float? MemoryReservation,
-    bool? AutoRemove,
     int? StopTimeout,
+    ResourceSpec? ResourceSpec,
     ContainerRestartPolicy RestartPolicy,
     Dictionary<string, string>? Labels,
-    List<string>? EnvVars,
     List<string>? Ports,
+    List<string>? EnvVars,
     List<string>? Volumes,
     List<string>? Networks,
     List<string>? EntryPoint,
     List<string>? Command,
-    string? Hostname = null,
-    List<string>? Dns = null,
     SecurityConfig? Security = null,
     LoggingConfig? LoggingConfig = null,
-    HealthCheckConfig? HealthCheck = null,
-    Dictionary<string, string>? Metadata = null
+    HealthCheckConfig? HealthCheck = null
     );
 
 [JsonPolymorphic]
@@ -37,6 +31,12 @@ public abstract record DeploymentImageInfo;
 
 public sealed record LocalImage(string ImageId) : DeploymentImageInfo;
 public sealed record ExternalImage(string RegistryId, string ImageTag) : DeploymentImageInfo;
+
+public sealed record ResourceSpec(
+    float? CpuLimit,
+    float? MemoryLimit,
+    float? MemoryReservation
+);
 
 public sealed record HealthCheckConfig(
     IEnumerable<string> Test,
@@ -52,9 +52,9 @@ public sealed record LoggingConfig(
     );
 
 public sealed record SecurityConfig(
-    bool Privileged,
-    List<string> CapAdd,
-    List<string> CapDrop,
-    bool ReadOnlyRootFs,
-    List<string> SecurityOpt
+    bool Privileged = false,
+    List<string>? CapAdd = null,
+    List<string>? CapDrop = null,
+    bool? ReadOnlyRootFs = null,
+    List<string>? SecurityOpt = null
     );

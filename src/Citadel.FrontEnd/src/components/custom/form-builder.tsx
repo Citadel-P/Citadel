@@ -9,6 +9,7 @@ import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 type Primitive = string | number | boolean | bigint | symbol | null | undefined | Date;
 
@@ -262,7 +263,7 @@ export function PortMappingField({
                     const newHost = e.target.value;
                     const updated = [...ports];
 
-                    updated[idx] = newHost ? `${newHost}-${containerPort}` : containerPort; 
+                    updated[idx] = newHost ? `${newHost}-${containerPort}` : containerPort;
 
                     set(updated);
                   }}
@@ -277,6 +278,49 @@ export function PortMappingField({
         })}
       </div>
     </div>
+  );
+}
+
+export function ItemSelector({
+  value,
+  onChange,
+  disabled,
+  collection,
+}: {
+  value?: string;
+  onChange: (v: any) => void;
+  disabled?: boolean;
+  collection: Record<string, { label: string; description?: string }>;
+}) {
+  const finalValue = value ?? Object.values(collection)[0]?.label;
+  const selected = collection[finalValue as keyof typeof collection];
+  return (
+    <Select value={finalValue} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger className="w-full max-w-[400px]">
+        <SelectValue>
+          {selected ? (
+            <div className="flex items-center gap-2">
+              <span>{selected.label}</span>
+            </div>
+          ) : (
+            'Select a value...'
+          )}
+        </SelectValue>
+      </SelectTrigger>
+
+      <SelectContent className="bg-background">
+        {Object.entries(collection).map(([key, info]) => (
+          <SelectItem key={key} value={key}>
+            <div className="flex items-center gap-2">
+              <div className="flex flex-col">
+                <span className="font-medium">{info.label}</span>
+                <span className="text-xs text-muted-foreground">{info.description}</span>
+              </div>
+            </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -448,6 +492,9 @@ export function FormShell<T>({
   draftVersion?: string | number;
   onReset?: () => void;
 }) {
+  const updateRef = React.useRef(update);
+  updateRef.current = update;
+
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -488,26 +535,23 @@ export function FormShell<T>({
     (key: string, partialOrUpdater: Partial<T> | ((prev: Partial<T>) => Partial<T>)) => {
       if (disabled) return;
 
-      // mark field as touched
       setTouched((prev) => {
         if (prev[key]) return prev;
         return { ...prev, [key]: true };
       });
 
-      setUpdate((prev) => {
-        const current = prev ?? {};
-        const resolved = typeof partialOrUpdater === 'function' ? partialOrUpdater(current) : partialOrUpdater;
-        const next = deepMerge<Partial<T>>(current, resolved);
+      const current = updateRef.current ?? {};
+      const resolved = typeof partialOrUpdater === 'function' ? partialOrUpdater(current) : partialOrUpdater;
+      const next = deepMerge<Partial<T>>(current, resolved);
 
-        if (draftKey && typeof window !== 'undefined') {
-          const savedAt = persistDraft<Partial<T>>(draftKey, draftVersion, next);
-          if (savedAt) {
-            setDraftInfo({ hasDraft: true, savedAt });
-          }
+      setUpdate(next);
+
+      if (draftKey && typeof window !== 'undefined') {
+        const savedAt = persistDraft<Partial<T>>(draftKey, draftVersion, next);
+        if (savedAt) {
+          setDraftInfo({ hasDraft: true, savedAt });
         }
-
-        return next;
-      });
+      }
     },
     [disabled, setUpdate, draftKey, draftVersion],
   );

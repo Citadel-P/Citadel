@@ -5,6 +5,8 @@ import {
   DeploymentImageInfoExternalImage,
   DeploymentImageInfoLocalImage,
   DockerNetworkResult,
+  ContainerRestartPolicy,
+  ResourceSpec,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -15,62 +17,87 @@ import {
   FieldTextArea,
   defineRowField,
   PortMappingField,
+  ItemSelector,
 } from '@/components/custom/form-builder';
-import { Constants } from '@/lib/constants';
 import { useState, useMemo, useEffect } from 'react';
 import { useMutate, useRead } from '@/lib/hooks';
 import { toast } from 'sonner';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useParams, useNavigate } from 'react-router';
 import { MultiResourceSelectorField, ResourceSelectorField } from '@/components/custom/common';
+import { MonacoToArrayStringEditor } from '@/lib/monaco';
 
 const enum ImageSource {
-  Local = 'Local',
-  External = 'External',
+  local = 'Local',
+  external = 'External',
 }
 
-const imageSource = {
-  Local: {
-    label: ImageSource.Local,
+const enum ResourceProfile {
+  automatic,
+  xsmall,
+  small,
+  medium,
+  large,
+  xlarge,
+}
+
+const image_source = {
+  [ImageSource.local]: {
+    label: 'Local',
     description: 'Use an image that already exists on the target Docker host.',
   },
-  External: {
-    label: ImageSource.External,
+  [ImageSource.external]: {
+    label: 'External',
     description: 'Pull an image from a remote registry (Docker Hub, GitHub, etc.)',
   },
 };
 
-const ImageSourceSelector = ({ value, onChange, disabled }: any) => {
-  const finalValue = value ?? ImageSource.Local;
-  const selected = imageSource[finalValue as keyof typeof imageSource];
-  return (
-    <Select value={finalValue} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger className="w-full max-w-[400px]">
-        <SelectValue>
-          {selected ? (
-            <div className="flex items-center gap-2">
-              <span>{selected.label}</span>
-            </div>
-          ) : (
-            'Select image source'
-          )}
-        </SelectValue>
-      </SelectTrigger>
+const restart_policies = {
+  No: { label: 'No', description: 'Do not automatically restart' },
+  Always: {
+    label: 'Always',
+    description: 'Automatically restarts the container whenever it stops.',
+  },
+  UnlessStopped: {
+    label: 'Unless Stopped',
+    description: 'Restart always except when the user has manually stopped the container',
+  },
+  OnFailure: {
+    label: 'On Failure',
+    description: 'Restart only when the container exit code is non-zero',
+  },
+};
 
-      <SelectContent className="bg-background">
-        {Object.entries(imageSource).map(([key, info]) => (
-          <SelectItem key={key} value={key}>
-            <div className="flex items-center gap-2">
-              <div className="flex flex-col">
-                <span className="font-medium">{info.label}</span>
-                <span className="text-xs text-muted-foreground">{info.description}</span>
-              </div>
-            </div>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
+const resource_profiles = {
+  [ResourceProfile.automatic]: {
+    label: 'Automatic',
+    description: 'Resources will be allocated automatically by the platform',
+    spec: null,
+  },
+  [ResourceProfile.xsmall]: {
+    label: 'X-Small',
+    description: '0.25 CPU - 256 MB RAM',
+    spec: { cpuLimit: 0.25, memoryLimit: 256, memoryReservation: null },
+  },
+  [ResourceProfile.small]: {
+    label: 'Small',
+    description: '0.5 CPU - 512 MB RAM',
+    spec: { cpuLimit: 0.5, memoryLimit: 512, memoryReservation: null },
+  },
+  [ResourceProfile.medium]: {
+    label: 'Medium',
+    description: '0.5 CPU - 1 GB RAM',
+    spec: { cpuLimit: 0.5, memoryLimit: 1024, memoryReservation: null },
+  },
+  [ResourceProfile.large]: {
+    label: 'Large',
+    description: '1.0 CPU - 2 GB RAM',
+    spec: { cpuLimit: 1, memoryLimit: 2048, memoryReservation: null },
+  },
+  [ResourceProfile.xlarge]: {
+    label: 'X-Large',
+    description: '2.0 CPU - 4 GB RAM',
+    spec: { cpuLimit: 2, memoryLimit: 4096, memoryReservation: null },
+  },
 };
 
 export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: DeploymentInput }) => {
@@ -84,29 +111,44 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
     imageId: (update.spec?.image as DeploymentImageInfoLocalImage)?.imageId,
   });
 
-  useEffect(() => {
-    if (imageInfoIsSuccess && data?.data?.ports !== undefined) {
-      setUpdate(
-        (prev) =>
-          ({
-            ...prev,
-            spec: {
-              ...(prev.spec ?? {}),
-              ports: data.data.ports,
-            },
-          }) as Partial<DeploymentInput>,
-      );
-    }
-  }, [imageInfoIsSuccess, data?.data?.ports]);
-
   const { mutateAsync: createDeployment } = useMutate('createDeployment');
   const { mutateAsync: updateDeployment } = useMutate('updateDeployment');
 
   const original = resource ?? ({} as DeploymentInput);
   const provider = update.spec?.image?.$type;
 
+  useEffect(() => {
+    const shouldFetch =
+      imageInfoIsSuccess && data?.data?.ports !== undefined && update.spec?.image?.$type === ImageSource.local;
+
+    if (!shouldFetch) return;
+
+    const currentPorts = update.spec?.ports ?? [];
+    const serverPorts = data.data.ports ?? [];
+
+    if (currentPorts.length > 0 && JSON.stringify(currentPorts) !== JSON.stringify(serverPorts)) {
+      return;
+    }
+
+    if (JSON.stringify(currentPorts) === JSON.stringify(serverPorts)) {
+      return;
+    }
+
+    setUpdate(
+      (prev) =>
+        ({
+          ...prev,
+          spec: {
+            ...(prev.spec ?? {}),
+            ports: serverPorts,
+          },
+        }) as Partial<DeploymentInput>,
+    );
+  }, [imageInfoIsSuccess, data?.data?.ports, update.spec?.image?.$type, update.spec?.ports]);
+
   const handleSave = async (payload: DeploymentInput) => {
     setIsPending(true);
+
     try {
       if (mode === 'edit') await updateDeployment({ id, data: payload });
       else await createDeployment({ data: payload });
@@ -173,14 +215,23 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                 required: true,
                 validate: (v) => (!v ? 'Source is required' : null),
                 render: (val, set) => (
-                  <ImageSourceSelector
+                  <ItemSelector
+                    collection={image_source}
                     value={val}
-                    onChange={(v: ImageSource) => set({ spec: { image: { $type: v } } as any })}
+                    onChange={(v: ImageSource) =>
+                      set((prev) => ({
+                        spec: {
+                          ...(prev.spec as DeploymentInput['spec']),
+                          image: { $type: v } as any,
+                          ports: [],
+                        },
+                      }))
+                    }
                   />
                 ),
               }),
 
-              provider === ImageSource.External
+              provider === ImageSource.external
                 ? defineRowField({
                     id: 'imageRow',
                     gap: 'gap-8',
@@ -262,6 +313,7 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                                 ...((prev.spec?.image as DeploymentImageInfoLocalImage) ?? {}),
                                 imageId: v?.id ?? '',
                               } satisfies DeploymentImageInfoLocalImage,
+                              ports: [],
                             },
                           }))
                         }
@@ -284,7 +336,7 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                 render: (value, set) => (
                   <MultiResourceSelectorField
                     type="Network"
-                    selected={value}
+                    selected={value ?? []}
                     onSelect={(v: DockerNetworkResult[] | undefined) =>
                       set((prev) => ({
                         spec: {
@@ -298,46 +350,126 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                   />
                 ),
               }),
-              defineField({
-                label: 'Ports',
-                key: 'spec.ports',
-                description: 'Configure port mappings.',
-                required: false,
-                render: (value, set) => (
-                  <PortMappingField
-                    ports={value ?? []}
-                    set={(v: string[] | undefined) =>
-                      set((prev) => ({
-                        spec: {
-                          ...prev.spec!,
-                          ports: v?.map((s) => s) ?? [],
-                        },
-                      }))
-                    }
-                  />
-                ),
-              }),
+              update.spec?.image?.$type === ImageSource.local
+                ? defineField({
+                    label: 'Ports',
+                    key: 'spec.ports',
+                    description: 'Configure port mappings.',
+                    required: false,
+                    render: (value, set) => (
+                      <PortMappingField
+                        ports={value ?? []}
+                        set={(v: string[] | undefined) =>
+                          set((prev) => ({
+                            spec: {
+                              ...prev.spec!,
+                              ports: v?.map((s) => s) ?? [],
+                            },
+                          }))
+                        }
+                      />
+                    ),
+                  })
+                : defineField({
+                    label: 'Ports',
+                    key: 'spec.ports',
+                    description: 'Configure port mappings.',
+                    required: false,
+                    render: (value, set) => (
+                      <MonacoToArrayStringEditor
+                        value={value}
+                        helperText="# 8080:8080/tcp"
+                        language="key_value"
+                        onChange={(p: string[] | undefined) =>
+                          set((prev) => ({
+                            spec: {
+                              ...prev.spec!,
+                              ports: p ?? [],
+                            },
+                          }))
+                        }
+                      />
+                    ),
+                  }),
             ],
+          }),
+          defineField({
+            key: 'spec.volumes',
+            label: 'Volumes',
+            description: 'Configure bind mounts or named volumes.',
+            required: false,
+            render: (value, set) => (
+              <MonacoToArrayStringEditor
+                value={value}
+                helperText="# my-volume:/data or /config:/etc/config:ro"
+                language="string_list"
+                onChange={(v: string[] | undefined) =>
+                  set((prev) => ({
+                    spec: {
+                      ...prev.spec!,
+                      volumes: v ?? [],
+                    },
+                  }))
+                }
+              />
+            ),
           }),
         ],
       }),
-      '': defineSection<DeploymentInput>({
-        title: '',
+      Advanced: defineSection<DeploymentInput>({
+        title: 'Advanced',
         items: [
           defineField({
-            key: 'name',
-            label: 'Name',
-            description: 'Provide a unique name to identify this registry.',
-            required: true,
-            validate: (v) => (!new RegExp(Constants.validNameIdentifier).test(v) ? 'Invalid name format' : null),
+            key: 'spec.resourceSpec',
+            label: 'Resources',
+            description: 'Choose how much CPU and memory to allocate to this deployment.',
+            render: (value, set) => {
+              const toProfile = (spec: ResourceSpec | undefined) => {
+                return (
+                  Object.entries(resource_profiles).find(
+                    ([_, p]) => p.spec?.cpuLimit === spec?.cpuLimit && p.spec?.memoryLimit === spec?.memoryLimit,
+                  )?.[0] ?? 'automatic'
+                );
+              };
+              return (
+                <ItemSelector
+                  collection={resource_profiles}
+                  value={toProfile(value)}
+                  onChange={(profile: ResourceProfile) =>
+                    set((prev) => ({
+                      spec: {
+                        ...(prev.spec as DeploymentInput['spec']),
+                        resourceSpec: resource_profiles[profile]?.spec ?? null,
+                      },
+                    }))
+                  }
+                />
+              );
+            },
+          }),
+          defineField({
+            key: 'spec.restartPolicy',
+            label: 'Restart Policy',
+            description: 'The behavior to apply when the container exits.',
             render: (value, set) => (
-              <FieldInput value={value ?? ''} onChange={(v) => set({ name: v })} placeholder="my-registry" />
+              <ItemSelector
+                collection={restart_policies}
+                value={value}
+                onChange={(policy: ContainerRestartPolicy) =>
+                  set((prev) => ({
+                    spec: {
+                      ...(prev.spec as DeploymentInput['spec']),
+                      restartPolicy: policy,
+                    },
+                  }))
+                }
+              />
             ),
           }),
         ],
       }),
     }),
-    [provider, update.platformId],
+    [provider, update.platformId, update.spec?.image?.$type],
   );
 
   return (
