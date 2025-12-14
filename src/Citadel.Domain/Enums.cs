@@ -230,3 +230,9 @@ public enum ImageSource
     Local,
     External
 }
+
+public enum StopSignal {     
+    SIGTERM,
+    SIGKILL,
+    SIGINT,
+}

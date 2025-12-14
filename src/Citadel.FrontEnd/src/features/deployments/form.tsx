@@ -7,6 +7,7 @@ import {
   DockerNetworkResult,
   ContainerRestartPolicy,
   ResourceSpec,
+  StopSignal,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -24,7 +25,7 @@ import { useMutate, useRead } from '@/lib/hooks';
 import { toast } from 'sonner';
 import { useParams, useNavigate } from 'react-router';
 import { MultiResourceSelectorField, ResourceSelectorField } from '@/components/custom/common';
-import { MonacoToArrayStringEditor } from '@/lib/monaco';
+import { MonacoToArrayEditor, MonacoToDictionaryEditor } from '@/lib/monaco';
 
 const enum ImageSource {
   local = 'Local',
@@ -97,6 +98,21 @@ const resource_profiles = {
     label: 'X-Large',
     description: '2.0 CPU - 4 GB RAM',
     spec: { cpuLimit: 2, memoryLimit: 4096, memoryReservation: null },
+  },
+};
+
+const stop_signals = {
+  [StopSignal.SIGTERM]: {
+    label: StopSignal.SIGTERM,
+    description: 'Request a graceful shutdown. Default and recommended.',
+  },
+  [StopSignal.SIGINT]: {
+    label: StopSignal.SIGINT,
+    description: 'Gracefully interrupt the process (similar to Ctrl+C).',
+  },
+  [StopSignal.SIGKILL]: {
+    label: StopSignal.SIGKILL,
+    description: 'Forcefully stop the process immediately.',
   },
 };
 
@@ -179,7 +195,6 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                   <FieldInput value={val} onChange={(v) => set({ name: v })} placeholder="e.g. production-web-server" />
                 ),
               }),
-
               defineField({
                 key: 'description',
                 label: 'Description',
@@ -376,7 +391,7 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                     description: 'Configure port mappings.',
                     required: false,
                     render: (value, set) => (
-                      <MonacoToArrayStringEditor
+                      <MonacoToArrayEditor
                         value={value}
                         helperText="# 8080:8080/tcp"
                         language="key_value"
@@ -399,7 +414,7 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
             description: 'Configure bind mounts or named volumes.',
             required: false,
             render: (value, set) => (
-              <MonacoToArrayStringEditor
+              <MonacoToArrayEditor
                 value={value}
                 helperText="# my-volume:/data or /config:/etc/config:ro"
                 language="string_list"
@@ -408,6 +423,27 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                     spec: {
                       ...prev.spec!,
                       volumes: v ?? [],
+                    },
+                  }))
+                }
+              />
+            ),
+          }),
+          defineField({
+            key: 'spec.envVars',
+            label: 'Environment',
+            description: 'Runtime configuration passed to the application inside the container.',
+            required: false,
+            render: (value, set) => (
+              <MonacoToArrayEditor
+                value={value}
+                helperText="# KEY=value"
+                language="key_value"
+                onChange={(e: string[] | undefined) =>
+                  set((prev) => ({
+                    spec: {
+                      ...prev.spec!,
+                      envVars: e ?? [],
                     },
                   }))
                 }
@@ -447,19 +483,185 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
               );
             },
           }),
+          defineGroupField({
+            id: 'lifecycle',
+            label: 'Lifecycle',
+            items: [
+              defineField({
+                key: 'spec.lifeCycleSpec.restartPolicy',
+                label: 'Restart Policy',
+                description: 'The behavior to apply when the container exits.',
+                render: (value, set) => (
+                  <ItemSelector
+                    collection={restart_policies}
+                    value={value}
+                    onChange={(policy: ContainerRestartPolicy) =>
+                      set((prev) => ({
+                        spec: {
+                          ...(prev.spec as DeploymentInput['spec']),
+                          lifeCycleSpec: {
+                            ...(prev.spec?.lifeCycleSpec as any),
+                            restartPolicy: policy,
+                          },
+                        },
+                      }))
+                    }
+                  />
+                ),
+              }),
+              defineField({
+                key: 'spec.lifeCycleSpec.stopSignal',
+                label: 'Stop Signal',
+                description: 'Signal sent to the container to initiate shutdown.',
+                render: (value, set) => (
+                  <ItemSelector
+                    collection={stop_signals}
+                    value={value}
+                    onChange={(sig: ContainerRestartPolicy) =>
+                      set((prev) => ({
+                        spec: {
+                          ...(prev.spec as DeploymentInput['spec']),
+                          lifeCycleSpec: {
+                            ...(prev.spec?.lifeCycleSpec as any),
+                            stopSignal: sig,
+                          },
+                        },
+                      }))
+                    }
+                  />
+                ),
+              }),
+
+              defineField({
+                key: 'spec.lifeCycleSpec.stopTimeout',
+                label: 'Stop Timeout',
+                description:
+                  'Maximum time to wait (in seconds) for the container to stop before it is forcefully terminated.',
+                render: (val, set) => (
+                  <FieldInput
+                    type="number"
+                    value={val}
+                    onChange={(v) =>
+                      set((prev) => ({
+                        spec: {
+                          ...(prev.spec as DeploymentInput['spec']),
+                          lifeCycleSpec: {
+                            ...(prev.spec?.lifeCycleSpec as any),
+                            stopTimeout: v,
+                          },
+                        },
+                      }))
+                    }
+                    placeholder="e.g. 10"
+                  />
+                ),
+              }),
+            ],
+          }),
+          defineGroupField({
+            id: 'execution',
+            label: 'Execution',
+            items: [
+              defineField({
+                key: 'spec.user',
+                label: 'User',
+                description: 'Run commands as this user inside the container.',
+                render: (val, set) => (
+                  <FieldInput
+                    value={val}
+                    onChange={(user) =>
+                      set((prev) => ({
+                        spec: {
+                          ...(prev.spec as DeploymentInput['spec']),
+                          user,
+                        },
+                      }))
+                    }
+                    placeholder="e.g. appuser"
+                  />
+                ),
+              }),
+
+              defineField({
+                key: 'spec.workingDir',
+                label: 'Working Directory',
+                description: 'Default directory for command execution.',
+                render: (val, set) => (
+                  <FieldInput
+                    value={val}
+                    onChange={(workingDir) =>
+                      set((prev) => ({
+                        spec: {
+                          ...(prev.spec as DeploymentInput['spec']),
+                          workingDir,
+                        },
+                      }))
+                    }
+                    placeholder="e.g. /app"
+                  />
+                ),
+              }),
+
+              defineField({
+                label: 'Command',
+                key: 'spec.command',
+                description: 'Overrides the image default command.',
+                required: false,
+                render: (value, set) => (
+                  <MonacoToArrayEditor
+                    value={value}
+                    helperText="# --housekeeping_interval=5s"
+                    language="key_value"
+                    onChange={(cmd: string[] | undefined) =>
+                      set((prev) => ({
+                        spec: {
+                          ...prev.spec!,
+                          command: cmd ?? [],
+                        },
+                      }))
+                    }
+                  />
+                ),
+              }),
+
+              defineField({
+                label: 'Entry Point',
+                key: 'spec.entryPoint',
+                description: 'Overrides the image entrypoint.',
+                required: false,
+                render: (value, set) => (
+                  <MonacoToArrayEditor
+                    value={value}
+                    helperText="# /bin/sh"
+                    language="string_list"
+                    onChange={(e: string[] | undefined) =>
+                      set((prev) => ({
+                        spec: {
+                          ...prev.spec!,
+                          entryPoint: e ?? [],
+                        },
+                      }))
+                    }
+                  />
+                ),
+              }),
+            ],
+          }),
+
           defineField({
-            key: 'spec.restartPolicy',
-            label: 'Restart Policy',
-            description: 'The behavior to apply when the container exits.',
+            key: 'spec.labels',
+            label: 'Labels',
+            description: 'User-defined key/value metadata.',
             render: (value, set) => (
-              <ItemSelector
-                collection={restart_policies}
+              <MonacoToDictionaryEditor
                 value={value}
-                onChange={(policy: ContainerRestartPolicy) =>
+                helperText="# KEY=value"
+                language="key_value"
+                onChange={(e: Record<string, string> | undefined) =>
                   set((prev) => ({
                     spec: {
-                      ...(prev.spec as DeploymentInput['spec']),
-                      restartPolicy: policy,
+                      ...prev.spec!,
+                      labels: e ?? {},
                     },
                   }))
                 }

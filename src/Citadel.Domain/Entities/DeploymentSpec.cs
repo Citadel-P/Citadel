@@ -5,12 +5,10 @@ namespace Domain.Entities;
 
 public sealed record DeploymentSpec(
     DeploymentImageInfo Image,
-    string? Name,
     string? WorkingDir,
-    string? User,
-    int? StopTimeout,
+    string? User, 
+    LifeCycleSpec? LifeCycleSpec,
     ResourceSpec? ResourceSpec,
-    ContainerRestartPolicy RestartPolicy,
     Dictionary<string, string>? Labels,
     List<string>? Ports,
     List<string>? EnvVars,
@@ -37,6 +35,12 @@ public sealed record ResourceSpec(
     float? MemoryLimit,
     float? MemoryReservation
 );
+
+public sealed record LifeCycleSpec(
+    int? StopTimeout,
+    StopSignal? StopSignal,
+    ContainerRestartPolicy RestartPolicy
+    );
 
 public sealed record HealthCheckConfig(
     IEnumerable<string> Test,

@@ -195,19 +195,14 @@ export const MonacoEditor = ({
   );
 };
 
-interface MonacoToArrayStringEditorProps {
+interface MonacoToArrayEditorProps {
   value?: string[];
   language: SupportedLanguage;
   helperText?: string;
   onChange: (v?: string[]) => void;
 }
 
-export const MonacoToArrayStringEditor = ({
-  value,
-  language,
-  helperText,
-  onChange,
-}: MonacoToArrayStringEditorProps) => {
+export const MonacoToArrayEditor = ({ value, language, helperText, onChange }: MonacoToArrayEditorProps) => {
   const cleanHelper = helperText?.trim();
 
   const generateDisplayContent = useCallback(
@@ -251,6 +246,94 @@ export const MonacoToArrayStringEditor = ({
         const currentText = text || '';
         setRaw(currentText);
         onChange(textToArray(currentText));
+      }}
+    />
+  );
+};
+
+interface MonacoToDictionaryEditorProps {
+  value?: Record<string, string | null>;
+  language?: SupportedLanguage;
+  helperText?: string;
+  onChange: (v?: Record<string, string>) => void;
+}
+
+export const MonacoToDictionaryEditor = ({
+  value,
+  language = 'ini',
+  helperText,
+  onChange,
+}: MonacoToDictionaryEditorProps) => {
+  const cleanHelper = helperText?.trim();
+
+  const generateDisplayContent = useCallback(
+    (val: Record<string, string | null> | undefined) => {
+      const valueString = Object.entries(val || {})
+        .filter(([_, v]) => v !== null && v !== undefined)
+        .map(([k, v]) => `${k}=${v}`)
+        .join('\n');
+
+      if (!cleanHelper) return valueString;
+      return valueString ? `${cleanHelper}\n${valueString}` : cleanHelper;
+    },
+    [cleanHelper],
+  );
+
+  const textToDictionary = (text: string): Record<string, string> => {
+    const result: Record<string, string> = {};
+    text.split('\n').forEach((line) => {
+      const trimmed = line.trim();
+      if (trimmed.length === 0 || trimmed.startsWith('#')) return;
+
+      const separatorIndex = trimmed.indexOf('=');
+      if (separatorIndex > 0) {
+        const key = trimmed.slice(0, separatorIndex).trim();
+        const val = trimmed.slice(separatorIndex + 1).trim();
+        if (key) {
+          result[key] = val;
+        }
+      }
+    });
+    return result;
+  };
+
+  const [raw, setRaw] = useState(() => generateDisplayContent(value));
+
+  useEffect(() => {
+    const expected = generateDisplayContent(value);
+
+    const currentData = textToDictionary(raw);
+    const expectedData = Object.fromEntries(Object.entries(value || {}).filter(([_, v]) => v !== null));
+
+    const isDataDifferent = JSON.stringify(currentData) !== JSON.stringify(expectedData);
+
+    if (isDataDifferent || (cleanHelper && !raw.startsWith(cleanHelper))) {
+      setRaw(expected);
+    }
+  }, [value, cleanHelper, raw, generateDisplayContent]);
+
+  return (
+    <MonacoEditor
+      language={language}
+      value={raw}
+      onValueChange={(text) => {
+        const currentText = text || '';
+        setRaw(currentText);
+
+        const newDict: Record<string, string | null> = textToDictionary(currentText);
+
+        if (value) {
+          Object.keys(value).forEach((oldKey) => {
+            const isMissing = !Object.prototype.hasOwnProperty.call(newDict, oldKey);
+            const wasNotNull = value[oldKey] !== null;
+
+            if (isMissing && wasNotNull) {
+              newDict[oldKey] = undefined as any;
+            }
+          });
+        }
+
+        onChange(newDict as any);
       }}
     />
   );

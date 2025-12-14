@@ -6120,12 +6120,10 @@
       "DeploymentSpec": {
         "required": [
           "image",
-          "name",
           "workingDir",
           "user",
-          "stopTimeout",
+          "lifeCycleSpec",
           "resourceSpec",
-          "restartPolicy",
           "labels",
           "ports",
           "envVars",
@@ -6139,12 +6137,6 @@
           "image": {
             "$ref": "#/components/schemas/DeploymentImageInfo"
           },
-          "name": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
           "workingDir": {
             "type": [
               "null",
@@ -6157,14 +6149,15 @@
               "string"
             ]
           },
-          "stopTimeout": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int32"
+          "lifeCycleSpec": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LifeCycleSpec"
+              }
+            ]
           },
           "resourceSpec": {
             "oneOf": [
@@ -6175,9 +6168,6 @@
                 "$ref": "#/components/schemas/ResourceSpec"
               }
             ]
-          },
-          "restartPolicy": {
-            "$ref": "#/components/schemas/ContainerRestartPolicy"
           },
           "labels": {
             "type": [
@@ -8288,6 +8278,38 @@
           }
         }
       },
+      "LifeCycleSpec": {
+        "required": [
+          "stopTimeout",
+          "stopSignal",
+          "restartPolicy"
+        ],
+        "type": "object",
+        "properties": {
+          "stopTimeout": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "stopSignal": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StopSignal"
+              }
+            ]
+          },
+          "restartPolicy": {
+            "$ref": "#/components/schemas/ContainerRestartPolicy"
+          }
+        }
+      },
       "LogConfiguration": {
         "required": [
           "type",
@@ -9655,6 +9677,14 @@
             }
           }
         }
+      },
+      "StopSignal": {
+        "enum": [
+          "SIGTERM",
+          "SIGKILL",
+          "SIGINT",
+          null
+        ]
       },
       "SwarmPeer": {
         "required": [

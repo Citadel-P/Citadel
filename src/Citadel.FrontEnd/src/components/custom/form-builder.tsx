@@ -774,7 +774,11 @@ export function FormShell<T>({
                     const fieldDisabled = !!disabled || !!f.disabled;
 
                     return (
-                      <fieldset id={key} key={key} disabled={fieldDisabled} className="relative border rounded-md p-6">
+                      <fieldset
+                        id={key}
+                        key={key}
+                        disabled={fieldDisabled}
+                        className="relative border rounded-md p-6 scroll-mt-20 xl:scroll-mt-16">
                         <FieldShell
                           label={f.label}
                           required={f.required}
@@ -791,7 +795,10 @@ export function FormShell<T>({
                   if (item.kind === 'row') {
                     // Row at section level
                     return (
-                      <section id={item.id} key={item.id} className={`relative border rounded-md p-6`}>
+                      <section
+                        id={item.id}
+                        key={item.id}
+                        className={`relative border rounded-md p-6 scroll-mt-20 xl:scroll-mt-16`}>
                         <div className={cn('flex flex-row w-full', item.gap ?? 'gap-4', item.className)}>
                           {item.fields.map((f) => {
                             const key = f.key as string;
@@ -825,7 +832,7 @@ export function FormShell<T>({
                     <section
                       id={group.id}
                       key={group.id}
-                      className={`relative border rounded-md p-6 flex gap-4 ${group.direction === 'horizontal' ? 'flex-row' : 'flex-col'}`}>
+                      className={`relative border rounded-md p-6 flex gap-4 ${group.direction === 'horizontal' ? 'flex-row' : 'flex-col'} scroll-mt-20 xl:scroll-mt-16`}>
                       <div className="flex flex-col gap-4 w-full">
                         {group.items.map((sub) => {
                           if (sub.kind === 'field') {
@@ -859,7 +866,7 @@ export function FormShell<T>({
                             <div
                               key={row.id}
                               id={row.id}
-                              className={`w-full ${group.direction === 'horizontal' ? 'flex-1' : ''} rounded-md`}>
+                              className={`w-full ${group.direction === 'horizontal' ? 'flex-1' : ''} rounded-md scroll-mt-20 xl:scroll-mt-16`}>
                               <div
                                 className={cn('flex flex-col sm:flex-row w-full', row.gap ?? 'gap-4', row.className)}>
                                 {row.fields.map((f) => {
@@ -872,7 +879,7 @@ export function FormShell<T>({
                                     <fieldset
                                       key={key}
                                       disabled={fieldDisabled}
-                                      className={` pb-1 last:pb-1  last:flex-1`}>
+                                      className={` pb-1 last:pb-1  last:flex-1 scroll-mt-20 xl:scroll-mt-16`}>
                                       <FieldShell
                                         label={f.label}
                                         required={f.required}

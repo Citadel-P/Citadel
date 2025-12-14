@@ -22,6 +22,12 @@ export enum VolumeScope {
   Multi = "Multi",
 }
 
+export enum StopSignal {
+  SIGTERM = "SIGTERM",
+  SIGKILL = "SIGKILL",
+  SIGINT = "SIGINT",
+}
+
 export enum RegistryType {
   Custom = "Custom",
   DockerHub = "DockerHub",
@@ -524,16 +530,10 @@ export interface DeploymentInput {
 
 export interface DeploymentSpec {
   image: DeploymentImageInfo;
-  name: null | string;
   workingDir: null | string;
   user: null | string;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  stopTimeout: null | number | string;
+  lifeCycleSpec: null | LifeCycleSpec;
   resourceSpec: null | ResourceSpec;
-  restartPolicy: ContainerRestartPolicy;
   labels: null | object;
   ports: null | any[];
   envVars: null | any[];
@@ -1086,6 +1086,16 @@ export interface IpamSubnetConfiguration {
   subnet: null | string;
   ipRange: null | string;
   gateway: null | string;
+}
+
+export interface LifeCycleSpec {
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  stopTimeout: null | number | string;
+  stopSignal: null | StopSignal;
+  restartPolicy: ContainerRestartPolicy;
 }
 
 export interface LogConfiguration {
