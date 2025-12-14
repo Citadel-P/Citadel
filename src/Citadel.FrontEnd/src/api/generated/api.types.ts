@@ -65,6 +65,7 @@ export enum LoggingDriverType {
   Awslogs = "awslogs",
   Splunk = "splunk",
   Etwlogs = "etwlogs",
+  Gcplogs = "gcplogs",
 }
 
 export enum GhcrAccountType {

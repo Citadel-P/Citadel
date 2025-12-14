@@ -179,7 +179,9 @@ public enum LoggingDriverType
     [JsonStringEnumMemberName("splunk")]
     Splunk,
     [JsonStringEnumMemberName("etwlogs")]
-    Etwlogs
+    Etwlogs,
+    [JsonStringEnumMemberName("gcplogs")]
+    Gcplogs
 }
 
 public enum DeploymentStatus
