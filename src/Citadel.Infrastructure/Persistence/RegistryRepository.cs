@@ -4,6 +4,7 @@ using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
+using Domain.Entities.Identity;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using Infrastructure.TypeHandlers;
@@ -87,7 +88,7 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     public Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         var (clause, parameters) = SqliteInClauseBuilder.BuildInClauseForGuids("Id", ids);
-        string sql = $"DELETE FROM Registries WHERE Id IN ({clause})";
+        string sql = $"DELETE FROM Registries WHERE Id IN ({clause}) AND CreatedByActorId != '{Actor.SystemId.Format()}'";
         return db.ExecuteAsync(sql, parameters, transaction: tx());
     }
 }

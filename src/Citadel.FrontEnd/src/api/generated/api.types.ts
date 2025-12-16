@@ -84,13 +84,14 @@ export enum DockerHubImageStatus {
 }
 
 export enum DeploymentStatus {
+  Unknown = "Unknown",
   Created = "Created",
   Pending = "Pending",
   Applying = "Applying",
   Healthy = "Healthy",
   Degraded = "Degraded",
   Failed = "Failed",
-  RolledBack = "RolledBack",
+  Stopped = "Stopped",
 }
 
 export enum DeploymentSource {
@@ -1470,16 +1471,20 @@ export interface RegistryInput {
   name: string;
   registryHost: string;
   configuration: RegistryConfigurationBase;
+  description?: null | string;
 }
 
 export interface RegistryView {
   /** @format uuid */
   id: string;
+  /** @format uuid */
+  createdByActorId: string;
   name: string;
+  description: null | string;
   registryHost: string;
   type: RegistryType;
   /** @format date-time */
-  created: any;
+  createdAt: any;
   isDefault?: boolean;
 }
 

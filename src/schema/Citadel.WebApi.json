@@ -9520,10 +9520,12 @@
       "RegistryView": {
         "required": [
           "id",
+          "createdByActorId",
           "name",
+          "description",
           "registryHost",
           "type",
-          "created"
+          "createdAt"
         ],
         "type": "object",
         "properties": {
@@ -9531,8 +9533,18 @@
             "type": "string",
             "format": "uuid"
           },
+          "createdByActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "name": {
             "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "registryHost": {
             "type": "string"
@@ -9540,7 +9552,7 @@
           "type": {
             "$ref": "#/components/schemas/RegistryType"
           },
-          "created": {
+          "createdAt": {
             "format": "date-time"
           },
           "isDefault": {
