@@ -41,17 +41,9 @@ internal sealed class ComposeUpHandler(IServiceScopeFactory scopeFactory, IPlatf
             yield break;
         }
 
-        Registry? registry;
-        if (command.RegistryName == Registry.DefaultRegistryName)
-        {
-            registry = Registry.DefaultRegistry();
-        }
-        else
-        {
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            registry = await uow.Registries.GetByNameAsync(command.RegistryName, cancellationToken);
-        }
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var registry = await uow.Registries.GetByNameAsync(command.RegistryName, cancellationToken);
 
         if (registry == null)
         {

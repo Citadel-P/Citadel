@@ -1,10 +1,12 @@
 ﻿{
   Id: Guid_1,
   Name: MyRegistry,
+  Description: null,
   RegistryHost: http://localhost:1234/registry,
-  Created: DateTime_1,
   Configuration: {
     UserName: username-2,
     PAT: fake-pat-1
-  }
+  },
+  CreatedAt: DateTime_1,
+  CreatedByActorId: Guid_2
 }

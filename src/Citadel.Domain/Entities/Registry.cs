@@ -1,5 +1,5 @@
-﻿using System.Text.Json.Serialization;
-using Domain.Entities.Registries;
+﻿using Domain.Entities.Registries;
+using System.Text.Json.Serialization;
 
 namespace Domain.Entities;
 
@@ -7,13 +7,16 @@ namespace Domain.Entities;
 public class Registry(
     string name,
     string registryHost,
-    RegistryConfigurationBase configuration)
+    Guid createdByActorId,
+    RegistryConfigurationBase configuration,
+    string? description = null) : AuditedEntity(createdByActorId)
 {
     public static readonly string DefaultRegistryName = "Docker Hub";
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public string Name { get; private set; } = name;
+    public string? Description { get; private set; } = description;
     public string RegistryHost { get; private set; } = registryHost;
-    public DateTime Created { get; private set; } = DateTime.UtcNow;
+
     public RegistryConfigurationBase Configuration { get; private set; } = configuration;
 
     public void PartialUpdate(string? name = null, string? registryHost = null, RegistryConfigurationBase? configuration = null)
@@ -21,33 +24,22 @@ public class Registry(
         if (name != null) Name = name;
         if (registryHost != null) RegistryHost = registryHost;
         if (configuration != null) Configuration = configuration;
+
     }
 
     public static Registry FromPersistence(
         Guid id,
         string name,
+        string? description,
         string registryHost,
-        DateTime created, 
+        DateTime createdAt, 
+        Guid createdByActorId,
         RegistryConfigurationBase configuration)
     {
-        return new Registry(name, registryHost, configuration)
+        return new Registry(name, registryHost, createdByActorId, configuration, description)
         {
             Id = id,
-            Created = created
+            CreatedAt = createdAt
         };
-    }
-
-    public static Registry DefaultRegistry()
-    {
-        var registry = new Registry(
-            name: DefaultRegistryName,
-            registryHost: "hub.docker.com",
-            configuration: new DockerHubRegistry())
-        {
-            Id = Guid.Empty,
-            Created = DateTime.MinValue
-        };
-
-        return registry;
     }
 }

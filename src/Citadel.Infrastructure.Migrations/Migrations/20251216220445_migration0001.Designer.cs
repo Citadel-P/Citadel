@@ -11,14 +11,47 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251206125101_migration0001")]
+    [Migration("20251216220445_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.1");
+
+            modelBuilder.Entity("Actor", b =>
+                {
+                    b.Property<string>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Actors", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = "00000000-0000-0000-0000-000000000002",
+                            Name = "Admin",
+                            Type = "User"
+                        },
+                        new
+                        {
+                            Id = "00000000-0000-0000-0000-000000000001",
+                            Name = "System",
+                            Type = "System"
+                        });
+                });
 
             modelBuilder.Entity("Container", b =>
                 {
@@ -150,6 +183,10 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
@@ -207,13 +244,6 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("TEXT");
 
@@ -230,8 +260,7 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasIndex("PlatformId")
                         .HasDatabaseName("IX_DeploymentVersions_PlatformId");
 
-                    b.HasIndex("UpdatedBy")
-                        .HasDatabaseName("IX_DeploymentVersions_UpdatedBy");
+                    b.HasIndex("UpdatedBy");
 
                     b.ToTable("DeploymentVersions", (string)null);
                 });
@@ -439,7 +468,15 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<long>("Created")
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedByActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(600)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
@@ -452,11 +489,25 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedByActorId");
+
                     b.HasIndex("Name")
                         .IsUnique()
                         .HasDatabaseName("IX_Registries_Name");
 
                     b.ToTable("Registries", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = "a1de9601-7f3b-4f75-a11b-98533d063a0f",
+                            Configuration = "{\r\n    \"$type\": \"DockerHub\"\r\n}",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            CreatedByActorId = "00000000-0000-0000-0000-000000000001",
+                            Description = "Public Docker Hub Registry",
+                            Name = "Docker Hub",
+                            RegistryHost = "hub.docker.com"
+                        });
                 });
 
             modelBuilder.Entity("Role", b =>
@@ -529,29 +580,36 @@ namespace Infrastructure.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
-                        .HasDefaultValue(new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CreatedByActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Email")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Password")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValue(new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
-
                     b.HasKey("Id");
+
+                    b.HasIndex("ActorId")
+                        .IsUnique();
+
+                    b.HasIndex("CreatedByActorId");
 
                     b.HasIndex("Email")
                         .IsUnique()
@@ -563,11 +621,12 @@ namespace Infrastructure.Migrations.Migrations
                         new
                         {
                             Id = "d1de9601-f113-ce77-884e-3cb636ec09a8",
+                            ActorId = "00000000-0000-0000-0000-000000000002",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             Email = "admin@admin.com",
                             Name = "admin",
-                            Password = "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1",
-                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
+                            Password = "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1"
                         });
                 });
 
@@ -705,12 +764,36 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Registry", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Team", b =>
                 {
                     b.HasOne("Role", null)
                         .WithMany()
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("User", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithOne()
+                        .HasForeignKey("User", "ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

@@ -6266,13 +6266,14 @@
       },
       "DeploymentStatus": {
         "enum": [
+          "Unknown",
           "Created",
           "Pending",
           "Applying",
           "Healthy",
           "Degraded",
           "Failed",
-          "RolledBack"
+          "Stopped"
         ]
       },
       "DeploymentVersionView": {
@@ -9497,6 +9498,12 @@
           },
           "configuration": {
             "$ref": "#/components/schemas/RegistryConfigurationBase"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

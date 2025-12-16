@@ -187,7 +187,11 @@ public enum LoggingDriverType
 public enum DeploymentStatus
 {
     /// <summary>
-    /// Spec written but not applied
+    /// Fallback for serialization errors or agent disconnects.
+    /// </summary>
+    Unknown = 0,
+    /// <summary>
+    /// Spec saved in DB, but the runner hasn't picked it up yet.
     /// </summary>
     Created,
     /// <summary>
@@ -195,22 +199,26 @@ public enum DeploymentStatus
     /// </summary>
     Pending,
     /// <summary>
-    /// Actively applying
+    /// Pulling images, creating containers, starting networking.
     /// </summary>
     Applying,
     /// <summary>
-    /// Running OK
+    /// Container is up, health checks passing (if any), exit code 0.
     /// </summary>
     Healthy,
     /// <summary>
-    /// Drift / errors
+    /// Container is running but drift detected, or health checks failing, 
+    /// or in a restart loop (CrashLoopBackOff), or paused.
     /// </summary>
     Degraded,
+    /// <summary>
+    /// Container exited with non-zero code, or image pull failed.
+    /// </summary>
     Failed,
     /// <summary>
-    /// Replaced by older version
+    /// Intentionally stopped by user. Resources exist but are not running.
     /// </summary>
-    RolledBack
+    Stopped
 }
 
 public enum DeploymentSource 
@@ -237,4 +245,11 @@ public enum StopSignal {
     SIGTERM,
     SIGKILL,
     SIGINT,
+}
+public enum ActorType
+{
+    User = 0,
+    System,
+    Agent,
+    Service
 }

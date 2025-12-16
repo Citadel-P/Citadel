@@ -40,6 +40,7 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
                 Users.Id, 
                 Users.Name, 
                 Users.Email,
+                Users.ActorId,
                 Roles.Name as RoleName, 
                 Permissions.PermissionCode
             FROM Token
@@ -47,7 +48,8 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
             LEFT JOIN UsersTeams ON Users.Id = UsersTeams.UserId
             LEFT JOIN Teams ON Teams.Id = UsersTeams.TeamId
             LEFT JOIN Roles ON Teams.RoleId = Roles.Id
-            LEFT JOIN Permissions ON Roles.Id = Permissions.RoleId;
+            LEFT JOIN Permissions ON Roles.Id = Permissions.RoleId
+            LEFT JOIN Actors ON Actors.Id = Users.Id;
             """;
 
         var result = await db.QueryAsync<UserAuthInfoDto>(sql,
@@ -55,11 +57,12 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
             transaction: tx());
 
         return result
-            .GroupBy(r => new { r.Id, r.Name, r.Email })
+            .GroupBy(r => new { r.Id, r.Name, r.Email, r.ActorId })
             .Select(g => new UserAuthInfo(
                g.Key.Id,
-                g.Key.Name,
-                g.Key.Email,
+               g.Key.ActorId,
+               g.Key.Name,
+               g.Key.Email,
                 null,
                 [.. g.Where(r => !string.IsNullOrWhiteSpace(r.RoleName))
                     .Select(r => r.RoleName!)

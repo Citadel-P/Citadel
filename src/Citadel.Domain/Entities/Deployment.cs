@@ -10,9 +10,9 @@ public sealed class Deployment(
     public string Name { get; private set; } = name;
     public string? Description { get; private set; } = description;
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
-    public DateTime? UpdatedAt { get; private set; }
     public Guid CreatedBy { get; private set; } = createdBy;
-    public Guid? UpdatedBy { get; private set; }
+    public DeploymentStatus Status { get; private set; }
+
 
     public IReadOnlyCollection<DeploymentVersion> Versions => versions;
     public Guid? ActiveVersionId { get; private set; }
@@ -30,11 +30,10 @@ public sealed class Deployment(
             platformId: platformId,
             createdBy: createdBy,
             spec: spec,
-            source: DeploymentSource.UI,
-            status: DeploymentStatus.Created
+            source: DeploymentSource.UI
         );
+        Status = DeploymentStatus.Created;
         versions.Add(newVersion);
-        UpdatedAt = DateTime.UtcNow;
         return newVersion;
     }
 
@@ -44,7 +43,16 @@ public sealed class Deployment(
             throw new ArgumentException("Version not found.", nameof(versionId));
 
         ActiveVersionId = versionId;
-        UpdatedAt = DateTime.UtcNow;
-        UpdatedBy = updatedBy;
+    }
+
+
+    public void MarkAsDeployed()
+    {
+        Status = DeploymentStatus.Healthy;
+    }
+
+    public void MarkAsFailed()
+    {
+        Status = DeploymentStatus.Failed;
     }
 }

@@ -4,31 +4,23 @@ using Domain.Contracts.Resources.Identity;
 
 namespace Domain.Entities.Identity;
 
-public class User
+public sealed class User(
+    string name,
+    string email,
+    string password,
+    Guid actorId,
+    Guid createdByActorId,
+    DateTime? createdAt = null
+    ) : AuditedEntity(createdByActorId, createdAt)
 {
-    public Guid Id { get; private set; }
-    public string Name { get; private set; } = null!;
-    public string Email { get; private set; } = null!;
-    public string Password { get; private set; } = null!;
-    public DateTime CreatedAt { get; private set; }
-    public DateTime UpdatedAt { get; private set; }
+    public Guid Id { get; private set; } = Guid.CreateVersion7();
+    public string Name { get; private set; } = name;
+    public string Email { get; private set; } = email;
+    public string Password { get; private set; } = HashPassword(password);
+    public Guid ActorId { get; private set; } = actorId;
+
     public ICollection<Team> Teams { get; } = [];
     public ICollection<RefreshToken> RefreshTokens { get; } = [];
-
-    /// <summary>
-    /// Factory method to create a user
-    /// </summary>
-    /// <param name="name">user name</param>
-    /// <param name="email">email</param>
-    /// <param name="password">plain text password</param>
-    public static User Create(string name, string email, string password, Guid? id = null, DateTime? createdAt = null) => new()
-    {
-        Id = id ?? Guid.CreateVersion7(),
-        Name = name,
-        Email = email,
-        CreatedAt = createdAt ?? DateTime.UtcNow,
-        Password = HashPassword(password),
-    };
 
     /// <summary>
     /// Check user password is valid
@@ -59,6 +51,7 @@ public class User
     {
         yield return new Claim("name", userAuthInfo.Name);
         yield return new Claim("email", userAuthInfo.Email);
+        yield return new Claim("actorId", userAuthInfo.ActorId.ToString());
         yield return new Claim("sub", userAuthInfo.Id.ToString());
         yield return new Claim("jti", Guid.CreateVersion7().ToString());
 

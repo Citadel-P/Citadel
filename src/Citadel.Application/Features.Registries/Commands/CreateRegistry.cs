@@ -7,8 +7,11 @@ using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
+using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 
 namespace Application.Features.Registries.Commands;
 
@@ -16,7 +19,8 @@ namespace Application.Features.Registries.Commands;
 public sealed record CreateRegistry(
     string Name, 
     string RegistryHost,
-    RegistryConfigurationBase Configuration) : ICommand<Result<Registry>>
+    RegistryConfigurationBase Configuration, 
+    string? Description = null) : ICommand<Result<Registry>>
 {
     internal sealed class Validator : AbstractValidator<CreateRegistry>
     {
@@ -114,10 +118,13 @@ public sealed record CreateRegistry(
     }
 }
 
-internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorResolver registryResolver) : ICommandHandler<CreateRegistry, Result<Registry>>
+internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IHttpContextAccessor httpContextAccessor, IRegistryConnectorResolver registryResolver) : ICommandHandler<CreateRegistry, Result<Registry>>
 {
     public async ValueTask<Result<Registry>> Handle(CreateRegistry command, CancellationToken cancellationToken)
     {
+        var user = httpContextAccessor.HttpContext?.User
+            ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
+
         var exist = await unitOfWork.Registries.ExistsAsync(command.Name, cancellationToken);
         if (exist)
         {
@@ -136,7 +143,7 @@ internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorR
             return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
         }
 
-        var registry = new Registry(name: command.Name, registryHost: command.RegistryHost, configuration: command.Configuration);
+        var registry = new Registry(name: command.Name, registryHost: command.RegistryHost, createdByActorId: user.GetActorId(), configuration: command.Configuration, description: command.Description);
         await unitOfWork.Registries.AddAsync(registry, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 

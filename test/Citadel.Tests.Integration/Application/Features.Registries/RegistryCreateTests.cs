@@ -1,7 +1,7 @@
 ﻿using System.Text;
 using Application.Services;
-using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Identity;
 using Domain.Entities.Registries;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -217,6 +217,7 @@ public class RegistryCreateTests : IntegrationTestBase
             await uow.Registries.AddAsync(new Domain.Entities.Registry(
                 name: "R-NEW",
                 registryHost: "https://existing.url",
+                createdByActorId: Actor.SystemId,
                 configuration: new DockerHubRegistry("user", "dummy-pat1234")
             ), TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);

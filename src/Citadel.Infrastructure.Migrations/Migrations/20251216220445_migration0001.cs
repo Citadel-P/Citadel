@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
+#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
+
 namespace Infrastructure.Migrations.Migrations
 {
     /// <inheritdoc />
@@ -11,6 +13,19 @@ namespace Infrastructure.Migrations.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.CreateTable(
+                name: "Actors",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    Type = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Actors", x => x.Id);
+                });
+
             migrationBuilder.CreateTable(
                 name: "Platforms",
                 columns: table => new
@@ -35,21 +50,6 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Registries",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "TEXT", nullable: false),
-                    Configuration = table.Column<string>(type: "TEXT", nullable: false),
-                    Created = table.Column<long>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", nullable: false),
-                    RegistryHost = table.Column<string>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Registries", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Roles",
                 columns: table => new
                 {
@@ -64,19 +64,55 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Registries",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    Configuration = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
+                    Description = table.Column<string>(type: "TEXT", maxLength: 600, nullable: true),
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    RegistryHost = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Registries", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Registries_Actors_CreatedByActorId",
+                        column: x => x.CreatedByActorId,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Users",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValue: new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)),
-                    Email = table.Column<string>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", nullable: false),
-                    Password = table.Column<string>(type: "TEXT", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValue: new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified))
+                    ActorId = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
+                    Email = table.Column<string>(type: "TEXT", nullable: true),
+                    Name = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
+                    Password = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Users", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Users_Actors_ActorId",
+                        column: x => x.ActorId,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Users_Actors_CreatedByActorId",
+                        column: x => x.CreatedByActorId,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -100,39 +136,6 @@ namespace Infrastructure.Migrations.Migrations
                         principalTable: "Platforms",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Images",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "TEXT", nullable: false),
-                    Containers = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 0),
-                    CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
-                    DockerImageId = table.Column<string>(type: "TEXT", nullable: false),
-                    IsUpToDate = table.Column<bool>(type: "INTEGER", nullable: true),
-                    Name = table.Column<string>(type: "TEXT", nullable: false),
-                    PlatformId = table.Column<string>(type: "TEXT", nullable: false),
-                    RegistryId = table.Column<string>(type: "TEXT", nullable: true),
-                    Size = table.Column<double>(type: "REAL", nullable: false, defaultValue: 0.0),
-                    Tags = table.Column<string>(type: "TEXT", nullable: false),
-                    UpdatedAt = table.Column<string>(type: "TEXT", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Images", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Images_Platforms_PlatformId",
-                        column: x => x.PlatformId,
-                        principalTable: "Platforms",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_Images_Registries_RegistryId",
-                        column: x => x.RegistryId,
-                        principalTable: "Registries",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
@@ -174,6 +177,39 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Images",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    Containers = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 0),
+                    CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
+                    DockerImageId = table.Column<string>(type: "TEXT", nullable: false),
+                    IsUpToDate = table.Column<bool>(type: "INTEGER", nullable: true),
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    PlatformId = table.Column<string>(type: "TEXT", nullable: false),
+                    RegistryId = table.Column<string>(type: "TEXT", nullable: true),
+                    Size = table.Column<double>(type: "REAL", nullable: false, defaultValue: 0.0),
+                    Tags = table.Column<string>(type: "TEXT", nullable: false),
+                    UpdatedAt = table.Column<string>(type: "TEXT", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Images", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Images_Platforms_PlatformId",
+                        column: x => x.PlatformId,
+                        principalTable: "Platforms",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Images_Registries_RegistryId",
+                        column: x => x.RegistryId,
+                        principalTable: "Registries",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Deployments",
                 columns: table => new
                 {
@@ -183,6 +219,7 @@ namespace Infrastructure.Migrations.Migrations
                     CreatedBy = table.Column<string>(type: "TEXT", nullable: false),
                     Description = table.Column<string>(type: "TEXT", nullable: true),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
+                    Status = table.Column<string>(type: "TEXT", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
                     UpdatedBy = table.Column<string>(type: "TEXT", nullable: true)
                 },
@@ -301,8 +338,6 @@ namespace Infrastructure.Migrations.Migrations
                     RolledBackFromVersion = table.Column<int>(type: "INTEGER", nullable: true),
                     Source = table.Column<string>(type: "TEXT", nullable: false),
                     Spec = table.Column<string>(type: "TEXT", nullable: false),
-                    Status = table.Column<string>(type: "TEXT", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
                     UpdatedBy = table.Column<string>(type: "TEXT", nullable: true),
                     Version = table.Column<int>(type: "INTEGER", nullable: false)
                 },
@@ -361,19 +396,33 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.InsertData(
+                table: "Actors",
+                columns: new[] { "Id", "Name", "Type" },
+                values: new object[,]
+                {
+                    { "00000000-0000-0000-0000-000000000001", "System", "System" },
+                    { "00000000-0000-0000-0000-000000000002", "Admin", "User" }
+                });
+
+            migrationBuilder.InsertData(
                 table: "Roles",
                 columns: new[] { "Id", "CreatedAt", "Name", "UpdatedAt" },
                 values: new object[] { "bdde9601-3b03-1275-a11b-98533d063a04", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "Admin", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified) });
 
             migrationBuilder.InsertData(
-                table: "Users",
-                columns: new[] { "Id", "CreatedAt", "Email", "Name", "Password", "UpdatedAt" },
-                values: new object[] { "d1de9601-f113-ce77-884e-3cb636ec09a8", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "admin@admin.com", "admin", "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified) });
+                table: "Registries",
+                columns: new[] { "Id", "Configuration", "CreatedAt", "CreatedByActorId", "Description", "Name", "RegistryHost" },
+                values: new object[] { "a1de9601-7f3b-4f75-a11b-98533d063a0f", "{\r\n    \"$type\": \"DockerHub\"\r\n}", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "Public Docker Hub Registry", "Docker Hub", "hub.docker.com" });
 
             migrationBuilder.InsertData(
                 table: "Teams",
                 columns: new[] { "Id", "Name", "RoleId" },
                 values: new object[] { "cede9601-67e9-507d-832c-0ca0155465a1", "Admins", "bdde9601-3b03-1275-a11b-98533d063a04" });
+
+            migrationBuilder.InsertData(
+                table: "Users",
+                columns: new[] { "Id", "ActorId", "CreatedAt", "CreatedByActorId", "Email", "Name", "Password" },
+                values: new object[] { "d1de9601-f113-ce77-884e-3cb636ec09a8", "00000000-0000-0000-0000-000000000002", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "admin@admin.com", "admin", "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1" });
 
             migrationBuilder.InsertData(
                 table: "UsersTeams",
@@ -481,6 +530,11 @@ namespace Infrastructure.Migrations.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Registries_CreatedByActorId",
+                table: "Registries",
+                column: "CreatedByActorId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Registries_Name",
                 table: "Registries",
                 column: "Name",
@@ -490,6 +544,17 @@ namespace Infrastructure.Migrations.Migrations
                 name: "IX_Teams_RoleId",
                 table: "Teams",
                 column: "RoleId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Users_ActorId",
+                table: "Users",
+                column: "ActorId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Users_CreatedByActorId",
+                table: "Users",
+                column: "CreatedByActorId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_Email",
@@ -552,6 +617,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "Registries");
+
+            migrationBuilder.DropTable(
+                name: "Actors");
         }
     }
 }

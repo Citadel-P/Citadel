@@ -15,8 +15,10 @@ internal static class RegistryMappers
         return Registry.FromPersistence(
             id: dto.Id,
             name: dto.Name,
+            description: dto.Description,
             registryHost: dto.RegistryHost,
-            created: DateTime.Parse(dto.Created),
+            createdByActorId: dto.CreatedByActorId,
+            createdAt: DateTime.Parse(dto.CreatedAt),
             configuration: JsonSerializer.Deserialize(dto.Configuration, RegistryJsonContext.Default.RegistryConfigurationBase)
                 ?? throw new NotImplementedException($"Registry configuration is missing for registry id {dto.Id}"));
     }

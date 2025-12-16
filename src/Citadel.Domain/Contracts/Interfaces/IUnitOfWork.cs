@@ -12,6 +12,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IImageRepository Images { get; }
     IPlatformRepository Platforms { get; }
     IContainerRepository Containers { get; }
+    IDeploymentRepository Deployments { get; }
     IRegistryRepository Registries { get; }
     IRefreshTokenRepository RefreshTokens { get; }
     IContainerStatRepository ContainerStats { get; }
@@ -111,4 +112,9 @@ public interface IImageRepository
     Task<int> BulkUpsertAsync(IEnumerable<Image> images, CancellationToken cancellationToken);
 
     Task<int> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+}
+
+public interface IDeploymentRepository
+{
+    Task<int> AddAsync(Deployment deployment, CancellationToken cancellationToken);
 }

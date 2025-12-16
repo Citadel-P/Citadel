@@ -1,11 +1,12 @@
-﻿using System.Text;
-using Application.Services;
+﻿using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
+using Domain.Entities.Identity;
 using Domain.Entities.Registries;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using System.Text;
 
 namespace Tests.Integration.Application.Features.Registries;
 
@@ -18,7 +19,8 @@ public class RegistryPatchTests : IntegrationTestBase
     {
         var registry = new Registry(
             name: "OriginalName",
-            registryHost: "https://original.url",
+            registryHost: "original.url",
+            createdByActorId: Actor.SystemId,
             configuration: new DockerHubRegistry("original-user", "pat123")
         );
 

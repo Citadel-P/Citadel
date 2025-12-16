@@ -12,9 +12,7 @@ internal sealed class GetAllRegistriesHandler(IUnitOfWork unitOfWork) : IQueryHa
     public async ValueTask<Result<IEnumerable<Registry>>> Handle(GetAllRegistries query, CancellationToken cancellationToken)
     {
         var registries = await unitOfWork.Registries.GetAllAsync(cancellationToken) ?? [];
-        var allRegistries = registries
-            .Prepend(Registry.DefaultRegistry())
-            .OrderByDescending(s => s.Created);
+        var allRegistries = registries.OrderByDescending(s => s.CreatedAt);
 
         return Result.Success<IEnumerable<Registry>>(allRegistries);
     }

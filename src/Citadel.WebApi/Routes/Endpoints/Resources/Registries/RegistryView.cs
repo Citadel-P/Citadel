@@ -10,7 +10,7 @@ public sealed record RegistryView(Guid Id, string Name, string RegistryHost, Reg
     /// Default registry cannot be edited or deleted
     /// </summary>
     public bool IsDefault => Id == Guid.Empty;
-    internal static RegistryView Map(Registry registry) => new(registry.Id, registry.Name, registry.RegistryHost, GetType(registry.Configuration), registry.Created);
+    internal static RegistryView Map(Registry registry) => new(registry.Id, registry.Name, registry.RegistryHost, GetType(registry.Configuration), registry.CreatedAt);
 
     private static RegistryType GetType(RegistryConfigurationBase config)
     {

@@ -110,7 +110,7 @@ namespace Infrastructure.DockerHub
 
         /// <summary>Create a personal access token</summary>
         /// <remarks>Creates and returns a personal access token.</remarks>
-        /// <returns>Created</returns>
+        /// <returns>CreatedAt</returns>
         /// <exception cref="ApiException">
         /// Thrown when the request returns a non-success status code:
         /// <list type="table">
@@ -1397,7 +1397,7 @@ namespace Infrastructure.DockerHub
     internal partial class PostUsersLoginSuccessResponse
     {
         /// <summary>
-        /// Created authentication token.
+        /// CreatedAt authentication token.
         /// <br/>This token can be used in the HTTP Authorization header as a JWT to authenticate with the Docker Hub APIs.
         /// <br/>
         /// </summary>

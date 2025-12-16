@@ -6,8 +6,7 @@ public sealed class DeploymentVersion (
     Guid platformId,
     DeploymentSpec spec,
     Guid createdBy,
-    DeploymentSource source,
-    DeploymentStatus status
+    DeploymentSource source
     )
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
@@ -16,13 +15,10 @@ public sealed class DeploymentVersion (
     public Guid PlatformId { get; private set; } = platformId;
     public DeploymentSpec Spec { get; private set; } = spec;
 
-    public DeploymentStatus Status { get; private set; } = status;
     public DeploymentSource Source { get; private set; } = source;
 
     public Guid CreatedBy { get; private set; } = createdBy;
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
-    public DateTime? UpdatedAt { get; private set; }
-    public Guid? UpdatedBy { get; private set; }
 
     public int? RolledBackFromVersion { get; private set; }
 
@@ -33,22 +29,4 @@ public sealed class DeploymentVersion (
 
     public Dictionary<string, string>? Annotations { get; private set; }
 
-    public void MarkAsDeployed()
-    {
-        Status = DeploymentStatus.Healthy;
-        UpdatedAt = DateTime.UtcNow;
-    }
-
-    public void MarkAsFailed()
-    {
-        Status = DeploymentStatus.Failed;
-        UpdatedAt = DateTime.UtcNow;
-    }
-
-    public void MarkAsRolledBack(int rolledBackFrom)
-    {
-        RolledBackFromVersion = rolledBackFrom;
-        Status = DeploymentStatus.RolledBack;
-        UpdatedAt = DateTime.UtcNow;
-    }
 }

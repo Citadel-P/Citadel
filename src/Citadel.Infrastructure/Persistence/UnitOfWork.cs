@@ -23,6 +23,7 @@ internal class UnitOfWork : IUnitOfWork
         Platforms = new Lazy<IPlatformRepository>(() => new PlatformRepository(connection, GetTransaction));
         Registries = new Lazy<IRegistryRepository>(() => new RegistryRepository(connection, GetTransaction));
         Containers = new Lazy<IContainerRepository>(() => new ContainerRepository(connection, GetTransaction));
+        Deployments = new Lazy<IDeploymentRepository>(() => new DeploymentRepository(connection, GetTransaction));
         RefreshTokens = new Lazy<IRefreshTokenRepository>(() => new RefreshTokenRepository(connection, GetTransaction));
         PlatformStats = new Lazy<IPlatformStatRepository>(() => new PlatformStatRepository(connection, GetTransaction));
         ContainerStats = new Lazy<IContainerStatRepository>(() => new ContainerStatRepository(connection, GetTransaction));
@@ -34,6 +35,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IPlatformRepository> Platforms { get; }
     private Lazy<IRegistryRepository> Registries { get; }
     private Lazy<IContainerRepository> Containers { get; }
+    private Lazy<IDeploymentRepository> Deployments { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
     private Lazy<IContainerStatRepository> ContainerStats { get; }
     private Lazy<IPlatformStatRepository> PlatformStats { get; }
@@ -44,11 +46,12 @@ internal class UnitOfWork : IUnitOfWork
     IPlatformRepository IUnitOfWork.Platforms => Platforms.Value;
     IRegistryRepository IUnitOfWork.Registries => Registries.Value;
     IContainerRepository IUnitOfWork.Containers => Containers.Value;
+    IDeploymentRepository IUnitOfWork.Deployments => Deployments.Value;
     IRefreshTokenRepository IUnitOfWork.RefreshTokens => RefreshTokens.Value;
     IContainerStatRepository IUnitOfWork.ContainerStats => ContainerStats.Value;
     IPlatformStatRepository IUnitOfWork.PlatformStats => PlatformStats.Value;
 
-    // Lazily creates a transaction - to prevent sqlite table locking
+    // Lazily creates a transaction
     private IDbTransaction GetTransaction()
     {
         ObjectDisposedException.ThrowIf(disposed, this);

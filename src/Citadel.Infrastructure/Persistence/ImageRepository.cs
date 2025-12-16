@@ -30,13 +30,14 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.RegistryId,
                 r.Name AS RegistryName,
                 r.RegistryHost AS RegistryHost,
-                r.Created As RegistryCreated
+                r.CreatedAt As RegistryCreatedAt,
+                r.CreatedByActorId AS RegistryCreatedByActorId
             FROM Images i
             LEFT JOIN Registries r
             ON i.RegistryId = r.Id
             WHERE PlatformId = @PlatformId
             ORDER BY 
-                CreatedAt DESC,
+                i.CreatedAt DESC,
                 Name ASC
             """;
         var images = await db.QueryAsync<ImageDto>(sql, new { PlatformId = platformId.Format() }, tx());
@@ -60,7 +61,8 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.RegistryId,
                 r.Name AS RegistryName,
                 r.RegistryHost AS RegistryHost,
-                r.Created As RegistryCreated
+                r.CreatedAt As RegistryCreatedAt,
+                r.CreatedByActorId AS RegistryCreatedByActorId
             FROM Images i
             LEFT JOIN Registries r
             ON i.RegistryId = r.Id
@@ -88,7 +90,8 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.RegistryId,
                 r.Name AS RegistryName,
                 r.RegistryHost AS RegistryHost,
-                r.Created As RegistryCreated
+                r.CreatedAt As RegistryCreatedAt,
+                r.CreatedByActorId AS RegistryCreatedByActorId
             FROM Images i
             LEFT JOIN Registries r
             ON i.RegistryId = r.Id

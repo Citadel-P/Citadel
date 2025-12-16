@@ -26,8 +26,10 @@ internal static class ImageMappers
                 registry: Registry.FromPersistence(
                     id: image?.RegistryId ?? Guid.Empty,
                     name: image?.RegistryName ?? "",
+                    description: null,
                     registryHost: image?.RegistryHost ?? "",
-                    created: image?.RegistryCreated ?? DateTime.MinValue,
+                    createdAt: image?.RegistryCreatedAt ?? DateTime.MinValue,
+                    createdByActorId: image?.RegistryCreatedByActorId ?? Guid.Empty,
                     configuration: null)
             );
 }

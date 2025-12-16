@@ -2,6 +2,7 @@
   id: Guid_1,
   name: R-NEW,
   registryHost: ghcr.io,
+  type: GitHub,
   created: DateTimeOffset_1,
   isDefault: false
 }

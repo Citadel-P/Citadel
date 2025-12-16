@@ -4,6 +4,12 @@
 );
 
 BEGIN TRANSACTION;
+CREATE TABLE "Actors" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_Actors" PRIMARY KEY,
+    "Name" TEXT NOT NULL,
+    "Type" TEXT NOT NULL
+);
+
 CREATE TABLE "Platforms" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Platforms" PRIMARY KEY,
     "Address" TEXT NOT NULL,
@@ -20,14 +26,6 @@ CREATE TABLE "Platforms" (
     "VolumeCount" REAL NOT NULL
 );
 
-CREATE TABLE "Registries" (
-    "Id" TEXT NOT NULL CONSTRAINT "PK_Registries" PRIMARY KEY,
-    "Configuration" TEXT NOT NULL,
-    "Created" TEXT NOT NULL,
-    "Name" TEXT NOT NULL,
-    "RegistryHost" TEXT NOT NULL
-);
-
 CREATE TABLE "Roles" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Roles" PRIMARY KEY,
     "CreatedAt" TEXT NOT NULL DEFAULT '2000-01-01 00:00:00',
@@ -35,13 +33,27 @@ CREATE TABLE "Roles" (
     "UpdatedAt" TEXT NOT NULL DEFAULT '2000-01-01 00:00:00'
 );
 
+CREATE TABLE "Registries" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_Registries" PRIMARY KEY,
+    "Configuration" TEXT NOT NULL,
+    "CreatedAt" TEXT NOT NULL,
+    "CreatedByActorId" TEXT NOT NULL,
+    "Description" TEXT NULL,
+    "Name" TEXT NOT NULL,
+    "RegistryHost" TEXT NOT NULL,
+    CONSTRAINT "FK_Registries_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
+);
+
 CREATE TABLE "Users" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Users" PRIMARY KEY,
-    "CreatedAt" TEXT NOT NULL DEFAULT '2000-01-01 00:00:00',
-    "Email" TEXT NOT NULL,
+    "ActorId" TEXT NOT NULL,
+    "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    "CreatedByActorId" TEXT NOT NULL,
+    "Email" TEXT NULL,
     "Name" TEXT NOT NULL,
-    "Password" TEXT NOT NULL,
-    "UpdatedAt" TEXT NOT NULL DEFAULT '2000-01-01 00:00:00'
+    "Password" TEXT NULL,
+    CONSTRAINT "FK_Users_Actors_ActorId" FOREIGN KEY ("ActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_Users_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
 );
 
 CREATE TABLE "PlatformStats" (
@@ -53,6 +65,20 @@ CREATE TABLE "PlatformStats" (
     "RxBytes" REAL NOT NULL,
     "TxBytes" REAL NOT NULL,
     CONSTRAINT "FK_PlatformStats_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "Permissions" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_Permissions" PRIMARY KEY,
+    "PermissionCode" TEXT NOT NULL,
+    "RoleId" TEXT NOT NULL,
+    CONSTRAINT "FK_Permissions_Roles_RoleId" FOREIGN KEY ("RoleId") REFERENCES "Roles" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "Teams" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_Teams" PRIMARY KEY,
+    "Name" TEXT NOT NULL,
+    "RoleId" TEXT NOT NULL,
+    CONSTRAINT "FK_Teams_Roles_RoleId" FOREIGN KEY ("RoleId") REFERENCES "Roles" ("Id") ON DELETE CASCADE
 );
 
 CREATE TABLE "Images" (
@@ -71,20 +97,6 @@ CREATE TABLE "Images" (
     CONSTRAINT "FK_Images_Registries_RegistryId" FOREIGN KEY ("RegistryId") REFERENCES "Registries" ("Id") ON DELETE SET NULL
 );
 
-CREATE TABLE "Permissions" (
-    "Id" TEXT NOT NULL CONSTRAINT "PK_Permissions" PRIMARY KEY,
-    "PermissionCode" TEXT NOT NULL,
-    "RoleId" TEXT NOT NULL,
-    CONSTRAINT "FK_Permissions_Roles_RoleId" FOREIGN KEY ("RoleId") REFERENCES "Roles" ("Id") ON DELETE CASCADE
-);
-
-CREATE TABLE "Teams" (
-    "Id" TEXT NOT NULL CONSTRAINT "PK_Teams" PRIMARY KEY,
-    "Name" TEXT NOT NULL,
-    "RoleId" TEXT NOT NULL,
-    CONSTRAINT "FK_Teams_Roles_RoleId" FOREIGN KEY ("RoleId") REFERENCES "Roles" ("Id") ON DELETE CASCADE
-);
-
 CREATE TABLE "Deployments" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Deployments" PRIMARY KEY,
     "ActiveVersionId" TEXT NULL,
@@ -92,6 +104,7 @@ CREATE TABLE "Deployments" (
     "CreatedBy" TEXT NOT NULL,
     "Description" TEXT NULL,
     "Name" TEXT NOT NULL,
+    "Status" TEXT NOT NULL,
     "UpdatedAt" TEXT NOT NULL,
     "UpdatedBy" TEXT NULL,
     CONSTRAINT "FK_Deployments_Users_CreatedBy" FOREIGN KEY ("CreatedBy") REFERENCES "Users" ("Id") ON DELETE RESTRICT,
@@ -143,8 +156,6 @@ CREATE TABLE "DeploymentVersions" (
     "RolledBackFromVersion" INTEGER NULL,
     "Source" TEXT NOT NULL,
     "Spec" TEXT NOT NULL,
-    "Status" TEXT NOT NULL,
-    "UpdatedAt" TEXT NOT NULL,
     "UpdatedBy" TEXT NULL,
     "Version" INTEGER NOT NULL,
     CONSTRAINT "FK_DeploymentVersions_Deployments_DeploymentId" FOREIGN KEY ("DeploymentId") REFERENCES "Deployments" ("Id") ON DELETE CASCADE,
@@ -166,18 +177,32 @@ CREATE TABLE "ContainerStats" (
     CONSTRAINT "FK_ContainerStats_Containers_ContainerId" FOREIGN KEY ("ContainerId") REFERENCES "Containers" ("Id") ON DELETE CASCADE
 );
 
+INSERT INTO "Actors" ("Id", "Name", "Type")
+VALUES ('00000000-0000-0000-0000-000000000001', 'System', 'System');
+SELECT changes();
+
+INSERT INTO "Actors" ("Id", "Name", "Type")
+VALUES ('00000000-0000-0000-0000-000000000002', 'Admin', 'User');
+SELECT changes();
+
+
 INSERT INTO "Roles" ("Id", "CreatedAt", "Name", "UpdatedAt")
 VALUES ('bdde9601-3b03-1275-a11b-98533d063a04', '2026-01-01 00:00:00', 'Admin', '2026-01-01 00:00:00');
 SELECT changes();
 
 
-INSERT INTO "Users" ("Id", "CreatedAt", "Email", "Name", "Password", "UpdatedAt")
-VALUES ('d1de9601-f113-ce77-884e-3cb636ec09a8', '2026-01-01 00:00:00', 'admin@admin.com', 'admin', 'o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1', '2026-01-01 00:00:00');
+INSERT INTO "Registries" ("Id", "Configuration", "CreatedAt", "CreatedByActorId", "Description", "Name", "RegistryHost")
+VALUES ('a1de9601-7f3b-4f75-a11b-98533d063a0f', (('{' || (CHAR(13) || CHAR(10))) || (('    "$type": "DockerHub"' || CHAR(13)) || (CHAR(10) || '}'))), '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', 'Public Docker Hub Registry', 'Docker Hub', 'hub.docker.com');
 SELECT changes();
 
 
 INSERT INTO "Teams" ("Id", "Name", "RoleId")
 VALUES ('cede9601-67e9-507d-832c-0ca0155465a1', 'Admins', 'bdde9601-3b03-1275-a11b-98533d063a04');
+SELECT changes();
+
+
+INSERT INTO "Users" ("Id", "ActorId", "CreatedAt", "CreatedByActorId", "Email", "Name", "Password")
+VALUES ('d1de9601-f113-ce77-884e-3cb636ec09a8', '00000000-0000-0000-0000-000000000002', '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', 'admin@admin.com', 'admin', 'o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1');
 SELECT changes();
 
 
@@ -224,9 +249,15 @@ CREATE UNIQUE INDEX "IX_Platforms_Address" ON "Platforms" ("Address");
 
 CREATE INDEX "IX_RefreshTokens_UserId" ON "RefreshTokens" ("UserId");
 
+CREATE INDEX "IX_Registries_CreatedByActorId" ON "Registries" ("CreatedByActorId");
+
 CREATE UNIQUE INDEX "IX_Registries_Name" ON "Registries" ("Name");
 
 CREATE INDEX "IX_Teams_RoleId" ON "Teams" ("RoleId");
+
+CREATE UNIQUE INDEX "IX_Users_ActorId" ON "Users" ("ActorId");
+
+CREATE INDEX "IX_Users_CreatedByActorId" ON "Users" ("CreatedByActorId");
 
 CREATE UNIQUE INDEX "IX_Users_Email" ON "Users" ("Email");
 
@@ -235,7 +266,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20251206125101_migration0001', '10.0.0');
+VALUES ('20251216220445_migration0001', '10.0.1');
 
 COMMIT;
 

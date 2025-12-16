@@ -6,10 +6,11 @@ namespace WebApi.Routes.Endpoints.Resources.Registries;
 public sealed record RegistryInput(
     string Name, 
     string RegistryHost,
-    RegistryConfigurationBase Configuration
+    RegistryConfigurationBase Configuration,
+    string? Description = null
     )
 {
-    internal CreateRegistry ToCommand() => new(Name, GetRegistryHost(), Configuration);
+    internal CreateRegistry ToCommand() => new(Name, GetRegistryHost(), Configuration, Description);
 
     private string GetRegistryHost()
     {
