@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { fromNow } from '@/lib/dayjs.helper';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
+import { ContentCard } from '@/components/custom/content-card';
 
 export const DockerPlatform = ({
   platform,
@@ -98,85 +99,88 @@ export const DockerPlatform = ({
   };
 
   return (
-    <div className="flow-root gap-1">
-      <ul className="divide-y divide-foreground">
-        <li className="group/platform py-3 bg-card/40 hover:bg-card/90 sm:py-4">
-          <div className="flex flex-row flex-wrap items-center space-x-4">
-            <div className="relative shrink-0">
-              <div className="ml-1 w-20 h-20">
-                <DockerIcon />
-              </div>
-              <LastSnapshotTooltip />
-            </div>
-
-            <div className="basis-5/12">
-              <div className="flex items-baseline gap-2">
-                <div className="cursor-pointer truncate text-sm font-medium hover:underline text-foreground">
-                  <Link to={'/platforms/' + platform.id}>{platform.name}</Link>
+    <ContentCard>
+      <div className="flow-root gap-1">
+        <ul className="divide-y divide-foreground">
+          <li className="group/platform py-3 bg-card/40 hover:bg-card/90 sm:py-4">
+            <div className="flex flex-row flex-wrap items-center space-x-4">
+              <div className="relative shrink-0">
+                <div className="ml-1 w-20 h-20">
+                  <DockerIcon />
                 </div>
-                <div className="truncate text-xs text-foreground">
-                  ({(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).operatingSystem} v
-                  {platform?.serverVersion})
-                </div>
+                <LastSnapshotTooltip />
               </div>
 
-              <div className="flex flex-wrap gap-x-3">
-                <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  <Link to={'/platforms/' + platform.id + '/containers'}>
-                    {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containerCount ?? '-'}{' '}
-                    containers
-                  </Link>
+              <div className="basis-5/12">
+                <div className="flex items-baseline gap-2">
+                  <div className="cursor-pointer truncate text-sm font-medium hover:underline text-foreground">
+                    <Link to={'/platforms/' + platform.id}>{platform.name}</Link>
+                  </div>
+                  <div className="truncate text-xs text-foreground">
+                    ({(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).operatingSystem} v
+                    {platform?.serverVersion})
+                  </div>
                 </div>
-                <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  <Link to={'/platforms/' + platform.id + '/images'}>{platform?.imageCount ?? '-'} images</Link>
-                </div>
-                <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  <Link to={'/platforms/' + platform.id + '/volumes'}>{platform?.volumeCount ?? '-'} volumes</Link>
-                </div>
-                <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                  <Link to={'/platforms/' + platform.id + '/networks'}>{platform?.networkCount ?? '-'} networks</Link>
-                </div>
-                <div className="truncate text-xs text-muted-foreground">{platform?.cpuCount ?? '-'} CPU</div>
-                <div className="truncate text-xs text-muted-foreground">{byteTransform(platform?.memTotal)} RAM</div>
-              </div>
-            </div>
-            <div className="flex flex-auto">
-              <div>
-                <div className="truncate text-center text-xs font-medium text-foreground">Containers</div>
-                <div className="grid grid-cols-3 gap-4 truncate text-center text-xs text-gray-500 dark:text-night-400">
-                  <ContainersStarted />
-                  <ContainersStopped />
-                  <ContainersPaused />
-                </div>
-              </div>
-            </div>
 
-            <div className="flex flex-auto">
-              <div>
-                <div className="truncate text-xs font-medium text-foreground">Memory usage</div>
-                <div className="truncate text-center text-xs text-muted-foreground">
-                  <span>
-                    {platform.stats && isPlatfomOnline ? toFixedNumber(platform.stats[0]?.memoryUsage) + ' %' : 'N/A'}
-                  </span>
+                <div className="flex flex-wrap gap-x-3">
+                  <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
+                    <Link to={'/platforms/' + platform.id + '/containers'}>
+                      {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containerCount ??
+                        '-'}{' '}
+                      containers
+                    </Link>
+                  </div>
+                  <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
+                    <Link to={'/platforms/' + platform.id + '/images'}>{platform?.imageCount ?? '-'} images</Link>
+                  </div>
+                  <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
+                    <Link to={'/platforms/' + platform.id + '/volumes'}>{platform?.volumeCount ?? '-'} volumes</Link>
+                  </div>
+                  <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
+                    <Link to={'/platforms/' + platform.id + '/networks'}>{platform?.networkCount ?? '-'} networks</Link>
+                  </div>
+                  <div className="truncate text-xs text-muted-foreground">{platform?.cpuCount ?? '-'} CPU</div>
+                  <div className="truncate text-xs text-muted-foreground">{byteTransform(platform?.memTotal)} RAM</div>
                 </div>
               </div>
-            </div>
-
-            <div className="flex flex-auto">
-              <div>
-                <div className="truncate text-xs font-medium text-foreground">CPU usage</div>
-                <div className="truncate text-center text-xs text-muted-foreground">
-                  <span>
-                    {platform.stats && isPlatfomOnline ? toFixedNumber(platform.stats[0]?.cpuUsage) + ' %' : 'N/A'}
-                  </span>
+              <div className="flex flex-auto">
+                <div>
+                  <div className="truncate text-center text-xs font-medium text-foreground">Containers</div>
+                  <div className="grid grid-cols-3 gap-4 truncate text-center text-xs text-gray-500 dark:text-night-400">
+                    <ContainersStarted />
+                    <ContainersStopped />
+                    <ContainersPaused />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <RowActionMenu resource={platform} actions={actions} />
-          </div>
-        </li>
-      </ul>
-    </div>
+              <div className="flex flex-auto">
+                <div>
+                  <div className="truncate text-xs font-medium text-foreground">Memory usage</div>
+                  <div className="truncate text-center text-xs text-muted-foreground">
+                    <span>
+                      {platform.stats && isPlatfomOnline ? toFixedNumber(platform.stats[0]?.memoryUsage) + ' %' : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-auto">
+                <div>
+                  <div className="truncate text-xs font-medium text-foreground">CPU usage</div>
+                  <div className="truncate text-center text-xs text-muted-foreground">
+                    <span>
+                      {platform.stats && isPlatfomOnline ? toFixedNumber(platform.stats[0]?.cpuUsage) + ' %' : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <RowActionMenu resource={platform} actions={actions} />
+            </div>
+          </li>
+        </ul>
+      </div>
+    </ContentCard>
   );
 };

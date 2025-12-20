@@ -18,7 +18,8 @@ internal static class RegistryMappers
             description: dto.Description,
             registryHost: dto.RegistryHost,
             createdByActorId: dto.CreatedByActorId,
-            createdAt: DateTime.Parse(dto.CreatedAt),
+            createdAt: dto.CreatedAt,
+            status: Enum.Parse<RegistryStatus>(dto.Status),
             configuration: JsonSerializer.Deserialize(dto.Configuration, RegistryJsonContext.Default.RegistryConfigurationBase)
                 ?? throw new NotImplementedException($"Registry configuration is missing for registry id {dto.Id}"));
     }

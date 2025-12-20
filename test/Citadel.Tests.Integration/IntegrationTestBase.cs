@@ -2,6 +2,7 @@
 using DbUp;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
+using Hosting.Common;
 using Infrastructure;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
@@ -65,7 +66,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         return jwt.CreateAccessToken(claims ?? new[] {
             new Claim("role", "admin"),
             new Claim("name", "Test user"),
-            new Claim("actorId", Actor.SystemId.ToString())
+            new Claim("actorId", Constants.SystemId.ToString())
         });
     }
 

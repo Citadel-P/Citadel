@@ -2,6 +2,7 @@
 using Domain.Entities;
 using Domain.Entities.Identity;
 using Domain.Entities.Registries;
+using Hosting.Common;
 using Hosting.Common.MergePatch;
 
 namespace Tests.Unit;
@@ -50,7 +51,8 @@ public class JsonMergePatchTests
         // Arrange
         var original = new Registry(
             name: "MyRegistry",
-            createdByActorId: Actor.SystemId,
+            createdByActorId: Constants.SystemId,
+            status: RegistryStatus.Disabled,
             registryHost: "http://localhost:1234/registry",
             configuration: new DockerHubRegistry(
                 UserName: "username-1",

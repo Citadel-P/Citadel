@@ -19,6 +19,7 @@ namespace Application.Features.Registries.Commands;
 public sealed record CreateRegistry(
     string Name, 
     string RegistryHost,
+    RegistryStatus Status,
     RegistryConfigurationBase Configuration, 
     string? Description = null) : ICommand<Result<Registry>>
 {
@@ -143,7 +144,7 @@ internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IHttpContextAccesso
             return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
         }
 
-        var registry = new Registry(name: command.Name, registryHost: command.RegistryHost, createdByActorId: user.GetActorId(), configuration: command.Configuration, description: command.Description);
+        var registry = new Registry(name: command.Name, registryHost: command.RegistryHost, status: command.Status, createdByActorId: user.GetActorId(), configuration: command.Configuration, description: command.Description);
         await unitOfWork.Registries.AddAsync(registry, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 

@@ -484,6 +484,10 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedByActorId");
@@ -503,7 +507,8 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             Description = "Public Docker Hub Registry",
                             Name = "Docker Hub",
-                            RegistryHost = "hub.docker.com"
+                            RegistryHost = "hub.docker.com",
+                            Status = "Active"
                         });
                 });
 

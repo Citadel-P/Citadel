@@ -3,6 +3,7 @@
   Name: MyRegistry,
   Description: null,
   RegistryHost: http://localhost:1234/registry,
+  Status: Disabled,
   Configuration: {
     UserName: username-2,
     PAT: fake-pat-1

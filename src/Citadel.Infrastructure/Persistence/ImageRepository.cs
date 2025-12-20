@@ -29,6 +29,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.UpdatedAt,
                 i.RegistryId,
                 r.Name AS RegistryName,
+                r.Status AS RegistryStatus,
                 r.RegistryHost AS RegistryHost,
                 r.CreatedAt As RegistryCreatedAt,
                 r.CreatedByActorId AS RegistryCreatedByActorId
@@ -60,6 +61,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.UpdatedAt,
                 i.RegistryId,
                 r.Name AS RegistryName,
+                r.Status AS RegistryStatus,
                 r.RegistryHost AS RegistryHost,
                 r.CreatedAt As RegistryCreatedAt,
                 r.CreatedByActorId AS RegistryCreatedByActorId
@@ -89,6 +91,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.UpdatedAt,
                 i.RegistryId,
                 r.Name AS RegistryName,
+                r.Status AS RegistryStatus,
                 r.RegistryHost AS RegistryHost,
                 r.CreatedAt As RegistryCreatedAt,
                 r.CreatedByActorId AS RegistryCreatedByActorId

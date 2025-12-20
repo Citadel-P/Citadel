@@ -73,7 +73,8 @@ namespace Infrastructure.Migrations.Migrations
                     CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
                     Description = table.Column<string>(type: "TEXT", maxLength: 600, nullable: true),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
-                    RegistryHost = table.Column<string>(type: "TEXT", nullable: false)
+                    RegistryHost = table.Column<string>(type: "TEXT", nullable: false),
+                    Status = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -411,8 +412,8 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.InsertData(
                 table: "Registries",
-                columns: new[] { "Id", "Configuration", "CreatedAt", "CreatedByActorId", "Description", "Name", "RegistryHost" },
-                values: new object[] { "a1de9601-7f3b-4f75-a11b-98533d063a0f", "{\r\n    \"$type\": \"DockerHub\"\r\n}", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "Public Docker Hub Registry", "Docker Hub", "hub.docker.com" });
+                columns: new[] { "Id", "Configuration", "CreatedAt", "CreatedByActorId", "Description", "Name", "RegistryHost", "Status" },
+                values: new object[] { "a1de9601-7f3b-4f75-a11b-98533d063a0f", "{\r\n    \"$type\": \"DockerHub\"\r\n}", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "Public Docker Hub Registry", "Docker Hub", "hub.docker.com", "Active" });
 
             migrationBuilder.InsertData(
                 table: "Teams",

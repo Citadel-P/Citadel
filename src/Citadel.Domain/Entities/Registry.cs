@@ -7,6 +7,7 @@ namespace Domain.Entities;
 public class Registry(
     string name,
     string registryHost,
+    RegistryStatus status,
     Guid createdByActorId,
     RegistryConfigurationBase configuration,
     string? description = null) : AuditedEntity(createdByActorId)
@@ -16,12 +17,20 @@ public class Registry(
     public string Name { get; private set; } = name;
     public string? Description { get; private set; } = description;
     public string RegistryHost { get; private set; } = registryHost;
+    public RegistryStatus Status { get; private set; } = status;
 
     public RegistryConfigurationBase Configuration { get; private set; } = configuration;
 
-    public void PartialUpdate(string? name = null, string? registryHost = null, RegistryConfigurationBase? configuration = null)
+    public void PartialUpdate(
+        string? name = null,
+        string? description = null,
+        string? registryHost = null,
+        RegistryStatus? status = null,
+        RegistryConfigurationBase? configuration = null)
     {
         if (name != null) Name = name;
+        if (status != null) Status = status.Value;
+        if (description != null) Description = description;
         if (registryHost != null) RegistryHost = registryHost;
         if (configuration != null) Configuration = configuration;
 
@@ -31,12 +40,13 @@ public class Registry(
         Guid id,
         string name,
         string? description,
+        RegistryStatus status,
         string registryHost,
         DateTime createdAt, 
         Guid createdByActorId,
         RegistryConfigurationBase configuration)
     {
-        return new Registry(name, registryHost, createdByActorId, configuration, description)
+        return new Registry(name, registryHost, status, createdByActorId, configuration, description)
         {
             Id = id,
             CreatedAt = createdAt

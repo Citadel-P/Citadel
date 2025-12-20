@@ -11,6 +11,7 @@ import { useSelectedResources } from '@/lib/atoms';
 import { useMemo } from 'react';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { DockerIcon, GitHubIcon } from '@/lib/icons';
+import { ContentCard } from '@/components/custom/content-card';
 
 const getNonDefaultRows = (rows: Row<RegistryView>[]) => rows.filter((row) => !row.original.isDefault);
 
@@ -148,5 +149,9 @@ export const RegistriesTable = ({
   const [_, setSelectedResources] = useSelectedResources<RegistryView>('Registry');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
-  return <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
+  return (
+    <ContentCard>
+      <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+    </ContentCard>
+  );
 };

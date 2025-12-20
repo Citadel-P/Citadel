@@ -4,6 +4,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Domain.Entities.Identity;
 using Domain.Entities.Registries;
+using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using System.Text;
@@ -20,7 +21,8 @@ public class RegistryPatchTests : IntegrationTestBase
         var registry = new Registry(
             name: "OriginalName",
             registryHost: "original.url",
-            createdByActorId: Actor.SystemId,
+            status: RegistryStatus.Active,
+            createdByActorId: Constants.SystemId,
             configuration: new DockerHubRegistry("original-user", "pat123")
         );
 

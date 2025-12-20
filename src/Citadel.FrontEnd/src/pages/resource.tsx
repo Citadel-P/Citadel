@@ -66,15 +66,13 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
           {/* Sub Header */}
           {Components.SubHeader && <Components.SubHeader />}
 
-          {/* Table */}
-          <div className="rounded-sm border p-1 shadow-xs">
-            <ActiveContent
-              items={filtered}
-              actions={Components.DropdownActions ?? {}}
-              isLoading={isLoading}
-              isFiltered={Boolean(search.trim())}
-            />
-          </div>
+          {/* Content */}
+          <ActiveContent
+            items={filtered}
+            actions={Components.DropdownActions ?? {}}
+            isLoading={isLoading}
+            isFiltered={Boolean(search.trim())}
+          />
         </div>
       </div>
 

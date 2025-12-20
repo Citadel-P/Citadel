@@ -1,8 +1,10 @@
 ﻿using System.Text;
 using Application.Services;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
 using Domain.Entities.Registries;
+using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
@@ -34,6 +36,7 @@ public class RegistryCreateTests : IntegrationTestBase
         {
           "name": "R-NEW",
           "registryHost": "registry123:9999",
+          "status": "Active",
           "configuration": {
             "$type": "DockerHub",
             "userName": "dummy-user",
@@ -73,6 +76,8 @@ public class RegistryCreateTests : IntegrationTestBase
         {
           "name": "R-NEW",
           "registryHost": "registry123:9999",
+          "description": "A custom registry",
+          "status": "Disabled",
           "configuration": {
             "$type": "Custom",
             "authEnabled": true,
@@ -112,6 +117,8 @@ public class RegistryCreateTests : IntegrationTestBase
         var createJson = """
         {
           "name": "R-NEW",
+          "status": "Active",
+          "description": "A GitHub registry",
           "registryHost": "registry123:9999",
           "configuration": {
             "$type": "GitHub",
@@ -216,8 +223,9 @@ public class RegistryCreateTests : IntegrationTestBase
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             await uow.Registries.AddAsync(new Domain.Entities.Registry(
                 name: "R-NEW",
+                status: RegistryStatus.Active,
                 registryHost: "https://existing.url",
-                createdByActorId: Actor.SystemId,
+                createdByActorId: Constants.SystemId,
                 configuration: new DockerHubRegistry("user", "dummy-pat1234")
             ), TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);

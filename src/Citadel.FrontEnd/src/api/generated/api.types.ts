@@ -37,6 +37,13 @@ export enum RegistryType {
   GitHub = "GitHub",
 }
 
+export enum RegistryStatus {
+  Unknown = "Unknown",
+  Active = "Active",
+  Disabled = "Disabled",
+  Deprecated = "Deprecated",
+}
+
 export enum PlatformType {
   Docker = "Docker",
   DockerSwarm = "DockerSwarm",
@@ -1470,6 +1477,7 @@ export interface RegistryConfigurationBaseGitlabRegistry {
 export interface RegistryInput {
   name: string;
   registryHost: string;
+  status: RegistryStatus;
   configuration: RegistryConfigurationBase;
   description?: null | string;
 }
@@ -1480,6 +1488,7 @@ export interface RegistryView {
   /** @format uuid */
   createdByActorId: string;
   name: string;
+  status: RegistryStatus;
   description: null | string;
   registryHost: string;
   type: RegistryType;

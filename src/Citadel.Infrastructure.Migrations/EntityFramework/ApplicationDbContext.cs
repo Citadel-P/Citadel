@@ -1,6 +1,6 @@
 ﻿using Domain;
 using Domain.Entities;
-using Domain.Entities.Identity;
+using Hosting.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
@@ -45,12 +45,12 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
         // --- Actors ---
         modelBuilder.Entity("Actor").HasData(new
         {
-            Id = Guid.Parse("00000000-0000-0000-0000-000000000002"),
+            Id = Constants.DefaultAdminId,
             Type = ActorType.User.ToString(),
             Name = "Admin"
         }, new 
         {
-            Id = Actor.SystemId,
+            Id = Constants.SystemId,
             Type = ActorType.System.ToString(),
             Name = "System"
         });
@@ -59,12 +59,12 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
         modelBuilder.Entity("User").HasData(new
         {
             Id = Guid.Parse("d1de9601-f113-ce77-884e-3cb636ec09a8"),
-            ActorId = Guid.Parse("00000000-0000-0000-0000-000000000002"),
+            ActorId = Constants.DefaultAdminId,
             Name = "admin",
             Email = "admin@admin.com",
             Password = "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1",
             CreatedAt = DateTime.Parse("2026-01-01"),
-            CreatedByActorId = Actor.SystemId
+            CreatedByActorId = Constants.SystemId
         });
 
         // --- Teams ---
@@ -91,8 +91,9 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             Name = Registry.DefaultRegistryName,
             Description = "Public Docker Hub Registry",
             RegistryHost = "hub.docker.com",
-            CreatedByActorId = Actor.SystemId,
+            CreatedByActorId = Constants.SystemId,
             CreatedAt = DateTime.Parse("2026-01-01"),
+            Status = "Active",
             Configuration = """
             {
                 "$type": "DockerHub"
@@ -255,6 +256,7 @@ internal static class Configuration
         registry.Property<string>("Name").HasColumnType("TEXT").IsRequired();
         registry.Property<string>("Description").HasColumnType("TEXT").IsRequired(false).HasMaxLength(600);
         registry.Property<string>("RegistryHost").HasColumnType("TEXT").IsRequired();
+        registry.Property<string>("Status").HasColumnType("TEXT").IsRequired();
         registry.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired();
         registry.Property<Guid>("CreatedByActorId").HasConversion(GuidConverter).IsRequired();
         registry.Property<string>("Configuration").HasColumnType("TEXT").IsRequired();

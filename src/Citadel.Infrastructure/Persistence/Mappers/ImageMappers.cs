@@ -27,6 +27,7 @@ internal static class ImageMappers
                     id: image?.RegistryId ?? Guid.Empty,
                     name: image?.RegistryName ?? "",
                     description: null,
+                    status: Enum.TryParse<RegistryStatus>(image?.RegistryStatus, out var status) ? status : RegistryStatus.Unknown,
                     registryHost: image?.RegistryHost ?? "",
                     createdAt: image?.RegistryCreatedAt ?? DateTime.MinValue,
                     createdByActorId: image?.RegistryCreatedByActorId ?? Guid.Empty,

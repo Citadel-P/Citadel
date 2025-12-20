@@ -32,7 +32,7 @@ public interface IRegistryRepository
     Task<Registry?> GetByNameAsync(string name, CancellationToken cancellationToken);
     Task<IEnumerable<Registry>> GetAllAsync(CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
-    Task<bool> IsNameUsedByAnotherRegistryAsync(Guid id, string name, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
     Task<int> AddAsync(Registry registry, CancellationToken cancellationToken);
     Task<int> UpdateAsync(Registry registry, CancellationToken cancellationToken);
 

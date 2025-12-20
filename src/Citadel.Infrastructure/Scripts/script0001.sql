@@ -41,6 +41,7 @@ CREATE TABLE "Registries" (
     "Description" TEXT NULL,
     "Name" TEXT NOT NULL,
     "RegistryHost" TEXT NOT NULL,
+    "Status" TEXT NOT NULL,
     CONSTRAINT "FK_Registries_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
 );
 
@@ -191,8 +192,8 @@ VALUES ('bdde9601-3b03-1275-a11b-98533d063a04', '2026-01-01 00:00:00', 'Admin', 
 SELECT changes();
 
 
-INSERT INTO "Registries" ("Id", "Configuration", "CreatedAt", "CreatedByActorId", "Description", "Name", "RegistryHost")
-VALUES ('a1de9601-7f3b-4f75-a11b-98533d063a0f', (('{' || (CHAR(13) || CHAR(10))) || (('    "$type": "DockerHub"' || CHAR(13)) || (CHAR(10) || '}'))), '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', 'Public Docker Hub Registry', 'Docker Hub', 'hub.docker.com');
+INSERT INTO "Registries" ("Id", "Configuration", "CreatedAt", "CreatedByActorId", "Description", "Name", "RegistryHost", "Status")
+VALUES ('a1de9601-7f3b-4f75-a11b-98533d063a0f', (('{' || (CHAR(13) || CHAR(10))) || (('    "$type": "DockerHub"' || CHAR(13)) || (CHAR(10) || '}'))), '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', 'Public Docker Hub Registry', 'Docker Hub', 'hub.docker.com', 'Active');
 SELECT changes();
 
 
@@ -266,7 +267,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20251216220445_migration0001', '10.0.1');
+VALUES ('20251220094157_migration0001', '10.0.1');
 
 COMMIT;
 

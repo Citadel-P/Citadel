@@ -15,6 +15,7 @@ import { useMemo } from 'react';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
+import { ContentCard } from '@/components/custom/content-card';
 
 export const ContainersTable = ({
   items,
@@ -30,7 +31,11 @@ export const ContainersTable = ({
 }) => {
   const [_, setSelectedResources] = useSelectedResources<ContainerView>('Container');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
-  return <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
+  return (
+    <ContentCard>
+      <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+    </ContentCard>
+  );
 };
 
 const columns = (

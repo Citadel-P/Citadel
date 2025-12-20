@@ -11,6 +11,7 @@ import { StateIndicator } from '@/components/custom/state-indicator';
 import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
+import { ContentCard } from '@/components/custom/content-card';
 
 export const VolumesTable = ({
   items,
@@ -27,7 +28,11 @@ export const VolumesTable = ({
   const [_, setSelectedResources] = useSelectedResources<DockerVolumeResult>('Volume');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
-  return <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />;
+  return (
+    <ContentCard>
+      <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
+    </ContentCard>
+  );
 };
 
 const columns = (

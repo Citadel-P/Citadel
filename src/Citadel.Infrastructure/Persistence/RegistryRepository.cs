@@ -4,7 +4,6 @@ using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
-using Domain.Entities.Identity;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using Infrastructure.TypeHandlers;
@@ -24,9 +23,9 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     {
         const string sql = """
             INSERT INTO Registries (
-                Id, Name, Description, RegistryHost, CreatedAt, CreatedByActorId, Configuration)
+                Id, Name, Description, RegistryHost, Status, CreatedAt, CreatedByActorId, Configuration)
             VALUES (
-                @Id, @Name, @Description, @RegistryHost, @CreatedAt, @CreatedByActorId, @Configuration)
+                @Id, @Name, @Description, @RegistryHost, @Status, @CreatedAt, @CreatedByActorId, @Configuration)
         """;
 
         return db.ExecuteAsync(sql, new
@@ -37,6 +36,7 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             RegistryHost = registry.RegistryHost, 
             CreatedAt = registry.CreatedAt.ToString(), 
             CreatedByActorId = registry.CreatedByActorId.Format(),
+            Status = EnumFormatter<RegistryStatus>.GetValue(registry.Status),
             Configuration = JsonSerializer.Serialize(registry.Configuration, RegistryJsonContext.Default.RegistryConfigurationBase),
         }, transaction: tx());
     }
@@ -55,7 +55,7 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         return result?.ToDomain();
     }
 
-    public Task<bool> IsNameUsedByAnotherRegistryAsync(Guid id, string name, CancellationToken cancellationToken)
+    public Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Registries WHERE Name=@Name AND Id != @Id)";
         return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id.Format(), cancellationToken }, transaction: tx());
@@ -72,7 +72,7 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     {
         const string sql = """
             UPDATE Registries
-            SET Name = @Name, Description = @Description, RegistryHost = @RegistryHost, Configuration = @Configuration
+            SET Name = @Name, Description = @Description, Status = @Status, RegistryHost = @RegistryHost, Configuration = @Configuration
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
@@ -81,6 +81,7 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             Name = registry.Name,
             Description = registry.Description,
             RegistryHost = registry.RegistryHost,
+            Status = EnumFormatter<RegistryStatus>.GetValue(registry.Status),
             Configuration = JsonSerializer.Serialize(registry.Configuration, RegistryJsonContext.Default.RegistryConfigurationBase),
         }, transaction: tx());
     }
@@ -88,7 +89,7 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     public Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         var (clause, parameters) = SqliteInClauseBuilder.BuildInClauseForGuids("Id", ids);
-        string sql = $"DELETE FROM Registries WHERE Id IN ({clause}) AND CreatedByActorId != '{Actor.SystemId.Format()}'";
+        string sql = $"DELETE FROM Registries WHERE Id IN ({clause})";
         return db.ExecuteAsync(sql, parameters, transaction: tx());
     }
 }

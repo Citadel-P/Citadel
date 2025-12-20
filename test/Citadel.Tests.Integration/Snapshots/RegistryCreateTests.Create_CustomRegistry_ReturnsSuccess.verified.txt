@@ -1,8 +1,11 @@
 ﻿{
   id: Guid_1,
+  createdByActorId: Guid_2,
   name: R-NEW,
+  status: Disabled,
+  description: A custom registry,
   registryHost: registry123:9999,
   type: Custom,
-  created: DateTimeOffset_1,
-  isDefault: false
+  createdAt: DateTimeOffset_1,
+  isDefault: true
 }

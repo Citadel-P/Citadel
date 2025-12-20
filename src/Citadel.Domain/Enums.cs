@@ -253,3 +253,11 @@ public enum ActorType
     Agent,
     Service
 }
+
+public enum RegistryStatus
+{
+    Unknown,
+    Active,
+    Disabled,
+    Deprecated
+}

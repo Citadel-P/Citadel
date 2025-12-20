@@ -3,6 +3,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Domain.Entities.Identity;
 using Domain.Entities.Registries;
+using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text;
 
@@ -14,7 +15,7 @@ public class RegistryDeleteTests : IntegrationTestBase
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
-        var registry = new Registry("fake", "ghcr.io", Actor.SystemId,
+        var registry = new Registry("fake", "ghcr.io", RegistryStatus.Active, Constants.SystemId,
                 new GitHubRegistry("ghcr1", "pat1", GhcrAccountType.User));
         await uow.Registries.AddAsync(registry, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
@@ -48,7 +49,7 @@ public class RegistryDeleteTests : IntegrationTestBase
         var registries = await uow.Registries.GetAllAsync(TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(registries);
-        Assert.Equal(1, registries.Count(r => r.CreatedByActorId == Actor.SystemId));
+        Assert.Equal(1, registries.Count(r => r.CreatedByActorId == Constants.SystemId));
         // Response has no content
         Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }

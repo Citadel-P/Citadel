@@ -1734,6 +1734,7 @@
                   "value": {
                     "Name": "my-azure-registry",
                     "RegistryHost": "myproject.azurecr.io",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "Azure",
                       "UserName": "johnDoe",
@@ -1745,6 +1746,7 @@
                   "value": {
                     "Name": "my-ecr-registry",
                     "RegistryHost": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "AWS",
                       "AccessKey": "",
@@ -1758,6 +1760,7 @@
                   "value": {
                     "Name": "",
                     "RegistryHost": "https://registry.gitlab.com",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "Gitlab",
                       "UserName": "",
@@ -1770,6 +1773,7 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "DockerHub",
                       "UserName": "",
@@ -1781,6 +1785,7 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "GitHub",
                       "Name": "organization or user name",
@@ -1793,6 +1798,7 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "localhost:9965",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "Custom",
                       "AuthEnabled": true,
@@ -2069,6 +2075,7 @@
                   "value": {
                     "Name": "my-azure-registry",
                     "RegistryHost": "myproject.azurecr.io",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "Azure",
                       "UserName": "johnDoe",
@@ -2080,6 +2087,7 @@
                   "value": {
                     "Name": "my-ecr-registry",
                     "RegistryHost": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "AWS",
                       "AccessKey": "",
@@ -2093,6 +2101,7 @@
                   "value": {
                     "Name": "",
                     "RegistryHost": "https://registry.gitlab.com",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "Gitlab",
                       "UserName": "",
@@ -2105,6 +2114,7 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "DockerHub",
                       "UserName": "",
@@ -2116,6 +2126,7 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "GitHub",
                       "Name": "organization or user name",
@@ -2128,6 +2139,7 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "localhost:9965",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "Custom",
                       "AuthEnabled": true,
@@ -2147,6 +2159,7 @@
                   "value": {
                     "Name": "my-azure-registry",
                     "RegistryHost": "myproject.azurecr.io",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "Azure",
                       "UserName": "johnDoe",
@@ -2158,6 +2171,7 @@
                   "value": {
                     "Name": "my-ecr-registry",
                     "RegistryHost": "aws-account-id.dkr.ecr.us-east-2.amazonaws.com/",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "AWS",
                       "AccessKey": "",
@@ -2171,6 +2185,7 @@
                   "value": {
                     "Name": "",
                     "RegistryHost": "https://registry.gitlab.com",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "Gitlab",
                       "UserName": "",
@@ -2183,6 +2198,7 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "DockerHub",
                       "UserName": "",
@@ -2194,6 +2210,7 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "GitHub",
                       "Name": "organization or user name",
@@ -2206,6 +2223,7 @@
                   "value": {
                     "Name": "my-custom-registry",
                     "RegistryHost": "localhost:9965",
+                    "Status": "Active",
                     "Configuration": {
                       "$type": "Custom",
                       "AuthEnabled": true,
@@ -9486,6 +9504,7 @@
         "required": [
           "name",
           "registryHost",
+          "status",
           "configuration"
         ],
         "type": "object",
@@ -9495,6 +9514,9 @@
           },
           "registryHost": {
             "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RegistryStatus"
           },
           "configuration": {
             "$ref": "#/components/schemas/RegistryConfigurationBase"
@@ -9506,6 +9528,14 @@
             ]
           }
         }
+      },
+      "RegistryStatus": {
+        "enum": [
+          "Unknown",
+          "Active",
+          "Disabled",
+          "Deprecated"
+        ]
       },
       "RegistryType": {
         "enum": [
@@ -9522,6 +9552,7 @@
           "id",
           "createdByActorId",
           "name",
+          "status",
           "description",
           "registryHost",
           "type",
@@ -9539,6 +9570,9 @@
           },
           "name": {
             "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RegistryStatus"
           },
           "description": {
             "type": [

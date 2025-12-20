@@ -134,7 +134,7 @@ internal class PatchRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorRe
         var patchedRegistry = command.Patch.ApplyTo(registry, RegistryJsonContext.Default.Registry);
         if (patchedRegistry.Name != null) 
         {
-            var conflict = await unitOfWork.Registries.IsNameUsedByAnotherRegistryAsync(command.Id, patchedRegistry.Name, cancellationToken);
+            var conflict = await unitOfWork.Registries.ExistsAsync(command.Id, patchedRegistry.Name, cancellationToken);
             if (conflict) 
             {
                 return Result.Failure<Registry>(new ConflictError("Name already exists"));
@@ -153,7 +153,8 @@ internal class PatchRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorRe
             return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
         }
 
-        registry.PartialUpdate(name: patchedRegistry.Name, registryHost: patchedRegistry.RegistryHost, configuration: patchedRegistry.Configuration);
+        registry.PartialUpdate(name: patchedRegistry.Name, registryHost: patchedRegistry.RegistryHost, status: patchedRegistry.Status, 
+            description: patchedRegistry.Description, configuration: patchedRegistry.Configuration);
         await unitOfWork.Registries.UpdateAsync(registry, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 

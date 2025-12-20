@@ -39,7 +39,7 @@ export const Platforms = ({
                 className="font-semibold underline hover:no-underline ml-1"
                 onClick={() => navigate('/add-docker-platform')}>
                 new platform
-              </button>
+              </button>&nbsp;
               to get started.
             </span>
           </AlertMessage>
