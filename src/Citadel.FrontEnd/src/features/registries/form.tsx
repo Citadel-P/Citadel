@@ -5,6 +5,7 @@ import {
   RegistryConfigurationBaseGitHubRegistry,
   RegistryConfigurationBaseCustomRegistry,
   RegistryConfigurationBaseDockerHubRegistry,
+  RegistryStatus,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -13,6 +14,8 @@ import {
   defineSection,
   FieldInput,
   FieldSwitch,
+  FieldTextArea,
+  ItemSelector,
 } from '@/components/custom/form-builder';
 import { Constants } from '@/lib/constants';
 import { useState, useMemo } from 'react';
@@ -41,6 +44,21 @@ const registryInfo = {
     description: 'Define your own OCI-compatible registry',
   },
 } as const;
+
+const registry_status = {
+  [RegistryStatus.Active]: {
+    label: RegistryStatus.Active,
+    description: 'Available for selection and normal use.',
+  },
+  [RegistryStatus.Deprecated]: {
+    label: RegistryStatus.Deprecated,
+    description: 'Available for selection, but shown with a warning.',
+  },
+  [RegistryStatus.Disabled]: {
+    label: RegistryStatus.Disabled,
+    description: 'Hidden from selection and cannot be used.',
+  },
+};
 
 const RegistryTypeSelector = ({ value, onChange, disabled }: any) => {
   const selected = registryInfo[value as keyof typeof registryInfo];
@@ -146,15 +164,40 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
               />
             ),
           }),
+          defineGroupField({
+            id: 'details',
+            label: 'Details',
+            items: [
+              defineField({
+                key: 'name',
+                label: 'Name',
+                description: 'Provide a unique name to identify this registry.',
+                required: true,
+                validate: (v) => (!new RegExp(Constants.validNameIdentifier).test(v) ? 'Invalid name format' : null),
+                render: (value, set) => (
+                  <FieldInput value={value ?? ''} onChange={(v) => set({ name: v })} placeholder="my-registry" />
+                ),
+              }),
+              defineField({
+                key: 'description',
+                label: 'Description',
+                required: false,
+                description: 'Optional notes to describe the registry’s purpose or usage.',
+                render: (val, set) => <FieldTextArea value={val} onChange={(v) => set({ description: v })} />,
+              }),
+            ],
+          }),
 
           defineField({
-            key: 'name',
-            label: 'Name',
-            description: 'Provide a unique name to identify this registry.',
-            required: true,
-            validate: (v) => (!new RegExp(Constants.validNameIdentifier).test(v) ? 'Invalid name format' : null),
-            render: (value, set) => (
-              <FieldInput value={value ?? ''} onChange={(v) => set({ name: v })} placeholder="my-registry" />
+            label: 'Status',
+            key: 'status',
+            description: 'Choose the current state of the registry.',
+            render: (val, set) => (
+              <ItemSelector
+                collection={registry_status}
+                value={val}
+                onChange={(v: RegistryStatus) => set({ status: v })}
+              />
             ),
           }),
         ],

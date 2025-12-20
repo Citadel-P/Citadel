@@ -256,7 +256,6 @@ public enum ActorType
 
 public enum RegistryStatus
 {
-    Unknown,
     Active,
     Disabled,
     Deprecated

@@ -45,7 +45,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
         return images?.ToDomain() ?? [];
     }
 
-    public async Task<Image?> GetByImageIdAsync(Guid id, Guid platformId, CancellationToken cancellationToken)
+    public async Task<Image?> GetByIdAsync(Guid id, Guid platformId, CancellationToken cancellationToken)
     {
         var sql = """
             SELECT 
@@ -59,15 +59,8 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.CreatedAt,
                 i.IsUpToDate,
                 i.UpdatedAt,
-                i.RegistryId,
-                r.Name AS RegistryName,
-                r.Status AS RegistryStatus,
-                r.RegistryHost AS RegistryHost,
-                r.CreatedAt As RegistryCreatedAt,
-                r.CreatedByActorId AS RegistryCreatedByActorId
+                i.RegistryId
             FROM Images i
-            LEFT JOIN Registries r
-            ON i.RegistryId = r.Id
             WHERE PlatformId = @PlatformId AND i.Id = @Id
             LIMIT 1
             """;
@@ -105,31 +98,6 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
         return result?.ToDomain();
     }
 
-    public Task<int> AddAsync(Image image, CancellationToken cancellationToken)
-    {
-        const string sql = """
-            INSERT INTO Images (
-                Id, PlatformId, DockerImageId, Name, Containers, IsUpToDate, Tags, Size, RegistryId, CreatedAt, UpdatedAt
-            ) VALUES (
-                @Id, @PlatformId, @DockerImageId, @Name, @Containers, @IsUpToDate, @Tags, @Size, @RegistryId, @CreatedAt, @UpdatedAt
-            )
-        """;
-        return db.ExecuteAsync(sql, new
-        {
-            Id = image.Id.Format(),
-            PlatformId = image.PlatformId.Format(),
-            DockerImageId = image.DockerImageId,
-            Name = image.Name,
-            Containers = image.Containers,
-            IsUpToDate = image.IsUpToDate,
-            Tags = JsonSerializer.Serialize(image.Tags, ImagTagsContext.Default.IEnumerableString),
-            Size = image.Size,
-            RegistryId = image.RegistryId?.Format(),
-            CreatedAt = image.CreatedAt,
-            UpdatedAt = image.UpdatedAt
-        }, transaction: tx());
-    }
-
     public Task<int> AddOrUpdateAsync(Image image, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -148,30 +116,6 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 UpdatedAt = excluded.UpdatedAt
         """;
 
-        return db.ExecuteAsync(sql, new
-        {
-            Id = image.Id.Format(),
-            PlatformId = image.PlatformId.Format(),
-            DockerImageId = image.DockerImageId,
-            Name = image.Name,
-            Containers = image.Containers,
-            IsUpToDate = image.IsUpToDate,
-            Tags = JsonSerializer.Serialize(image.Tags, ImagTagsContext.Default.IEnumerableString),
-            Size = image.Size,
-            RegistryId = image.RegistryId?.Format(),
-            CreatedAt = image.CreatedAt,
-            UpdatedAt = image.UpdatedAt
-        }, transaction: tx());
-    }
-
-    public Task<int> UpdateAsync(Image image, CancellationToken cancellationToken)
-    {
-        const string sql = """
-            UPDATE Images
-                SET PlatformId = @PlatformId, DockerImageId = @DockerImageId, Name = @Name, 
-                    Containers = @Containers, IsUpToDate = @IsUpToDate, Tags = @Tags, Size = @Size, RegistryId = @RegistryId, CreatedAt = @CreatedAt, UpdatedAt = @UpdatedAt
-            WHERE Id = @Id
-        """;
         return db.ExecuteAsync(sql, new
         {
             Id = image.Id.Format(),

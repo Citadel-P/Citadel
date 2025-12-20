@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { RegistryView } from '@/api/generated/api.types';
+import { RegistryStatus, RegistryView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef, Row } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -12,6 +12,7 @@ import { useMemo } from 'react';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { DockerIcon, GitHubIcon } from '@/lib/icons';
 import { ContentCard } from '@/components/custom/content-card';
+import { StateIndicator } from '@/components/custom/state-indicator';
 
 const getNonDefaultRows = (rows: Row<RegistryView>[]) => rows.filter((row) => !row.original.isDefault);
 
@@ -69,7 +70,7 @@ const columns = (
         <Checkbox
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select registry"
+          aria-label="Select Registry"
         />
       );
     },
@@ -80,31 +81,7 @@ const columns = (
   {
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
-    cell: ({ row }) => {
-      if (row.original.isDefault) {
-        return (
-          <div className="flex items-center gap-1">
-            <span>{row.original.name}</span>
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <InfoIcon className="h-3.5 w-3.5 text-foreground/65" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>This is the default registry, it can&apos;t be deleted or updated.</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        );
-      }
-
-      return (
-        <Link to={`../registries/edit/${row.original.id}`} className="hover:underline">
-          {row.original.name}
-        </Link>
-      );
-    },
+    cell: ({ row }) => <RegistryNameRow registry={row.original} />,
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => rowA.original.name.localeCompare(rowB.original.name),
   },
   {
@@ -153,5 +130,37 @@ export const RegistriesTable = ({
     <ContentCard>
       <DataTable columns={cols} data={items ?? []} isLoading={isLoading} onSelectionChange={setSelectedResources} />
     </ContentCard>
+  );
+};
+
+const RegistryNameRow = ({ registry }: { registry: RegistryView }) => {
+  const isDefault = registry.isDefault;
+  const status = isDefault ? RegistryStatus.Active : (registry.status ?? RegistryStatus.Disabled);
+
+  const name = isDefault ? (
+    <span>{registry.name}</span>
+  ) : (
+    <Link to={`../registries/edit/${registry.id}`} className="hover:underline">
+      {registry.name}
+    </Link>
+  );
+
+  return (
+    <div className="flex items-center gap-1">
+      <StateIndicator value={status} />
+      {name}
+      {isDefault && (
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <InfoIcon className="h-3.5 w-3.5 text-foreground/65" />
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>This is the default registry, it can&apos;t be deleted or updated.</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </div>
   );
 };

@@ -38,7 +38,6 @@ export enum RegistryType {
 }
 
 export enum RegistryStatus {
-  Unknown = "Unknown",
   Active = "Active",
   Disabled = "Disabled",
   Deprecated = "Deprecated",
@@ -1502,6 +1501,8 @@ export interface RegistryWithConfigView {
   id: string;
   name: string;
   registryHost: string;
+  status: RegistryStatus;
+  description: string;
   /** @format date-time */
   created: any;
   configuration: null | RegistryConfigurationBase;

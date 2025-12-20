@@ -1,8 +1,8 @@
 import { memo } from 'react';
-import { ContainerStateStatus } from '@/api/generated/api.types';
+import { ContainerStateStatus, RegistryStatus } from '@/api/generated/api.types';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-type StateValue = boolean | ContainerStateStatus;
+type StateValue = boolean | ContainerStateStatus | RegistryStatus;
 
 const getStatusStyle = (value: StateValue) => {
   // Boolean-based statuses
@@ -13,8 +13,16 @@ const getStatusStyle = (value: StateValue) => {
     };
   }
 
-  // Enum-based statuses (containers)
+  // Enum-based statuses
   switch (value) {
+    // Registries
+    case RegistryStatus.Active:
+      return { colorClass: 'bg-green-500', tooltip: 'Active' };
+    case RegistryStatus.Disabled:
+      return { colorClass: 'bg-gray-500', tooltip: 'Disabled' };
+    case RegistryStatus.Deprecated:
+      return { colorClass: 'bg-orange-500', tooltip: 'Deprecated' };
+    // Containers
     case ContainerStateStatus.Created:
       return { colorClass: 'bg-blue-400', tooltip: 'Created' };
     case ContainerStateStatus.Exited:

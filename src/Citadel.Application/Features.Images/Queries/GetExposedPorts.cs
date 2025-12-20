@@ -30,7 +30,7 @@ internal sealed class GetRunImageInfoHandler(IPlatformContainerCache platformCon
             return Result.Failure<ExposedPortsResult>(error);
         }
 
-        var image = await unitOfWork.Images.GetByImageIdAsync(query.ImageId, platform.Id, cancellationToken);
+        var image = await unitOfWork.Images.GetByIdAsync(query.ImageId, platform.Id, cancellationToken);
         if (image is null) 
         {
             return Result.Failure<ExposedPortsResult>(new NotFoundError("Image not found."));

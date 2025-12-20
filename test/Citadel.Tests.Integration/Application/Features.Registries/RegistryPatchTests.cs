@@ -2,7 +2,6 @@
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
-using Domain.Entities.Identity;
 using Domain.Entities.Registries;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -52,7 +51,38 @@ public class RegistryPatchTests : IntegrationTestBase
         var patchJson = """
         {
           "name": "UpdatedName",
-          "$type": "DockerHub",
+          "configuration": {
+            "$type": "DockerHub",
+            "userName": "patched-user"
+          }
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        // Act
+        var response = await Client.PatchAsync($"/api/v1/registries/{registryId}", content, cancellationToken: TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        // Assert
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Patch_RegistryStatus_Should_Succeed()
+    {
+        // Arrange
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfigurationBase>()))
+            .Returns(registryConnectorMock.Object);
+
+        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult<(bool, string?)>((true, null)));
+
+        var patchJson = """
+        {
+          "name": "UpdatedName",
+          "description": "Disabled for test purposes",
+          "status": "Disabled",
           "configuration": {
             "$type": "DockerHub",
             "userName": "patched-user"
@@ -122,7 +152,6 @@ public class RegistryPatchTests : IntegrationTestBase
         var patchJson = """
         {
           "name": "UpdatedName",
-          "$type": "DockerHub",
           "configuration": {
             "$type": "DockerHub",
             "userName": "patched-user"

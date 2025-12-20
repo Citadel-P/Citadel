@@ -30,6 +30,7 @@ public partial class PlatformJsonContext : JsonSerializerContext
     Converters = new[]
     {
         typeof(JsonStringEnumConverter<RegistryType>),
+        typeof(JsonStringEnumConverter<RegistryStatus>),
         typeof(JsonStringEnumConverter<GhcrAccountType>)
     })]
 [JsonSerializable(typeof(Registry))]

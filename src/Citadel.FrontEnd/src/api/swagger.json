@@ -9531,7 +9531,6 @@
       },
       "RegistryStatus": {
         "enum": [
-          "Unknown",
           "Active",
           "Disabled",
           "Deprecated"
@@ -9599,6 +9598,8 @@
           "id",
           "name",
           "registryHost",
+          "status",
+          "description",
           "created",
           "configuration"
         ],
@@ -9612,6 +9613,12 @@
             "type": "string"
           },
           "registryHost": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RegistryStatus"
+          },
+          "description": {
             "type": "string"
           },
           "created": {

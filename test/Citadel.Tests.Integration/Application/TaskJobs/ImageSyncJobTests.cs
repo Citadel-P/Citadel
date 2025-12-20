@@ -60,7 +60,7 @@ public class ImageSyncJobTests : IntegrationTestBase
         await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
         foreach (var image in Fakes.GetDummyImages())
         {
-            await uow.Images.AddAsync(new Image(
+            await uow.Images.AddOrUpdateAsync(new Image(
                 name: image.GetName() ?? "",
                 tags: image.RepoTags ?? [],
                 dockerImageId: image.Id,
@@ -120,7 +120,7 @@ public class ImageSyncJobTests : IntegrationTestBase
             createdAt: DateTime.UtcNow);
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        await uow.Images.AddAsync(staleImage, TestContext.Current.CancellationToken);
+        await uow.Images.AddOrUpdateAsync(staleImage, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         // Return fresh images
@@ -190,7 +190,7 @@ public class ImageSyncJobTests : IntegrationTestBase
             null, null);
         await using (var uow = Services.GetRequiredService<IUnitOfWork>())
         {
-            await uow.Images.AddAsync(oldImage, TestContext.Current.CancellationToken);
+            await uow.Images.AddOrUpdateAsync(oldImage, TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
 
