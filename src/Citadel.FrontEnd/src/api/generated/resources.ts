@@ -21,7 +21,7 @@ export const resources = {
   getPlatfom: { method: "GET", key: "getPlatfom", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   updatePlatform: { method: "PATCH", key: "updatePlatform", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
   listContainers: { method: "GET", key: "listContainers", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
-  listRegistries: { method: "GET", key: "listRegistries", params: ["params"], requiredParams: [], queryParams: [] },
+  listRegistries: { method: "GET", key: "listRegistries", params: ["query","params"], requiredParams: [], queryParams: ["includeDisabled"] },
   createRegistry: { method: "POST", key: "createRegistry", params: ["data","params"], requiredParams: [], queryParams: [] },
   deleteRegistries: { method: "DELETE", key: "deleteRegistries", params: ["params"], requiredParams: [], queryParams: [] },
   getRegistry: { method: "GET", key: "getRegistry", params: ["id","params"], requiredParams: ["id"], queryParams: [] },

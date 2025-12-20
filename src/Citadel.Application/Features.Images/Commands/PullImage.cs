@@ -38,8 +38,8 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
                 return new PullImageCommand
                     (
                         PlatformAddress: platformAddress,
-                        FromImage: $"{domainName}/{ghCfg.Name}/{BuildImageAndTag()}",
-                        Auth: ghCfg.GetRegistryAuth(domainName)
+                        FromImage: ghCfg.GhcrAuthEnabled == true ? $"{domainName}/{ghCfg.Name}/{BuildImageAndTag()}" : $"{domainName}/{BuildImageAndTag()}",
+                        Auth: ghCfg.GhcrAuthEnabled == true ? ghCfg.GetRegistryAuth(domainName) : null
                     );
             
             case CustomRegistry customCfg:

@@ -48,6 +48,10 @@ internal class GitHubConnectorStrategy(IGitHubCrRepository gitHubCrService) : IR
         {
             return (false, "Invalid GitHub config");
         }
+        if (cfg.GhcrAuthEnabled is not true)
+        {
+            return (true, null);
+        }
 
         var (canConnect, errorMessage) = await gitHubCrService.CanConnectAsync(cfg, cancellationToken);
         

@@ -103,8 +103,12 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
     {
         public GitHubRegistryValidator()
         {
-            When(s => s.PAT != null, () => RuleFor(x => x.PAT).NotEmpty().MinimumLength(10));
-            When(s => s.Name != null, () => RuleFor(x => x.Name).NotEmpty().MinimumLength(5));
+            When(x => x.GhcrAuthEnabled == true, () =>
+            {
+                When(s => s.PAT != null, () => RuleFor(x => x.PAT).NotEmpty().MinimumLength(10));
+                When(s => s.Name != null, () => RuleFor(x => x.Name).NotEmpty().MinimumLength(5));
+            });
+            
         }
     }
 
@@ -114,8 +118,8 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
         {
             When(x => x.AuthEnabled == true, () =>
             {
-                RuleFor(x => x.UserName).NotEmpty().MinimumLength(3);
-                RuleFor(x => x.Password).NotEmpty().MinimumLength(6);
+                When(s => s.UserName != null, () => RuleFor(x => x.UserName).NotEmpty().MinimumLength(3));
+                When(s => s.Password != null, () => RuleFor(x => x.Password).NotEmpty().MinimumLength(6));
             });
         }
     }

@@ -1461,9 +1461,11 @@ export interface RegistryConfigurationBaseDockerHubRegistry {
 
 export interface RegistryConfigurationBaseGitHubRegistry {
   $type?: "GitHub";
-  name: string;
-  pat: string;
-  accountType: GhcrAccountType;
+  /** @default false */
+  ghcrAuthEnabled?: null | boolean;
+  name?: null | string;
+  pat?: null | string;
+  accountType?: null | GhcrAccountType;
 }
 
 export interface RegistryConfigurationBaseGitlabRegistry {
@@ -2458,13 +2460,19 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    listRegistries: (params: RequestParams = {}) =>
+    listRegistries: (
+      query?: {
+        includeDisabled?: boolean;
+      },
+      params: RequestParams = {},
+    ) =>
       this.request<
         RegistriesView,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/registries`,
         method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,

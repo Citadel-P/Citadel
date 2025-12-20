@@ -17,7 +17,7 @@ export const RegistryComponents: RequiredComponents = {
   },
 
   useData: function (): ResourceDataHookResult<any> {
-    const { data, isLoading } = useRead(`listRegistries`);
+    const { data, isLoading } = useRead(`listRegistries`, { query: { includeDisabled: true } });
     return { items: data?.data?.registries ?? [], isLoading };
   },
   filterItems: (items, search) => {

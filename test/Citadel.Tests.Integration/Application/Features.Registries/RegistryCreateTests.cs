@@ -119,9 +119,10 @@ public class RegistryCreateTests : IntegrationTestBase
           "name": "R-NEW",
           "status": "Active",
           "description": "A GitHub registry",
-          "registryHost": "registry123:9999",
+          "registryHost": "ghcr.io",
           "configuration": {
             "$type": "GitHub",
+            "ghcrAuthEnabled": true,
             "Name": "dummy-user",
             "PAT": "dummy-pat123"
           }

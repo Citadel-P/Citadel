@@ -1658,6 +1658,15 @@
         ],
         "summary": "Get all registries",
         "operationId": "listRegistries",
+        "parameters": [
+          {
+            "name": "includeDisabled",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "500": {
             "description": "Internal Server Error",
@@ -1788,6 +1797,7 @@
                     "Status": "Active",
                     "Configuration": {
                       "$type": "GitHub",
+                      "GhcrAuthEnabled": true,
                       "Name": "organization or user name",
                       "PAT": "",
                       "AccountType": "Organization"
@@ -2129,6 +2139,7 @@
                     "Status": "Active",
                     "Configuration": {
                       "$type": "GitHub",
+                      "GhcrAuthEnabled": true,
                       "Name": "organization or user name",
                       "PAT": "",
                       "AccountType": "Organization"
@@ -2213,6 +2224,7 @@
                     "Status": "Active",
                     "Configuration": {
                       "$type": "GitHub",
+                      "GhcrAuthEnabled": true,
                       "Name": "organization or user name",
                       "PAT": "",
                       "AccountType": "Organization"
@@ -7073,7 +7085,8 @@
       "GhcrAccountType": {
         "enum": [
           "Organization",
-          "User"
+          "User",
+          null
         ]
       },
       "GitHubCrPackageVersion": {
@@ -9453,11 +9466,6 @@
         }
       },
       "RegistryConfigurationBaseGitHubRegistry": {
-        "required": [
-          "name",
-          "pat",
-          "accountType"
-        ],
         "properties": {
           "$type": {
             "enum": [
@@ -9465,14 +9473,34 @@
             ],
             "type": "string"
           },
+          "ghcrAuthEnabled": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "default": false
+          },
           "name": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "pat": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "accountType": {
-            "$ref": "#/components/schemas/GhcrAccountType"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GhcrAccountType"
+              }
+            ]
           }
         }
       },

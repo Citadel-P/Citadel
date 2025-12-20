@@ -1,7 +1,6 @@
 import {
   RegistryType,
   RegistryInput,
-  GhcrAccountType,
   RegistryConfigurationBaseGitHubRegistry,
   RegistryConfigurationBaseCustomRegistry,
   RegistryConfigurationBaseDockerHubRegistry,
@@ -16,6 +15,7 @@ import {
   FieldSwitch,
   FieldTextArea,
   ItemSelector,
+  InputGroupField,
 } from '@/components/custom/form-builder';
 import { Constants } from '@/lib/constants';
 import { useState, useMemo } from 'react';
@@ -95,18 +95,6 @@ const RegistryTypeSelector = ({ value, onChange, disabled }: any) => {
   );
 };
 
-const GhcrAccountTypeSelector = ({ value, onChange, disabled }: any) => (
-  <Select value={value} onValueChange={onChange} disabled={disabled}>
-    <SelectTrigger className="w-full max-w-[400px]">
-      <SelectValue placeholder="Select GitHub account type" />
-    </SelectTrigger>
-    <SelectContent className="bg-background">
-      <SelectItem value={GhcrAccountType.User}>{GhcrAccountType.User}</SelectItem>
-      <SelectItem value={GhcrAccountType.Organization}>{GhcrAccountType.Organization}</SelectItem>
-    </SelectContent>
-  </Select>
-);
-
 const HelperLink = ({ href, info }: { href: string; info: string }) => (
   <a className="underline decoration-dotted hover:text-primary" href={href} target="_blank" rel="noreferrer">
     <span className="flex flex-row gap-1 justify-baseline items-center">
@@ -139,6 +127,12 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
       setIsPending(false);
     }
   };
+  const isCustomAuthEnabled =
+    ((update.configuration as RegistryConfigurationBaseCustomRegistry)?.authEnabled ??
+      (original.configuration as RegistryConfigurationBaseCustomRegistry)?.authEnabled) === true;
+  const isGhcrAuthEnabled =
+    ((update.configuration as RegistryConfigurationBaseGitHubRegistry)?.ghcrAuthEnabled ??
+      (original.configuration as RegistryConfigurationBaseGitHubRegistry)?.ghcrAuthEnabled) === true;
 
   const schema = useMemo(
     () => ({
@@ -209,49 +203,38 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
               title: 'GitHub',
               items: [
                 defineGroupField<RegistryInput>({
-                  id: 'account-info',
-                  label: 'Account Info',
+                  id: 'ghcr-auth',
+                  label: 'Settings',
                   items: [
                     defineField({
-                      key: 'configuration.accountType',
-                      label: 'Account Type',
-                      description: 'Select your account type',
-                      required: true,
-                      validate: (v) => (!v || v.length < 3 ? 'Account name too short' : null),
+                      key: 'registryHost',
+                      label: 'Namespace',
+                      disabled: isGhcrAuthEnabled,
+                      description: 'The GitHub account (User or Organization) that owns the container images.',
                       render: (value, set) => (
-                        <GhcrAccountTypeSelector
-                          value={value ?? GhcrAccountType.User}
-                          onChange={(v: GhcrAccountType) =>
-                            set((prev) => ({
-                              configuration: {
-                                $type: 'GitHub',
-                                ...((prev.configuration as RegistryConfigurationBaseGitHubRegistry) ?? {}),
-                                accountType: v,
-                              } satisfies RegistryConfigurationBaseGitHubRegistry,
-                            }))
-                          }
+                        <InputGroupField
+                          value={isGhcrAuthEnabled ? '' : value}
+                          onChange={(v) => set({ registryHost: v })}
+                          prefixPlaceholder="ghcr.io/"
+                          suffixPlaceholder="e.g. jellyfin"
                         />
                       ),
                     }),
-
                     defineField({
-                      key: 'configuration.name',
-                      label:
-                        (update.configuration as RegistryConfigurationBaseGitHubRegistry)?.accountType ===
-                        GhcrAccountType.Organization
-                          ? 'Organization Name'
-                          : 'User Name',
-                      required: true,
-                      validate: (v) => (!v || v.length < 3 ? 'Account name too short' : null),
+                      key: 'configuration.ghcrAuthEnabled',
+                      label: 'Authentication',
+                      description:
+                        'Authentication is required for private images. For public images, providing authentication is recommended to avoid GitHub rate limits.',
                       render: (value, set) => (
-                        <FieldInput
-                          value={value ?? ''}
-                          onChange={(v) =>
+                        <FieldSwitch
+                          checked={value ?? false}
+                          id="configuration.authEnabled"
+                          onChange={(value) =>
                             set((prev) => ({
                               configuration: {
                                 $type: 'GitHub',
-                                ...((prev.configuration as RegistryConfigurationBaseGitHubRegistry) ?? {}),
-                                name: v,
+                                ...((prev.configuration ?? {}) as RegistryConfigurationBaseGitHubRegistry),
+                                ghcrAuthEnabled: value,
                               } satisfies RegistryConfigurationBaseGitHubRegistry,
                             }))
                           }
@@ -260,37 +243,71 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                     }),
                   ],
                 }),
-                defineField({
-                  key: 'configuration.pat',
-                  label: 'PAT',
-                  required: true,
-                  validate: (v) => (!v || v.length < 10 ? 'PAT must be at least 10 chars' : null),
-                  description: (
-                    <div className="flex flex-row flex-wrap text-sm gap-1 text-muted-foreground">
-                      Provide a Personal Access Token with the <Badge variant="secondary">read:packages</Badge> scope.
-                      More info in the{' '}
-                      <HelperLink
-                        href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic"
-                        info="GitHub documentation"
-                      />
-                    </div>
-                  ),
-                  render: (value, set) => (
-                    <FieldInput
-                      type="password"
-                      value={value ?? ''}
-                      onChange={(v) =>
-                        set((prev) => ({
-                          configuration: {
-                            $type: 'GitHub',
-                            ...((prev.configuration as RegistryConfigurationBaseGitHubRegistry) ?? {}),
-                            pat: v,
-                          } satisfies RegistryConfigurationBaseGitHubRegistry,
-                        }))
-                      }
-                    />
-                  ),
-                }),
+
+                /* CREDENTIALS GROUP — only if enabled */
+                ...(isGhcrAuthEnabled
+                  ? [
+                      defineGroupField<RegistryInput>({
+                        id: 'account-info',
+                        label: 'Credentials',
+                        items: [
+                          defineField({
+                            key: 'configuration.name',
+                            label: 'GitHub Username',
+                            description: 'The GitHub username of the account generating the PAT.',
+                            required: true,
+                            validate: (v) => (!v || v.length < 3 ? 'Account name too short' : null),
+                            render: (value, set) => (
+                              <FieldInput
+                                value={value ?? ''}
+                                onChange={(v) =>
+                                  set((prev) => ({
+                                    configuration: {
+                                      $type: 'GitHub',
+                                      ...((prev.configuration as RegistryConfigurationBaseGitHubRegistry) ?? {}),
+                                      name: v,
+                                    } satisfies RegistryConfigurationBaseGitHubRegistry,
+                                  }))
+                                }
+                              />
+                            ),
+                          }),
+
+                          defineField<RegistryInput, 'configuration.pat'>({
+                            key: 'configuration.pat',
+                            label: 'PAT',
+                            required: true,
+                            validate: (v) => (!v || v.length < 10 ? 'PAT must be at least 10 chars' : null),
+                            description: (
+                              <div className="flex flex-row flex-wrap text-sm gap-1 text-muted-foreground">
+                                Provide a Personal Access Token with the{' '}
+                                <Badge variant="secondary">read:packages</Badge> scope. More info in the{' '}
+                                <HelperLink
+                                  href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic"
+                                  info="GitHub documentation"
+                                />
+                              </div>
+                            ),
+                            render: (value, set) => (
+                              <FieldInput
+                                type="password"
+                                value={value ?? ''}
+                                onChange={(v) =>
+                                  set((prev) => ({
+                                    configuration: {
+                                      $type: 'GitHub',
+                                      ...((prev.configuration as RegistryConfigurationBaseGitHubRegistry) ?? {}),
+                                      pat: v,
+                                    } satisfies RegistryConfigurationBaseGitHubRegistry,
+                                  }))
+                                }
+                              />
+                            ),
+                          }),
+                        ],
+                      }),
+                    ]
+                  : []),
               ],
             }),
           }
@@ -410,8 +427,7 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                 }),
 
                 /* CREDENTIALS GROUP — only if enabled */
-                ...(((update.configuration as RegistryConfigurationBaseCustomRegistry)?.authEnabled ??
-                (original.configuration as RegistryConfigurationBaseCustomRegistry)?.authEnabled)
+                ...(isCustomAuthEnabled
                   ? [
                       defineGroupField<RegistryInput>({
                         id: 'custom-auth',
@@ -470,7 +486,7 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
           }
         : {}),
     }),
-    [mode, provider, update.configuration, original.configuration],
+    [mode, provider, isGhcrAuthEnabled, isCustomAuthEnabled],
   );
 
   return (

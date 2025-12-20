@@ -113,8 +113,12 @@ public sealed record CreateRegistry(
     {
         public GitHubRegistryValidator()
         {
-            RuleFor(x => x.PAT).NotEmpty().MinimumLength(10);
-            RuleFor(x => x.Name).NotEmpty().MinimumLength(5);
+            When(x => x.GhcrAuthEnabled == true, () =>
+            {
+                RuleFor(x => x.PAT).NotEmpty().MinimumLength(10);
+                RuleFor(x => x.Name).NotEmpty().MinimumLength(5);
+            });
+            
         }
     }
 }

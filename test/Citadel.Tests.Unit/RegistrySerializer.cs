@@ -51,7 +51,7 @@ public class RegistrySerializer
     [Fact]
     public async Task ShouldSerializeeGitHubRegistryConfiguration()
     {
-        var cfg = GitHubRegistry.Create("username-1", "fake-pat-1", GhcrAccountType.User);
+        var cfg = GitHubRegistry.Create(true, "username-1", "fake-pat-1", GhcrAccountType.User);
         var json = JsonSerializer.Serialize(cfg, RegistryJsonContext.Default.RegistryConfigurationBase);
         await VerifyJson(json);
     }

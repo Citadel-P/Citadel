@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef, memo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Eye, History, Save, X } from 'lucide-react';
@@ -162,6 +162,19 @@ function FieldShell({ label, required, description, edited, error, touched, chil
   );
 }
 
+// Memoized wrapper to prevent re-rendering fields when unrelated fields change.
+interface SmartFieldProps<T> extends Omit<FieldShellProps, 'children'> {
+  render: (value: any, set: FieldChange<T>) => React.ReactNode;
+  value: any;
+  onChange: FieldChange<T>;
+}
+
+function SmartFieldImpl<T>({ render, value, onChange, ...props }: SmartFieldProps<T>) {
+  return <FieldShell {...props}>{render(value, onChange)}</FieldShell>;
+}
+
+const SmartField = memo(SmartFieldImpl) as typeof SmartFieldImpl;
+
 export const FieldInput = ({
   value,
   onChange,
@@ -276,6 +289,50 @@ export function PortMappingField({
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+export function InputGroupField({
+  value,
+  onChange,
+  prefixPlaceholder,
+  suffixPlaceholder,
+  type,
+  disabled,
+  className,
+}: {
+  value?: string;
+  onChange: (v: string) => void;
+  prefixPlaceholder?: string;
+  suffixPlaceholder?: string;
+  type?: string;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className="col-span-2 ">
+      <div className="space-y-2 flex flex-col gap-2">
+        <div
+          className={cn(
+            'flex flex-col sm:flex-row gap-2 items-start sm:items-center max-w-[400px] max-h-[36px]',
+            className,
+          )}>
+          <div className="flex flex-1 w-full">
+            <span className="flex z-10 items-center justify-center w-[80px] shadow-xs flex-shrink-0 bg-accent/60 border-l rounded-l-sm border-y border-border text-xs">
+              {prefixPlaceholder}
+            </span>
+            <Input
+              placeholder={suffixPlaceholder}
+              className="rounded-l-none! focus-visible:ring-transparent"
+              type={type}
+              value={value}
+              disabled={disabled}
+              onChange={(e) => onChange(e.target.value)}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -556,12 +613,21 @@ export function FormShell<T>({
     [disabled, setUpdate, draftKey, draftVersion],
   );
 
-  const createFieldChangeHandler = useCallback(
-    (key: string): FieldChange<T> =>
-      (partialOrUpdater) =>
-        handleChange(key, partialOrUpdater),
-    [handleChange],
-  );
+  // Use a Ref for handleChange to ensure the cached handlers always call the latest version
+  // without needing to be re-created themselves.
+  const handleChangeRef = useRef(handleChange);
+  handleChangeRef.current = handleChange;
+
+  const fieldHandlersRef = useRef<Map<string, FieldChange<T>>>(new Map());
+
+  const getFieldHandler = useCallback((key: string) => {
+    if (!fieldHandlersRef.current.has(key)) {
+      fieldHandlersRef.current.set(key, (partialOrUpdater) => {
+        handleChangeRef.current(key, partialOrUpdater);
+      });
+    }
+    return fieldHandlersRef.current.get(key)!;
+  }, []);
 
   const reset = useCallback(() => {
     if (onReset) {
@@ -779,15 +845,17 @@ export function FormShell<T>({
                         key={key}
                         disabled={fieldDisabled}
                         className="relative border rounded-md p-6 scroll-mt-20 xl:scroll-mt-16">
-                        <FieldShell
+                        <SmartField
+                          render={f.render}
+                          value={value}
+                          onChange={getFieldHandler(key)}
                           label={f.label}
                           required={f.required}
                           description={f.description}
                           edited={!!edited}
                           error={error}
-                          touched={!!touched[key]}>
-                          {f.render(value, createFieldChangeHandler(key))}
-                        </FieldShell>
+                          touched={!!touched[key]}
+                        />
                       </fieldset>
                     );
                   }
@@ -809,15 +877,17 @@ export function FormShell<T>({
 
                             return (
                               <fieldset key={key} disabled={fieldDisabled} className={`relative pb-0 last:pb-0 flex-1`}>
-                                <FieldShell
+                                <SmartField
+                                  render={f.render}
+                                  value={value}
+                                  onChange={getFieldHandler(key)}
                                   label={f.label}
                                   required={f.required}
                                   description={f.description}
                                   edited={!!edited}
                                   error={error}
-                                  touched={!!touched[key]}>
-                                  {f.render(value, createFieldChangeHandler(key))}
-                                </FieldShell>
+                                  touched={!!touched[key]}
+                                />
                               </fieldset>
                             );
                           })}
@@ -848,15 +918,17 @@ export function FormShell<T>({
                                 key={key}
                                 disabled={fieldDisabled}
                                 className={`relative pb-6 last:pb-0 ${group.direction === 'horizontal' ? 'flex-1' : 'block border-b last:border-b-0'}`}>
-                                <FieldShell
+                                <SmartField
+                                  render={f.render}
+                                  value={value}
+                                  onChange={getFieldHandler(key)}
                                   label={f.label}
                                   required={f.required}
                                   description={f.description}
                                   edited={!!edited}
                                   error={error}
-                                  touched={!!touched[key]}>
-                                  {f.render(value, createFieldChangeHandler(key))}
-                                </FieldShell>
+                                  touched={!!touched[key]}
+                                />
                               </fieldset>
                             );
                           }
@@ -880,15 +952,17 @@ export function FormShell<T>({
                                       key={key}
                                       disabled={fieldDisabled}
                                       className={` pb-1 last:pb-1  last:flex-1 scroll-mt-20 xl:scroll-mt-16`}>
-                                      <FieldShell
+                                      <SmartField
+                                        render={f.render}
+                                        value={value}
+                                        onChange={getFieldHandler(key)}
                                         label={f.label}
                                         required={f.required}
                                         description={f.description}
                                         edited={!!edited}
                                         error={error}
-                                        touched={!!touched[key]}>
-                                        {f.render(value, createFieldChangeHandler(key))}
-                                      </FieldShell>
+                                        touched={!!touched[key]}
+                                      />
                                     </fieldset>
                                   );
                                 })}

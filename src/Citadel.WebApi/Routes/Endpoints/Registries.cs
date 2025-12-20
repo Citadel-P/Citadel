@@ -19,9 +19,9 @@ public static class Registries
         return EndpointHandlers.HandleResult(result, RegistryView.Map);
     }
 
-    public static async Task<Results<Ok<RegistriesView>, ProblemHttpResult>> List(IMediator mediator, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<RegistriesView>, ProblemHttpResult>> List(IMediator mediator, bool? includeDisabled, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetAllRegistries(), cancellationToken);
+        var result = await mediator.Send(new GetAllRegistries(includeDisabled), cancellationToken);
         return EndpointHandlers.HandleResult(result, RegistriesView.Map);
     }
 
