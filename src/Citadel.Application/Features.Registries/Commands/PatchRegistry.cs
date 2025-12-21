@@ -106,7 +106,7 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
             When(x => x.GhcrAuthEnabled == true, () =>
             {
                 When(s => s.PAT != null, () => RuleFor(x => x.PAT).NotEmpty().MinimumLength(10));
-                When(s => s.Name != null, () => RuleFor(x => x.Name).NotEmpty().MinimumLength(5));
+                When(s => s.NameSpace!= null, () => RuleFor(x => x.NameSpace).NotEmpty().MinimumLength(5));
             });
             
         }

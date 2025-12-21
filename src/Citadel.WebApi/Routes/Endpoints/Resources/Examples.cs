@@ -38,7 +38,7 @@ internal static class Examples
             }
             internal static OpenApiExample CreateGitHubRegistryExample()
             {
-                var registry = new RegistryInput(Name: "my-custom-registry", RegistryHost: "", Status: RegistryStatus.Active, GitHubRegistry.Create(true, "organization or user name", "", GhcrAccountType.Organization));
+                var registry = new RegistryInput(Name: "my-custom-registry", RegistryHost: "", Status: RegistryStatus.Active, GitHubRegistry.Create("citadel-p", true, "PAT HERE"));
                 return new OpenApiExample() { Value = JsonNode.Parse(JsonSerializer.Serialize(registry, typeof(RegistryInput), GetJsonContext())) };
             }
             internal static OpenApiExample CreateCustomRegistryExample()
@@ -72,7 +72,7 @@ internal static class Examples
             }
             internal static OpenApiExample UpdateGitHubRegistryExample()
             {
-                var registry = new RegistryInput(Name: "my-custom-registry", RegistryHost: "", Status: RegistryStatus.Active, GitHubRegistry.Create(true, "organization or user name", "", GhcrAccountType.Organization));
+                var registry = new RegistryInput(Name: "my-custom-registry", RegistryHost: "", Status: RegistryStatus.Active, GitHubRegistry.Create("citadel-p", true, "PAT HERE"));
                 return new OpenApiExample() { Value = JsonNode.Parse(JsonSerializer.Serialize(registry, typeof(RegistryInput), GetJsonContext())) };
             }
             internal static OpenApiExample UpdateCustomRegistryExample()

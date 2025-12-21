@@ -207,18 +207,35 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                   label: 'Settings',
                   items: [
                     defineField({
-                      key: 'registryHost',
+                      key: 'configuration.nameSpace',
                       label: 'Namespace',
-                      disabled: isGhcrAuthEnabled,
+                      disabled: false,
+                      required: true,
+                      validate: (v) => {
+                        const namespace = v?.replace('ghcr.io/', '') ?? '';
+                        return !new RegExp(Constants.validNameIdentifier).test(namespace)
+                          ? 'Invalid namespace (use a-z, 0-9)'
+                          : null;
+                      },
                       description: 'The GitHub account (User or Organization) that owns the container images.',
-                      render: (value, set) => (
-                        <InputGroupField
-                          value={isGhcrAuthEnabled ? '' : value}
-                          onChange={(v) => set({ registryHost: v })}
-                          prefixPlaceholder="ghcr.io/"
-                          suffixPlaceholder="e.g. jellyfin"
-                        />
-                      ),
+                      render: (value, set) => {
+                        return (
+                          <InputGroupField
+                            value={value}
+                            onChange={(value) =>
+                              set((prev) => ({
+                                configuration: {
+                                  $type: 'GitHub',
+                                  ...((prev.configuration ?? {}) as RegistryConfigurationBaseGitHubRegistry),
+                                  nameSpace: value,
+                                } satisfies RegistryConfigurationBaseGitHubRegistry,
+                              }))
+                            }
+                            prefixPlaceholder="ghcr.io/"
+                            suffixPlaceholder="e.g. jellyfin"
+                          />
+                        );
+                      },
                     }),
                     defineField({
                       key: 'configuration.ghcrAuthEnabled',
@@ -247,64 +264,36 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                 /* CREDENTIALS GROUP — only if enabled */
                 ...(isGhcrAuthEnabled
                   ? [
-                      defineGroupField<RegistryInput>({
-                        id: 'account-info',
-                        label: 'Credentials',
-                        items: [
-                          defineField({
-                            key: 'configuration.name',
-                            label: 'GitHub Username',
-                            description: 'The GitHub username of the account generating the PAT.',
-                            required: true,
-                            validate: (v) => (!v || v.length < 3 ? 'Account name too short' : null),
-                            render: (value, set) => (
-                              <FieldInput
-                                value={value ?? ''}
-                                onChange={(v) =>
-                                  set((prev) => ({
-                                    configuration: {
-                                      $type: 'GitHub',
-                                      ...((prev.configuration as RegistryConfigurationBaseGitHubRegistry) ?? {}),
-                                      name: v,
-                                    } satisfies RegistryConfigurationBaseGitHubRegistry,
-                                  }))
-                                }
-                              />
-                            ),
-                          }),
-
-                          defineField<RegistryInput, 'configuration.pat'>({
-                            key: 'configuration.pat',
-                            label: 'PAT',
-                            required: true,
-                            validate: (v) => (!v || v.length < 10 ? 'PAT must be at least 10 chars' : null),
-                            description: (
-                              <div className="flex flex-row flex-wrap text-sm gap-1 text-muted-foreground">
-                                Provide a Personal Access Token with the{' '}
-                                <Badge variant="secondary">read:packages</Badge> scope. More info in the{' '}
-                                <HelperLink
-                                  href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic"
-                                  info="GitHub documentation"
-                                />
-                              </div>
-                            ),
-                            render: (value, set) => (
-                              <FieldInput
-                                type="password"
-                                value={value ?? ''}
-                                onChange={(v) =>
-                                  set((prev) => ({
-                                    configuration: {
-                                      $type: 'GitHub',
-                                      ...((prev.configuration as RegistryConfigurationBaseGitHubRegistry) ?? {}),
-                                      pat: v,
-                                    } satisfies RegistryConfigurationBaseGitHubRegistry,
-                                  }))
-                                }
-                              />
-                            ),
-                          }),
-                        ],
+                      defineField<RegistryInput, 'configuration.pat'>({
+                        key: 'configuration.pat',
+                        label: 'PAT',
+                        required: true,
+                        validate: (v) => (!v || v.length < 10 ? 'PAT must be at least 10 chars' : null),
+                        description: (
+                          <div className="flex flex-row flex-wrap text-sm gap-1 text-muted-foreground">
+                            Provide a Personal Access Token with the <Badge variant="secondary">read:packages</Badge>{' '}
+                            scope. More info in the{' '}
+                            <HelperLink
+                              href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic"
+                              info="GitHub documentation"
+                            />
+                          </div>
+                        ),
+                        render: (value, set) => (
+                          <FieldInput
+                            type="password"
+                            value={value ?? ''}
+                            onChange={(v) =>
+                              set((prev) => ({
+                                configuration: {
+                                  $type: 'GitHub',
+                                  ...((prev.configuration as RegistryConfigurationBaseGitHubRegistry) ?? {}),
+                                  pat: v,
+                                } satisfies RegistryConfigurationBaseGitHubRegistry,
+                              }))
+                            }
+                          />
+                        ),
                       }),
                     ]
                   : []),

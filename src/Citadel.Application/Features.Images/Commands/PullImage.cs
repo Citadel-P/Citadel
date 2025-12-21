@@ -38,7 +38,7 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
                 return new PullImageCommand
                     (
                         PlatformAddress: platformAddress,
-                        FromImage: ghCfg.GhcrAuthEnabled == true ? $"{domainName}/{ghCfg.Name}/{BuildImageAndTag()}" : $"{domainName}/{BuildImageAndTag()}",
+                        FromImage: $"{domainName}/{ghCfg.NameSpace}/{BuildImageAndTag()}",
                         Auth: ghCfg.GhcrAuthEnabled == true ? ghCfg.GetRegistryAuth(domainName) : null
                     );
             

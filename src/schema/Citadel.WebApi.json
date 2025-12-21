@@ -1797,10 +1797,9 @@
                     "Status": "Active",
                     "Configuration": {
                       "$type": "GitHub",
+                      "NameSpace": "citadel-p",
                       "GhcrAuthEnabled": true,
-                      "Name": "organization or user name",
-                      "PAT": "",
-                      "AccountType": "Organization"
+                      "PAT": "PAT HERE"
                     }
                   }
                 },
@@ -2139,10 +2138,9 @@
                     "Status": "Active",
                     "Configuration": {
                       "$type": "GitHub",
+                      "NameSpace": "citadel-p",
                       "GhcrAuthEnabled": true,
-                      "Name": "organization or user name",
-                      "PAT": "",
-                      "AccountType": "Organization"
+                      "PAT": "PAT HERE"
                     }
                   }
                 },
@@ -2224,10 +2222,9 @@
                     "Status": "Active",
                     "Configuration": {
                       "$type": "GitHub",
+                      "NameSpace": "citadel-p",
                       "GhcrAuthEnabled": true,
-                      "Name": "organization or user name",
-                      "PAT": "",
-                      "AccountType": "Organization"
+                      "PAT": "PAT HERE"
                     }
                   }
                 },
@@ -7082,13 +7079,6 @@
           }
         }
       },
-      "GhcrAccountType": {
-        "enum": [
-          "Organization",
-          "User",
-          null
-        ]
-      },
       "GitHubCrPackageVersion": {
         "required": [
           "id",
@@ -9466,11 +9456,17 @@
         }
       },
       "RegistryConfigurationBaseGitHubRegistry": {
+        "required": [
+          "nameSpace"
+        ],
         "properties": {
           "$type": {
             "enum": [
               "GitHub"
             ],
+            "type": "string"
+          },
+          "nameSpace": {
             "type": "string"
           },
           "ghcrAuthEnabled": {
@@ -9480,26 +9476,10 @@
             ],
             "default": false
           },
-          "name": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
           "pat": {
             "type": [
               "null",
               "string"
-            ]
-          },
-          "accountType": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/GhcrAccountType"
-              }
             ]
           }
         }

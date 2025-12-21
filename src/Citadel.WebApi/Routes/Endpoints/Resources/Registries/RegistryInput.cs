@@ -20,9 +20,9 @@ public sealed record RegistryInput(
         {
             return "docker.io";
         }
-        else if (Configuration is GitHubRegistry ghcrCfg)
+        if (Configuration is GitHubRegistry)
         {
-            return ghcrCfg.GhcrAuthEnabled == true ?  "ghcr.io" : "ghcr.io/" + RegistryHost;
+            return "ghcr.io";
         }
 
         return RegistryHost;

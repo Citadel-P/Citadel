@@ -74,11 +74,6 @@ export enum LoggingDriverType {
   Gcplogs = "gcplogs",
 }
 
-export enum GhcrAccountType {
-  Organization = "Organization",
-  User = "User",
-}
-
 export enum DockerHubTagStatus {
   Active = "Active",
   Inactive = "Inactive",
@@ -1461,11 +1456,10 @@ export interface RegistryConfigurationBaseDockerHubRegistry {
 
 export interface RegistryConfigurationBaseGitHubRegistry {
   $type?: "GitHub";
+  nameSpace: string;
   /** @default false */
   ghcrAuthEnabled?: null | boolean;
-  name?: null | string;
   pat?: null | string;
-  accountType?: null | GhcrAccountType;
 }
 
 export interface RegistryConfigurationBaseGitlabRegistry {

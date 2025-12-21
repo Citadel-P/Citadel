@@ -37,7 +37,7 @@ public class RegistrySerializer
         var json = """
         {
             "$type":"GitHub",
-            "Name": "username-1",
+            "nameSpace": "username-1",
             "PAT": "fake-pat-1"
         }
         """;
@@ -45,13 +45,12 @@ public class RegistrySerializer
         Assert.NotNull(cfg);
         Assert.IsType<GitHubRegistry>(cfg);
         Assert.Equal("fake-pat-1", (cfg as GitHubRegistry)?.PAT);
-        Assert.Equal("username-1", (cfg as GitHubRegistry)?.Name);
     }
 
     [Fact]
     public async Task ShouldSerializeeGitHubRegistryConfiguration()
     {
-        var cfg = GitHubRegistry.Create(true, "username-1", "fake-pat-1", GhcrAccountType.User);
+        var cfg = GitHubRegistry.Create("citadel-p", true, "fake-pat-1");
         var json = JsonSerializer.Serialize(cfg, RegistryJsonContext.Default.RegistryConfigurationBase);
         await VerifyJson(json);
     }

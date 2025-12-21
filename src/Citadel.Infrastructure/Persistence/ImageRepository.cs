@@ -32,10 +32,11 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 r.Status AS RegistryStatus,
                 r.RegistryHost AS RegistryHost,
                 r.CreatedAt As RegistryCreatedAt,
+                r.Configuration AS RegistryConfiguration,
                 r.CreatedByActorId AS RegistryCreatedByActorId
             FROM Images i
             LEFT JOIN Registries r
-            ON i.RegistryId = r.Id
+                ON i.RegistryId = r.Id
             WHERE PlatformId = @PlatformId
             ORDER BY 
                 i.CreatedAt DESC,
@@ -87,10 +88,11 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 r.Status AS RegistryStatus,
                 r.RegistryHost AS RegistryHost,
                 r.CreatedAt As RegistryCreatedAt,
+                r.Configuration AS RegistryConfiguration,
                 r.CreatedByActorId AS RegistryCreatedByActorId
             FROM Images i
             LEFT JOIN Registries r
-            ON i.RegistryId = r.Id
+                ON i.RegistryId = r.Id
             WHERE PlatformId = @PlatformId AND DockerImageId LIKE @dockerImageIdPrefix || '%'
             LIMIT 1
             """;

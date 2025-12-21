@@ -3,10 +3,10 @@
 namespace Domain.Entities.Registries;
 
 [method: JsonConstructor]
-public record GitHubRegistry(bool? GhcrAuthEnabled = false, string? Name = null, string? PAT = null, GhcrAccountType? AccountType = null) : RegistryConfigurationBase
+public record GitHubRegistry(string NameSpace, bool? GhcrAuthEnabled = false, string? PAT = null) : RegistryConfigurationBase
 {
-    public override string GetRegistryAuth(string registryHost) => new RegistryAuth(Name ?? string.Empty, PAT ?? string.Empty, registryHost).GetAuth();
+    public override string GetRegistryAuth(string registryHost) => new RegistryAuth(NameSpace, PAT ?? string.Empty, registryHost).GetAuth();
    
-    public static GitHubRegistry Create(bool? ghcrAuthEnabled, string? name, string? PAT, GhcrAccountType? accountType) => new (ghcrAuthEnabled, name, PAT, accountType);
+    public static GitHubRegistry Create(string nameSpace, bool? ghcrAuthEnabled, string? PAT) => new (nameSpace, ghcrAuthEnabled, PAT);
 }
 

@@ -123,7 +123,7 @@ public class RegistryCreateTests : IntegrationTestBase
           "configuration": {
             "$type": "GitHub",
             "ghcrAuthEnabled": true,
-            "Name": "dummy-user",
+            "nameSpace": "my-org",
             "PAT": "dummy-pat123"
           }
         }

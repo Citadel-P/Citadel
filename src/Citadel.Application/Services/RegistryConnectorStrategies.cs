@@ -10,7 +10,7 @@ namespace Application.Services;
 internal interface IRegistryConnectorStrategy
 {
     RegistryType Type { get; }
-    Task<(bool success, string? error)> CanConnectAsync(RegistryConfigurationBase config, CancellationToken ct);
+    Task<(bool success, string? error)> CanConnectAsync(RegistryConfigurationBase config, CancellationToken cancellationToken);
 }
 
 /// <summary>

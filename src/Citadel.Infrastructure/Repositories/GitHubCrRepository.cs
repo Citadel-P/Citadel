@@ -1,5 +1,4 @@
-﻿using Domain;
-using Domain.Contracts.Interfaces;
+﻿using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Registries;
 using Domain.Entities.Registries;
 using Infrastructure.GithubCr;
@@ -13,9 +12,7 @@ internal class GitHubCrRepository(IGithubCrApi gitHubCrApi) : IGitHubCrRepositor
     {
         try
         {
-            var packages = gitHubRegistry.AccountType == GhcrAccountType.Organization
-                    ? await gitHubCrApi.ListOrgPackages(gitHubRegistry.Name, gitHubRegistry.PAT, gitHubRegistry.Name, cancellationToken)
-                    : await gitHubCrApi.ListUserPackages(gitHubRegistry.Name, gitHubRegistry.PAT, gitHubRegistry.Name, cancellationToken);
+            var packages = await gitHubCrApi.ListUserPackages(gitHubRegistry.NameSpace, gitHubRegistry.PAT, gitHubRegistry.NameSpace, cancellationToken);
             return (true, null);
         }
         catch (ApiException ex)
@@ -31,9 +28,7 @@ internal class GitHubCrRepository(IGithubCrApi gitHubCrApi) : IGitHubCrRepositor
     {
         try
         {
-            var packages = gitHubRegistry.AccountType == GhcrAccountType.User
-                ? await gitHubCrApi.ListUserPackages(gitHubRegistry.Name, gitHubRegistry.PAT, gitHubRegistry.Name, cancellationToken)
-                : await gitHubCrApi.ListOrgPackages(gitHubRegistry.Name, gitHubRegistry.PAT, gitHubRegistry.Name, cancellationToken);
+            var packages = await gitHubCrApi.ListUserPackages(gitHubRegistry.NameSpace, gitHubRegistry.PAT, gitHubRegistry.NameSpace, cancellationToken);
             return (packages.Map(), null);
         }
         catch (ApiException ex)
@@ -49,9 +44,7 @@ internal class GitHubCrRepository(IGithubCrApi gitHubCrApi) : IGitHubCrRepositor
     {
         try
         {
-            var versions = gitHubRegistry.AccountType == GhcrAccountType.User
-                        ? await gitHubCrApi.ListPackageVersionsForUser(packageName, gitHubRegistry.PAT, gitHubRegistry.Name, cancellationToken: cancellationToken)
-                        : await gitHubCrApi.ListPackageVersionsForOrg(gitHubRegistry.Name, packageName, gitHubRegistry.PAT, gitHubRegistry.Name, cancellationToken: cancellationToken);
+            var versions = await gitHubCrApi.ListPackageVersionsForUser(packageName, gitHubRegistry.PAT, gitHubRegistry.NameSpace, cancellationToken: cancellationToken);
             return (versions.Map(), null);
         }
         catch (ApiException ex)

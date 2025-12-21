@@ -31,6 +31,8 @@ internal static class ImageMappers
                     registryHost: image?.RegistryHost ?? "",
                     createdAt: image?.RegistryCreatedAt ?? DateTime.MinValue,
                     createdByActorId: image?.RegistryCreatedByActorId ?? Guid.Empty,
-                    configuration: null)
+                    configuration: image.RegistryConfiguration != null 
+                        ? JsonSerializer.Deserialize(image.RegistryConfiguration, RegistryJsonContext.Default.RegistryConfigurationBase)
+                        : null)
             );
 }

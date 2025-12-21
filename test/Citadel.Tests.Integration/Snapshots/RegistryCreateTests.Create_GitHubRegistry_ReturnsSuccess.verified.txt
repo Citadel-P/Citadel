@@ -4,7 +4,7 @@
   name: R-NEW,
   status: Active,
   description: A GitHub registry,
-  registryHost: ghcr.io,
+  registryHost: ghcr.io/my-org,
   type: GitHub,
   createdAt: DateTimeOffset_1,
   isDefault: true

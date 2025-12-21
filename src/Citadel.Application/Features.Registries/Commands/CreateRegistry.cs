@@ -116,7 +116,7 @@ public sealed record CreateRegistry(
             When(x => x.GhcrAuthEnabled == true, () =>
             {
                 RuleFor(x => x.PAT).NotEmpty().MinimumLength(10);
-                RuleFor(x => x.Name).NotEmpty().MinimumLength(5);
+                RuleFor(x => x.NameSpace).NotEmpty().MinimumLength(5);
             });
             
         }

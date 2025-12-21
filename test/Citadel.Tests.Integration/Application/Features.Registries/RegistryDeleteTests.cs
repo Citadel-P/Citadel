@@ -16,7 +16,7 @@ public class RegistryDeleteTests : IntegrationTestBase
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
         var registry = new Registry("fake", "ghcr.io", RegistryStatus.Active, Constants.SystemId,
-                new GitHubRegistry(true, "ghcr1", "pat1", GhcrAccountType.User));
+                new GitHubRegistry("citadel-p", true, "pat1"));
         await uow.Registries.AddAsync(registry, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
         registryId = registry.Id;

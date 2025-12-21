@@ -1,7 +1,6 @@
 ﻿{
   $type: GitHub,
+  NameSpace: citadel-p,
   GhcrAuthEnabled: true,
-  Name: username-1,
-  PAT: fake-pat-1,
-  AccountType: User
+  PAT: fake-pat-1
 }
