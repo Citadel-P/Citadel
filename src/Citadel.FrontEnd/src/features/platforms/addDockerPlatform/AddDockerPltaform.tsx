@@ -1,6 +1,5 @@
 import DockerIcon from '@/assets/docker.min.svg';
 import DockerAgentInstallCmd from './DockerAgentInstallCmd';
-import ConnectAgentForm from './ConnectAgentForm';
 
 const AddDockerPlatform = () => {
   return (
@@ -32,7 +31,7 @@ const AddDockerPlatform = () => {
               2
             </span>
             <h2 className="text-sm font-semibold text-foreground">Connect</h2>
-            <ConnectAgentForm />
+            {/* <ConnectAgentForm /> */}
           </li>
         </ol>
       </div>

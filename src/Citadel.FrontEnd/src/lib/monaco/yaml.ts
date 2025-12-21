@@ -59,14 +59,14 @@ const yaml_language = {
       [/\}/, '@brackets', '@pop'],
       [/,/, 'delimiter.comma'],
       [/:(?= )/, 'operators'],
-      [/(?:".*?"|'.*?'|[^,\{\[]+?)(?=: )/, 'type'],
+      [/(?:".*?"|'.*?'|[^,{[]+?)(?=: )/, 'type'],
       { include: '@flowCollections' },
       { include: '@flowScalars' },
       { include: '@tagHandle' },
       { include: '@anchor' },
       { include: '@flowNumber' },
       [
-        /[^\},]+/,
+        /[^},]+/,
         {
           cases: {
             '@keywords': 'keyword',
@@ -136,16 +136,16 @@ const yaml_language = {
     blockStyle: [[/[>|][0-9]*[+-]?$/, 'operators', '@multiString']],
 
     flowNumber: [
-      [/@numberInteger(?=[ \t]*[,\]\}])/, 'number'],
-      [/@numberFloat(?=[ \t]*[,\]\}])/, 'number.float'],
-      [/@numberOctal(?=[ \t]*[,\]\}])/, 'number.octal'],
-      [/@numberHex(?=[ \t]*[,\]\}])/, 'number.hex'],
-      [/@numberInfinity(?=[ \t]*[,\]\}])/, 'number.infinity'],
-      [/@numberNaN(?=[ \t]*[,\]\}])/, 'number.nan'],
-      [/@numberDate(?=[ \t]*[,\]\}])/, 'number.date'],
+      [/@numberInteger(?=[ \t]*[,]}])/, 'number'],
+      [/@numberFloat(?=[ \t]*[,\]}])/, 'number.float'],
+      [/@numberOctal(?=[ \t]*[,\]}])/, 'number.octal'],
+      [/@numberHex(?=[ \t]*[,\]}])/, 'number.hex'],
+      [/@numberInfinity(?=[ \t]*[,\]}])/, 'number.infinity'],
+      [/@numberNaN(?=[ \t]*[,\]}])/, 'number.nan'],
+      [/@numberDate(?=[ \t]*[,\]}])/, 'number.date'],
     ],
 
-    tagHandle: [[/\![^ ]*/, 'tag']],
+    tagHandle: [[/![^ ]*/, 'tag']],
     anchor: [[/[&*][^ ]+/, 'namespace']],
   },
 };

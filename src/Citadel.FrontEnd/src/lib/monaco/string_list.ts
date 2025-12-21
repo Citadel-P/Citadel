@@ -32,7 +32,7 @@ const string_list_language = {
       [/\\/, { token: 'keyword', next: '@regex' }],
 
       // Main strings separated by spaces or newlines
-      [/[^\*\?,#\\\s]+/, ''],
+      [/[^*?,#\\\s]+/, ''],
 
       // Whitespace
       [/[ \t\r\n]+/, ''],
@@ -40,7 +40,7 @@ const string_list_language = {
     regex: [
       // Regex tokens
       [/\[[^\]]*\]/, ''],
-      [/[*+?\.]+/, 'keyword'],
+      [/[*+?.]+/, 'keyword'],
       [/\\./, 'string.regexp constant.character.escape'],
       [/[^\\]/, 'string'],
       [/\\/, { token: 'keyword', next: '@pop' }],
