@@ -39,7 +39,7 @@ const GenericActionBar = <T,>({ selectedItems, allItems, resource, actions }: Ac
 
   return (
     <div
-      className={`fixed -translate-x-5 inset-x-0 bottom-0 shadow-lg p-2 bg-background flex flex-wrap justify-center items-center gap-x-4 gap-y-2 sm:justify-between ${
+      className={`fixed left-5 sm:-translate-x-5 inset-x-0 bottom-0 shadow-lg p-2 bg-background flex flex-wrap justify-center items-center gap-x-4 gap-y-2 sm:justify-between ${
         sidebarMinimized ? 'action-bar-left-collapsed' : 'action-bar-left'
       }`}
       style={{
@@ -48,11 +48,13 @@ const GenericActionBar = <T,>({ selectedItems, allItems, resource, actions }: Ac
       <div className="flex-1 text-xs text-muted-foreground mt-2">
         {selectedItems.length} of {allItems?.length} {resource.toLowerCase()}(s) selected.
       </div>
-      <ButtonGroup>
-        {actions.map((Action, id) => (
-          <Action resources={selectedItems} key={id} />
-        ))}
-      </ButtonGroup>
+      <div className="overflow-x-auto">
+        <ButtonGroup>
+          {actions.map((Action, id) => (
+            <Action resources={selectedItems} key={id} />
+          ))}
+        </ButtonGroup>
+      </div>
     </div>
   );
 };

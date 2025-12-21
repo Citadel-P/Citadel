@@ -48,7 +48,7 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
   const { sentinelRef, isStuck } = useStickySentinel(32);
 
   return (
-    <div className="flex flex-col justify-between">
+    <div className="flex-col justify-between relative">
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
         <div className="max-w-full rounded-lg border border-border bg-background p-4">
           {isLoading ? (
@@ -58,32 +58,28 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
               {errorDetail?.detail ?? 'Unknown error'}{' '}
             </AlertMessage>
           ) : (
-            <div>
+            <div className="flex flex-col gap-2">
               {/* Header */}
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-3">
-                <div className="flex items-center gap-1 mb-4 md:mb-0">
+              <div className="flex flex-col sm:flex-row gap-2 items-start justify-between">
+                <div className="flex items-center gap-1">
                   <Header.Indicator resource={resource} />
                   <div className="flex flex-col text-md font-bold text-foreground">
                     <span>{resource.name}</span>
-                    <span className="text-sm text-foreground/40">
+                    <span className="text-sm text-wrap text-foreground/40">
                       <CopyToClipboard textToCopy={resource.id ?? '-'} />
                     </span>
                   </div>
                 </div>
-                <div className="flex justify-start md:justify-end w-full">
                   {Components.Header.ActionButtons && (
-                    <div className="flex gap-4 items-center flex-wrap">
+                    <div className="flex gap-4 items-center overflow-auto flex-wrap">
                       <Components.Header.ActionButtons resource={resource} />
                     </div>
                   )}
-                </div>
               </div>
-
               {/* Sub Header */}
               {Components.SubHeader && <Components.SubHeader resource={resource} />}
-
               {/* Tabs */}
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-4">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-2">
                 {/* Sentinel to detect when the tabs reach sticky position */}
                 <div ref={sentinelRef} aria-hidden className="h-px" />
                 <div

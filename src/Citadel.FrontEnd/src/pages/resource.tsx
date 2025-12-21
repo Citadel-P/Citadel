@@ -39,9 +39,9 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
   return (
     <div className="flex-col justify-between relative">
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
-        <div className="w-full rounded-lg border-border bg-background p-4 flex flex-col gap-3">
+        <div className="w-full rounded-lg border-border bg-background p-4 flex flex-col gap-2">
           {/* Header */}
-          <div className="sm:flex sm:justify-between">
+          <div className="flex flex-col sm:flex-row gap-2 sm:justify-between">
             <div className="flex items-center gap-1">
               <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 {Icon}
