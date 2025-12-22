@@ -1,15 +1,17 @@
-import { ResourceComponents } from '@/features';
+import { ResourceFormComponents } from '@/features';
 import { useResourceParamType } from '@/lib/hooks';
 import { useParams } from 'react-router';
 import NotFound from './not-found';
 import { capitalize } from '@/lib/utils';
 import { Pencil, Plus } from 'lucide-react';
+import { RequiredFormFields } from './types';
 
 export const ResourceFormPage = ({ mode }: { mode: 'add' | 'edit' }) => {
   const type = useResourceParamType()!;
   const id = useParams().id;
-  const Components = ResourceComponents[type];
-  const { item } = Components.useFormData?.(id) ?? {};
+  const Components = ResourceFormComponents[type];
+  const item = Components?.useFormData?.(id).item;
+
   if (!Components || Components.Form === undefined) return <NotFound />;
 
   return (
@@ -31,6 +33,15 @@ export const ResourceFormPage = ({ mode }: { mode: 'add' | 'edit' }) => {
           <Components.Form mode={mode} resource={item} />
         </div>
       </div>
+    </div>
+  );
+};
+
+const Header = ({ resource }: { resource: RequiredFormFields }) => {
+  return (
+    <div className="flex flex-row justify-between">
+      <div></div>
+      <div>Actions</div>
     </div>
   );
 };

@@ -70,11 +70,11 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
                     </span>
                   </div>
                 </div>
-                  {Components.Header.ActionButtons && (
-                    <div className="flex gap-4 items-center overflow-auto flex-wrap">
-                      <Components.Header.ActionButtons resource={resource} />
-                    </div>
-                  )}
+                {Components.Header.ActionButtons && (
+                  <div className="flex gap-4 items-center overflow-auto flex-wrap">
+                    <Components.Header.ActionButtons resource={resource} />
+                  </div>
+                )}
               </div>
               {/* Sub Header */}
               {Components.SubHeader && <Components.SubHeader resource={resource} />}

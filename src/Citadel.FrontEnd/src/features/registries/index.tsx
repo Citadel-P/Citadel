@@ -1,5 +1,5 @@
 import { Cable } from 'lucide-react';
-import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
+import { RequiredComponents, RequiredFormComponents, RequiredFormFields, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { ActionBar } from '@/components/custom/action-bar';
 import { RegistryDropdownActions, RegistryGroupActions } from './actions';
@@ -31,11 +31,18 @@ export const RegistryComponents: RequiredComponents = {
     );
   },
 
+};
+
+export const RegistryFormComponents: RequiredFormComponents = {
   Form: ({ mode, resource }) => {
     return <RegistryForm mode={mode} resource={resource} />;
   },
-  useFormData: function (id: string | undefined) {
+  useFormData: function (id?: string): { item?: RequiredFormFields; isLoading: boolean; } {
     const { data, isLoading } = useRead('getRegistryWithConfig', { id });
     return { item: data?.data, isLoading };
   },
+  Header: {
+    Indicator: undefined,
+    ActionButtons: undefined
+  }
 };

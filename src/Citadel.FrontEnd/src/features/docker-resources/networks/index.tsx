@@ -1,6 +1,6 @@
 import { Network } from 'lucide-react';
 import { NetworksTable } from './table';
-import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
+import { RequiredComponents, RequiredFormComponents, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { NetworkDropdownActions, NetworkGroupActions } from './actions';
 import { ActionBar } from '@/components/custom/action-bar';
@@ -29,10 +29,14 @@ export const NetworkComponents: RequiredComponents = {
         v.id?.substring(0, 12).toLowerCase().includes(s),
     );
   },
+};
+
+export const NetworkFormComponents: RequiredFormComponents = {
+  Header: {
+    Indicator: undefined,
+    ActionButtons: undefined,
+  },
   Form: ({ mode }) => {
-      return <NetworkForm mode={mode} />;
-    },
-    useFormData: function (_: string | undefined) {
-      return {};
-    },
+    return <NetworkForm mode={mode} />;
+  },
 };

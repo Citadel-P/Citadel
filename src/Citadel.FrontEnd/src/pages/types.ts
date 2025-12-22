@@ -32,12 +32,21 @@ export interface RequiredComponents<T = any> {
 
   /** Optional helper to filter items by search term */
   filterItems?: (items: T[], search: string) => T[];
+}
 
-  /** Form data (edit/add) */
+/**
+ * Encapsulates the logic and UI for the resource mutation page (Create/Edit)
+ */
+export interface RequiredFormComponents<T = any> {
+  Header: {
+    Indicator: React.FC<{ resource: T }>;
+    ActionButtons: React.FC<{ resource: T }>;
+  };
+  /** The React component responsible for rendering the input form. */
   Form?: React.FC<ResourceFormProps<T>>;
 
-  /** Form data hook */
-  useFormData?: (id: string | undefined) => T;
+  /** Fetches existing data for 'Edit' mode based on the provided ID. . */
+  useFormData?: (id: string | undefined) => { item?: RequiredFormFields; isLoading: boolean };
 }
 
 /**
@@ -108,3 +117,5 @@ export type DropdownActionComponent<T = any> = React.FC<{
   resource: T;
   onAction?: (actionKey: string, actionData?: ActionData) => void;
 }>;
+
+export type RequiredFormFields = { name: string; description: string; status: unknown };

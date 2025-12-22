@@ -1,6 +1,6 @@
 import { HardDrive } from 'lucide-react';
 import { VolumesTable } from './table';
-import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
+import { RequiredComponents, RequiredFormComponents, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { ActionBar } from '@/components/custom/action-bar';
 import { VolumeDropdownActions, VolumeGroupActions } from './actions';
@@ -30,10 +30,14 @@ export const VolumeComponents: RequiredComponents = {
         v.id?.substring(0, 12).toLowerCase().includes(s),
     );
   },
+};
+
+export const VolumeFormComponents: RequiredFormComponents = {
+  Header: {
+    Indicator: undefined,
+    ActionButtons: undefined,
+  },
   Form: ({ mode }) => {
     return <VolumeForm mode={mode} />;
-  },
-  useFormData: function (_: string | undefined) {
-    return {};
   },
 };

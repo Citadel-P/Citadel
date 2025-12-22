@@ -1,5 +1,5 @@
 import { Cable } from 'lucide-react';
-import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
+import { RequiredComponents, RequiredFormComponents, RequiredFormFields, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { ActionBar } from '@/components/custom/action-bar';
 import { DeploymentDropdownActions, DeploymentGroupActions } from './actions';
@@ -30,11 +30,17 @@ export const DeploymentComponents: RequiredComponents = {
         v.id?.substring(0, 12).toLowerCase().includes(s),
     );
   },
+};
 
+export const DeploymentFormComponents: RequiredFormComponents = {
+  Header: {
+    Indicator: undefined,
+    ActionButtons: undefined,
+  },
   Form: ({ mode, resource }) => {
     return <DeploymentForm mode={mode} resource={resource} />;
   },
-  useFormData: function (id: string | undefined) {
+  useFormData: function (id?: string): { item?: RequiredFormFields; isLoading: boolean } {
     const { data, isLoading } = useRead('getRegistryWithConfig', { id });
     return { item: data?.data, isLoading };
   },
