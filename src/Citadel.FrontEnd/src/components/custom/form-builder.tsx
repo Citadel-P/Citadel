@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect, useRef, memo } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef, memo, Ref } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Eye, History, Save, X } from 'lucide-react';
@@ -177,23 +177,32 @@ const SmartField = memo(SmartFieldImpl) as typeof SmartFieldImpl;
 
 export const FieldInput = ({
   value,
+  autoFocus,
   onChange,
+  onKeyDown,
   placeholder,
   type,
   disabled,
   className,
+  ref,
 }: {
   value?: string;
+  autoFocus?: boolean;
   onChange: (v: string) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   placeholder?: string;
   type?: string;
   disabled?: boolean;
   className?: string;
+  ref?: Ref<HTMLInputElement> | undefined;
 }) => (
   <Input
     disabled={disabled}
     type={type}
+    ref={ref}
+    autoFocus={autoFocus}
     value={value ?? ''}
+    onKeyDown={onKeyDown}
     onChange={(e) => onChange(e.target.value)}
     placeholder={placeholder}
     className={cn('max-w-[400px] max-h-[36px]', className)}

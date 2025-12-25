@@ -715,8 +715,8 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
             items: [
               defineField({
                 key: 'spec.loggingConfig.driver',
-                label: 'Driver',
-                description: 'The logging driver to use for this container.',
+                label: 'Logging Driver',
+                description: 'Select how this container’s logs are collected and stored.',
                 render: (value, set) => (
                   <ItemSelector
                     collection={logging_drivers}
@@ -738,7 +738,7 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
               defineField({
                 key: 'spec.loggingConfig.options',
                 label: 'Options',
-                description: 'Driver-specific options.',
+                description: 'Driver-specific configuration options for the logging driver.',
                 render: (value, set) => (
                   <MonacoToDictionaryEditor
                     value={value}

@@ -16,17 +16,18 @@ export const CopyToClipboard = ({
   const [copyCmd, setCopyCmd] = useCopyToClipboard(3000);
 
   return (
-    <div className={cn('flex gap-0.5 items-center group', groupClassName)}>
-      <div className={cn('break-all md:break-normal', textClassName)}>
+    <div className={cn('flex gap-0.5 items-center group min-w-0', groupClassName)}>
+      <div className={cn('truncate whitespace-nowrap overflow-hidden', textClassName)} title={textToCopy}>
         {transform ? transform(textToCopy) : textToCopy}
       </div>
+
       <button
         aria-label="Copy to clipboard"
         className={cn(
-          'rounded-full ml-1 px-1.5 py-1.5 hover:bg-foreground/10 text-sm font-semibold',
+          'shrink-0 rounded-full px-1.5 py-1.5 hover:bg-foreground/10',
           copyCmd ? 'visible' : 'invisible group-hover:visible group-hover/rowid:visible focus-visible:visible',
         )}
-        onClick={() => setCopyCmd(textToCopy ?? '')}>
+        onClick={() => setCopyCmd(textToCopy)}>
         {copyCmd ? <CheckCheck className="w-3 h-3 text-green-500" /> : <Clipboard className="w-3 h-3 text-primary" />}
       </button>
     </div>
