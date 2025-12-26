@@ -717,7 +717,7 @@ export function FormShell<T>({
       <div className="flex gap-6">
         {/* Sidebar (xl and up) */}
         <aside className="hidden xl:block relative pr-6 border-r">
-          <div className="sticky top-16 hidden xl:flex flex-col gap-8 w-[140px] h-fit pb-24">
+          <div className="sticky top-26 hidden xl:flex flex-col gap-8 w-[140px] h-fit pb-24">
             {title && <p className="text-sm font-semibold text-muted-foreground mb-2">{title}</p>}
 
             {sections.map((sectionKey) => {

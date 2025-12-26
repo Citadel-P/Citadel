@@ -38,15 +38,23 @@ export interface RequiredComponents<T = any> {
  * Encapsulates the logic and UI for the resource mutation page (Create/Edit)
  */
 export interface RequiredFormComponents<T = any> {
-  Header: {
-    Indicator: React.FC<{ resource: T }>;
-    ActionButtons: React.FC<{ resource: T }>;
+  AddForm: {
+    /** The component responsible for rendering the main Add form. */
+    Content?: React.FC;
   };
-  /** The React component responsible for rendering the input form. */
-  Form?: React.FC<ResourceFormProps<T>>;
 
-  /** Fetches existing data for 'Edit' mode based on the provided ID. . */
-  useFormData?: (id: string | undefined) => { item?: RequiredFormFields; isLoading: boolean };
+  EditForm: {
+    Header: {
+      Indicator: React.FC<{ resource: T }>;
+      ActionButtons: React.FC<{ resource: T }>;
+    };
+    /** Tabs configuration */
+    Tabs: (TabElement<T> & {
+      useData?: (id: string | undefined) => { item?: RequiredFormFields; isLoading: boolean };
+    })[];
+    /** Main Data hook for this workload */
+    useData: (id: string) => { item?: RequiredFormFields; isLoading: boolean };
+  };
 }
 
 /**
@@ -61,17 +69,7 @@ export interface RequiredDockerInfoComponents<T = any> {
   /** Optional subheader */
   SubHeader?: React.FC<{ resource: T }>;
   /** Tabs configuration for tabbed resources */
-  Tabs: {
-    /** Tab label shown in the UI */
-    label: string;
-
-    /** Component(s) for this tab */
-    Content: React.FC<{ resource: T }>;
-
-    /** Data hook for this resource */
-    useData?: (platformId: string, resourceId: string) => ResourceInfoHookResult<T>;
-  }[];
-
+  Tabs: (TabElement<T> & { useData?: (platformId: string, resourceId: string) => ResourceInfoHookResult<T> })[];
   /** Data hook for this resource */
   useData: (platformId: string, resourceId: string) => ResourceInfoHookResult<T>;
 }
@@ -79,6 +77,13 @@ export interface RequiredDockerInfoComponents<T = any> {
 export interface ResourceDataHookResult<T> {
   items: T[];
   isLoading: boolean;
+}
+
+export interface TabElement<T> {
+  /** Tab label shown in the UI */
+  label: string;
+  /** Component(s) for this tab */
+  Content: React.FC<{ resource: T }>;
 }
 
 interface ResourceInfoHookResult<T> {

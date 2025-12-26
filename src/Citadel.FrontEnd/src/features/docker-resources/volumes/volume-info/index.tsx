@@ -24,10 +24,6 @@ export const VolumeInfoComponents: RequiredDockerInfoComponents<DockerVolumeResu
       label: 'Inspect',
       Content: ({ resource }) => <InspectVolumeWrapper resource={resource} />,
     },
-    {
-      label: 'Activity',
-      Content: () => <div>Activity</div>,
-    },
   ],
   useData: (platformId: string, resourceId: string) => {
     const { data, isLoading, error } = useRead(`inspectVolume`, { platformId, name: resourceId });

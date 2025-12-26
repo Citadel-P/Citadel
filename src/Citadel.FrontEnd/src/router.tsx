@@ -4,12 +4,11 @@ import NotFound from '@/pages/not-found';
 import { useAuthContext } from './features/auth/auth-context';
 import Loader from './components/ui/loader';
 import { lazy, Suspense } from 'react';
-import { ResourceFormPage } from './pages/resource-form-page';
+import { ResourceForm } from './pages/resource-form';
 
 const Login = lazy(() => import('@/features/auth/login'));
 const Resources = lazy(() => import('@/pages/resource'));
-const ResourceInfo = lazy(() => import('@/pages/docker-resource-info'));
-const AddPlatform = lazy(() => import('@/pages/add-platform-page'));
+const ResourceInfo = lazy(() => import('@/pages/resource-docker-info'));
 
 export const REDIRECT_TO_KEY = 'redirectTo';
 
@@ -28,15 +27,14 @@ export const Router = () => {
 
               <Route path="platforms">
                 <Route index element={<Resources />} />
-                <Route path="add" element={<AddPlatform />} />
                 <Route path=":platformId/:type" element={<Resources />} />
-                <Route path=":platformId/:type/add" element={<ResourceFormPage mode="add" />} />
+                <Route path=":platformId/:type/add" element={<ResourceForm mode="add" />} />
                 <Route path=":platformId/:type/:resourceId" element={<ResourceInfo />} />
               </Route>
 
               <Route path=":type" element={<Resources />} />
-              <Route path=":type/add" element={<ResourceFormPage mode="add" />} />
-              <Route path=":type/edit/:id" element={<ResourceFormPage mode="edit" />} />
+              <Route path=":type/add" element={<ResourceForm mode="add" />} />
+              <Route path=":type/edit/:id" element={<ResourceForm mode="edit" />} />
 
               <Route path="*" element={<NotFound />} />
             </Route>

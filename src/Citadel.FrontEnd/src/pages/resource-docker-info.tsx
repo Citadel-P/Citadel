@@ -1,19 +1,18 @@
-import { useResourceParamType, useLocalStorage, useStickySentinel } from '@/lib/hooks';
-import { cn } from '@/lib/utils';
+import { useResourceParamType } from '@/lib/hooks';
 import { useParams } from 'react-router';
 import { RequiredDockerInfoComponents } from './types';
 import { DockerResourceType } from '@/api/types';
 import NotFound from './not-found';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Loader from '@/components/ui/loader';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { ProblemDetails } from '@/api/generated/api.types';
 import { DockerResourceInfoComponents } from '@/features';
 import { useSegmentTitle } from '@/lib/atoms';
 import { useEffect } from 'react';
+import { ResourceTabs } from '@/components/custom/resource-tabs';
 
-const DockerResourceInfoPage = () => {
+const ResourceDockerInfoPage = () => {
   const type = useResourceParamType()!;
 
   const Components = DockerResourceInfoComponents[type as DockerResourceType];
@@ -40,12 +39,8 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
   const tabs = Components.Tabs ?? [];
   const Header = Components.Header;
 
-  const [activeTab, setActiveTab] = useLocalStorage(
-    `${type}-info-${resourceId}.active-tab`,
-    tabs[0]?.label ?? 'default',
-  );
+  const key = `${type}-info-${resourceId}`;
   const errorDetail = (error as any)?.error as ProblemDetails;
-  const { sentinelRef, isStuck } = useStickySentinel(32);
 
   return (
     <div className="flex-col justify-between relative">
@@ -80,29 +75,7 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
               {/* Sub Header */}
               {Components.SubHeader && <Components.SubHeader resource={resource} />}
               {/* Tabs */}
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-2">
-                {/* Sentinel to detect when the tabs reach sticky position */}
-                <div ref={sentinelRef} aria-hidden className="h-px" />
-                <div
-                  className={cn(
-                    'sticky top-11.5 z-30 bg-background left-0 right-0 transition-all duration-200',
-                    isStuck ? '-mx-4' : 'mx-0',
-                  )}>
-                  <TabsList className={cn('w-full overflow-x-auto', isStuck && 'border-b rounded-none py-2')}>
-                    {tabs.map((tab) => (
-                      <TabsTrigger key={tab.label} value={tab.label}>
-                        {tab.label}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-                </div>
-
-                {tabs.map((tab) => (
-                  <TabsContent key={tab.label} value={tab.label}>
-                    <tab.Content resource={resource} />
-                  </TabsContent>
-                ))}
-              </Tabs>
+              <ResourceTabs localKey={key} resource={resource as any} tabs={tabs} />
             </div>
           )}
         </div>
@@ -116,4 +89,4 @@ export type ResourceInfoViewProps<T = any> = {
   Components: RequiredDockerInfoComponents<T>;
 };
 
-export default DockerResourceInfoPage;
+export default ResourceDockerInfoPage;

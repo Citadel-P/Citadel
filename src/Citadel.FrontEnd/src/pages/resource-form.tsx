@@ -12,20 +12,46 @@ import { Textarea } from '@/components/ui/textarea';
 
 import NotFound from './not-found';
 import { RequiredFormFields } from './types';
+import { ResourceType } from '@/api/types';
+import Loader from '@/components/ui/loader';
+import { ResourceTabs } from '@/components/custom/resource-tabs';
 
-export const ResourceFormPage = ({ mode }: { mode: 'add' | 'edit' }) => {
+export const ResourceForm = ({ mode }: { mode: 'add' | 'edit' }) => {
   const type = useResourceParamType();
+  if (!type) return <NotFound />;
+
+  return (
+    <PageShell mode={mode}>{mode === 'add' ? <AddFormPage type={type} /> : <EditFormPage type={type} />}</PageShell>
+  );
+};
+
+const AddFormPage = ({ type }: { type: ResourceType }) => {
+  const Components = ResourceFormComponents[type]?.AddForm;
+
+  if (!Components?.Content) return <NotFound />;
+
+  return (
+    <>
+      <AddHeader type={type} />
+      <Components.Content />
+    </>
+  );
+};
+
+const EditFormPage = ({ type }: { type: ResourceType }) => {
   const { id } = useParams();
-
   const { mutateAsync: updateResource } = useMutate(`update${type}` as any);
+  const [resource, setResource] = useState<RequiredFormFields | null>(null);
 
-  const Components = ResourceFormComponents[type];
-  const formData = Components?.useFormData?.(id);
+  const Components = ResourceFormComponents[type]?.EditForm;
+  const formData = Components?.useData?.(id!);
 
   const item = formData?.item;
   const isLoading = formData?.isLoading;
 
-  const [resource, setResource] = useState<RequiredFormFields | null>(null);
+  const tabs = Components?.Tabs ?? [];
+  const Header = Components?.Header;
+  const localKey = `${type}-workload-${id}.active-tab`;
 
   useEffect(() => {
     if (item) {
@@ -34,11 +60,8 @@ export const ResourceFormPage = ({ mode }: { mode: 'add' | 'edit' }) => {
   }, [item]);
 
   if (!type) return <NotFound />;
-  if (!Components?.Form) return <NotFound />;
-
-  if (mode === 'edit' && (isLoading || !resource)) {
-    return null;
-  }
+  if (!tabs.length) return <NotFound />;
+  if (!Header) return <span>Workload header is required</span>;
 
   const updateField = async (patch: Partial<RequiredFormFields>) => {
     if (!resource) return;
@@ -51,28 +74,27 @@ export const ResourceFormPage = ({ mode }: { mode: 'add' | 'edit' }) => {
     }
   };
 
-  return (
-    <PageShell>
-      {mode === 'add' ? (
-        <AddHeader type={type} />
-      ) : (
-        <EditHeader
-          item={resource}
-          Indicator={Components.Header.Indicator}
-          Actions={Components.Header.ActionButtons}
-          onRename={(name) => updateField({ name })}
-          onChangeDescription={(description) => updateField({ description })}
-        />
-      )}
+  if (isLoading || !resource) return <Loader />;
 
-      <Components.Form mode={mode} resource={resource} />
-    </PageShell>
+  return (
+    <>
+      <EditHeader
+        item={resource}
+        Indicator={Header.Indicator}
+        Actions={Header.ActionButtons}
+        onRename={(name) => updateField({ name })}
+        onChangeDescription={(description) => updateField({ description })}
+      />
+      <ResourceTabs localKey={localKey} resource={resource} tabs={tabs} />
+    </>
   );
 };
 
-const PageShell = ({ children }: { children: React.ReactNode }) => (
+const PageShell = ({ mode, children }: { mode: 'add' | 'edit'; children: React.ReactNode }) => (
   <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
-    <div className="w-full rounded-lg border bg-background p-4 flex flex-col gap-6">{children}</div>
+    <div className={`w-full rounded-lg border bg-background p-4 flex flex-col ${mode === 'add' ? 'gap-6' : 'gap-0.5'}`}>
+      {children}
+    </div>
   </div>
 );
 
@@ -101,7 +123,7 @@ const EditHeader = <T extends RequiredFormFields>({
   onChangeDescription,
 }: EditHeaderProps<T>) => (
   <div className="flex flex-col sm:flex-row gap-4 items-start">
-    <div className="flex items-center gap-2 flex-1 min-w-0">
+    <div className="flex items-center gap-2 flex-1 min-w-0 w-full">
       <Indicator resource={item} />
       <div className="flex flex-col flex-1 min-w-0">
         <EditableTitle value={item.name} onSave={onRename} />
@@ -186,9 +208,9 @@ const EditableDescription = ({ value = '', onSave }: { value?: string; onSave?: 
 
   if (!edit.editing)
     return (
-      <div className="group flex items-center gap-2 w-full">
+      <div className="group flex items-center gap-2 w-full min-w-0">
         <div
-          className="text-sm text-muted-foreground leading-relaxed truncate cursor-text focus:outline-none"
+          className="text-sm text-muted-foreground leading-relaxed truncate cursor-text focus:outline-none min-w-0"
           onClick={edit.start}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {

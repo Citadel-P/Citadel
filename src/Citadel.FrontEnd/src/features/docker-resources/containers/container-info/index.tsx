@@ -37,10 +37,6 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<DockerContain
       label: 'Stats',
       Content: ({ resource }) => <ContainerStats resource={resource} />,
     },
-    {
-      label: 'Activity',
-      Content: () => <div>Activity</div>,
-    },
   ],
 
   useData: (platformId: string, resourceId: string) => {

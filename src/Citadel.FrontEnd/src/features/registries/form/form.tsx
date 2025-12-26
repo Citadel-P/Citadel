@@ -158,29 +158,34 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
               />
             ),
           }),
-          defineGroupField({
-            id: 'details',
-            label: 'Details',
-            items: [
-              defineField({
-                key: 'name',
-                label: 'Name',
-                description: 'Provide a unique name to identify this registry.',
-                required: true,
-                validate: (v) => (!new RegExp(Constants.validNameIdentifier).test(v) ? 'Invalid name format' : null),
-                render: (value, set) => (
-                  <FieldInput value={value ?? ''} onChange={(v) => set({ name: v })} placeholder="my-registry" />
-                ),
-              }),
-              defineField({
-                key: 'description',
-                label: 'Description',
-                required: false,
-                description: 'Optional notes to describe the registry’s purpose or usage.',
-                render: (val, set) => <FieldTextArea value={val} onChange={(v) => set({ description: v })} />,
-              }),
-            ],
-          }),
+          ...(mode === 'add'
+            ? [
+                defineGroupField<RegistryInput>({
+                  id: 'details',
+                  label: 'Details',
+                  items: [
+                    defineField({
+                      key: 'name',
+                      label: 'Name',
+                      description: 'Provide a unique name to identify this registry.',
+                      required: true,
+                      validate: (v) =>
+                        !new RegExp(Constants.validNameIdentifier).test(v) ? 'Invalid name format' : null,
+                      render: (value, set) => (
+                        <FieldInput value={value ?? ''} onChange={(v) => set({ name: v })} placeholder="my-registry" />
+                      ),
+                    }),
+                    defineField({
+                      key: 'description',
+                      label: 'Description',
+                      required: false,
+                      description: 'Optional notes to describe the registry’s purpose or usage.',
+                      render: (val, set) => <FieldTextArea value={val} onChange={(v) => set({ description: v })} />,
+                    }),
+                  ],
+                }),
+              ]
+            : []),
 
           defineField({
             label: 'Status',

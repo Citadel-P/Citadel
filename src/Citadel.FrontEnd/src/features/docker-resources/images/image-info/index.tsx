@@ -37,10 +37,6 @@ export const ImageInfoComponents: RequiredDockerInfoComponents<InspectImageView>
       label: 'Inspect',
       Content: ({ resource }) => <InspectImageWrapper resource={resource} />,
     },
-    {
-      label: 'Activity',
-      Content: () => <div>Activity</div>,
-    },
   ],
 
   useData: (platformId: string, resourceId: string) => {

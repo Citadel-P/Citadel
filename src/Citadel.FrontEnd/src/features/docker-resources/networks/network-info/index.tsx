@@ -36,10 +36,6 @@ export const NetworkInfoComponents: RequiredDockerInfoComponents<DockerNetworkDe
       label: 'Inspect',
       Content: ({ resource }) => <InspectNetworkWrapper resource={resource} />,
     },
-    {
-      label: 'Activity',
-      Content: () => <div>Activity</div>,
-    },
   ],
   useData: (platformId: string, resourceId: string) => {
     const { data, isLoading, error } = useRead(`inspectNetwork`, { platformId, networkId: resourceId });
