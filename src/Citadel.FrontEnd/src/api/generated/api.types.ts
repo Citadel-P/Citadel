@@ -95,13 +95,6 @@ export enum DeploymentStatus {
   Stopped = "Stopped",
 }
 
-export enum DeploymentSource {
-  UI = "UI",
-  Git = "Git",
-  API = "API",
-  CLI = "CLI",
-}
-
 export enum ContainerStateStatus {
   Unknown = "Unknown",
   Created = "Created",
@@ -533,8 +526,6 @@ export interface DeploymentInput {
 
 export interface DeploymentSpec {
   image: DeploymentImageInfo;
-  workingDir: null | string;
-  user: null | string;
   lifeCycleSpec: null | LifeCycleSpec;
   resourceSpec: null | ResourceSpec;
   labels: null | object;
@@ -542,44 +533,7 @@ export interface DeploymentSpec {
   envVars: null | any[];
   volumes: null | any[];
   networks: null | any[];
-  entryPoint: null | any[];
   command: null | any[];
-  security?: null | SecurityConfig;
-  loggingConfig?: null | LoggingConfig;
-  healthCheck?: null | HealthCheckConfig;
-}
-
-export interface DeploymentVersionView {
-  /** @format uuid */
-  id: string;
-  /** @format uuid */
-  deploymentId: string;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  version: number | string;
-  /** @format uuid */
-  platformId: string;
-  spec: DeploymentSpec;
-  status: DeploymentStatus;
-  source: DeploymentSource;
-  /** @format uuid */
-  createdBy: string;
-  /** @format date-time */
-  createdAt: any;
-  /** @format date-time */
-  updatedAt: any;
-  /** @format uuid */
-  updatedBy: null | string;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  rolledBackFromVersion: null | number | string;
-  gitRepoUrl: null | string;
-  gitPath: null | string;
-  gitCommitHash: null | string;
 }
 
 export interface DeploymentView {
@@ -587,15 +541,14 @@ export interface DeploymentView {
   id: string;
   name: string;
   description: null | string;
+  /** @format uuid */
+  platformId: string;
   /** @format date-time */
   createdAt: any;
-  /** @format date-time */
-  updatedAt: any;
   /** @format uuid */
-  createdBy: string;
-  /** @format uuid */
-  updatedBy: null | string;
-  activeVersion: null | DeploymentVersionView;
+  createdByActorId: string;
+  status: DeploymentStatus;
+  spec: DeploymentSpec;
 }
 
 export interface DeploymentsView {

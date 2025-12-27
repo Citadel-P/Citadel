@@ -6136,19 +6136,9 @@
           }
         }
       },
-      "DeploymentSource": {
-        "enum": [
-          "UI",
-          "Git",
-          "API",
-          "CLI"
-        ]
-      },
       "DeploymentSpec": {
         "required": [
           "image",
-          "workingDir",
-          "user",
           "lifeCycleSpec",
           "resourceSpec",
           "labels",
@@ -6156,25 +6146,12 @@
           "envVars",
           "volumes",
           "networks",
-          "entryPoint",
           "command"
         ],
         "type": "object",
         "properties": {
           "image": {
             "$ref": "#/components/schemas/DeploymentImageInfo"
-          },
-          "workingDir": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "user": {
-            "type": [
-              "null",
-              "string"
-            ]
           },
           "lifeCycleSpec": {
             "oneOf": [
@@ -6241,15 +6218,6 @@
               "type": "string"
             }
           },
-          "entryPoint": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
           "command": {
             "type": [
               "null",
@@ -6258,36 +6226,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "security": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SecurityConfig"
-              }
-            ]
-          },
-          "loggingConfig": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/LoggingConfig"
-              }
-            ]
-          },
-          "healthCheck": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/HealthCheckConfig"
-              }
-            ]
           }
         }
       },
@@ -6303,111 +6241,16 @@
           "Stopped"
         ]
       },
-      "DeploymentVersionView": {
-        "required": [
-          "id",
-          "deploymentId",
-          "version",
-          "platformId",
-          "spec",
-          "status",
-          "source",
-          "createdBy",
-          "createdAt",
-          "updatedAt",
-          "updatedBy",
-          "rolledBackFromVersion",
-          "gitRepoUrl",
-          "gitPath",
-          "gitCommitHash"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "deploymentId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "version": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
-          "platformId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "spec": {
-            "$ref": "#/components/schemas/DeploymentSpec"
-          },
-          "status": {
-            "$ref": "#/components/schemas/DeploymentStatus"
-          },
-          "source": {
-            "$ref": "#/components/schemas/DeploymentSource"
-          },
-          "createdBy": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "createdAt": {
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "format": "date-time"
-          },
-          "updatedBy": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "format": "uuid"
-          },
-          "rolledBackFromVersion": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
-          "gitRepoUrl": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "gitPath": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "gitCommitHash": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      },
       "DeploymentView": {
         "required": [
           "id",
           "name",
           "description",
+          "platformId",
           "createdAt",
-          "updatedAt",
-          "createdBy",
-          "updatedBy",
-          "activeVersion"
+          "createdByActorId",
+          "status",
+          "spec"
         ],
         "type": "object",
         "properties": {
@@ -6424,32 +6267,22 @@
               "string"
             ]
           },
-          "createdAt": {
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "format": "date-time"
-          },
-          "createdBy": {
+          "platformId": {
             "type": "string",
             "format": "uuid"
           },
-          "updatedBy": {
-            "type": [
-              "null",
-              "string"
-            ],
+          "createdAt": {
+            "format": "date-time"
+          },
+          "createdByActorId": {
+            "type": "string",
             "format": "uuid"
           },
-          "activeVersion": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/DeploymentVersionView"
-              }
-            ]
+          "status": {
+            "$ref": "#/components/schemas/DeploymentStatus"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
           }
         }
       },

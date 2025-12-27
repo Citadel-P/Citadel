@@ -49,7 +49,8 @@ void Configure(WebApplication app)
 void AdditionalJsonOptions(JsonOptions options)
 {
     options.SerializerOptions.TypeInfoResolverChain.Add(ApplicationJsonContext.Default);
-    options.SerializerOptions.TypeInfoResolverChain.Add(RegistryJsonContext.Default);
+    //options.SerializerOptions.TypeInfoResolverChain.Add(DeploymentJsonContext.Default);
+    //options.SerializerOptions.TypeInfoResolverChain.Add(RegistryJsonContext.Default);
     options.SerializerOptions.TypeInfoResolverChain.Add(ProblemJsonContext.Default);
     options.SerializerOptions.Converters.AddGenericEnumConverters();
     Citadel.GeneratedConverters.SafeEnumConverters.Register(options.SerializerOptions);

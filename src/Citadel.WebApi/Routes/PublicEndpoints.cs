@@ -463,7 +463,7 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("listDeployments");
 
-        deployment.MapGet("/{deploymentId}", Deployments.GetDeployment)
+        deployment.MapGet("/{deploymentId}", Deployments.Get)
             .WithSummary("Get deployment by Id")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)

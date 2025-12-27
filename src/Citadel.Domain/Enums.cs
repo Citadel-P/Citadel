@@ -90,6 +90,11 @@ public enum AppPermission
     Registry_Create,
     Registry_Update,
     Registry_Delete,
+    // Deployments
+    Deployment_View,
+    Deploymen_Create,
+    Deploymen_Update,
+    Deploymen_Delete,
 }
 
 public enum DockerHubTagStatus

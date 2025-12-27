@@ -1,9 +1,13 @@
-﻿using Hosting.Extensions;
+﻿using Application.Features.Deployments.Queries;
+using Domain.Entities;
+using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
 using WebApi.Routes.Endpoints.Resources.Deployments;
+using Hosting.Common.MergePatch;
+using Application.Features.Deployments.Commands;
 
 namespace WebApi.Routes.Endpoints;
 
@@ -11,24 +15,20 @@ public static class Deployments
 {
     public static async Task<Results<Ok<DeploymentsView>, ProblemHttpResult>> List(IMediator mediator, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
-        //var result = await mediator.Send(new List(), cancellationToken);
-        //return EndpointHandlers.HandleResult(result, DeploymentsView.Map);
+        var result = await mediator.Send(new GetAllDeployments(), cancellationToken);
+        return EndpointHandlers.HandleResult(result, DeploymentsView.Map);
     }
 
-    public static async Task<Results<Ok<DeploymentView>, ProblemHttpResult>> GetDeployment(IMediator mediator, [Description("The deployment id")] Guid deploymentId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<DeploymentView>, ProblemHttpResult>> Get(IMediator mediator, [Description("The deployment id")] Guid deploymentId, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
-
-        //var result = await mediator.Send(new GetDeployment(), cancellationToken);
-        //return EndpointHandlers.HandleResult(result, DeploymentView.Map);
+        var result = await mediator.Send(new GetDeployment(deploymentId), cancellationToken);
+        return EndpointHandlers.HandleResult(result, DeploymentView.Map);
     }
 
     public static async Task<Results<Ok<DeploymentView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] DeploymentInput request, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
-        //var result = await mediator.Send(request.ToCommand(), cancellationToken);
-        //return EndpointHandlers.HandleResult(result, DeploymentView.Map);
+        var result = await mediator.Send(request.ToCommand(), cancellationToken);
+        return EndpointHandlers.HandleResult(result, DeploymentView.Map);
     }
 
     public static async Task<Results<NoContent, ProblemHttpResult>> Delete(IMediator mediator, [FromBody] DeleteDeploymentsInput request, CancellationToken cancellationToken)
@@ -43,9 +43,8 @@ public static class Deployments
         DeploymentInputPatchDocument patchInput,
         CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
-        //var mapped = patchInput.Map<RegistryInput, Registry>();
-        //var result = await mediator.Send(new PatchRegistry(id, mapped), cancellationToken);
-        //return EndpointHandlers.HandleResult(result, RegistryView.Map);
+        var mapped = patchInput.Map<DeploymentInput, Deployment>();
+        var result = await mediator.Send(new PatchDeployment(id, mapped), cancellationToken);
+        return EndpointHandlers.HandleResult(result, DeploymentView.Map);
     }
 }

@@ -8,7 +8,6 @@ import {
   ContainerRestartPolicy,
   ResourceSpec,
   StopSignal,
-  LoggingDriverType,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -114,45 +113,6 @@ const stop_signals = {
   [StopSignal.SIGKILL]: {
     label: StopSignal.SIGKILL,
     description: 'Forcefully stop the process immediately.',
-  },
-};
-
-const logging_drivers = {
-  [LoggingDriverType.JsonFile]: {
-    label: 'JSON File',
-    description: 'Default. Writes logs to JSON files. Supports log rotation options.',
-  },
-  [LoggingDriverType.Syslog]: {
-    label: 'Syslog',
-    description: 'Writes logging messages to the syslog facility.',
-  },
-  [LoggingDriverType.Journald]: {
-    label: 'Journald',
-    description: 'Writes log messages to the systemd journal.',
-  },
-  [LoggingDriverType.Gelf]: {
-    label: 'GELF',
-    description: 'Graylog Extended Log Format.',
-  },
-  [LoggingDriverType.Fluentd]: {
-    label: 'Fluentd',
-    description: 'Forwards log messages to Fluentd.',
-  },
-  [LoggingDriverType.Awslogs]: {
-    label: 'Awslogs',
-    description: 'Writes log messages to Amazon CloudWatch Logs',
-  },
-  [LoggingDriverType.Gcplogs]: {
-    label: 'Gcplogs',
-    description: 'Writes log messages to Google Cloud Platform (GCP) Logging',
-  },
-  [LoggingDriverType.Splunk]: {
-    label: 'Splunk',
-    description: 'Writes log messages to splunk using the HTTP Event Collector',
-  },
-  [LoggingDriverType.None]: {
-    label: 'None',
-    description: 'Disables logging for the container.',
   },
 };
 
@@ -598,94 +558,26 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
               }),
             ],
           }),
-          defineGroupField({
-            id: 'execution',
-            label: 'Execution',
-            items: [
-              defineField({
-                key: 'spec.user',
-                label: 'User',
-                description: 'Run commands as this user inside the container.',
-                render: (val, set) => (
-                  <FieldInput
-                    value={val}
-                    onChange={(user) =>
-                      set((prev) => ({
-                        spec: {
-                          ...(prev.spec as DeploymentInput['spec']),
-                          user,
-                        },
-                      }))
-                    }
-                    placeholder="e.g. appuser"
-                  />
-                ),
-              }),
-
-              defineField({
-                key: 'spec.workingDir',
-                label: 'Working Directory',
-                description: 'Default directory for command execution.',
-                render: (val, set) => (
-                  <FieldInput
-                    value={val}
-                    onChange={(workingDir) =>
-                      set((prev) => ({
-                        spec: {
-                          ...(prev.spec as DeploymentInput['spec']),
-                          workingDir,
-                        },
-                      }))
-                    }
-                    placeholder="e.g. /app"
-                  />
-                ),
-              }),
-
-              defineField({
-                label: 'Command',
-                key: 'spec.command',
-                description: 'Overrides the image default command.',
-                required: false,
-                render: (value, set) => (
-                  <MonacoToArrayEditor
-                    value={value}
-                    helperText="# --housekeeping_interval=5s"
-                    language="key_value"
-                    onChange={(cmd: string[] | undefined) =>
-                      set((prev) => ({
-                        spec: {
-                          ...prev.spec!,
-                          command: cmd ?? [],
-                        },
-                      }))
-                    }
-                  />
-                ),
-              }),
-
-              defineField({
-                label: 'Entry Point',
-                key: 'spec.entryPoint',
-                description: 'Overrides the image entrypoint.',
-                required: false,
-                render: (value, set) => (
-                  <MonacoToArrayEditor
-                    value={value}
-                    helperText="# /bin/sh"
-                    language="string_list"
-                    onChange={(e: string[] | undefined) =>
-                      set((prev) => ({
-                        spec: {
-                          ...prev.spec!,
-                          entryPoint: e ?? [],
-                        },
-                      }))
-                    }
-                  />
-                ),
-              }),
-            ],
+          defineField({
+            label: 'Command',
+            key: 'spec.command',
+            description: 'Overrides the image default command.',
+            required: false,
+            render: (value, set) => (
+              <MonacoToArrayEditor
+                value={value}
+                helperText="# --housekeeping_interval=5s"
+                language="key_value"
+                onChange={(cmd: string[] | undefined) =>
+                  set((prev) => ({
+                    spec: {
+                      ...prev.spec!,
+                      command: cmd ?? [],
+                    },
+                  }))
+                }
+              />
+            ),
           }),
 
           defineField({
@@ -707,58 +599,6 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                 }
               />
             ),
-          }),
-
-          defineGroupField({
-            id: 'logging',
-            label: 'Logging',
-            items: [
-              defineField({
-                key: 'spec.loggingConfig.driver',
-                label: 'Logging Driver',
-                description: 'Select how this container’s logs are collected and stored.',
-                render: (value, set) => (
-                  <ItemSelector
-                    collection={logging_drivers}
-                    value={value ?? 'json-file'}
-                    onChange={(driver) =>
-                      set((prev) => ({
-                        spec: {
-                          ...(prev.spec as DeploymentInput['spec']),
-                          loggingConfig: {
-                            ...(prev.spec?.loggingConfig ?? {}),
-                            driver: driver,
-                          },
-                        },
-                      }))
-                    }
-                  />
-                ),
-              }),
-              defineField({
-                key: 'spec.loggingConfig.options',
-                label: 'Options',
-                description: 'Driver-specific configuration options for the logging driver.',
-                render: (value, set) => (
-                  <MonacoToDictionaryEditor
-                    value={value}
-                    helperText="# max-size=10m"
-                    language="key_value"
-                    onChange={(options) =>
-                      set((prev) => ({
-                        spec: {
-                          ...(prev.spec as DeploymentInput['spec']),
-                          loggingConfig: {
-                            ...((prev.spec?.loggingConfig ?? {}) as any),
-                            options: options ?? {},
-                          },
-                        },
-                      }))
-                    }
-                  />
-                ),
-              }),
-            ],
           }),
         ],
       }),

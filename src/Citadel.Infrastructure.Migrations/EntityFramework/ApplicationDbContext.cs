@@ -1,5 +1,4 @@
 ﻿using Domain;
-using Domain.Entities;
 using Hosting.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -26,7 +25,6 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .RoleConfiguration()
             .UserTeamConfiguration()
             .DeploymentConfiguration()
-            .DeploymentVersionConfiguration()
             .ImageConfiguration();
 
         SeedDb(modelBuilder);
@@ -88,7 +86,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
         modelBuilder.Entity("Registry").HasData(new
         {
             Id =  Guid.Parse("a1de9601-7f3b-4f75-a11b-98533d063a0f"),
-            Name = Registry.DefaultRegistryName,
+            Name = Constants.DefaultRegistryName,
             Description = "Public Docker Hub Registry",
             RegistryHost = "hub.docker.com",
             CreatedByActorId = Constants.SystemId,
@@ -450,78 +448,25 @@ internal static class Configuration
 
         deployment.Property<string>("Name").HasColumnType("TEXT").IsRequired();
         deployment.Property<string>("Description").HasColumnType("TEXT").IsRequired(false);
-        deployment.Property<Guid?>("ActiveVersionId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
-        deployment.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired();
-        deployment.Property<DateTime?>("UpdatedAt").HasColumnType("TEXT").IsRequired();
         deployment.Property<string>("Status").HasColumnType("TEXT").IsRequired();
-        deployment.Property<Guid>("CreatedBy").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        deployment.Property<Guid?>("UpdatedBy").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
+        deployment.Property<string>("Spec").HasColumnType("TEXT").IsRequired();
+        deployment.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired();
+        deployment.Property<Guid>("CreatedByActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        deployment.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
 
         deployment
-            .HasOne("User")
-            .WithMany()
-            .HasForeignKey("CreatedBy")
-            .OnDelete(DeleteBehavior.Restrict);
-
-        deployment
-            .HasOne("User")
-            .WithMany()
-            .HasForeignKey("UpdatedBy")
-            .OnDelete(DeleteBehavior.Restrict);
-
-        deployment.HasIndex("CreatedBy").HasDatabaseName($"IX_{tableName}_CreatedBy");
-        deployment.HasIndex("UpdatedBy").HasDatabaseName($"IX_{tableName}_UpdatedBy");
-
-        return builder;
-    }
-
-    public static ModelBuilder DeploymentVersionConfiguration(this ModelBuilder builder)
-    {
-        var tableName = "DeploymentVersions";
-        var deploymentVersion = builder.Entity("DeploymentVersion");
-
-        deploymentVersion.ToTable(tableName);
-
-        deploymentVersion.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        deploymentVersion.HasKey("Id");
-
-        deploymentVersion.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        deploymentVersion.Property<int>("Version").HasColumnType("INTEGER").IsRequired();
-        deploymentVersion.Property<int?>("RolledBackFromVersion").HasColumnType("INTEGER").IsRequired(false);
-        deploymentVersion.Property<string>("Spec").HasColumnType("TEXT").IsRequired();
-        deploymentVersion.Property<string>("Source").HasColumnType("TEXT").IsRequired();
-        deploymentVersion.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired();
-        deploymentVersion.Property<Guid>("CreatedBy").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        deploymentVersion.Property<string>("GitRepoUrl").HasColumnType("TEXT");
-        deploymentVersion.Property<string>("GitPath").HasColumnType("TEXT");
-        deploymentVersion.Property<string>("GitCommitHash").HasColumnType("TEXT");
-
-        deploymentVersion
-            .HasOne("Platform")
-            .WithMany()
-            .HasForeignKey("PlatformId")
-            .OnDelete(DeleteBehavior.Cascade);
-
-        deploymentVersion
-            .HasOne("User")
-            .WithMany()
-            .HasForeignKey("CreatedBy")
-            .OnDelete(DeleteBehavior.Restrict);
-
-        deploymentVersion
-           .HasOne("User")
+           .HasOne("Platform")
            .WithMany()
-           .HasForeignKey("UpdatedBy")
-           .OnDelete(DeleteBehavior.Restrict);
+           .HasForeignKey("PlatformId")
+           .OnDelete(DeleteBehavior.Cascade);
 
-        deploymentVersion
-            .HasOne("Deployment")
-            .WithMany("Versions")
-            .HasForeignKey("DeploymentId")
-            .OnDelete(DeleteBehavior.Cascade);
+        deployment.HasIndex("Name").IsUnique().HasDatabaseName($"IX_{tableName}_Name");
 
-        deploymentVersion.HasIndex("CreatedBy").HasDatabaseName($"IX_{tableName}_CreatedBy");
-        deploymentVersion.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
+        deployment
+            .HasOne("Actor")
+            .WithMany()
+            .HasForeignKey("CreatedByActorId")
+            .OnDelete(DeleteBehavior.Restrict);
 
         return builder;
     }

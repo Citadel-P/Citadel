@@ -3,33 +3,32 @@ using Domain;
 using Domain.Entities;
 namespace WebApi.Routes.Endpoints.Resources.Deployments;
 
-public sealed record DeploymentsView(IEnumerable<DeploymentView> Deployments);
+public sealed record DeploymentsView(IEnumerable<DeploymentView> Deployments)
+{
+    internal static DeploymentsView Map(IEnumerable<Deployment> deployments) => new(
+        Deployments: deployments.Select(DeploymentView.Map)
+        );
+}
 
 public sealed record DeploymentView(
     Guid Id,
     string Name,
     string? Description,
-    DateTime CreatedAt,
-    DateTime UpdatedAt,
-    Guid CreatedBy,
-    Guid? UpdatedBy,
-    DeploymentVersionView? ActiveVersion
-    );
-
-public sealed record DeploymentVersionView(
-    Guid Id,
-    Guid DeploymentId,
-    int Version,
     Guid PlatformId,
-    DeploymentSpec Spec,
-    DeploymentStatus Status,
-    DeploymentSource Source,
-    Guid CreatedBy,
     DateTime CreatedAt,
-    DateTime? UpdatedAt,
-    Guid? UpdatedBy,
-    int? RolledBackFromVersion,
-    string? GitRepoUrl,
-    string? GitPath,
-    string? GitCommitHash
-    );
+    Guid CreatedByActorId,
+    DeploymentStatus Status,
+    DeploymentSpec Spec
+    )
+{
+    internal static DeploymentView Map(Deployment deployment) => new(
+        Id: deployment.Id,
+        Name: deployment.Name,
+        Description: deployment.Description,
+        PlatformId: deployment.PlatformId,
+        CreatedAt: deployment.CreatedAt,
+        CreatedByActorId: deployment.CreatedByActorId,
+        Status: deployment.Status,
+        Spec: deployment.Spec
+        );
+}

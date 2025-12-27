@@ -57,6 +57,19 @@ CREATE TABLE "Users" (
     CONSTRAINT "FK_Users_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
 );
 
+CREATE TABLE "Deployments" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_Deployments" PRIMARY KEY,
+    "CreatedAt" TEXT NOT NULL,
+    "CreatedByActorId" TEXT NOT NULL,
+    "Description" TEXT NULL,
+    "Name" TEXT NOT NULL,
+    "PlatformId" TEXT NOT NULL,
+    "Spec" TEXT NOT NULL,
+    "Status" TEXT NOT NULL,
+    CONSTRAINT "FK_Deployments_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_Deployments_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
+);
+
 CREATE TABLE "PlatformStats" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_PlatformStats" PRIMARY KEY,
     "CpuUsage" REAL NOT NULL,
@@ -98,20 +111,6 @@ CREATE TABLE "Images" (
     CONSTRAINT "FK_Images_Registries_RegistryId" FOREIGN KEY ("RegistryId") REFERENCES "Registries" ("Id") ON DELETE SET NULL
 );
 
-CREATE TABLE "Deployments" (
-    "Id" TEXT NOT NULL CONSTRAINT "PK_Deployments" PRIMARY KEY,
-    "ActiveVersionId" TEXT NULL,
-    "CreatedAt" TEXT NOT NULL,
-    "CreatedBy" TEXT NOT NULL,
-    "Description" TEXT NULL,
-    "Name" TEXT NOT NULL,
-    "Status" TEXT NOT NULL,
-    "UpdatedAt" TEXT NOT NULL,
-    "UpdatedBy" TEXT NULL,
-    CONSTRAINT "FK_Deployments_Users_CreatedBy" FOREIGN KEY ("CreatedBy") REFERENCES "Users" ("Id") ON DELETE RESTRICT,
-    CONSTRAINT "FK_Deployments_Users_UpdatedBy" FOREIGN KEY ("UpdatedBy") REFERENCES "Users" ("Id") ON DELETE RESTRICT
-);
-
 CREATE TABLE "RefreshTokens" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_RefreshTokens" PRIMARY KEY,
     "CreatedAt" TEXT NOT NULL,
@@ -143,26 +142,6 @@ CREATE TABLE "Containers" (
     CONSTRAINT "FK_Containers_Deployments_DeploymentId" FOREIGN KEY ("DeploymentId") REFERENCES "Deployments" ("Id") ON DELETE SET NULL,
     CONSTRAINT "FK_Containers_Images_ImageId" FOREIGN KEY ("ImageId") REFERENCES "Images" ("Id") ON DELETE SET NULL,
     CONSTRAINT "FK_Containers_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
-);
-
-CREATE TABLE "DeploymentVersions" (
-    "Id" TEXT NOT NULL CONSTRAINT "PK_DeploymentVersions" PRIMARY KEY,
-    "CreatedAt" TEXT NOT NULL,
-    "CreatedBy" TEXT NOT NULL,
-    "DeploymentId" TEXT NULL,
-    "GitCommitHash" TEXT NULL,
-    "GitPath" TEXT NULL,
-    "GitRepoUrl" TEXT NULL,
-    "PlatformId" TEXT NOT NULL,
-    "RolledBackFromVersion" INTEGER NULL,
-    "Source" TEXT NOT NULL,
-    "Spec" TEXT NOT NULL,
-    "UpdatedBy" TEXT NULL,
-    "Version" INTEGER NOT NULL,
-    CONSTRAINT "FK_DeploymentVersions_Deployments_DeploymentId" FOREIGN KEY ("DeploymentId") REFERENCES "Deployments" ("Id") ON DELETE CASCADE,
-    CONSTRAINT "FK_DeploymentVersions_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE,
-    CONSTRAINT "FK_DeploymentVersions_Users_CreatedBy" FOREIGN KEY ("CreatedBy") REFERENCES "Users" ("Id") ON DELETE RESTRICT,
-    CONSTRAINT "FK_DeploymentVersions_Users_UpdatedBy" FOREIGN KEY ("UpdatedBy") REFERENCES "Users" ("Id") ON DELETE RESTRICT
 );
 
 CREATE TABLE "ContainerStats" (
@@ -224,17 +203,11 @@ CREATE INDEX "IX_Containers_PlatformId" ON "Containers" ("PlatformId");
 
 CREATE UNIQUE INDEX "IX__Containers_DockerContainerId_PlatformId" ON "Containers" ("DockerContainerId", "PlatformId");
 
-CREATE INDEX "IX_DeploymentVersions_CreatedBy" ON "DeploymentVersions" ("CreatedBy");
+CREATE INDEX "IX_Deployments_CreatedByActorId" ON "Deployments" ("CreatedByActorId");
 
-CREATE INDEX "IX_DeploymentVersions_DeploymentId" ON "DeploymentVersions" ("DeploymentId");
+CREATE UNIQUE INDEX "IX_Deployments_Name" ON "Deployments" ("Name");
 
-CREATE INDEX "IX_DeploymentVersions_PlatformId" ON "DeploymentVersions" ("PlatformId");
-
-CREATE INDEX "IX_DeploymentVersions_UpdatedBy" ON "DeploymentVersions" ("UpdatedBy");
-
-CREATE INDEX "IX_Deployments_CreatedBy" ON "Deployments" ("CreatedBy");
-
-CREATE INDEX "IX_Deployments_UpdatedBy" ON "Deployments" ("UpdatedBy");
+CREATE INDEX "IX_Deployments_PlatformId" ON "Deployments" ("PlatformId");
 
 CREATE UNIQUE INDEX "IX_Images_DockerImageId_PlatformId" ON "Images" ("DockerImageId", "PlatformId");
 
@@ -267,7 +240,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20251220094157_migration0001', '10.0.1');
+VALUES ('20251226220213_migration0001', '10.0.1');
 
 COMMIT;
 

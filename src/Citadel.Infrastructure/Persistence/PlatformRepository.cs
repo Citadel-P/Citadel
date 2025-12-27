@@ -30,7 +30,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         return result?.ToDomain();
     }
 
-    public Task<int?> IsPlatformNameUniqueExceptForIdAsync(Guid platformId, string name, CancellationToken cancellationToken)
+    public Task<int?> PlatformNameExistsAsync(string name, Guid excludePlatformId, CancellationToken cancellationToken)
     {
         const string sql = """
             SELECT 1
@@ -38,7 +38,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             WHERE Name = @Name AND Id != @Id
             LIMIT 1
         """;
-        return db.ExecuteScalarAsync<int?>(sql, new { Id = platformId.Format(), Name = name }, transaction: tx());
+        return db.ExecuteScalarAsync<int?>(sql, new { Id = excludePlatformId.Format(), Name = name }, transaction: tx());
     }
 
     public Task<bool> NameOrAddressExistsAsync(string name, string address, CancellationToken cancellationToken)

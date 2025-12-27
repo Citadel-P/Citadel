@@ -27,7 +27,8 @@ public sealed record CreateRegistry(
     {
         public Validator()
         {
-            RuleFor(x => x.Name).NotEmpty().MinimumLength(3);
+            RuleFor(x => x.Name).NotEmpty().ValidNameIdentifier();
+            RuleFor(x => x.Description).MaximumLength(600);
 
             RuleFor(x => x.RegistryHost).NotNull().NotEmpty()
                 .Matches(Validators.RegistryUrlRegex).WithMessage("Please provide a valid host name eg: ghcr.io");

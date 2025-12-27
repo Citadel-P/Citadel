@@ -117,6 +117,36 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Deployments",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
+                    Description = table.Column<string>(type: "TEXT", nullable: true),
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    PlatformId = table.Column<string>(type: "TEXT", nullable: false),
+                    Spec = table.Column<string>(type: "TEXT", nullable: false),
+                    Status = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Deployments", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Deployments_Actors_CreatedByActorId",
+                        column: x => x.CreatedByActorId,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Deployments_Platforms_PlatformId",
+                        column: x => x.PlatformId,
+                        principalTable: "Platforms",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "PlatformStats",
                 columns: table => new
                 {
@@ -211,37 +241,6 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Deployments",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "TEXT", nullable: false),
-                    ActiveVersionId = table.Column<string>(type: "TEXT", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    CreatedBy = table.Column<string>(type: "TEXT", nullable: false),
-                    Description = table.Column<string>(type: "TEXT", nullable: true),
-                    Name = table.Column<string>(type: "TEXT", nullable: false),
-                    Status = table.Column<string>(type: "TEXT", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Deployments", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Deployments_Users_CreatedBy",
-                        column: x => x.CreatedBy,
-                        principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Deployments_Users_UpdatedBy",
-                        column: x => x.UpdatedBy,
-                        principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "RefreshTokens",
                 columns: table => new
                 {
@@ -322,53 +321,6 @@ namespace Infrastructure.Migrations.Migrations
                         principalTable: "Platforms",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "DeploymentVersions",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "TEXT", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    CreatedBy = table.Column<string>(type: "TEXT", nullable: false),
-                    DeploymentId = table.Column<string>(type: "TEXT", nullable: true),
-                    GitCommitHash = table.Column<string>(type: "TEXT", nullable: true),
-                    GitPath = table.Column<string>(type: "TEXT", nullable: true),
-                    GitRepoUrl = table.Column<string>(type: "TEXT", nullable: true),
-                    PlatformId = table.Column<string>(type: "TEXT", nullable: false),
-                    RolledBackFromVersion = table.Column<int>(type: "INTEGER", nullable: true),
-                    Source = table.Column<string>(type: "TEXT", nullable: false),
-                    Spec = table.Column<string>(type: "TEXT", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", nullable: true),
-                    Version = table.Column<int>(type: "INTEGER", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_DeploymentVersions", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_DeploymentVersions_Deployments_DeploymentId",
-                        column: x => x.DeploymentId,
-                        principalTable: "Deployments",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_DeploymentVersions_Platforms_PlatformId",
-                        column: x => x.PlatformId,
-                        principalTable: "Platforms",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_DeploymentVersions_Users_CreatedBy",
-                        column: x => x.CreatedBy,
-                        principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_DeploymentVersions_Users_UpdatedBy",
-                        column: x => x.UpdatedBy,
-                        principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -463,34 +415,20 @@ namespace Infrastructure.Migrations.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_DeploymentVersions_CreatedBy",
-                table: "DeploymentVersions",
-                column: "CreatedBy");
+                name: "IX_Deployments_CreatedByActorId",
+                table: "Deployments",
+                column: "CreatedByActorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_DeploymentVersions_DeploymentId",
-                table: "DeploymentVersions",
-                column: "DeploymentId");
+                name: "IX_Deployments_Name",
+                table: "Deployments",
+                column: "Name",
+                unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_DeploymentVersions_PlatformId",
-                table: "DeploymentVersions",
+                name: "IX_Deployments_PlatformId",
+                table: "Deployments",
                 column: "PlatformId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_DeploymentVersions_UpdatedBy",
-                table: "DeploymentVersions",
-                column: "UpdatedBy");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Deployments_CreatedBy",
-                table: "Deployments",
-                column: "CreatedBy");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Deployments_UpdatedBy",
-                table: "Deployments",
-                column: "UpdatedBy");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Images_DockerImageId_PlatformId",
@@ -581,9 +519,6 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ContainerStats");
 
             migrationBuilder.DropTable(
-                name: "DeploymentVersions");
-
-            migrationBuilder.DropTable(
                 name: "Permissions");
 
             migrationBuilder.DropTable(
@@ -602,6 +537,9 @@ namespace Infrastructure.Migrations.Migrations
                 name: "Teams");
 
             migrationBuilder.DropTable(
+                name: "Users");
+
+            migrationBuilder.DropTable(
                 name: "Deployments");
 
             migrationBuilder.DropTable(
@@ -609,9 +547,6 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "Roles");
-
-            migrationBuilder.DropTable(
-                name: "Users");
 
             migrationBuilder.DropTable(
                 name: "Platforms");

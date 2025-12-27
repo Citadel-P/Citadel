@@ -5,8 +5,6 @@ namespace Domain.Entities;
 
 public sealed record DeploymentSpec(
     DeploymentImageInfo Image,
-    string? WorkingDir,
-    string? User, 
     LifeCycleSpec? LifeCycleSpec,
     ResourceSpec? ResourceSpec,
     Dictionary<string, string>? Labels,
@@ -14,11 +12,7 @@ public sealed record DeploymentSpec(
     List<string>? EnvVars,
     List<string>? Volumes,
     List<string>? Networks,
-    List<string>? EntryPoint,
-    List<string>? Command,
-    SecurityConfig? Security = null,
-    LoggingConfig? LoggingConfig = null,
-    HealthCheckConfig? HealthCheck = null
+    List<string>? Command
     );
 
 [JsonPolymorphic]

@@ -12,7 +12,6 @@ public class Registry(
     RegistryConfigurationBase configuration,
     string? description = null) : AuditedEntity(createdByActorId)
 {
-    public static readonly string DefaultRegistryName = "Docker Hub";
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public string Name { get; private set; } = name;
     public string? Description { get; private set; } = description;

@@ -1,0 +1,69 @@
+﻿using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Entities;
+using FluentValidation;
+using Hosting.Common;
+using Hosting.Common.Attributes;
+using Hosting.Common.ErrorTypes;
+using Hosting.Common.MergePatch;
+using LightResults;
+using Mediator;
+
+namespace Application.Features.Deployments.Commands;
+
+[RequirePermission(nameof(AppPermission.Deploymen_Update))]
+public sealed record PatchDeployment(Guid Id, JsonMergePatchDocument<Deployment> Patch) : ICommand<Result<Deployment>>
+{
+    internal sealed class Validator : PatchCommandValidator<PatchDeployment, Deployment>
+    {
+        public Validator()
+            : base(
+                  patchSelector: x => x.Patch,
+                  jsonTypeInfo: DeploymentJsonContext.Default.Deployment,
+                  modelValidator: new DeploymentValidator()
+                  )
+        { }
+    }
+
+    internal sealed class DeploymentValidator : AbstractValidator<Deployment>
+    {
+        public DeploymentValidator()
+        {
+
+            RuleFor(x => x.Id).NotEmpty().NotNull();
+            When(s => s.Name != null, () => RuleFor(x => x.Name).NotEmpty().ValidNameIdentifier());
+            When(s => s.Name != null, () => RuleFor(x => x.Description).MaximumLength(600));
+        }
+    }
+}
+
+internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork) : ICommandHandler<PatchDeployment, Result<Deployment>>
+{
+    public async ValueTask<Result<Deployment>> Handle(PatchDeployment command, CancellationToken cancellationToken)
+    {
+        var deployment = await unitOfWork.Deployments.GetAsync(command.Id, cancellationToken);
+        if (deployment == null)
+        {
+            return Result.Failure<Deployment>(new NotFoundError("The provided deployment does not exist"));
+        }
+
+        var patchedDeployment = command.Patch.ApplyTo(deployment, DeploymentJsonContext.Default.Deployment);
+        if (patchedDeployment.Name != null)
+        {
+            var conflict = await unitOfWork.Deployments.ExistsAsync(patchedDeployment.Name, cancellationToken);
+            if (conflict)
+            {
+                return Result.Failure<Deployment>(new ConflictError("Name already exists"));
+            }
+        }
+
+        deployment.PartialUpdate(
+            name: patchedDeployment.Name, 
+            description: patchedDeployment.Description, 
+            spec: patchedDeployment.Spec);
+        await unitOfWork.Deployments.UpdateAsync(deployment, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+
+        return deployment;
+    }
+}

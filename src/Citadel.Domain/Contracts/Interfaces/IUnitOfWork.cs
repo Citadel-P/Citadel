@@ -28,7 +28,7 @@ public interface IUserRepository
 }
 public interface IRegistryRepository 
 {
-    Task<Registry?> GetAsync(Guid Id, CancellationToken cancellationToken);
+    Task<Registry?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<Registry?> GetByNameAsync(string name, CancellationToken cancellationToken);
     Task<IEnumerable<Registry>> GetAllAsync(CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
@@ -91,7 +91,7 @@ public interface IPlatformRepository
     Task<PlatformConnectionInfo?> GetPlatformInfoAsync(Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<PlatformConnectionInfo>> GetPlatformsInfoAsync(CancellationToken cancellationToken);
 
-    Task<int?> IsPlatformNameUniqueExceptForIdAsync(Guid platformId, string name, CancellationToken cancellationToken);
+    Task<int?> PlatformNameExistsAsync(string name, Guid excludePlatformId, CancellationToken cancellationToken);
     Task<bool> NameOrAddressExistsAsync(string name, string address, CancellationToken cancellationToken);
 
     Task<int> AddPlatformAsync(Platform platform, CancellationToken cancellationToken);
@@ -114,5 +114,9 @@ public interface IImageRepository
 
 public interface IDeploymentRepository
 {
+    Task<Deployment?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
     Task<int> AddAsync(Deployment deployment, CancellationToken cancellationToken);
+    Task<IEnumerable<Deployment>> GetAllAsync(CancellationToken cancellationToken);
+    Task<int> UpdateAsync(Deployment registry, CancellationToken cancellationToken);
 }

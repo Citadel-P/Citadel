@@ -134,7 +134,6 @@ namespace Application.Models;
 [JsonSerializable(typeof(DeploymentsView))]
 [JsonSerializable(typeof(IEnumerable<DeploymentView>))]
 [JsonSerializable(typeof(DeploymentView))]
-[JsonSerializable(typeof(IEnumerable<DeploymentVersion>))]
 [JsonSerializable(typeof(DeploymentSpec))]
 [JsonSerializable(typeof(SecurityConfig))]
 [JsonSerializable(typeof(LoggingConfig))]

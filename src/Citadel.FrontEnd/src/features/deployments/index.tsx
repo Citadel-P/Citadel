@@ -1,4 +1,4 @@
-import { Cable } from 'lucide-react';
+import { Cable, Rocket } from 'lucide-react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { ActionBar } from '@/components/custom/action-bar';
@@ -6,7 +6,7 @@ import { DeploymentDropdownActions, DeploymentGroupActions } from './actions';
 import { DeploymentsTable } from './table';
 
 export const DeploymentComponents: RequiredComponents = {
-  Icon: <Cable className="h-4 w-4" />,
+  Icon: <Rocket className="h-4 w-4" />,
   Content: ({ items, actions, isLoading }) => {
     return <DeploymentsTable items={items} actions={actions} isLoading={isLoading} />;
   },

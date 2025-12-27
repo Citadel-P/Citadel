@@ -163,13 +163,10 @@ namespace Infrastructure.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ActiveVersionId")
-                        .HasColumnType("TEXT");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("CreatedBy")
+                    b.Property<string>("CreatedByActorId")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -180,60 +177,7 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedBy")
-                        .HasDatabaseName("IX_Deployments_CreatedBy");
-
-                    b.HasIndex("UpdatedBy")
-                        .HasDatabaseName("IX_Deployments_UpdatedBy");
-
-                    b.ToTable("Deployments", (string)null);
-                });
-
-            modelBuilder.Entity("DeploymentVersion", b =>
-                {
-                    b.Property<string>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("DeploymentId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("GitCommitHash")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("GitPath")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("GitRepoUrl")
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("PlatformId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<int?>("RolledBackFromVersion")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Source")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -241,25 +185,21 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("UpdatedBy")
+                    b.Property<string>("Status")
+                        .IsRequired()
                         .HasColumnType("TEXT");
-
-                    b.Property<int>("Version")
-                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CreatedBy")
-                        .HasDatabaseName("IX_DeploymentVersions_CreatedBy");
+                    b.HasIndex("CreatedByActorId");
 
-                    b.HasIndex("DeploymentId");
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Deployments_Name");
 
-                    b.HasIndex("PlatformId")
-                        .HasDatabaseName("IX_DeploymentVersions_PlatformId");
+                    b.HasIndex("PlatformId");
 
-                    b.HasIndex("UpdatedBy");
-
-                    b.ToTable("DeploymentVersions", (string)null);
+                    b.ToTable("Deployments", (string)null);
                 });
 
             modelBuilder.Entity("Image", b =>
@@ -688,41 +628,17 @@ namespace Infrastructure.Migrations.Migrations
 
             modelBuilder.Entity("Deployment", b =>
                 {
-                    b.HasOne("User", null)
+                    b.HasOne("Actor", null)
                         .WithMany()
-                        .HasForeignKey("CreatedBy")
+                        .HasForeignKey("CreatedByActorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("User", null)
-                        .WithMany()
-                        .HasForeignKey("UpdatedBy")
-                        .OnDelete(DeleteBehavior.Restrict);
-                });
-
-            modelBuilder.Entity("DeploymentVersion", b =>
-                {
-                    b.HasOne("User", null)
-                        .WithMany()
-                        .HasForeignKey("CreatedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Deployment", null)
-                        .WithMany("Versions")
-                        .HasForeignKey("DeploymentId")
-                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("Platform", null)
                         .WithMany()
                         .HasForeignKey("PlatformId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("User", null)
-                        .WithMany()
-                        .HasForeignKey("UpdatedBy")
-                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Image", b =>
@@ -812,11 +728,6 @@ namespace Infrastructure.Migrations.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("Deployment", b =>
-                {
-                    b.Navigation("Versions");
                 });
 #pragma warning restore 612, 618
         }

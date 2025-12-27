@@ -57,11 +57,18 @@ public partial class ImagTagsContext : JsonSerializerContext
 {
 }
 
-[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Default,
+    PropertyNameCaseInsensitive = true,
+    Converters = new[]
+    {
+        typeof(JsonStringEnumConverter<DeploymentStatus>)
+    })]
+[JsonSerializable(typeof(Deployment))]
 [JsonSerializable(typeof(DeploymentSpec))]
 [JsonSerializable(typeof(SecurityConfig))]
 [JsonSerializable(typeof(LoggingConfig))]
 [JsonSerializable(typeof(HealthCheckConfig))]
-public partial class  DeploymentContext: JsonSerializerContext
+public partial class  DeploymentJsonContext: JsonSerializerContext
 { 
 }

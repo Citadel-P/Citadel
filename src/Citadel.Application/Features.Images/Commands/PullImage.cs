@@ -51,7 +51,7 @@ public sealed record PullImage(Guid PlatformId, string RegistryName, string Repo
                 );
 
             case DockerHubRegistry dockerCfg:
-                if (RegistryName == Registry.DefaultRegistryName)
+                if (RegistryName == Constants.DefaultRegistryName)
                 {
                     return new PullImageCommand
                         (

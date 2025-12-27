@@ -2,49 +2,19 @@
 
 public sealed class Deployment(
     string name,
-    Guid createdBy,
-    string? description)
+    DeploymentStatus status,
+    Guid createdByActorId,
+    Guid platformId,
+    DeploymentSpec spec,
+    string? description = null) : AuditedEntity(createdByActorId)
 {
-    private readonly List<DeploymentVersion> versions = [];
     public Guid Id { get; private set; } = Guid.CreateVersion7();
+    public Guid PlatformId { get; private set; } = platformId;
     public string Name { get; private set; } = name;
     public string? Description { get; private set; } = description;
-    public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
-    public Guid CreatedBy { get; private set; } = createdBy;
-    public DeploymentStatus Status { get; private set; }
+    public DeploymentStatus Status { get; private set; } = status;
 
-
-    public IReadOnlyCollection<DeploymentVersion> Versions => versions;
-    public Guid? ActiveVersionId { get; private set; }
-
-    public DeploymentVersion CreateVersion(DeploymentSpec spec, Guid platformId, Guid createdBy)
-    {
-        int nextVersion = versions.Count == 0
-            ? 1
-            : versions.Max(v => v.Version) + 1;
-
-        var newVersion = new DeploymentVersion
-        (
-            deploymentId: Id,
-            version: nextVersion,
-            platformId: platformId,
-            createdBy: createdBy,
-            spec: spec,
-            source: DeploymentSource.UI
-        );
-        Status = DeploymentStatus.Created;
-        versions.Add(newVersion);
-        return newVersion;
-    }
-
-    public void SetActiveVersion(Guid versionId, Guid updatedBy)
-    {
-        if (versions.All(v => v.Id != versionId))
-            throw new ArgumentException("Version not found.", nameof(versionId));
-
-        ActiveVersionId = versionId;
-    }
-
+    public DeploymentSpec Spec { get; private set; } = spec;
 
     public void MarkAsDeployed()
     {
@@ -54,5 +24,36 @@ public sealed class Deployment(
     public void MarkAsFailed()
     {
         Status = DeploymentStatus.Failed;
+    }
+
+    public static Deployment FromPersistence(
+        Guid id,
+        string name,
+        Guid platformId,
+        string? description,
+        DeploymentStatus status,
+        DateTime createdAt,
+        Guid createdByActorId,
+        DeploymentSpec spec)
+    {
+        return new Deployment(name, status, createdByActorId, platformId, spec, description)
+        {
+            Id = id,
+            CreatedAt = createdAt
+        };
+    }
+
+    public void PartialUpdate(
+        string? name = null,
+        string? description = null,
+        Guid? platformId = null,
+        DeploymentStatus? status = null,
+        DeploymentSpec? spec = null)
+    {
+        if (name != null) Name = name;
+        if (status != null) Status = status.Value;
+        if (description != null) Description = description;
+        if (platformId != null) PlatformId = platformId.Value;
+        if (spec != null) Spec = spec;
     }
 }
