@@ -174,7 +174,7 @@ public class PlatformCreateTests : IntegrationTestBase
                 ContainersPaused: 2,
                 ContainersStopped: 1));
 
-        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         var createJson = """

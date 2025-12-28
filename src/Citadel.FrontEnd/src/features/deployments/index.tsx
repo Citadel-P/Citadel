@@ -1,4 +1,4 @@
-import { Cable, Rocket } from 'lucide-react';
+import { Rocket } from 'lucide-react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { ActionBar } from '@/components/custom/action-bar';

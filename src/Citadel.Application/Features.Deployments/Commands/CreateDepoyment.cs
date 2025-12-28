@@ -3,6 +3,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
@@ -12,10 +13,12 @@ using System.Security.Claims;
 
 namespace Application.Features.Deployments.Commands;
 
+[RequirePermission(nameof(AppPermission.Deploymen_Create))]
 public sealed record CreateDeployment(
     string Name,
     Guid PlatformId,
     string? Description,
+    UpdateBehavior UpdateBehavior,
     DeploymentSpec Spec) 
     : ICommand<Result<Deployment>>
 {
@@ -42,16 +45,34 @@ internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, IHttpContextAcces
             return Result.Failure<Deployment>(new ConflictError("Name already exists"));
         }
 
+        if (command.Spec.Image is not ExternalImage)
+        {
+            if (command.UpdateBehavior != UpdateBehavior.Disabled)
+            {
+                return Result.Failure<Deployment>(new BadRequestError("Auto-update requires an external image source."));
+            }
+        }
+
+        if (command.Spec.Image is ExternalImage extImage && extImage.ImageTag.Contains('@'))
+        {
+            if (command.UpdateBehavior != UpdateBehavior.Disabled)
+            {
+                return Result.Failure<Deployment>(new BadRequestError("Cannot enable Auto-update for an image pinned by digest (contains '@')."));
+            }
+        }
+
         var deployment = new Deployment(
             name : command.Name,
             description : command.Description,
             status : DeploymentStatus.Created,
             createdByActorId: user.GetActorId(),
             platformId : command.PlatformId,
+            updateBehavior : command.UpdateBehavior,
             spec : command.Spec
             );
 
         var result = await unitOfWork.Deployments.AddAsync(deployment, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
         return deployment;
     }
 }

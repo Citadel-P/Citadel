@@ -5,14 +5,14 @@ namespace Domain.Entities;
 
 public sealed record DeploymentSpec(
     DeploymentImageInfo Image,
-    LifeCycleSpec? LifeCycleSpec,
-    ResourceSpec? ResourceSpec,
-    Dictionary<string, string>? Labels,
-    List<string>? Ports,
-    List<string>? EnvVars,
-    List<string>? Volumes,
-    List<string>? Networks,
-    List<string>? Command
+    LifeCycleSpec? LifeCycleSpec = null,
+    ResourceSpec? ResourceSpec = null,
+    Dictionary<string, string>? Labels = null,
+    List<string>? Ports = null,
+    List<string>? EnvVars = null,
+    List<string>? Volumes = null,
+    List<string>? Networks = null,
+    List<string>? Command = null
     );
 
 [JsonPolymorphic]
@@ -22,7 +22,7 @@ public sealed record DeploymentSpec(
 public abstract record DeploymentImageInfo;
 
 public sealed record LocalImage(string ImageId) : DeploymentImageInfo;
-public sealed record ExternalImage(string RegistryId, string ImageTag) : DeploymentImageInfo;
+public sealed record ExternalImage(Guid RegistryId, string ImageTag) : DeploymentImageInfo;
 
 public sealed record ResourceSpec(
     float? CpuLimit,

@@ -8,6 +8,7 @@ import {
   ContainerRestartPolicy,
   ResourceSpec,
   StopSignal,
+  UpdateBehavior,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -40,6 +41,21 @@ const enum ResourceProfile {
   large,
   xlarge,
 }
+
+const update_behaviors = {
+  [UpdateBehavior.Disabled]: {
+    label: 'Disabled',
+    description: 'Do not check for updates.',
+  },
+  [UpdateBehavior.Notify]: {
+    label: 'Notify Only',
+    description: 'Periodically check for updates and alert me, but do not redeploy.',
+  },
+  [UpdateBehavior.AutoDeploy]: {
+    label: 'Auto Deploy',
+    description: 'Periodically check and automatically redeploy when a new image is found.',
+  },
+};
 
 const image_source = {
   [ImageSource.local]: {
@@ -447,6 +463,23 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                     },
                   }))
                 }
+              />
+            ),
+          }),
+          defineField({
+            key: 'updateBehavior',
+            label: 'Auto Update',
+            description: 'Define how the platform handles new image versions.',
+            render: (value, set) => (
+              <ItemSelector
+                collection={update_behaviors}
+                value={value}
+                onChange={(updateBehavior: UpdateBehavior) => {
+                  set((prev) => ({
+                    ...prev,
+                    updateBehavior,
+                  }));
+                }}
               />
             ),
           }),

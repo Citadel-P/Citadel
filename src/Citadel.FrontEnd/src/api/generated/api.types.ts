@@ -22,6 +22,12 @@ export enum VolumeScope {
   Multi = "Multi",
 }
 
+export enum UpdateBehavior {
+  Disabled = "Disabled",
+  Notify = "Notify",
+  AutoDeploy = "AutoDeploy",
+}
+
 export enum StopSignal {
   SIGTERM = "SIGTERM",
   SIGKILL = "SIGKILL",
@@ -522,6 +528,7 @@ export interface DeploymentInput {
   platformId: string;
   description: null | string;
   spec: DeploymentSpec;
+  updateBehavior: UpdateBehavior;
 }
 
 export interface DeploymentSpec {
@@ -989,7 +996,6 @@ export interface ImageView {
   platformId: string;
   /** @format date-time */
   createdAt: any;
-  isUpToDate?: null | boolean;
   updatedAt?: any;
   /** @format uuid */
   registryId?: null | string;

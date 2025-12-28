@@ -48,7 +48,7 @@ public class ApplicationHubTests : IntegrationTestBase
         }
         var containers = dockerContainers.Map(images, platform.Id);
 
-        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.Images.BulkUpsertAsync(images, TestContext.Current.CancellationToken);
         await uow.Containers.BulkUpsertAsync(containers, TestContext.Current.CancellationToken);
 

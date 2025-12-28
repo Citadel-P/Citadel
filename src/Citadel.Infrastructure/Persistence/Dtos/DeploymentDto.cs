@@ -7,5 +7,11 @@ internal sealed record DeploymentDto(
     DateTime CreatedAt,
     Guid CreatedByActorId,
     Guid PlatformId,
+    string UpdateBehavior,
+    DateTime AutoUpdateState_LastCheckedAt,
+    string AutoUpdateState_Status,
+    string? AutoUpdateState_CurrentDigest,
+    string? AutoUpdateState_RemoteDigest,
+    string? AutoUpdateState_LastError,
     string Spec,
     string? Description = null);

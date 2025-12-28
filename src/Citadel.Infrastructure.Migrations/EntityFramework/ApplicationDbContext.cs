@@ -450,9 +450,16 @@ internal static class Configuration
         deployment.Property<string>("Description").HasColumnType("TEXT").IsRequired(false);
         deployment.Property<string>("Status").HasColumnType("TEXT").IsRequired();
         deployment.Property<string>("Spec").HasColumnType("TEXT").IsRequired();
-        deployment.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired();
+        deployment.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
         deployment.Property<Guid>("CreatedByActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         deployment.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+
+        deployment.Property<string>("UpdateBehavior").HasColumnType("TEXT").HasDefaultValue(null);
+        deployment.Property<DateTime?>("AutoUpdateState_LastCheckedAt").HasColumnType("TEXT").HasDefaultValue(null).IsRequired(false);
+        deployment.Property<string>("AutoUpdateState_Status").HasColumnType("TEXT").HasDefaultValue(null);
+        deployment.Property<string>("AutoUpdateState_CurrentDigest").HasColumnType("TEXT").HasDefaultValue(null);
+        deployment.Property<string>("AutoUpdateState_RemoteDigest").HasColumnType("TEXT").HasDefaultValue(null);
+        deployment.Property<string>("AutoUpdateState_LastError").HasColumnType("TEXT").HasMaxLength(2000).HasDefaultValue(null);
 
         deployment
            .HasOne("Platform")
@@ -489,7 +496,6 @@ internal static class Configuration
         image.Property<string>("CreatedAt").HasColumnType("TEXT").IsRequired();
         image.Property<string?>("UpdatedAt").HasColumnType("TEXT").HasDefaultValue(null);
         image.Property<int>("Containers").HasColumnType("INTEGER").HasDefaultValue(0);
-        image.Property<bool?>("IsUpToDate").HasColumnType("INTEGER").HasDefaultValue(null);
         image.Property<double>("Size").HasColumnType("REAL").HasDefaultValue(0);
 
         image

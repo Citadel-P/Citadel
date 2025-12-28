@@ -125,7 +125,7 @@ internal sealed class PersistPlatformStatsWorkItem(Dictionary<Guid, List<Platfor
                 memTotal: last.MemTotal,
                 descriptor: descriptor);
 
-            await uow.Platforms.UpdatePlatformAsync(existing, cancellationToken);
+            await uow.Platforms.UpdateAsync(existing, cancellationToken);
         }
 
         try

@@ -27,13 +27,22 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return db.ExecuteScalarAsync<bool>(sql, new { Name = name, cancellationToken }, transaction: tx());
     }
 
+    public Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT EXISTS (SELECT 1 FROM Deployments WHERE Name=@Name AND Id != @Id)";
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id.Format(), cancellationToken }, transaction: tx());
+    }
+
     public Task<int> AddAsync(Deployment deployment, CancellationToken cancellationToken)
     {
         const string sql = """
             INSERT INTO Deployments (
-                Id, Name, Description, PlatformId, Status, CreatedAt, CreatedByActorId, Spec
+                Id, Name, Description, PlatformId, Status, CreatedAt, CreatedByActorId, Spec, UpdateBehavior, AutoUpdateState_LastCheckedAt, AutoUpdateState_Status, AutoUpdateState_CurrentDigest,
+                AutoUpdateState_RemoteDigest, AutoUpdateState_LastError
             ) VALUES (
-                 @Id, @Name, @Description, PlatformId, @Status, @CreatedAt, @CreatedByActorId, @Spec
+                 @Id, @Name, @Description, @PlatformId, @Status, @CreatedAt, @CreatedByActorId, @Spec, @UpdateBehavior,
+                 @AutoUpdateState_LastCheckedAt, @AutoUpdateState_Status, @AutoUpdateState_CurrentDigest,
+                 @AutoUpdateState_RemoteDigest, @AutoUpdateState_LastError
             )
         """;
         return db.ExecuteAsync(sql, new
@@ -45,7 +54,14 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             CreatedByActorId = deployment.CreatedByActorId.Format(),
             CreatedAt = deployment.CreatedAt.ToString(),
             Status = EnumFormatter<DeploymentStatus>.GetValue(deployment.Status),
-            Spec = JsonSerializer.Serialize(deployment.Spec, DeploymentJsonContext.Default.DeploymentSpec)
+            Spec = JsonSerializer.Serialize(deployment.Spec, DeploymentJsonContext.Default.DeploymentSpec),
+            UpdateBehavior = EnumFormatter<UpdateBehavior>.GetValue(deployment.UpdateBehavior),
+            AutoUpdateState_LastCheckedAt = deployment.AutoUpdateState?.LastCheckedAt.ToString(),
+            AutoUpdateState_Status = deployment.AutoUpdateState != null ? EnumFormatter<AutoUpdateStatus>.GetValue(deployment.AutoUpdateState.Status) : null,
+            AutoUpdateState_CurrentDigest = deployment.AutoUpdateState?.CurrentDigest,
+            AutoUpdateState_RemoteDigest = deployment.AutoUpdateState?.RemoteDigest,
+            AutoUpdateState_LastError = deployment.AutoUpdateState?.LastError,
+
         }, transaction: tx());
     }
 
@@ -56,8 +72,37 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return result.ToDomain();
     }
 
-    public Task<int> UpdateAsync(Deployment registry, CancellationToken cancellationToken)
+    public Task<int> UpdateAsync(Deployment deployment, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        const string sql = """
+            UPDATE Deployments
+            SET Name = @Name, Description = @Description, PlatformId = @PlatformId, Status = @Status, Spec = @Spec, UpdateBehavior = @UpdateBehavior,
+                AutoUpdateState_LastCheckedAt = @AutoUpdateState_LastCheckedAt, AutoUpdateState_Status = @AutoUpdateState_Status, 
+                AutoUpdateState_CurrentDigest = @AutoUpdateState_CurrentDigest, AutoUpdateState_RemoteDigest = @AutoUpdateState_RemoteDigest, 
+                AutoUpdateState_LastError = @AutoUpdateState_LastError
+            WHERE Id = @Id
+        """;
+        return db.ExecuteAsync(sql, new
+        {
+            Id = deployment.Id.Format(),
+            Name = deployment.Name,
+            Description = deployment.Description,
+            PlatformId = deployment.PlatformId.Format(),
+            Status = EnumFormatter<DeploymentStatus>.GetValue(deployment.Status),
+            Spec = JsonSerializer.Serialize(deployment.Spec, DeploymentJsonContext.Default.DeploymentSpec),
+            UpdateBehavior = EnumFormatter<UpdateBehavior>.GetValue(deployment.UpdateBehavior),
+            AutoUpdateState_LastCheckedAt = deployment.AutoUpdateState?.LastCheckedAt.ToString(),
+            AutoUpdateState_Status = deployment.AutoUpdateState != null ? EnumFormatter<AutoUpdateStatus>.GetValue(deployment.AutoUpdateState.Status) : null,
+            AutoUpdateState_CurrentDigest = deployment.AutoUpdateState?.CurrentDigest,
+            AutoUpdateState_RemoteDigest = deployment.AutoUpdateState?.RemoteDigest,
+            AutoUpdateState_LastError = deployment.AutoUpdateState?.LastError,
+        }, transaction: tx());
+    }
+
+    public Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
+    {
+        var (clause, parameters) = SqliteInClauseBuilder.BuildInClauseForGuids("Id", ids);
+        string sql = $"DELETE FROM Deployments WHERE Id IN ({clause})";
+        return db.ExecuteAsync(sql, parameters, transaction: tx());
     }
 }

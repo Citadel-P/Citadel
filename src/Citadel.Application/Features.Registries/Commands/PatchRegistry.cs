@@ -30,7 +30,7 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
         public RegistryValidator()
         {
             RuleFor(x => x.Id).NotEmpty().NotNull();
-            When(s => s.Name != null, () => RuleFor(x => x.Name).NotEmpty().ValidNameIdentifier());
+            When(s => s.Name != null, () => RuleFor(x => x.Name).ValidNameIdentifier());
             When(s => s.Name != null, () => RuleFor(x => x.Description).MaximumLength(600));
 
             When(s => s.Name != null, () => RuleFor(x => x.RegistryHost).Matches(Validators.RegistryUrlRegex).WithMessage("Please provide a valid host name eg: ghcr.io"));

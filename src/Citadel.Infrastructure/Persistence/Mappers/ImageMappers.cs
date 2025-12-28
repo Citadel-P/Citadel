@@ -20,7 +20,6 @@ internal static class ImageMappers
                 containers: image.Containers,
                 platformId: image.PlatformId,
                 createdAt: image.CreatedAt,
-                isUpToDate: image.IsUpToDate,
                 updatedAt: image.UpdatedAt,
                 registryId: image.RegistryId,
                 registry: Registry.FromPersistence(

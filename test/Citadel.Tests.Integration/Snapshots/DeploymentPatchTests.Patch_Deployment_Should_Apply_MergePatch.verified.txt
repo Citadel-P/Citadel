@@ -1,0 +1,23 @@
+﻿{
+  id: Guid_1,
+  name: Updated-Deployment-Name,
+  description: Updated description for testing,
+  platformId: Guid_2,
+  createdAt: DateTimeOffset_1,
+  createdByActorId: Guid_3,
+  status: Created,
+  spec: {
+    image: {
+      $type: External,
+      registryId: Guid_4,
+      imageTag: nginx:latest
+    },
+    ports: [
+      80:80
+    ],
+    envVars: [
+      ENV=staging,
+      DEBUG=true
+    ]
+  }
+}

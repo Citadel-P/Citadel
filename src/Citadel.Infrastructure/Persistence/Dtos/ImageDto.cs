@@ -9,7 +9,6 @@ internal sealed record ImageDto(
     int Containers,
     Guid PlatformId,
     DateTime CreatedAt,
-    bool? IsUpToDate = null,
     DateTime? UpdatedAt = null,
     Guid? RegistryId = null,
     string? RegistryName = null,

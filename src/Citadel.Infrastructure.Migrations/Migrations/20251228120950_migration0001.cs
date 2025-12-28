@@ -121,13 +121,19 @@ namespace Infrastructure.Migrations.Migrations
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    AutoUpdateState_CurrentDigest = table.Column<string>(type: "TEXT", nullable: true),
+                    AutoUpdateState_LastCheckedAt = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    AutoUpdateState_LastError = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true),
+                    AutoUpdateState_RemoteDigest = table.Column<string>(type: "TEXT", nullable: true),
+                    AutoUpdateState_Status = table.Column<string>(type: "TEXT", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
                     Description = table.Column<string>(type: "TEXT", nullable: true),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
                     PlatformId = table.Column<string>(type: "TEXT", nullable: false),
                     Spec = table.Column<string>(type: "TEXT", nullable: false),
-                    Status = table.Column<string>(type: "TEXT", nullable: false)
+                    Status = table.Column<string>(type: "TEXT", nullable: false),
+                    UpdateBehavior = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -215,7 +221,6 @@ namespace Infrastructure.Migrations.Migrations
                     Containers = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 0),
                     CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
                     DockerImageId = table.Column<string>(type: "TEXT", nullable: false),
-                    IsUpToDate = table.Column<bool>(type: "INTEGER", nullable: true),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
                     PlatformId = table.Column<string>(type: "TEXT", nullable: false),
                     RegistryId = table.Column<string>(type: "TEXT", nullable: true),

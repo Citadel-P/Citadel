@@ -75,7 +75,7 @@ internal sealed class CreatePlatformHandler(
 
         // Add the new platform
         var platform = platformResult.Map(command.Address ?? "", command.Name, command.ConnectorType);
-        await unitOfWork.Platforms.AddPlatformAsync(platform, cancellationToken);
+        await unitOfWork.Platforms.AddAsync(platform, cancellationToken);
 
         // Add it's images
         var images = await GetImages(platform, cancellationToken);

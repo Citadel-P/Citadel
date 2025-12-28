@@ -57,7 +57,7 @@ public class ImageSyncJobTests : IntegrationTestBase
     {
         var platform = Fakes.GetDummyPlatform();
 
-        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         foreach (var image in Fakes.GetDummyImages())
         {
             await uow.Images.AddOrUpdateAsync(new Image(
@@ -66,7 +66,6 @@ public class ImageSyncJobTests : IntegrationTestBase
                 dockerImageId: image.Id,
                 size: image.Size,
                 containers : image.Containers,
-                isUpToDate: false,
                 platformId: platform.Id,
                 createdAt: DateTimeOffset.FromUnixTimeSeconds(image.Created).DateTime
                 ), TestContext.Current.CancellationToken);
@@ -115,7 +114,6 @@ public class ImageSyncJobTests : IntegrationTestBase
             dockerImageId: staleImageId,
             size: 900000,
             containers: 0,
-            isUpToDate: false,
             platformId: platformId,
             createdAt: DateTime.UtcNow);
         await using var scope = Services.CreateAsyncScope();
@@ -186,7 +184,6 @@ public class ImageSyncJobTests : IntegrationTestBase
             containers: 2,
             platformId: platformId,
             createdAt: DateTime.UtcNow,
-            isUpToDate: true,
             null, null);
         await using (var uow = Services.GetRequiredService<IUnitOfWork>())
         {

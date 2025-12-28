@@ -59,13 +59,19 @@ CREATE TABLE "Users" (
 
 CREATE TABLE "Deployments" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Deployments" PRIMARY KEY,
-    "CreatedAt" TEXT NOT NULL,
+    "AutoUpdateState_CurrentDigest" TEXT NULL,
+    "AutoUpdateState_LastCheckedAt" TEXT NULL,
+    "AutoUpdateState_LastError" TEXT NULL,
+    "AutoUpdateState_RemoteDigest" TEXT NULL,
+    "AutoUpdateState_Status" TEXT NULL,
+    "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     "CreatedByActorId" TEXT NOT NULL,
     "Description" TEXT NULL,
     "Name" TEXT NOT NULL,
     "PlatformId" TEXT NOT NULL,
     "Spec" TEXT NOT NULL,
     "Status" TEXT NOT NULL,
+    "UpdateBehavior" TEXT NULL,
     CONSTRAINT "FK_Deployments_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_Deployments_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
 );
@@ -100,7 +106,6 @@ CREATE TABLE "Images" (
     "Containers" INTEGER NOT NULL DEFAULT 0,
     "CreatedAt" TEXT NOT NULL,
     "DockerImageId" TEXT NOT NULL,
-    "IsUpToDate" INTEGER NULL,
     "Name" TEXT NOT NULL,
     "PlatformId" TEXT NOT NULL,
     "RegistryId" TEXT NULL,
@@ -240,7 +245,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20251226220213_migration0001', '10.0.1');
+VALUES ('20251228120950_migration0001', '10.0.1');
 
 COMMIT;
 

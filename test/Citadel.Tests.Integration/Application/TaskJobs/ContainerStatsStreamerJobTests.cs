@@ -4,7 +4,6 @@ using Application.Services;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -46,7 +45,7 @@ public class ContainerStatsStreamerJobTests : IntegrationTestBase
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
         var platform = Fakes.GetDummyPlatform();
-        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
 
         foreach (var container in Fakes.GetDummyContainers())
         {

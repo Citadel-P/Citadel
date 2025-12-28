@@ -47,7 +47,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Address = address }, transaction: tx());
     }
 
-    public async Task<PlatformConnectionInfo?> GetPlatformInfoAsync(Guid platformId, CancellationToken cancellationToken)
+    public async Task<PlatformConnectionInfo?> GetInfoAsync(Guid platformId, CancellationToken cancellationToken)
     {
         const string sql = """
             SELECT Id, Address, ConnectorType
@@ -67,7 +67,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         return result.Select(s => s.ToDomain());
     }
 
-    public Task<int> AddPlatformAsync(Platform platform, CancellationToken cancellationToken)
+    public Task<int> AddAsync(Platform platform, CancellationToken cancellationToken)
     {
         const string sql = """
             INSERT INTO Platforms (
@@ -99,7 +99,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         return db.ExecuteAsync(sql, new { PlatformId = platformId.Format() }, transaction: tx());
     }
 
-    public Task<int> UpdatePlatformAsync(Platform platform, CancellationToken cancellationToken)
+    public Task<int> UpdateAsync(Platform platform, CancellationToken cancellationToken)
     {
         const string updateSql = """
             UPDATE Platforms SET
@@ -184,7 +184,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     }
 
 
-    public async Task<PlatformConnectionInfo?> GetPlatformDetailsByContainerIdAsync(string dockerContainerId, CancellationToken cancellationToken)
+    public async Task<PlatformConnectionInfo?> GetPlatformByContainerIdAsync(string dockerContainerId, CancellationToken cancellationToken)
     {
         const string sql = """
             SELECT 

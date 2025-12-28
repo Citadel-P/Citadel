@@ -49,7 +49,7 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
         var platform = Fakes.GetDummyPlatform();
-        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
 
         var container = new Container(
                 name: "container-1",

@@ -48,8 +48,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
                 i.Size as Image_Size,
                 i.Containers as Image_Containers,
                 i.PlatformId as Image_PlatformId,
-                i.CreatedAt as Image_CreatedAt,
-                i.IsUpToDate as Image_IsUpToDate,
+                i.CreatedAt as Image_CreatedAt,               
                 i.UpdatedAt as Image_UpdatedAt,
                 i.RegistryId as Image_RegistryId
             FROM Containers c
@@ -74,7 +73,6 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             i.Containers as Image_Containers,
             i.PlatformId as Image_PlatformId,
             i.CreatedAt as Image_CreatedAt,
-            i.IsUpToDate as Image_IsUpToDate,
             i.UpdatedAt as Image_UpdatedAt,
             i.RegistryId as Image_RegistryId,
             s.Created as Stat_Created,

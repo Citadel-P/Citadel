@@ -8,7 +8,6 @@ public sealed class Image(
     int containers,
     Guid platformId,
     DateTime createdAt,
-    bool? isUpToDate = null,
     DateTime? updatedAt = null,
     Guid? registryId = null,
     Registry? registry = null)
@@ -18,7 +17,6 @@ public sealed class Image(
     public Guid? RegistryId { get; private set; } = registryId;
     public string DockerImageId { get; private set; } = dockerImageId;
     public int Containers { get; private set; } = containers;
-    public bool? IsUpToDate { get; private set; } = isUpToDate;
     public IEnumerable<string> Tags { get; private set; } = [.. tags];
     public double Size { get; private set; } = size;
     public string Name { get; private set; } = name;
@@ -32,7 +30,6 @@ public sealed class Image(
         string? dockerImageId = null,
         double? size = null,
         int? containers = null,
-        bool? isUpToDate = null,
         DateTime? updatedAt = null,
         Guid? registryId = null)
     {
@@ -46,8 +43,6 @@ public sealed class Image(
             Size = size.Value;
         if (containers is not null && Containers != containers)
             Containers = containers.Value;
-        if (isUpToDate is not null && IsUpToDate != isUpToDate)
-            IsUpToDate = isUpToDate.Value;
         if (updatedAt is not null && UpdatedAt != updatedAt)
             UpdatedAt = updatedAt.Value;
         if (registryId is not null && RegistryId != registryId)
@@ -63,7 +58,6 @@ public sealed class Image(
         int containers,
         Guid platformId,
         DateTime createdAt,
-        bool? isUpToDate = null,
         DateTime? updatedAt = null,
         Guid? registryId = null,
         Registry? registry = null)
@@ -76,7 +70,6 @@ public sealed class Image(
             containers: containers,
             platformId: platformId,
             createdAt: createdAt,
-            isUpToDate: isUpToDate,
             updatedAt: updatedAt,
             registryId: registryId)
         { 

@@ -6114,7 +6114,8 @@
           "name",
           "platformId",
           "description",
-          "spec"
+          "spec",
+          "updateBehavior"
         ],
         "type": "object",
         "properties": {
@@ -6133,6 +6134,9 @@
           },
           "spec": {
             "$ref": "#/components/schemas/DeploymentSpec"
+          },
+          "updateBehavior": {
+            "$ref": "#/components/schemas/UpdateBehavior"
           }
         }
       },
@@ -7906,12 +7910,6 @@
           "createdAt": {
             "format": "date-time"
           },
-          "isUpToDate": {
-            "type": [
-              "null",
-              "boolean"
-            ]
-          },
           "updatedAt": { },
           "registryId": {
             "type": [
@@ -9656,6 +9654,13 @@
             "format": "int64"
           }
         }
+      },
+      "UpdateBehavior": {
+        "enum": [
+          "Disabled",
+          "Notify",
+          "AutoDeploy"
+        ]
       },
       "VolumeAccessMode": {
         "required": [

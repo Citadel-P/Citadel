@@ -62,7 +62,10 @@ public partial class ImagTagsContext : JsonSerializerContext
     PropertyNameCaseInsensitive = true,
     Converters = new[]
     {
-        typeof(JsonStringEnumConverter<DeploymentStatus>)
+        typeof(JsonStringEnumConverter<StopSignal>),
+        typeof(JsonStringEnumConverter<ImageSource>),
+        typeof(JsonStringEnumConverter<UpdateBehavior>),
+        typeof(JsonStringEnumConverter<ContainerRestartPolicy>),
     })]
 [JsonSerializable(typeof(Deployment))]
 [JsonSerializable(typeof(DeploymentSpec))]

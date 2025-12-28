@@ -65,7 +65,7 @@ public class PlatformSyncJobTests : IntegrationTestBase
             connectorType: PlatformConnectorType.Agent,
             platformDescriptor: platformDescriptor
         );
-        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         platformName = platform.Name;

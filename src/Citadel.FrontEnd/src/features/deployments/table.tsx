@@ -85,7 +85,7 @@ const DeploymentNameRow = ({ deployment }: { deployment: DeploymentView }) => {
   return (
     <div className="flex items-center whitespace-nowrap">
       <div className="flex items-center">
-        <StateIndicator value={deployment.activeVersion?.status} />
+        <StateIndicator value={deployment.status} />
       </div>
       <span
         className="cursor-pointer hover:underline"
@@ -98,7 +98,7 @@ const DeploymentNameRow = ({ deployment }: { deployment: DeploymentView }) => {
         tabIndex={0}
         role="button"
         aria-label="Show deployment details">
-        {deployment.id}
+        {deployment.name}
       </span>
     </div>
   );

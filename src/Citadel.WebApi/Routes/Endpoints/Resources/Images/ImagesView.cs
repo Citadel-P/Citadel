@@ -12,7 +12,6 @@ public sealed record ImageView(
     bool IsInUse,
     Guid PlatformId,
     DateTime CreatedAt,
-    bool? IsUpToDate = null,
     DateTime? UpdatedAt = null,
     Guid? RegistryId = null,
     RegistryView? Registry = null);
@@ -30,7 +29,6 @@ public sealed record ImagesView(IEnumerable<ImageView> Images)
             IsInUse: image.Containers > 0,
             PlatformId: image.PlatformId,
             CreatedAt: image.CreatedAt,
-            IsUpToDate: image.IsUpToDate,
             UpdatedAt: image.UpdatedAt,
             RegistryId: image.RegistryId,
             Registry: image.Registry is not null ? RegistryView.Map(image.Registry) : null

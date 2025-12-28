@@ -27,7 +27,7 @@ public sealed record CreateRegistry(
     {
         public Validator()
         {
-            RuleFor(x => x.Name).NotEmpty().ValidNameIdentifier();
+            RuleFor(x => x.Name).ValidNameIdentifier();
             RuleFor(x => x.Description).MaximumLength(600);
 
             RuleFor(x => x.RegistryHost).NotNull().NotEmpty()

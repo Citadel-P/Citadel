@@ -25,7 +25,6 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.Containers,
                 i.PlatformId,
                 i.CreatedAt,
-                i.IsUpToDate,
                 i.UpdatedAt,
                 i.RegistryId,
                 r.Name AS RegistryName,
@@ -58,7 +57,6 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.Containers,
                 i.PlatformId,
                 i.CreatedAt,
-                i.IsUpToDate,
                 i.UpdatedAt,
                 i.RegistryId
             FROM Images i
@@ -81,7 +79,6 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.Containers,
                 i.PlatformId,
                 i.CreatedAt,
-                i.IsUpToDate,
                 i.UpdatedAt,
                 i.RegistryId,
                 r.Name AS RegistryName,
@@ -104,14 +101,13 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
     {
         const string sql = """
             INSERT INTO Images (
-                Id, PlatformId, DockerImageId, Name, Containers, IsUpToDate, Tags, Size, RegistryId, CreatedAt, UpdatedAt
+                Id, PlatformId, DockerImageId, Name, Containers, Tags, Size, RegistryId, CreatedAt, UpdatedAt
             ) VALUES (
-                @Id, @PlatformId, @DockerImageId, @Name, @Containers, @IsUpToDate, @Tags, @Size, @RegistryId, @CreatedAt, @UpdatedAt
+                @Id, @PlatformId, @DockerImageId, @Name, @Containers, @Tags, @Size, @RegistryId, @CreatedAt, @UpdatedAt
             )
             ON CONFLICT(DockerImageId, PlatformId) DO UPDATE SET
                 Name = excluded.Name,
                 Containers = excluded.Containers,
-                IsUpToDate = excluded.IsUpToDate,
                 Tags = excluded.Tags,
                 Size = excluded.Size,
                 RegistryId = excluded.RegistryId,
@@ -125,7 +121,6 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
             DockerImageId = image.DockerImageId,
             Name = image.Name,
             Containers = image.Containers,
-            IsUpToDate = image.IsUpToDate,
             Tags = JsonSerializer.Serialize(image.Tags, ImagTagsContext.Default.IEnumerableString),
             Size = image.Size,
             RegistryId = image.RegistryId?.Format(),
@@ -138,16 +133,15 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
     {
         const string sql = """
             INSERT INTO Images (
-                Id, PlatformId, DockerImageId, Name, Containers, IsUpToDate, Tags, Size, RegistryId, CreatedAt, UpdatedAt
+                Id, PlatformId, DockerImageId, Name, Containers, Tags, Size, RegistryId, CreatedAt, UpdatedAt
             )
             VALUES (
-                @Id, @PlatformId, @DockerImageId, @Name, @Containers, @IsUpToDate, @Tags, @Size, @RegistryId, @CreatedAt, @UpdatedAt
+                @Id, @PlatformId, @DockerImageId, @Name, @Containers, @Tags, @Size, @RegistryId, @CreatedAt, @UpdatedAt
             )
             ON CONFLICT(Id) DO UPDATE SET
                 PlatformId  = excluded.PlatformId,
                 Name        = excluded.Name,
                 Containers  = excluded.Containers,
-                IsUpToDate  = excluded.IsUpToDate,
                 Tags        = excluded.Tags,
                 Size        = excluded.Size,
                 RegistryId  = excluded.RegistryId,
@@ -163,7 +157,6 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
             DockerImageId = img.DockerImageId,
             Name = img.Name,
             Containers = img.Containers,
-            IsUpToDate = img.IsUpToDate,
             Tags = JsonSerializer.Serialize(img.Tags, ImagTagsContext.Default.IEnumerableString),
             Size = img.Size,
             RegistryId = img.RegistryId?.Format(),

@@ -56,7 +56,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
     {
         var platform = Fakes.GetDummyPlatform();
 
-        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         foreach (var container in Fakes.GetDummyContainers())
         {
             await uow.Containers.AddAsync(new Container(

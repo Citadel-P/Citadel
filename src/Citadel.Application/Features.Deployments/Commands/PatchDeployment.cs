@@ -50,17 +50,36 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork) : ICommandH
         var patchedDeployment = command.Patch.ApplyTo(deployment, DeploymentJsonContext.Default.Deployment);
         if (patchedDeployment.Name != null)
         {
-            var conflict = await unitOfWork.Deployments.ExistsAsync(patchedDeployment.Name, cancellationToken);
+            var conflict = await unitOfWork.Deployments.ExistsAsync(command.Id, patchedDeployment.Name, cancellationToken);
             if (conflict)
             {
                 return Result.Failure<Deployment>(new ConflictError("Name already exists"));
             }
         }
 
+        if (patchedDeployment.Spec.Image is not ExternalImage)
+        {
+            if (patchedDeployment.UpdateBehavior != UpdateBehavior.Disabled)
+            {
+                return Result.Failure<Deployment>(new BadRequestError("Auto-update requires an external image source."));
+            }
+        }
+
+        if (patchedDeployment.Spec.Image is ExternalImage extImage && extImage.ImageTag.Contains('@'))
+        {
+            if (patchedDeployment.UpdateBehavior != UpdateBehavior.Disabled)
+            {
+                return Result.Failure<Deployment>(new BadRequestError("Cannot enable Auto-update for an image pinned by digest (contains '@')."));
+            }
+        }
+
         deployment.PartialUpdate(
             name: patchedDeployment.Name, 
-            description: patchedDeployment.Description, 
+            platformId: patchedDeployment.PlatformId,
+            description: patchedDeployment.Description,
+            updateBehavior: patchedDeployment.UpdateBehavior,
             spec: patchedDeployment.Spec);
+
         await unitOfWork.Deployments.UpdateAsync(deployment, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 

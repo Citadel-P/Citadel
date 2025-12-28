@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251226220213_migration0001")]
+    [Migration("20251228120950_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -166,8 +166,26 @@ namespace Infrastructure.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<string>("AutoUpdateState_CurrentDigest")
                         .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("AutoUpdateState_LastCheckedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AutoUpdateState_LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AutoUpdateState_RemoteDigest")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AutoUpdateState_Status")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("CreatedByActorId")
                         .IsRequired()
@@ -190,6 +208,9 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdateBehavior")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -223,9 +244,6 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<string>("DockerImageId")
                         .IsRequired()
                         .HasColumnType("TEXT");
-
-                    b.Property<bool?>("IsUpToDate")
-                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Name")
                         .IsRequired()

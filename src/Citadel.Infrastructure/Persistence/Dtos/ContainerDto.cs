@@ -44,7 +44,6 @@ internal record ContainerWithImageDto(
      double? Image_Size = null,
      int? Image_Containers = null,
      DateTime? Image_CreatedAt = null,
-     bool? Image_IsUpToDate = null,
      DateTime? Image_UpdatedAt = null
     ) : ContainerDto;
 

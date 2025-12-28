@@ -25,7 +25,7 @@ internal class GetContainerInfoByIdHandler(IConnectorFactory<IContainerConnector
 {
     public async ValueTask<Result<ContainerInfo>> Handle(GetContainerInfoById query, CancellationToken cancellationToken)
     {
-        var platform = await unitOfWork.Platforms.GetPlatformDetailsByContainerIdAsync(query.ContainerId, cancellationToken);
+        var platform = await unitOfWork.Platforms.GetPlatformByContainerIdAsync(query.ContainerId, cancellationToken);
         if (platform is null)
         {
             return Result.Failure<ContainerInfo>(new NotFoundError("No platform found for the given ID."));

@@ -28,7 +28,7 @@ internal class DeletePlatformHandler(
     {
         foreach (var platformId in command.Ids)
         {
-            var platform = await unitOfWork.Platforms.GetPlatformInfoAsync(platformId, cancellationToken);
+            var platform = await unitOfWork.Platforms.GetInfoAsync(platformId, cancellationToken);
             if (platform is null)
             {
                 return Result.Failure(new NotFoundError("Platform does not exist"));

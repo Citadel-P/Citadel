@@ -1,4 +1,5 @@
 ﻿using Domain.Contracts.Interfaces;
+using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
@@ -10,13 +11,12 @@ internal class DeleteDeploymentsHandler(IUnitOfWork unitOfWork) : ICommandHandle
 {
     public async ValueTask<Result> Handle(DeleteDeployments command, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
-        //var result = await unitOfWork.RegistriesDe.RemoveRangeAsync(command.Ids, cancellationToken);
-        //await unitOfWork.CommitAsync(cancellationToken);
+        var result = await unitOfWork.Deployments.RemoveRangeAsync(command.Ids, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
 
-        //return result > 0
-        //    ? Result.Success()
-        //    : Result.Failure(new NotFoundError("No registries found matching the provided IDs for deletion."));
+        return result > 0
+            ? Result.Success()
+            : Result.Failure(new NotFoundError("No deployments found matching the provided IDs for deletion."));
     }
 }
 

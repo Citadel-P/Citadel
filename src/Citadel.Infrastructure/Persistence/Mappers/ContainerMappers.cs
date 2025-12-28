@@ -52,7 +52,6 @@ internal static class ContainerMappers
                 containers: container.Image_Containers ?? 0,
                 platformId: container.Image_platformId ?? Guid.Empty,
                 createdAt: container.Image_CreatedAt ?? DateTime.MinValue,
-                isUpToDate: container.Image_IsUpToDate,
                 updatedAt: container.Image_UpdatedAt,
                 registryId: container.Image_RegistryId
                 ) : null);
@@ -86,7 +85,6 @@ internal static class ContainerMappers
                 containers: container.Image_Containers ?? 0,
                 platformId: container.Image_platformId ?? Guid.Empty,
                 createdAt: container.Image_CreatedAt ?? DateTime.MinValue,
-                isUpToDate: container.Image_IsUpToDate,
                 updatedAt: container.Image_UpdatedAt,
                 registryId: container.Image_RegistryId
             ),

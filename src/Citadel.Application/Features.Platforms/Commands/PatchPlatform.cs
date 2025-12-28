@@ -98,7 +98,7 @@ internal class PatchPlatformHandler(
                     agentVersion: platformInfo.AgentVersion,
                     descriptor: platformInfo.Descriptor);
 
-                await unitOfWork.Platforms.UpdatePlatformAsync(platform, cancellationToken);
+                await unitOfWork.Platforms.UpdateAsync(platform, cancellationToken);
                 await unitOfWork.CommitAsync(cancellationToken);
 
                 await UpdatePlatformTracking(platform.Id, platform.Address, platform.ConnectorType, oldPlatformAddress, cancellationToken);

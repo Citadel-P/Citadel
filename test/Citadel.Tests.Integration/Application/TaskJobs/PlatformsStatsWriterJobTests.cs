@@ -51,7 +51,7 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
     {
         var platform = Fakes.GetDummyPlatform();
 
-        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         _platformId = platform.Id;

@@ -265,3 +265,62 @@ public enum RegistryStatus
     Disabled,
     Deprecated
 }
+
+public enum AutoUpdateMode
+{
+    /// <summary>
+    /// The platform periodically checks the registry (Default).
+    /// </summary>
+    Poll,
+    /// <summary>
+    /// The registry calls a webhook on this platform to trigger update.
+    /// </summary>
+    Webhook
+}
+
+public enum AutoUpdateStrategy
+{
+    /// <summary>
+    /// The standard "Watchtower" behavior. 
+    /// Checks if the Digest for the currently defined Tag has changed.
+    /// Used for mutable tags like 'latest', 'dev', 'stable'.
+    /// </summary>
+    RecreateOnNewDigest,
+
+    /// <summary>
+    /// Scans registry for newer tags matching a SemVer pattern.
+    /// E.g. currently 'v1.0.1', found 'v1.0.2'.
+    /// </summary>
+    SemVerBump
+}
+
+public enum AutoUpdateStatus
+{
+    Unknown,
+    UpToDate,
+    /// <summary>
+    /// A new digest/tag was found, waiting for update window/approval
+    /// </summary>
+    UpdateAvailable,
+    /// <summary>
+    /// Deployment is currently restarting with new image
+    /// </summary>
+    Updating,
+    Failed
+}
+
+public enum UpdateBehavior
+{
+    /// <summary>
+    /// Do not check for updates.
+    /// </summary>
+    Disabled,
+    /// <summary>
+    /// Periodically check for updates and alert me, but do not redeploy.
+    /// </summary>
+    Notify,
+    /// <summary>
+    /// Periodically check and automatically redeploy when a new image is found.
+    /// </summary>
+    AutoDeploy
+}

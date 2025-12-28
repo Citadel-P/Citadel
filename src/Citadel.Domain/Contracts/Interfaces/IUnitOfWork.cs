@@ -87,15 +87,15 @@ public interface IPlatformRepository
     Task<Platform?> GetByNameAsync(string name, CancellationToken cancellationToken);
     Task<IEnumerable<Platform>?> GetPlatformsWithLatestStatAsync(CancellationToken cancellationToken);
     Task<Platform?> GetPlatformWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken);
-    Task<PlatformConnectionInfo?> GetPlatformDetailsByContainerIdAsync(string dockerContainerId, CancellationToken cancellationToken);
-    Task<PlatformConnectionInfo?> GetPlatformInfoAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<PlatformConnectionInfo?> GetPlatformByContainerIdAsync(string dockerContainerId, CancellationToken cancellationToken);
+    Task<PlatformConnectionInfo?> GetInfoAsync(Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<PlatformConnectionInfo>> GetPlatformsInfoAsync(CancellationToken cancellationToken);
 
     Task<int?> PlatformNameExistsAsync(string name, Guid excludePlatformId, CancellationToken cancellationToken);
     Task<bool> NameOrAddressExistsAsync(string name, string address, CancellationToken cancellationToken);
 
-    Task<int> AddPlatformAsync(Platform platform, CancellationToken cancellationToken);
-    Task<int> UpdatePlatformAsync(Platform platform, CancellationToken cancellationToken);
+    Task<int> AddAsync(Platform platform, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(Platform platform, CancellationToken cancellationToken);
 
     Task<int> DeleteAsync(Guid platformId, CancellationToken cancellationToken);
 }
@@ -116,7 +116,10 @@ public interface IDeploymentRepository
 {
     Task<Deployment?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
     Task<int> AddAsync(Deployment deployment, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetAllAsync(CancellationToken cancellationToken);
-    Task<int> UpdateAsync(Deployment registry, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(Deployment deployment, CancellationToken cancellationToken);
+
+    Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
 }

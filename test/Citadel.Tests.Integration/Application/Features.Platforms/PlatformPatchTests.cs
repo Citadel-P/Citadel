@@ -50,7 +50,7 @@ public class PlatformPatchTests : IntegrationTestBase
                 ContainersStopped: 1)
         );
 
-        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         platformId = platform.Id;
@@ -166,7 +166,7 @@ public class PlatformPatchTests : IntegrationTestBase
                 ContainersStopped: 1)
         );
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        await uow.Platforms.AddPlatformAsync(platform, TestContext.Current.CancellationToken);
+        await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         var patchJson = """

@@ -2,7 +2,6 @@
 using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Identity;
 using Domain.Entities.Registries;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;

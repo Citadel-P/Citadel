@@ -1,8 +1,8 @@
 import { memo } from 'react';
-import { ContainerStateStatus, RegistryStatus } from '@/api/generated/api.types';
+import { ContainerStateStatus, DeploymentStatus, RegistryStatus } from '@/api/generated/api.types';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-type StateValue = boolean | ContainerStateStatus | RegistryStatus;
+type StateValue = boolean | ContainerStateStatus | RegistryStatus | DeploymentStatus;
 
 const getStatusStyle = (value: StateValue) => {
   // Boolean-based statuses
@@ -22,6 +22,20 @@ const getStatusStyle = (value: StateValue) => {
       return { colorClass: 'bg-gray-500', tooltip: 'Disabled' };
     case RegistryStatus.Deprecated:
       return { colorClass: 'bg-orange-500', tooltip: 'Deprecated' };
+    // Deployment
+    case DeploymentStatus.Created:
+      return { colorClass: 'bg-blue-400', tooltip: 'Created' };
+    case DeploymentStatus.Healthy:
+      return { colorClass: 'bg-green-500', tooltip: 'Running' };
+    case DeploymentStatus.Failed:
+      return { colorClass: 'bg-red-500', tooltip: 'Failed' };
+    case DeploymentStatus.Stopped:
+      return { colorClass: 'bg-gray-500', tooltip: 'Stopped' };
+    case DeploymentStatus.Degraded:
+      return { colorClass: 'bg-orange-500', tooltip: 'Degraded' };
+    case DeploymentStatus.Applying:
+    case DeploymentStatus.Pending:
+      return { colorClass: 'bg-yellow-500', tooltip: 'Pending' };
     // Containers
     case ContainerStateStatus.Created:
       return { colorClass: 'bg-blue-400', tooltip: 'Created' };

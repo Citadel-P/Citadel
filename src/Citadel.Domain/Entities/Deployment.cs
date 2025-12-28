@@ -6,13 +6,18 @@ public sealed class Deployment(
     Guid createdByActorId,
     Guid platformId,
     DeploymentSpec spec,
+    UpdateBehavior updateBehavior,
     string? description = null) : AuditedEntity(createdByActorId)
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid PlatformId { get; private set; } = platformId;
     public string Name { get; private set; } = name;
     public string? Description { get; private set; } = description;
+
     public DeploymentStatus Status { get; private set; } = status;
+
+    public UpdateBehavior UpdateBehavior { get; private set; } = updateBehavior;
+    public AutoUpdateState? AutoUpdateState { get; private set; } = new AutoUpdateState(LastCheckedAt: DateTime.MinValue, Status: AutoUpdateStatus.Unknown);
 
     public DeploymentSpec Spec { get; private set; } = spec;
 
@@ -34,12 +39,15 @@ public sealed class Deployment(
         DeploymentStatus status,
         DateTime createdAt,
         Guid createdByActorId,
+        UpdateBehavior updateBehavior,
+        AutoUpdateState? autoUpdateState,
         DeploymentSpec spec)
     {
-        return new Deployment(name, status, createdByActorId, platformId, spec, description)
+        return new Deployment(name, status, createdByActorId, platformId, spec, updateBehavior, description)
         {
             Id = id,
-            CreatedAt = createdAt
+            CreatedAt = createdAt,
+            AutoUpdateState = autoUpdateState,
         };
     }
 
@@ -48,6 +56,7 @@ public sealed class Deployment(
         string? description = null,
         Guid? platformId = null,
         DeploymentStatus? status = null,
+        UpdateBehavior? updateBehavior = null,
         DeploymentSpec? spec = null)
     {
         if (name != null) Name = name;
@@ -55,5 +64,14 @@ public sealed class Deployment(
         if (description != null) Description = description;
         if (platformId != null) PlatformId = platformId.Value;
         if (spec != null) Spec = spec;
+        if (updateBehavior != null) UpdateBehavior = updateBehavior.Value;
     }
 }
+
+public sealed record AutoUpdateState(
+    DateTime LastCheckedAt,
+    AutoUpdateStatus Status,
+    string? CurrentDigest = null,
+    string? RemoteDigest = null,
+    string? LastError = null
+    );

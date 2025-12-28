@@ -206,7 +206,7 @@ internal sealed class PlatformOnlineSyncWorkItem(
                 descriptor: platformInfo.Descriptor
             );
 
-            await uow.Platforms.UpdatePlatformAsync(platform, cancellationToken);
+            await uow.Platforms.UpdateAsync(platform, cancellationToken);
             await uow.CommitAsync(cancellationToken);
 
             // Notify clients
@@ -238,7 +238,7 @@ internal sealed class PlatformOfflineSyncWorkItem(
 
             platform.PartialUpdate(platformStatus: PlatformStatus.Offline);
 
-            await uow.Platforms.UpdatePlatformAsync(platform, cancellationToken);
+            await uow.Platforms.UpdateAsync(platform, cancellationToken);
             await uow.CommitAsync(cancellationToken);
 
             var notificationWorkItem = new PushPlatformUpdateNotificationWorkItem(platformStreamManager, platform);
