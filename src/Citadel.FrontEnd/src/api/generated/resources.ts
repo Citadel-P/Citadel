@@ -26,7 +26,7 @@ export const resources = {
   deleteRegistries: { method: "DELETE", key: "deleteRegistries", params: ["params"], requiredParams: [], queryParams: [] },
   getRegistry: { method: "GET", key: "getRegistry", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   updateRegistry: { method: "PATCH", key: "updateRegistry", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
-  getRegistryWithConfig: { method: "GET", key: "getRegistryWithConfig", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
+  getRegistryConfig: { method: "GET", key: "getRegistryConfig", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   listImages: { method: "GET", key: "listImages", params: ["platformId","params"], requiredParams: ["platformId"], queryParams: [] },
   getExternalRepositories: { method: "GET", key: "getExternalRepositories", params: ["registryName","params"], requiredParams: ["registryName"], queryParams: [] },
   getGhcrPackageVersions: { method: "GET", key: "getGhcrPackageVersions", params: ["registryName","packageName","params"], requiredParams: ["registryName","packageName"], queryParams: [] },
@@ -49,6 +49,7 @@ export const resources = {
   createDeployment: { method: "POST", key: "createDeployment", params: ["data","params"], requiredParams: [], queryParams: [] },
   deleteDeployments: { method: "DELETE", key: "deleteDeployments", params: ["params"], requiredParams: [], queryParams: [] },
   getDeployment: { method: "GET", key: "getDeployment", params: ["deploymentId","params"], requiredParams: ["deploymentId"], queryParams: [] },
+  getDeploymentConfig: { method: "GET", key: "getDeploymentConfig", params: ["deploymentId","params"], requiredParams: ["deploymentId"], queryParams: [] },
   updateDeployment: { method: "PATCH", key: "updateDeployment", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
 } as const;
 

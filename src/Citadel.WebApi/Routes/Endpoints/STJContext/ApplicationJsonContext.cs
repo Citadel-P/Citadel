@@ -128,7 +128,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(CreateContainerView))]
 [JsonSerializable(typeof(IAsyncEnumerable<ComposeDeploymentEvent>))]
 [JsonSerializable(typeof(ComposeUpRequest))]
-[JsonSerializable(typeof(RegistryWithConfigView))]
+[JsonSerializable(typeof(RegistryConfigView))]
 [JsonSerializable(typeof(IEnumerable<ContainerVolumeResult>))]
 [JsonSerializable(typeof(InspectImageView))]
 [JsonSerializable(typeof(DeploymentsView))]
@@ -141,6 +141,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(DeletePlatformsInput))]
 [JsonSerializable(typeof(DeploymentInput))]
 [JsonSerializable(typeof(DeleteDeploymentsInput))]
+[JsonSerializable(typeof(DeploymentConfigView))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

@@ -6,18 +6,41 @@
   createdAt: DateTimeOffset_1,
   createdByActorId: Guid_3,
   status: Created,
+  autoUpdateState: {
+    lastCheckedAt: Date_MinValue,
+    status: Unknown
+  },
   spec: {
     image: {
-      $type: External,
-      registryId: Guid_4,
-      imageTag: nginx:latest
+      $type: Local,
+      imageId: Guid_4
+    },
+    lifeCycleSpec: {
+      stopTimeout: 15,
+      stopSignal: SIGKILL,
+      restartPolicy: No
+    },
+    resourceSpec: {
+      cpuLimit: 0.25,
+      memoryLimit: 256
+    },
+    labels: {
+      key1: val1
     },
     ports: [
-      80:80
+      2220-27017/tcp
     ],
     envVars: [
       ENV=staging,
       DEBUG=true
+    ],
+    networks: [
+      96da77baf016bb722c40f10c023b2f5d1a4296b4bc6593cfad74de4bd31e8b14
+    ],
+    command: [
+      --housekeeping_interval=5s
     ]
-  }
+  },
+  updateBehavior: Disabled,
+  platformStatus: Offline
 }

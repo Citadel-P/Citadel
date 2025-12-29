@@ -65,12 +65,11 @@ public partial class ImagTagsContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<StopSignal>),
         typeof(JsonStringEnumConverter<ImageSource>),
         typeof(JsonStringEnumConverter<UpdateBehavior>),
+        typeof(JsonStringEnumConverter<AutoUpdateStatus>),
         typeof(JsonStringEnumConverter<ContainerRestartPolicy>),
     })]
 [JsonSerializable(typeof(Deployment))]
 [JsonSerializable(typeof(DeploymentSpec))]
-[JsonSerializable(typeof(SecurityConfig))]
-[JsonSerializable(typeof(LoggingConfig))]
 [JsonSerializable(typeof(HealthCheckConfig))]
 public partial class  DeploymentJsonContext: JsonSerializerContext
 { 

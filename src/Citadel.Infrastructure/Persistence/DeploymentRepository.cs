@@ -67,7 +67,36 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
 
     public async Task<IEnumerable<Deployment>> GetAllAsync(CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM Deployments";
+        const string sql = """
+            SELECT
+                d.Id,
+                d.Name, 
+                d.Description, 
+                d.PlatformId, 
+                d.Status, 
+                d.CreatedAt, 
+                d.CreatedByActorId, 
+                d.UpdateBehavior,
+                d.AutoUpdateState_LastCheckedAt, 
+                d.AutoUpdateState_Status,
+                d.AutoUpdateState_CurrentDigest,
+                d.AutoUpdateState_RemoteDigest,
+                d.AutoUpdateState_LastError,
+                p.Name AS Platform_Name,
+                p.status AS Platform_Status,
+                i.name as Image_Name,
+                i.Id AS Image_Id
+            FROM Deployments d 
+            LEFT JOIN Platforms p 
+                ON d.PlatformId = p.Id
+            LEFT JOIN Containers c 
+                ON d.Id = c.DeploymentId
+            LEFT JOIN Images i 
+                ON c.ImageId = i.Id
+            ORDER BY 
+                d.CreatedAt DESC,
+                d.Name ASC
+            """;
         var result = await db.QueryAsync<DeploymentDto>(sql, transaction: tx());
         return result.ToDomain();
     }

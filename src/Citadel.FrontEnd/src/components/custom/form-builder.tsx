@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect, useRef, memo, Ref } from 'react';
+import React, { useMemo, useState, useCallback, useRef, memo, Ref, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Eye, History, Save, X } from 'lucide-react';
@@ -186,9 +186,9 @@ export const FieldInput = ({
   className,
   ref,
 }: {
-  value?: string;
+  value?: string | number;
   autoFocus?: boolean;
-  onChange: (v: string) => void;
+  onChange: (v: any) => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   placeholder?: string;
   type?: string;
@@ -203,7 +203,19 @@ export const FieldInput = ({
     autoFocus={autoFocus}
     value={value ?? ''}
     onKeyDown={onKeyDown}
-    onChange={(e) => onChange(e.target.value)}
+    onChange={(e) => {
+      const v = e.target.value;
+      if (type === 'number') {
+        if (v === '') {
+          onChange(undefined);
+        } else {
+          const num = parseFloat(v);
+          onChange(isNaN(num) ? v : num);
+        }
+      } else {
+        onChange(v);
+      }
+    }}
     placeholder={placeholder}
     className={cn('max-w-[400px] max-h-[36px]', className)}
   />
@@ -853,7 +865,7 @@ export function FormShell<T>({
                         id={key}
                         key={key}
                         disabled={fieldDisabled}
-                        className="relative border rounded-md p-6 scroll-mt-20 xl:scroll-mt-16">
+                        className="relative border rounded-md p-6 scroll-mt-25 xl:scroll-mt-22">
                         <SmartField
                           render={f.render}
                           value={value}
@@ -875,7 +887,7 @@ export function FormShell<T>({
                       <section
                         id={item.id}
                         key={item.id}
-                        className={`relative border rounded-md p-6 scroll-mt-20 xl:scroll-mt-16`}>
+                        className={`relative border rounded-md p-6 scroll-mt-25 xl:scroll-mt-22`}>
                         <div className={cn('flex flex-row w-full', item.gap ?? 'gap-4', item.className)}>
                           {item.fields.map((f) => {
                             const key = f.key as string;
@@ -911,7 +923,7 @@ export function FormShell<T>({
                     <section
                       id={group.id}
                       key={group.id}
-                      className={`relative border rounded-md p-6 flex gap-4 ${group.direction === 'horizontal' ? 'flex-row' : 'flex-col'} scroll-mt-20 xl:scroll-mt-16`}>
+                      className={`relative border rounded-md p-6 flex gap-4 ${group.direction === 'horizontal' ? 'flex-row' : 'flex-col'} scroll-mt-25 xl:scroll-mt-22`}>
                       <div className="flex flex-col gap-4 w-full">
                         {group.items.map((sub) => {
                           if (sub.kind === 'field') {
@@ -947,7 +959,7 @@ export function FormShell<T>({
                             <div
                               key={row.id}
                               id={row.id}
-                              className={`w-full ${group.direction === 'horizontal' ? 'flex-1' : ''} rounded-md scroll-mt-20 xl:scroll-mt-16`}>
+                              className={`w-full ${group.direction === 'horizontal' ? 'flex-1' : ''} rounded-md scroll-mt-25 xl:scroll-mt-22`}>
                               <div
                                 className={cn('flex flex-col sm:flex-row w-full', row.gap ?? 'gap-4', row.className)}>
                                 {row.fields.map((f) => {
@@ -960,7 +972,7 @@ export function FormShell<T>({
                                     <fieldset
                                       key={key}
                                       disabled={fieldDisabled}
-                                      className={` pb-1 last:pb-1  last:flex-1 scroll-mt-20 xl:scroll-mt-16`}>
+                                      className={` pb-1 last:pb-1  last:flex-1 scroll-mt-25 xl:scroll-mt-22`}>
                                       <SmartField
                                         render={f.render}
                                         value={value}

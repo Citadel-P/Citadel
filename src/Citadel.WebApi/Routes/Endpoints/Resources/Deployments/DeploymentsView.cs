@@ -18,7 +18,13 @@ public sealed record DeploymentView(
     DateTime CreatedAt,
     Guid CreatedByActorId,
     DeploymentStatus Status,
-    DeploymentSpec Spec
+    AutoUpdateState AutoUpdateState,
+    DeploymentSpec Spec,
+    UpdateBehavior UpdateBehavior,
+    PlatformStatus PlatformStatus,
+    string? PlatformName = null,
+    string? ImageName = null,
+    Guid? ImageId = null
     )
 {
     internal static DeploymentView Map(Deployment deployment) => new(
@@ -29,6 +35,31 @@ public sealed record DeploymentView(
         CreatedAt: deployment.CreatedAt,
         CreatedByActorId: deployment.CreatedByActorId,
         Status: deployment.Status,
-        Spec: deployment.Spec
+        Spec: deployment.Spec,
+        UpdateBehavior: deployment.UpdateBehavior,
+        AutoUpdateState: deployment.AutoUpdateState ?? new AutoUpdateState(LastCheckedAt : DateTime.MinValue, Status: AutoUpdateStatus.Unknown),
+        PlatformName: deployment.Platform?.Name,
+        PlatformStatus: deployment.Platform?.Status ?? PlatformStatus.Offline,
+        ImageName: deployment.Image?.Name,
+        ImageId: deployment.Image?.Id
+        );
+}
+
+public sealed record DeploymentConfigView(
+    Guid Id,
+    string Name,
+    Guid PlatformId,
+    string? Description,
+    DeploymentSpec Spec,
+    UpdateBehavior UpdateBehavior
+    )
+{
+    internal static DeploymentConfigView Map(Deployment deployment) => new(
+        Id: deployment.Id,
+        Name: deployment.Name,
+        PlatformId: deployment.PlatformId,
+        Description: deployment.Description,
+        Spec: deployment.Spec,
+        UpdateBehavior: deployment.UpdateBehavior
         );
 }

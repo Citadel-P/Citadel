@@ -31,10 +31,10 @@ public static class Registries
         return EndpointHandlers.HandleResult(result, RegistryView.Map);
     }
 
-    public static async Task<Results<Ok<RegistryWithConfigView>, ProblemHttpResult>> GetWithConfig(IMediator mediator, [Description("Registry id")] Guid id, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<RegistryConfigView>, ProblemHttpResult>> GetConfig(IMediator mediator, [Description("Registry id")] Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetRegistry(id), cancellationToken);
-        return EndpointHandlers.HandleResult(result, RegistryWithConfigView.Map);
+        return EndpointHandlers.HandleResult(result, RegistryConfigView.Map);
     }
 
     public static async Task<Results<NoContent, ProblemHttpResult>> Delete(IMediator mediator, [FromBody] DeleteRegistriesInput request, CancellationToken cancellationToken)

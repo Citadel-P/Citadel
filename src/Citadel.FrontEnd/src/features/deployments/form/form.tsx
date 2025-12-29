@@ -138,24 +138,29 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
   const [update, setUpdate] = useState<Partial<DeploymentInput>>({});
   const [isPending, setIsPending] = useState(false);
 
-  const { data, isSuccess: imageInfoIsSuccess } = useRead('getExposedPorts', {
-    platformId: update.platformId,
-    imageId: (update.spec?.image as DeploymentImageInfoLocalImage)?.imageId,
-  });
-
   const { mutateAsync: createDeployment } = useMutate('createDeployment');
   const { mutateAsync: updateDeployment } = useMutate('updateDeployment');
 
   const original = resource ?? ({} as DeploymentInput);
-  const provider = update.spec?.image?.$type;
+
+  // Fallback Logic: Check `update` first, then `original`.
+  const currentPlatformId = update.platformId ?? original.platformId;
+  const currentSpec = { ...original.spec, ...update.spec };
+  const currentImage = update.spec?.image ?? original.spec?.image;
+  const provider = currentImage?.$type;
+
+  const { data, isSuccess: imageInfoIsSuccess } = useRead('getExposedPorts', {
+    platformId: currentPlatformId,
+    imageId: (currentImage as DeploymentImageInfoLocalImage)?.imageId,
+  });
 
   useEffect(() => {
     const shouldFetch =
-      imageInfoIsSuccess && data?.data?.ports !== undefined && update.spec?.image?.$type === ImageSource.local;
+      imageInfoIsSuccess && data?.data?.ports !== undefined && currentImage?.$type === ImageSource.local;
 
     if (!shouldFetch) return;
 
-    const currentPorts = update.spec?.ports ?? [];
+    const currentPorts = update.spec?.ports ?? original.spec?.ports ?? [];
     const serverPorts = data.data.ports ?? [];
 
     if (currentPorts.length > 0 && JSON.stringify(currentPorts) !== JSON.stringify(serverPorts)) {
@@ -176,7 +181,7 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
           },
         }) as Partial<DeploymentInput>,
     );
-  }, [imageInfoIsSuccess, data?.data?.ports, update.spec?.image?.$type, update.spec?.ports]);
+  }, [imageInfoIsSuccess, data?.data?.ports, currentImage?.$type, update.spec?.ports, original.spec?.ports]);
 
   const handleSave = async (payload: DeploymentInput) => {
     setIsPending(true);
@@ -197,43 +202,53 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
       general: defineSection<DeploymentInput>({
         title: '',
         items: [
-          defineGroupField({
-            id: 'details',
-            label: 'Details',
-            items: [
-              defineField({
-                key: 'name',
-                label: 'Name',
-                required: true,
-                description: 'Internal identifier for this workload.',
-                validate: (v) => (!v ? 'Name is required' : null),
-                render: (val, set) => (
-                  <FieldInput value={val} onChange={(v) => set({ name: v })} placeholder="e.g. production-web-server" />
-                ),
-              }),
-              defineField({
-                key: 'description',
-                label: 'Description',
-                required: false,
-                description: 'Optional description of this workload.',
-                render: (val, set) => <FieldTextArea value={val} onChange={(v) => set({ description: v })} />,
-              }),
-            ],
-          }),
+          ...(mode === 'add'
+            ? [
+                defineGroupField<DeploymentInput>({
+                  id: 'details',
+                  label: 'Details',
+                  items: [
+                    defineField({
+                      key: 'name',
+                      label: 'Name',
+                      required: true,
+                      description: 'Internal identifier for this workload.',
+                      validate: (v) => (!v ? 'Name is required' : null),
+                      render: (val, set) => (
+                        <FieldInput
+                          value={val}
+                          onChange={(v) => set({ name: v })}
+                          placeholder="e.g. production-web-server"
+                        />
+                      ),
+                    }),
+                    defineField({
+                      key: 'description',
+                      label: 'Description',
+                      required: false,
+                      description: 'Optional description of this workload.',
+                      render: (val, set) => <FieldTextArea value={val} onChange={(v) => set({ description: v })} />,
+                    }),
+                  ],
+                }),
+              ]
+            : []),
           defineField({
             key: 'platformId',
             label: 'Platform',
             required: true,
             disabled: false,
             description: 'Select the platform to deploy on.',
-            render: (value, set) => (
-              <ResourceSelectorField
-                type="Platform"
-                selected={value}
-                onSelect={(v: PlatformView | undefined) => set({ platformId: v?.id })}
-                placeholder="Select Platform"
-              />
-            ),
+            render: (value, set) => {
+              return (
+                <ResourceSelectorField
+                  type="Platform"
+                  selected={value}
+                  onSelect={(v: PlatformView | undefined) => set({ platformId: v?.id })}
+                  placeholder="Select Platform"
+                />
+              );
+            },
           }),
           defineGroupField<DeploymentInput>({
             id: 'image',
@@ -245,21 +260,23 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                 description: 'Select the image source.',
                 required: true,
                 validate: (v) => (!v ? 'Source is required' : null),
-                render: (val, set) => (
-                  <ItemSelector
-                    collection={image_source}
-                    value={val}
-                    onChange={(v: ImageSource) =>
-                      set((prev) => ({
-                        spec: {
-                          ...(prev.spec as DeploymentInput['spec']),
-                          image: { $type: v } as any,
-                          ports: [],
-                        },
-                      }))
-                    }
-                  />
-                ),
+                render: (val, set) => {
+                  return (
+                    <ItemSelector
+                      collection={image_source}
+                      value={val}
+                      onChange={(v: ImageSource) =>
+                        set((prev) => ({
+                          spec: {
+                            ...(prev.spec as DeploymentInput['spec']),
+                            image: { $type: v } as any,
+                            ports: [],
+                          },
+                        }))
+                      }
+                    />
+                  );
+                },
               }),
 
               provider === ImageSource.external
@@ -277,7 +294,7 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                             <ResourceSelectorField
                               type="Registry"
                               selected={val}
-                              platformId={update.platformId}
+                              platformId={currentPlatformId}
                               onSelect={(v: ImageView | undefined) =>
                                 set((prev) => ({
                                   spec: {
@@ -334,7 +351,7 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                       <ResourceSelectorField
                         type="Image"
                         selected={val}
-                        platformId={update.platformId}
+                        platformId={currentPlatformId}
                         onSelect={(v: ImageView | undefined) =>
                           set((prev) => ({
                             spec: {
@@ -377,11 +394,11 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                       }))
                     }
                     placeholder="Select Network(s)"
-                    platformId={update.platformId}
+                    platformId={currentPlatformId}
                   />
                 ),
               }),
-              update.spec?.image?.$type === ImageSource.local
+              provider === ImageSource.local
                 ? defineField({
                     label: 'Ports',
                     key: 'spec.ports',
@@ -470,18 +487,34 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
             key: 'updateBehavior',
             label: 'Auto Update',
             description: 'Define how the platform handles new image versions.',
-            render: (value, set) => (
-              <ItemSelector
-                collection={update_behaviors}
-                value={value}
-                onChange={(updateBehavior: UpdateBehavior) => {
-                  set((prev) => ({
-                    ...prev,
-                    updateBehavior,
-                  }));
-                }}
-              />
-            ),
+            render: (value, set) => {
+              let disabled = provider === ImageSource.local;
+              let warningMsg = 'Auto update requires an external image source.';
+
+              if (
+                provider === ImageSource.external &&
+                (currentSpec.image as DeploymentImageInfoExternalImage)?.imageTag?.includes('@')
+              ) {
+                disabled = true;
+                warningMsg = "Cannot enable Auto-update for an image pinned by digest (contains '@')";
+              }
+              return (
+                <>
+                  <ItemSelector
+                    collection={update_behaviors}
+                    value={value}
+                    disabled={disabled}
+                    onChange={(updateBehavior: UpdateBehavior) => {
+                      set((prev) => ({
+                        ...prev,
+                        updateBehavior,
+                      }));
+                    }}
+                  />
+                  <span className="text-xs text-danger/60">{disabled && warningMsg}</span>
+                </>
+              );
+            },
           }),
         ],
       }),
@@ -636,7 +669,7 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
         ],
       }),
     }),
-    [provider, update.platformId, update.spec?.image?.$type],
+    [provider, currentPlatformId, currentSpec.image, mode],
   );
 
   return (

@@ -13,5 +13,10 @@ internal sealed record DeploymentDto(
     string? AutoUpdateState_CurrentDigest,
     string? AutoUpdateState_RemoteDigest,
     string? AutoUpdateState_LastError,
-    string Spec,
-    string? Description = null);
+    string? Spec = null,
+    string? Description = null,
+    string? Platform_Name = null,
+    string? Platform_Status = null,
+    string? Image_Name = null,
+    Guid? Image_Id = null
+    );

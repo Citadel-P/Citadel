@@ -4,14 +4,13 @@ using Domain.Entities.Registries;
 
 namespace WebApi.Routes.Endpoints.Resources.Registries;
 
-public sealed record RegistryWithConfigView(
+public sealed record RegistryConfigView(
     Guid Id, 
     string Name,
     string RegistryHost,
     RegistryStatus Status,
     string Description,
-    DateTime Created,
     RegistryConfigurationBase? Configuration)
 {
-    internal static RegistryWithConfigView Map(Registry registry) => new(registry.Id, registry.Name, registry.RegistryHost, registry.Status, registry.Description ?? "", registry.CreatedAt, registry.Configuration);
+    internal static RegistryConfigView Map(Registry registry) => new(registry.Id, registry.Name, registry.RegistryHost, registry.Status, registry.Description ?? "", registry.Configuration);
 }

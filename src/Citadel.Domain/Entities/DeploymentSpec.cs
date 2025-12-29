@@ -26,8 +26,7 @@ public sealed record ExternalImage(Guid RegistryId, string ImageTag) : Deploymen
 
 public sealed record ResourceSpec(
     float? CpuLimit,
-    float? MemoryLimit,
-    float? MemoryReservation
+    float? MemoryLimit
 );
 
 public sealed record LifeCycleSpec(

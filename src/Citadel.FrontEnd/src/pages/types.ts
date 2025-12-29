@@ -123,4 +123,4 @@ export type DropdownActionComponent<T = any> = React.FC<{
   onAction?: (actionKey: string, actionData?: ActionData) => void;
 }>;
 
-export type RequiredFormFields = { name: string; description: string; status: unknown };
+export type RequiredFormFields = { name: string; description: string | null; status: unknown };

@@ -49,13 +49,44 @@ public class DeploymentPatchTests : IntegrationTestBase
     public async Task Patch_Deployment_Should_Apply_MergePatch()
     {
         // Arrange
-        var patchJson = """
+        var patchJson = $$"""
         {
-          "name": "Updated-Deployment-Name",
-          "description": "Updated description for testing",
-          "spec": {
-            "envVars": ["ENV=staging", "DEBUG=true"]
-          }
+          "name":"Updated-Deployment-Name",
+          "description":"Updated description for testing",
+          "platformId":"{{_platformId}}",
+          "updateBehavior":"Disabled",
+          "spec": 
+          {
+            "image":
+            {
+                "$type":"Local",
+                "registryId":"{{Constants.DefaultRegistryId}}",
+                "imageTag":"nginx",
+                "imageId":"019b6552-be84-7649-a6b0-c3a73a2df59c"
+            },
+            "ports":["2220-27017/tcp"],
+            "networks":["96da77baf016bb722c40f10c023b2f5d1a4296b4bc6593cfad74de4bd31e8b14"],
+            "resourceSpec":
+            {
+                "cpuLimit":0.25,
+                "memoryLimit":256
+            },
+            "lifeCycleSpec":
+            {
+                "stopSignal":"SIGKILL",
+                "stopTimeout":15
+            },
+            "labels":
+            {
+                "key1":"val1"
+            },
+            "envVars":
+            [
+                "ENV=staging",
+                "DEBUG=true"
+            ],
+            "command":["--housekeeping_interval=5s"]
+           }
         }
         """;
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
@@ -71,10 +102,11 @@ public class DeploymentPatchTests : IntegrationTestBase
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var deployment = await uow.Deployments.GetAsync(_deploymentId, TestContext.Current.CancellationToken);
 
-        Assert.Equal("Updated-Deployment-Name", deployment.Name);
-        Assert.Equal("Updated description for testing", deployment.Description);
-        Assert.Contains("ENV=staging", deployment.Spec.EnvVars);
-        Assert.Contains("DEBUG=true", deployment.Spec.EnvVars);
+        Assert.Equal("Updated-Deployment-Name", deployment?.Name);
+        Assert.Equal("Updated description for testing", deployment?.Description);
+        Assert.Contains("ENV=staging", deployment?.Spec?.EnvVars ?? []);
+        Assert.Contains("DEBUG=true", deployment?.Spec?.EnvVars ?? []);
+        Assert.Contains("key1", deployment?.Spec?.Labels?? []);
         await VerifyJson(responseBody);
     }
 

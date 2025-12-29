@@ -57,7 +57,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork) : ICommandH
             }
         }
 
-        if (patchedDeployment.Spec.Image is not ExternalImage)
+        if (patchedDeployment.Spec?.Image is not ExternalImage)
         {
             if (patchedDeployment.UpdateBehavior != UpdateBehavior.Disabled)
             {
@@ -65,7 +65,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork) : ICommandH
             }
         }
 
-        if (patchedDeployment.Spec.Image is ExternalImage extImage && extImage.ImageTag.Contains('@'))
+        if (patchedDeployment.Spec?.Image is ExternalImage extImage && extImage.ImageTag.Contains('@'))
         {
             if (patchedDeployment.UpdateBehavior != UpdateBehavior.Disabled)
             {

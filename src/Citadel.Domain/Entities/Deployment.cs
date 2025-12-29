@@ -5,8 +5,8 @@ public sealed class Deployment(
     DeploymentStatus status,
     Guid createdByActorId,
     Guid platformId,
-    DeploymentSpec spec,
     UpdateBehavior updateBehavior,
+    DeploymentSpec? spec = null,
     string? description = null) : AuditedEntity(createdByActorId)
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
@@ -19,7 +19,10 @@ public sealed class Deployment(
     public UpdateBehavior UpdateBehavior { get; private set; } = updateBehavior;
     public AutoUpdateState? AutoUpdateState { get; private set; } = new AutoUpdateState(LastCheckedAt: DateTime.MinValue, Status: AutoUpdateStatus.Unknown);
 
-    public DeploymentSpec Spec { get; private set; } = spec;
+    public DeploymentSpec? Spec { get; private set; } = spec;
+
+    public Platform? Platform { get; private set; } = null!;
+    public Image? Image { get; private set; } = null!;
 
     public void MarkAsDeployed()
     {
@@ -41,13 +44,17 @@ public sealed class Deployment(
         Guid createdByActorId,
         UpdateBehavior updateBehavior,
         AutoUpdateState? autoUpdateState,
-        DeploymentSpec spec)
+        DeploymentSpec? spec,
+        Platform? platform = null,
+        Image? image = null)
     {
-        return new Deployment(name, status, createdByActorId, platformId, spec, updateBehavior, description)
+        return new Deployment(name, status, createdByActorId, platformId, updateBehavior, spec, description)
         {
             Id = id,
             CreatedAt = createdAt,
             AutoUpdateState = autoUpdateState,
+            Platform = platform,
+            Image = image
         };
     }
 

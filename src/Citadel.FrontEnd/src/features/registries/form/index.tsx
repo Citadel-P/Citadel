@@ -29,7 +29,7 @@ export const RegistryFormComponents: RequiredFormComponents = {
       },
     ],
     useData: function (id?: string): { item?: RequiredFormFields; isLoading: boolean } {
-      const { data, isLoading } = useRead('getRegistryWithConfig', { id });
+      const { data, isLoading } = useRead('getRegistryConfig', { id });
       return { item: data?.data, isLoading };
     },
   },

@@ -1,5 +1,6 @@
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { DeploymentForm } from './form';
+import { useRead } from '@/lib/hooks';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -9,12 +10,24 @@ export const DeploymentFormComponents: RequiredFormComponents = {
   },
   EditForm: {
     Header: {
-      Indicator: undefined,
-      ActionButtons: undefined,
+      Indicator: ({ resource }: { resource: RequiredFormFields }) => {
+        return <></>;
+      },
+      ActionButtons: ({ resource }) => {
+        return <></>;
+      },
     },
-    Tabs: [],
+    Tabs: [
+      {
+        label: 'Config',
+        Content: ({ resource }) => {
+          return <DeploymentForm mode="edit" resource={resource} />;
+        },
+      },
+    ],
     useData: function (id: string): { item?: RequiredFormFields; isLoading: boolean } {
-      throw new Error('Function not implemented.');
+      const { data, isLoading } = useRead('getDeploymentConfig', { deploymentId: id });
+      return { item: data?.data, isLoading };
     },
   },
 };

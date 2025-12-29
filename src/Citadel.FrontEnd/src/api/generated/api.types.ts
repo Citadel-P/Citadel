@@ -120,6 +120,23 @@ export enum ContainerRestartPolicy {
   UnlessStopped = "UnlessStopped",
 }
 
+export enum AutoUpdateStatus {
+  Unknown = "Unknown",
+  UpToDate = "UpToDate",
+  UpdateAvailable = "UpdateAvailable",
+  Updating = "Updating",
+  Failed = "Failed",
+}
+
+export interface AutoUpdateState {
+  /** @format date-time */
+  lastCheckedAt: any;
+  status: AutoUpdateStatus;
+  currentDigest?: null | string;
+  remoteDigest?: null | string;
+  lastError?: null | string;
+}
+
 export interface BindOptions {
   propagation: null | string;
   nonRecursive: null | boolean;
@@ -502,6 +519,17 @@ export interface DeleteVolumesInput {
   force: null | boolean;
 }
 
+export interface DeploymentConfigView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  description: null | string;
+  spec: DeploymentSpec;
+  updateBehavior: UpdateBehavior;
+}
+
 export type DeploymentImageInfo = BaseDeploymentImageInfo &
   (
     | BaseDeploymentImageInfoTypeMapping<"Local", DeploymentImageInfoLocalImage>
@@ -513,6 +541,7 @@ export type DeploymentImageInfo = BaseDeploymentImageInfo &
 
 export interface DeploymentImageInfoExternalImage {
   $type?: "External";
+  /** @format uuid */
   registryId: string;
   imageTag: string;
 }
@@ -533,14 +562,14 @@ export interface DeploymentInput {
 
 export interface DeploymentSpec {
   image: DeploymentImageInfo;
-  lifeCycleSpec: null | LifeCycleSpec;
-  resourceSpec: null | ResourceSpec;
-  labels: null | object;
-  ports: null | any[];
-  envVars: null | any[];
-  volumes: null | any[];
-  networks: null | any[];
-  command: null | any[];
+  lifeCycleSpec?: null | LifeCycleSpec;
+  resourceSpec?: null | ResourceSpec;
+  labels?: null | object;
+  ports?: null | any[];
+  envVars?: null | any[];
+  volumes?: null | any[];
+  networks?: null | any[];
+  command?: null | any[];
 }
 
 export interface DeploymentView {
@@ -555,7 +584,14 @@ export interface DeploymentView {
   /** @format uuid */
   createdByActorId: string;
   status: DeploymentStatus;
+  autoUpdateState: AutoUpdateState;
   spec: DeploymentSpec;
+  updateBehavior: UpdateBehavior;
+  platformStatus: PlatformStatus;
+  platformName?: null | string;
+  imageName?: null | string;
+  /** @format uuid */
+  imageId?: null | string;
 }
 
 export interface DeploymentsView {
@@ -1357,6 +1393,16 @@ export interface RegistriesView {
   registries: RegistryView[];
 }
 
+export interface RegistryConfigView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  registryHost: string;
+  status: RegistryStatus;
+  description: string;
+  configuration: null | RegistryConfigurationBase;
+}
+
 export type RegistryConfigurationBase = BaseRegistryConfigurationBase &
   (
     | BaseRegistryConfigurationBaseTypeMapping<
@@ -1449,18 +1495,6 @@ export interface RegistryView {
   /** @format date-time */
   createdAt: any;
   isDefault?: boolean;
-}
-
-export interface RegistryWithConfigView {
-  /** @format uuid */
-  id: string;
-  name: string;
-  registryHost: string;
-  status: RegistryStatus;
-  description: string;
-  /** @format date-time */
-  created: any;
-  configuration: null | RegistryConfigurationBase;
 }
 
 export interface ResourceSpec {
@@ -2550,20 +2584,20 @@ export class Api<
      * No description
      *
      * @tags Registries
-     * @name GetRegistryWithConfig
-     * @summary Get registry and it's configuration
+     * @name GetRegistryConfig
+     * @summary Get registry with it's configuration
      * @request GET:/api/v1/registries/{id}/_cfg
      * @secure
-     * @response `200` `RegistryWithConfigView` OK
+     * @response `200` `RegistryConfigView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    getRegistryWithConfig: (id: string, params: RequestParams = {}) =>
+    getRegistryConfig: (id: string, params: RequestParams = {}) =>
       this.request<
-        RegistryWithConfigView,
+        RegistryConfigView,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/registries/${id}/_cfg`,
@@ -3206,6 +3240,33 @@ export class Api<
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/deployments/${deploymentId}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name GetDeploymentConfig
+     * @summary Get deployment by Id
+     * @request GET:/api/v1/deployments/{deploymentId}/_cfg
+     * @secure
+     * @response `200` `DeploymentConfigView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getDeploymentConfig: (deploymentId: string, params: RequestParams = {}) =>
+      this.request<
+        DeploymentConfigView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/deployments/${deploymentId}/_cfg`,
         method: "GET",
         secure: true,
         format: "json",

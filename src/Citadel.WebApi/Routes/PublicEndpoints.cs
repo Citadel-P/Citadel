@@ -254,13 +254,13 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getRegistry");
 
-        registries.MapGet("{id}/_cfg", Registries.GetWithConfig)
-            .WithSummary("Get registry and it's configuration")
+        registries.MapGet("{id}/_cfg", Registries.GetConfig)
+            .WithSummary("Get registry with it's configuration")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .WithName("getRegistryWithConfig");
+            .WithName("getRegistryConfig");
 
         registries.MapPost("/", Registries.Create)
             .WithSummary("Create a registry")
@@ -470,6 +470,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("getDeployment");
+
+        deployment.MapGet("/{deploymentId}/_cfg", Deployments.GetConfig)
+            .WithSummary("Get deployment by Id")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getDeploymentConfig");
 
         deployment.MapPost("/", Deployments.Create)
             .WithSummary("Create a deployment")

@@ -2330,8 +2330,8 @@
         "tags": [
           "Registries"
         ],
-        "summary": "Get registry and it's configuration",
-        "operationId": "getRegistryWithConfig",
+        "summary": "Get registry with it's configuration",
+        "operationId": "getRegistryConfig",
         "parameters": [
           {
             "name": "id",
@@ -2360,7 +2360,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RegistryWithConfigView"
+                  "$ref": "#/components/schemas/RegistryConfigView"
                 }
               }
             }
@@ -4340,6 +4340,94 @@
         ]
       }
     },
+    "/api/v1/deployments/{deploymentId}/_cfg": {
+      "get": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Get deployment by Id",
+        "operationId": "getDeploymentConfig",
+        "parameters": [
+          {
+            "name": "deploymentId",
+            "in": "path",
+            "description": "The deployment id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentConfigView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/deployments/{id}": {
       "patch": {
         "tags": [
@@ -4456,6 +4544,48 @@
   },
   "components": {
     "schemas": {
+      "AutoUpdateState": {
+        "required": [
+          "lastCheckedAt",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "lastCheckedAt": {
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AutoUpdateStatus"
+          },
+          "currentDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "remoteDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastError": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AutoUpdateStatus": {
+        "enum": [
+          "Unknown",
+          "UpToDate",
+          "UpdateAvailable",
+          "Updating",
+          "Failed"
+        ]
+      },
       "BindOptions": {
         "required": [
           "propagation",
@@ -6052,6 +6182,42 @@
           }
         }
       },
+      "DeploymentConfigView": {
+        "required": [
+          "id",
+          "name",
+          "platformId",
+          "description",
+          "spec",
+          "updateBehavior"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "spec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          },
+          "updateBehavior": {
+            "$ref": "#/components/schemas/UpdateBehavior"
+          }
+        }
+      },
       "DeploymentImageInfo": {
         "required": [
           "$type"
@@ -6086,7 +6252,8 @@
             "type": "string"
           },
           "registryId": {
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           "imageTag": {
             "type": "string"
@@ -6142,15 +6309,7 @@
       },
       "DeploymentSpec": {
         "required": [
-          "image",
-          "lifeCycleSpec",
-          "resourceSpec",
-          "labels",
-          "ports",
-          "envVars",
-          "volumes",
-          "networks",
-          "command"
+          "image"
         ],
         "type": "object",
         "properties": {
@@ -6254,7 +6413,10 @@
           "createdAt",
           "createdByActorId",
           "status",
-          "spec"
+          "autoUpdateState",
+          "spec",
+          "updateBehavior",
+          "platformStatus"
         ],
         "type": "object",
         "properties": {
@@ -6285,8 +6447,36 @@
           "status": {
             "$ref": "#/components/schemas/DeploymentStatus"
           },
+          "autoUpdateState": {
+            "$ref": "#/components/schemas/AutoUpdateState"
+          },
           "spec": {
             "$ref": "#/components/schemas/DeploymentSpec"
+          },
+          "updateBehavior": {
+            "$ref": "#/components/schemas/UpdateBehavior"
+          },
+          "platformStatus": {
+            "$ref": "#/components/schemas/PlatformStatus"
+          },
+          "platformName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "imageName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "imageId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -9150,6 +9340,45 @@
           }
         }
       },
+      "RegistryConfigView": {
+        "required": [
+          "id",
+          "name",
+          "registryHost",
+          "status",
+          "description",
+          "configuration"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "registryHost": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RegistryStatus"
+          },
+          "description": {
+            "type": "string"
+          },
+          "configuration": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegistryConfigurationBase"
+              }
+            ]
+          }
+        }
+      },
       "RegistryConfigurationBase": {
         "required": [
           "$type"
@@ -9429,49 +9658,6 @@
           },
           "isDefault": {
             "type": "boolean"
-          }
-        }
-      },
-      "RegistryWithConfigView": {
-        "required": [
-          "id",
-          "name",
-          "registryHost",
-          "status",
-          "description",
-          "created",
-          "configuration"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "registryHost": {
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/RegistryStatus"
-          },
-          "description": {
-            "type": "string"
-          },
-          "created": {
-            "format": "date-time"
-          },
-          "configuration": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RegistryConfigurationBase"
-              }
-            ]
           }
         }
       },
