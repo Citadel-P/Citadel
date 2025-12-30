@@ -12,12 +12,7 @@ import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
 import { HardDrive, Layers } from 'lucide-react';
 import { formatId } from '@/lib/utils';
-import {
-  AutoUpdateIcon,
-  UPDATE_BEHAVIOR_UI,
-  UPDATE_STATUS_UI,
-  UpdateStatusIcon,
-} from '@/components/custom/update-icons';
+import { AutoUpdateIcon, UPDATE_BEHAVIOR_UI, UPDATE_STATUS_UI, UpdateStatusIcon } from '@/components/custom/common';
 
 export const DeploymentsTable = ({
   items,
