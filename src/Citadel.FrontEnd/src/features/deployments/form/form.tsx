@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import { useParams, useNavigate } from 'react-router';
 import { MultiResourceSelectorField, ResourceSelectorField } from '@/components/custom/common';
 import { MonacoToArrayEditor, MonacoToDictionaryEditor } from '@/lib/monaco';
+import { AlertMessage } from '@/components/custom/alert-message';
 
 const enum ImageSource {
   local = 'Local',
@@ -499,7 +500,7 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                 warningMsg = "Cannot enable Auto-update for an image pinned by digest (contains '@')";
               }
               return (
-                <>
+                <div className='flex flex-col gap-2'>
                   <ItemSelector
                     collection={update_behaviors}
                     value={value}
@@ -511,8 +512,12 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                       }));
                     }}
                   />
-                  <span className="text-xs text-danger/60">{disabled && warningMsg}</span>
-                </>
+                  {disabled && (
+                    <AlertMessage type={'warning'} title={''}>
+                      <span className=" font-normal">{warningMsg}</span>
+                    </AlertMessage>
+                  )}
+                </div>
               );
             },
           }),

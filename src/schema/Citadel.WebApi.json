@@ -3025,13 +3025,13 @@
         "tags": [
           "Images"
         ],
-        "summary": "Pull an image from a registry and returns logs as a stream",
+        "summary": "Pull an image from a registry and streams execution logs in real time.",
         "operationId": "pullImage",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PullImageRequest"
+                "$ref": "#/components/schemas/PullImageInput"
               }
             }
           },
@@ -3055,7 +3055,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/PullImageResult"
+                    "$ref": "#/components/schemas/PullImageStreamItem"
                   }
                 }
               }
@@ -4540,10 +4540,101 @@
           }
         ]
       }
+    },
+    "/api/v1/deployments/apply": {
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Apply a deployment and streams execution logs in real time.",
+        "operationId": "applyDeployment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyDeploymentInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeploymentStreamItem"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
     }
   },
   "components": {
     "schemas": {
+      "ApplyDeploymentInput": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "AutoUpdateState": {
         "required": [
           "lastCheckedAt",
@@ -6182,6 +6273,30 @@
           }
         }
       },
+      "DeploymentApplyError": {
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "DeploymentConfigView": {
         "required": [
           "id",
@@ -6403,6 +6518,33 @@
           "Failed",
           "Stopped"
         ]
+      },
+      "DeploymentStreamItem": {
+        "type": "object",
+        "properties": {
+          "progressMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "errorMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DeploymentApplyError"
+              }
+            ]
+          }
+        }
       },
       "DeploymentView": {
         "required": [
@@ -9230,11 +9372,10 @@
           }
         }
       },
-      "PullImageRequest": {
+      "PullImageInput": {
         "required": [
           "platformId",
-          "registryName",
-          "repositoryName",
+          "registryId",
           "imageTag"
         ],
         "type": "object",
@@ -9243,18 +9384,16 @@
             "type": "string",
             "format": "uuid"
           },
-          "registryName": {
-            "type": "string"
-          },
-          "repositoryName": {
-            "type": "string"
+          "registryId": {
+            "type": "string",
+            "format": "uuid"
           },
           "imageTag": {
             "type": "string"
           }
         }
       },
-      "PullImageResult": {
+      "PullImageStreamItem": {
         "type": "object",
         "properties": {
           "id": {

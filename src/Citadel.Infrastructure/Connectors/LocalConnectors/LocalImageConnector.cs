@@ -35,7 +35,7 @@ internal class LocalImageConnector(IImageService imageService) : IImageConnector
         return ServiceResultHandlers.HandleResult(result, ImageMappers.Map);
     }
 
-    public async IAsyncEnumerable<PullImageResult> PullImageProgressStreamAsync(PullImageCommand pullImageCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<PullImageStreamItem> PullImageProgressStreamAsync(PullImageCommand pullImageCommand, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var command = new Hosting.DockerClient.Models.Images.PullImageStreamCommand
         (

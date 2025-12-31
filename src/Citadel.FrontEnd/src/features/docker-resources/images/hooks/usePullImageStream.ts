@@ -1,7 +1,7 @@
 import { useApiClientContext } from '@/api/api-client-context';
 import { useMutation } from '@tanstack/react-query';
 import { useGetValidationErrors } from '@/hooks/useGetValidationErrors';
-import { PullImageRequest } from '@/api/generated/api.types';
+import { PullImageInput } from '@/api/generated/api.types';
 import { Cancellable } from '@/api/types';
 import { useAuthContext } from '@/features/auth/auth-context';
 
@@ -9,7 +9,7 @@ export const usePullImageStream = (onChunkReceived: (chunk: string) => void) => 
   const { apiClient } = useApiClientContext();
   const { accessToken } = useAuthContext();
 
-  const mutationFn = async (param: PullImageRequest & Cancellable) => {
+  const mutationFn = async (param: PullImageInput & Cancellable) => {
     if (!apiClient?.baseUrl) {
       throw new Error('API client base URL is not defined');
     }

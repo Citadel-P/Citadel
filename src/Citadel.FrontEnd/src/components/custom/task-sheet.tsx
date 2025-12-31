@@ -53,14 +53,10 @@ type PullImageTaskRendererProps = {
 function PullImageTaskRenderer({ payload, type, children }: PullImageTaskRendererProps) {
   const { text, status, elapsedLabel } = useImagePullProgress({
     imageTag: payload.imageTag,
-    repository: payload.repository,
-    registryName: payload.registryName,
+    registryId: payload.registryId,
   });
 
-  const refName = useMemo(
-    () => `${payload.repository ? payload.repository + ':' : ''}${payload.imageTag}`,
-    [payload.repository, payload.imageTag],
-  );
+  const refName = useMemo(() => payload.imageTag, [payload.imageTag]);
 
   const description = (
     <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -115,9 +111,8 @@ function getTaskTitleForKind(task: TaskSpec) {
 export type TaskType = 'pull' | 'build' | 'deploy' | 'stack';
 
 export interface PullImageParams {
-  repository: string;
   imageTag: string;
-  registryName?: string;
+  registryId: string;
 }
 
 export type TaskSpec =

@@ -33,7 +33,7 @@ const REGEX = {
   ipv6: /^([a-fA-F0-9:]+:+)+[a-fA-F0-9]+$/,
 };
 
-export default function AddNetwork() {
+export default function AddNetwork({ mode }: { mode: 'add' | 'edit' }) {
   const navigate = useNavigate();
   const { currentPlatform } = useAppContext();
   const { mutateAsync, isPending } = useMutate('createNetwork');
@@ -353,6 +353,10 @@ export default function AddNetwork() {
       ],
     }),
   };
+
+  if (mode === 'edit') {
+    return 'This resource does not allow editing';
+  }
 
   return (
     <FormShell

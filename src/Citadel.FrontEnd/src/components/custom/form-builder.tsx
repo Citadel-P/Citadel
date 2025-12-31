@@ -887,7 +887,7 @@ export function FormShell<T>({
                       <section
                         id={item.id}
                         key={item.id}
-                        className='relative border rounded-md p-6 scroll-mt-22 xl:scroll-mt-20'>
+                        className="relative border rounded-md p-6 scroll-mt-22 xl:scroll-mt-20">
                         <div className={cn('flex flex-row w-full', item.gap ?? 'gap-4', item.className)}>
                           {item.fields.map((f) => {
                             const key = f.key as string;
@@ -972,7 +972,7 @@ export function FormShell<T>({
                                     <fieldset
                                       key={key}
                                       disabled={fieldDisabled}
-                                      className='pb-1 last:pb-1 last:flex-1 scroll-mt-22 xl:scroll-mt-20'>
+                                      className="pb-1 last:pb-1 last:flex-1 scroll-mt-22 xl:scroll-mt-20">
                                       <SmartField
                                         render={f.render}
                                         value={value}
@@ -1026,7 +1026,7 @@ export function FormShell<T>({
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent aria-describedby={undefined} className="w-full max-w-[1100px] sm:max-w-[1100px]">
           <DialogHeader>
-            <DialogTitle>Diff Preview</DialogTitle>
+            <DialogTitle>Configuration changes</DialogTitle>
           </DialogHeader>
 
           <div className="pt-4">

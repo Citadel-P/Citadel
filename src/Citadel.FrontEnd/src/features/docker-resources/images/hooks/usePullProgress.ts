@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { PullImageRequest, PullImageResult } from '@/api/generated/api.types';
+import { PullImageInput, PullImageStreamItem } from '@/api/generated/api.types';
 import { useAppContext } from '@/lib/context/app-context';
 import { useResourceFilter } from '@/lib/atoms';
 import { RegistryView } from '@/api/generated/api.types';
@@ -8,8 +8,7 @@ import { toast } from 'sonner';
 
 export type PullImageParams = {
   imageTag: string;
-  repository: string;
-  registryName?: string;
+  registryId: string;
 };
 
 export type ImagePullProgressState = {
@@ -40,14 +39,13 @@ export function usePullProgress(params: PullImageParams): ImagePullProgressState
 
   const { isPending, isSuccess, error, mutate } = usePullImageStream(handleChunkReceived);
 
-  const request: PullImageRequest = useMemo(
+  const request: PullImageInput = useMemo(
     () => ({
-      registryName: params.registryName ?? registryFilter?.item?.name ?? '',
-      repositoryName: params.repository,
+      registryId: params.registryId ?? registryFilter?.item?.name ?? '',
       platformId: currentPlatform?.id ?? '',
       imageTag: params.imageTag,
     }),
-    [currentPlatform, registryFilter?.item?.name, params.imageTag, params.repository, params.registryName],
+    [currentPlatform, registryFilter?.item?.name, params.imageTag, params.registryId],
   );
 
   useEffect(() => {
@@ -70,7 +68,7 @@ export function usePullProgress(params: PullImageParams): ImagePullProgressState
     if (isSuccess) {
       try {
         const data = lines.join('\n');
-        const response = JSON.parse(data) as PullImageResult[];
+        const response = JSON.parse(data) as PullImageStreamItem[];
         const errors = response.filter((s) => s.errorMessage).map((s) => s.errorMessage);
         if (errors.length > 0) {
           const err = errors[0];
@@ -99,8 +97,7 @@ export function usePullProgress(params: PullImageParams): ImagePullProgressState
       if (startRef.current == null) startRef.current = performance.now();
       if (timerRef.current == null) {
         timerRef.current = window.setInterval(() => {
-          if (startRef.current != null)
-            setElapsedMs(Math.max(0, performance.now() - startRef.current));
+          if (startRef.current != null) setElapsedMs(Math.max(0, performance.now() - startRef.current));
         }, 100);
       }
     } else {

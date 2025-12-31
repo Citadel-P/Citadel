@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251228120950_migration0001")]
+    [Migration("20251231142558_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -462,7 +462,7 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasData(
                         new
                         {
-                            Id = "a1de9601-7f3b-4f75-a11b-98533d063a0f",
+                            Id = "00000000-0000-0000-0000-000000000100",
                             Configuration = "{\r\n    \"$type\": \"DockerHub\"\r\n}",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",

@@ -1,6 +1,6 @@
 ﻿namespace Domain.Contracts.Resources.Images;
 
-public record PullImageResult(
+public record PullImageStreamItem(
     string? Id = null,
     string? From = null,
     string? Stream = null,

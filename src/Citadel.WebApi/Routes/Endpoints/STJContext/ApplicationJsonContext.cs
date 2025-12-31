@@ -1,8 +1,8 @@
-﻿using System.Text.Json.Serialization;
-using Application.Features.Auth.Models;
+﻿using Application.Features.Auth.Models;
 using Application.Features.Images.Queries;
 using Domain.Contracts.Resources.Compose;
 using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Deployments;
 using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Registries;
@@ -11,6 +11,7 @@ using Domain.Entities;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json.Serialization;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Auth;
 using WebApi.Routes.Endpoints.Resources.Compose;
@@ -78,7 +79,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(DockerHubImageView))]
 [JsonSerializable(typeof(ImageView))]
 [JsonSerializable(typeof(ImagesView))]
-[JsonSerializable(typeof(PullImageRequest))]
+[JsonSerializable(typeof(PullImageInput))]
 [JsonSerializable(typeof(IEnumerable<IImageRepository>))]
 [JsonSerializable(typeof(IEnumerable<DockerHubTagView>))]
 [JsonSerializable(typeof(CreateNetworkInput))]
@@ -120,7 +121,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(ImageGraphicDriver))]
 [JsonSerializable(typeof(ImageHealthCheck))]
 [JsonSerializable(typeof(ImageGraphDriverData))]
-[JsonSerializable(typeof(IAsyncEnumerable<PullImageResult>))]
+[JsonSerializable(typeof(IAsyncEnumerable<PullImageStreamItem>))]
 [JsonSerializable(typeof(IEnumerable<DockerHubImageResult>))]
 [JsonSerializable(typeof(ContainerInfoView))]
 [JsonSerializable(typeof(ExposedPortsResult))]
@@ -142,6 +143,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(DeploymentInput))]
 [JsonSerializable(typeof(DeleteDeploymentsInput))]
 [JsonSerializable(typeof(DeploymentConfigView))]
+[JsonSerializable(typeof(IAsyncEnumerable<DeploymentStreamItem>))]
+[JsonSerializable(typeof(ApplyDeploymentInput))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

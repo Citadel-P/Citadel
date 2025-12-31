@@ -33,11 +33,8 @@ export const VolumeComponents: RequiredComponents = {
 };
 
 export const VolumeFormComponents: RequiredFormComponents = {
-  Header: {
-    Indicator: undefined,
-    ActionButtons: undefined,
+  AddForm: {
+    Content: () => <VolumeForm mode="add" />,
   },
-  Form: ({ mode }) => {
-    return <VolumeForm mode={mode} />;
-  },
+  EditForm: {},
 };

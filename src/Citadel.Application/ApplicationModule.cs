@@ -53,6 +53,7 @@ public static class ApplicationModule
             .AddScoped<GitHubConnectorStrategy>()
             .AddScoped<DockerHubConnectorStrategy>()
             .AddScoped<CustomRegistryConnectorStrategy>()
+            .AddScoped<IPullImageService, PullImageService>()
             .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>();
 
     private static IServiceCollection AddSignalRServices(this IServiceCollection services) =>

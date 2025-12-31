@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { RegistryView } from '@/api/generated/api.types';
 import { ResourceSelectorField } from '@/components/custom/common';
+import { AlertMessage } from '@/components/custom/alert-message';
 
 export const PullButton = () => {
   const { open, toggle } = useInlineSubHeader('Image');
@@ -53,9 +54,8 @@ export default function PullImageForm() {
     openSheet({
       kind: 'pull',
       payload: {
-        repository: '',
         imageTag: image,
-        registryName: registry.name,
+        registryId: registry.id,
       },
     });
   };
@@ -106,6 +106,15 @@ export default function PullImageForm() {
                 <Download className="w-4 h-4" />
               </Button>
             </div>
+
+            <AlertMessage type="info" title="">
+              <div className="flex flex-row gap-1">
+                <div className="font-semibold text-sm">Tip:</div>
+                <div className="font-normal">
+                  Looking to run containers? Create a Deployment (single) or Stack (multiple) instead.
+                </div>
+              </div>
+            </AlertMessage>
           </form>
         </div>
       )}

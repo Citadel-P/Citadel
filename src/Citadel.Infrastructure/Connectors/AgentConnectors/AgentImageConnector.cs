@@ -79,7 +79,7 @@ internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageCon
         }
     }
 
-    public async IAsyncEnumerable<PullImageResult> PullImageProgressStreamAsync(PullImageCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<PullImageStreamItem> PullImageProgressStreamAsync(PullImageCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var client = clientFactory.GetImageClient(command.PlatformAddress);
         var request = new PullImageRequest

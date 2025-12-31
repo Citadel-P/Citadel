@@ -128,6 +128,11 @@ export enum AutoUpdateStatus {
   Failed = "Failed",
 }
 
+export interface ApplyDeploymentInput {
+  /** @format uuid */
+  id: string;
+}
+
 export interface AutoUpdateState {
   /** @format date-time */
   lastCheckedAt: any;
@@ -519,6 +524,15 @@ export interface DeleteVolumesInput {
   force: null | boolean;
 }
 
+export interface DeploymentApplyError {
+  /**
+   * @format int64
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  code: null | number | string;
+  message: null | string;
+}
+
 export interface DeploymentConfigView {
   /** @format uuid */
   id: string;
@@ -570,6 +584,12 @@ export interface DeploymentSpec {
   volumes?: null | any[];
   networks?: null | any[];
   command?: null | any[];
+}
+
+export interface DeploymentStreamItem {
+  progressMessage?: null | string;
+  errorMessage?: null | string;
+  error?: null | DeploymentApplyError;
 }
 
 export interface DeploymentView {
@@ -1366,15 +1386,15 @@ export interface ProblemDetails {
   instance?: null | string;
 }
 
-export interface PullImageRequest {
+export interface PullImageInput {
   /** @format uuid */
   platformId: string;
-  registryName: string;
-  repositoryName: string;
+  /** @format uuid */
+  registryId: string;
   imageTag: string;
 }
 
-export interface PullImageResult {
+export interface PullImageStreamItem {
   id?: null | string;
   from?: null | string;
   stream?: null | string;
@@ -1508,11 +1528,6 @@ export interface ResourceSpec {
    * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
    */
   memoryLimit: null | number | string;
-  /**
-   * @format float
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  memoryReservation: null | number | string;
 }
 
 export interface RestartPolicy {
@@ -2815,18 +2830,18 @@ export class Api<
      *
      * @tags Images
      * @name PullImage
-     * @summary Pull an image from a registry and returns logs as a stream
+     * @summary Pull an image from a registry and streams execution logs in real time.
      * @request POST:/api/v1/images/pull
      * @secure
-     * @response `200` `(PullImageResult)[]` OK
+     * @response `200` `(PullImageStreamItem)[]` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    pullImage: (data: PullImageRequest, params: RequestParams = {}) =>
+    pullImage: (data: PullImageInput, params: RequestParams = {}) =>
       this.request<
-        PullImageResult[],
+        PullImageStreamItem[],
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/images/pull`,
@@ -3300,6 +3315,34 @@ export class Api<
       >({
         path: `/api/v1/deployments/${id}`,
         method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name ApplyDeployment
+     * @summary Apply a deployment and streams execution logs in real time.
+     * @request POST:/api/v1/deployments/apply
+     * @secure
+     * @response `200` `(DeploymentStreamItem)[]` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    applyDeployment: (data: ApplyDeploymentInput, params: RequestParams = {}) =>
+      this.request<
+        DeploymentStreamItem[],
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/deployments/apply`,
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,

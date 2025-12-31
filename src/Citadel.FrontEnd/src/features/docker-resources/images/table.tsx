@@ -145,7 +145,7 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
         tabIndex={0}
         role="button"
         aria-label="Show image details">
-        {truncate(image.name ?? '', 32, 'right')}
+        {truncate(image.name?.length > 0 ? image.name : '<none>', 32, 'right')}
       </span>
     </div>
   );

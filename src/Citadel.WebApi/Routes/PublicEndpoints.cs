@@ -357,7 +357,7 @@ public static class PublicEndpoints
            .WithName("getExposedPorts");
 
         images.MapPost("/pull", Images.PullImage)
-            .WithSummary("Pull an image from a registry and returns logs as a stream")
+            .WithSummary("Pull an image from a registry and streams execution logs in real time.")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
@@ -504,5 +504,12 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("deleteDeployments");
+
+        deployment.MapPost("/apply", Deployments.ApplyDeployment)
+            .WithSummary("Apply a deployment and streams execution logs in real time.")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("applyDeployment");
     }
 }

@@ -85,7 +85,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
         // --- Registries ---
         modelBuilder.Entity("Registry").HasData(new
         {
-            Id =  Guid.Parse("a1de9601-7f3b-4f75-a11b-98533d063a0f"),
+            Id = Constants.DefaultRegistryId,
             Name = Constants.DefaultRegistryName,
             Description = "Public Docker Hub Registry",
             RegistryHost = "hub.docker.com",

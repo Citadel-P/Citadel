@@ -32,11 +32,8 @@ export const NetworkComponents: RequiredComponents = {
 };
 
 export const NetworkFormComponents: RequiredFormComponents = {
-  Header: {
-    Indicator: undefined,
-    ActionButtons: undefined,
+  AddForm: {
+    Content: () => <NetworkForm mode="add" />,
   },
-  Form: ({ mode }) => {
-    return <NetworkForm mode={mode} />;
-  },
+  EditForm: {},
 };

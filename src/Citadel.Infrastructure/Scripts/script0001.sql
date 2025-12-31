@@ -177,7 +177,7 @@ SELECT changes();
 
 
 INSERT INTO "Registries" ("Id", "Configuration", "CreatedAt", "CreatedByActorId", "Description", "Name", "RegistryHost", "Status")
-VALUES ('a1de9601-7f3b-4f75-a11b-98533d063a0f', (('{' || (CHAR(13) || CHAR(10))) || (('    "$type": "DockerHub"' || CHAR(13)) || (CHAR(10) || '}'))), '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', 'Public Docker Hub Registry', 'Docker Hub', 'hub.docker.com', 'Active');
+VALUES ('00000000-0000-0000-0000-000000000100', (('{' || (CHAR(13) || CHAR(10))) || (('    "$type": "DockerHub"' || CHAR(13)) || (CHAR(10) || '}'))), '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', 'Public Docker Hub Registry', 'Docker Hub', 'hub.docker.com', 'Active');
 SELECT changes();
 
 
@@ -245,7 +245,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20251228120950_migration0001', '10.0.1');
+VALUES ('20251231142558_migration0001', '10.0.1');
 
 COMMIT;
 

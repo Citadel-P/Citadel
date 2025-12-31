@@ -166,7 +166,7 @@ internal static class ImageMappers
         StartInterval: healthCheck.StartInterval
     );
 
-    internal static PullImageResult Map(this PullImageResponse pullResponse) => new
+    internal static PullImageStreamItem Map(this PullImageResponse pullResponse) => new
     (
         Id: pullResponse.Id,
         From: pullResponse.From,
@@ -352,7 +352,7 @@ internal static class ImageMappers
         StartInterval: healthConfig.StartInterval
     );
 
-    internal static PullImageResult Map(this Hosting.DockerClient.HttpClient.JSONMessage jsonMessage) => new
+    internal static PullImageStreamItem Map(this Hosting.DockerClient.HttpClient.JSONMessage jsonMessage) => new
     (
         Id: jsonMessage.ID,
         From: jsonMessage.From,

@@ -8,7 +8,6 @@ using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources.Images;
-using PullImageRequest = WebApi.Routes.Endpoints.Resources.Images.PullImageRequest;
 
 namespace WebApi.Routes.Endpoints;
 
@@ -44,9 +43,9 @@ public static class Images
         return EndpointHandlers.HandleResult(result, v => v);
     }
 
-    public static async IAsyncEnumerable<PullImageResult> PullImage(IMediator mediator, PullImageRequest pullImageRequest, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public static async IAsyncEnumerable<PullImageStreamItem> PullImage(IMediator mediator, PullImageInput pullImageInput, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await foreach (var reply in mediator.CreateStream(pullImageRequest.ToCommand(), cancellationToken))
+        await foreach (var reply in mediator.CreateStream(pullImageInput.ToCommand(), cancellationToken))
         {
             yield return reply;
         }

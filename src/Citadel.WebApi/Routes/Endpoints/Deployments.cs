@@ -1,13 +1,15 @@
-﻿using Application.Features.Deployments.Queries;
+﻿using Application.Features.Deployments.Commands;
+using Application.Features.Deployments.Queries;
+using Domain.Contracts.Resources.Deployments;
 using Domain.Entities;
+using Hosting.Common.MergePatch;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using WebApi.Routes.Endpoints.Resources.Deployments;
-using Hosting.Common.MergePatch;
-using Application.Features.Deployments.Commands;
 
 namespace WebApi.Routes.Endpoints;
 
@@ -52,5 +54,13 @@ public static class Deployments
         var mapped = patchInput.Map<DeploymentInput, Deployment>();
         var result = await mediator.Send(new PatchDeployment(id, mapped), cancellationToken);
         return EndpointHandlers.HandleResult(result, DeploymentView.Map);
+    }
+
+    public static async IAsyncEnumerable<DeploymentStreamItem> ApplyDeployment(IMediator mediator, ApplyDeploymentInput applyDeploymentInput, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var reply in mediator.CreateStream(applyDeploymentInput.ToCommand(), cancellationToken))
+        {
+            yield return reply;
+        }
     }
 }
