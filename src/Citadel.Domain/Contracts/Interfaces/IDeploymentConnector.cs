@@ -5,5 +5,5 @@ namespace Domain.Contracts.Interfaces;
 
 public interface IDeploymentConnector
 {
-    Task<Result<string>> ApplyDeploymentAsync(ApplyDeploymentCommand applyDeployment, CancellationToken cancellationToken);
+    Task<Result<ApplyDeploymentResult>> ApplyDeploymentAsync(ApplyDeploymentCommand applyDeployment, CancellationToken cancellationToken);
 }

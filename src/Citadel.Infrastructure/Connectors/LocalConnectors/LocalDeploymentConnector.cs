@@ -2,6 +2,7 @@
 using Domain.Contracts.Resources.Deployments;
 using Hosting.DockerClient.Models.Deployments;
 using Hosting.DockerClient.Services;
+using Hosting.Extensions;
 using Infrastructure.Connectors.Mappers;
 using LightResults;
 
@@ -9,7 +10,7 @@ namespace Infrastructure.Connectors.LocalConnectors;
 
 internal class LocalDeploymentConnector(IDeploymentService deploymentService) : IDeploymentConnector
 {
-    public Task<Result<string>> ApplyDeploymentAsync(ApplyDeploymentCommand applyDeployment, CancellationToken cancellationToken)
+    public async Task<Result<Domain.Contracts.Resources.Deployments.ApplyDeploymentResult>> ApplyDeploymentAsync(ApplyDeploymentCommand applyDeployment, CancellationToken cancellationToken)
     {
         var command = new ApplyDeploymentSpec
         (
@@ -27,6 +28,8 @@ internal class LocalDeploymentConnector(IDeploymentService deploymentService) : 
             StopTimeout: applyDeployment.Spec.LifeCycleSpec?.StopTimeout,
             StopSignal: applyDeployment.Spec.LifeCycleSpec?.StopSignal?.ToString()
         );
-        return deploymentService.ApplyDeploymentAsync(command, cancellationToken);
+
+        var result = await deploymentService.ApplyDeploymentAsync(command, cancellationToken);
+        return ServiceResultHandlers.HandleResult(result, DeploymentMappers.Map);
     }
 }

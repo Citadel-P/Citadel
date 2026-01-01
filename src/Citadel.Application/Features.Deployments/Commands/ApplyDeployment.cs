@@ -49,7 +49,7 @@ internal sealed class ApplyDeploymentHandler(
         string? imageId = null;
         if (deployment.Spec?.Image is ExternalImage image)
         {
-            yield return new DeploymentStreamItem(ProgressMessage: $"⏳ Pulling image {image.ImageTag} from the provided registry.");
+            yield return new DeploymentStreamItem(ProgressMessage: $"Pulling image {image.ImageTag} from the provided registry.");
             await foreach (var item in pullImageService.PullAsync(new PullImageService.PullImageInput(
             ImageTag: image.ImageTag,
             PlatformId: platform.Id,
@@ -57,9 +57,12 @@ internal sealed class ApplyDeploymentHandler(
             ), cancellationToken))
             {
                 yield return new DeploymentStreamItem(
+                    Id: item.Id,
                     Status: item.Status,
+                    Stream: item.Stream,
                     ProgressMessage: item.ProgressMessage,
                     ErrorMessage: item.ErrorMessage,
+                    Progress: item.Progress,
                     Error: item.Error is not null ? new DeploymentApplyError(item.Error.Code, item.Error.Message) : null
                     );
                 if (!string.IsNullOrEmpty(item.ErrorMessage))
@@ -106,13 +109,22 @@ internal sealed class ApplyDeploymentHandler(
 
         var connector = connectorFactory.GetConnector(platform.ConnectorType);
         var result = await connector.ApplyDeploymentAsync(spec, cancellationToken);
-        if (!result.IsSuccess(out var containerId, out var error))
+        if (!result.IsSuccess(out var deploymentResult, out var error))
         {
             yield return new DeploymentStreamItem(ErrorMessage: $"❌ {error.Message}");
             yield break;
         }
 
-        yield return new DeploymentStreamItem(ProgressMessage: $"Container started: {containerId}.");
+        yield return new DeploymentStreamItem(ProgressMessage: $"Container created: {deploymentResult.ContainerId}.");
+
+        if (deploymentResult.DeployedContainerState != Domain.DeployedContainerState.Running)
+        {
+            var message = $"❌ Deployment failed: container did not start successfully - Container state: {deploymentResult.DeployedContainerState}";
+            yield return new DeploymentStreamItem(ErrorMessage: message, Error: new DeploymentApplyError(422, message));
+            yield break;
+        }
+
+        yield return new DeploymentStreamItem(ProgressMessage: $"Container started: {deploymentResult}.");
 
         // Todo: link deployment to the container
 

@@ -23,6 +23,7 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
             kind: 'deploy',
             payload: {
               deploymentId: selected.id,
+              name: selected.name,
             },
           });
         },

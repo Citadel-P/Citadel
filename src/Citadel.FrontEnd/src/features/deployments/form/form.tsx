@@ -22,6 +22,7 @@ import {
   ItemSelector,
 } from '@/components/custom/form-builder';
 import { useState, useMemo, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useMutate, useRead } from '@/lib/hooks';
 import { toast } from 'sonner';
 import { useParams, useNavigate } from 'react-router';
@@ -94,27 +95,27 @@ const resource_profiles = {
   [ResourceProfile.xsmall]: {
     label: 'X-Small',
     description: '0.25 CPU - 256 MB RAM',
-    spec: { cpuLimit: 0.25, memoryLimit: 256, memoryReservation: null },
+    spec: { cpuLimit: 0.25, memoryLimit: 256 },
   },
   [ResourceProfile.small]: {
     label: 'Small',
     description: '0.5 CPU - 512 MB RAM',
-    spec: { cpuLimit: 0.5, memoryLimit: 512, memoryReservation: null },
+    spec: { cpuLimit: 0.5, memoryLimit: 512 },
   },
   [ResourceProfile.medium]: {
     label: 'Medium',
     description: '0.5 CPU - 1 GB RAM',
-    spec: { cpuLimit: 0.5, memoryLimit: 1024, memoryReservation: null },
+    spec: { cpuLimit: 0.5, memoryLimit: 1024 },
   },
   [ResourceProfile.large]: {
     label: 'Large',
     description: '1.0 CPU - 2 GB RAM',
-    spec: { cpuLimit: 1, memoryLimit: 2048, memoryReservation: null },
+    spec: { cpuLimit: 1, memoryLimit: 2048 },
   },
   [ResourceProfile.xlarge]: {
     label: 'X-Large',
     description: '2.0 CPU - 4 GB RAM',
-    spec: { cpuLimit: 2, memoryLimit: 4096, memoryReservation: null },
+    spec: { cpuLimit: 2, memoryLimit: 4096 },
   },
 };
 
@@ -138,6 +139,7 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
   const navigate = useNavigate();
   const [update, setUpdate] = useState<Partial<DeploymentInput>>({});
   const [isPending, setIsPending] = useState(false);
+  const queryClient = useQueryClient();
 
   const { mutateAsync: createDeployment } = useMutate('createDeployment');
   const { mutateAsync: updateDeployment } = useMutate('updateDeployment');
@@ -188,11 +190,16 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
     setIsPending(true);
 
     try {
-      if (mode === 'edit') await updateDeployment({ id, data: payload });
-      else await createDeployment({ data: payload });
+      if (mode === 'edit') {
+        await updateDeployment({ id, data: payload });
+        localStorage.removeItem(`deployment:${id ?? 'new'}`);
+        queryClient.invalidateQueries({ queryKey: ['getDeploymentConfig', { deploymentId: id }] });
+      } else {
+        await createDeployment({ data: payload });
+        navigate('/deployments');
+      }
 
       toast.success(`Deployment "${payload.name}" saved successfully`);
-      navigate('/deployments');
     } finally {
       setIsPending(false);
     }
@@ -500,7 +507,7 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
                 warningMsg = "Cannot enable Auto-update for an image pinned by digest (contains '@')";
               }
               return (
-                <div className='flex flex-col gap-2'>
+                <div className="flex flex-col gap-2">
                   <ItemSelector
                     collection={update_behaviors}
                     value={value}

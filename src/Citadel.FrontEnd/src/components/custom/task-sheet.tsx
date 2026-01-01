@@ -22,6 +22,7 @@ interface PullImageParams {
 
 interface DeployParams {
   deploymentId: string;
+  name: string;
 }
 
 export type TaskSpec =
@@ -81,7 +82,7 @@ function PullImageTaskRenderer({ payload, type }: { payload: PullImageParams; ty
 
 function ApplyDeployTaskRenderer({ payload, type }: { payload: DeployParams; type: ResourceType }) {
   const state = useApplyDeploymentProgress(payload);
-  return <TaskStreamLayout title="Deploy" refName={payload.deploymentId} type={type} state={state as any} />;
+  return <TaskStreamLayout title="Deploy" refName={payload.name} type={type} state={state as any} />;
 }
 
 const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }) => ReactNode> = {

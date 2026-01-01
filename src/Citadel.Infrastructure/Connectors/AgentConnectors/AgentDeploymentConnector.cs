@@ -10,7 +10,7 @@ namespace Infrastructure.Connectors.AgentConnectors;
 
 internal class AgentDeploymentConnector : IDeploymentConnector
 {
-    Task<Result<string>> IDeploymentConnector.ApplyDeploymentAsync(ApplyDeploymentCommand applyDeployment, CancellationToken cancellationToken)
+    Task<Result<ApplyDeploymentResult>> IDeploymentConnector.ApplyDeploymentAsync(ApplyDeploymentCommand applyDeployment, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }

@@ -587,9 +587,12 @@ export interface DeploymentSpec {
 }
 
 export interface DeploymentStreamItem {
+  id?: null | string;
   status?: null | string;
+  stream?: null | string;
   progressMessage?: null | string;
   errorMessage?: null | string;
+  progress?: null | ImagePullProgress;
   error?: null | DeploymentApplyError;
 }
 

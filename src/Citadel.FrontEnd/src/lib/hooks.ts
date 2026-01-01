@@ -421,65 +421,148 @@ interface UseStreamProgressOptions<TRequest, TItem> {
   getError?: (item: TItem) => string | undefined | null;
 }
 
+const formatBytes = (bytes: number) => {
+  if (!bytes || bytes <= 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+};
+
+const getProgressBar = (current: number, total: number) => {
+  if (!total || total <= 0) return '';
+  const size = 15; // Width of the bar
+  const progress = Math.min(Math.round((current / total) * size), size);
+  return ` [${'='.repeat(Math.max(0, progress - 1))}>${' '.repeat(Math.max(0, size - progress))}]`;
+};
+
 export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   endpoint,
   request,
   successMessage,
-  errorMessageDefault,
-  getError,
 }: UseStreamProgressOptions<TRequest, TItem>): StreamProgressState {
-  const [lines, setLines] = useState<string[]>([]);
+  const [history, setHistory] = useState<string[]>([]);
+  const [activeItems, setActiveItems] = useState<Map<string, string>>(new Map());
   const [internalError, setInternalError] = useState<string | undefined>();
-  const abortControllerRef = useRef<AbortController | null>(null);
 
+  const bufferRef = useRef('');
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   const startRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
 
   const handleChunkReceived = useCallback((chunk: string) => {
-    setLines((prev) => [...prev, chunk]);
+    bufferRef.current += chunk;
+    let braceCount = 0;
+    let startIndex = -1;
+    const newHistory: string[] = [];
+    const updatedActive = new Map<string, string>();
+    let processedIndex = 0;
+
+    for (let i = 0; i < bufferRef.current.length; i++) {
+      const char = bufferRef.current[i];
+      if (char === '{') {
+        if (braceCount === 0) startIndex = i;
+        braceCount++;
+      } else if (char === '}') {
+        braceCount--;
+        if (braceCount === 0 && startIndex !== -1) {
+          const rawObject = bufferRef.current.substring(startIndex, i + 1);
+          processedIndex = i + 1;
+
+          try {
+            const item = JSON.parse(rawObject);
+            const { id, status, progress, errorMessage, progressMessage } = item;
+
+            if (errorMessage) {
+              newHistory.push(errorMessage);
+              setInternalError(errorMessage);
+              continue;
+            }
+
+            // 2. Handle simple log messages
+            if (progressMessage) {
+              newHistory.push(progressMessage.trim());
+              continue;
+            }
+
+            // 3. Handle Docker/Progress items
+            if (id) {
+              const lowerStatus = (status || '').toLowerCase();
+
+              // Define what constitutes an "Active" item vs a "Log" item
+              const isProgressing =
+                lowerStatus.includes('downloading') ||
+                lowerStatus.includes('extracting') ||
+                lowerStatus.includes('pushing');
+              const isFinished =
+                lowerStatus.includes('complete') ||
+                lowerStatus.includes('pull complete') ||
+                lowerStatus.includes('exists');
+
+              // Build the display line
+              let line = `${id}: ${status}`;
+              if (progress && progress.total > 0) {
+                line += `${getProgressBar(progress.current, progress.total)} ${formatBytes(progress.current)}/${formatBytes(progress.total)}`;
+              } else if (progress && progress.current > 0) {
+                line += ` ${progress.current}${progress.units || ''}`;
+              }
+
+              if (isFinished) {
+                // If it's done, move to history and remove from active map
+                newHistory.push(line);
+                setActiveItems((prev) => {
+                  const next = new Map(prev);
+                  next.delete(id);
+                  return next;
+                });
+              } else if (isProgressing) {
+                updatedActive.set(id, line);
+              } else {
+                newHistory.push(line);
+              }
+            } else if (status) {
+              newHistory.push(status);
+            }
+          } catch {
+            // If parse fails, we just skip this object
+          }
+          startIndex = -1;
+        }
+      }
+    }
+
+    bufferRef.current = bufferRef.current.slice(processedIndex);
+
+    if (newHistory.length > 0) setHistory((prev) => [...prev, ...newHistory]);
+    if (updatedActive.size > 0) {
+      setActiveItems((prev) => {
+        const next = new Map(prev);
+        updatedActive.forEach((val, key) => next.set(key, val));
+        return next;
+      });
+    }
   }, []);
 
   const { isPending, isSuccess, error: streamError, mutate } = usePulledStream(handleChunkReceived, endpoint);
 
-  // Handle Request Lifecycle
+  const text = useMemo(() => {
+    const activeLines = Array.from(activeItems.values());
+    const combined = [...history, ...activeLines];
+    if (combined.length === 0 && isPending) return 'Connecting to registry...';
+    return combined.join('\n');
+  }, [history, activeItems, isPending]);
+
   useEffect(() => {
     const controller = new AbortController();
     abortControllerRef.current = controller;
-
     mutate({ ...request, signal: controller.signal });
-
     return () => {
       controller.abort();
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [mutate, request]);
 
-  // Handle Success/Error Parsing
-  useEffect(() => {
-    if (isSuccess) {
-      try {
-        const data = lines.join('\n');
-        const response = JSON.parse(data) as TItem[];
-
-        const errors = getError ? response.map(getError).filter(Boolean) : [];
-
-        if (errors.length > 0) {
-          const err = (errors[0] as string) || errorMessageDefault;
-          setInternalError(err);
-          toast.error('Error', { description: err });
-        } else {
-          toast.success(successMessage);
-        }
-      } catch {
-        const msg = 'Failed to parse response';
-        setInternalError(msg);
-        toast.error('Error', { description: msg });
-      }
-    }
-  }, [isSuccess, lines, getError, successMessage, errorMessageDefault]);
-
-  // Handle Timer
   useEffect(() => {
     if (isPending) {
       if (startRef.current == null) startRef.current = performance.now();
@@ -491,19 +574,21 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
     }
   }, [isPending]);
 
+  useEffect(() => {
+    if (isSuccess && !internalError) toast.success(successMessage);
+  }, [isSuccess, internalError, successMessage]);
+
   const status: StreamStatus = useMemo(() => {
     if (isPending) return 'pending';
     if (internalError || streamError) return 'error';
     return 'success';
   }, [isPending, internalError, streamError]);
 
-  const elapsedLabel = useMemo(() => {
-    return (Math.floor(elapsedMs / 100) / 10).toFixed(1).replace('.', ',');
-  }, [elapsedMs]);
+  const elapsedLabel = useMemo(() => (Math.floor(elapsedMs / 100) / 10).toFixed(1).replace('.', ','), [elapsedMs]);
 
   return {
-    lines,
-    text: lines.length === 0 && isPending ? 'Loading...' : lines.join('\n'),
+    lines: history,
+    text,
     isPending,
     isSuccess,
     status,

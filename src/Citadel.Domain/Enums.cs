@@ -324,3 +324,10 @@ public enum UpdateBehavior
     /// </summary>
     AutoDeploy
 }
+
+public enum DeployedContainerState
+{
+    Running,
+    Exited,
+    Timeout
+}

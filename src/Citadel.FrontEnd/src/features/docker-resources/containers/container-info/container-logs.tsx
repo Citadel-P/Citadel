@@ -8,7 +8,7 @@ const decoder = new TextDecoder('utf-8');
 export const ContainerLogs = ({ resource }: { resource: DockerContainerView | undefined }) => {
   const { containerLogs: logs } = useContainerLogGroup(resource?.id);
 
-  return <CodeHighlight code={logs?.length === 0 ? 'Loading...' : logs!.join('\n')} language="tsx" autoScroll />;
+  return <CodeHighlight code={logs?.length === 0 ? 'No logs' : logs!.join('\n')} language="tsx" autoScroll />;
 };
 
 export const useContainerLogGroup = (containerId?: string) => {
