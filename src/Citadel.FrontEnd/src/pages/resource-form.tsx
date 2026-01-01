@@ -15,6 +15,7 @@ import { RequiredFormFields } from './types';
 import { ResourceType } from '@/api/types';
 import Loader from '@/components/ui/loader';
 import { ResourceTabs } from '@/components/custom/resource-tabs';
+import TaskSheet from '@/components/custom/task-sheet';
 
 export const ResourceForm = ({ mode }: { mode: 'add' | 'edit' }) => {
   const type = useResourceParamType();
@@ -86,6 +87,7 @@ const EditFormPage = ({ type }: { type: ResourceType }) => {
         onChangeDescription={(description) => updateField({ description })}
       />
       <ResourceTabs localKey={localKey} resource={resource} tabs={tabs} />
+      <TaskSheet type={type} />
     </>
   );
 };

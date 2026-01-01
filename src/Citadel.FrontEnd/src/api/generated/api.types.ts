@@ -587,6 +587,7 @@ export interface DeploymentSpec {
 }
 
 export interface DeploymentStreamItem {
+  status?: null | string;
   progressMessage?: null | string;
   errorMessage?: null | string;
   error?: null | DeploymentApplyError;
@@ -1401,6 +1402,7 @@ export interface PullImageStreamItem {
   status?: null | string;
   errorMessage?: null | string;
   progressMessage?: null | string;
+  dockerImageId?: null | string;
   progress?: null | ImagePullProgress;
   error?: null | ImagePullError;
 }

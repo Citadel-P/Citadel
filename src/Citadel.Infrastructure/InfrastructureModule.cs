@@ -80,13 +80,16 @@ public static class InfrastructureModule
             .AddSingleton<LocalContainerConnector>()
             .AddSingleton<LocalComposeConnector>()
             .AddSingleton<AgentComposeConnector>()
+            .AddSingleton<AgentDeploymentConnector>()
+            .AddSingleton<LocalDeploymentConnector>()
             .AddSingleton(typeof(IConnectorFactory<>), typeof(ConnectorFactory<>))
             .AddConnectorFactory<IImageConnector, AgentImageConnector, LocalImageConnector>()
             .AddConnectorFactory<IVolumeConnector, AgentVolumeConnector, LocalVolumeConnector>()
             .AddConnectorFactory<INetworkConnector, AgentNetworkConnector, LocalNetworkConnector>()
             .AddConnectorFactory<IComposeConnector, AgentComposeConnector, LocalComposeConnector>()
             .AddConnectorFactory<IPlatformConnector, AgentPlatformConnector, LocalPlatformConnector>()
-            .AddConnectorFactory<IContainerConnector, AgentContainerConnector, LocalContainerConnector>();
+            .AddConnectorFactory<IContainerConnector, AgentContainerConnector, LocalContainerConnector>()
+            .AddConnectorFactory<IDeploymentConnector, AgentDeploymentConnector, LocalDeploymentConnector>();
 
     /// <summary>
     /// Adds HTTP clients to the service collection.

@@ -6522,6 +6522,12 @@
       "DeploymentStreamItem": {
         "type": "object",
         "properties": {
+          "status": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "progressMessage": {
             "type": [
               "null",
@@ -9427,6 +9433,12 @@
             ]
           },
           "progressMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dockerImageId": {
             "type": [
               "null",
               "string"

@@ -65,6 +65,7 @@ internal class PullImageService(
         }
 
         var imageEntity = image.Map(platform.Id, registry);
+        yield return new PullImageStreamItem(DockerImageId: imageEntity.DockerImageId);
 
         var workItem = new PersistPulledImageWorkItem(
             imageEntity,

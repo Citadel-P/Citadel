@@ -1,6 +1,8 @@
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { DeploymentForm } from './form';
 import { useRead } from '@/lib/hooks';
+import { GenericActionBarButtons } from '@/components/custom/action-bar';
+import { DeploymentActions } from './actions';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -14,7 +16,7 @@ export const DeploymentFormComponents: RequiredFormComponents = {
         return <></>;
       },
       ActionButtons: ({ resource }) => {
-        return <></>;
+        return <GenericActionBarButtons resource={resource} actions={Object.values(DeploymentActions)} />;
       },
     },
     Tabs: [

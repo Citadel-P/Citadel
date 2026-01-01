@@ -1,6 +1,7 @@
 ﻿namespace Domain.Contracts.Resources.Deployments;
 
 public sealed record DeploymentStreamItem(
+    string? Status = null,
     string? ProgressMessage = null,
     string? ErrorMessage = null,
     DeploymentApplyError? Error = null

@@ -15,6 +15,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   AnyFn,
   ApiFn,
+  Cancellable,
   KnownResourceName,
   ResourceResponse,
   ResourceType,
@@ -24,7 +25,8 @@ import {
 import { useGetValidationErrors, getValidationErrors } from '@/hooks/useGetValidationErrors';
 import { toast } from 'sonner';
 import { useParams } from 'react-router';
-import { ProblemDetails } from '@/api/generated/api.types';
+import { ApplyDeploymentInput, ProblemDetails, PullImageInput } from '@/api/generated/api.types';
+import { useAuthContext } from '@/features/auth/auth-context';
 
 const EMPTY_ARGS = Object.freeze({});
 
@@ -337,3 +339,176 @@ export const useWindowDimensions = () => {
   }, []);
   return dimensions;
 };
+
+type PulledStreamProps = PullImageInput | ApplyDeploymentInput;
+
+const usePulledStream = (onChunkReceived: (chunk: string) => void, endpoint: string) => {
+  const { apiClient } = useApiClientContext();
+  const { accessToken } = useAuthContext();
+
+  const mutationFn = async (param: PulledStreamProps & Cancellable) => {
+    if (!apiClient?.baseUrl) {
+      throw new Error('API client base URL is not defined');
+    }
+
+    const response = await fetch(`${apiClient.baseUrl}/${endpoint}`, {
+      method: 'POST',
+      credentials: 'include',
+      signal: param.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(param),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Network response was not ok: ${response.status} ${response.statusText}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('ReadableStream is not supported or response body is null');
+    }
+
+    const decoder = new TextDecoder('utf-8');
+    let done = false;
+
+    try {
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true });
+          onChunkReceived(chunk);
+        }
+      }
+    } catch (error) {
+      console.error('Error while reading stream:', error);
+      throw error;
+    } finally {
+      reader.releaseLock();
+    }
+  };
+
+  const { mutate, isPending, isSuccess, error } = useMutation({ mutationFn });
+
+  const validationErrors = useGetValidationErrors(error);
+
+  return { mutate, isPending, isSuccess, error, validationErrors };
+};
+
+type StreamStatus = 'pending' | 'success' | 'error';
+
+interface StreamProgressState {
+  lines: string[];
+  text: string;
+  isPending: boolean;
+  isSuccess: boolean;
+  status: StreamStatus;
+  error?: string;
+  elapsedMs: number;
+  elapsedLabel: string;
+}
+
+interface UseStreamProgressOptions<TRequest, TItem> {
+  endpoint: string;
+  request: TRequest;
+  successMessage: string;
+  errorMessageDefault: string;
+  // A predicate to check if an item in the stream represents an error
+  getError?: (item: TItem) => string | undefined | null;
+}
+
+export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
+  endpoint,
+  request,
+  successMessage,
+  errorMessageDefault,
+  getError,
+}: UseStreamProgressOptions<TRequest, TItem>): StreamProgressState {
+  const [lines, setLines] = useState<string[]>([]);
+  const [internalError, setInternalError] = useState<string | undefined>();
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const [elapsedMs, setElapsedMs] = useState<number>(0);
+  const startRef = useRef<number | null>(null);
+  const timerRef = useRef<number | null>(null);
+
+  const handleChunkReceived = useCallback((chunk: string) => {
+    setLines((prev) => [...prev, chunk]);
+  }, []);
+
+  const { isPending, isSuccess, error: streamError, mutate } = usePulledStream(handleChunkReceived, endpoint);
+
+  // Handle Request Lifecycle
+  useEffect(() => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    mutate({ ...request, signal: controller.signal });
+
+    return () => {
+      controller.abort();
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [mutate, request]);
+
+  // Handle Success/Error Parsing
+  useEffect(() => {
+    if (isSuccess) {
+      try {
+        const data = lines.join('\n');
+        const response = JSON.parse(data) as TItem[];
+
+        const errors = getError ? response.map(getError).filter(Boolean) : [];
+
+        if (errors.length > 0) {
+          const err = (errors[0] as string) || errorMessageDefault;
+          setInternalError(err);
+          toast.error('Error', { description: err });
+        } else {
+          toast.success(successMessage);
+        }
+      } catch {
+        const msg = 'Failed to parse response';
+        setInternalError(msg);
+        toast.error('Error', { description: msg });
+      }
+    }
+  }, [isSuccess, lines, getError, successMessage, errorMessageDefault]);
+
+  // Handle Timer
+  useEffect(() => {
+    if (isPending) {
+      if (startRef.current == null) startRef.current = performance.now();
+      timerRef.current = window.setInterval(() => {
+        setElapsedMs(Math.max(0, performance.now() - (startRef.current ?? 0)));
+      }, 100);
+    } else if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+  }, [isPending]);
+
+  const status: StreamStatus = useMemo(() => {
+    if (isPending) return 'pending';
+    if (internalError || streamError) return 'error';
+    return 'success';
+  }, [isPending, internalError, streamError]);
+
+  const elapsedLabel = useMemo(() => {
+    return (Math.floor(elapsedMs / 100) / 10).toFixed(1).replace('.', ',');
+  }, [elapsedMs]);
+
+  return {
+    lines,
+    text: lines.length === 0 && isPending ? 'Loading...' : lines.join('\n'),
+    isPending,
+    isSuccess,
+    status,
+    error: internalError || (streamError as any)?.message,
+    elapsedMs,
+    elapsedLabel,
+  };
+}

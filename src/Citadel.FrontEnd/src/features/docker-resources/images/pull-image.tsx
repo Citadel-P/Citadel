@@ -111,7 +111,8 @@ export default function PullImageForm() {
               <div className="flex flex-row gap-1">
                 <div className="font-semibold text-sm">Tip:</div>
                 <div className="font-normal">
-                  Looking to run containers? Create a Deployment (single) or Stack (multiple) instead.
+                  Looking to run containers? Create a Deployment for a single container or a Stack for multiple
+                  containers.
                 </div>
               </div>
             </AlertMessage>
