@@ -8,6 +8,7 @@ using static Citadel.Agent.Images.V1.ImageService;
 using static Citadel.Agent.Networks.V1.NetworkService;
 using static Citadel.Agent.Platforms.V1.PlatformService;
 using static Citadel.Agent.Volumes.V1.VolumeService;
+using static Citadel.Agent.Deployments.V1.DeploymentService;
 
 namespace Infrastructure.Repositories;
 
@@ -21,6 +22,7 @@ internal interface IGrpcClientFactory
     ImageServiceClient GetImageClient(string address);
     NetworkServiceClient GetNetworkClient(string address);
     VolumeServiceClient GetVolumeClient(string address);
+    DeploymentServiceClient GetDeploymentClient(string address);
 }
 
 internal class GrpcClientFactory(params Interceptor[] interceptors) : IGrpcClientFactory
@@ -43,6 +45,9 @@ internal class GrpcClientFactory(params Interceptor[] interceptors) : IGrpcClien
 
     public VolumeServiceClient GetVolumeClient(string address) =>
         GetOrCreateClient(NormalizeAddress(address), invoker => new VolumeServiceClient(invoker));
+
+    public DeploymentServiceClient GetDeploymentClient(string address) =>
+        GetOrCreateClient(NormalizeAddress(address), invoker => new DeploymentServiceClient(invoker));
 
     private TClient GetOrCreateClient<TClient>(string address, Func<CallInvoker, TClient> factory)
     {
