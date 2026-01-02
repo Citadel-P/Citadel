@@ -16,8 +16,8 @@ internal class LocalDeploymentConnector(IDeploymentService deploymentService) : 
         (
             ImageId: applyDeployment.ImageId,
             Name: applyDeployment.Name,
-            MemoryLimit: (long) applyDeployment.Spec.ResourceSpec.MemoryLimit,
-            CpuQuota: (long) applyDeployment.Spec.ResourceSpec?.CpuLimit,
+            MemoryLimit: (long?) applyDeployment.Spec.ResourceSpec?.MemoryLimit,
+            NanoCpus: (long?) applyDeployment.Spec.ResourceSpec?.NanoCpus,
             RestartPolicy: applyDeployment.Spec.LifeCycleSpec?.RestartPolicy.Map(),
             Labels: applyDeployment.Spec.Labels,
             Networks: applyDeployment.Spec.Networks,

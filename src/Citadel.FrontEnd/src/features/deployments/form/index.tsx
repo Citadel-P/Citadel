@@ -3,6 +3,7 @@ import { DeploymentForm } from './form';
 import { useRead } from '@/lib/hooks';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { DeploymentActions } from './actions';
+import { StateIndicator } from '@/components/custom/state-indicator';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -13,7 +14,7 @@ export const DeploymentFormComponents: RequiredFormComponents = {
   EditForm: {
     Header: {
       Indicator: ({ resource }: { resource: RequiredFormFields }) => {
-        return <></>;
+        return <StateIndicator value={resource.status as any} />;
       },
       ActionButtons: ({ resource }) => {
         return <GenericActionBarButtons resource={resource} actions={Object.values(DeploymentActions)} />;
@@ -22,13 +23,13 @@ export const DeploymentFormComponents: RequiredFormComponents = {
     Tabs: [
       {
         label: 'Config',
-        Content: ({ resource }) => {
-          return <DeploymentForm mode="edit" resource={resource} />;
+        Content: ({ metadataChanged }: { metadataChanged?: boolean }) => {
+          return <DeploymentForm mode="edit" metadataChanged={metadataChanged} />;
         },
       },
     ],
     useData: function (id: string): { item?: RequiredFormFields; isLoading: boolean } {
-      const { data, isLoading } = useRead('getDeploymentConfig', { deploymentId: id });
+      const { data, isLoading } = useRead('getDeployment', { deploymentId: id });
       return { item: data?.data, isLoading };
     },
   },

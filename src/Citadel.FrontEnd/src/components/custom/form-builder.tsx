@@ -477,7 +477,7 @@ function computeValidationState<T>(
     const val = getValue(merged, key);
     const originalVal = getValue(original, key);
 
-    dirty[key] = val !== originalVal;
+    dirty[key] = !areValuesEqual(val, originalVal);
 
     const isEmpty = val === undefined || val === '';
     let err: string | null = null;
@@ -1036,4 +1036,25 @@ export function FormShell<T>({
       </Dialog>
     </div>
   );
+}
+function areValuesEqual(a: any, b: any): boolean {
+  if (a === b) return true;
+
+  const isEmptyA =
+    a === undefined ||
+    a === null ||
+    (Array.isArray(a) && a.length === 0) ||
+    (isObject(a) && Object.keys(a).length === 0);
+  const isEmptyB =
+    b === undefined ||
+    b === null ||
+    (Array.isArray(b) && b.length === 0) ||
+    (isObject(b) && Object.keys(b).length === 0);
+  if (isEmptyA && isEmptyB) return true;
+
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch (e) {
+    return false;
+  }
 }

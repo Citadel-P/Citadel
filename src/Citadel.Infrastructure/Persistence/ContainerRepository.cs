@@ -128,7 +128,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
             UPDATE Containers
-            SET Name = @Name, DockerImageId = @DockerImageId, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports, Created = @Created, ImageId = @ImageId
+            SET Name = @Name, DockerImageId = @DockerImageId, Updated = @Updated, State = @State, Stack = @Stack, Ports = @Ports, Created = @Created, ImageId = @ImageId, DeploymentId = @DeploymentId, PlatformId = @PlatformId
             WHERE Id = @Id
         """;
         return db.ExecuteAsync(sql, new
@@ -137,6 +137,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             Id = container.Id.Format(),
             PlatformId = container.PlatformId.Format(),
             ImageId = container.ImageId?.Format(),
+            DeploymentId = container.DeploymentId?.Format(),
             Name = container.Name,
             Image = container.Image,
             DockerImageId = container.DockerImageId,

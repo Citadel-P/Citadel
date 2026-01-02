@@ -1,33 +1,42 @@
 import { Rocket, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { DeploymentView } from '@/api/generated/api.types';
+import { DeploymentStatus, DeploymentView } from '@/api/generated/api.types';
 import { useTaskSheet } from '@/lib/atoms';
 
 export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>()
   .addAction({
-    key: 'deploy',
-    type: 'command',
-    icon: Rocket,
-    useHandler: ({ resources }) => {
-      const { open: openSheet } = useTaskSheet('Deployment');
-      const selected = Array.isArray(resources) ? resources[0] : resources;
-      const canExecute = !!selected;
+    key: 'deployToggle',
+    type: 'toggle',
+    predicate: (r: DeploymentView) => r.status !== DeploymentStatus.Created,
+    primary: {
+      title: 'Deploy',
+      icon: Rocket,
+      confirm: true,
+      useHandler: ({ resources }) => {
+        const { open: openSheet } = useTaskSheet('Deployment');
+        const selected = Array.isArray(resources) ? resources[0] : resources;
 
-      return {
-        canExecute,
-        isPending: false,
-        run: () => {
-          if (!canExecute || !selected) return;
-          openSheet({
-            kind: 'deploy',
-            payload: {
-              deploymentId: selected.id,
-              name: selected.name,
-            },
-          });
-        },
-      };
+        return {
+          canExecute: !!selected,
+          run: () => openSheet({ kind: 'deploy', payload: { deploymentId: selected.id, name: selected.name } }),
+        };
+      },
+    },
+    secondary: {
+      title: 'Redeploy',
+      icon: Rocket,
+      confirm: true,
+      useHandler: ({ resources }) => {
+        const { open: openSheet } = useTaskSheet('Deployment');
+        const selected = Array.isArray(resources) ? resources[0] : resources;
+
+        return {
+          canExecute: !!selected,
+          run: () =>
+            openSheet({ kind: 'deploy', payload: { deploymentId: selected.id, name: selected.name, redeploy: true } }),
+        };
+      },
     },
   })
   .addAction({

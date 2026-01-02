@@ -1527,7 +1527,7 @@ export interface ResourceSpec {
    * @format float
    * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
    */
-  cpuLimit: null | number | string;
+  nanoCpus: null | number | string;
   /**
    * @format float
    * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$

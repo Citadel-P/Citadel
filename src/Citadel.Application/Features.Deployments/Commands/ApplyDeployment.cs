@@ -1,9 +1,11 @@
 ﻿using Application.Services;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
 
 namespace Application.Features.Deployments.Commands;
@@ -11,50 +13,55 @@ namespace Application.Features.Deployments.Commands;
 public sealed record ApplyDeployment(Guid Id) : IStreamCommand<DeploymentStreamItem>;
 
 internal sealed class ApplyDeploymentHandler(
+    IDbWorkQueue dbWorkQueue,
     IPullImageService pullImageService,
-    IPlatformContainerCache platformContainerCache,
+    INotificationQueue notificationQueue,
+    IPlatformContainerCache platformCache,
     IConnectorFactory<IDeploymentConnector> connectorFactory,
-    IServiceScopeFactory scopeFactory) : IStreamCommandHandler<ApplyDeployment, DeploymentStreamItem>
+    IServiceScopeFactory scopeFactory,
+    ILogger<ApplyDeploymentHandler> logger)
+    : IStreamCommandHandler<ApplyDeployment, DeploymentStreamItem>
 {
-    public async IAsyncEnumerable<DeploymentStreamItem> Handle(ApplyDeployment command, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<DeploymentStreamItem> Handle(ApplyDeployment command, [EnumeratorCancellation] CancellationToken ct)
     {
-        Deployment? deployment;
-        await using (var scope = scopeFactory.CreateAsyncScope())
+        var deployment = await LoadDeployment(command.Id, ct);
+        if (deployment is null)
         {
-            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            deployment = await uow.Deployments.GetAsync(command.Id, cancellationToken);
-        }
-            
-        if (deployment == null )
-        {
-            var message = $"❌ Deployment with ID {command.Id} not found.";
-            yield return new DeploymentStreamItem(ErrorMessage: message, Error: new DeploymentApplyError(404, message));
-            yield break;
-        }
-
-        if (!platformContainerCache.TryGetCacheEntry(deployment.PlatformId, out var platform, out _))
-        {
-            var message = $"❌ Platform with ID {deployment.PlatformId} not found or disconnected.";
-            yield return new DeploymentStreamItem(ErrorMessage: message, Error: new DeploymentApplyError(404, message));
+            yield return Error(404, $"Deployment {command.Id} not found.");
             yield break;
         }
 
         if (deployment.Spec is null)
         {
-            var message = "❌ Deployment Spec not found";
-            yield return new DeploymentStreamItem(ErrorMessage: message, Error: new DeploymentApplyError(400, message));
+            yield return Error(400, "Deployment spec missing.");
             yield break;
         }
 
-        string? imageId = null;
-        if (deployment.Spec?.Image is ExternalImage image)
+        if (!platformCache.TryGetCacheEntry(deployment.PlatformId, out var platform, out _))
         {
-            yield return new DeploymentStreamItem(ProgressMessage: $"Pulling image {image.ImageTag} from the provided registry.");
-            await foreach (var item in pullImageService.PullAsync(new PullImageService.PullImageInput(
-            ImageTag: image.ImageTag,
-            PlatformId: platform.Id,
-            RegistryId: image.RegistryId
-            ), cancellationToken))
+            yield return Error(404, "Platform not found or disconnected.");
+            yield break;
+        }
+
+        await EnqueueStatus(deployment.Id, DeploymentStatus.Applying, ct);
+
+        string? imageId = null;
+
+        if (deployment.Spec.Image is LocalImage local)
+        {
+            imageId = local.ImageId;
+        }
+        else if (deployment.Spec.Image is ExternalImage external)
+        {
+            yield return new DeploymentStreamItem(
+                ProgressMessage: $"Pulling image {external.ImageTag}");
+
+            await foreach (var item in pullImageService.PullAsync(
+                new PullImageService.PullImageInput(
+                    PlatformId: platform.Id,
+                    ImageTag: external.ImageTag,
+                    RegistryId: external.RegistryId),
+                ct))
             {
                 yield return new DeploymentStreamItem(
                     Id: item.Id,
@@ -63,71 +70,171 @@ internal sealed class ApplyDeploymentHandler(
                     ProgressMessage: item.ProgressMessage,
                     ErrorMessage: item.ErrorMessage,
                     Progress: item.Progress,
-                    Error: item.Error is not null ? new DeploymentApplyError(item.Error.Code, item.Error.Message) : null
-                    );
+                    Error: item.Error is not null
+                        ? new DeploymentApplyError(item.Error.Code, item.Error.Message)
+                        : null
+                );
+
                 if (!string.IsNullOrEmpty(item.ErrorMessage))
                 {
-                    // TODO: log the error to the audit table
+                    await EnqueueStatus(deployment.Id, DeploymentStatus.Failed, ct);
                     yield break;
                 }
 
-                // Capture the image ID once pulled
                 if (!string.IsNullOrEmpty(item.DockerImageId))
                 {
                     imageId = item.DockerImageId;
                 }
             }
         }
-        else
-        {
-            imageId = (deployment.Spec?.Image as LocalImage)?.ImageId;
-        }
 
         if (string.IsNullOrEmpty(imageId))
         {
-            var message = "❌ Image ID could not be determined for the deployment.";
-            yield return new DeploymentStreamItem(ErrorMessage: message, Error: new DeploymentApplyError(400, message));
+            await EnqueueStatus(deployment.Id, DeploymentStatus.Failed, ct);
+            yield return Error(400, "Image ID could not be resolved.");
             yield break;
         }
 
-        yield return new DeploymentStreamItem(ProgressMessage: $"Applying deployment to platform {platform.Address}...");
-
-        var resourceSpec = deployment.Spec.ResourceSpec with
+        if (imageId is null)
         {
-            CpuLimit = deployment.Spec?.ResourceSpec?.CpuLimit.HasValue == true ? (deployment.Spec.ResourceSpec?.CpuLimit.Value * 100000) : 0,
-            MemoryLimit = deployment.Spec?.ResourceSpec?.MemoryLimit.HasValue == true ? deployment.Spec?.ResourceSpec?.MemoryLimit * 1024 * 1024 : 0
-        };
+            await EnqueueStatus(deployment.Id, DeploymentStatus.Failed, ct);
+            yield return Error(400, "Image resolution failed.");
+            yield break;
+        }
 
-        var spec = new ApplyDeploymentCommand(
-                PlatformAddress: platform.Address,
-                Name: deployment.Name,
-                ImageId: imageId,
-                Spec: deployment.Spec with
-                {
-                    ResourceSpec = resourceSpec
-                });
+        yield return Info($"Applying deployment to {platform.Address}...");
 
         var connector = connectorFactory.GetConnector(platform.ConnectorType);
-        var result = await connector.ApplyDeploymentAsync(spec, cancellationToken);
+        var commandToApply = BuildApplyCommand(deployment, platform.Address, imageId);
+
+        var result = await connector.ApplyDeploymentAsync(commandToApply, ct);
         if (!result.IsSuccess(out var deploymentResult, out var error))
         {
-            yield return new DeploymentStreamItem(ErrorMessage: $"❌ {error.Message}");
+            await EnqueueStatus(deployment.Id, DeploymentStatus.Failed, ct);
+            yield return Error(500, error.Message);
             yield break;
         }
 
-        yield return new DeploymentStreamItem(ProgressMessage: $"Container created: {deploymentResult.ContainerId}.");
+        yield return Info($"Container created: {deploymentResult.ContainerId}");
 
-        if (deploymentResult.DeployedContainerState != Domain.DeployedContainerState.Running)
+        if (deploymentResult.DeployedContainerState != DeployedContainerState.Running)
         {
-            var message = $"❌ Deployment failed: container did not start successfully - Container state: {deploymentResult.DeployedContainerState}";
-            yield return new DeploymentStreamItem(ErrorMessage: message, Error: new DeploymentApplyError(422, message));
+            await EnqueueStatus(deployment.Id, DeploymentStatus.Failed, ct);
+            yield return Error(422, $"Deployment failed: container did not start successfully - Container state: {deploymentResult.DeployedContainerState}");
             yield break;
         }
 
-        yield return new DeploymentStreamItem(ProgressMessage: $"Container started: {deploymentResult}.");
+        await dbWorkQueue.EnqueueAsync(
+            new DeploymentSucceededWorkItem(
+                deployment.Id,
+                deploymentResult.ContainerId,
+                notificationQueue),
+            ct);
 
-        // Todo: link deployment to the container
+        yield return Info("✅ Deployment is now running.");
+    }
 
-        yield return new DeploymentStreamItem(ProgressMessage: "✅ Deployment is now running.");
+    private static ApplyDeploymentCommand BuildApplyCommand(Deployment deployment, string platformAddress, string imageId)
+    {
+        var rs = deployment.Spec!.ResourceSpec;
+
+        var normalized = rs with
+        {
+            NanoCpus = rs?.NanoCpus is > 0 ? (long)(rs.NanoCpus.Value * 1_000_000_000) : 0,
+            MemoryLimit = rs?.MemoryLimit is > 0 ? rs.MemoryLimit.Value * 1024 * 1024 : 0
+        };
+
+        return new ApplyDeploymentCommand(
+            PlatformAddress: platformAddress,
+            Name: deployment.Name,
+            ImageId: imageId,
+            Spec: deployment.Spec with { ResourceSpec = normalized });
+    }
+
+    private static DeploymentStreamItem Info(string message)
+        => new(ProgressMessage: message);
+
+    private static DeploymentStreamItem Error(int code, string message)
+        => new(ErrorMessage: $"❌ {message}", Error: new DeploymentApplyError(code, $"❌ {message}"));
+
+    private async Task EnqueueStatus(Guid deploymentId, DeploymentStatus status, CancellationToken ct)
+    {
+        await dbWorkQueue.EnqueueAsync(
+            new UpdateDeploymentStatusWorkItem(
+                deploymentId,
+                status,
+                notificationQueue),
+            ct);
+    }
+
+    private async Task<Deployment?> LoadDeployment(Guid id, CancellationToken ct)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        return await uow.Deployments.GetAsync(id, ct);
     }
 }
+
+    public static class DeploymentStateMachine
+    {
+        private static readonly IReadOnlyDictionary<DeploymentStatus, DeploymentStatus[]> AllowedTransitions =
+            new Dictionary<DeploymentStatus, DeploymentStatus[]>
+            {
+                [DeploymentStatus.Created] = [DeploymentStatus.Applying],
+                [DeploymentStatus.Applying] = [DeploymentStatus.Applying, DeploymentStatus.Healthy, DeploymentStatus.Failed],
+                [DeploymentStatus.Failed] = [DeploymentStatus.Applying],
+                [DeploymentStatus.Healthy] = [DeploymentStatus.Applying]
+            };
+
+        public static bool CanTransition(
+            DeploymentStatus from,
+            DeploymentStatus to)
+            => AllowedTransitions.TryGetValue(from, out var next)
+               && next.Contains(to);
+    }
+
+internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, DeploymentStatus targetStatus, INotificationQueue notificationQueue)
+    : IDbWorkItem
+{
+    public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
+    {
+        var deployment = await uow.Deployments.GetAsync(deploymentId, ct);
+        if (deployment is null) return;
+
+        if (!DeploymentStateMachine.CanTransition(deployment.Status, targetStatus))
+            return;
+
+        deployment.PartialUpdate(status: targetStatus);
+        await uow.Deployments.UpdateAsync(deployment, ct);
+        await uow.CommitAsync(ct);
+
+        // TODO: push notification
+    }
+}
+
+internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, string containerId, INotificationQueue notificationQueue)
+    : IDbWorkItem
+{
+    public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
+    {
+        var deployment = await uow.Deployments.GetAsync(deploymentId, ct);
+        var container = await uow.Containers.GetByIdAsync(containerId, ct);
+
+        if (deployment is null || container is null) return;
+
+        if (!DeploymentStateMachine.CanTransition(
+                deployment.Status,
+                DeploymentStatus.Healthy))
+            return;
+
+        container.PartialUpdate(deploymentId: deployment.Id);
+        deployment.PartialUpdate(status: DeploymentStatus.Healthy);
+
+        await uow.Containers.UpdateAsync(container, ct);
+        await uow.Deployments.UpdateAsync(deployment, ct);
+        await uow.CommitAsync(ct);
+
+        // TODO: notify clients
+    }
+}
+

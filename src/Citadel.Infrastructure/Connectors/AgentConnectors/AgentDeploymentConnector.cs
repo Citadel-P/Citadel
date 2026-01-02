@@ -30,7 +30,7 @@ internal class AgentDeploymentConnector(IGrpcClientFactory clientFactory) : IDep
                     },
                     ResourceSpec = new ResourceSpec
                     {
-                        CpuLimit = applyDeployment.Spec.ResourceSpec?.CpuLimit ?? 0,
+                        NanoCpus = applyDeployment.Spec.ResourceSpec?.NanoCpus ?? 0,
                         MemoryLimit = applyDeployment.Spec.ResourceSpec?.MemoryLimit ?? 0
                     },
                     Labels = { applyDeployment.Spec.Labels },

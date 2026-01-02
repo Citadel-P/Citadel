@@ -1,4 +1,6 @@
-﻿namespace Domain.Entities;
+﻿using System.Diagnostics.CodeAnalysis;
+
+namespace Domain.Entities;
 
 public class Container(
     string name,
@@ -40,6 +42,7 @@ public class Container(
         long? created = null,
         Guid? platformId = null,
         Guid? imageId = null,
+        Guid? deploymentId = null,
         IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null)
     {
         if (name != null) Name = name;
@@ -49,6 +52,7 @@ public class Container(
         if (created != null) Created = created.Value;
         if (platformId != null) PlatformId = platformId.Value;
         if (imageId is not null) ImageId = imageId;
+        if (deploymentId is not null) DeploymentId = deploymentId;
         if (ports != null)
         {
             this.ports.Clear();

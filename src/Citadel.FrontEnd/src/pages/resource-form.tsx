@@ -43,6 +43,7 @@ const EditFormPage = ({ type }: { type: ResourceType }) => {
   const { id } = useParams();
   const { mutateAsync: updateResource } = useMutate(`update${type}` as any);
   const [resource, setResource] = useState<RequiredFormFields | null>(null);
+  const [metadatChanged, setMetaDataChanged] = useState(false);
 
   const Components = ResourceFormComponents[type]?.EditForm;
   const formData = Components?.useData?.(id!);
@@ -70,6 +71,7 @@ const EditFormPage = ({ type }: { type: ResourceType }) => {
     setResource({ ...resource, ...patch });
     try {
       await updateResource({ id, data: patch });
+      setMetaDataChanged(true);
     } catch {
       setResource(previous);
     }
@@ -86,7 +88,7 @@ const EditFormPage = ({ type }: { type: ResourceType }) => {
         onRename={(name) => updateField({ name })}
         onChangeDescription={(description) => updateField({ description })}
       />
-      <ResourceTabs localKey={localKey} resource={resource} tabs={tabs} />
+      <ResourceTabs localKey={localKey} resource={resource} tabs={tabs} metadataChanged={metadatChanged} />
       <TaskSheet type={type} />
     </>
   );
@@ -129,7 +131,7 @@ const EditHeader = <T extends RequiredFormFields>({
       <Indicator resource={item} />
       <div className="flex flex-col flex-1 min-w-0">
         <EditableTitle value={item.name} onSave={onRename} />
-        <EditableDescription value={item.description} onSave={onChangeDescription} />
+        <EditableDescription value={item.description ?? ''} onSave={onChangeDescription} />
       </div>
     </div>
     <div className="flex gap-4 items-center flex-wrap shrink-0">

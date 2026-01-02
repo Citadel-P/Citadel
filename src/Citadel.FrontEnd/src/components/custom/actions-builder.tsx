@@ -21,6 +21,7 @@ export interface CommandAction<R, K extends KnownResourceName | undefined = unde
   confirm?: boolean;
   destructive?: boolean;
   invalidate?: K;
+  variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
   useVariables?: (resources: R[] | R) => K extends KnownResourceName ? PrimaryArg<K> : any;
   argName?: 'params' | 'data';
   resourceType?: ResourceType;
@@ -33,26 +34,38 @@ export interface CommandAction<R, K extends KnownResourceName | undefined = unde
   useSuccessHandler?: (ctx: { resources: R | R[] }) => (() => void) | void;
 }
 
-export interface ToggleAction<R, K extends KnownResourceName = KnownResourceName> {
+export interface ToggleAction<R, K extends KnownResourceName | undefined = undefined> {
   key: string;
   type: 'toggle';
   separatorBefore?: boolean;
+  predicate?: (r: R) => boolean;
   primary: ToggleConfig<R, K>;
   secondary: ToggleConfig<R, K>;
 }
 
-type ToggleConfig<R, K extends KnownResourceName> = {
+type ToggleConfig<R, K extends KnownResourceName | undefined = undefined> = {
   title: string;
   icon: LucideIcon;
-  mutateKey: K;
-  canExecute: (r: R) => boolean;
-  useVariables?: (resources: R | R[]) => PrimaryArg<K>;
+  mutateKey?: K;
+  confirm?: boolean;
+  variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
+  canExecute?: (r: R) => boolean;
+  useVariables?: (resources: R | R[]) => K extends KnownResourceName ? PrimaryArg<K> : any;
+  useHandler?: (ctx: { resources: R | R[] }) => {
+    run: () => void | Promise<void>;
+    canExecute?: boolean;
+    isPending?: boolean;
+  };
   onSuccess?: (ctx: { resources: R | R[] }) => (() => void) | void;
+  invalidate?: K;
+  argName?: 'params' | 'data';
+  destructive?: boolean;
+  resourceType?: ResourceType;
 };
 
 export type ActionConfig<R, K extends KnownResourceName | undefined = undefined> =
   | CommandAction<R, K>
-  | ToggleAction<R>;
+  | ToggleAction<R, any>;
 
 export function createActionsBuilder<R extends BaseResource>(options?: { showToast?: boolean }) {
   const actions: ActionConfig<R, any>[] = [];
@@ -70,7 +83,6 @@ export function createActionsBuilder<R extends BaseResource>(options?: { showToa
       const info: Record<string, ButtonActionComponent<R>> = {};
 
       for (const act of actions) {
-        // Generate components based on type
         const components =
           act.type === 'toggle' ? createToggleComponents(act, showToast) : createCommandComponents(act, showToast);
 
@@ -92,13 +104,13 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
 
   const Dropdown: DropdownActionComponent<R> = ({ resource, onAction }) => {
     const { run, isPending, canExecute } = useUnifiedExecutor(act, resource, title, showToast);
-
+    const variant = act.variant || (act.destructive ? 'destructive' : 'outline');
     return (
       <DropdownActionButton
         title={title}
         icon={<act.icon className="h-4 w-4" />}
         separatorBefore={act.separatorBefore}
-        variant={act.destructive ? 'destructive' : 'default'}
+        variant={variant}
         disabled={!canExecute || isPending}
         onClick={
           act.confirm || act.destructive
@@ -109,7 +121,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
                   icon: <act.icon className="h-4 w-4" />,
                   onClick: run,
                   disabled: !canExecute,
-                  variant: act.destructive ? 'destructive' : 'default',
+                  variant: variant,
                 })
             : run
         }
@@ -119,8 +131,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
 
   const Group: ButtonGroupComponent<R> = ({ resources }) => {
     const { run, isPending, canExecute } = useUnifiedExecutor(act, resources, title, showToast);
-
-    // Dialog / Confirmation Mode
+    const variant = act.variant || (act.destructive ? 'destructive' : 'outline');
     if (act.confirm || act.destructive) {
       return (
         <GroupActionWithDialog
@@ -128,7 +139,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
           name={title}
           title={title}
           iconPosition="left"
-          variant={act.destructive ? 'destructive' : 'outline'}
+          variant={variant}
           icon={<act.icon className="h-4 w-4" />}
           onClick={run}
           disabled={!canExecute || isPending}
@@ -136,12 +147,11 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
       );
     }
 
-    // Standard Button Mode
     return (
       <ActionButton
         title={title}
         iconPosition="left"
-        variant={act.destructive ? 'destructive' : 'outline'}
+        variant={variant}
         icon={<act.icon className="h-4 w-4" />}
         onClick={run}
         disabled={!canExecute || isPending}
@@ -151,7 +161,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
 
   const Info: ButtonActionComponent<R> = ({ resource }) => {
     const { run, isPending, canExecute } = useUnifiedExecutor(act, resource, title, showToast);
-
+    const variant = act.variant || (act.destructive ? 'destructive' : 'outline');
     if (act.confirm || act.destructive) {
       return (
         <ActionWithDialog
@@ -161,7 +171,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
           icon={<act.icon className="h-4 w-4" />}
           onClick={run}
           disabled={!canExecute || isPending}
-          variant={act.destructive ? 'destructive' : 'default'}
+          variant={variant}
         />
       );
     }
@@ -170,7 +180,7 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
       <ActionButton
         title={title}
         iconPosition="left"
-        variant={act.destructive ? 'destructive' : 'outline'}
+        variant={variant}
         icon={<act.icon className="h-4 w-4" />}
         onClick={run}
         disabled={!canExecute || isPending}
@@ -181,33 +191,37 @@ function createCommandComponents<R extends BaseResource>(act: CommandAction<R, a
   return { Dropdown, Group, Info };
 }
 
-/**
- * Creates the React components for a 'toggle' type action
- */
-function createToggleComponents<R extends BaseResource>(act: ToggleAction<R>, showToast: boolean) {
+function createToggleComponents<R extends BaseResource>(act: ToggleAction<R, any>, showToast: boolean) {
   const useActiveConfig = (resources: R | R[]) => {
     const rList = Array.isArray(resources) ? resources : [resources];
-    const isSecondary = rList.some(act.secondary.canExecute);
+    const isSecondary = act.predicate ? rList.some(act.predicate) : rList.some((r) => act.secondary.canExecute?.(r));
+
     return isSecondary ? act.secondary : act.primary;
   };
 
-  const Dropdown: DropdownActionComponent<R> = ({ resource }) => {
+  const Dropdown: DropdownActionComponent<R> = ({ resource, onAction }) => {
     const config = useActiveConfig(resource);
-    // Toggles are treated as mutations in the executor
-    const { run, isPending, canExecute } = useMutationLogic(
-      config,
-      resource,
-      config.title,
-      showToast,
-      undefined, // no explicit invalidate key on toggle config root usually
-      'data',
-    );
+    const variant = config.variant || (config.destructive ? 'destructive' : 'outline');
+    const { run, isPending, canExecute } = useUnifiedExecutor(config, resource, config.title, showToast);
 
     return (
       <DropdownActionButton
         title={config.title}
         icon={<config.icon className="h-4 w-4" />}
-        onClick={run}
+        variant={variant}
+        onClick={
+          config.confirm || config.destructive
+            ? () =>
+                onAction?.('confirm', {
+                  name: resource.name,
+                  title: config.title,
+                  icon: <config.icon className="h-4 w-4" />,
+                  onClick: run,
+                  disabled: !canExecute,
+                  variant: variant,
+                })
+            : run
+        }
         disabled={!canExecute || isPending}
         separatorBefore={act.separatorBefore}
       />
@@ -216,21 +230,30 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R>, sh
 
   const Group: ButtonGroupComponent<R> = ({ resources }) => {
     const config = useActiveConfig(resources);
-    const { run, isPending, canExecute } = useMutationLogic(
-      config,
-      resources,
-      config.title,
-      showToast,
-      undefined,
-      'data',
-    );
+    const variant = config.variant || (config.destructive ? 'destructive' : 'outline');
+    const { run, isPending, canExecute } = useUnifiedExecutor(config, resources, config.title, showToast);
+
+    if (config.confirm || config.destructive) {
+      return (
+        <GroupActionWithDialog
+          type={config.resourceType ?? 'Container'}
+          name={config.title}
+          title={config.title}
+          iconPosition="left"
+          variant={variant}
+          icon={<config.icon className="h-4 w-4" />}
+          onClick={run}
+          disabled={!canExecute || isPending}
+        />
+      );
+    }
 
     return (
       <ActionButton
         title={config.title}
         icon={<config.icon className="h-4 w-4" />}
         iconPosition="left"
-        variant="outline"
+        variant={variant}
         onClick={run}
         disabled={!canExecute || isPending}
       />
@@ -239,19 +262,27 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R>, sh
 
   const Info: ButtonActionComponent<R> = ({ resource }) => {
     const config = useActiveConfig(resource);
-    const { run, isPending, canExecute } = useMutationLogic(
-      config,
-      resource,
-      config.title,
-      showToast,
-      undefined,
-      'data',
-    );
+    const variant = config.variant || (config.destructive ? 'destructive' : 'outline');
+    const { run, isPending, canExecute } = useUnifiedExecutor(config, resource, config.title, showToast);
+
+    if (config.confirm || config.destructive) {
+      return (
+        <ActionWithDialog
+          name={resource.name}
+          title={config.title}
+          iconPosition="left"
+          variant={variant}
+          icon={<config.icon className="h-4 w-4" />}
+          onClick={run}
+          disabled={!canExecute || isPending}
+        />
+      );
+    }
 
     return (
       <ActionButton
         iconPosition="left"
-        variant="outline"
+        variant={variant}
         title={config.title}
         icon={<config.icon className="h-4 w-4" />}
         onClick={run}
@@ -263,14 +294,21 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R>, sh
   return { Dropdown, Group, Info };
 }
 
-/**
- * Decides whether to use the Handler hook or the Mutation hook logic
- */
-function useUnifiedExecutor<R>(act: CommandAction<R, any>, resources: R | R[], title: string, showToast: boolean) {
-  // If useHandler is defined, we use the custom hook logic
-  // Note: We use a conditional check inside, but hook rules require consistent calling.
-  // Since 'act' is constant for a specific component instance created by the builder, this is safe.
-
+function useUnifiedExecutor<R>(
+  act: {
+    useHandler?: any;
+    mutateKey?: any;
+    invalidate?: any;
+    argName?: any;
+    canExecute?: any;
+    useVariables?: any;
+    useSuccessHandler?: any;
+    onSuccess?: any;
+  },
+  resources: R | R[],
+  title: string,
+  showToast: boolean,
+) {
   if (act.useHandler) {
     const handler = act.useHandler({ resources });
     return {
@@ -280,20 +318,16 @@ function useUnifiedExecutor<R>(act: CommandAction<R, any>, resources: R | R[], t
     };
   }
 
-  // Otherwise default to Mutation logic
   return useMutationLogic(act, resources, title, showToast, act.invalidate, act.argName);
 }
 
-/**
- * Handles the React Query mutation setup and execution wrappers
- */
 function useMutationLogic<R, K extends KnownResourceName>(
   act: {
     mutateKey?: K;
     canExecute?: (r: any) => boolean;
     useVariables?: (r: any) => any;
     useSuccessHandler?: (ctx: any) => any;
-    onSuccess?: (ctx: any) => any; // Support Toggle structure
+    onSuccess?: (ctx: any) => any;
   },
   resources: R | R[],
   title: string,
@@ -301,18 +335,19 @@ function useMutationLogic<R, K extends KnownResourceName>(
   invalidate?: string,
   argName: 'params' | 'data' = 'data',
 ) {
-  const { mutateAsync, isPending } = useMutate(act.mutateKey!);
+  const { mutateAsync, isPending } = useMutate(act.mutateKey || ('none' as any));
   const client = useQueryClient();
 
-  const canExecute = act.canExecute
-    ? Array.isArray(resources)
-      ? resources.some(act.canExecute)
-      : act.canExecute(resources)
-    : true;
+  const canExecute = act.mutateKey
+    ? act.canExecute
+      ? Array.isArray(resources)
+        ? resources.some(act.canExecute)
+        : act.canExecute(resources)
+      : true
+    : false;
 
   const vars = act.useVariables ? act.useVariables(resources) : undefined;
 
-  // Normalize success handler (Command uses useSuccessHandler, Toggle uses onSuccess)
   const successCallback = act.useSuccessHandler
     ? act.useSuccessHandler({ resources })
     : act.onSuccess
@@ -320,22 +355,16 @@ function useMutationLogic<R, K extends KnownResourceName>(
       : undefined;
 
   const run = async () => {
+    if (!act.mutateKey) return;
     try {
       await mutateAsync({ [argName]: vars });
-
-      if (invalidate) {
-        client.invalidateQueries({ queryKey: [invalidate] });
-      }
-
+      if (invalidate) client.invalidateQueries({ queryKey: [invalidate] });
       if (showToast) {
-        const resourceName = Array.isArray(resources) ? `${resources.length} items` : (resources as any).name;
-        toast.success(`${title} executed for ${resourceName}`);
+        const name = Array.isArray(resources) ? `${resources.length} items` : (resources as any).name;
+        toast.success(`${title} executed for ${name}`);
       }
-
       if (successCallback) successCallback();
-    } catch (err: any) {
-      // Error handling is centralized here if needed, or left to global error boundary
-      // For now, rethrow to let UI handle it if needed
+    } catch (err) {
       console.error(err);
     }
   };

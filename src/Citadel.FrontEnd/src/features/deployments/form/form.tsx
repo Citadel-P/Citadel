@@ -21,7 +21,7 @@ import {
   PortMappingField,
   ItemSelector,
 } from '@/components/custom/form-builder';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMutate, useRead } from '@/lib/hooks';
 import { toast } from 'sonner';
@@ -95,27 +95,27 @@ const resource_profiles = {
   [ResourceProfile.xsmall]: {
     label: 'X-Small',
     description: '0.25 CPU - 256 MB RAM',
-    spec: { cpuLimit: 0.25, memoryLimit: 256 },
+    spec: { nanoCpus: 0.25, memoryLimit: 256 },
   },
   [ResourceProfile.small]: {
     label: 'Small',
     description: '0.5 CPU - 512 MB RAM',
-    spec: { cpuLimit: 0.5, memoryLimit: 512 },
+    spec: { nanoCpus: 0.5, memoryLimit: 512 },
   },
   [ResourceProfile.medium]: {
     label: 'Medium',
     description: '0.5 CPU - 1 GB RAM',
-    spec: { cpuLimit: 0.5, memoryLimit: 1024 },
+    spec: { nanoCpus: 0.5, memoryLimit: 1024 },
   },
   [ResourceProfile.large]: {
     label: 'Large',
     description: '1.0 CPU - 2 GB RAM',
-    spec: { cpuLimit: 1, memoryLimit: 2048 },
+    spec: { nanoCpus: 1, memoryLimit: 2048 },
   },
   [ResourceProfile.xlarge]: {
     label: 'X-Large',
     description: '2.0 CPU - 4 GB RAM',
-    spec: { cpuLimit: 2, memoryLimit: 4096 },
+    spec: { nanoCpus: 2, memoryLimit: 4096 },
   },
 };
 
@@ -134,7 +134,7 @@ const stop_signals = {
   },
 };
 
-export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: DeploymentInput }) => {
+export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'; metadataChanged?: boolean }) => {
   const id = useParams().id;
   const navigate = useNavigate();
   const [update, setUpdate] = useState<Partial<DeploymentInput>>({});
@@ -143,6 +143,9 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
 
   const { mutateAsync: createDeployment } = useMutate('createDeployment');
   const { mutateAsync: updateDeployment } = useMutate('updateDeployment');
+  const { data: deploymentCfg } = useRead('getDeploymentConfig', { deploymentId: id });
+
+  const resource: DeploymentInput | undefined = deploymentCfg?.data;
 
   const original = resource ?? ({} as DeploymentInput);
 
@@ -186,14 +189,23 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
     );
   }, [imageInfoIsSuccess, data?.data?.ports, currentImage?.$type, update.spec?.ports, original.spec?.ports]);
 
+  const refreshData = useCallback(() => {
+    localStorage.removeItem(`deployment:${id ?? 'new'}`);
+    queryClient.invalidateQueries({ queryKey: ['getDeploymentConfig', { deploymentId: id }] });
+  }, [id, queryClient]);
+
+  useEffect(() => {
+    if (!metadataChanged) return;
+    refreshData();
+  }, [metadataChanged, refreshData]);
+
   const handleSave = async (payload: DeploymentInput) => {
     setIsPending(true);
 
     try {
       if (mode === 'edit') {
         await updateDeployment({ id, data: payload });
-        localStorage.removeItem(`deployment:${id ?? 'new'}`);
-        queryClient.invalidateQueries({ queryKey: ['getDeploymentConfig', { deploymentId: id }] });
+        refreshData();
       } else {
         await createDeployment({ data: payload });
         navigate('/deployments');
@@ -541,7 +553,7 @@ export const DeploymentForm = ({ mode, resource }: { mode: 'add' | 'edit'; resou
               const toProfile = (spec: ResourceSpec | undefined) => {
                 return (
                   Object.entries(resource_profiles).find(
-                    ([_, p]) => p.spec?.cpuLimit === spec?.cpuLimit && p.spec?.memoryLimit === spec?.memoryLimit,
+                    ([_, p]) => p.spec?.nanoCpus === spec?.nanoCpus && p.spec?.memoryLimit === spec?.memoryLimit,
                   )?.[0] ?? 'automatic'
                 );
               };

@@ -49,9 +49,7 @@ export interface RequiredFormComponents<T = any> {
       ActionButtons: React.FC<{ resource: T }>;
     };
     /** Tabs configuration */
-    Tabs: (TabElement<T> & {
-      useData?: (id: string | undefined) => { item?: RequiredFormFields; isLoading: boolean };
-    })[];
+    Tabs: TabElement<T>[];
     /** Main Data hook for this workload */
     useData: (id: string) => { item?: RequiredFormFields; isLoading: boolean };
   };
@@ -69,7 +67,7 @@ export interface RequiredDockerInfoComponents<T = any> {
   /** Optional subheader */
   SubHeader?: React.FC<{ resource: T }>;
   /** Tabs configuration for tabbed resources */
-  Tabs: (TabElement<T> & { useData?: (platformId: string, resourceId: string) => ResourceInfoHookResult<T> })[];
+  Tabs: TabElement<T>[];
   /** Data hook for this resource */
   useData: (platformId: string, resourceId: string) => ResourceInfoHookResult<T>;
 }
@@ -83,7 +81,7 @@ export interface TabElement<T> {
   /** Tab label shown in the UI */
   label: string;
   /** Component(s) for this tab */
-  Content: React.FC<{ resource: T }>;
+  Content: React.FC<{ resource: T; metadataChanged?: boolean }>;
 }
 
 interface ResourceInfoHookResult<T> {

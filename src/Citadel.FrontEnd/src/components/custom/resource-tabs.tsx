@@ -9,10 +9,12 @@ export const ResourceTabs = ({
   localKey,
   resource,
   tabs,
+  metadataChanged,
 }: {
   localKey: string;
   resource: RequiredFormFields;
   tabs: TabElement<any>[];
+  metadataChanged?: boolean;
 }) => {
   const [_, setSegmentTitle] = useSegmentTitle();
 
@@ -35,7 +37,7 @@ export const ResourceTabs = ({
         )}>
         <TabsList className={cn('w-full overflow-x-auto', isStuck && 'border-b rounded-none py-2')}>
           {tabs.map((tab) => (
-            <TabsTrigger key={tab.label} value={tab.label} className='text-xs'>
+            <TabsTrigger key={tab.label} value={tab.label} className="text-xs">
               {tab.label}
             </TabsTrigger>
           ))}
@@ -44,7 +46,7 @@ export const ResourceTabs = ({
 
       {tabs.map((tab) => (
         <TabsContent key={tab.label} value={tab.label}>
-          <tab.Content resource={resource} />
+          <tab.Content resource={resource} metadataChanged={metadataChanged} />
         </TabsContent>
       ))}
     </Tabs>

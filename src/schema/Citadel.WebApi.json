@@ -9836,12 +9836,12 @@
       },
       "ResourceSpec": {
         "required": [
-          "cpuLimit",
+          "nanoCpus",
           "memoryLimit"
         ],
         "type": "object",
         "properties": {
-          "cpuLimit": {
+          "nanoCpus": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",

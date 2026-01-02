@@ -25,7 +25,7 @@ public sealed record LocalImage(string ImageId) : DeploymentImageInfo;
 public sealed record ExternalImage(Guid RegistryId, string ImageTag) : DeploymentImageInfo;
 
 public sealed record ResourceSpec(
-    float? CpuLimit,
+    float? NanoCpus,
     float? MemoryLimit
 );
 
