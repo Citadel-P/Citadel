@@ -68,7 +68,7 @@ public class DeploymentPatchTests : IntegrationTestBase
             "networks":["96da77baf016bb722c40f10c023b2f5d1a4296b4bc6593cfad74de4bd31e8b14"],
             "resourceSpec":
             {
-                "cpuLimit":0.25,
+                "nanoCpus":0.25,
                 "memoryLimit":256
             },
             "lifeCycleSpec":

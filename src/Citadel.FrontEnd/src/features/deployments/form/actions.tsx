@@ -19,7 +19,7 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
 
         return {
           canExecute: !!selected,
-          run: () => openSheet({ kind: 'deploy', payload: { deploymentId: selected.id, name: selected.name } }),
+          run: () => openSheet({ kind: 'deploy', payload: { id: selected.id, name: selected.name } }),
         };
       },
     },
@@ -34,7 +34,7 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
         return {
           canExecute: !!selected,
           run: () =>
-            openSheet({ kind: 'deploy', payload: { deploymentId: selected.id, name: selected.name, redeploy: true } }),
+            openSheet({ kind: 'deploy', payload: { id: selected.id, name: selected.name, recreate: true } }),
         };
       },
     },

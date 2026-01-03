@@ -37,7 +37,18 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         return result?.ToDomain();
     }
 
-    public async Task<Container?> GetContainerWithImageByIdAsync(string dockerContainerId, CancellationToken cancellationToken)
+    public async Task<Container?> GetByDeploymentIdAsync(Guid deploymentId, CancellationToken cancellationToken)
+    {
+        var sql = """
+            SELECT * FROM Containers c
+            WHERE DeploymentId = @DeploymentId
+            LIMIT 1
+            """;
+        var result = await db.QuerySingleOrDefaultAsync<ContainerDto>(sql, new { DeploymentId = deploymentId.Format() }, transaction: tx());
+        return result?.ToDomain();
+    }
+
+    public async Task<Container?> GetContainerInfoAsync(string dockerContainerId, CancellationToken cancellationToken)
     {
         var sql = """
             SELECT c.*,
@@ -50,9 +61,13 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
                 i.PlatformId as Image_PlatformId,
                 i.CreatedAt as Image_CreatedAt,               
                 i.UpdatedAt as Image_UpdatedAt,
-                i.RegistryId as Image_RegistryId
+                i.RegistryId as Image_RegistryId,
+                d.Id as Deployment_Id,
+                d.Name as Deployment_Name,
+                d.Status as Deployment_Status
             FROM Containers c
             LEFT JOIN Images i ON c.ImageId = i.Id
+            LEFT JOIN Deployments d ON c.DeploymentId = d.Id
             WHERE DockerContainerId LIKE @DockerContainerIdPrefix || '%'
             LIMIT 1
             """;
@@ -61,7 +76,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         return result?.ToDomain();
     }
 
-    public async Task<IEnumerable<Container>?> GetAllWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken)
+    public async Task<IEnumerable<Container>?> GetContainersInfoAsync(Guid platformId, CancellationToken cancellationToken)
     {
         const string sql = """
         SELECT c.*,
@@ -81,9 +96,13 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             s.CpuUsage as Stat_CpuUsage, 
             s.MemoryLimit as Stat_MemoryLimit, 
             s.RxBytes as Stat_RxBytes, 
-            s.TxBytes as Stat_TxBytes
+            s.TxBytes as Stat_TxBytes,
+            d.Id as Deployment_Id,
+            d.Name as Deployment_Name,
+            d.status as Deployment_Status
         FROM Containers c
         LEFT JOIN Images i ON c.ImageId = i.Id
+        LEFT JOIN Deployments d ON c.DeploymentId = d.Id
         LEFT JOIN ContainerStats s ON s.ContainerId = c.Id
           AND s.Id = (
               SELECT Id FROM ContainerStats 
@@ -103,9 +122,9 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
     {
         const string sql = """
             INSERT INTO Containers (
-                Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId
+                Id, PlatformId, DockerContainerId, Name, DockerImageId, Created, Updated, State, Stack, Ports, ImageId, deploymentId
             ) VALUES (
-                @Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports, @ImageId
+                @Id, @PlatformId, @DockerContainerId, @Name, @DockerImageId, @Created, @Updated, @State, @Stack, @Ports, @ImageId, @DeploymentId
             )
         """;
         return db.ExecuteAsync(sql, new 
@@ -120,6 +139,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             State = EnumFormatter<ContainerStateStatus>.GetValue(container.State),
             Stack = container.Stack,
             ImageId = container.ImageId?.Format(),
+            DeploymentId = container.DeploymentId?.Format(),
             Ports = JsonSerializer.Serialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding)
         }, transaction: tx());
     }

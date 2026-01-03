@@ -4632,6 +4632,13 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "recreate": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "default": false
           }
         }
       },
@@ -5147,6 +5154,16 @@
                 "$ref": "#/components/schemas/ImageView"
               }
             ]
+          },
+          "deploymentView": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DeploymentView"
+              }
+            ]
           }
         }
       },
@@ -5653,6 +5670,16 @@
               },
               {
                 "$ref": "#/components/schemas/ImageView"
+              }
+            ]
+          },
+          "deploymentView": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DeploymentView"
               }
             ]
           },

@@ -11,8 +11,8 @@ internal record ContainerDto(
     string State, // ContainerStateStatus
     string Ports, // List<ContainerPort> 
     string? Stack,
-    Guid? ImageId = null
-)
+    Guid? ImageId = null,
+    Guid? DeploymentId = null)
 {
     public ICollection<ContainerStatDto> Stats { get; init; } = [];
 
@@ -34,6 +34,13 @@ internal record struct ContainerStatDto(
      double? TxBytes
 );
 
+internal record ContainerWithDeploymentDto
+(
+    Guid? Deployment_Id = null,
+    string? Deployment_Name = null,
+    string? Deployment_Status = null
+) : ContainerDto;
+
 internal record ContainerWithImageDto(
      Guid? Image_ImageId = null,
      Guid? Image_platformId = null,
@@ -45,7 +52,7 @@ internal record ContainerWithImageDto(
      int? Image_Containers = null,
      DateTime? Image_CreatedAt = null,
      DateTime? Image_UpdatedAt = null
-    ) : ContainerDto;
+    ) : ContainerWithDeploymentDto;
 
 internal record ContainerWithLastStatDto(
      long? Stat_Created,

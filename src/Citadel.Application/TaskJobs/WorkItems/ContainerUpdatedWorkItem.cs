@@ -16,7 +16,7 @@ internal sealed class ContainerUpdatedWorkItem(
     {
         try
         {
-            var existing = await uow.Containers.GetContainerWithImageByIdAsync(
+            var existing = await uow.Containers.GetByIdAsync(
                 eventInfo.ContainerId,
                 cancellationToken);
 

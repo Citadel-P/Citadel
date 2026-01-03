@@ -1,6 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
-
-namespace Domain.Entities;
+﻿namespace Domain.Entities;
 
 public class Container(
     string name,
@@ -33,6 +31,7 @@ public class Container(
     public IReadOnlyCollection<ContainerStat>? Stats => stats;
     public Platform? Platform { get; private set; } = null!;
     public Image? Image { get; private set; } = null!;
+    public Deployment? Deployment { get; private set; } = null!;
 
     public Container PartialUpdate(
         string? name = null,
@@ -82,7 +81,9 @@ public class Container(
         IDictionary<string, IReadOnlyList<HostPortBinding>> ports,
         string? stack = null,
         Guid? imageId = null,
+        Guid? deploymentId = null,
         Image? image = null,
+        Deployment? deployment = null,
         IReadOnlyCollection<ContainerStat>? stats = null
         )
     {
@@ -95,11 +96,13 @@ public class Container(
             created: created,
             stack: stack,
             ports: ports,
-            imageId: imageId)
+            imageId: imageId,
+            deploymentId: deploymentId)
         {
             Id = id,
             Updated = updated,
             Image = image,
+            Deployment = deployment
         };
 
         if (stats is not null)

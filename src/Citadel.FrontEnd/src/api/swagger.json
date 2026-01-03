@@ -4632,6 +4632,13 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "recreate": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "default": false
           }
         }
       },

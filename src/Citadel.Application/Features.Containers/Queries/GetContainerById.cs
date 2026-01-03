@@ -24,7 +24,7 @@ internal class GetContainerByIdHandler(IUnitOfWork unitOfWork) : IQueryHandler<G
 {
     public async ValueTask<Result<Container>> Handle(GetContainerById query, CancellationToken cancellationToken)
     {
-        var container = await unitOfWork.Containers.GetContainerWithImageByIdAsync(query.ContainerId, cancellationToken);
+        var container = await unitOfWork.Containers.GetContainerInfoAsync(query.ContainerId, cancellationToken);
         return container ?? Result.Failure<Container>(new NotFoundError("Container does not exist"));
     }
 }

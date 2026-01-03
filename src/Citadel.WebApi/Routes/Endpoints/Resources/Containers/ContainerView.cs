@@ -2,6 +2,7 @@
 using Domain;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 
@@ -21,6 +22,7 @@ public sealed record ContainerView(
     IDictionary<string, IReadOnlyList<HostPortBinding>> Ports,
     PlatformView? Platform = null,
     ImageView? ImageView = null,
+    DeploymentView? DeploymentView = null,
     EndpointMetadata? Metadata = null)
 {
     internal static IEnumerable<ContainerView> Map(IEnumerable<Container> containersInfo)
@@ -51,6 +53,7 @@ public sealed record ContainerView(
             LastStats: container.Stats is not null && container.Stats.Count > 0 ? ContainerStatView.Map(container.Stats.First()) : null,
             Ports: container.Ports,
             ImageView: container.Image is not null ? ImagesView.Map(container.Image) : null,
+            DeploymentView: container.Deployment is not null ? DeploymentView.Map(container.Deployment) : null,
             Platform: container.Platform == null ? null : PlatformView.Map(container.Platform));
     }
 
@@ -75,7 +78,8 @@ public sealed record ContainerInfoView(
     IDictionary<string, IReadOnlyList<HostPortBinding>> Ports,
     IDictionary<string, string> Networks,
     ContainerStateStatus State,
-    ImageView? ImageView)
+    ImageView? ImageView,
+    DeploymentView? DeploymentView = null)
 {
     internal static ContainerInfoView Map(ContainerInfo container) => new(
         Name: container.Name,
@@ -88,6 +92,7 @@ public sealed record ContainerInfoView(
         Ports: container.Ports,
         Networks: container.Networks,
         State: container.State,
-        ImageView: container.Image is not null ? ImagesView.Map(container.Image) : null
+        ImageView: container.Image is not null ? ImagesView.Map(container.Image) : null,
+        DeploymentView: container.Deployment is not null ? DeploymentView.Map(container.Deployment) : null
         );
 }

@@ -13,4 +13,5 @@ public sealed record ContainerInfo (
     IDictionary<string, IReadOnlyList<HostPortBinding>> Ports,
     IDictionary<string, string> Networks,
     ContainerStateStatus State,
-    Image? Image = null);
+    Image? Image = null,
+    Deployment? Deployment = null);

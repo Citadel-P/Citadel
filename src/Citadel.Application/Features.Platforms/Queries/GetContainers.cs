@@ -24,7 +24,7 @@ internal class GetContainersHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetC
 {
     public async ValueTask<Result<IEnumerable<Container>>> Handle(GetContainers query, CancellationToken cancellationToken)
     {
-        var containers = await unitOfWork.Containers.GetAllWithLatestStatAsync(query.PlatformId, cancellationToken);
+        var containers = await unitOfWork.Containers.GetContainersInfoAsync(query.PlatformId, cancellationToken);
         return Result.Success(containers ?? []);
     }
 }

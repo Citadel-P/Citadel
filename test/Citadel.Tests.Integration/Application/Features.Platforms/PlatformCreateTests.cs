@@ -81,7 +81,7 @@ public class PlatformCreateTests : IntegrationTestBase
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var platform = await uow.Platforms.GetByNameAsync("P-NEW", TestContext.Current.CancellationToken) ?? throw new Exception("platform can not be null");
-        var containers = await uow.Containers.GetAllWithLatestStatAsync(platform.Id, TestContext.Current.CancellationToken);
+        var containers = await uow.Containers.GetContainersInfoAsync(platform.Id, TestContext.Current.CancellationToken);
         var images = await uow.Images.GetByPlatformIdAsync(platform.Id, TestContext.Current.CancellationToken);
 
         Assert.NotNull(platform);
@@ -137,7 +137,7 @@ public class PlatformCreateTests : IntegrationTestBase
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var platform = await uow.Platforms.GetByNameAsync("P-NEW", TestContext.Current.CancellationToken) ?? throw new Exception("platform can not be null");
-        var containers = await uow.Containers.GetAllWithLatestStatAsync(platform.Id, TestContext.Current.CancellationToken) ?? throw new Exception("containers can not be null");
+        var containers = await uow.Containers.GetContainersInfoAsync(platform.Id, TestContext.Current.CancellationToken) ?? throw new Exception("containers can not be null");
         var images = await uow.Images.GetByPlatformIdAsync(platform.Id, TestContext.Current.CancellationToken);
 
         Assert.NotNull(platform);

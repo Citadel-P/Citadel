@@ -42,9 +42,10 @@ public interface IRegistryRepository
 public interface IContainerRepository 
 {
     Task<Container?> GetByIdAsync(string dockerContainerId, CancellationToken cancellationToken);
-    Task<Container?> GetContainerWithImageByIdAsync(string dockerContainerId, CancellationToken cancellationToken);
+    Task<Container?> GetContainerInfoAsync(string dockerContainerId, CancellationToken cancellationToken);
+    Task<Container?> GetByDeploymentIdAsync(Guid deploymentId, CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
-    Task<IEnumerable<Container>?> GetAllWithLatestStatAsync(Guid platformId, CancellationToken cancellationToken);
+    Task<IEnumerable<Container>?> GetContainersInfoAsync(Guid platformId, CancellationToken cancellationToken);
 
     Task<int> AddAsync(Container container, CancellationToken cancellationToken);
     Task<int> BulkUpsertAsync(IEnumerable<Container> containers, CancellationToken cancellationToken);

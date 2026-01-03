@@ -20,10 +20,7 @@ interface PullImageParams {
   registryId: string;
 }
 
-interface DeployParams {
-  deploymentId: string;
-  name: string;
-}
+type DeployParams = { name: string; } & ApplyDeploymentInput
 
 export type TaskSpec =
   | { kind: 'pull'; payload: PullImageParams }
@@ -137,9 +134,10 @@ function useImagePullProgress(params: PullImageParams) {
 function useApplyDeploymentProgress(params: DeployParams) {
   const request: ApplyDeploymentInput = useMemo(
     () => ({
-      id: params.deploymentId,
+      id: params.id,
+      recreate: params.recreate,
     }),
-    [params.deploymentId],
+    [params],
   );
 
   return useStreamProgress<ApplyDeploymentInput, DeploymentStreamItem>({

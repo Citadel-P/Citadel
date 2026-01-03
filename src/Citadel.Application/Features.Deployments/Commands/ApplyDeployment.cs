@@ -1,25 +1,26 @@
 ﻿using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
+using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
 
 namespace Application.Features.Deployments.Commands;
 
-public sealed record ApplyDeployment(Guid Id) : IStreamCommand<DeploymentStreamItem>;
+public sealed record ApplyDeployment(Guid Id, bool? Recreate = false) : IStreamCommand<DeploymentStreamItem>;
 
 internal sealed class ApplyDeploymentHandler(
     IDbWorkQueue dbWorkQueue,
+    IServiceScopeFactory scopeFactory,
     IPullImageService pullImageService,
     INotificationQueue notificationQueue,
     IPlatformContainerCache platformCache,
-    IConnectorFactory<IDeploymentConnector> connectorFactory,
-    IServiceScopeFactory scopeFactory,
-    ILogger<ApplyDeploymentHandler> logger)
+    IConnectorFactory<IContainerConnector> containerConnectorFactory,
+    IConnectorFactory<IDeploymentConnector> deploymentConnectorFactory)
     : IStreamCommandHandler<ApplyDeployment, DeploymentStreamItem>
 {
     public async IAsyncEnumerable<DeploymentStreamItem> Handle(ApplyDeployment command, [EnumeratorCancellation] CancellationToken ct)
@@ -95,16 +96,24 @@ internal sealed class ApplyDeploymentHandler(
             yield break;
         }
 
-        if (imageId is null)
+        if (command.Recreate == true)
         {
-            await EnqueueStatus(deployment.Id, DeploymentStatus.Failed, ct);
-            yield return Error(400, "Image resolution failed.");
-            yield break;
+            var (deletedContainerId, errorMessage) = await DeleteContainer(deployment.Id, platform, ct);
+            if (!string.IsNullOrEmpty(errorMessage))
+            {
+                yield return Error(500, errorMessage);
+                yield break;
+            }
+
+            if (!string.IsNullOrEmpty(deletedContainerId))
+            {
+                yield return Info($"Container deleted: {deletedContainerId}");
+            }
         }
 
         yield return Info($"Applying deployment to {platform.Address}...");
 
-        var connector = connectorFactory.GetConnector(platform.ConnectorType);
+        var connector = deploymentConnectorFactory.GetConnector(platform.ConnectorType);
         var commandToApply = BuildApplyCommand(deployment, platform.Address, imageId);
 
         var result = await connector.ApplyDeploymentAsync(commandToApply, ct);
@@ -173,25 +182,54 @@ internal sealed class ApplyDeploymentHandler(
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         return await uow.Deployments.GetAsync(id, ct);
     }
+
+    private async Task<(string? ContainerId, string? error)> DeleteContainer(Guid deploymentId, PlatformCacheEntry platform, CancellationToken ct)
+    {
+        var container = await GetContainer(deploymentId, ct);
+        if (container == null) return (null, null);
+
+        var connector = containerConnectorFactory.GetConnector(platform.ConnectorType);
+        var commandToApply = new DeleteContainerCommand([container.DockerContainerId], platform.Address, true, true, false);
+
+        var result = await connector.DeleteAsync(commandToApply, ct);
+        if (result.IsFailure(out var error))
+        {
+            return (null, error.Message);
+        }
+
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        await uow.Containers.DeleteAsync([container.Id], ct);
+        await uow.CommitAsync(ct);
+
+        return (container.DockerContainerId, null);
+    }
+
+    private async Task<Container?> GetContainer(Guid deploymentId, CancellationToken ct)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        return await uow.Containers.GetByDeploymentIdAsync(deploymentId, ct);
+    }
 }
 
-    public static class DeploymentStateMachine
-    {
-        private static readonly IReadOnlyDictionary<DeploymentStatus, DeploymentStatus[]> AllowedTransitions =
-            new Dictionary<DeploymentStatus, DeploymentStatus[]>
-            {
-                [DeploymentStatus.Created] = [DeploymentStatus.Applying],
-                [DeploymentStatus.Applying] = [DeploymentStatus.Applying, DeploymentStatus.Healthy, DeploymentStatus.Failed],
-                [DeploymentStatus.Failed] = [DeploymentStatus.Applying],
-                [DeploymentStatus.Healthy] = [DeploymentStatus.Applying]
-            };
+public static class DeploymentStateMachine
+{
+    private static readonly IReadOnlyDictionary<DeploymentStatus, DeploymentStatus[]> AllowedTransitions =
+        new Dictionary<DeploymentStatus, DeploymentStatus[]>
+        {
+            [DeploymentStatus.Created] = [DeploymentStatus.Applying],
+            [DeploymentStatus.Applying] = [DeploymentStatus.Applying, DeploymentStatus.Healthy, DeploymentStatus.Failed],
+            [DeploymentStatus.Failed] = [DeploymentStatus.Applying],
+            [DeploymentStatus.Healthy] = [DeploymentStatus.Applying]
+        };
 
-        public static bool CanTransition(
-            DeploymentStatus from,
-            DeploymentStatus to)
-            => AllowedTransitions.TryGetValue(from, out var next)
-               && next.Contains(to);
-    }
+    public static bool CanTransition(
+        DeploymentStatus from,
+        DeploymentStatus to)
+        => AllowedTransitions.TryGetValue(from, out var next)
+            && next.Contains(to);
+}
 
 internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, DeploymentStatus targetStatus, INotificationQueue notificationQueue)
     : IDbWorkItem

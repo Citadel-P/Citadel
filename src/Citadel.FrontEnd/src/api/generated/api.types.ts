@@ -131,6 +131,8 @@ export enum AutoUpdateStatus {
 export interface ApplyDeploymentInput {
   /** @format uuid */
   id: string;
+  /** @default false */
+  recreate?: null | boolean;
 }
 
 export interface AutoUpdateState {

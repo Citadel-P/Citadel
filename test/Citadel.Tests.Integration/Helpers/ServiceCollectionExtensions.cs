@@ -4,10 +4,11 @@ namespace Tests.Integration.Helpers;
 
 internal static class ServiceCollectionExtensions
 {
-    public static void ReplaceService<T>(this IServiceCollection services, T instance) where T : class
+    public static IServiceCollection ReplaceService<T>(this IServiceCollection services, T instance) where T : class
     {
         RemoveService<T>(services);
         services.AddSingleton(instance);
+        return services;
     }
 
     public static void ReplaceService<T>(this IServiceCollection services, Func<IServiceProvider, T> factory) where T : class

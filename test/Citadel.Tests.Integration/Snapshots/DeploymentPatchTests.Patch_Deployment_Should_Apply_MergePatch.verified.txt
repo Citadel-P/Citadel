@@ -21,7 +21,7 @@
       restartPolicy: No
     },
     resourceSpec: {
-      cpuLimit: 0.25,
+      nanoCpus: 0.25,
       memoryLimit: 256
     },
     labels: {

@@ -42,7 +42,7 @@ internal class GetContainerInfoByIdHandler(IConnectorFactory<IContainerConnector
             return Result.Failure<ContainerInfo>(inspectResult.Errors);
         }
 
-        var container = await unitOfWork.Containers.GetContainerWithImageByIdAsync(query.ContainerId, cancellationToken);
+        var container = await unitOfWork.Containers.GetContainerInfoAsync(query.ContainerId, cancellationToken);
 
         return new ContainerInfo(
               Name: inspect?.Name ?? string.Empty,
@@ -55,7 +55,8 @@ internal class GetContainerInfoByIdHandler(IConnectorFactory<IContainerConnector
               Networks: inspect?.NetworkSettings?.Networks?.ToDictionary(n => n.Key, n => string.IsNullOrEmpty(n.Value.NetworkID) ? n.Key : n.Value.NetworkID ) ?? [],
               Ports: inspect?.HostConfig?.PortBindings ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
               State: inspect?.State?.Status ?? ContainerStateStatus.Unknown,
-              Image: container?.Image
+              Image: container?.Image,
+              Deployment: container?.Deployment
             );
     }
 }

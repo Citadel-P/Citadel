@@ -1,7 +1,7 @@
-﻿using System.Text.Json;
-using Domain;
+﻿using Domain;
 using Domain.Entities;
 using Infrastructure.Persistence.Dtos;
+using System.Text.Json;
 
 namespace Infrastructure.Persistence.Mappers;
 
@@ -25,6 +25,7 @@ internal static class ContainerMappers
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             stack: container.Stack,
             imageId: container.ImageId,
+            deploymentId: container.DeploymentId,
             stats: container.Stats?.Select(ToDomain).ToList());
     }
 
@@ -43,6 +44,17 @@ internal static class ContainerMappers
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             stack: container.Stack,
             imageId: container.ImageId,
+            deploymentId: container.DeploymentId,
+            deployment: container.Deployment_Id == null ? null : Deployment.FromPersistence
+            (
+                id: container.Deployment_Id ?? Guid.Empty,
+                name: container.Deployment_Name,
+                platformId: container.PlatformId,
+                status: Enum.Parse<DeploymentStatus>(container.Deployment_Status ?? DeploymentStatus.Pending.ToString()),
+                createdAt: DateTime.MinValue,
+                createdByActorId: Guid.Empty,
+                updateBehavior: UpdateBehavior.Disabled
+            ),
             image: container.Image_ImageId != null ? Image.FromPersistence(
                 id: container.Image_ImageId ?? Guid.Empty,
                 name: container.Image_Name,
@@ -75,6 +87,7 @@ internal static class ContainerMappers
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             stack: container.Stack,
             imageId: container.ImageId,
+            deploymentId: container.DeploymentId,
             image: container.Image_ImageId == null ? null : Image.FromPersistence
             (
                 id: container.Image_ImageId ?? Guid.Empty,
@@ -87,6 +100,16 @@ internal static class ContainerMappers
                 createdAt: container.Image_CreatedAt ?? DateTime.MinValue,
                 updatedAt: container.Image_UpdatedAt,
                 registryId: container.Image_RegistryId
+            ),
+            deployment: container.Deployment_Id == null ? null : Deployment.FromPersistence
+            (
+                id: container.Deployment_Id ?? Guid.Empty,
+                name: container.Deployment_Name,
+                platformId: container.PlatformId,
+                status: Enum.Parse<DeploymentStatus>(container.Deployment_Status ?? DeploymentStatus.Pending.ToString()),
+                createdAt: DateTime.MinValue,
+                createdByActorId: Guid.Empty,
+                updateBehavior: UpdateBehavior.Disabled
             ),
             stats: [new ContainerStat(
                 ContainerId: container.Id,

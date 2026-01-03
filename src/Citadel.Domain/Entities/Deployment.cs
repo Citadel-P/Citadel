@@ -38,13 +38,13 @@ public sealed class Deployment(
         Guid id,
         string name,
         Guid platformId,
-        string? description,
         DeploymentStatus status,
         DateTime createdAt,
         Guid createdByActorId,
         UpdateBehavior updateBehavior,
-        AutoUpdateState? autoUpdateState,
-        DeploymentSpec? spec,
+        string? description = null,
+        AutoUpdateState? autoUpdateState = null,
+        DeploymentSpec? spec = null,
         Platform? platform = null,
         Image? image = null)
     {
