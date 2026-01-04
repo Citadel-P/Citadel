@@ -1,7 +1,7 @@
-﻿using Application.Services.SignalR;
+﻿using Application.Services;
+using Application.Services.SignalR;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
-using Domain.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Application.TaskJobs.WorkItems;
@@ -10,13 +10,14 @@ internal sealed class ContainerUpdatedWorkItem(
     DaemonContainerEventInfo eventInfo,
     INotificationQueue notificationQueue,
     IDockerDaemonStreamManager dockerDaemonHub,
+    IContainerEventBroadcaster containerEventBroadcaster,
     ILogger logger) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
         try
         {
-            var existing = await uow.Containers.GetByIdAsync(
+            var existing = await uow.Containers.GetContainerInfoAsync(
                 eventInfo.ContainerId,
                 cancellationToken);
 
@@ -29,7 +30,7 @@ internal sealed class ContainerUpdatedWorkItem(
             await uow.Containers.UpdateAsync(existing, cancellationToken);
             await uow.CommitAsync(cancellationToken);
 
-            var workItem = new SendContainerNotificationWorkItem(dockerDaemonHub, existing, eventInfo.Action);
+            var workItem = new ContainerNotificationWorkItem(existing, eventInfo, dockerDaemonHub, containerEventBroadcaster);
             await notificationQueue.EnqueueAsync(workItem, cancellationToken);
         }
         catch (Exception ex)
@@ -37,10 +38,4 @@ internal sealed class ContainerUpdatedWorkItem(
             logger.LogError(ex, "Failed to handle container updated event {ContainerId}", eventInfo.ContainerId);
         }
     }
-}
-
-internal class SendContainerNotificationWorkItem(IDockerDaemonStreamManager dockerDaemonHub, Container container, string action) : INotificationWorkItem
-{
-    public Task ExecuteAsync(CancellationToken cancellationToken)
-        => dockerDaemonHub.SendContainerEvent(container, action);
 }

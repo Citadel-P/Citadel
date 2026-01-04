@@ -36,29 +36,29 @@ export const { info: ContainerInfoActions } = createActionsBuilder<DockerContain
     },
   })
   .addAction({
-      key: 'pauseToggle',
-      type: 'toggle',
-      primary: {
-        title: 'Pause',
-        icon: Pause,
-        mutateKey: 'pauseContainers',
-        useVariables,
-        canExecute: (r) => {
-          const can = (x: DockerContainerView) => x.state === ContainerStateStatus.Running;
-          return Array.isArray(r) ? r.some(can) : can(r);
-        },
+    key: 'pauseToggle',
+    type: 'toggle',
+    primary: {
+      title: 'Pause',
+      icon: Pause,
+      mutateKey: 'pauseContainers',
+      useVariables,
+      canExecute: (r) => {
+        const can = (x: DockerContainerView) => x.state === ContainerStateStatus.Running;
+        return Array.isArray(r) ? r.some(can) : can(r);
       },
-      secondary: {
-        title: 'Resume',
-        icon: StepForward,
-        mutateKey: 'unpauseContainers',
-        useVariables,
-        canExecute: (r) => {
-          const can = (x: DockerContainerView) => x.state === ContainerStateStatus.Paused;
-          return Array.isArray(r) ? r.some(can) : can(r);
-        },
+    },
+    secondary: {
+      title: 'Resume',
+      icon: StepForward,
+      mutateKey: 'unpauseContainers',
+      useVariables,
+      canExecute: (r) => {
+        const can = (x: DockerContainerView) => x.state === ContainerStateStatus.Paused;
+        return Array.isArray(r) ? r.some(can) : can(r);
       },
-    })
+    },
+  })
   .addAction({
     key: 'restart',
     type: 'command',

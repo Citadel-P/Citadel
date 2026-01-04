@@ -127,7 +127,7 @@ internal sealed class DockerDaemonEventJob(
 
     private ValueTask OnContainerUpdated(DaemonContainerEventInfo eventInfo, CancellationToken cancellationToken)
     {
-        var item = new ContainerUpdatedWorkItem(eventInfo, notificationQueue, dockerDaemonHub, logger);
+        var item = new ContainerUpdatedWorkItem(eventInfo, notificationQueue, dockerDaemonHub, containerEventBroadcaster, logger);
 
         return dbWorkQueue.EnqueueAsync(item, cancellationToken);
     }

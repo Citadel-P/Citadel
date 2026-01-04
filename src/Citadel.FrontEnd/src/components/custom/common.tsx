@@ -1,4 +1,4 @@
-import { useMemo, useState, useLayoutEffect } from 'react';
+import { useMemo, useState, useLayoutEffect, useRef, useEffect } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AutoUpdateStatus, UpdateBehavior } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
@@ -305,4 +305,39 @@ export const UpdateStatusIcon = ({ updateStatus }: { updateStatus: AutoUpdateSta
   const { Icon, className } = UPDATE_STATUS_UI[updateStatus];
 
   return <Icon width={14} height={14} className={className} />;
+};
+
+interface LogViewerProps {
+  logs: string | string[];
+  autoScroll?: boolean;
+  maxLines?: number;
+  className?: string;
+}
+
+export const LogViewer = ({ logs, autoScroll = true, className }: LogViewerProps) => {
+  const scrollRef = useRef<HTMLPreElement>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+
+  const handleScroll = () => {
+    if (!scrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    const atBottom = scrollHeight - scrollTop <= clientHeight + 50;
+    setIsAtBottom(atBottom);
+  };
+
+  useEffect(() => {
+    if (autoScroll && isAtBottom && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [logs, autoScroll, isAtBottom]);
+  const content = Array.isArray(logs) ? logs.join('\n') : logs;
+  return (
+    <pre
+      ref={scrollRef}
+      onScroll={handleScroll}
+      className={cn("p-4 max-h-[600px] rounded-sm border shadow-xs inline-block w-full overflow-auto bg-transparent text-xs", className)}
+      style={{ scrollBehavior: 'auto' }}>
+      {content || <span className="text-zinc-500 italic">Waiting for output...</span>}
+    </pre>
+  );
 };

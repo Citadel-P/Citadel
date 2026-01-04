@@ -11,7 +11,7 @@ import type { KnownResourceName, PrimaryArg, ResourceType } from '@/api/types';
 export type ActionKind = 'command' | 'toggle';
 export type BaseResource = { name: string };
 
-export interface CommandAction<R, K extends KnownResourceName | undefined = undefined> {
+export interface CommandAction<R, K extends KnownResourceName> {
   key: string;
   type: 'command';
   icon: LucideIcon;
@@ -34,7 +34,7 @@ export interface CommandAction<R, K extends KnownResourceName | undefined = unde
   useSuccessHandler?: (ctx: { resources: R | R[] }) => (() => void) | void;
 }
 
-export interface ToggleAction<R, K extends KnownResourceName | undefined = undefined> {
+export interface ToggleAction<R, K extends KnownResourceName> {
   key: string;
   type: 'toggle';
   separatorBefore?: boolean;
@@ -43,7 +43,7 @@ export interface ToggleAction<R, K extends KnownResourceName | undefined = undef
   secondary: ToggleConfig<R, K>;
 }
 
-type ToggleConfig<R, K extends KnownResourceName | undefined = undefined> = {
+type ToggleConfig<R, K extends KnownResourceName> = {
   title: string;
   icon: LucideIcon;
   mutateKey?: K;
@@ -63,16 +63,14 @@ type ToggleConfig<R, K extends KnownResourceName | undefined = undefined> = {
   resourceType?: ResourceType;
 };
 
-export type ActionConfig<R, K extends KnownResourceName | undefined = undefined> =
-  | CommandAction<R, K>
-  | ToggleAction<R, any>;
+export type ActionConfig<R, K extends KnownResourceName> = CommandAction<R, K> | ToggleAction<R, K>;
 
 export function createActionsBuilder<R extends BaseResource>(options?: { showToast?: boolean }) {
   const actions: ActionConfig<R, any>[] = [];
   const showToast = options?.showToast ?? true;
 
   const builder = {
-    addAction<K extends KnownResourceName | undefined>(action: ActionConfig<R, K>) {
+    addAction<K extends KnownResourceName>(action: ActionConfig<R, K>) {
       actions.push(action);
       return builder;
     },
@@ -297,7 +295,7 @@ function createToggleComponents<R extends BaseResource>(act: ToggleAction<R, any
 function useUnifiedExecutor<R>(
   act: {
     useHandler?: any;
-    mutateKey?: any;
+    mutateKey?: KnownResourceName;
     invalidate?: any;
     argName?: any;
     canExecute?: any;

@@ -1,7 +1,7 @@
-﻿using System.Text;
-using Application.Services.Abstractions;
+﻿using Application.Services.Abstractions;
 using Application.Services.SignalR.Context;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Services.SignalR;
@@ -54,21 +54,18 @@ internal sealed class ContainerLogStreamManager(
     private async Task StreamLogsAsync(LogStreamContext ctx, string containerId)
     {
         var token = ctx.Cancellation.Token;
-
-        if (!platformContainerCache.TryGetPlatformByContainerId(containerId, out var platform))
-        {
-            logger.LogError("No platform found for container ID {ContainerId}", containerId);
-            return;
-        }
+        if (!platformContainerCache.TryGetPlatformByContainerId(containerId, out var platform)) return;
 
         try
         {
-            await foreach (var data in connectorFactory.GetConnector(platform!.ConnectorType).StreamLogsAsync(new(platform.Address, containerId), token))
+            var request = new StreamContainerLogsCommand(platform.Address, containerId);
+            var connector = connectorFactory.GetConnector(platform.ConnectorType);
+
+            await foreach (var data in connector.StreamLogsAsync(request, token))
             {
                 ctx.AddToBuffer(data.Span);
                 ctx.AddToBuffer("\n"u8);
                 await dispatcher.SendContainerLog(containerId, data);
-
             }
         }
         catch (OperationCanceledException) { }
@@ -76,8 +73,8 @@ internal sealed class ContainerLogStreamManager(
         {
             logger.LogError(ex, "Error while polling logs for {ContainerId}", containerId);
         }
-        
     }
+
 
     private async Task WatchContainerEvents(LogStreamContext context, string containerId)
     {
@@ -98,7 +95,6 @@ internal sealed class ContainerLogStreamManager(
 
                     // Stop current producer/consumer and create fresh ones
                     context.Reset();
-
                     if (context.TryStart())
                     {
                         Run(context, containerId);

@@ -63,7 +63,7 @@ internal sealed class ContainerCreatedWorkItem(
                 await uow.CommitAsync(cancellationToken);
             }
 
-            var notificationItem = new ContainerCreatedNotificationWorkItem(
+            var notificationItem = new ContainerNotificationWorkItem(
                 container,
                 eventInfo,
                 dockerDaemonHub, 
@@ -79,7 +79,7 @@ internal sealed class ContainerCreatedWorkItem(
     }
 }
 
-internal class ContainerCreatedNotificationWorkItem(
+internal class ContainerNotificationWorkItem(
     Container container,
     DaemonContainerEventInfo eventInfo,
     IDockerDaemonStreamManager dockerDaemonHub, 

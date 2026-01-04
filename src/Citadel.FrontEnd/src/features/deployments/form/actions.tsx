@@ -1,8 +1,11 @@
-import { Rocket, Trash } from 'lucide-react';
+import { Pause, Rocket, StepForward, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { DeploymentStatus, DeploymentView } from '@/api/generated/api.types';
 import { useTaskSheet } from '@/lib/atoms';
+
+const useVariables = (resources: DeploymentView | DeploymentView[]) =>
+  Array.isArray(resources) ? resources.map((r) => r.id) : [resources.id];
 
 export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>()
   .addAction({
@@ -33,9 +36,32 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
 
         return {
           canExecute: !!selected,
-          run: () =>
-            openSheet({ kind: 'deploy', payload: { id: selected.id, name: selected.name, recreate: true } }),
+          run: () => openSheet({ kind: 'deploy', payload: { id: selected.id, name: selected.name, recreate: true } }),
         };
+      },
+    },
+  })
+  .addAction({
+    key: 'pauseToggle',
+    type: 'toggle',
+    primary: {
+      title: 'Suspend',
+      icon: Pause,
+      mutateKey: 'suspendDeployment',
+      useVariables,
+      canExecute: (r) => {
+        const can = (x: DeploymentView) => x.status === DeploymentStatus.Healthy;
+        return Array.isArray(r) ? r.some(can) : can(r);
+      },
+    },
+    secondary: {
+      title: 'Resume',
+      icon: StepForward,
+      mutateKey: 'resumeDeployment',
+      useVariables,
+      canExecute: (r) => {
+        const can = (x: DeploymentView) => x.status === DeploymentStatus.Pending;
+        return Array.isArray(r) ? r.some(can) : can(r);
       },
     },
   })

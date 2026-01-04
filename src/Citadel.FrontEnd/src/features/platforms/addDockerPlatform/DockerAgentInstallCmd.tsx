@@ -1,5 +1,4 @@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import CodeHighlight from '@/components/custom/code-highlight';
 
 const DockerAgentInstallCmd = () => {
   const agentVersion = '1.0.0';
@@ -35,13 +34,13 @@ const DockerAgentInstallCmd = () => {
       </TabsList>
       {commands.map((cmd, index) => (
         <TabsContent key={index} value={cmd.name}>
-          <CodeHighlight
+          {/* <CodeHighlight
             code={cmd.code}
             language="tsx"
             className="bg-card-foreground dark:bg-card p-6! rounded-sm shadow-xs relative"
             lineContentClassName="text-md"
             showCopyButton
-          />
+          /> */}
         </TabsContent>
       ))}
     </Tabs>

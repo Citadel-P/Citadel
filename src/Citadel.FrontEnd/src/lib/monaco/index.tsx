@@ -120,6 +120,9 @@ interface MonacoEditorProps {
   readOnly?: boolean;
   minHeight?: number;
   className?: string;
+  folding?: boolean;
+  minimap?: boolean;
+  fontSize?: number;
 }
 
 export const MonacoEditor = ({
@@ -130,6 +133,9 @@ export const MonacoEditor = ({
   readOnly,
   minHeight,
   className,
+  folding = false,
+  minimap = false,
+  fontSize = 13,
 }: MonacoEditorProps) => {
   const [editorInstance, setEditorInstance] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
   const { currentTheme, handleBeforeMount } = useThemeEditor();
@@ -177,10 +183,12 @@ export const MonacoEditor = ({
           onChange={(v) => onValueChange?.(v ?? '')}
           onMount={handleMount}
           options={{
-            minimap: { enabled: false },
+            minimap: { enabled: minimap },
             scrollBeyondLastLine: false,
-            folding: false,
+            folding: folding,
+            links: true,
             automaticLayout: true,
+            occurrencesHighlight: 'singleFile',
             renderValidationDecorations: 'on',
             renderLineHighlightOnlyWhenFocus: true,
             readOnly,
@@ -188,6 +196,11 @@ export const MonacoEditor = ({
             detectIndentation: true,
             quickSuggestions: true,
             padding: { top: 15 },
+            fontSize: fontSize,
+            lineHeight: 20,
+            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            fontLigatures: true,
+            letterSpacing: 0.5,
           }}
         />
       </div>

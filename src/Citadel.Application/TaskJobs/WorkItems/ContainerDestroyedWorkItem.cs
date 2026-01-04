@@ -51,7 +51,7 @@ internal sealed class ContainerDestroyedWorkItem(
                 await uow.CommitAsync(cancellationToken);
             }
 
-            var notificationItem = new ContainerCreatedNotificationWorkItem(
+            var notificationItem = new ContainerNotificationWorkItem(
                 existing,
                 eventInfo,
                 dockerDaemonHub,

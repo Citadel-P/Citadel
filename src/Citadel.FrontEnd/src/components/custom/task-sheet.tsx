@@ -1,11 +1,11 @@
-import { ReactNode, useMemo } from 'react';
+import { ReactNode, useEffect, useMemo } from 'react';
 import { Clock, LoaderCircle } from 'lucide-react';
 import { ResourceType } from '@/api/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import CodeHighlight from '@/components/custom/code-highlight';
 import { useResourceFilter, useTaskSheet } from '@/lib/atoms';
 import { ResourceComponents } from '@/features';
 import { useAppContext } from '@/lib/context/app-context';
+import { LogViewer } from '@/components/custom/common';
 import { useStreamProgress } from '@/lib/hooks';
 import {
   ApplyDeploymentInput,
@@ -20,7 +20,7 @@ interface PullImageParams {
   registryId: string;
 }
 
-type DeployParams = { name: string; } & ApplyDeploymentInput
+type DeployParams = { name: string } & ApplyDeploymentInput;
 
 export type TaskSpec =
   | { kind: 'pull'; payload: PullImageParams }
@@ -43,7 +43,7 @@ interface TaskStreamLayoutProps {
 function TaskStreamLayout({ title, refName, type, state }: TaskStreamLayoutProps) {
   const { status, elapsedLabel, text } = state;
   const Icon = ResourceComponents[type].Icon;
-
+  
   return (
     <>
       <SheetHeader>
@@ -66,7 +66,7 @@ function TaskStreamLayout({ title, refName, type, state }: TaskStreamLayoutProps
         </SheetDescription>
       </SheetHeader>
       <div className="pt-0 pb-4 px-4">
-        <CodeHighlight code={text} language="text" autoScroll />
+        <LogViewer logs={text} autoScroll={true} />
       </div>
     </>
   );
