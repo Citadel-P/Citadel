@@ -8,6 +8,7 @@ import { cn, filterBySplit } from '@/lib/utils';
 import { PluralResourceMap, ResourceType } from '@/api/types';
 import { useMeasuredWidth, useRead } from '@/lib/hooks';
 import { useResourceFilter } from '@/lib/atoms';
+import Convert from 'ansi-to-html';
 import { Badge } from '../ui/badge';
 import { MultiSelect, MultiSelectOption } from '../ui/multi-select';
 import {
@@ -307,37 +308,88 @@ export const UpdateStatusIcon = ({ updateStatus }: { updateStatus: AutoUpdateSta
   return <Icon width={14} height={14} className={className} />;
 };
 
-interface LogViewerProps {
-  logs: string | string[];
-  autoScroll?: boolean;
-  maxLines?: number;
-  className?: string;
+const convert = new Convert({
+  newline: false,
+  escapeXML: true,
+});
+
+export interface LogEntry {
+  timestamp?: string;
+  message: string;
 }
 
-export const LogViewer = ({ logs, autoScroll = true, className }: LogViewerProps) => {
-  const scrollRef = useRef<HTMLPreElement>(null);
+interface LogViewerProps {
+  logs: string | string[] | LogEntry[];
+  autoScroll?: boolean;
+  className?: string;
+  showTimestamps?: boolean;
+  wrapLines?: boolean;
+}
+
+export const LogViewer = ({ logs, autoScroll = true, className, showTimestamps = false, wrapLines = true}: LogViewerProps) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
+
+  const normalizedLogs = useMemo((): LogEntry[] => {
+    if (!logs) return [];
+
+    // Handle single string (e.g., from a simple text fetch)
+    if (typeof logs === 'string') {
+      return logs.split('\n').map((line) => ({ message: line }));
+    }
+
+    // Handle array
+    return logs.map((log) => {
+      // If it's already an object {timestamp, message}, keep it
+      if (typeof log === 'object' && log !== null) {
+        return log;
+      }
+      // If it's an array of strings (e.g., Deploy Progress)
+      return { message: log };
+    });
+  }, [logs]);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-    const atBottom = scrollHeight - scrollTop <= clientHeight + 50;
-    setIsAtBottom(atBottom);
+    setIsAtBottom(scrollHeight - scrollTop <= clientHeight + 50);
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (autoScroll && isAtBottom && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [logs, autoScroll, isAtBottom]);
-  const content = Array.isArray(logs) ? logs.join('\n') : logs;
+  }, [normalizedLogs, autoScroll, isAtBottom, wrapLines, showTimestamps]);
+
   return (
-    <pre
-      ref={scrollRef}
-      onScroll={handleScroll}
-      className={cn("p-4 max-h-[600px] rounded-sm border shadow-xs inline-block w-full overflow-auto bg-transparent text-xs", className)}
-      style={{ scrollBehavior: 'auto' }}>
-      {content || <span className="text-zinc-500 italic">Waiting for output...</span>}
-    </pre>
+    <div className="flex flex-col h-full border rounded-md overflow-hidden">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className={cn(
+          'p-4 max-h-[600px] rounded-sm border text-xs inline-block w-full overflow-auto bg-transparent',
+          className,
+        )}>
+        {normalizedLogs.length > 0 ? (
+          normalizedLogs.map((log, index) => (
+            <div
+              key={index}
+              className={cn(
+                'flex gap-2 min-h-[1.2rem]',
+                wrapLines ? 'whitespace-pre-wrap break-all' : 'whitespace-pre',
+              )}>
+              {showTimestamps && log.timestamp && (
+                <span className="text-foreground/30 shrink-0 select-none tabular-nums">
+                  {log.timestamp.includes('T') ? log.timestamp.split('T')[1].slice(0, 8) : log.timestamp}
+                </span>
+              )}
+              <span dangerouslySetInnerHTML={{ __html: convert.toHtml(log.message) }} />
+            </div>
+          ))
+        ) : (
+          <div className="text-zinc-600 italic">No logs available...</div>
+        )}
+      </div>
+    </div>
   );
 };

@@ -8,8 +8,6 @@ import Loader from '@/components/ui/loader';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { ProblemDetails } from '@/api/generated/api.types';
 import { DockerResourceInfoComponents } from '@/features';
-import { useSegmentTitle } from '@/lib/atoms';
-import { useEffect } from 'react';
 import { ResourceTabs } from '@/components/custom/resource-tabs';
 
 const ResourceDockerInfoPage = () => {
@@ -28,14 +26,7 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
   }>();
 
   const { resource, isLoading, error } = Components.useData(platformId, resourceId);
-  const [_, setSegmentTitle] = useSegmentTitle();
-
-  useEffect(() => {
-    if (resource?.name) {
-      setSegmentTitle({ action: 'inspect', name: resource?.name });
-    }
-  }, [resource?.name, setSegmentTitle]);
-
+  
   const tabs = Components.Tabs ?? [];
   const Header = Components.Header;
 

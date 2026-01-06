@@ -18,7 +18,7 @@ public interface IApplicationHubDispatcher
     #endregion
 
     #region Container Logs
-    Task SendContainerLog(string containerId, ReadOnlyMemory<byte> buffer);
+    Task SendContainerLogs(string containerId, ReadOnlyMemory<byte> buffer);
     Task SendContainerLogsBatchToConnection(string connectionId, byte[] recentLogs);
     #endregion
 

@@ -3,6 +3,7 @@ using Application.Services.SignalR.Context;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Microsoft.Extensions.Logging;
+using System.Threading.Channels;
 
 namespace Application.Services.SignalR;
 
@@ -56,16 +57,21 @@ internal sealed class ContainerLogStreamManager(
         var token = ctx.Cancellation.Token;
         if (!platformContainerCache.TryGetPlatformByContainerId(containerId, out var platform)) return;
 
+        var currentChannel = ctx.LogChannel;
         try
         {
             var request = new StreamContainerLogsCommand(platform.Address, containerId);
             var connector = connectorFactory.GetConnector(platform.ConnectorType);
 
+            _ = Task.Run(() => BroadcastBatchesAsync(currentChannel, containerId, token), token);
+
             await foreach (var data in connector.StreamLogsAsync(request, token))
             {
                 ctx.AddToBuffer(data.Span);
                 ctx.AddToBuffer("\n"u8);
-                await dispatcher.SendContainerLog(containerId, data);
+
+                // Just drop it in the pipe and keep reading
+                ctx.LogChannel.Writer.TryWrite(data.ToArray());
             }
         }
         catch (OperationCanceledException) { }
@@ -73,8 +79,46 @@ internal sealed class ContainerLogStreamManager(
         {
             logger.LogError(ex, "Error while polling logs for {ContainerId}", containerId);
         }
+        finally
+        {
+            currentChannel.Writer.TryComplete();
+        }
     }
 
+    private async Task BroadcastBatchesAsync(Channel<byte[]> channel, string containerId, CancellationToken token)
+    {
+        var reader = channel.Reader;
+        var batchBuffer = new MemoryStream();
+
+        try
+        {
+            while (await reader.WaitToReadAsync(token))
+            {
+                await Task.Delay(200, token);
+
+                while (reader.TryRead(out var line))
+                {
+                    batchBuffer.Write(line);
+                    batchBuffer.Write("\n"u8);
+                }
+
+                if (batchBuffer.Length > 0)
+                {
+                    await dispatcher.SendContainerLogs(containerId, batchBuffer.ToArray());
+                    batchBuffer.SetLength(0);
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error while broadcasting logs for {ContainerId}", containerId);
+        }
+        finally
+        {
+            await batchBuffer.DisposeAsync();
+        }
+    }
 
     private async Task WatchContainerEvents(LogStreamContext context, string containerId)
     {
@@ -105,7 +149,6 @@ internal sealed class ContainerLogStreamManager(
         }
         catch (OperationCanceledException)
         {
-            logger.LogInformation("Log streaming watcher for {ContainerId} canceled", containerId);
         }
         catch (Exception ex)
         {
@@ -127,7 +170,6 @@ internal sealed class ContainerLogStreamManager(
             }
             catch (OperationCanceledException)
             {
-                logger.LogInformation("Log streaming for {ContainerId} canceled", containerId);
             }
             catch (Exception ex)
             {

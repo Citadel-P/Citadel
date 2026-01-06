@@ -20,10 +20,10 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
     #endregion
 
     #region Container Logs
-    public Task SendContainerLog(string containerId, ReadOnlyMemory<byte> buffer) =>
+    public Task SendContainerLogs(string containerId, ReadOnlyMemory<byte> buffer) =>
         hubContext.Clients
             .Group(WellKnownSignalRGroups.ContainerLogGroup(containerId))
-            .SendAsync("SendContainerLog", buffer);
+            .SendAsync("SendContainerLogs", buffer);
 
     public Task SendContainerLogsBatchToConnection(string connectionId, byte[] recentLogs) =>
         hubContext.Clients

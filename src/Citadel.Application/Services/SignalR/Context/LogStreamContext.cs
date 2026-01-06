@@ -1,10 +1,12 @@
 ﻿using System.Buffers;
 using System.Text;
+using System.Threading.Channels;
 
 namespace Application.Services.SignalR.Context;
 
 internal sealed class LogStreamContext : StreamContext, IDisposable
 {
+    public Channel<byte[]> LogChannel { get; set; } = Channel.CreateUnbounded<byte[]>();
     public CancellationTokenSource Cancellation { get; private set; } = new();
     public CancellationTokenSource WatcherCts { get; private set; } = new();
 
@@ -40,6 +42,7 @@ internal sealed class LogStreamContext : StreamContext, IDisposable
         Cancellation = new CancellationTokenSource();
 
         started = false;
+        LogChannel = Channel.CreateUnbounded<byte[]>();
 
         var t = StreamTask;
         StreamTask = null;
