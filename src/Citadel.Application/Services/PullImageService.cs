@@ -69,7 +69,7 @@ internal class PullImageService(
 
         var workItem = new PersistPulledImageWorkItem(
             imageEntity,
-            platform,
+            platform.Id,
             imageStream,
             notificationQueue
         );
@@ -79,7 +79,7 @@ internal class PullImageService(
 
     internal sealed class PersistPulledImageWorkItem(
         Image imageEntity,
-        PlatformCacheEntry platform,
+        Guid platformId,
         IImageStreamManager imageStream,
         INotificationQueue notificationQueue)
         : IDbWorkItem
@@ -91,7 +91,7 @@ internal class PullImageService(
             await uow.CommitAsync(cancellationToken);
 
             // Notify clients
-            var imageNotification = new SendImageNotificationWorkItem(imageStream, imageEntity, platform.Id);
+            var imageNotification = new SendImageNotificationWorkItem(imageStream, imageEntity, platformId);
             await notificationQueue.EnqueueAsync(imageNotification, cancellationToken);
         }
     }

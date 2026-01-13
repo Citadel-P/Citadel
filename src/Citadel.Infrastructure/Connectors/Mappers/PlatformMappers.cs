@@ -166,6 +166,8 @@ internal static class PlatformMappers
         {
             DaemonContainerResult containerEvent => containerEvent.Map(),
             DaemonImageResult imageEvent => imageEvent.Map(),
+            DaemonVolumeResult volumeEvent => volumeEvent.Map(),
+            DaemonNetworkResult networkEvent => networkEvent.Map(),
             _ => throw new NotSupportedException($"Event type {@event.GetType().Name} is not supported")
         };
     }
@@ -186,7 +188,27 @@ internal static class PlatformMappers
         (
             Action: result.Action,
             ImageId: result.ImageId,
-            Image: result.Image.Map()
+            Image: result.Image?.Map()
+        );
+    }
+
+    internal static DaemonEventInfo Map(this DaemonVolumeResult result)
+    {
+        return new DaemonVolumeEventInfo
+        (
+            Action: result.Action,
+            VolumeId: result.VolumeId,
+            Volume: result.Volume?.Map()
+        );
+    }
+
+    internal static DaemonEventInfo Map(this DaemonNetworkResult result)
+    {
+        return new DaemonNetworkEventInfo
+        (
+            Action: result.Action,
+            NetworkId: result.NetworkId,
+            Network: result.Network?.Map()
         );
     }
 

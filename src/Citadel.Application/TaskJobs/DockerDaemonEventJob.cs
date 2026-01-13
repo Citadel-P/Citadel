@@ -1,4 +1,5 @@
-﻿using Application.Services;
+﻿using Application.Mappers;
+using Application.Services;
 using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain.Contracts.Interfaces;
@@ -7,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Threading.Channels;
+using static Application.Services.PullImageService;
 
 namespace Application.TaskJobs;
 
@@ -18,6 +20,7 @@ internal sealed class DockerDaemonEventJob(
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IContainerEventBroadcaster containerEventBroadcaster,
     INotificationQueue notificationQueue,
+    IImageStreamManager imageStream,
     IDbWorkQueue dbWorkQueue) : BackgroundService
 {
     private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
@@ -90,9 +93,43 @@ internal sealed class DockerDaemonEventJob(
                     }
                     else if (reply is DaemonImageEventInfo imageEvent)
                     {
-                        if (reply.Action == "delete")
+                        switch (reply.Action)
                         {
-                            await OnImageDeleted(imageEvent, platform.Id, cancellationToken);
+                            case "create":
+                            case "pull":
+                                await OnImageCreated(imageEvent, platform.Id, cancellationToken);
+                                break;
+                            case "delete":
+                                await OnImageDeleted(imageEvent, platform.Id, cancellationToken);
+                                break;
+                            
+                            default: break;
+                        }
+                    }
+                    else if (reply is DaemonVolumeEventInfo volumeEvent)
+                    {
+                        switch (reply.Action)
+                        {
+                            case "create":
+                                await OnVolumeCreated(volumeEvent, platform.Id, cancellationToken);
+                                break;
+                            case "destroy":
+                                await OnVolumeDeleted(volumeEvent, platform.Id, cancellationToken);
+                                break;
+                            default: break;
+                        }
+                    }
+                    else if (reply is DaemonNetworkEventInfo networkEvent)
+                    {
+                        switch (reply.Action)
+                        {
+                            case "create":
+                                await OnNetworkCreated(networkEvent, platform.Id, cancellationToken);
+                                break;
+                            case "destroy":
+                                await OnNetworkDeleted(networkEvent, platform.Id, cancellationToken);
+                                break;
+                            default: break;
                         }
                     }
                 }
@@ -145,10 +182,54 @@ internal sealed class DockerDaemonEventJob(
         return dbWorkQueue.EnqueueAsync(item, cancellationToken);
     }
 
+    private async ValueTask OnImageCreated(DaemonImageEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
+    {
+        if (eventInfo.Image is null) return;
+
+        var imageEntity = eventInfo.Image.Map(platformId);
+
+        var workItem = new PersistPulledImageWorkItem(
+            imageEntity,
+            platformId,
+            imageStream,
+            notificationQueue
+        );
+
+        await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
+    }
+
     private ValueTask OnImageDeleted(DaemonImageEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
     {
         var item = new ImageDeletedWorkItem(platformId, eventInfo, notificationQueue, dockerDaemonHub, logger);
 
         return dbWorkQueue.EnqueueAsync(item, cancellationToken);
     }
+
+    private async ValueTask OnVolumeCreated(DaemonVolumeEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
+    {
+
+    }
+
+    private async ValueTask OnVolumeDeleted(DaemonVolumeEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
+    {
+        //var volumeNotificationItem = new SendImageNotificationWorkItem(existing, eventInfo.Action, dockerDaemonHub);
+        //await notificationQueue.EnqueueAsync(imageNotificationItem, cancellationToken);
+    }
+
+    private async ValueTask OnNetworkCreated(DaemonNetworkEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
+    {
+
+    }
+
+    private async ValueTask OnNetworkDeleted(DaemonNetworkEventInfo eventInfo, Guid platformId, CancellationToken cancellationToken)
+    {
+        //var volumeNotificationItem = new SendImageNotificationWorkItem(existing, eventInfo.Action, dockerDaemonHub);
+        //await notificationQueue.EnqueueAsync(imageNotificationItem, cancellationToken);
+    }
+
+    //internal class SendVolumeNotificationWorkItem(Image image, string action, IDockerDaemonStreamManager dockerDaemonHub) : INotificationWorkItem
+    //{
+    //    public Task ExecuteAsync(CancellationToken cancellationToken)
+    //        => dockerDaemonHub.SendImageEvent(image, action);
+    //}
 }
