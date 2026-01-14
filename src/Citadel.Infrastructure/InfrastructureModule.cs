@@ -48,6 +48,7 @@ public static class InfrastructureModule
 
     private static IServiceCollection AddGrpcClients(this IServiceCollection services)
     {
+        Helpers.GetOrCreatePublicKey();
         services
             .AddSingleton<HubSigningInterceptor>()
             .AddSingleton<IGrpcClientFactory>(sp =>

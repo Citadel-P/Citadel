@@ -1,5 +1,5 @@
-﻿using Citadel.Agent.Common.V1;
-using Citadel.Agent.Platforms.V1;
+﻿using Citadel.SharedModels.V1;
+using Citadel.Platforms.V1;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities.Platforms;
 using Hosting.DockerClient.Models.Platforms;

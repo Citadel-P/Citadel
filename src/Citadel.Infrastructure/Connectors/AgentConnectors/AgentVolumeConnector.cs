@@ -1,4 +1,4 @@
-﻿using Citadel.Agent.Volumes.V1;
+﻿using Citadel.Volumes.V1;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Volumes;
 using Grpc.Core;

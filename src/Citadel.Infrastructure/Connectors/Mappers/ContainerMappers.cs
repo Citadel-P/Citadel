@@ -1,6 +1,6 @@
-﻿using Citadel.Agent.Common.V1;
-using Citadel.Agent.Containers.V1;
-using Citadel.Agent.Platforms.V1;
+﻿using Citadel.SharedModels.V1;
+using Citadel.Containers.V1;
+using Citadel.Platforms.V1;
 using Domain;
 using Domain.Contracts.Resources.Containers;
 using Google.Protobuf.Collections;
@@ -405,7 +405,7 @@ internal static class ContainerMappers
             VolumeOptions: mount.VolumeOptions?.Map()
         );
 
-    private static Domain.Contracts.Resources.Containers.BindOptions Map(this Citadel.Agent.Common.V1.BindOptions bindOptions)
+    private static Domain.Contracts.Resources.Containers.BindOptions Map(this Citadel.SharedModels.V1.BindOptions bindOptions)
         => new 
         (
              Propagation: bindOptions.Propagation,
@@ -415,7 +415,7 @@ internal static class ContainerMappers
              ReadOnlyForceRecursive: bindOptions.ReadOnlyForceRecursive
         );
 
-    private static Domain.Contracts.Resources.Containers.VolumeOptions Map(this Citadel.Agent.Common.V1.VolumeOptions volumeOptions)
+    private static Domain.Contracts.Resources.Containers.VolumeOptions Map(this Citadel.SharedModels.V1.VolumeOptions volumeOptions)
         => new
         (
             NoCopy: volumeOptions.NoCopy,
@@ -529,7 +529,7 @@ internal static class ContainerMappers
         return result;
     }
 
-    private static EndpointSettingsInfo Map(this Citadel.Agent.Common.V1.EndpointSettings endpointSettings)
+    private static EndpointSettingsInfo Map(this Citadel.SharedModels.V1.EndpointSettings endpointSettings)
         => new(
             IpamConfig: endpointSettings.IPAMConfig?.Map(),
             Links: endpointSettings.Links?.ToList() ?? [],
@@ -617,6 +617,12 @@ internal static class ContainerMappers
             DaemonEventResponse.KindOneofCase.DaemonImageEventResponse
                 => MapImage(@event.DaemonImageEventResponse),
 
+            DaemonEventResponse.KindOneofCase.DaemonVolumeEventResponse
+                => MapVolume(@event.DaemonVolumeEventResponse),
+
+            DaemonEventResponse.KindOneofCase.DaemonNetworkEventResponse
+                => MapNetwork(@event.DaemonNetworkEventResponse),
+
             _ => throw new InvalidOperationException("Unknown event kind")
         };
     }
@@ -638,6 +644,26 @@ internal static class ContainerMappers
             Action: evt.Action,
             ImageId: evt.ImageId,
             Image: evt.Image?.Map()
+        );
+    }
+
+    private static DaemonVolumeEventInfo MapVolume(DaemonVolumeEventResponse evt)
+    {
+        return new DaemonVolumeEventInfo
+        (
+            Action: evt.Action,
+            VolumeId: evt.VolumeId,
+            Volume: evt.Volume?.Map()
+        );
+    }
+
+    private static DaemonNetworkEventInfo MapNetwork(DaemonNetworkEventResponse evt)
+    {
+        return new DaemonNetworkEventInfo
+        (
+            Action: evt.Action,
+            NetworkId: evt.NetworkId,
+            Network: evt.Network?.Map()
         );
     }
 
@@ -833,13 +859,13 @@ internal static class ContainerMappers
             _ => Hosting.DockerClient.RestartPolicyName.No
         };
 
-    internal static Citadel.Agent.Containers.V1.RestartPolicy Map(this ContainerRestartPolicy? restartPolicy)
+    internal static Citadel.Containers.V1.RestartPolicy Map(this ContainerRestartPolicy? restartPolicy)
         => restartPolicy switch
         {
-            ContainerRestartPolicy.No => Citadel.Agent.Containers.V1.RestartPolicy.No,
-            ContainerRestartPolicy.Always => Citadel.Agent.Containers.V1.RestartPolicy.Always,
-            ContainerRestartPolicy.OnFailure => Citadel.Agent.Containers.V1.RestartPolicy.OnFailure,
-            ContainerRestartPolicy.UnlessStopped => Citadel.Agent.Containers.V1.RestartPolicy.UnlessStopped,
-            _ => Citadel.Agent.Containers.V1.RestartPolicy.No
+            ContainerRestartPolicy.No => Citadel.Containers.V1.RestartPolicy.No,
+            ContainerRestartPolicy.Always => Citadel.Containers.V1.RestartPolicy.Always,
+            ContainerRestartPolicy.OnFailure => Citadel.Containers.V1.RestartPolicy.OnFailure,
+            ContainerRestartPolicy.UnlessStopped => Citadel.Containers.V1.RestartPolicy.UnlessStopped,
+            _ => Citadel.Containers.V1.RestartPolicy.No
         };
 }

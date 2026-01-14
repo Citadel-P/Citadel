@@ -1,8 +1,8 @@
-﻿using Citadel.Agent.Common.V1;
-using Citadel.Agent.Images.V1;
+﻿using Citadel.SharedModels.V1;
+using Citadel.Images.V1;
 using Domain.Contracts.Resources.Images;
 using Google.Protobuf.Collections;
-using static Citadel.Agent.Images.V1.ConfigMessage.Types;
+using static Citadel.Images.V1.ConfigMessage.Types;
 
 namespace Infrastructure.Connectors.Mappers;
 
@@ -49,10 +49,10 @@ internal static class ImageMappers
             Layers: image.Layers?.Select(Map)?.ToList() ?? []
         );
 
-    private static IEnumerable<Domain.Contracts.Resources.Images.ContainerImageResult> Map(this RepeatedField<global::Citadel.Agent.Images.V1.ContainerImageResult> containers)
+    private static IEnumerable<Domain.Contracts.Resources.Images.ContainerImageResult> Map(this RepeatedField<global::Citadel.Images.V1.ContainerImageResult> containers)
         => containers.Select(Map);
 
-    private static Domain.Contracts.Resources.Images.ContainerImageResult Map(this global::Citadel.Agent.Images.V1.ContainerImageResult container)
+    private static Domain.Contracts.Resources.Images.ContainerImageResult Map(this global::Citadel.Images.V1.ContainerImageResult container)
         => new (
             Id: container.Id,
             Name: container.Name,
@@ -371,14 +371,14 @@ internal static class ImageMappers
         Units: jsonProgress.Units,
         Start: jsonProgress.Start
     );
-    internal static IEnumerable<Domain.Contracts.Resources.Images.HistoryImageResult> Map(this IEnumerable<Citadel.Agent.Images.V1.HistoryImageResult> items) => items.Select(Map);
+    internal static IEnumerable<Domain.Contracts.Resources.Images.HistoryImageResult> Map(this IEnumerable<Citadel.Images.V1.HistoryImageResult> items) => items.Select(Map);
 
     internal static IEnumerable<Domain.Contracts.Resources.Images.HistoryImageResult> Map(this IEnumerable<Hosting.DockerClient.HistoryResponseItem> items) => items.Select(Map);
 
     internal static Domain.Contracts.Resources.Images.HistoryImageResult Map(this Hosting.DockerClient.HistoryResponseItem item) => new (
         Id: item.Id, Created : item.Created, CreatedBy: item.CreatedBy, Size: item.Size, Comment: item.Comment);
 
-    internal static Domain.Contracts.Resources.Images.HistoryImageResult Map(this Citadel.Agent.Images.V1.HistoryImageResult item) => new(
+    internal static Domain.Contracts.Resources.Images.HistoryImageResult Map(this Citadel.Images.V1.HistoryImageResult item) => new(
         Id: item.Id, Created: item.Created, CreatedBy: item.CreatedBy, Size: item.Size, Comment: item.Comment);
 
     internal static ExposedPortsResult Map(this Hosting.DockerClient.Models.Images.ExposedPortsResult info) =>

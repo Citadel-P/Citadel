@@ -1,4 +1,4 @@
-﻿using Citadel.Agent.Deployments.V1;
+﻿using Citadel.Deployments.V1;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Deployments;
 using Grpc.Core;

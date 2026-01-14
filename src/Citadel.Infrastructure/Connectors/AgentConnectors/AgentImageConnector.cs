@@ -1,5 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
-using Citadel.Agent.Images.V1;
+using Citadel.Images.V1;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Images;
 using Grpc.Core;

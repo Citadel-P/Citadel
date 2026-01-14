@@ -1,4 +1,4 @@
-﻿using Citadel.Agent.Common.V1;
+﻿using Citadel.SharedModels.V1;
 
 namespace WebApi.Routes.Endpoints.Resources.Containers;
 

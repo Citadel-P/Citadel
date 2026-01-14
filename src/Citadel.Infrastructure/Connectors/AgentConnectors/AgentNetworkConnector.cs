@@ -1,4 +1,5 @@
-﻿using Citadel.Agent.Networks.V1;
+﻿using Citadel.Networks.V1;
+using Citadel.SharedModels.V1;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Networks;
 using Grpc.Core;

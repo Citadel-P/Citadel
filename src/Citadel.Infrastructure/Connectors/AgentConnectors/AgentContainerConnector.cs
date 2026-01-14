@@ -1,5 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
-using Citadel.Agent.Containers.V1;
+using Citadel.Containers.V1;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
@@ -8,7 +8,7 @@ using Hosting.Common.ErrorTypes;
 using Infrastructure.Connectors.Mappers;
 using Infrastructure.Repositories;
 using LightResults;
-using static Citadel.Agent.Containers.V1.ContainerService;
+using static Citadel.Containers.V1.ContainerService;
 
 namespace Infrastructure.Connectors.AgentConnectors;
 
@@ -56,7 +56,7 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : ICont
         try
         {
             var containerClient = clientFactory.GetContainerClient(createContainerCommand.PlatformAddress);
-            Dictionary<string, Citadel.Agent.Common.V1.EndpointSettings>? networks = [];
+            Dictionary<string, Citadel.SharedModels.V1.EndpointSettings>? networks = [];
             foreach (var (k, v) in createContainerCommand.Networks ?? [])
             {
                 networks[k] = v.MapAgent();

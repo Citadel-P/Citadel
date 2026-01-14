@@ -1,4 +1,5 @@
-﻿using Citadel.Agent.Volumes.V1;
+﻿using Citadel.SharedModels.V1;
+using Citadel.Volumes.V1;
 using Domain;
 using Domain.Contracts.Resources.Volumes;
 using Google.Protobuf.Collections;
@@ -31,10 +32,10 @@ internal static class VolumeMappers
             Containers: volume.Containers?.Map() ?? [],
             InUse: volume.InUse);
     }
-    internal static IEnumerable<Domain.Contracts.Resources.Volumes.ContainerVolumeResult> Map(this RepeatedField<Citadel.Agent.Volumes.V1.ContainerVolumeResult>? containers)
+    internal static IEnumerable<Domain.Contracts.Resources.Volumes.ContainerVolumeResult> Map(this RepeatedField<Citadel.SharedModels.V1.ContainerVolumeResult>? containers)
         => containers?.Select(Map) ?? [];
 
-    internal static Domain.Contracts.Resources.Volumes.ContainerVolumeResult Map(this Citadel.Agent.Volumes.V1.ContainerVolumeResult container)
+    internal static Domain.Contracts.Resources.Volumes.ContainerVolumeResult Map(this Citadel.SharedModels.V1.ContainerVolumeResult container)
         => new
         (
             Id: container.Id,
@@ -193,7 +194,7 @@ internal static class VolumeMappers
             Secrets: accessMode.Secrets?.Select(Map)?.ToList() ?? []
         );
 
-    internal static Domain.Contracts.Resources.Volumes.VolumeCapacityRange? Map(this Citadel.Agent.Volumes.V1.VolumeCapacityRange capacityRange)
+    internal static Domain.Contracts.Resources.Volumes.VolumeCapacityRange? Map(this Citadel.SharedModels.V1.VolumeCapacityRange capacityRange)
         => new
         (
             RequiredBytes: capacityRange.RequiredBytes,

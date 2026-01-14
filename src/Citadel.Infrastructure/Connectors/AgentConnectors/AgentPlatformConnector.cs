@@ -1,5 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
-using Citadel.Agent.Platforms.V1;
+using Citadel.Platforms.V1;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Platforms;
