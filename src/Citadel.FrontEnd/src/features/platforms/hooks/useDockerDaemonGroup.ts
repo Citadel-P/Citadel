@@ -1,11 +1,13 @@
 import { useState, useCallback } from 'react';
 import { HubConnection } from '@microsoft/signalr';
-import { ContainerView, ImageView } from '@/api/generated/api.types';
+import { ContainerView, DockerNetworkResult, DockerVolumeResult, ImageView } from '@/api/generated/api.types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 
 export const useDockerDaemonGroup = (platformId?: string) => {
-  const [containerEvent, setContainerEvent] = useState<ContainerEvent | undefined>();
   const [imageEvent, setImageEvent] = useState<ImageEvent | undefined>();
+  const [volumeEvent, setVolumeEvent] = useState<VolumeEvent | undefined>();
+  const [networkEvent, setNetworkEvent] = useState<NetworkEvent | undefined>();
+  const [containerEvent, setContainerEvent] = useState<ContainerEvent | undefined>();
 
   const handleContainerEventReceived = useCallback((container: ContainerView, eventType: string) => {
     setContainerEvent({ container, eventType });
@@ -15,20 +17,32 @@ export const useDockerDaemonGroup = (platformId?: string) => {
     setImageEvent({ image, eventType });
   }, []);
 
+  const handleVolumeEventReceived = useCallback((volume: DockerVolumeResult, eventType: string, actorId: string) => {
+    setVolumeEvent({ volume, eventType, actorId });
+  }, []);
+
+  const handleNetworkEventReceived = useCallback((network: DockerNetworkResult, eventType: string, actorId: string) => {
+    setNetworkEvent({ network, eventType, actorId });
+  }, []);
+
   const setupEventListeners = useCallback(
     (hubConnection: HubConnection) => {
-      hubConnection.on('ContainerEventReceived', handleContainerEventReceived);
       hubConnection.on('ImageEventReceived', handleImageEventReceived);
+      hubConnection.on('VolumeEventReceived', handleVolumeEventReceived);
+      hubConnection.on('NetworkEventReceived', handleNetworkEventReceived);
+      hubConnection.on('ContainerEventReceived', handleContainerEventReceived);
     },
-    [handleContainerEventReceived, handleImageEventReceived],
+    [handleContainerEventReceived, handleImageEventReceived, handleVolumeEventReceived, handleNetworkEventReceived],
   );
 
   const removeEventListeners = useCallback(
     (hubConnection: HubConnection) => {
-      hubConnection.off('ContainerEventReceived', handleContainerEventReceived);
       hubConnection.off('ImageEventReceived', handleImageEventReceived);
+      hubConnection.off('VolumeEventReceived', handleVolumeEventReceived);
+      hubConnection.off('NetworkEventReceived', handleNetworkEventReceived);
+      hubConnection.off('ContainerEventReceived', handleContainerEventReceived);
     },
-    [handleContainerEventReceived, handleImageEventReceived],
+    [handleContainerEventReceived, handleImageEventReceived, handleVolumeEventReceived, handleNetworkEventReceived],
   );
 
   useSignalRGroup({
@@ -38,7 +52,7 @@ export const useDockerDaemonGroup = (platformId?: string) => {
     skip: !platformId,
   });
 
-  return { containerEvent, imageEvent };
+  return { containerEvent, imageEvent, volumeEvent, networkEvent };
 };
 type BaseEvent = {
   eventType: string;
@@ -50,4 +64,14 @@ interface ContainerEvent extends BaseEvent {
 
 interface ImageEvent extends BaseEvent {
   image: ImageView;
+}
+
+interface VolumeEvent extends BaseEvent {
+  volume: DockerVolumeResult;
+  actorId: string;
+}
+
+interface NetworkEvent extends BaseEvent {
+  network: DockerNetworkResult;
+  actorId: string;
 }

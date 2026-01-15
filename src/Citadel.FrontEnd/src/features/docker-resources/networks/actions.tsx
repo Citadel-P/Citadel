@@ -33,7 +33,6 @@ export const { dropdown: NetworkDropdownActions, group: NetworkGroupActions } =
       type: 'command',
       icon: Trash,
       mutateKey: 'deleteNetworks',
-      invalidate: 'listNetworks',
       canExecute: (r) => {
         const can = (x: DockerNetworkResult) => x.inUse === false;
         return Array.isArray(r) ? r.every(can) : can(r);

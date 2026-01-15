@@ -32,7 +32,6 @@ export const { dropdown: VolumeDropdownActions, group: VolumeGroupActions } = cr
     type: 'command',
     icon: Trash,
     mutateKey: 'deleteVolumes',
-    invalidate: 'listVolumes',
     canExecute: (r) => {
       const can = (x: DockerVolumeResult) => x.inUse === false;
       return Array.isArray(r) ? r.every(can) : can(r);

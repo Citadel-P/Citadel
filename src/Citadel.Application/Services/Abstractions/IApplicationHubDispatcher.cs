@@ -1,8 +1,8 @@
 ﻿using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
-using Microsoft.AspNetCore.SignalR;
-using static Hosting.Common.Constants;
 
 namespace Application.Services.Abstractions;
 
@@ -11,6 +11,8 @@ public interface IApplicationHubDispatcher
     #region Daemon events
     Task SendContainerEvent(Container container, string @event);
     Task SendImageEvent(Image image, string @event);
+    Task SendVolumeEvent(DockerVolumeResult? volume, string @event, string actorId, Guid platformId);
+    Task SendNetworkEvent(DockerNetworkResult? network, string @event, string actorId, Guid platformId);
     #endregion
 
     #region Container Info
@@ -38,4 +40,5 @@ public interface IApplicationHubDispatcher
     Task PlatformDeleted(Guid platformId);
     Task PushPlatformStats(Guid platformId, PlatformStatsResult platform);
     #endregion
+
 }

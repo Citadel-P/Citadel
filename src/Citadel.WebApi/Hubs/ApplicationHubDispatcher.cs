@@ -1,6 +1,8 @@
 ﻿using Application.Services.Abstractions;
 using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Platforms;
+using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Microsoft.AspNetCore.SignalR;
 using WebApi.Routes.Endpoints.Resources.Containers;
@@ -89,5 +91,15 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
         hubContext.Clients
             .Group(WellKnownSignalRGroups.DockerDaemonGroup(image.PlatformId))
             .SendAsync("ImageEventReceived", ImagesView.Map(image), @event);
+
+    public Task SendVolumeEvent(DockerVolumeResult? volume, string @event, string actorId, Guid platformId) =>
+         hubContext.Clients
+            .Group(WellKnownSignalRGroups.DockerDaemonGroup(platformId))
+            .SendAsync("VolumeEventReceived", volume, @event, actorId);
+
+    public Task SendNetworkEvent(DockerNetworkResult? network, string @event, string actorId, Guid platformId) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.DockerDaemonGroup(platformId))
+            .SendAsync("NetworkEventReceived", network, @event, actorId);
     #endregion
 }

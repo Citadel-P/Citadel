@@ -1,10 +1,10 @@
 import { Network } from 'lucide-react';
 import { NetworksTable } from './table';
 import { RequiredComponents, RequiredFormComponents, ResourceDataHookResult } from '@/pages/types';
-import { useRead } from '@/lib/hooks';
 import { NetworkDropdownActions, NetworkGroupActions } from './actions';
 import { ActionBar } from '@/components/custom/action-bar';
 import NetworkForm from './form';
+import { useNetworksGroup } from './hooks/useNetworksGroup';
 
 export const NetworkComponents: RequiredComponents = {
   Icon: <Network className="h-4 w-4" />,
@@ -16,8 +16,8 @@ export const NetworkComponents: RequiredComponents = {
     return <ActionBar type="Network" items={items} actions={Object.values(NetworkGroupActions)} />;
   },
   useData: function (platformId: string): ResourceDataHookResult<any> {
-    const { data, isLoading } = useRead(`listNetworks`, { platformId: platformId });
-    return { items: data?.data?.networks ?? [], isLoading };
+    const { networks, isLoading } = useNetworksGroup(platformId);
+    return { items: networks?.networks ?? [], isLoading };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

@@ -67,6 +67,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
     if (open) measure();
   }, [open, selectedItem, measure]);
 
+  const defaultDisplay = (item: T | undefined) => (item?.name == '' ? `<id=${item?.id}>` : item?.name);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -81,7 +82,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
             'flex justify-between gap-2 w-full max-w-[400px] font-normal data-[placeholder]:text-muted-foreground text-sm bg-background hover:bg-background shadow-xs border',
             className,
           )}>
-          {selectedItem?.name ?? placeholder}
+          {defaultDisplay(selectedItem) ?? placeholder}
           <ChevronDown className="h-4 w-4 opacity-60" />
         </Button>
       </PopoverTrigger>
@@ -113,10 +114,10 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
                 return (
                   <CommandItem
                     key={item.id}
-                    value={item.name}
+                    value={defaultDisplay(item)}
                     onSelect={() => handleSelect(item)}
                     className="flex items-center justify-between cursor-pointer my-0.5 px-2 py-2 rounded-sm">
-                    <span>{item.name}</span>
+                    <span>{defaultDisplay(item)}</span>
                     <Check className={cn('h-4 w-4 transition-opacity', isSelected ? 'opacity-100' : 'opacity-0')} />
                   </CommandItem>
                 );
@@ -326,7 +327,13 @@ interface LogViewerProps {
   wrapLines?: boolean;
 }
 
-export const LogViewer = ({ logs, autoScroll = true, className, showTimestamps = false, wrapLines = true}: LogViewerProps) => {
+export const LogViewer = ({
+  logs,
+  autoScroll = true,
+  className,
+  showTimestamps = false,
+  wrapLines = true,
+}: LogViewerProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
 

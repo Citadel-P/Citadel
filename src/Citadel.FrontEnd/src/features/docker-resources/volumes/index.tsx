@@ -1,9 +1,9 @@
 import { HardDrive } from 'lucide-react';
 import { VolumesTable } from './table';
 import { RequiredComponents, RequiredFormComponents, ResourceDataHookResult } from '@/pages/types';
-import { useRead } from '@/lib/hooks';
 import { ActionBar } from '@/components/custom/action-bar';
 import { VolumeDropdownActions, VolumeGroupActions } from './actions';
+import { useVolumesGroup } from './hooks/useVolumesGroup';
 import VolumeForm from './form';
 
 export const VolumeComponents: RequiredComponents = {
@@ -17,8 +17,8 @@ export const VolumeComponents: RequiredComponents = {
   },
 
   useData: function (platformId: string): ResourceDataHookResult<any> {
-    const { data, isLoading } = useRead(`listVolumes`, { platformId: platformId });
-    return { items: data?.data?.volumes ?? [], isLoading };
+    const { volumes, isLoading } = useVolumesGroup(platformId);
+    return { items: volumes?.volumes ?? [], isLoading };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

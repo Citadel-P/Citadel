@@ -1,5 +1,7 @@
 ﻿using Domain;
 using Domain.Contracts.Resources.Containers;
+using Domain.Contracts.Resources.Networks;
+using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Domain.Entities.Platforms;
 using Nerdbank.MessagePack;
@@ -35,6 +37,8 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<ImagesView>]
 [GenerateShapeFor<ImageView>]
 [GenerateShapeFor<IEnumerable<ImageView>>]
+[GenerateShapeFor<DockerNetworkResult>]
+[GenerateShapeFor<DockerVolumeResult>]
 partial class SignalRMessagePackContext;
 
 internal static class DerivedTypesMapping
