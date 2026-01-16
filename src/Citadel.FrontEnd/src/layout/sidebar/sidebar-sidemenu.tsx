@@ -24,7 +24,7 @@ export const SidebarSubMenu = ({ submenu, toggleMenu }: IProps) => {
       )}>
       <ul className="overflow-hidden flex flex-col border-l border-dashed border-border pl-2 gap-0.5 text-muted-foreground">
         {submenu.children?.map((sub) => (
-          <li key={sub.label} className='hover:underline'>
+          <li key={sub.label} className="hover:underline">
             <SubRow sub={sub} toggleMenu={toggleMenu} />
             {sub.children && sub.expanded && <SidebarSubMenu submenu={sub} toggleMenu={toggleMenu} />}
           </li>
@@ -45,6 +45,7 @@ function SubRow({ sub, toggleMenu }: { sub: ISubMenuItem; toggleMenu: (menu: ISu
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleMenu(sub)}
         aria-expanded={!!sub.expanded}
         className={clsx(base, 'w-full px-3 py-2')}>
+        {sub.icon && <span className="mr-2 flex items-center">{sub.icon}</span>}
         <span className="flex-1 text-left text-xs font-medium">{sub.label}</span>
         <ChevronRight
           className={clsx(
@@ -60,8 +61,13 @@ function SubRow({ sub, toggleMenu }: { sub: ISubMenuItem; toggleMenu: (menu: ISu
   return (
     <Link
       to={sub.route ?? '/'}
-      className={clsx(base, 'w-full px-3 py-2 text-xs font-medium', sub.active && 'text-primary hover:text-primary bg-card')}
+      className={clsx(
+        base,
+        'w-full p-2 gap-4 text-xs font-medium',
+        sub.active && 'text-primary hover:text-primary bg-card',
+      )}
       onClick={() => toggleMenu(sub)}>
+      {sub.icon && <span className="flex items-center">{sub.icon}</span>}
       {sub.label}
     </Link>
   );

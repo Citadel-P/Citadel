@@ -1,8 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Download, Minus, Plus } from 'lucide-react';
 import { useInlineSubHeader, useResourceFilter, useTaskSheet } from '@/lib/atoms';
-import { useEffect, useRef, useState } from 'react';
-import autoAnimate from '@formkit/auto-animate';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { RegistryView } from '@/api/generated/api.types';
@@ -30,17 +29,6 @@ export default function PullImageForm() {
 
   const [resourceFilter] = useResourceFilter<{ item: RegistryView }>('Registry');
 
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (ref.current) {
-      autoAnimate(ref.current, {
-        duration: 250,
-        easing: 'ease-in-out',
-      });
-    }
-  }, []);
-
   useEffect(() => {
     if (resourceFilter?.item) {
       setRegistry(resourceFilter.item);
@@ -61,64 +49,65 @@ export default function PullImageForm() {
   };
 
   return (
-    <div ref={ref} className="mb-1">
-      {open && (
-        <div
-          className={cn(
-            'overflow-hidden transition-all duration-300 ease-in-out',
-            'rounded-sm border p-1 px-2 bg-background',
-            open ? 'opacity-100 ' : 'opacity-0 ',
-          )}>
-          <form onSubmit={submit} className="sm:flex flex flex-col gap-5 p-2">
-            <div className="flex flex-col items-baseline">
-              <div className="font-semibold text-sm">Pull Image</div>
-              <div className="text-sm text-muted-foreground">
-                {' '}
-                Pull an image from a connected registry to make it available on this platform.
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-baseline">
-              <div className="flex-none w-full sm:w-36 text-sm font-medium">Registry</div>
-              <ResourceSelectorField
-                type={'Registry'}
-                selected={registry}
-                onSelect={setRegistry}
-                placeholder="Select Registry"
-                className="text-sm"
-              />
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-baseline">
-              <div className="flex-none w-full sm:w-36 text-sm font-medium">Image</div>
-              <Input
-                placeholder="e.g. nginx:latest or my-app:1.0"
-                value={image}
-                onChange={(e) => setImage(e.target.value)}
-                className="text-sm w-full max-w-[400px]"
-              />
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-baseline">
-              <div className="flex-none w-full sm:w-36 text-sm" />
-              <Button type="submit" className="gap-2 text-sm" variant="outline" disabled={!image || !registry}>
-                Pull image
-                <Download className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <AlertMessage type="info" title="">
-              <div className="flex flex-row gap-1">
-                <div className="font-semibold text-sm">Tip:</div>
-                <div className="font-normal">
-                  Looking to run containers? Create a Deployment for a single container or a Stack for multiple
-                  containers.
+    <div className="mb-1">
+      <div
+        className={cn(
+          'grid transition-all duration-300 ease-in-out',
+          open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0 invisible',
+        )}>
+        <div className="overflow-hidden">
+          <div className="rounded-sm border p-1 px-2 bg-background">
+            <form onSubmit={submit} className="sm:flex flex flex-col gap-5 p-2">
+              <div className="flex flex-col items-baseline">
+                <div className="font-semibold text-sm">Pull Image</div>
+                <div className="text-sm text-muted-foreground">
+                  {' '}
+                  Pull an image from a connected registry to make it available on this platform.
                 </div>
               </div>
-            </AlertMessage>
-          </form>
+
+              <div className="flex flex-col sm:flex-row sm:items-baseline">
+                <div className="flex-none w-full sm:w-36 text-sm font-medium">Registry</div>
+                <ResourceSelectorField
+                  type={'Registry'}
+                  selected={registry}
+                  onSelect={setRegistry}
+                  placeholder="Select Registry"
+                  className="text-sm"
+                />
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-baseline">
+                <div className="flex-none w-full sm:w-36 text-sm font-medium">Image</div>
+                <Input
+                  placeholder="e.g. nginx:latest or my-app:1.0"
+                  value={image}
+                  onChange={(e) => setImage(e.target.value)}
+                  className="text-sm w-full max-w-[400px]"
+                />
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-baseline">
+                <div className="flex-none w-full sm:w-36 text-sm" />
+                <Button type="submit" className="gap-2 text-sm" variant="outline" disabled={!image || !registry}>
+                  Pull image
+                  <Download className="w-4 h-4" />
+                </Button>
+              </div>
+
+              <AlertMessage type="info" title="">
+                <div className="flex flex-row gap-1">
+                  <div className="font-semibold text-sm">Tip:</div>
+                  <div className="font-normal">
+                    Looking to run containers? Create a Deployment for a single container or a Stack for multiple
+                    containers.
+                  </div>
+                </div>
+              </AlertMessage>
+            </form>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

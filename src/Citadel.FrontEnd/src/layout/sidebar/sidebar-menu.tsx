@@ -35,7 +35,7 @@ export const SidebarMenu = () => {
       addedPlatformIdsRef.current.add(platform.id);
 
       setMenuItems((prev) => {
-        const baseMenuIndex = prev.findIndex((menu) => menu.group === 'Base');
+        const baseMenuIndex = prev.findIndex((menu) => menu.group === 'Infrastructure');
         if (baseMenuIndex === -1) return prev;
 
         const baseMenu = prev[baseMenuIndex];
@@ -50,7 +50,7 @@ export const SidebarMenu = () => {
 
   // Clean up removed platforms
   useEffect(() => {
-    const baseMenu = menuItems.find((menu) => menu.group === 'Base');
+    const baseMenu = menuItems.find((menu) => menu.group === 'Infrastructure');
     if (!baseMenu) return;
 
     const ids = new Set<string>();
@@ -139,24 +139,20 @@ export const SidebarMenu = () => {
 function SidebarRow({ item, minimized, onClick }: { item: ISubMenuItem; minimized: boolean; onClick: () => void }) {
   return (
     <div
-      className={clsx("group relative flex items-center h-9 rounded cursor-pointer hover:bg-card text-muted-foreground px-2", item.active && 'text-primary bg-card')}
+      className={clsx(
+        'group relative flex items-center h-9 gap-3 rounded cursor-pointer hover:bg-card text-muted-foreground px-2',
+        item.active && 'text-primary bg-card',
+      )}
       role="button"
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onClick()}>
       {/* Icon */}
-      <div
-        className={clsx(
-          'absolute flex items-center justify-center',
-          'left-2',
-          item.active ? 'text-primary' : 'text-muted-foreground/50',
-        )}>
-        {item.icon}
-      </div>
+      <div className={item.active ? 'text-primary' : 'text-muted-foreground'}>{item.icon}</div>
 
       {/* Label section (hidden when minimized) */}
       {!minimized && (
-        <div className={'flex items-center hover:underline gap-3 w-full pl-10'}>
+        <div className={'flex items-center hover:underline w-full'}>
           {item.children ? (
             <ExpandableHead label={item.label} expanded={!!item.expanded} />
           ) : (

@@ -1,11 +1,11 @@
-import { Layers } from 'lucide-react';
+import { Server } from 'lucide-react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { usePlatformsGroup } from './hooks/usePlatformsGroup';
 import { Platforms } from './platforms';
 import { PlatformDropdownActions } from './actions';
 
 export const PlatformComponents: RequiredComponents = {
-  Icon: <Layers className="h-4 w-4" />,
+  Icon: <Server className="h-4 w-4" />,
   Content: ({ items, actions, isLoading, isFiltered }) => {
     return <Platforms items={items} actions={actions} isLoading={isLoading} isFiltered={isFiltered} />;
   },

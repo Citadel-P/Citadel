@@ -1,4 +1,16 @@
-import { Layers, Users, Cable, Bell, Rocket } from 'lucide-react';
+import {
+  Layers,
+  Users,
+  Cable,
+  Bell,
+  Rocket,
+  Server,
+  GitBranch,
+  ChevronsLeftRightEllipsis,
+  Settings,
+  Megaphone,
+  TriangleAlert,
+} from 'lucide-react';
 import { JSX } from 'react';
 import DockerIcon from '@/assets/docker.min.svg';
 interface IMenuItem {
@@ -19,43 +31,77 @@ interface ISubMenuItem {
 
 const MenuItems: IMenuItem[] = [
   {
-    group: 'Base',
+    group: 'Infrastructure',
     separator: false,
     items: [
       {
-        icon: <Layers width={17} height={17} />,
+        icon: <Server width={14} height={14} />,
         label: 'Platforms',
         route: '/',
       },
     ],
   },
   {
-    group: 'Config',
+    group: 'Orchestration',
     separator: false,
     items: [
       {
-        icon: <Users width={17} height={17} />,
-        label: 'Users',
-        route: '/users',
-        children: [
-          { label: 'Teams', route: '/teams' },
-          { label: 'Roles', route: '/roles' },
-        ],
-      },
-      {
-        icon: <Rocket width={17} height={17} />,
+        icon: <Rocket width={14} height={14} />,
         label: 'Deployments',
         route: '/deployments',
       },
       {
-        icon: <Cable width={17} height={17} />,
-        label: 'Registries',
-        route: '/registries',
+        icon: <Layers width={14} height={14} />,
+        label: 'Stacks',
+        route: '/stacks',
+      },
+    ],
+  },
+  {
+    group: 'System',
+    separator: false,
+    items: [
+      {
+        icon: <TriangleAlert width={14} height={14} />,
+        label: 'Alerts',
+        route: '/alerts',
       },
       {
-        icon: <Bell width={17} height={17} />,
+        icon: <Bell width={14} height={14} />,
         label: 'Notifications',
         route: '/notifications',
+      },
+      {
+        icon: <Settings className="w-4 h-4" />,
+        label: 'Settings',
+        route: '/settings',
+        children: [
+          {
+            icon: <Cable className="w-3.5 h-3.5" />,
+            label: 'Registries',
+            route: '/registries',
+          },
+          {
+            icon: <GitBranch className="w-3.5 h-3.5" />,
+            label: 'Git Providers',
+            route: '/git-providers',
+          },
+          {
+            icon: <ChevronsLeftRightEllipsis className="w-3.5 h-3.5" />,
+            label: 'Variables',
+            route: '/variables',
+          },
+          {
+            icon: <Megaphone className="w-3.5 h-3.5" />,
+            label: 'Alerters',
+            route: '/alerters',
+          },
+          {
+            icon: <Users className="w-3.5 h-3.5" />,
+            label: 'Users',
+            route: '/users',
+          },
+        ],
       },
     ],
   },

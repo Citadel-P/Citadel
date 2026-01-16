@@ -3,56 +3,23 @@ import { useCallback, useMemo, useState } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { LogViewer } from '@/components/custom/common';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Eraser } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const MAX_LOGS = 5000;
 const decoder = new TextDecoder('utf-8');
 
 export const ContainerLogs = ({ resource }: { resource: DockerContainerView | undefined }) => {
   const { containerLogs: logs, clearLogs } = useContainerLogGroup(resource?.id);
-  const [showTimestamps, setShowTimestamps] = useState(false);
-  const [wrapLines, setWrapLines] = useState(false);
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-4 pl-2 justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 ">
-            <Label className="text-xs text-foreground/80 font-normal" htmlFor="timestamps">
-              Timestamps
-            </Label>
-            <Switch checked={showTimestamps} id="timestamps" onCheckedChange={setShowTimestamps} />
-          </div>
-          <div className="flex items-center gap-2 ">
-            <Label className="text-xs text-foreground/80 font-normal" htmlFor="wrap-lines">
-              Wrap Lines
-            </Label>
-            <Switch checked={wrapLines} id="wrap-lines" onCheckedChange={setWrapLines} />
-          </div>
-        </div>
-
-        <div className="flex items-center">
-          <TooltipProvider delayDuration={200}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon-sm" onClick={clearLogs} className="rounded-full">
-                  <Eraser className="h-3.5 w-3.5 " />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Clear Console</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-      </div>
       <LogViewer
         logs={logs}
         autoScroll={true}
-        showTimestamps={showTimestamps}
-        wrapLines={wrapLines}
+        timeStamps={true}
+        allowWrap={true}
+        showTimestamps={false}
+        wrapLines={false}
+        onClear={clearLogs}
         className="pb-[20vh]"
       />
     </div>

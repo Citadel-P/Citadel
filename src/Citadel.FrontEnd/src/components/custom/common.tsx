@@ -1,4 +1,4 @@
-import { useMemo, useState, useLayoutEffect, useRef, useEffect } from 'react';
+import { useMemo, useState, useLayoutEffect, useRef } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AutoUpdateStatus, UpdateBehavior } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
@@ -6,20 +6,24 @@ import { Command, CommandInput, CommandList, CommandGroup, CommandItem, CommandE
 import { Check, ChevronDown, LucideIcon, Tags, X } from 'lucide-react';
 import { cn, filterBySplit } from '@/lib/utils';
 import { PluralResourceMap, ResourceType } from '@/api/types';
-import { useMeasuredWidth, useRead } from '@/lib/hooks';
+import { useMeasuredWidth, useRead, useLocalStorage } from '@/lib/hooks';
 import { useResourceFilter } from '@/lib/atoms';
 import Convert from 'ansi-to-html';
 import { Badge } from '../ui/badge';
 import { MultiSelect, MultiSelectOption } from '../ui/multi-select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Bell,
   CircleCheck,
   CircleQuestionMark,
   CircleX,
+  Eraser,
   RefreshCcw,
   RefreshCcwDot,
   RefreshCwOff,
   SquareArrowUp,
+  Timer,
+  WrapText,
 } from 'lucide-react';
 
 export function ResourceSelectorField<T extends { id: string; name: string }>({
@@ -325,17 +329,49 @@ interface LogViewerProps {
   className?: string;
   showTimestamps?: boolean;
   wrapLines?: boolean;
+  timeStamps?: boolean;
+  allowWrap?: boolean;
+  onClear?: () => void;
 }
+
+interface LogActionProps {
+  label: string;
+  icon: React.ReactNode;
+  active?: boolean;
+  onClick: () => void;
+}
+
+const LogAction = ({ label, icon, active, onClick }: LogActionProps) => (
+  <TooltipProvider delayDuration={200}>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          size="icon-sm"
+          variant={active ? 'secondary' : 'outline'}
+          className={'rounded-full h-7 w-7 shadow-sm'}
+          onClick={onClick}>
+          {icon}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="left">{label}</TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+);
 
 export const LogViewer = ({
   logs,
   autoScroll = true,
   className,
-  showTimestamps = false,
-  wrapLines = true,
+  showTimestamps: initialShowTimestamps = false,
+  wrapLines: initialWrapLines = true,
+  timeStamps: enableTimestamps = false,
+  allowWrap = false,
+  onClear,
 }: LogViewerProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [showTimestamps, setShowTimestamps] = useLocalStorage('log-viewer-show-timestamps', initialShowTimestamps);
+  const [wrapLines, setWrapLines] = useLocalStorage('log-viewer-wrap-lines', initialWrapLines);
 
   const normalizedLogs = useMemo((): LogEntry[] => {
     if (!logs) return [];
@@ -369,12 +405,33 @@ export const LogViewer = ({
   }, [normalizedLogs, autoScroll, isAtBottom, wrapLines, showTimestamps]);
 
   return (
-    <div className="flex flex-col h-full border rounded-md overflow-hidden">
+    <div className="relative flex flex-col h-full border rounded-md overflow-hidden">
+      {(enableTimestamps || allowWrap || onClear) && (
+        <div className="absolute top-2 right-2 flex flex-col gap-2 z-10">
+          {enableTimestamps && (
+            <LogAction
+              label="Timestamps"
+              icon={<Timer className="h-3.5 w-3.5" />}
+              active={showTimestamps}
+              onClick={() => setShowTimestamps(!showTimestamps)}
+            />
+          )}
+          {allowWrap && (
+            <LogAction
+              label="Wrap Lines"
+              icon={<WrapText className="h-3.5 w-3.5" />}
+              active={wrapLines}
+              onClick={() => setWrapLines(!wrapLines)}
+            />
+          )}
+          {onClear && <LogAction label="Clear Console" icon={<Eraser className="h-3.5 w-3.5" />} onClick={onClear} />}
+        </div>
+      )}
       <div
         ref={scrollRef}
         onScroll={handleScroll}
         className={cn(
-          'p-4 max-h-[600px] rounded-sm border text-xs inline-block w-full overflow-auto bg-transparent',
+          'p-4 max-h-[600px] rounded-sm text-xs inline-block w-full overflow-auto bg-transparent',
           className,
         )}>
         {normalizedLogs.length > 0 ? (

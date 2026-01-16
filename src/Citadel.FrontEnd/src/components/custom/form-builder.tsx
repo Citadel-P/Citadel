@@ -687,14 +687,26 @@ export function FormShell<T>({
     const valid = validateAll(merged);
     if (!valid) return;
 
-    await onSave(merged as T);
-
+    let backupDraft: StoredDraft<Partial<T>> | null = null;
     if (draftKey && typeof window !== 'undefined') {
+      backupDraft = loadDraft<Partial<T>>(draftKey, draftVersion);
       clearDraft(draftKey);
-      setDraftInfo({ hasDraft: false, savedAt: undefined });
-      setDraftLoadedBanner(false);
     }
-  }, [validateAll, merged, onSave, draftKey]);
+
+    try {
+      await onSave(merged as T);
+
+      if (draftKey && typeof window !== 'undefined') {
+        setDraftInfo({ hasDraft: false, savedAt: undefined });
+        setDraftLoadedBanner(false);
+      }
+    } catch (e) {
+      if (draftKey && typeof window !== 'undefined' && backupDraft && backupDraft.update) {
+        persistDraft<Partial<T>>(draftKey, backupDraft.version, backupDraft.update);
+      }
+      throw e;
+    }
+  }, [validateAll, merged, onSave, draftKey, draftVersion]);
 
   /* -------------------------------------------------------------------------- */
   /*                                    UI                                     */
