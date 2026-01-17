@@ -511,5 +511,37 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("applyDeployment");
+
+        deployment.MapPost("/resume", Deployments.Resume)
+            .WithSummary("Resume deployments")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("resumeDeployments");
+
+        deployment.MapPost("/pause", Deployments.Pause)
+            .WithSummary("Pause deployments")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("pauseDeployments");
+
+        deployment.MapPost("/restart", Deployments.Restart)
+            .WithSummary("Restart deployments")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("restartDeployments");
+
+        deployment.MapPost("/stop", Deployments.Stop)
+            .WithSummary("Stop deployments")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("stopDeployments");
     }
 }

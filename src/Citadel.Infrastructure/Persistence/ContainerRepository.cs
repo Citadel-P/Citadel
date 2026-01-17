@@ -1,12 +1,12 @@
-﻿using System.Data;
-using System.Text.Json;
-using Dapper;
+﻿using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using Infrastructure.TypeHandlers;
+using System.Data;
+using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
 
 namespace Infrastructure.Persistence;
@@ -48,6 +48,25 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         return result?.ToDomain();
     }
 
+    public async Task<IEnumerable<Container>> GetByDeploymentIdsAsync(IEnumerable<Guid> deploymentIds, CancellationToken cancellationToken)
+    {
+        const string sql = """
+        SELECT *
+        FROM Containers c
+        WHERE c.DeploymentId IN (
+            SELECT value FROM json_each(@DeploymentIds)
+        )
+        LIMIT 1
+        """;
+
+        var result = await db.QueryAsync<ContainerDto>(sql, 
+            new { DeploymentIds = JsonSerializer.Serialize(deploymentIds, DeploymentJsonContext.Default.IEnumerableGuid) },
+            transaction: tx()
+        );
+
+        return result.ToDomain();
+    }
+
     public async Task<Container?> GetContainerInfoAsync(string dockerContainerId, CancellationToken cancellationToken)
     {
         var sql = """
@@ -62,9 +81,9 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
                 i.CreatedAt as Image_CreatedAt,               
                 i.UpdatedAt as Image_UpdatedAt,
                 i.RegistryId as Image_RegistryId,
-                d.Id as Deployment_Id,
-                d.Name as Deployment_Name,
-                d.Status as Deployment_Status
+                d.Id as Deployment_DeploymentId,
+                d.Name as Deployment_DeploymentName,
+                d.Status as Deployment_DeploymentStatus
             FROM Containers c
             LEFT JOIN Images i ON c.ImageId = i.Id
             LEFT JOIN Deployments d ON c.DeploymentId = d.Id
@@ -205,22 +224,40 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
 
     public Task<int> UpdateContainersStateAsync(IEnumerable<Guid> ids, ContainerStateStatus state, CancellationToken cancellationToken)
     {
-        var (clause, parameters) = SqliteInClauseBuilder.BuildInClauseForGuids("Id", ids);
-        string sql = $"""
-            UPDATE Containers
-            SET State = @State, Updated = @Updated
-            WHERE Id IN ({clause})
+        const string sql = """
+        UPDATE Containers
+        SET State   = @State,
+            Updated = @Updated
+        WHERE Id IN (
+            SELECT value FROM json_each(@Ids)
+        )
         """;
 
-        parameters.Add("State", state);
-        parameters.Add("Updated", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-        return db.ExecuteAsync(sql, parameters, transaction: tx());
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid),
+                State = state,
+                Updated = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            },
+            transaction: tx()
+        );
     }
 
     public Task<int> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        var (clause, parameters) = SqliteInClauseBuilder.BuildInClauseForGuids("Id", ids);
-        string sql = $"DELETE FROM Containers WHERE Id IN ({clause})";
-        return db.ExecuteAsync(sql, parameters, transaction: tx());
+        const string sql = """
+        DELETE FROM Containers
+        WHERE Id IN (
+            SELECT value FROM json_each(@Ids)
+        )
+        """;
+
+        return db.ExecuteAsync(
+            sql,
+            new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid) },
+            transaction: tx()
+        );
     }
 }

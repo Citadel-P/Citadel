@@ -63,7 +63,7 @@ public static class Images
         return EndpointHandlers.HandleResult(result, InspectImageView.Map);
     }
 
-    public static async Task<Results<Ok<ExposedPortsResult>, ProblemHttpResult>> GetExposedPorts(IMediator mediator, Guid platformId, Guid imageId, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<ExposedPortsResult>, ProblemHttpResult>> GetExposedPorts(IMediator mediator, Guid platformId, string imageId, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetExposedPorts(platformId, imageId), cancellationToken);
         return EndpointHandlers.HandleResult(result, v => v);

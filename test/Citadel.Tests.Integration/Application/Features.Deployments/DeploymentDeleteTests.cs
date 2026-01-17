@@ -1,11 +1,8 @@
 ﻿using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
-using Domain.Entities.Registries;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
 using System.Text;
 using Tests.Integration.Helpers;
 
@@ -50,12 +47,10 @@ public class DeploymentDeleteTests : IntegrationTestBase
     public async Task Delete_Deployment_ReturnsSuccess()
     {
         // Arrange
-        var content = $$"""
-        {
-            "ids": ["{{deploymentId}}"]
-        }
-        """;
-
+        var content = $"""
+            ["{deploymentId}"]
+            """;
+            
         // Act
         var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/deployments")
         {

@@ -36,9 +36,9 @@ internal record struct ContainerStatDto(
 
 internal record ContainerWithDeploymentDto
 (
-    Guid? Deployment_Id = null,
-    string? Deployment_Name = null,
-    string? Deployment_Status = null
+    Guid? Deployment_DeploymentId = null,
+    string? Deployment_DeploymentName = null,
+    string? Deployment_DeploymentStatus = null
 ) : ContainerDto;
 
 internal record ContainerWithImageDto(

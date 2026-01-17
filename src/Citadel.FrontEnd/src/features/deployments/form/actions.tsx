@@ -1,4 +1,4 @@
-import { Pause, Rocket, StepForward, Trash } from 'lucide-react';
+import { Ban, Pause, Rocket, StepForward, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { DeploymentStatus, DeploymentView } from '@/api/generated/api.types';
@@ -42,12 +42,24 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
     },
   })
   .addAction({
+    key: 'stop',
+    type: 'command',
+    icon: Ban,
+    mutateKey: 'stopDeployments',
+    useVariables,
+    canExecute: (r) => {
+      const can = (x: DeploymentView) =>
+        x.status === DeploymentStatus.Healthy || x.status === DeploymentStatus.Degraded;
+      return Array.isArray(r) ? r.some(can) : can(r);
+    },
+  })
+  .addAction({
     key: 'pauseToggle',
     type: 'toggle',
     primary: {
-      title: 'Suspend',
+      title: 'Pause',
       icon: Pause,
-      mutateKey: 'suspendDeployment',
+      mutateKey: 'pauseDeployments',
       useVariables,
       canExecute: (r) => {
         const can = (x: DeploymentView) => x.status === DeploymentStatus.Healthy;
@@ -57,7 +69,7 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
     secondary: {
       title: 'Resume',
       icon: StepForward,
-      mutateKey: 'resumeDeployment',
+      mutateKey: 'resumeDeployments',
       useVariables,
       canExecute: (r) => {
         const can = (x: DeploymentView) => x.status === DeploymentStatus.Pending;
@@ -74,11 +86,7 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
     destructive: true,
     resourceType: 'Deployment',
     canExecute: () => true,
-    useVariables: (resource) => {
-      return {
-        ids: [(resource as DeploymentView).id],
-      };
-    },
+    useVariables,
     useSuccessHandler: () => {
       const navigate = useNavigate();
       return () => {

@@ -44,6 +44,7 @@ public interface IContainerRepository
     Task<Container?> GetByIdAsync(string dockerContainerId, CancellationToken cancellationToken);
     Task<Container?> GetContainerInfoAsync(string dockerContainerId, CancellationToken cancellationToken);
     Task<Container?> GetByDeploymentIdAsync(Guid deploymentId, CancellationToken cancellationToken);
+    Task<IEnumerable<Container>> GetByDeploymentIdsAsync(IEnumerable<Guid> deploymentIds, CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<Container>?> GetContainersInfoAsync(Guid platformId, CancellationToken cancellationToken);
 

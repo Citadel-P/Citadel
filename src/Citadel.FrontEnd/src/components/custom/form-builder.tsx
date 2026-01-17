@@ -277,8 +277,8 @@ export function PortMappingField({
         {ports.length === 0 && <span className="text-xs text-muted">No ports exposed in this image</span>}
 
         {ports.map((value, idx) => {
-          const hasMapping = value.includes('-');
-          const [hostPort, containerPort] = hasMapping ? value.split('-') : ['', value];
+          const hasMapping = value.includes(':');
+          const [hostPort, containerPort] = hasMapping ? value.split(':') : ['', value];
 
           return (
             <div
@@ -297,7 +297,7 @@ export function PortMappingField({
                     const newHost = e.target.value;
                     const updated = [...ports];
 
-                    updated[idx] = newHost ? `${newHost}-${containerPort}` : containerPort;
+                    updated[idx] = newHost ? `${newHost}:${containerPort}` : containerPort;
 
                     set(updated);
                   }}

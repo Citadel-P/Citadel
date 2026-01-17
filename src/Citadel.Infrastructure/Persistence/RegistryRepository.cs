@@ -88,8 +88,17 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
 
     public Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        var (clause, parameters) = SqliteInClauseBuilder.BuildInClauseForGuids("Id", ids);
-        string sql = $"DELETE FROM Registries WHERE Id IN ({clause})";
-        return db.ExecuteAsync(sql, parameters, transaction: tx());
+        const string sql = """
+        DELETE FROM Registries
+        WHERE Id IN (
+            SELECT value FROM json_each(@Ids)
+        )
+        """;
+
+        return db.ExecuteAsync(
+            sql,
+            new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid) },
+            transaction: tx()
+        );
     }
 }

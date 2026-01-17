@@ -10,7 +10,7 @@ namespace WebApi.Routes.Endpoints.Resources.Containers;
 
 public sealed record ContainerView(
     Guid Id,
-    Guid PlatformId,
+    Guid PlatformId, 
     string ContainerId,
     string Name,
     string DockerImageId,
@@ -20,6 +20,7 @@ public sealed record ContainerView(
     string? Stack,
     ContainerStatView? LastStats,
     IDictionary<string, IReadOnlyList<HostPortBinding>> Ports,
+    Guid? DeploymentId,
     PlatformView? Platform = null,
     ImageView? ImageView = null,
     DeploymentView? DeploymentView = null,
@@ -43,6 +44,7 @@ public sealed record ContainerView(
         return new (
             Id: container.Id,
             PlatformId: container.PlatformId,
+            DeploymentId: container.DeploymentId,
             ContainerId: container.DockerContainerId,
             Name: container.Name,
             DockerImageId: GetImageId(),

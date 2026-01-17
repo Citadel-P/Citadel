@@ -379,7 +379,7 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                               image: {
                                 $type: 'Local',
                                 ...((prev.spec?.image as DeploymentImageInfoLocalImage) ?? {}),
-                                imageId: v?.id ?? '',
+                                imageId: v?.dockerImageId ?? '',
                               } satisfies DeploymentImageInfoLocalImage,
                               ports: [],
                             },

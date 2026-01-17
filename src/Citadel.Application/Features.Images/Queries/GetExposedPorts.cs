@@ -8,7 +8,7 @@ using Mediator;
 
 namespace Application.Features.Images.Queries;
 
-public sealed record GetExposedPorts(Guid PlatformId, Guid ImageId) : IQuery<Result<ExposedPortsResult>>
+public sealed record GetExposedPorts(Guid PlatformId, string ImageId) : IQuery<Result<ExposedPortsResult>>
 {
     internal class Validator : AbstractValidator<InspectImage>
     {
@@ -30,7 +30,7 @@ internal sealed class GetRunImageInfoHandler(IPlatformContainerCache platformCon
             return Result.Failure<ExposedPortsResult>(error);
         }
 
-        var image = await unitOfWork.Images.GetByIdAsync(query.ImageId, platform.Id, cancellationToken);
+        var image = await unitOfWork.Images.GetByDockerImageIdAsync(query.ImageId, platform.Id, cancellationToken);
         if (image is null) 
         {
             return Result.Failure<ExposedPortsResult>(new NotFoundError("Image not found."));

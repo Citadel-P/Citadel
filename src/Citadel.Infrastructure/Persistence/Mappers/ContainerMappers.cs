@@ -45,12 +45,12 @@ internal static class ContainerMappers
             stack: container.Stack,
             imageId: container.ImageId,
             deploymentId: container.DeploymentId,
-            deployment: container.Deployment_Id == null ? null : Deployment.FromPersistence
+            deployment: container.Deployment_DeploymentId == null ? null : Deployment.FromPersistence
             (
-                id: container.Deployment_Id ?? Guid.Empty,
-                name: container.Deployment_Name,
+                id: container.Deployment_DeploymentId ?? Guid.Empty,
+                name: container.Deployment_DeploymentName,
                 platformId: container.PlatformId,
-                status: Enum.Parse<DeploymentStatus>(container.Deployment_Status ?? DeploymentStatus.Pending.ToString()),
+                status: Enum.Parse<DeploymentStatus>(container.Deployment_DeploymentStatus ?? DeploymentStatus.Pending.ToString()),
                 createdAt: DateTime.MinValue,
                 createdByActorId: Guid.Empty,
                 updateBehavior: UpdateBehavior.Disabled
@@ -101,12 +101,12 @@ internal static class ContainerMappers
                 updatedAt: container.Image_UpdatedAt,
                 registryId: container.Image_RegistryId
             ),
-            deployment: container.Deployment_Id == null ? null : Deployment.FromPersistence
+            deployment: container.Deployment_DeploymentId == null ? null : Deployment.FromPersistence
             (
-                id: container.Deployment_Id ?? Guid.Empty,
-                name: container.Deployment_Name,
+                id: container.Deployment_DeploymentId ?? Guid.Empty,
+                name: container.Deployment_DeploymentName,
                 platformId: container.PlatformId,
-                status: Enum.Parse<DeploymentStatus>(container.Deployment_Status ?? DeploymentStatus.Pending.ToString()),
+                status: Enum.Parse<DeploymentStatus>(container.Deployment_DeploymentStatus ?? DeploymentStatus.Pending.ToString()),
                 createdAt: DateTime.MinValue,
                 createdByActorId: Guid.Empty,
                 updateBehavior: UpdateBehavior.Disabled

@@ -118,6 +118,14 @@ public enum ContainerAction
     UNPAUSE
 }
 
+public enum DeploymentAction
+{
+    STOP,
+    PAUSE,
+    UNPAUSE,
+    RESTART
+}
+
 public enum ContainerEventType
 {
     Unknown = 0,

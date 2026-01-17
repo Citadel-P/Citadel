@@ -245,6 +245,7 @@ export interface ContainerInfoView {
   networks: Record<string, string>;
   state: ContainerStateStatus;
   imageView: null | ImageView;
+  deploymentView?: null | DeploymentView;
 }
 
 export interface ContainerInspectView {
@@ -378,6 +379,7 @@ export interface ContainerView {
   ports: Record<string, HostPortBinding[]>;
   platform?: null | PlatformView;
   imageView?: null | ImageView;
+  deploymentView?: null | DeploymentView;
   metadata?: null | EndpointMetadata;
 }
 
@@ -481,10 +483,6 @@ export interface DeleteContainersRequest {
   force?: null | boolean;
   /** @default false */
   link?: null | boolean;
-}
-
-export interface DeleteDeploymentsInput {
-  ids: string[];
 }
 
 export interface DeleteImageResponseItem {
@@ -3228,10 +3226,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    deleteDeployments: (
-      data: DeleteDeploymentsInput,
-      params: RequestParams = {},
-    ) =>
+    deleteDeployments: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/deployments`,
         method: "DELETE",
@@ -3354,6 +3349,106 @@ export class Api<
         secure: true,
         type: ContentType.Json,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name ResumeDeployments
+     * @summary Resume deployments
+     * @request POST:/api/v1/deployments/resume
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    resumeDeployments: (data: string[], params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/deployments/resume`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name PauseDeployments
+     * @summary Pause deployments
+     * @request POST:/api/v1/deployments/pause
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    pauseDeployments: (data: string[], params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/deployments/pause`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name RestartDeployments
+     * @summary Restart deployments
+     * @request POST:/api/v1/deployments/restart
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    restartDeployments: (data: string[], params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/deployments/restart`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name StopDeployments
+     * @summary Stop deployments
+     * @request POST:/api/v1/deployments/stop
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    stopDeployments: (data: string[], params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/deployments/stop`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         ...params,
       }),
   };

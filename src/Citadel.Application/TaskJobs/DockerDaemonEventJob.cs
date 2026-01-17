@@ -4,8 +4,6 @@ using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
-using Domain.Contracts.Resources.Networks;
-using Domain.Contracts.Resources.Volumes;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;

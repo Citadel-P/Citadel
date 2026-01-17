@@ -28,6 +28,7 @@ namespace Application.Models;
 
 [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
 [JsonSerializable(typeof(string[]))]
+[JsonSerializable(typeof(Guid[]))]
 [JsonSerializable(typeof(List<Platform>))]
 [JsonSerializable(typeof(List<PlatformStat>))]
 [JsonSerializable(typeof(SwarmPeer))]
@@ -141,7 +142,6 @@ namespace Application.Models;
 [JsonSerializable(typeof(HealthCheckConfig))]
 [JsonSerializable(typeof(DeletePlatformsInput))]
 [JsonSerializable(typeof(DeploymentInput))]
-[JsonSerializable(typeof(DeleteDeploymentsInput))]
 [JsonSerializable(typeof(DeploymentConfigView))]
 [JsonSerializable(typeof(IAsyncEnumerable<DeploymentStreamItem>))]
 [JsonSerializable(typeof(ApplyDeploymentInput))]

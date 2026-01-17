@@ -25,7 +25,7 @@ internal class PatchContainerHandler(IPlatformContainerCache platformContainerCa
     {
         if (!platformContainerCache.TryGetPlatformsByContainersId(request.ContainerIds, out var platformContainers))
         {
-            return Result.Failure(new NotFoundError("No platform found for the given IDs."));
+            return Result.Failure(new NotFoundError("Platform resolution failed for container IDs. Platform may be disconnected."));
         }
 
         foreach (var platform in platformContainers)

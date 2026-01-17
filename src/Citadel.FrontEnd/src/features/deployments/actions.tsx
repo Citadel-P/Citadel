@@ -3,6 +3,9 @@ import { Pencil, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 
+const useVariables = (resources: DeploymentView | DeploymentView[]) =>
+  Array.isArray(resources) ? resources.map((r) => r.id) : [resources.id];
+
 export const { dropdown: DeploymentDropdownActions, group: DeploymentGroupActions } =
   createActionsBuilder<DeploymentView>()
     .addAction({
@@ -31,17 +34,11 @@ export const { dropdown: DeploymentDropdownActions, group: DeploymentGroupAction
       type: 'command',
       icon: Trash,
       mutateKey: 'deleteDeployments',
-      invalidate: 'listDeployments',
       canExecute: () => true,
       separatorBefore: true,
       confirm: true,
       destructive: true,
       resourceType: 'Deployment',
-      useVariables: (resources) => {
-        const selected = Array.isArray(resources) ? resources : [resources];
-        return {
-          ids: selected.map((x) => x.id!),
-        };
-      },
+      useVariables,
     })
     .build();

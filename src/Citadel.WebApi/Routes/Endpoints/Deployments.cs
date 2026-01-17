@@ -1,5 +1,6 @@
 ﻿using Application.Features.Deployments.Commands;
 using Application.Features.Deployments.Queries;
+using Domain;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities;
 using Hosting.Common.MergePatch;
@@ -39,9 +40,9 @@ public static class Deployments
         return EndpointHandlers.HandleResult(result, DeploymentView.Map);
     }
 
-    public static async Task<Results<NoContent, ProblemHttpResult>> Delete(IMediator mediator, [FromBody] DeleteDeploymentsInput request, CancellationToken cancellationToken)
+    public static async Task<Results<NoContent, ProblemHttpResult>> Delete(IMediator mediator, [FromBody] Guid[] deploymentIds, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(request.ToCommand(), cancellationToken);
+        var result = await mediator.Send(new DeleteDeployments(deploymentIds), cancellationToken);
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
@@ -63,4 +64,28 @@ public static class Deployments
             yield return reply;
         }
     }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> Resume(IMediator mediator, [FromBody] Guid[] deploymentIds, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ChangeDeploymentState(deploymentIds, DeploymentAction.UNPAUSE), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
+    }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> Pause(IMediator mediator, [FromBody] Guid[] deploymentIds, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ChangeDeploymentState(deploymentIds, DeploymentAction.PAUSE), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
+    }
+    public static async Task<Results<NoContent, ProblemHttpResult>> Restart(IMediator mediator, [FromBody] Guid[] deploymentIds, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ChangeDeploymentState(deploymentIds, DeploymentAction.RESTART), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
+    }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> Stop(IMediator mediator, [FromBody] Guid[] deploymentIds, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ChangeDeploymentState(deploymentIds, DeploymentAction.STOP), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
+    }
+
 }

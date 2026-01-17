@@ -24,7 +24,7 @@ public class Container(
     public string? DockerImageId { get; private set; } = dockerImageId;
     public string Name { get; private set; } = name;
     public long Created { get; private set; } = created is not null ? created.Value : (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
-    public long Updated { get; private set; } = (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds;
+    public long Updated { get; private set; }
     public ContainerStateStatus State { get; set; } = state;
     public string? Stack { get; private set; } = stack;
     public IDictionary<string, IReadOnlyList<HostPortBinding>> Ports => ports;
