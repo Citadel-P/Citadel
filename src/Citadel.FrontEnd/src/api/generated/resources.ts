@@ -56,6 +56,7 @@ export const resources = {
   pauseDeployments: { method: "POST", key: "pauseDeployments", params: ["data","params"], requiredParams: [], queryParams: [] },
   restartDeployments: { method: "POST", key: "restartDeployments", params: ["data","params"], requiredParams: [], queryParams: [] },
   stopDeployments: { method: "POST", key: "stopDeployments", params: ["data","params"], requiredParams: [], queryParams: [] },
+  startDeployments: { method: "POST", key: "startDeployments", params: ["data","params"], requiredParams: [], queryParams: [] },
 } as const;
 
 export type ResourceName = keyof typeof resources;

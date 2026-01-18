@@ -1,4 +1,4 @@
-import { Ban, Pause, Rocket, StepForward, Trash } from 'lucide-react';
+import { Ban, Pause, Play, Rocket, StepForward, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { DeploymentStatus, DeploymentView } from '@/api/generated/api.types';
@@ -39,6 +39,17 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
           run: () => openSheet({ kind: 'deploy', payload: { id: selected.id, name: selected.name, recreate: true } }),
         };
       },
+    },
+  })
+  .addAction({
+    key: 'start',
+    type: 'command',
+    icon: Play,
+    mutateKey: 'startDeployments',
+    useVariables,
+    canExecute: (r) => {
+      const can = (x: DeploymentView) => x.status === DeploymentStatus.Stopped;
+      return Array.isArray(r) ? r.some(can) : can(r);
     },
   })
   .addAction({

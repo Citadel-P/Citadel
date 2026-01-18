@@ -196,11 +196,9 @@ internal sealed class ApplyDeploymentHandler(
         {
             return (null, error.Message);
         }
-
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        await uow.Containers.DeleteAsync([container.Id], ct);
-        await uow.CommitAsync(ct);
+        
+        // TODO: when the deployment is stopped, and applying a deployment it does not switch to Healthy (gray -> green, it stays gray)
+        // TODO: delete the container from the cache 
 
         return (container.DockerContainerId, null);
     }
@@ -213,24 +211,6 @@ internal sealed class ApplyDeploymentHandler(
     }
 }
 
-public static class DeploymentStateMachine
-{
-    private static readonly IReadOnlyDictionary<DeploymentStatus, DeploymentStatus[]> AllowedTransitions =
-        new Dictionary<DeploymentStatus, DeploymentStatus[]>
-        {
-            [DeploymentStatus.Created] = [DeploymentStatus.Applying],
-            [DeploymentStatus.Applying] = [DeploymentStatus.Applying, DeploymentStatus.Healthy, DeploymentStatus.Failed],
-            [DeploymentStatus.Failed] = [DeploymentStatus.Applying],
-            [DeploymentStatus.Healthy] = [DeploymentStatus.Applying]
-        };
-
-    public static bool CanTransition(
-        DeploymentStatus from,
-        DeploymentStatus to)
-        => AllowedTransitions.TryGetValue(from, out var next)
-            && next.Contains(to);
-}
-
 internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, DeploymentStatus targetStatus, INotificationQueue notificationQueue)
     : IDbWorkItem
 {
@@ -238,9 +218,6 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Deployme
     {
         var deployment = await uow.Deployments.GetAsync(deploymentId, ct);
         if (deployment is null) return;
-
-        if (!DeploymentStateMachine.CanTransition(deployment.Status, targetStatus))
-            return;
 
         deployment.PartialUpdate(status: targetStatus);
         await uow.Deployments.UpdateAsync(deployment, ct);
@@ -259,11 +236,6 @@ internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, string cont
         var container = await uow.Containers.GetByIdAsync(containerId, ct);
 
         if (deployment is null || container is null) return;
-
-        if (!DeploymentStateMachine.CanTransition(
-                deployment.Status,
-                DeploymentStatus.Healthy))
-            return;
 
         container.PartialUpdate(deploymentId: deployment.Id);
         deployment.PartialUpdate(status: DeploymentStatus.Healthy);

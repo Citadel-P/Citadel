@@ -41,4 +41,8 @@ public interface IApplicationHubDispatcher
     Task PushPlatformStats(Guid platformId, PlatformStatsResult platform);
     #endregion
 
+    #region Deployments
+    Task SendDeploymentInfo(Deployment deployment);
+    Task SendDeploymentsInfo(IEnumerable<Deployment> deployments);
+    #endregion
 }

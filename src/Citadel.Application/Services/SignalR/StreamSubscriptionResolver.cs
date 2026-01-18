@@ -17,6 +17,7 @@ internal sealed class StreamSubscriptionResolver(IServiceProvider provider) : IS
         ["images"] = typeof(ImageStreamManager),
         ["platforms"] = typeof(PlatformStreamManager),
         ["containers"] = typeof(ContainerStreamManager),
+        ["deployment"] = typeof(DeploymentStreamManager),
         ["docker-daemon"] = typeof(DockerDaemonStreamManager),
     };
 

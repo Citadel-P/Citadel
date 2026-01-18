@@ -61,6 +61,7 @@ public static class ApplicationModule
             .AddSingleton<IStreamSubscriptionResolver, StreamSubscriptionResolver>()
             .AddSingleton<ContainerInfoStreamManager>()
             .AddSingleton<ContainerLogStreamManager>()
+            .AddSingleton<DeploymentStreamManager>()
             .AddSingleton<ImageStreamManager>()
             .AddSingleton<PlatformStreamManager>()
             .AddSingleton<ContainerStreamManager>()
@@ -68,6 +69,7 @@ public static class ApplicationModule
             .AddSingleton<IImageStreamManager>(s => s.GetRequiredService<ImageStreamManager>())
             .AddSingleton<IPlatformStreamManager>(s => s.GetRequiredService<PlatformStreamManager>())
             .AddSingleton<IContainerStreamManager>(s => s.GetRequiredService<ContainerStreamManager>())
+            .AddSingleton<IDeploymentStreamManager>(s => s.GetRequiredService<DeploymentStreamManager>())
             .AddSingleton<IDockerDaemonStreamManager>(s => s.GetRequiredService<DockerDaemonStreamManager>());
 
     private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)

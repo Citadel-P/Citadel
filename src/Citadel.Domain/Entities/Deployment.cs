@@ -73,6 +73,21 @@ public sealed class Deployment(
         if (spec != null) Spec = spec;
         if (updateBehavior != null) UpdateBehavior = updateBehavior.Value;
     }
+
+    public static DeploymentStatus ToDeploymentStatus(ContainerStateStatus status)
+    {
+        return status switch
+        {
+            ContainerStateStatus.Running => DeploymentStatus.Healthy,
+            ContainerStateStatus.Restarting => DeploymentStatus.Pending,
+            ContainerStateStatus.Paused => DeploymentStatus.Pending,
+            ContainerStateStatus.Exited => DeploymentStatus.Stopped,
+            ContainerStateStatus.Created => DeploymentStatus.Created,
+            ContainerStateStatus.Offline => DeploymentStatus.Degraded,
+            ContainerStateStatus.Dead => DeploymentStatus.Degraded,
+            _ => DeploymentStatus.Failed,
+        };
+    }
 }
 
 public sealed record AutoUpdateState(

@@ -1,4 +1,6 @@
-﻿using Domain;
+﻿using Application.Services.SignalR;
+using Application.TaskJobs.WorkItems;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using FluentValidation;
@@ -37,7 +39,7 @@ public sealed record PatchDeployment(Guid Id, JsonMergePatchDocument<Deployment>
     }
 }
 
-internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork) : ICommandHandler<PatchDeployment, Result<Deployment>>
+internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeploymentStreamManager deploymentHub, INotificationQueue notificationQueue) : ICommandHandler<PatchDeployment, Result<Deployment>>
 {
     public async ValueTask<Result<Deployment>> Handle(PatchDeployment command, CancellationToken cancellationToken)
     {
@@ -82,6 +84,9 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork) : ICommandH
 
         await unitOfWork.Deployments.UpdateAsync(deployment, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+
+        var workItem = new DeploymentNotificationWorkItem(deploymentHub, deployment);
+        await notificationQueue.EnqueueAsync(workItem, cancellationToken);
 
         return deployment;
     }

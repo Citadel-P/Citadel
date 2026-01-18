@@ -88,4 +88,10 @@ public static class Deployments
         return EndpointHandlers.HandleResultForNoContent(result);
     }
 
+    public static async Task<Results<NoContent, ProblemHttpResult>> Start(IMediator mediator, [FromBody] Guid[] deploymentIds, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ChangeDeploymentState(deploymentIds, DeploymentAction.START), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
+    }
+
 }

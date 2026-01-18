@@ -123,7 +123,8 @@ public enum DeploymentAction
     STOP,
     PAUSE,
     UNPAUSE,
-    RESTART
+    RESTART,
+    START
 }
 
 public enum ContainerEventType

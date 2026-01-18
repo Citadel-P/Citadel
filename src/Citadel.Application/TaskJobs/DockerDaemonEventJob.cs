@@ -21,6 +21,7 @@ internal sealed class DockerDaemonEventJob(
     IContainerEventBroadcaster containerEventBroadcaster,
     INotificationQueue notificationQueue,
     IImageStreamManager imageStream,
+    IDeploymentStreamManager deploymentHub,
     IDbWorkQueue dbWorkQueue) : BackgroundService
 {
     private readonly ConcurrentDictionary<string, CancellationTokenSource> runningStreams = new();
@@ -146,7 +147,7 @@ internal sealed class DockerDaemonEventJob(
 
     private ValueTask OnContainerUpdated(DaemonContainerEventInfo eventInfo, CancellationToken cancellationToken)
     {
-        var item = new ContainerUpdatedWorkItem(eventInfo, notificationQueue, dockerDaemonHub, containerEventBroadcaster, logger);
+        var item = new ContainerUpdatedWorkItem(eventInfo, notificationQueue, deploymentHub, dockerDaemonHub, containerEventBroadcaster, logger);
 
         return dbWorkQueue.EnqueueAsync(item, cancellationToken);
     }

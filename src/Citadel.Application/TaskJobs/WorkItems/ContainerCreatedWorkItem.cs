@@ -50,7 +50,7 @@ internal sealed class ContainerCreatedWorkItem(
                     // commit for both container + image
                     await uow.CommitAsync(cancellationToken);
 
-                    var imageNotificationItem = new SendImageNotificationWorkItem(imageToUpdate, "update", dockerDaemonHub);
+                    var imageNotificationItem = new SendImageNotificationWorkItem(dockerDaemonHub, imageToUpdate, "update");
                     await notificationQueue.EnqueueAsync(imageNotificationItem, cancellationToken);
                 }
                 else
@@ -92,8 +92,20 @@ internal class ContainerNotificationWorkItem(
     }
 }
 
-internal class SendImageNotificationWorkItem(Image image, string action, IDockerDaemonStreamManager dockerDaemonHub) : INotificationWorkItem
+internal class SendImageNotificationWorkItem(IDockerDaemonStreamManager dockerDaemonHub, Image image, string action) : INotificationWorkItem
 {
     public Task ExecuteAsync(CancellationToken cancellationToken)
         => dockerDaemonHub.SendImageEvent(image, action);
+}
+
+internal class DeploymentNotificationWorkItem(IDeploymentStreamManager deploymentHub, Deployment deployment) : INotificationWorkItem
+{
+    public Task ExecuteAsync(CancellationToken cancellationToken)
+        => deploymentHub.SendDeploymentInfo(deployment);
+}
+
+internal class DeploymentsNotificationWorkItem(IDeploymentStreamManager deploymentHub, IEnumerable<Deployment> deployments) : INotificationWorkItem
+{
+    public Task ExecuteAsync(CancellationToken cancellationToken)
+        => deploymentHub.SendDeploymentsInfo(deployments);
 }

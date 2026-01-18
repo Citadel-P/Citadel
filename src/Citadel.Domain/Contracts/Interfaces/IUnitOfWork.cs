@@ -117,11 +117,13 @@ public interface IImageRepository
 public interface IDeploymentRepository
 {
     Task<Deployment?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<Deployment>?> GetInfoAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
     Task<int> AddAsync(Deployment deployment, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetAllAsync(CancellationToken cancellationToken);
     Task<int> UpdateAsync(Deployment deployment, CancellationToken cancellationToken);
+    Task<int> UpdateDeploymentsStatusAsync(IEnumerable<Guid> ids, DeploymentStatus status, CancellationToken cancellationToken);
 
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
 }

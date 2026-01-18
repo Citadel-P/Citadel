@@ -21,6 +21,36 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return result?.ToDomain();
     }
 
+    public Task<IEnumerable<Deployment>?> GetInfoAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT
+                d.Id,
+                d.Name, 
+                d.Description, 
+                d.PlatformId, 
+                d.Status, 
+                d.CreatedAt, 
+                d.CreatedByActorId, 
+                d.UpdateBehavior,
+                d.AutoUpdateState_LastCheckedAt, 
+                d.AutoUpdateState_Status,
+                d.AutoUpdateState_CurrentDigest,
+                d.AutoUpdateState_RemoteDigest,
+                d.AutoUpdateState_LastError
+            FROM Deployments d 
+            WHERE d.Id IN (
+                SELECT value FROM json_each(@Ids)
+            )
+            ORDER BY 
+                d.CreatedAt DESC,
+                d.Name ASC
+            """;
+        return db.QueryAsync<DeploymentDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx())
+            .ContinueWith(t => (IEnumerable<Deployment>?)t.Result.Select(dto => dto.ToDomain()), cancellationToken);
+    }
+
+
     public Task<bool> ExistsAsync(string name, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM Deployments WHERE name = @Name)";
@@ -140,6 +170,27 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return db.ExecuteAsync(
             sql,
             new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid) },
+            transaction: tx()
+        );
+    }
+
+    public Task<int> UpdateDeploymentsStatusAsync(IEnumerable<Guid> ids, DeploymentStatus status, CancellationToken cancellationToken)
+    {
+        const string sql = """
+        UPDATE Deployments
+        SET Status = @Status
+        WHERE Id IN (
+            SELECT value FROM json_each(@Ids)
+        )
+        """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid),
+                Status = status
+            },
             transaction: tx()
         );
     }

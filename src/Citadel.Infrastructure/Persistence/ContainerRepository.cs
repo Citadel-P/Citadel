@@ -116,9 +116,9 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             s.MemoryLimit as Stat_MemoryLimit, 
             s.RxBytes as Stat_RxBytes, 
             s.TxBytes as Stat_TxBytes,
-            d.Id as Deployment_Id,
-            d.Name as Deployment_Name,
-            d.status as Deployment_Status
+            d.Id as Deployment_DeploymentId,
+            d.Name as Deployment_DeploymentName,
+            d.status as Deployment_DeploymentStatus
         FROM Containers c
         LEFT JOIN Images i ON c.ImageId = i.Id
         LEFT JOIN Deployments d ON c.DeploymentId = d.Id

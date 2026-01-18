@@ -7,6 +7,7 @@ using Domain.Entities.Platforms;
 using Nerdbank.MessagePack;
 using PolyType;
 using WebApi.Routes.Endpoints.Resources.Containers;
+using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 
@@ -39,6 +40,8 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<IEnumerable<ImageView>>]
 [GenerateShapeFor<DockerNetworkResult>]
 [GenerateShapeFor<DockerVolumeResult>]
+[GenerateShapeFor<DeploymentsView>]
+[GenerateShapeFor<DeploymentView>]
 partial class SignalRMessagePackContext;
 
 internal static class DerivedTypesMapping

@@ -6,6 +6,7 @@ using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Microsoft.AspNetCore.SignalR;
 using WebApi.Routes.Endpoints.Resources.Containers;
+using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using static Hosting.Common.Constants;
@@ -101,5 +102,17 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
         hubContext.Clients
             .Group(WellKnownSignalRGroups.DockerDaemonGroup(platformId))
             .SendAsync("NetworkEventReceived", network, @event, actorId);
+    #endregion
+
+    #region Deployments
+    public Task SendDeploymentInfo(Deployment deployment) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.DeploymentGroup(deployment.Id))
+            .SendAsync("DeploymentInfoUpdated", DeploymentView.Map(deployment));
+
+    public Task SendDeploymentsInfo(IEnumerable<Deployment> deployments) =>
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.DeploymentsGroup)
+            .SendAsync("DeploymentsInfoUpdated", DeploymentsView.Map(deployments));
     #endregion
 }

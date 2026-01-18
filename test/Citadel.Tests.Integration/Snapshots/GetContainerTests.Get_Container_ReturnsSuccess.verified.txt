@@ -7,8 +7,9 @@
   created: 1768686293,
   state: Created,
   updated: 0,
+  deploymentId: Guid_3,
   imageView: {
-    id: Guid_3,
+    id: Guid_4,
     tags: [
       sha256:abcd1234
     ],
@@ -20,7 +21,7 @@
     createdAt: Date_MinValue
   },
   deploymentView: {
-    id: Guid_4,
+    id: Guid_3,
     name: deployment-01,
     platformId: Guid_2,
     createdAt: Date_MinValue,

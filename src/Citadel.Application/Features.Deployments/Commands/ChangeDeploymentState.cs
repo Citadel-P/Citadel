@@ -1,4 +1,6 @@
-﻿using Domain;
+﻿using Application.Services.SignalR;
+using Application.TaskJobs.WorkItems;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
@@ -11,7 +13,11 @@ namespace Application.Features.Deployments.Commands;
 
 public sealed record ChangeDeploymentState(IEnumerable<Guid> DeploymentIds, DeploymentAction Action) : ICommand<Result>;
 
-internal sealed class ChangeDeploymentStateHandler(IServiceScopeFactory scopeFactory, IPlatformContainerCache platformContainerCache, IConnectorFactory<IContainerConnector> connectorFactory) : ICommandHandler<ChangeDeploymentState, Result>
+internal sealed class ChangeDeploymentStateHandler(
+    IServiceScopeFactory scopeFactory,
+    INotificationQueue notificationQueue,
+    IPlatformContainerCache platformContainerCache, 
+    IDeploymentStreamManager deploymentHub, IConnectorFactory<IContainerConnector> connectorFactory) : ICommandHandler<ChangeDeploymentState, Result>
 {
     public async ValueTask<Result> Handle(ChangeDeploymentState command, CancellationToken cancellationToken)
     {
@@ -40,6 +46,7 @@ internal sealed class ChangeDeploymentStateHandler(IServiceScopeFactory scopeFac
             DeploymentAction.PAUSE => ContainerAction.PAUSE,
             DeploymentAction.UNPAUSE => ContainerAction.UNPAUSE,
             DeploymentAction.STOP => ContainerAction.STOP,
+            DeploymentAction.START => ContainerAction.START,
             _ => ContainerAction.START
         };
 
@@ -56,6 +63,22 @@ internal sealed class ChangeDeploymentStateHandler(IServiceScopeFactory scopeFac
             {
                 return result;
             }
+        }
+
+        await using (var scope = scopeFactory.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var deployments = await uow.Deployments.GetInfoAsync(command.DeploymentIds, cancellationToken);
+           
+            foreach (var deployment in deployments ?? [])
+            {
+                deployment.PartialUpdate(status: DeploymentStatus.Pending);
+            }
+            var workItem = new DeploymentsNotificationWorkItem(deploymentHub, deployments ?? []);
+            await notificationQueue.EnqueueAsync(workItem, cancellationToken);
+
+            await uow.Deployments.UpdateDeploymentsStatusAsync(command.DeploymentIds, DeploymentStatus.Pending, cancellationToken);
+            await uow.CommitAsync(cancellationToken);
         }
 
         return Result.Success();

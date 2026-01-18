@@ -1,9 +1,9 @@
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { DeploymentForm } from './form';
-import { useRead } from '@/lib/hooks';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { DeploymentActions } from './actions';
 import { StateIndicator } from '@/components/custom/state-indicator';
+import { useDeploymentGroup } from './hooks/useDeploymentGroup';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -29,8 +29,8 @@ export const DeploymentFormComponents: RequiredFormComponents = {
       },
     ],
     useData: function (id: string): { item?: RequiredFormFields; isLoading: boolean } {
-      const { data, isLoading } = useRead('getDeployment', { deploymentId: id });
-      return { item: data?.data, isLoading };
+      const { deployment, isLoading } = useDeploymentGroup(id);
+      return { item: deployment, isLoading };
     },
   },
 };

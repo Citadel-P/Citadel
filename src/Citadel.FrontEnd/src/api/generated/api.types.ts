@@ -377,6 +377,8 @@ export interface ContainerView {
   stack: null | string;
   lastStats: null | ContainerStatView;
   ports: Record<string, HostPortBinding[]>;
+  /** @format uuid */
+  deploymentId: null | string;
   platform?: null | PlatformView;
   imageView?: null | ImageView;
   deploymentView?: null | DeploymentView;
@@ -3445,6 +3447,31 @@ export class Api<
     stopDeployments: (data: string[], params: RequestParams = {}) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/deployments/stop`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name StartDeployments
+     * @summary Start deployments
+     * @request POST:/api/v1/deployments/start
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    startDeployments: (data: string[], params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/deployments/start`,
         method: "POST",
         body: data,
         secure: true,

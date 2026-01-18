@@ -22,7 +22,7 @@ internal sealed class ImageDeletedWorkItem(
             await uow.Images.DeleteAsync([existing.Id], cancellationToken);
             await uow.CommitAsync(cancellationToken);
 
-            var imageNotificationItem = new SendImageNotificationWorkItem(existing, eventInfo.Action, dockerDaemonHub);
+            var imageNotificationItem = new SendImageNotificationWorkItem(dockerDaemonHub, existing, eventInfo.Action);
             await notificationQueue.EnqueueAsync(imageNotificationItem, cancellationToken);
         }
         catch (Exception ex)
