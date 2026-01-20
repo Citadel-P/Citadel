@@ -5,6 +5,7 @@ using Domain.Entities;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using Infrastructure.TypeHandlers;
+using System;
 using System.Data;
 using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
@@ -50,17 +51,16 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             .ContinueWith(t => (IEnumerable<Deployment>?)t.Result.Select(dto => dto.ToDomain()), cancellationToken);
     }
 
-
-    public Task<bool> ExistsAsync(string name, CancellationToken cancellationToken)
+    public Task<bool> ExistsAsync(string name, Guid platformId, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT EXISTS (SELECT 1 FROM Deployments WHERE name = @Name)";
-        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, cancellationToken }, transaction: tx());
+        const string sql = "SELECT EXISTS (SELECT 1 FROM Deployments WHERE name = @Name AND PlatformId = @PlatformId)";
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, PlatformId = platformId.Format(), cancellationToken }, transaction: tx());
     }
 
-    public Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken)
+    public Task<bool> ExistsAsync(Guid id, string name, Guid platformId, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT EXISTS (SELECT 1 FROM Deployments WHERE Name=@Name AND Id != @Id)";
-        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id.Format(), cancellationToken }, transaction: tx());
+        const string sql = "SELECT EXISTS (SELECT 1 FROM Deployments WHERE Name=@Name AND Id != @Id AND PlatformId = @PlatformId)";
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id.Format(), PlatformId = platformId.Format(), cancellationToken }, transaction: tx());
     }
 
     public Task<int> AddAsync(Deployment deployment, CancellationToken cancellationToken)

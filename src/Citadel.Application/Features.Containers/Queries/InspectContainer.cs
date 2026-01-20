@@ -23,7 +23,7 @@ internal sealed class InspectContainerHandler(IPlatformContainerCache platformCo
     
     public async ValueTask<Result<ContainerInspectionInfo>> Handle(InspectContainer query, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetPlatformByContainerId(query.ContainerId, out var platform))
+        if (!platformContainerCache.TryGetPlatformWithContainer(query.ContainerId, out var platform))
         {
             return Result.Failure<ContainerInspectionInfo>(new NotFoundError($"No platform found for container ID {query.ContainerId}"));
         }

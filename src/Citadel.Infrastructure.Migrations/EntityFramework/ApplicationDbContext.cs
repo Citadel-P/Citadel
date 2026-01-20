@@ -467,13 +467,13 @@ internal static class Configuration
            .HasForeignKey("PlatformId")
            .OnDelete(DeleteBehavior.Cascade);
 
-        deployment.HasIndex("Name").IsUnique().HasDatabaseName($"IX_{tableName}_Name");
-
         deployment
             .HasOne("Actor")
             .WithMany()
             .HasForeignKey("CreatedByActorId")
             .OnDelete(DeleteBehavior.Restrict);
+
+        deployment.HasIndex("Name", "PlatformId").IsUnique().HasDatabaseName($"IX_{tableName}_Name_PlatformId");
 
         return builder;
     }

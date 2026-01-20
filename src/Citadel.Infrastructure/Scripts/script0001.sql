@@ -210,7 +210,7 @@ CREATE UNIQUE INDEX "IX__Containers_DockerContainerId_PlatformId" ON "Containers
 
 CREATE INDEX "IX_Deployments_CreatedByActorId" ON "Deployments" ("CreatedByActorId");
 
-CREATE UNIQUE INDEX "IX_Deployments_Name" ON "Deployments" ("Name");
+CREATE UNIQUE INDEX "IX_Deployments_Name_PlatformId" ON "Deployments" ("Name", "PlatformId");
 
 CREATE INDEX "IX_Deployments_PlatformId" ON "Deployments" ("PlatformId");
 
@@ -245,7 +245,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20251231142558_migration0001', '10.0.1');
+VALUES ('20260120092550_migration0001', '10.0.2');
 
 COMMIT;
 

@@ -35,7 +35,7 @@ internal sealed class ChangeDeploymentStateHandler(
 
         var groupByPlatform = containers.GroupBy(c => c.PlatformId);
 
-        if (!platformContainerCache.TryGetPlatformsByContainersId([.. containers.Select(s => s.DockerContainerId)], out var platformContainers))
+        if (!platformContainerCache.TryGetPlatformsWithContainers([.. containers.Select(s => s.DockerContainerId)], out var platformContainers))
         {
             return Result.Failure(new NotFoundError("Platform resolution failed for ID (s). Platform may be disconnected."));
         }

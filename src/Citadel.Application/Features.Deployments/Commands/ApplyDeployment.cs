@@ -1,4 +1,6 @@
 ﻿using Application.Services;
+using Application.Services.SignalR;
+using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
@@ -19,6 +21,7 @@ internal sealed class ApplyDeploymentHandler(
     IPullImageService pullImageService,
     INotificationQueue notificationQueue,
     IPlatformContainerCache platformCache,
+    IDeploymentStreamManager deploymentHub,
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
     IConnectorFactory<IDeploymentConnector> deploymentConnectorFactory)
     : IStreamCommandHandler<ApplyDeployment, DeploymentStreamItem>
@@ -137,6 +140,7 @@ internal sealed class ApplyDeploymentHandler(
             new DeploymentSucceededWorkItem(
                 deployment.Id,
                 deploymentResult.ContainerId,
+                deploymentHub,
                 notificationQueue),
             ct);
 
@@ -172,6 +176,7 @@ internal sealed class ApplyDeploymentHandler(
             new UpdateDeploymentStatusWorkItem(
                 deploymentId,
                 status,
+                deploymentHub,
                 notificationQueue),
             ct);
     }
@@ -197,9 +202,6 @@ internal sealed class ApplyDeploymentHandler(
             return (null, error.Message);
         }
         
-        // TODO: when the deployment is stopped, and applying a deployment it does not switch to Healthy (gray -> green, it stays gray)
-        // TODO: delete the container from the cache 
-
         return (container.DockerContainerId, null);
     }
 
@@ -211,7 +213,7 @@ internal sealed class ApplyDeploymentHandler(
     }
 }
 
-internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, DeploymentStatus targetStatus, INotificationQueue notificationQueue)
+internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, DeploymentStatus targetStatus, IDeploymentStreamManager deploymentHub, INotificationQueue notificationQueue)
     : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
@@ -223,11 +225,13 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Deployme
         await uow.Deployments.UpdateAsync(deployment, ct);
         await uow.CommitAsync(ct);
 
-        // TODO: push notification
+        // Push notification
+        var workItem = new DeploymentNotificationWorkItem(deploymentHub, deployment);
+        await notificationQueue.EnqueueAsync(workItem, ct);
     }
 }
 
-internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, string containerId, INotificationQueue notificationQueue)
+internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, string containerId, IDeploymentStreamManager deploymentHub, INotificationQueue notificationQueue)
     : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
@@ -244,7 +248,9 @@ internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, string cont
         await uow.Deployments.UpdateAsync(deployment, ct);
         await uow.CommitAsync(ct);
 
-        // TODO: notify clients
+        // Push notification
+        var workItem = new DeploymentNotificationWorkItem(deploymentHub, deployment);
+        await notificationQueue.EnqueueAsync(workItem, ct);
     }
 }
 

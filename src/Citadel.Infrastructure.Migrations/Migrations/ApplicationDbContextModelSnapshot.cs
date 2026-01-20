@@ -15,7 +15,7 @@ namespace Infrastructure.Migrations.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.1");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.2");
 
             modelBuilder.Entity("Actor", b =>
                 {
@@ -214,11 +214,11 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("CreatedByActorId");
 
-                    b.HasIndex("Name")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Deployments_Name");
-
                     b.HasIndex("PlatformId");
+
+                    b.HasIndex("Name", "PlatformId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Deployments_Name_PlatformId");
 
                     b.ToTable("Deployments", (string)null);
                 });

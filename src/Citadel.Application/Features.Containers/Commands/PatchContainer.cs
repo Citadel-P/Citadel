@@ -23,7 +23,7 @@ internal class PatchContainerHandler(IPlatformContainerCache platformContainerCa
 {
     public async ValueTask<Result> Handle(PatchContainer request, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetPlatformsByContainersId(request.ContainerIds, out var platformContainers))
+        if (!platformContainerCache.TryGetPlatformsWithContainers(request.ContainerIds, out var platformContainers))
         {
             return Result.Failure(new NotFoundError("Platform resolution failed for container IDs. Platform may be disconnected."));
         }

@@ -63,7 +63,7 @@ internal static class Fakes
                 Image: $"image-{i}:latest",
                 ImageId: $"image-id-{i}:latest",
                 State: ContainerStateStatus.Running,
-                Id: $"container-id-{i}"
+                Id: $"{i}-docker-id"
             );
         }
     }

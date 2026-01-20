@@ -8,6 +8,7 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Collections.Immutable;
 using System.Threading.Channels;
 
 namespace Application.TaskJobs;
@@ -266,7 +267,7 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
                 Id: platformEvent.Id,
                 Address: platformEvent.Address,
                 ConnectorType: platformEvent.Type,
-                Containers: currentActiveContainers.ToDictionary(
+                Containers: currentActiveContainers.ToImmutableDictionary(
                     c => c.DockerContainerId,
                     c => c.Id,
                     StringComparer.OrdinalIgnoreCase));

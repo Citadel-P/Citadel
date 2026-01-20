@@ -1,148 +1,305 @@
-﻿using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
+﻿using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Hosting.Common.ErrorTypes;
 using LightResults;
+using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Application.Services;
 
-internal class PlatformContainerCache : IPlatformContainerCache
+internal sealed class PlatformContainerCache : IPlatformContainerCache
 {
-    private readonly ConcurrentDictionary<Guid, PlatformCacheEntry> cache = [];
+    // Atomic snapshot
+    private volatile PlatformSnapshot _snapshot =new([], []);
 
-    /// <inheritdoc />
-    public void ReplacePlatformContainers(Guid platformId, PlatformCacheEntry cacheEntry)
+    private static string NormalizeId(string id) => id.ToLowerInvariant().Trim();
+    private const int ShortIdLength = 12;
+
+    public void ReplacePlatformContainers(Guid platformId, PlatformCacheEntry entry)
     {
-        cache[platformId] = cacheEntry;
+        while (true)
+        {
+            var oldSnap = _snapshot;
+            var mapBuilder = oldSnap.ContainerToPlatform.ToBuilder();
+
+            // Remove old containers for this platform
+            if (oldSnap.Platforms.TryGetValue(platformId, out var oldPlatform))
+            {
+                foreach (var cid in oldPlatform.Containers.Keys)
+                    mapBuilder.Remove(cid);
+            }
+
+            // Add new containers with full 64-char IDs
+            var newContainers = entry.Containers
+                .ToImmutableDictionary(
+                    kvp => NormalizeId(kvp.Key),
+                    kvp => kvp.Value);
+
+            foreach (var cid in newContainers.Keys)
+                mapBuilder[cid] = platformId;
+
+            var view = new PlatformView(
+                entry.Id, 
+                entry.Address, 
+                entry.ConnectorType, 
+                newContainers);
+
+            var newSnap = oldSnap with
+            {
+                Platforms = oldSnap.Platforms.SetItem(platformId, view),
+                ContainerToPlatform = mapBuilder.ToImmutable()
+            };
+
+            if (ReferenceEquals(
+                    Interlocked.CompareExchange(ref _snapshot, newSnap, oldSnap),
+                    oldSnap))
+                return;
+        }
     }
 
-    /// <inheritdoc />
     public bool TryAddContainer(Guid platformId, string containerId, Guid dbId)
     {
-        if (cache.TryGetValue(platformId, out var entry))
+        var nid = NormalizeId(containerId);
+
+        while (true)
         {
-            entry.Containers[containerId] = dbId;
-            return true;
+            var oldSnap = _snapshot;
+
+            if (!oldSnap.Platforms.TryGetValue(platformId, out var platform)) 
+                return false;
+
+            var newPlatform = platform with 
+            {
+                Containers = platform.Containers.SetItem(nid, dbId) 
+            };
+
+            var newSnap = oldSnap with
+            {
+                Platforms = oldSnap.Platforms.SetItem(platformId, newPlatform),
+                ContainerToPlatform = oldSnap.ContainerToPlatform.SetItem(nid, platformId)
+            };
+
+            if (ReferenceEquals(
+                    Interlocked.CompareExchange(ref _snapshot, newSnap, oldSnap), 
+                    oldSnap))
+                return true;
         }
-        return false;
     }
 
-    /// <inheritdoc />
     public bool TryRemoveContainer(Guid platformId, string containerId)
     {
-        if (cache.TryGetValue(platformId, out var platformContainers))
+        while (true)
         {
-            return platformContainers.Containers.Remove(containerId, out _);
+            var oldSnap = _snapshot;
+            var fullId = ResolveFullId(oldSnap, containerId);
+            if (fullId == null) return false;
+
+            if (!oldSnap.Platforms.TryGetValue(platformId, out var platform)) return false;
+            if (!platform.Containers.ContainsKey(fullId)) return false;
+
+            var newPlatform = platform with 
+            { 
+                Containers = platform.Containers.Remove(fullId) 
+            };
+
+            var newSnap = oldSnap with
+            {
+                Platforms = oldSnap.Platforms.SetItem(platformId, newPlatform),
+                ContainerToPlatform = oldSnap.ContainerToPlatform.Remove(fullId)
+            };
+
+            if (ReferenceEquals(
+                    Interlocked.CompareExchange(ref _snapshot, newSnap, oldSnap),
+                    oldSnap))
+                return true;
         }
-        return false;
     }
 
-    /// <inheritdoc />
-    public bool EvictPlatform(Guid platformId) => cache.TryRemove(platformId, out _);
+    public bool EvictPlatform(Guid platformId)
+    {
+        while (true)
+        {
+            var oldSnap = _snapshot;
+            if (!oldSnap.Platforms.TryGetValue(platformId, out var platform)) return false;
 
-    /// <inheritdoc />
+            var mapBuilder = oldSnap.ContainerToPlatform.ToBuilder();
+            foreach (var cid in platform.Containers.Keys) mapBuilder.Remove(cid);
+
+            var newSnap = oldSnap with
+            {
+                Platforms = oldSnap.Platforms.Remove(platformId),
+                ContainerToPlatform = mapBuilder.ToImmutable()
+            };
+
+            if (ReferenceEquals(
+                    Interlocked.CompareExchange(ref _snapshot, newSnap, oldSnap), 
+                    oldSnap))
+                return true;
+        }
+    }
+
     public bool TryGetContainers(Guid platformId, [MaybeNullWhen(false)] out IReadOnlyDictionary<string, Guid> containers)
     {
-        containers = null;
-        if (cache.TryGetValue(platformId, out var inner))
+        var snap = _snapshot;
+
+        if (snap.Platforms.TryGetValue(platformId, out var platform))
         {
-            containers = inner.Containers;
+            containers = platform.Containers;
             return true;
         }
+
+        containers = null;
         return false;
     }
 
-    /// <inheritdoc />
     public bool TryGetCacheEntry(Guid platformId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry, [MaybeNullWhen(true)] out Error error)
     {
-        cacheEntry = null;
-        error = null;
-        if (cache.TryGetValue(platformId, out var inner))
+        var snap = _snapshot;
+
+        if (snap.Platforms.TryGetValue(platformId, out var platform))
         {
-            cacheEntry = inner;
+            cacheEntry = new PlatformCacheEntry(
+                platform.Id,
+                platform.Address,
+                platform.ConnectorType,
+                platform.Containers
+            );
+            error = null;
             return true;
         }
+
+        cacheEntry = null;
         error = new NotFoundError("Platform is disconnected or unavailable.");
         return false;
     }
 
-    /// <inheritdoc />
     public bool TryGetCacheEntries([MaybeNullWhen(false)] out IEnumerable<PlatformCacheEntry> cacheEntries, [MaybeNullWhen(true)] out Error error)
     {
-        cacheEntries = null;
+        var snap = _snapshot;
+
+        if (snap.Platforms.IsEmpty)
+        {
+            cacheEntries = null;
+            error = new NotFoundError("No platform is currently connected.");
+            return false;
+        }
+
+        cacheEntries = snap.Platforms.Values.Select(p =>
+            new PlatformCacheEntry(
+                p.Id,
+                p.Address,
+                p.ConnectorType,
+                p.Containers));
+
         error = null;
-        
-        if (cache.Keys.Count != 0)
-        {
-            cacheEntries = cache.Values.AsEnumerable();
-            return true;
-        }
-        error = new NotFoundError("No platform is currently connected.");
-        return false;
+        return true;
     }
 
-    /// <inheritdoc />
-    public bool TryGetPlatformByContainerId(string containerId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry)
+    public bool TryGetPlatformWithContainer(string containerId, [MaybeNullWhen(false)] out PlatformCacheEntry cacheEntry)
     {
-        cacheEntry = null;
-        foreach (var (_, platformCacheEntry) in cache)
+        var snap = _snapshot;
+        var fullId = ResolveFullId(snap, containerId);
+
+        if (fullId == null ||
+            !snap.ContainerToPlatform.TryGetValue(fullId, out var pid) ||
+            !snap.Platforms.TryGetValue(pid, out var platform) ||
+            !platform.Containers.TryGetValue(fullId, out var dbId))
         {
-            foreach (var key in platformCacheEntry.Containers.Keys)
-            {
-                if (key.StartsWith(containerId, StringComparison.OrdinalIgnoreCase))
-                {
-                    cacheEntry = platformCacheEntry;
-                    return true;
-                }
-            }
+            cacheEntry = null;
+            return false;
         }
 
-        return false;
+        cacheEntry = new PlatformCacheEntry(
+            platform.Id,
+            platform.Address,
+            platform.ConnectorType,
+            ImmutableDictionary<string, Guid>.Empty.Add(fullId, dbId)
+        );
+
+        return true;
     }
 
-    /// <inheritdoc />
-    public bool TryGetPlatformsByContainersId(string[] containersId, [MaybeNullWhen(false)] out List<PlatformCacheEntry> cacheEntries)
+    public bool TryGetPlatformsWithContainers(string[] containersId, [MaybeNullWhen(false)] out List<PlatformCacheEntry> cacheEntries)
     {
-        cacheEntries = null;
-        var foundEntries = new List<PlatformCacheEntry>();
-        foreach (var (_, platformCacheEntry) in cache)
+        var snap = _snapshot;
+
+        // platformId -> (containerId -> dbId)
+        var grouped = new Dictionary<Guid, Dictionary<string, Guid>>();
+
+        foreach (var raw in containersId)
         {
-            foreach (var key in platformCacheEntry.Containers.Keys)
+            var fullId = ResolveFullId(snap, raw);
+            if (fullId == null) continue;
+
+            if (!snap.ContainerToPlatform.TryGetValue(fullId, out var pid))
+                continue;
+
+            if (!snap.Platforms.TryGetValue(pid, out var platform))
+                continue;
+
+            if (!platform.Containers.TryGetValue(fullId, out var dbId))
+                continue;
+
+            if (!grouped.TryGetValue(pid, out var containers))
             {
-                var found = false;
-                PlatformCacheEntry? cacheEntry = null;
-                foreach (var containerId in containersId)
-                {
-                    if (key.StartsWith(containerId, StringComparison.OrdinalIgnoreCase))
-                    {
-                        
-                        if (!found)
-                        {
-                            cacheEntry = new PlatformCacheEntry(
-                                Id: platformCacheEntry.Id,
-                                Address: platformCacheEntry.Address,
-                                ConnectorType: platformCacheEntry.ConnectorType,
-                                Containers: []);
-                        }
-                        if (cacheEntry != null)
-                        {
-                            cacheEntry.Containers[key] = platformCacheEntry.Containers[key];    
-                        }
-                        found = true;
-
-                        foundEntries.Add(platformCacheEntry);
-                    }
-                }
-
-                if (found && cacheEntry != null)
-                {
-                    cacheEntries ??= [];
-                    cacheEntries.Add(cacheEntry);
-                }
-
+                containers = [];
+                grouped[pid] = containers;
             }
+
+            containers[fullId] = dbId;
         }
-        return foundEntries.Count > 0;
+
+        if (grouped.Count == 0)
+        {
+            cacheEntries = null;
+            return false;
+        }
+
+        cacheEntries = new List<PlatformCacheEntry>(grouped.Count);
+        foreach (var (pid, containers) in grouped)
+        {
+            var platform = snap.Platforms[pid];
+            cacheEntries.Add(new PlatformCacheEntry(
+                platform.Id,
+                platform.Address,
+                platform.ConnectorType,
+                containers.ToImmutableDictionary()
+            ));
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Resolves an input ID (could be 12-char or 64-char) to the actual key used in the dictionary.
+    /// </summary>
+    private static string? ResolveFullId(PlatformSnapshot snap, string id)
+    {
+        var nid = NormalizeId(id);
+
+        if (snap.ContainerToPlatform.ContainsKey(nid))
+            return nid;
+
+        if (nid.Length >= ShortIdLength)
+        {
+            // In case of multiple matches (extremely rare), FirstOrDefault returns the first found.
+            return snap.ContainerToPlatform.Keys
+                .FirstOrDefault(k => k.StartsWith(nid, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return null;
     }
 }
+
+internal sealed record PlatformSnapshot(
+    ImmutableDictionary<Guid, PlatformView> Platforms,
+    ImmutableDictionary<string, Guid> ContainerToPlatform
+);
+
+internal sealed record PlatformView(
+    Guid Id,
+    string Address,
+    PlatformConnectorType ConnectorType,
+    ImmutableDictionary<string, Guid> Containers
+);

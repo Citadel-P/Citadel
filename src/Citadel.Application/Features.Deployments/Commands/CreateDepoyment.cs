@@ -39,7 +39,7 @@ internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, IHttpContextAcces
         var user = httpContextAccessor.HttpContext?.User
            ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
 
-        var exist = await unitOfWork.Deployments.ExistsAsync(command.Name, cancellationToken);
+        var exist = await unitOfWork.Deployments.ExistsAsync(command.Name, command.PlatformId, cancellationToken);
         if (exist)
         {
             return Result.Failure<Deployment>(new ConflictError("Name already exists"));

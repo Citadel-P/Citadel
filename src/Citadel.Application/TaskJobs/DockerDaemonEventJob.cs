@@ -158,6 +158,7 @@ internal sealed class DockerDaemonEventJob(
             platformId,
             eventInfo,
             notificationQueue,
+            deploymentHub,
             dockerDaemonHub,
             platformContainerCache,
             containerEventBroadcaster, logger);

@@ -118,8 +118,8 @@ public interface IDeploymentRepository
 {
     Task<Deployment?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>?> GetInfoAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
-    Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
-    Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(string name, Guid platformId, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(Guid id, string name, Guid platformId, CancellationToken cancellationToken);
     Task<int> AddAsync(Deployment deployment, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetAllAsync(CancellationToken cancellationToken);
     Task<int> UpdateAsync(Deployment deployment, CancellationToken cancellationToken);

@@ -55,7 +55,7 @@ internal sealed class ContainerLogStreamManager(
     private async Task StreamLogsAsync(LogStreamContext ctx, string containerId)
     {
         var token = ctx.Cancellation.Token;
-        if (!platformContainerCache.TryGetPlatformByContainerId(containerId, out var platform)) return;
+        if (!platformContainerCache.TryGetPlatformWithContainer(containerId, out var platform)) return;
 
         var currentChannel = ctx.LogChannel;
         try

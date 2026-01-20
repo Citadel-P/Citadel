@@ -25,7 +25,7 @@ internal sealed class DeleteContainersHandler(IPlatformContainerCache platformCo
 {
     public async ValueTask<Result> Handle(DeleteContainers request, CancellationToken cancellationToken)
     {
-        if (!platformContainerCache.TryGetPlatformsByContainersId(request.ContainerIds, out var platformContainers))
+        if (!platformContainerCache.TryGetPlatformsWithContainers(request.ContainerIds, out var platformContainers))
         {
             return Result.Failure(new NotFoundError("No platform found for the given IDs."));
         }

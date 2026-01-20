@@ -321,13 +321,9 @@ public class DeploymentApplyTests : IntegrationTestBase
         // Give work queue time to process DeploymentSucceededWorkItem
         await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
 
-        // Verify old container removed from DB
+        // Verify new container was linked to deployment
         var verifyScope = Services.CreateAsyncScope();
         var verifyUow = verifyScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var deletedContainer = await verifyUow.Containers.GetByIdAsync("old-container-123", TestContext.Current.CancellationToken);
-        Assert.Null(deletedContainer);
-
-        // Verify new container was linked to deployment
         var persistedNewContainer = await verifyUow.Containers.GetByIdAsync(newContainerId, TestContext.Current.CancellationToken);
         Assert.NotNull(persistedNewContainer);
         Assert.Equal(_deploymentId, persistedNewContainer.DeploymentId);

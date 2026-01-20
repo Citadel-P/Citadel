@@ -11,14 +11,14 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251231142558_migration0001")]
+    [Migration("20260120092550_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.1");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.2");
 
             modelBuilder.Entity("Actor", b =>
                 {
@@ -217,11 +217,11 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("CreatedByActorId");
 
-                    b.HasIndex("Name")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Deployments_Name");
-
                     b.HasIndex("PlatformId");
+
+                    b.HasIndex("Name", "PlatformId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Deployments_Name_PlatformId");
 
                     b.ToTable("Deployments", (string)null);
                 });

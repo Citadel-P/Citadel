@@ -425,9 +425,9 @@ namespace Infrastructure.Migrations.Migrations
                 column: "CreatedByActorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Deployments_Name",
+                name: "IX_Deployments_Name_PlatformId",
                 table: "Deployments",
-                column: "Name",
+                columns: new[] { "Name", "PlatformId" },
                 unique: true);
 
             migrationBuilder.CreateIndex(

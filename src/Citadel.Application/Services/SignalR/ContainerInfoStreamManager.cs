@@ -50,7 +50,7 @@ internal sealed class ContainerInfoStreamManager(
         var writer = ctx.Channel.Writer;
         var token = ctx.Cancellation.Token;
 
-        if (!platformContainerCache.TryGetPlatformByContainerId(containerId, out var platformInfo))
+        if (!platformContainerCache.TryGetPlatformWithContainer(containerId, out var platformInfo))
         {
             logger.LogError("No platform found for container ID {ContainerId}", containerId);
             writer.TryComplete();

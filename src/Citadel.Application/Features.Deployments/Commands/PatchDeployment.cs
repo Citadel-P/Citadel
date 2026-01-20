@@ -52,7 +52,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
         var patchedDeployment = command.Patch.ApplyTo(deployment, DeploymentJsonContext.Default.Deployment);
         if (patchedDeployment.Name != null)
         {
-            var conflict = await unitOfWork.Deployments.ExistsAsync(command.Id, patchedDeployment.Name, cancellationToken);
+            var conflict = await unitOfWork.Deployments.ExistsAsync(command.Id, patchedDeployment.Name, patchedDeployment.PlatformId, cancellationToken);
             if (conflict)
             {
                 return Result.Failure<Deployment>(new ConflictError("Name already exists"));

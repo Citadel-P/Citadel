@@ -21,7 +21,7 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
         const selected = Array.isArray(resources) ? resources[0] : resources;
 
         return {
-          canExecute: !!selected,
+          canExecute: !!selected && selected.status !== DeploymentStatus.Applying,
           run: () => openSheet({ kind: 'deploy', payload: { id: selected.id, name: selected.name } }),
         };
       },
@@ -35,7 +35,7 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
         const selected = Array.isArray(resources) ? resources[0] : resources;
 
         return {
-          canExecute: !!selected,
+          canExecute: !!selected && selected.status !== DeploymentStatus.Applying,
           run: () => openSheet({ kind: 'deploy', payload: { id: selected.id, name: selected.name, recreate: true } }),
         };
       },
@@ -60,7 +60,7 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
     useVariables,
     canExecute: (r) => {
       const can = (x: DeploymentView) =>
-        x.status === DeploymentStatus.Healthy || x.status === DeploymentStatus.Degraded;
+        x.status === DeploymentStatus.Healthy;
       return Array.isArray(r) ? r.some(can) : can(r);
     },
   })
@@ -96,7 +96,10 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
     confirm: true,
     destructive: true,
     resourceType: 'Deployment',
-    canExecute: () => true,
+    canExecute: (r) => {
+      const can = (x: DeploymentView) => x.status !== DeploymentStatus.Applying;
+      return Array.isArray(r) ? r.every(can) : can(r);
+    },
     useVariables,
     useSuccessHandler: () => {
       const navigate = useNavigate();

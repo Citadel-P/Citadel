@@ -32,7 +32,7 @@ internal sealed class ContainerCreatedWorkItem(
 
             // cache update (in-memory)
             platformContainerCache.TryAddContainer(platformId, container.DockerContainerId, container.Id);
-
+            
             await uow.Containers.AddAsync(container, cancellationToken);
 
             // update image status
