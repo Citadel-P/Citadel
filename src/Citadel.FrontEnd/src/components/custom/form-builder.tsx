@@ -370,8 +370,8 @@ export function ItemSelector({
   disabled?: boolean;
   collection: Record<string, { label: string; description?: string }>;
 }) {
-  const finalValue = value ?? Object.values(collection)[0]?.label;
-  const selected = collection[finalValue as keyof typeof collection];
+  const finalValue = value && collection[value] ? value : '';
+  const selected = collection[finalValue];
   return (
     <Select value={finalValue} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger className="w-full max-w-[400px]">
@@ -416,6 +416,10 @@ function isObject(item: any): boolean {
 
 function deepMerge<T>(target: any, source: any): T {
   if (!isObject(target) || !isObject(source)) return (source ?? target) as T;
+
+  if (source.$type && target.$type && source.$type !== target.$type) {
+    return source as T;
+  }
 
   const output: any = Array.isArray(target) ? [...target] : { ...target };
 

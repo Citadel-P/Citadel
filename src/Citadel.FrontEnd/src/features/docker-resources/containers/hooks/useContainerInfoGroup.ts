@@ -3,8 +3,11 @@ import { HubConnection } from '@microsoft/signalr';
 import { DockerContainerView } from '@/api/types';
 import { useDockerDaemonGroup } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
+import { normalizeDockerId } from '@/lib/utils';
 
 export const useContainerInfoGroup = (containerId?: string, platformId?: string) => {
+  const nid = normalizeDockerId(containerId);
+
   const { containerEvent } = useDockerDaemonGroup(platformId);
 
   const [containerInfo, setContainerInfo] = useState<DockerContainerView | undefined>();
@@ -28,16 +31,16 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
   );
 
   const { isLoading } = useSignalRGroup({
-    groupName: `container-info:${containerId}`,
+    groupName: `container-info:${nid}`,
     setupEventListeners,
     removeEventListeners,
-    skip: !containerId,
+    skip: !nid,
   });
 
   useEffect(() => {
     if (
-      containerId &&
-      containerEvent?.container.containerId.startsWith(containerId) &&
+      nid &&
+      containerEvent?.container.containerId.startsWith(nid) &&
       containerEvent?.eventType !== 'destroy'
     ) {
       const container: DockerContainerView = {
@@ -51,7 +54,7 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
       };
       setContainerInfo(container);
     }
-  }, [containerEvent, containerId]);
+  }, [containerEvent, nid]);
 
   return { containerInfo, isLoading: isLoading || !containerInfo };
 };

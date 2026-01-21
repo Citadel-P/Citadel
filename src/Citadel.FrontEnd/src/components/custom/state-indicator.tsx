@@ -26,7 +26,7 @@ const getStatusStyle = (value: StateValue) => {
     case DeploymentStatus.Created:
       return { colorClass: 'bg-blue-400', tooltip: 'Created' };
     case DeploymentStatus.Healthy:
-      return { colorClass: 'bg-green-500', tooltip: 'Running' };
+      return { colorClass: 'bg-green-500', tooltip: 'Healthy' };
     case DeploymentStatus.Failed:
       return { colorClass: 'bg-red-500', tooltip: 'Failed' };
     case DeploymentStatus.Stopped:

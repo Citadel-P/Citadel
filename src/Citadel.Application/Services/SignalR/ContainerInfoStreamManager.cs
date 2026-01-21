@@ -20,7 +20,7 @@ internal sealed class ContainerInfoStreamManager(
         if (!streams.TryGetValue(groupId, out var context))
             return;
 
-        var containerId = GetEntityId(groupId.AsSpan()).ToString();
+        var containerId = GetNormalizedIdFromGroup(groupId.AsSpan());
         if (string.IsNullOrEmpty(containerId))
         {
             logger.LogError("Invalid group ID format: {GroupId}", groupId);

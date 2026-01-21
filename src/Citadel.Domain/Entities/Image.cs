@@ -26,8 +26,8 @@ public sealed class Image(
 
     public void PartialUpdate(
         string? name = null,
-        string? tag = null,
         string? dockerImageId = null,
+        IEnumerable<string>? tags = null,
         double? size = null,
         int? containers = null,
         DateTime? updatedAt = null,

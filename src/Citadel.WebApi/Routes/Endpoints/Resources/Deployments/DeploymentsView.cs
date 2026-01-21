@@ -24,7 +24,9 @@ public sealed record DeploymentView(
     PlatformStatus PlatformStatus,
     string? PlatformName = null,
     string? ImageName = null,
-    Guid? ImageId = null
+    Guid? ImageId = null,
+    Guid? ContainerId = null,
+    string? DockerContainerId = null
     )
 {
     internal static DeploymentView Map(Deployment deployment) => new(
@@ -41,7 +43,9 @@ public sealed record DeploymentView(
         PlatformName: deployment.Platform?.Name,
         PlatformStatus: deployment.Platform?.Status ?? PlatformStatus.Offline,
         ImageName: deployment.Image?.Name,
-        ImageId: deployment.Image?.Id
+        ImageId: deployment.Image?.Id,
+        ContainerId: deployment.Container?.Id,
+        DockerContainerId: deployment.Container?.DockerContainerId
         );
 }
 

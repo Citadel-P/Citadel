@@ -75,14 +75,23 @@ internal abstract class BaseStreamManager<TContext> where TContext : StreamConte
     protected virtual void OnSubscriberAdded(string groupId, string connectionId) { }
     protected virtual void OnSubscriberRemoved(string groupId, string connectionId) { }
 
-    protected static ReadOnlySpan<char> GetEntityId(ReadOnlySpan<char> groupId)
+    protected static string GetNormalizedIdFromGroup(ReadOnlySpan<char> groupId)
     {
         var idx = groupId.IndexOf(':');
-        if (idx < 0 || idx == groupId.Length - 1)
-        {
-            return [];
-        }
+        if ((uint)idx >= (uint)(groupId.Length - 1))
+            return string.Empty;
 
-        return groupId[(idx + 1)..];
+        return NormalizeDockerId(groupId[(idx + 1)..]);
+    }
+
+    protected static string NormalizeDockerId(ReadOnlySpan<char> dockerId)
+    {
+        if (dockerId.IsEmpty)
+            return string.Empty;
+
+        if (dockerId.Length > 12)
+            dockerId = dockerId[..12];
+
+        return dockerId.ToString().ToLowerInvariant();
     }
 }

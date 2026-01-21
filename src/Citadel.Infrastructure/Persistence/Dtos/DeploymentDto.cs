@@ -18,5 +18,7 @@ internal sealed record DeploymentDto(
     string? Platform_Name = null,
     string? Platform_Status = null,
     string? Image_Name = null,
-    Guid? Image_Id = null
+    Guid? Image_Id = null,
+    Guid? Container_ContainerId = null,
+    string? Container_DockerContainerId = null
     );

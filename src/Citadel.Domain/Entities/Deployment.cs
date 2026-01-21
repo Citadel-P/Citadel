@@ -21,8 +21,9 @@ public sealed class Deployment(
 
     public DeploymentSpec? Spec { get; private set; } = spec;
 
-    public Platform? Platform { get; private set; } = null!;
-    public Image? Image { get; private set; } = null!;
+    public Platform? Platform { get; private set; } = null;
+    public Image? Image { get; private set; } = null;
+    public Container? Container { get; private set; } = null;
 
     public void MarkAsDeployed()
     {
@@ -46,7 +47,8 @@ public sealed class Deployment(
         AutoUpdateState? autoUpdateState = null,
         DeploymentSpec? spec = null,
         Platform? platform = null,
-        Image? image = null)
+        Image? image = null,
+        Container? container = null)
     {
         return new Deployment(name, status, createdByActorId, platformId, updateBehavior, spec, description)
         {
@@ -54,7 +56,8 @@ public sealed class Deployment(
             CreatedAt = createdAt,
             AutoUpdateState = autoUpdateState,
             Platform = platform,
-            Image = image
+            Image = image,
+            Container = container
         };
     }
 
@@ -64,7 +67,8 @@ public sealed class Deployment(
         Guid? platformId = null,
         DeploymentStatus? status = null,
         UpdateBehavior? updateBehavior = null,
-        DeploymentSpec? spec = null)
+        DeploymentSpec? spec = null,
+        Container? container = null)
     {
         if (name != null) Name = name;
         if (status != null) Status = status.Value;
@@ -72,6 +76,7 @@ public sealed class Deployment(
         if (platformId != null) PlatformId = platformId.Value;
         if (spec != null) Spec = spec;
         if (updateBehavior != null) UpdateBehavior = updateBehavior.Value;
+        if (container != null) Container = container;
     }
 
     public static DeploymentStatus ToDeploymentStatus(ContainerStateStatus status)

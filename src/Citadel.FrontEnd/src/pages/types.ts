@@ -48,6 +48,8 @@ export interface RequiredFormComponents<T = any> {
       Indicator: React.FC<{ resource: T }>;
       ActionButtons: React.FC<{ resource: T }>;
     };
+    /** Optional subheader */
+    SubHeader?: React.FC<{ resource: T }>;
     /** Tabs configuration */
     Tabs: TabElement<T>[];
     /** Main Data hook for this workload */

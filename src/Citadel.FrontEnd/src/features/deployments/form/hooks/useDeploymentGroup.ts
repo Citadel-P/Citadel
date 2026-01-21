@@ -21,6 +21,8 @@ export const useDeploymentGroup = (deploymentId: string) => {
         name: deployment.name,
         status: deployment.status,
         description: deployment.description,
+        dockerContainerId: deployment.dockerContainerId,
+        containerId: deployment.containerId,
       };
     });
   }, []);

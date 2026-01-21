@@ -105,6 +105,7 @@ export const filterBySplit = <T>(items: T[] | undefined, search: string, extract
       : items) ?? []
   );
 };
+export const normalizeDockerId = (id?: string) => (id ? id.slice(0, 12).toLowerCase() : undefined);
 
 export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 

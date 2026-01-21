@@ -27,7 +27,10 @@ public sealed record ExternalImage(Guid RegistryId, string ImageTag) : Deploymen
 public sealed record ResourceSpec(
     float? NanoCpus,
     float? MemoryLimit
-);
+)
+{
+    public static readonly ResourceSpec Empty = new(null, null);
+}
 
 public sealed record LifeCycleSpec(
     int? StopTimeout,

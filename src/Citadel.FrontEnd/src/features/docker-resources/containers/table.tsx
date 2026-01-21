@@ -3,8 +3,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ContainerView, ContainerStateStatus, ContainerStatView } from '@/api/generated/api.types';
 import { truncate } from '@/lib/truncate';
-import { formatId, toFixedNumber } from '@/lib/utils';
-import { byteTransform } from '@/lib/bytes.helper';
+import { formatId } from '@/lib/utils';
 import SortableCell from '@/components/custom/sortable-cell';
 import { Link } from 'react-router';
 import { CopyToClipboard } from '@/components/custom/copy-to-clipboard';
@@ -16,6 +15,7 @@ import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
+import { CPUCell, MemoryUsageCell } from '@/components/custom/common';
 
 export const ContainersTable = ({
   items,
@@ -67,12 +67,8 @@ const columns = (
     accessorKey: 'name',
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => (
-      <div className="flex items-center gap-0.5">
-        {' '}
-        {/* row container */}
-        <div className="flex items-center">
-          <StateIndicator value={row.original.state ?? ContainerStateStatus.Exited} />
-        </div>
+      <div className="flex items-center gap-2">
+        <StateIndicator value={row.original.state ?? ContainerStateStatus.Exited} />
         <Link to={`./${formatId(row.original.containerId)}`} className="table-link">
           {row.original.name ? row.original.name?.slice(1) : ''}
         </Link>
@@ -101,7 +97,7 @@ const columns = (
   {
     accessorKey: 'CPU',
     header: ({ column }) => <SortableCell cellName="Cpu" column={column} />,
-    cell: ({ row }) => <CPUCell container={row.original} />,
+    cell: ({ row }) => <CPUCell state={row.original.state} stats={row.original.lastStats} />,
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
       if (!rowA.original.stats || !rowB.original.stats) return 0;
       return rowA.original.stats[0]?.cpuUsage < rowB.original.stats[0]?.cpuUsage ? 1 : -1;
@@ -110,7 +106,7 @@ const columns = (
   {
     accessorKey: 'memory',
     header: ({ column }) => <SortableCell cellName="Memory" column={column} />,
-    cell: ({ row }) => <MemoryUsageCell container={row.original} />,
+    cell: ({ row }) => <MemoryUsageCell state={row.original.state} stats={row.original.lastStats} />,
     sortingFn: (rowA: any, rowB: any, _columnId: any): number => {
       const cA = rowA.original.lastStats as ContainerStatView;
       const cB = rowB.original.lastStats as ContainerStatView;
@@ -137,21 +133,3 @@ const columns = (
     cell: ({ row }) => <RowActionMenu resource={row.original} actions={actions} />,
   },
 ];
-
-const MemoryUsageCell = ({ container }: { container: ContainerView }) => {
-  if (container.state !== ContainerStateStatus.Running) {
-    return <div className="text-muted">0B / 0B</div>;
-  }
-  return (
-    byteTransform(container.lastStats?.memoryActive ?? 0, 2) +
-    ' / ' +
-    byteTransform(container.lastStats?.memoryLimit ?? 0, 2)
-  );
-};
-
-const CPUCell = ({ container }: { container: ContainerView }) => {
-  if (container.state !== ContainerStateStatus.Running) {
-    return <div className="text-muted">0%</div>;
-  }
-  return container.lastStats?.cpuUsage ? toFixedNumber(container.lastStats?.cpuUsage as number, 'percent') : '0%';
-};

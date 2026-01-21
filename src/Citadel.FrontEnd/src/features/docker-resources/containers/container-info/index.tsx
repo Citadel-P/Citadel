@@ -22,12 +22,20 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<DockerContain
     },
   },
   SubHeader: ({ resource }) => {
-    return <ContainerInfoTable container={resource} />;
+    return (
+      <ContainerInfoTable
+        container={resource}
+        displayOptions={{
+          DisplayStatus: true,
+          DisplayPlatformName: true,
+        }}
+      />
+    );
   },
   Tabs: [
     {
       label: 'Logs',
-      Content: ({ resource }) => <ContainerLogs resource={resource} />,
+      Content: ({ resource }) => <ContainerLogs containerId={resource?.id} />,
     },
     {
       label: 'Inspect',

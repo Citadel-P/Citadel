@@ -1,10 +1,10 @@
 import { useMemo, useState, useLayoutEffect, useRef } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { AutoUpdateStatus, UpdateBehavior } from '@/api/generated/api.types';
+import { AutoUpdateStatus, ContainerStateStatus, ContainerStatView, UpdateBehavior } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem, CommandEmpty } from '@/components/ui/command';
 import { Check, ChevronDown, LucideIcon, Tags, X } from 'lucide-react';
-import { cn, filterBySplit } from '@/lib/utils';
+import { cn, filterBySplit, toFixedNumber } from '@/lib/utils';
 import { PluralResourceMap, ResourceType } from '@/api/types';
 import { useMeasuredWidth, useRead, useLocalStorage } from '@/lib/hooks';
 import { useResourceFilter } from '@/lib/atoms';
@@ -25,6 +25,7 @@ import {
   Timer,
   WrapText,
 } from 'lucide-react';
+import { byteTransform } from '@/lib/bytes.helper';
 
 export function ResourceSelectorField<T extends { id: string; name: string }>({
   type,
@@ -456,4 +457,24 @@ export const LogViewer = ({
       </div>
     </div>
   );
+};
+
+export const MemoryUsageCell = ({
+  state,
+  stats,
+}: {
+  state: ContainerStateStatus;
+  stats?: ContainerStatView | null;
+}) => {
+  if (state !== ContainerStateStatus.Running) {
+    return <div className="text-muted">0B / 0B</div>;
+  }
+  return <span className='text-[13px]'>{byteTransform(stats?.memoryActive ?? 0, 2) + ' / ' + byteTransform(stats?.memoryLimit ?? 0, 2)}</span>;
+};
+
+export const CPUCell = ({ state, stats }: { state: ContainerStateStatus; stats?: ContainerStatView | null }) => {
+  if (state !== ContainerStateStatus.Running) {
+    return <div className="text-muted">0%</div>;
+  }
+  return <span className='text-[13px]'>{stats?.cpuUsage ? toFixedNumber(stats?.cpuUsage as number, 'percent') : '0%'}</span>;
 };

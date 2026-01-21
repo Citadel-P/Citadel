@@ -17,7 +17,16 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
 
     public async Task<Deployment?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM Deployments WHERE Id = @Id LIMIT 1";
+        const string sql = """
+            SELECT 
+                d.*,
+                c.Id AS Container_ContainerId,
+                c.DockerContainerId AS Container_DockerContainerId
+                FROM Deployments d
+            LEFT JOIN Containers c ON c.DeploymentId = d.Id
+            WHERE d.Id = @Id LIMIT 1
+            """;
+            
         var result = await db.QuerySingleOrDefaultAsync<DeploymentDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
         return result?.ToDomain();
     }

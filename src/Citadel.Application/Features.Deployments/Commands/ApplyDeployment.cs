@@ -151,11 +151,13 @@ internal sealed class ApplyDeploymentHandler(
     {
         var rs = deployment.Spec!.ResourceSpec;
 
-        var normalized = rs with
-        {
-            NanoCpus = rs?.NanoCpus is > 0 ? (long)(rs.NanoCpus.Value * 1_000_000_000) : 0,
-            MemoryLimit = rs?.MemoryLimit is > 0 ? rs.MemoryLimit.Value * 1024 * 1024 : 0
-        };
+        var normalized = rs != null
+            ? rs with
+            {
+                NanoCpus = rs?.NanoCpus is > 0 ? (long)(rs.NanoCpus.Value * 1_000_000_000) : 0,
+                MemoryLimit = rs?.MemoryLimit is > 0 ? rs.MemoryLimit.Value * 1024 * 1024 : 0
+            }
+            : ResourceSpec.Empty;
 
         return new ApplyDeploymentCommand(
             PlatformAddress: platformAddress,
@@ -242,14 +244,14 @@ internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, string cont
         if (deployment is null || container is null) return;
 
         container.PartialUpdate(deploymentId: deployment.Id);
-        deployment.PartialUpdate(status: DeploymentStatus.Healthy);
+        deployment.PartialUpdate(status: DeploymentStatus.Healthy, container: container);
 
         await uow.Containers.UpdateAsync(container, ct);
         await uow.Deployments.UpdateAsync(deployment, ct);
         await uow.CommitAsync(ct);
 
         // Push notification
-        var workItem = new DeploymentNotificationWorkItem(deploymentHub, deployment);
+        var workItem = new DeploymentNotificationWorkItem(deploymentHub, deployment );
         await notificationQueue.EnqueueAsync(workItem, ct);
     }
 }

@@ -1,14 +1,15 @@
-import { DockerContainerView } from '@/api/types';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { LogViewer } from '@/components/custom/common';
+import { normalizeDockerId } from '@/lib/utils';
 
 const MAX_LOGS = 5000;
 const decoder = new TextDecoder('utf-8');
 
-export const ContainerLogs = ({ resource }: { resource: DockerContainerView | undefined }) => {
-  const { containerLogs: logs, clearLogs } = useContainerLogGroup(resource?.id);
+export const ContainerLogs = ({ containerId }: { containerId: string | undefined }) => {
+  const nid = normalizeDockerId(containerId);
+  const { containerLogs: logs, clearLogs } = useContainerLogGroup(nid);
 
   return (
     <div className="flex flex-col gap-3">
@@ -26,12 +27,17 @@ export const ContainerLogs = ({ resource }: { resource: DockerContainerView | un
   );
 };
 
-export const useContainerLogGroup = (containerId?: string) => {
+const useContainerLogGroup = (containerId?: string) => {
   // We use a Map to ensure uniqueness by Timestamp
   // Key: Timestamp string, Value: Log message
   const [logsMap, setLogsMap] = useState<Map<string, string>>(new Map());
+  const processRef = useRef<(rawText: string) => void>(() => {});
 
-  const processIncomingText = useCallback((rawText: string) => {
+  useEffect(() => {
+    setLogsMap(new Map());
+  }, [containerId]);
+
+  processRef.current = (rawText: string) => {
     setLogsMap((prev) => {
       const next = new Map(prev);
       const lines = rawText.split('\n').filter(Boolean);
@@ -43,7 +49,8 @@ export const useContainerLogGroup = (containerId?: string) => {
           const message = line.substring(firstSpaceIndex + 1);
           next.set(timestamp, message);
         } else {
-          next.set(new Date().toISOString(), line);
+          // Fallback for lines without standard Docker timestamps
+          next.set(`${new Date().getTime()}-${Math.random()}`, line);
         }
       });
 
@@ -53,40 +60,27 @@ export const useContainerLogGroup = (containerId?: string) => {
       }
       return next;
     });
+  };
+
+  const handleLogs = useCallback((data: ArrayBuffer) => {
+    const text = decoder.decode(new Uint8Array(data));
+    processRef.current(text);
   }, []);
-
-  const clearLogs = useCallback(() => {
-    setLogsMap(new Map());
-  }, []);
-
-  const handleContainerLogs = useCallback(
-    (log: ArrayBuffer) => {
-      processIncomingText(decoder.decode(new Uint8Array(log)));
-    },
-    [processIncomingText],
-  );
-
-  const handleContainerLogsBatch = useCallback(
-    (logs: ArrayBuffer) => {
-      processIncomingText(decoder.decode(new Uint8Array(logs)));
-    },
-    [processIncomingText],
-  );
 
   const setupEventListeners = useCallback(
     (hub: HubConnection) => {
-      hub.on('SendContainerLogs', handleContainerLogs);
-      hub.on('SendContainerLogsBatch', handleContainerLogsBatch);
+      hub.on('SendContainerLogs', handleLogs);
+      hub.on('SendContainerLogsBatch', handleLogs);
     },
-    [handleContainerLogs, handleContainerLogsBatch],
+    [handleLogs],
   );
 
   const removeEventListeners = useCallback(
     (hub: HubConnection) => {
-      hub.off('SendContainerLogs', handleContainerLogs);
-      hub.off('SendContainerLogsBatch', handleContainerLogsBatch);
+      hub.off('SendContainerLogs', handleLogs);
+      hub.off('SendContainerLogsBatch', handleLogs);
     },
-    [handleContainerLogs, handleContainerLogsBatch],
+    [handleLogs],
   );
 
   useSignalRGroup({
@@ -96,12 +90,16 @@ export const useContainerLogGroup = (containerId?: string) => {
     skip: !containerId,
   });
 
+  const clearLogs = useCallback(() => setLogsMap(new Map()), []);
+
   const containerLogs = useMemo(
     () =>
-      Array.from(logsMap.entries()).map(([ts, msg]) => ({
-        timestamp: ts,
-        message: msg,
-      })),
+      Array.from(logsMap.entries())
+        .map(([ts, msg]) => ({
+          timestamp: ts,
+          message: msg,
+        }))
+        .sort((a, b) => a.timestamp.localeCompare(b.timestamp)), // Ensure chronological order
     [logsMap],
   );
 

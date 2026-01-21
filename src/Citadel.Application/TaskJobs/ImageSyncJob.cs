@@ -120,7 +120,7 @@ internal sealed class ImageSyncWorkItem(
                 dbImage.PartialUpdate(
                     dockerImageId: fresh.Id,
                     containers: fresh.Containers,
-                    tag: fresh.RepoTags?.FirstOrDefault() ?? "",
+                    tags: fresh.RepoTags,
                     size: fresh.Size
                 );
                 upserts.Add(dbImage);

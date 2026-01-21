@@ -53,7 +53,7 @@ public class BaseStreamManagerTests
         public IReadOnlyCollection<string> GetConnectionGroups(string connectionId)
             => connectionToGroups.TryGetValue(connectionId, out var set) ? set.Keys.ToList() : Array.Empty<string>();
 
-        public string GetEntityIdPublic(string groupId) => new string(GetEntityId(groupId).ToArray());
+        public string GetEntityIdPublic(string groupId) => new([.. GetNormalizedIdFromGroup(groupId)]);
     }
 
     [Fact]

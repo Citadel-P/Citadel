@@ -7085,6 +7085,19 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "containerId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "dockerContainerId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

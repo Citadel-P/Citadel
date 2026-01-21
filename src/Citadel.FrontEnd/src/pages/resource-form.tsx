@@ -88,6 +88,7 @@ const EditFormPage = ({ type }: { type: ResourceType }) => {
         onRename={(name) => updateField({ name })}
         onChangeDescription={(description) => updateField({ description })}
       />
+       {Components.SubHeader && <Components.SubHeader resource={resource} />}
       <ResourceTabs localKey={localKey} resource={resource} tabs={tabs} metadataChanged={metadatChanged} />
       <TaskSheet type={type} />
     </>

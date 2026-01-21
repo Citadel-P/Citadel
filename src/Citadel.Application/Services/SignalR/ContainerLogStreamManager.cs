@@ -17,15 +17,15 @@ internal sealed class ContainerLogStreamManager(
 {
     protected override void OnSubscriberAdded(string groupId, string connectionId)
     {
-        var containerId = GetEntityId(groupId.AsSpan()).ToString();
+        if (!streams.TryGetValue(groupId, out var context))
+            return;
+
+        var containerId = GetNormalizedIdFromGroup(groupId.AsSpan());
         if (string.IsNullOrEmpty(containerId))
         {
             logger.LogError("Invalid group ID format: {GroupId}", groupId);
             return;
         }
-
-        if (!streams.TryGetValue(groupId, out var context))
-            return;
 
         var recentLogs = context.GetBufferedLogsAsBytes();
         if (recentLogs.Length > 0)
@@ -130,7 +130,7 @@ internal sealed class ContainerLogStreamManager(
         {
             await foreach (var ev in reader.ReadAllAsync(token))
             {
-                if (ev.ContainerId != containerId)
+                if (NormalizeDockerId(ev.ContainerId) != containerId)
                     continue;
 
                 if (ev.Action == "start")

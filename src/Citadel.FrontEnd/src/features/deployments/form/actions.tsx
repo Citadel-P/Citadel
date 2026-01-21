@@ -59,8 +59,7 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
     mutateKey: 'stopDeployments',
     useVariables,
     canExecute: (r) => {
-      const can = (x: DeploymentView) =>
-        x.status === DeploymentStatus.Healthy;
+      const can = (x: DeploymentView) => x.status === DeploymentStatus.Healthy;
       return Array.isArray(r) ? r.some(can) : can(r);
     },
   })
@@ -96,10 +95,6 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
     confirm: true,
     destructive: true,
     resourceType: 'Deployment',
-    canExecute: (r) => {
-      const can = (x: DeploymentView) => x.status !== DeploymentStatus.Applying;
-      return Array.isArray(r) ? r.every(can) : can(r);
-    },
     useVariables,
     useSuccessHandler: () => {
       const navigate = useNavigate();

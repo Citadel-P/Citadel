@@ -4,6 +4,10 @@ import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { DeploymentActions } from './actions';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useDeploymentGroup } from './hooks/useDeploymentGroup';
+import { ContainerLogs } from '@/features/docker-resources/containers/container-info/container-logs';
+import { DeploymentRuntime } from './deployment-runtime';
+import { DeploymentView } from '@/api/generated/api.types';
+import { normalizeDockerId } from '@/lib/utils';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -20,11 +24,21 @@ export const DeploymentFormComponents: RequiredFormComponents = {
         return <GenericActionBarButtons resource={resource} actions={Object.values(DeploymentActions)} />;
       },
     },
+    SubHeader: ({ resource }: { resource: DeploymentView }) => {
+      return <DeploymentRuntime key={resource.containerId} deployment={resource} />;
+    },
     Tabs: [
       {
         label: 'Config',
         Content: ({ metadataChanged }: { metadataChanged?: boolean }) => {
           return <DeploymentForm mode="edit" metadataChanged={metadataChanged} />;
+        },
+      },
+      {
+        label: 'Logs',
+        Content: ({ resource }: { resource: DeploymentView }) => {
+          const nid = normalizeDockerId(resource?.dockerContainerId ?? undefined);
+          return <ContainerLogs key={nid} containerId={nid} />;
         },
       },
     ],

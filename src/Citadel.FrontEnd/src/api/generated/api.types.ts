@@ -618,6 +618,9 @@ export interface DeploymentView {
   imageName?: null | string;
   /** @format uuid */
   imageId?: null | string;
+  /** @format uuid */
+  containerId?: null | string;
+  dockerContainerId?: null | string;
 }
 
 export interface DeploymentsView {
