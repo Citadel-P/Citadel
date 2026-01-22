@@ -56,6 +56,15 @@ namespace Infrastructure.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("ControlStartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ControlState")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Idle");
+
                     b.Property<long>("Created")
                         .HasColumnType("REAL");
 
@@ -85,6 +94,11 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<string>("Ports")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0L);
 
                     b.Property<string>("Stack")
                         .HasColumnType("TEXT");
@@ -179,6 +193,15 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<string>("AutoUpdateState_Status")
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("ControlStartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ControlState")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Idle");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
@@ -198,6 +221,11 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<string>("PlatformId")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0L);
 
                     b.Property<string>("Spec")
                         .IsRequired()
@@ -424,7 +452,9 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("CreatedByActorId")
                         .IsRequired()

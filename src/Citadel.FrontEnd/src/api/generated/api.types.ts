@@ -34,6 +34,11 @@ export enum StopSignal {
   SIGINT = "SIGINT",
 }
 
+export enum ResourceControlState {
+  Idle = "Idle",
+  Processing = "Processing",
+}
+
 export enum RegistryType {
   Custom = "Custom",
   DockerHub = "DockerHub",
@@ -610,6 +615,7 @@ export interface DeploymentView {
   /** @format uuid */
   createdByActorId: string;
   status: DeploymentStatus;
+  controlState: ResourceControlState;
   autoUpdateState: AutoUpdateState;
   spec: DeploymentSpec;
   updateBehavior: UpdateBehavior;

@@ -209,7 +209,7 @@ public enum DeploymentStatus
     /// </summary>
     Created,
     /// <summary>
-    /// Queued to be applied
+    /// Paused or restarting container, waiting to become healthy.
     /// </summary>
     Pending,
     /// <summary>
@@ -339,4 +339,10 @@ public enum DeployedContainerState
     Running,
     Exited,
     Timeout
+}
+
+public enum ResourceControlState
+{
+    Idle,
+    Processing
 }

@@ -20,6 +20,8 @@ internal sealed class ContainerUpdatedWorkItem(
     {
         try
         {
+            Deployment? deployment = null;
+            Container? container = null;
             var existing = await uow.Containers.GetContainerInfoAsync(
                 eventInfo.ContainerId,
                 cancellationToken);
@@ -28,10 +30,23 @@ internal sealed class ContainerUpdatedWorkItem(
 
             if (existing.DeploymentId != null)
             {
-                await UpdateDeployment(uow, existing.DeploymentId.Value, cancellationToken);
+                var status = Deployment.ToDeploymentStatus(eventInfo.Container?.State ?? ContainerStateStatus.Unknown);
+                deployment = await ContainerDestroyedWorkItem.UpdateDeploymentStatus(uow, existing.DeploymentId.Value, status, cancellationToken);
             }
 
-            await UpdateContainer(uow, existing, cancellationToken);
+            container = await UpdateContainer(uow, existing, cancellationToken);
+            await uow.CommitAsync(cancellationToken);
+
+            // Notify Container
+            var workItem = new ContainerNotificationWorkItem(container, eventInfo, dockerDaemonHub, containerEventBroadcaster);
+            await notificationQueue.EnqueueAsync(workItem, cancellationToken);
+
+            // Notify Deployment
+            if (deployment != null)
+            {
+                var deploymentWorkItem = new DeploymentNotificationWorkItem(deploymentHub, deployment);
+                await notificationQueue.EnqueueAsync(deploymentWorkItem, cancellationToken);
+            }
         }
         catch (Exception ex)
         {
@@ -39,31 +54,13 @@ internal sealed class ContainerUpdatedWorkItem(
         }
     }
 
-    private async Task UpdateContainer(IUnitOfWork uow, Container container, CancellationToken cancellationToken)
+    private async Task<Container> UpdateContainer(IUnitOfWork uow, Container container, CancellationToken cancellationToken)
     {
         container.PartialUpdate(
                 state: eventInfo.Container?.State,
                 ports: eventInfo.Container?.Ports);
 
         await uow.Containers.UpdateAsync(container, cancellationToken);
-        await uow.CommitAsync(cancellationToken);
-
-        var workItem = new ContainerNotificationWorkItem(container, eventInfo, dockerDaemonHub, containerEventBroadcaster);
-        await notificationQueue.EnqueueAsync(workItem, cancellationToken);
-    }
-
-    private async Task UpdateDeployment(IUnitOfWork uow, Guid deploymentId, CancellationToken cancellationToken)
-    {
-        var existing = await uow.Deployments.GetAsync(deploymentId, cancellationToken);
-        if (existing is null) return;
-        
-        existing.PartialUpdate(
-                status: Deployment.ToDeploymentStatus(eventInfo.Container?.State ?? ContainerStateStatus.Unknown));
-
-        await uow.Deployments.UpdateAsync(existing, cancellationToken);
-        await uow.CommitAsync(cancellationToken);
-
-        var workItem = new DeploymentNotificationWorkItem(deploymentHub, existing);
-        await notificationQueue.EnqueueAsync(workItem, cancellationToken);
+        return container;
     }
 }

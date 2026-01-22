@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { ContainerStateStatus, DeploymentStatus, RegistryStatus } from '@/api/generated/api.types';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { LoaderCircle } from 'lucide-react';
 
 type StateValue = boolean | ContainerStateStatus | RegistryStatus | DeploymentStatus;
 
@@ -23,6 +24,8 @@ const getStatusStyle = (value: StateValue) => {
     case RegistryStatus.Deprecated:
       return { colorClass: 'bg-orange-500', tooltip: 'Deprecated' };
     // Deployment
+    case DeploymentStatus.Unknown:
+      return { colorClass: 'bg-violet-400', tooltip: 'Unknown' };
     case DeploymentStatus.Created:
       return { colorClass: 'bg-blue-400', tooltip: 'Created' };
     case DeploymentStatus.Healthy:
@@ -52,9 +55,10 @@ const getStatusStyle = (value: StateValue) => {
   }
 };
 
-export const StateIndicator = memo(({ value }: { value: StateValue }) => {
+export const StateIndicator = memo(({ value, isProcessing }: { value: StateValue; isProcessing?: boolean }) => {
   const { colorClass, tooltip } = getStatusStyle(value);
 
+  if (isProcessing) return <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />;
   return (
     <TooltipProvider delayDuration={200}>
       <Tooltip>

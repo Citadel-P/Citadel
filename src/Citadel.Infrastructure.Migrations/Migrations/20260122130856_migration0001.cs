@@ -69,7 +69,7 @@ namespace Infrastructure.Migrations.Migrations
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
                     Configuration = table.Column<string>(type: "TEXT", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
                     Description = table.Column<string>(type: "TEXT", maxLength: 600, nullable: true),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
@@ -126,11 +126,14 @@ namespace Infrastructure.Migrations.Migrations
                     AutoUpdateState_LastError = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true),
                     AutoUpdateState_RemoteDigest = table.Column<string>(type: "TEXT", nullable: true),
                     AutoUpdateState_Status = table.Column<string>(type: "TEXT", nullable: true),
+                    ControlStartedAt = table.Column<long>(type: "INTEGER", nullable: true),
+                    ControlState = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true, defaultValue: "Idle"),
                     CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
                     Description = table.Column<string>(type: "TEXT", nullable: true),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
                     PlatformId = table.Column<string>(type: "TEXT", nullable: false),
+                    RowVersion = table.Column<long>(type: "INTEGER", nullable: false, defaultValue: 0L),
                     Spec = table.Column<string>(type: "TEXT", nullable: false),
                     Status = table.Column<string>(type: "TEXT", nullable: false),
                     UpdateBehavior = table.Column<string>(type: "TEXT", nullable: true)
@@ -293,6 +296,8 @@ namespace Infrastructure.Migrations.Migrations
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
+                    ControlStartedAt = table.Column<long>(type: "INTEGER", nullable: true),
+                    ControlState = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true, defaultValue: "Idle"),
                     Created = table.Column<long>(type: "REAL", nullable: false),
                     DeploymentId = table.Column<string>(type: "TEXT", nullable: true),
                     DockerContainerId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
@@ -301,6 +306,7 @@ namespace Infrastructure.Migrations.Migrations
                     Name = table.Column<string>(type: "TEXT", nullable: false),
                     PlatformId = table.Column<string>(type: "TEXT", nullable: false),
                     Ports = table.Column<string>(type: "TEXT", nullable: false),
+                    RowVersion = table.Column<long>(type: "INTEGER", nullable: false, defaultValue: 0L),
                     Stack = table.Column<string>(type: "TEXT", nullable: true),
                     State = table.Column<string>(type: "TEXT", nullable: false),
                     Updated = table.Column<string>(type: "TEXT", nullable: false)

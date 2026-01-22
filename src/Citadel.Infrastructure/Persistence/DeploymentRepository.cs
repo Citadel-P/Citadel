@@ -5,7 +5,6 @@ using Domain.Entities;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using Infrastructure.TypeHandlers;
-using System;
 using System.Data;
 using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
@@ -14,6 +13,29 @@ namespace Infrastructure.Persistence;
 
 internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) : IDeploymentRepository
 {
+    private const string BaseSelect = """
+    SELECT
+        d.Id,
+        d.Name, 
+        d.Description, 
+        d.PlatformId, 
+        d.Status, 
+        d.CreatedAt, 
+        d.CreatedByActorId, 
+        d.UpdateBehavior,
+        d.AutoUpdateState_LastCheckedAt, 
+        d.AutoUpdateState_Status,
+        d.AutoUpdateState_CurrentDigest,
+        d.AutoUpdateState_RemoteDigest,
+        d.AutoUpdateState_LastError,
+        d.ControlState,
+        d.ControlStartedAt,
+        d.RowVersion,
+        c.Id AS Container_ContainerId,
+        c.DockerContainerId AS Container_DockerContainerId
+    FROM Deployments d 
+    LEFT JOIN Containers c ON d.Id = c.DeploymentId
+    """;
 
     public async Task<Deployment?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -30,34 +52,42 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         var result = await db.QuerySingleOrDefaultAsync<DeploymentDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
         return result?.ToDomain();
     }
-
-    public Task<IEnumerable<Deployment>?> GetInfoAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
+    
+    public async Task<Deployment?> GetInfoAsync(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = """
-            SELECT
-                d.Id,
-                d.Name, 
-                d.Description, 
-                d.PlatformId, 
-                d.Status, 
-                d.CreatedAt, 
-                d.CreatedByActorId, 
-                d.UpdateBehavior,
-                d.AutoUpdateState_LastCheckedAt, 
-                d.AutoUpdateState_Status,
-                d.AutoUpdateState_CurrentDigest,
-                d.AutoUpdateState_RemoteDigest,
-                d.AutoUpdateState_LastError
-            FROM Deployments d 
-            WHERE d.Id IN (
-                SELECT value FROM json_each(@Ids)
-            )
+        const string sql = BaseSelect + " "+ "WHERE d.Id = @Id LIMIT 1";
+
+        var result = await db.QuerySingleOrDefaultAsync<DeploymentDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        return result?.ToDomain();
+    }
+
+    public async Task<IEnumerable<Deployment>?> GetInfoAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
+    {
+        const string sql = BaseSelect + " " + """
+            WHERE d.Id IN (SELECT value FROM json_each(@Ids))
+            ORDER BY d.CreatedAt DESC, d.Name ASC
+        """;
+        var result = await db.QueryAsync<DeploymentDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
+        return result.ToDomain();
+    }
+
+    public async Task<IEnumerable<Deployment>> GetStuckDeploymentsAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
+    {
+        const string sql = BaseSelect + " " +"""
+            WHERE 
+                d.ControlState = @ControlState
+                AND d.ControlStartedAt < @ControlStartedAt
             ORDER BY 
-                d.CreatedAt DESC,
-                d.Name ASC
+                d.ControlStartedAt ASC
             """;
-        return db.QueryAsync<DeploymentDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx())
-            .ContinueWith(t => (IEnumerable<Deployment>?)t.Result.Select(dto => dto.ToDomain()), cancellationToken);
+        var result = await db.QueryAsync<DeploymentDto>(sql, new 
+        {
+            ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
+            ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s,
+            cancellationToken 
+        }, transaction: tx());
+
+        return result.ToDomain();
     }
 
     public Task<bool> ExistsAsync(string name, Guid platformId, CancellationToken cancellationToken)
@@ -112,7 +142,10 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
                 d.Name, 
                 d.Description, 
                 d.PlatformId, 
-                d.Status, 
+                d.RowVersion,
+                d.ControlState,
+                d.ControlStartedAt,
+                d.Status,
                 d.CreatedAt, 
                 d.CreatedByActorId, 
                 d.UpdateBehavior,
@@ -167,6 +200,40 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         }, transaction: tx());
     }
 
+    public Task<int> UpdateProcessingAsync(Guid id, DeploymentStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, CancellationToken cancellationToken)
+    {
+        var conditions = new List<string>
+        {
+            "Id = @Id"
+        };
+
+        if (checkRowVersion == true)
+            conditions.Add("RowVersion = @RowVersion");
+
+        var sql = $"""
+            UPDATE Deployments
+            SET
+                ControlState = @State,
+                ControlStartedAt = @StartedAt,
+                Status = @Status,
+                RowVersion = RowVersion + 1
+            WHERE {string.Join(" AND ", conditions)}
+        """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id.Format(),
+                State = EnumFormatter<ResourceControlState>.GetValue(state),
+                Status = EnumFormatter<DeploymentStatus>.GetValue(status),
+                RowVersion = rowVersion,
+                StartedAt = startedAt
+            },
+            transaction: tx()
+        );
+    }
+
     public Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -179,27 +246,6 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return db.ExecuteAsync(
             sql,
             new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid) },
-            transaction: tx()
-        );
-    }
-
-    public Task<int> UpdateDeploymentsStatusAsync(IEnumerable<Guid> ids, DeploymentStatus status, CancellationToken cancellationToken)
-    {
-        const string sql = """
-        UPDATE Deployments
-        SET Status = @Status
-        WHERE Id IN (
-            SELECT value FROM json_each(@Ids)
-        )
-        """;
-
-        return db.ExecuteAsync(
-            sql,
-            new
-            {
-                Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid),
-                Status = status
-            },
             transaction: tx()
         );
     }

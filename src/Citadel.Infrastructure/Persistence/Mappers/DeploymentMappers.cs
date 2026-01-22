@@ -15,12 +15,15 @@ internal static class DeploymentMappers
         return Deployment.FromPersistence(
             id: dto.Id,
             name: dto.Name,
+            rowVersion: dto.RowVersion,
             platformId: dto.PlatformId,
             description: dto.Description,
             createdByActorId: dto.CreatedByActorId,
             createdAt: dto.CreatedAt,
+            controlStartedAt: dto.ControlStartedAt,
             status: Enum.Parse<DeploymentStatus>(dto.Status),
             updateBehavior: Enum.Parse<UpdateBehavior>(dto.UpdateBehavior),
+            controlState: Enum.Parse<ResourceControlState>(dto.ControlState),
             autoUpdateState: new AutoUpdateState(
                 LastCheckedAt: dto.AutoUpdateState_LastCheckedAt,
                 Status: Enum.Parse<AutoUpdateStatus>(dto.AutoUpdateState_Status),

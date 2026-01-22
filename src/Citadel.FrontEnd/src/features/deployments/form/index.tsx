@@ -6,7 +6,7 @@ import { StateIndicator } from '@/components/custom/state-indicator';
 import { useDeploymentGroup } from './hooks/useDeploymentGroup';
 import { ContainerLogs } from '@/features/docker-resources/containers/container-info/container-logs';
 import { DeploymentRuntime } from './deployment-runtime';
-import { DeploymentView } from '@/api/generated/api.types';
+import { DeploymentView, ResourceControlState } from '@/api/generated/api.types';
 import { normalizeDockerId } from '@/lib/utils';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
@@ -18,7 +18,12 @@ export const DeploymentFormComponents: RequiredFormComponents = {
   EditForm: {
     Header: {
       Indicator: ({ resource }: { resource: RequiredFormFields }) => {
-        return <StateIndicator value={resource.status as any} />;
+        return (
+          <StateIndicator
+            value={resource.status as any}
+            isProcessing={(resource as any).controlState === ResourceControlState.Processing}
+          />
+        );
       },
       ActionButtons: ({ resource }) => {
         return <GenericActionBarButtons resource={resource} actions={Object.values(DeploymentActions)} />;

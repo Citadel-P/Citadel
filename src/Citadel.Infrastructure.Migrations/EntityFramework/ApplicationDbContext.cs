@@ -1,6 +1,7 @@
 ﻿using Domain;
 using Hosting.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Infrastructure.Migrations.EntityFramework;
@@ -124,6 +125,8 @@ internal static class Configuration
         container.Property<string>("State").HasColumnType("TEXT").IsRequired();
         container.Property<string>("Stack").HasColumnType("TEXT");
         container.Property<string>("Ports").HasColumnType("TEXT").IsRequired();
+
+        container.AddReconcilableMember();
 
         container
             .HasOne("Platform")
@@ -255,9 +258,9 @@ internal static class Configuration
         registry.Property<string>("Description").HasColumnType("TEXT").IsRequired(false).HasMaxLength(600);
         registry.Property<string>("RegistryHost").HasColumnType("TEXT").IsRequired();
         registry.Property<string>("Status").HasColumnType("TEXT").IsRequired();
-        registry.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired();
-        registry.Property<Guid>("CreatedByActorId").HasConversion(GuidConverter).IsRequired();
         registry.Property<string>("Configuration").HasColumnType("TEXT").IsRequired();
+
+        registry.AddAuditedMemebers();
 
         registry.HasIndex("Name").IsUnique().HasDatabaseName($"IX_{tableName}_Name");
 
@@ -324,8 +327,7 @@ internal static class Configuration
         user.Property<string>("Name").HasColumnType("TEXT").HasMaxLength(100).IsRequired();
         user.Property<string>("Email").HasColumnType("TEXT").IsRequired(false);
         user.Property<string>("Password").HasColumnType("TEXT").IsRequired(false);
-        user.Property<Guid>("CreatedByActorId").HasConversion(GuidConverter).IsRequired();
-        user.Property<DateTime>("CreatedAt").HasColumnType("TEXT").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        user.AddAuditedMemebers();
 
         user.HasIndex("Email")
             .IsUnique()
@@ -450,8 +452,6 @@ internal static class Configuration
         deployment.Property<string>("Description").HasColumnType("TEXT").IsRequired(false);
         deployment.Property<string>("Status").HasColumnType("TEXT").IsRequired();
         deployment.Property<string>("Spec").HasColumnType("TEXT").IsRequired();
-        deployment.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
-        deployment.Property<Guid>("CreatedByActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         deployment.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
 
         deployment.Property<string>("UpdateBehavior").HasColumnType("TEXT").HasDefaultValue(null);
@@ -460,6 +460,10 @@ internal static class Configuration
         deployment.Property<string>("AutoUpdateState_CurrentDigest").HasColumnType("TEXT").HasDefaultValue(null);
         deployment.Property<string>("AutoUpdateState_RemoteDigest").HasColumnType("TEXT").HasDefaultValue(null);
         deployment.Property<string>("AutoUpdateState_LastError").HasColumnType("TEXT").HasMaxLength(2000).HasDefaultValue(null);
+
+        deployment
+            .AddReconcilableMember()
+            .AddAuditedMemebers();
 
         deployment
            .HasOne("Platform")
@@ -513,6 +517,23 @@ internal static class Configuration
         image.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
         image.HasIndex("DockerImageId", "PlatformId").IsUnique()
             .HasDatabaseName($"IX_{tableName}_DockerImageId_PlatformId");
+
+        return builder;
+    }
+
+    private static EntityTypeBuilder AddReconcilableMember(this EntityTypeBuilder builder)
+    {
+        builder.Property<long>("RowVersion").HasColumnType("INTEGER").HasDefaultValue(0);
+        builder.Property<long?>("ControlStartedAt").HasColumnType("INTEGER").HasDefaultValue(null);
+        builder.Property<string>("ControlState").HasColumnType("TEXT").HasMaxLength(64).HasDefaultValue(ResourceControlState.Idle);
+
+        return builder;
+    }
+
+    private static EntityTypeBuilder AddAuditedMemebers(this EntityTypeBuilder builder)
+    {
+        builder.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        builder.Property<Guid>("CreatedByActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
 
         return builder;
     }

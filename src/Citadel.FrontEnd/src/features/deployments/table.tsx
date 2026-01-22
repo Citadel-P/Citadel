@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { DeploymentView, PlatformStatus } from '@/api/generated/api.types';
+import { DeploymentView, PlatformStatus, ResourceControlState } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -148,7 +148,10 @@ const DeploymentNameRow = ({ deployment }: { deployment: DeploymentView }) => {
   return (
     <div className="flex items-center whitespace-nowrap">
       <div className="flex items-center">
-        <StateIndicator value={deployment.status} />
+        <StateIndicator
+          value={deployment.status}
+          isProcessing={deployment.controlState === ResourceControlState.Processing}
+        />
       </div>
       <span
         className="cursor-pointer hover:underline"

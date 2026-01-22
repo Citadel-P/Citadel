@@ -14,7 +14,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Moq;
-using System.Threading;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;

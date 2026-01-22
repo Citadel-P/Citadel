@@ -1,4 +1,4 @@
-import { DeploymentStatus, DeploymentView } from '@/api/generated/api.types';
+import { DeploymentView } from '@/api/generated/api.types';
 import { ContainerInfoTable } from '@/features/docker-resources/containers/container-info/container-info-table';
 import { useContainerInfoGroup } from '@/features/docker-resources/containers/hooks/useContainerInfoGroup';
 import Loader from '@/components/ui/loader';
@@ -8,8 +8,7 @@ export const DeploymentRuntime = ({ deployment }: { deployment: DeploymentView }
     deployment.dockerContainerId ?? undefined,
     deployment.platformId,
   );
-
-  if (isLoading && deployment.status !== DeploymentStatus.Created) return <Loader />;
+  if (isLoading) return <Loader />;
   if (!containerInfo) return null;
   return (
     <ContainerInfoTable

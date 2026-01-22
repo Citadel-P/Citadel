@@ -27,6 +27,7 @@
     createdAt: Date_MinValue,
     createdByActorId: Guid_Empty,
     status: Created,
+    controlState: Idle,
     autoUpdateState: {
       lastCheckedAt: Date_MinValue,
       status: Unknown

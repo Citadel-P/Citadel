@@ -1,7 +1,7 @@
 import { Ban, Pause, Play, Rocket, StepForward, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
-import { DeploymentStatus, DeploymentView } from '@/api/generated/api.types';
+import { DeploymentStatus, DeploymentView, ResourceControlState } from '@/api/generated/api.types';
 import { useTaskSheet } from '@/lib/atoms';
 
 const useVariables = (resources: DeploymentView | DeploymentView[]) =>
@@ -21,7 +21,10 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
         const selected = Array.isArray(resources) ? resources[0] : resources;
 
         return {
-          canExecute: !!selected && selected.status !== DeploymentStatus.Applying,
+          canExecute:
+            !!selected &&
+            selected.status !== DeploymentStatus.Applying &&
+            selected.controlState !== ResourceControlState.Processing,
           run: () => openSheet({ kind: 'deploy', payload: { id: selected.id, name: selected.name } }),
         };
       },
@@ -35,7 +38,10 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
         const selected = Array.isArray(resources) ? resources[0] : resources;
 
         return {
-          canExecute: !!selected && selected.status !== DeploymentStatus.Applying,
+          canExecute:
+            !!selected &&
+            selected.status !== DeploymentStatus.Applying &&
+            selected.controlState !== ResourceControlState.Processing,
           run: () => openSheet({ kind: 'deploy', payload: { id: selected.id, name: selected.name, recreate: true } }),
         };
       },
@@ -48,7 +54,8 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
     mutateKey: 'startDeployments',
     useVariables,
     canExecute: (r) => {
-      const can = (x: DeploymentView) => x.status === DeploymentStatus.Stopped;
+      const can = (x: DeploymentView) =>
+        x.status === DeploymentStatus.Stopped && x.controlState !== ResourceControlState.Processing;
       return Array.isArray(r) ? r.some(can) : can(r);
     },
   })
@@ -59,7 +66,8 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
     mutateKey: 'stopDeployments',
     useVariables,
     canExecute: (r) => {
-      const can = (x: DeploymentView) => x.status === DeploymentStatus.Healthy;
+      const can = (x: DeploymentView) =>
+        x.status === DeploymentStatus.Healthy && x.controlState !== ResourceControlState.Processing;
       return Array.isArray(r) ? r.some(can) : can(r);
     },
   })
@@ -72,7 +80,8 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
       mutateKey: 'pauseDeployments',
       useVariables,
       canExecute: (r) => {
-        const can = (x: DeploymentView) => x.status === DeploymentStatus.Healthy;
+        const can = (x: DeploymentView) =>
+          x.status === DeploymentStatus.Healthy && x.controlState !== ResourceControlState.Processing;
         return Array.isArray(r) ? r.some(can) : can(r);
       },
     },
@@ -82,7 +91,8 @@ export const { info: DeploymentActions } = createActionsBuilder<DeploymentView>(
       mutateKey: 'resumeDeployments',
       useVariables,
       canExecute: (r) => {
-        const can = (x: DeploymentView) => x.status === DeploymentStatus.Pending;
+        const can = (x: DeploymentView) =>
+          x.status === DeploymentStatus.Pending && x.controlState !== ResourceControlState.Processing;
         return Array.isArray(r) ? r.some(can) : can(r);
       },
     },

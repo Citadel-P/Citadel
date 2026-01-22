@@ -19,7 +19,7 @@
     <PackageVersion Include="Dapper.AOT" Version="1.0.48" />
     <PackageVersion Include="dbup-sqlite" Version="6.0.4" />
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.2" />
-    <PackageVersion Include="FluentMigrator" Version="8.0.0" />
+    <PackageVersion Include="FluentMigrator" Version="8.0.1" />
     <PackageVersion Include="FluentMigrator.Runner" Version="7.1.0" />
     <PackageVersion Include="FluentMigrator.Runner.SQLite" Version="7.1.0" />
     <!--Test-->

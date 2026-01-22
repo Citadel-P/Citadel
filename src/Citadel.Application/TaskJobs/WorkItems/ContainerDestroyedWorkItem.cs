@@ -3,6 +3,7 @@ using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Domain.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Application.TaskJobs.WorkItems;
@@ -22,6 +23,8 @@ internal sealed class ContainerDestroyedWorkItem(
     {
         try
         {
+            Deployment? deployment = null;
+            Image? image = null;
             var existing = await uow.Containers.GetByIdAsync(eventInfo.ContainerId, cancellationToken);
             if (existing is null) return;
 
@@ -29,24 +32,34 @@ internal sealed class ContainerDestroyedWorkItem(
 
             if (!string.IsNullOrEmpty(existing.DockerImageId))
             {
-                await UpdateImage(uow, existing, cancellationToken);
+                image = await UpdateImage(uow, existing, cancellationToken);
             }
 
             if (existing.DeploymentId != null)
             {
-                await UpdateDeployment(uow, existing.DeploymentId.Value, cancellationToken);
+                deployment = await UpdateDeploymentStatus(uow, existing.DeploymentId.Value, DeploymentStatus.Degraded, cancellationToken);
             }
 
             await uow.Containers.DeleteAsync([existing.Id], cancellationToken);
             await uow.CommitAsync(cancellationToken);
 
-            var notificationItem = new ContainerNotificationWorkItem(
+            var containerNotification = new ContainerNotificationWorkItem(
                 existing,
                 eventInfo,
                 dockerDaemonHub,
                 containerEventBroadcaster);
 
-            await notificationQueue.EnqueueAsync(notificationItem, cancellationToken);
+            await notificationQueue.EnqueueAsync(containerNotification, cancellationToken);
+            if (deployment != null)
+            {
+                var deploymentNotification = new DeploymentNotificationWorkItem(deploymentHub, deployment);
+                await notificationQueue.EnqueueAsync(deploymentNotification, cancellationToken);
+            }
+            if (image != null)
+            {
+                var imageNotificationItem = new SendImageNotificationWorkItem(dockerDaemonHub, image, "update");
+                await notificationQueue.EnqueueAsync(imageNotificationItem, cancellationToken);
+            }
         }
         catch (Exception ex)
         {
@@ -54,30 +67,34 @@ internal sealed class ContainerDestroyedWorkItem(
         }
     }
 
-    private async Task UpdateImage(IUnitOfWork uow, Domain.Entities.Container container, CancellationToken cancellationToken)
+    private async Task<Image?> UpdateImage(IUnitOfWork uow, Container container, CancellationToken cancellationToken)
     {
         var image = await uow.Images.GetByDockerImageIdAsync(container.DockerImageId!, platformId, cancellationToken);
-        if (image != null)
-        {
-            // will commit in the main method
-            image.PartialUpdate(containers: image.Containers - 1);
-            await uow.Images.AddOrUpdateAsync(image, cancellationToken);
+        if (image is null) return null;
 
-            var imageNotificationItem = new SendImageNotificationWorkItem(dockerDaemonHub, image, "update");
-            await notificationQueue.EnqueueAsync(imageNotificationItem, cancellationToken);
-        }
+        image.PartialUpdate(containers: image.Containers - 1);
+        await uow.Images.AddOrUpdateAsync(image, cancellationToken);
+
+        return image;
     }
 
-    private async Task UpdateDeployment(IUnitOfWork uow, Guid deploymentId, CancellationToken cancellationToken)
+    internal static async Task<Deployment?> UpdateDeploymentStatus(IUnitOfWork uow, Guid deploymentId, 
+        DeploymentStatus status, CancellationToken cancellationToken)
     {
-        var existing = await uow.Deployments.GetAsync(deploymentId, cancellationToken);
-        if (existing is null) return;
+        var deployment = await uow.Deployments.GetInfoAsync(deploymentId, cancellationToken);
+        if (deployment is null) return null;
 
-        // will commit in the main method
-        existing.PartialUpdate(status: DeploymentStatus.Degraded);
-        await uow.Deployments.UpdateAsync(existing, cancellationToken);
+        deployment.ReleaseProcessing(status);
 
-        var workItem = new DeploymentNotificationWorkItem(deploymentHub, existing);
-        await notificationQueue.EnqueueAsync(workItem, cancellationToken);
+        await uow.Deployments.UpdateProcessingAsync(
+            id: deployment.Id,
+            status: deployment.Status,
+            state: deployment.ControlState,
+            startedAt: deployment.ControlStartedAt,
+            rowVersion: deployment.RowVersion,
+            checkRowVersion: false,
+            cancellationToken);
+
+        return deployment;
     }
 }

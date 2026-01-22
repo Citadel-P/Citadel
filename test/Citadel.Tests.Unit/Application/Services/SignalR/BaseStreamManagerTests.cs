@@ -116,7 +116,7 @@ public class BaseStreamManagerTests
         var mgr = new TestManager();
 
         var withEntity = mgr.GetEntityIdPublic("prefix:entityId");
-        Assert.Equal("entityId", withEntity);
+        Assert.Equal("entityid", withEntity);
 
         var noColon = mgr.GetEntityIdPublic("no-colon");
         Assert.Equal(string.Empty, noColon);

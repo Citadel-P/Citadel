@@ -10,7 +10,7 @@ public class Container(
     string? stack = null,
     Guid? deploymentId = null,
     Guid? imageId = null,
-    IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null)
+    IDictionary<string, IReadOnlyList<HostPortBinding>>? ports = null) : IReconcilableResource
 {
     private readonly List<ContainerStat> stats = [];
     private readonly IDictionary<string, IReadOnlyList<HostPortBinding>> ports = ports is not null 
@@ -27,6 +27,13 @@ public class Container(
     public long Updated { get; private set; }
     public ContainerStateStatus State { get; set; } = state;
     public string? Stack { get; private set; } = stack;
+
+    #region IReconcilableResource Members
+    public ResourceControlState ControlState { get; private set; } = ResourceControlState.Idle;
+    public long? ControlStartedAt { get; private set; }
+    public long RowVersion { get; private set; }
+    #endregion
+
     public IDictionary<string, IReadOnlyList<HostPortBinding>> Ports => ports;
     public IReadOnlyCollection<ContainerStat>? Stats => stats;
     public Platform? Platform { get; private set; } = null!;

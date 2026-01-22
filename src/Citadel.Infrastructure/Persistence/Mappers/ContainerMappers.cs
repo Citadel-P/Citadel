@@ -50,10 +50,13 @@ internal static class ContainerMappers
                 id: container.Deployment_DeploymentId ?? Guid.Empty,
                 name: container.Deployment_DeploymentName,
                 platformId: container.PlatformId,
-                status: Enum.Parse<DeploymentStatus>(container.Deployment_DeploymentStatus ?? DeploymentStatus.Pending.ToString()),
+                status: Enum.Parse<DeploymentStatus>(container.Deployment_DeploymentStatus ?? DeploymentStatus.Unknown.ToString()),
                 createdAt: DateTime.MinValue,
                 createdByActorId: Guid.Empty,
-                updateBehavior: UpdateBehavior.Disabled
+                updateBehavior: UpdateBehavior.Disabled,
+                rowVersion:0,
+                controlState: ResourceControlState.Idle,
+                controlStartedAt: 0
             ),
             image: container.Image_ImageId != null ? Image.FromPersistence(
                 id: container.Image_ImageId ?? Guid.Empty,
@@ -106,10 +109,13 @@ internal static class ContainerMappers
                 id: container.Deployment_DeploymentId ?? Guid.Empty,
                 name: container.Deployment_DeploymentName,
                 platformId: container.PlatformId,
-                status: Enum.Parse<DeploymentStatus>(container.Deployment_DeploymentStatus ?? DeploymentStatus.Pending.ToString()),
+                status: Enum.Parse<DeploymentStatus>(container.Deployment_DeploymentStatus ?? DeploymentStatus.Unknown.ToString()),
                 createdAt: DateTime.MinValue,
                 createdByActorId: Guid.Empty,
-                updateBehavior: UpdateBehavior.Disabled
+                updateBehavior: UpdateBehavior.Disabled,
+                rowVersion: 0,
+                controlState: ResourceControlState.Idle,
+                controlStartedAt: 0
             ),
             stats: [new ContainerStat(
                 ContainerId: container.Id,

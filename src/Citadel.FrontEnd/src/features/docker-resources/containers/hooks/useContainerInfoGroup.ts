@@ -38,9 +38,8 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
   });
 
   useEffect(() => {
-    if (
-      nid &&
-      containerEvent?.container.containerId.startsWith(nid) &&
+    if (nid && 
+      containerEvent?.container.containerId.startsWith(nid) && 
       containerEvent?.eventType !== 'destroy'
     ) {
       const container: DockerContainerView = {
@@ -56,5 +55,5 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
     }
   }, [containerEvent, nid]);
 
-  return { containerInfo, isLoading: isLoading || !containerInfo };
+  return { containerInfo, isLoading };
 };

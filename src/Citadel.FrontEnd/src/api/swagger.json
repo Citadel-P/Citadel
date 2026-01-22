@@ -7021,6 +7021,7 @@
           "createdAt",
           "createdByActorId",
           "status",
+          "controlState",
           "autoUpdateState",
           "spec",
           "updateBehavior",
@@ -7054,6 +7055,9 @@
           },
           "status": {
             "$ref": "#/components/schemas/DeploymentStatus"
+          },
+          "controlState": {
+            "$ref": "#/components/schemas/ResourceControlState"
           },
           "autoUpdateState": {
             "$ref": "#/components/schemas/AutoUpdateState"
@@ -10284,6 +10288,12 @@
             "type": "boolean"
           }
         }
+      },
+      "ResourceControlState": {
+        "enum": [
+          "Idle",
+          "Processing"
+        ]
       },
       "ResourceSpec": {
         "required": [

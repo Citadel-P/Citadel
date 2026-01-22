@@ -73,7 +73,7 @@ internal class PlatformSyncJob(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error during periodic platform synchronization.");
+                logger.LogError(ex, "Error during periodic {JobName} synchronization.", nameof(PlatformSyncJob));
             }
 
             await Task.Delay(SyncInterval, cancellationToken);
@@ -118,7 +118,6 @@ internal class PlatformSyncJob(
     {
         try
         {
-            // --------  Short db read: get current platform --------
             string? platformName;
             string? platformAddress;
 

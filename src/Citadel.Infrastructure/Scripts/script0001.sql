@@ -36,7 +36,7 @@ CREATE TABLE "Roles" (
 CREATE TABLE "Registries" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Registries" PRIMARY KEY,
     "Configuration" TEXT NOT NULL,
-    "CreatedAt" TEXT NOT NULL,
+    "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     "CreatedByActorId" TEXT NOT NULL,
     "Description" TEXT NULL,
     "Name" TEXT NOT NULL,
@@ -64,11 +64,14 @@ CREATE TABLE "Deployments" (
     "AutoUpdateState_LastError" TEXT NULL,
     "AutoUpdateState_RemoteDigest" TEXT NULL,
     "AutoUpdateState_Status" TEXT NULL,
+    "ControlStartedAt" INTEGER NULL,
+    "ControlState" TEXT NULL DEFAULT 'Idle',
     "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     "CreatedByActorId" TEXT NOT NULL,
     "Description" TEXT NULL,
     "Name" TEXT NOT NULL,
     "PlatformId" TEXT NOT NULL,
+    "RowVersion" INTEGER NOT NULL DEFAULT 0,
     "Spec" TEXT NOT NULL,
     "Status" TEXT NOT NULL,
     "UpdateBehavior" TEXT NULL,
@@ -133,6 +136,8 @@ CREATE TABLE "UsersTeams" (
 
 CREATE TABLE "Containers" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Containers" PRIMARY KEY,
+    "ControlStartedAt" INTEGER NULL,
+    "ControlState" TEXT NULL DEFAULT 'Idle',
     "Created" REAL NOT NULL,
     "DeploymentId" TEXT NULL,
     "DockerContainerId" TEXT NOT NULL,
@@ -141,6 +146,7 @@ CREATE TABLE "Containers" (
     "Name" TEXT NOT NULL,
     "PlatformId" TEXT NOT NULL,
     "Ports" TEXT NOT NULL,
+    "RowVersion" INTEGER NOT NULL DEFAULT 0,
     "Stack" TEXT NULL,
     "State" TEXT NOT NULL,
     "Updated" TEXT NOT NULL,
@@ -245,7 +251,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260120092550_migration0001', '10.0.2');
+VALUES ('20260122130856_migration0001', '10.0.2');
 
 COMMIT;
 

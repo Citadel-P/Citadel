@@ -7,7 +7,7 @@ public sealed class Deployment(
     Guid platformId,
     UpdateBehavior updateBehavior,
     DeploymentSpec? spec = null,
-    string? description = null) : AuditedEntity(createdByActorId)
+    string? description = null) : AuditedEntity(createdByActorId), IReconcilableResource
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid PlatformId { get; private set; } = platformId;
@@ -19,26 +19,39 @@ public sealed class Deployment(
     public UpdateBehavior UpdateBehavior { get; private set; } = updateBehavior;
     public AutoUpdateState? AutoUpdateState { get; private set; } = new AutoUpdateState(LastCheckedAt: DateTime.MinValue, Status: AutoUpdateStatus.Unknown);
 
+    #region IReconcilableResource Members
+    public ResourceControlState ControlState { get; private set; } = ResourceControlState.Idle;
+    public long? ControlStartedAt { get; private set; }
+    public long RowVersion { get; private set; }
+    #endregion
+
     public DeploymentSpec? Spec { get; private set; } = spec;
 
     public Platform? Platform { get; private set; } = null;
     public Image? Image { get; private set; } = null;
     public Container? Container { get; private set; } = null;
 
-    public void MarkAsDeployed()
+    public void MarkProcessing()
     {
-        Status = DeploymentStatus.Healthy;
+        Status = DeploymentStatus.Pending;
+        ControlState = ResourceControlState.Processing;
+        ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     }
 
-    public void MarkAsFailed()
+    public void ReleaseProcessing(DeploymentStatus status)
     {
-        Status = DeploymentStatus.Failed;
+        Status = status;
+        ControlState = ResourceControlState.Idle;
+        ControlStartedAt = null;
     }
 
     public static Deployment FromPersistence(
         Guid id,
         string name,
         Guid platformId,
+        long rowVersion,
+        long? controlStartedAt,
+        ResourceControlState controlState,
         DeploymentStatus status,
         DateTime createdAt,
         Guid createdByActorId,
@@ -53,11 +66,15 @@ public sealed class Deployment(
         return new Deployment(name, status, createdByActorId, platformId, updateBehavior, spec, description)
         {
             Id = id,
-            CreatedAt = createdAt,
-            AutoUpdateState = autoUpdateState,
-            Platform = platform,
             Image = image,
-            Container = container
+            Platform = platform,
+            CreatedAt = createdAt,
+            Container = container,
+            RowVersion = rowVersion,
+            ControlState = controlState,
+            AutoUpdateState = autoUpdateState,
+            ControlStartedAt = controlStartedAt,
+
         };
     }
 
@@ -67,6 +84,7 @@ public sealed class Deployment(
         Guid? platformId = null,
         DeploymentStatus? status = null,
         UpdateBehavior? updateBehavior = null,
+        ResourceControlState? resourceControlState = null,
         DeploymentSpec? spec = null,
         Container? container = null)
     {
@@ -77,6 +95,7 @@ public sealed class Deployment(
         if (spec != null) Spec = spec;
         if (updateBehavior != null) UpdateBehavior = updateBehavior.Value;
         if (container != null) Container = container;
+        if (resourceControlState != null) ControlState = resourceControlState.Value;
     }
 
     public static DeploymentStatus ToDeploymentStatus(ContainerStateStatus status)

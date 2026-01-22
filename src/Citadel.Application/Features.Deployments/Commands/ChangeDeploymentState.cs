@@ -21,19 +21,48 @@ internal sealed class ChangeDeploymentStateHandler(
 {
     public async ValueTask<Result> Handle(ChangeDeploymentState command, CancellationToken cancellationToken)
     {
-        IEnumerable<Container>? containers;
+        IEnumerable<Deployment>? deployments;
         await using (var scope = scopeFactory.CreateAsyncScope())
         {
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            containers = await uow.Containers.GetByDeploymentIdsAsync(command.DeploymentIds, cancellationToken);
+            deployments = await uow.Deployments.GetInfoAsync(command.DeploymentIds, cancellationToken);
         }
 
+        var containers = deployments?.Select(s => s.Container).Where(s => s is not null) ?? [];
         if (!containers.Any()) 
         {
             return Result.Failure(new NotFoundError("No containers found for the provided deployment ID (s)."));
         }
 
-        var groupByPlatform = containers.GroupBy(c => c.PlatformId);
+        var successfullyUpdated = new List<Deployment>();
+
+        await using (var scope = scopeFactory.CreateAsyncScope())
+        {
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+            foreach (var original in deployments ?? [])
+            {
+                original.MarkProcessing();
+                var affectedRow = await uow.Deployments.UpdateProcessingAsync(
+                    original.Id,
+                    original.Status,
+                    original.ControlState,
+                    original.ControlStartedAt,
+                    original.RowVersion, 
+                    checkRowVersion: true, cancellationToken);
+
+                if (affectedRow != 0)
+                {
+                    successfullyUpdated.Add(original);
+                }
+            }
+            await uow.CommitAsync(cancellationToken);
+        }
+
+        foreach (var deployment in successfullyUpdated)
+        {
+            await notificationQueue.EnqueueAsync(new DeploymentNotificationWorkItem(deploymentHub, deployment), cancellationToken);
+        }
 
         if (!platformContainerCache.TryGetPlatformsWithContainers([.. containers.Select(s => s.DockerContainerId)], out var platformContainers))
         {
@@ -63,22 +92,6 @@ internal sealed class ChangeDeploymentStateHandler(
             {
                 return result;
             }
-        }
-
-        await using (var scope = scopeFactory.CreateAsyncScope())
-        {
-            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            var deployments = await uow.Deployments.GetInfoAsync(command.DeploymentIds, cancellationToken);
-           
-            foreach (var deployment in deployments ?? [])
-            {
-                deployment.PartialUpdate(status: DeploymentStatus.Pending);
-            }
-            var workItem = new DeploymentsNotificationWorkItem(deploymentHub, deployments ?? []);
-            await notificationQueue.EnqueueAsync(workItem, cancellationToken);
-
-            await uow.Deployments.UpdateDeploymentsStatusAsync(command.DeploymentIds, DeploymentStatus.Pending, cancellationToken);
-            await uow.CommitAsync(cancellationToken);
         }
 
         return Result.Success();

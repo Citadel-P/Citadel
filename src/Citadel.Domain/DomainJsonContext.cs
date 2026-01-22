@@ -66,6 +66,7 @@ public partial class ImagTagsContext : JsonSerializerContext
         typeof(JsonStringEnumConverter<ImageSource>),
         typeof(JsonStringEnumConverter<UpdateBehavior>),
         typeof(JsonStringEnumConverter<AutoUpdateStatus>),
+        typeof(JsonStringEnumConverter<ResourceControlState>),
         typeof(JsonStringEnumConverter<ContainerRestartPolicy>),
     })]
 [JsonSerializable(typeof(IEnumerable<Guid>))]

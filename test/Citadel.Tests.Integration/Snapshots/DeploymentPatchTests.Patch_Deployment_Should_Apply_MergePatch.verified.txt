@@ -6,6 +6,7 @@
   createdAt: DateTimeOffset_1,
   createdByActorId: Guid_3,
   status: Created,
+  controlState: Idle,
   autoUpdateState: {
     lastCheckedAt: Date_MinValue,
     status: Unknown

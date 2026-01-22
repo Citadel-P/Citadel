@@ -12,7 +12,6 @@ export const useDeploymentGroup = (deploymentId: string) => {
     if (!data) return;
     setDeployment(data.data);
   }, [data]);
-
   const handleDeploymentInfoUpdated = useCallback((deployment: DeploymentView) => {
     setDeployment((prev) => {
       if (!prev) return prev;
@@ -23,6 +22,7 @@ export const useDeploymentGroup = (deploymentId: string) => {
         description: deployment.description,
         dockerContainerId: deployment.dockerContainerId,
         containerId: deployment.containerId,
+        controlState: deployment.controlState,
       };
     });
   }, []);
