@@ -1,72 +1,63 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { ImagesView, ImageView } from '@/api/generated/api.types';
-import { useDockerDaemonGroup } from '@/features/platforms/hooks/useDockerDaemonGroup';
+import { useDockerDaemonGroup, ImageEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 
 export const useImagesGroup = (platformId?: string) => {
   const [isLoading, setIsLoading] = useState(false);
   const [imagesInfo, setimagesInfo] = useState<ImagesView | undefined>();
-  const { imageEvent } = useDockerDaemonGroup(platformId);
+
+  const onImageEvent = useCallback((event: ImageEvent) => {
+    setimagesInfo((currentInfo) => {
+      if (!currentInfo?.images) return currentInfo;
+
+      const { image, eventType } = event;
+      const existingIndex = currentInfo.images.findIndex((i) => i.dockerImageId === image.dockerImageId);
+
+      if (eventType === 'delete' || eventType === 'untag') {
+        if (existingIndex !== -1) {
+          return {
+            ...currentInfo,
+            images: currentInfo.images.filter((i) => i.dockerImageId !== image.dockerImageId),
+          };
+        }
+      }
+      return currentInfo;
+    });
+  }, []);
+
+  useDockerDaemonGroup(platformId, { onImageEvent });
+
+  const handleImageInfoUpdated = useCallback((image: ImageView) => {
+    setimagesInfo((currentInfo) => {
+      if (!currentInfo) return currentInfo;
+
+      const updatedImages = [...(currentInfo.images ?? [])];
+      const existingIndex = updatedImages.findIndex((i) => i.dockerImageId === image.dockerImageId);
+
+      if (existingIndex === -1) {
+        return { ...currentInfo, images: [image, ...updatedImages] };
+      }
+
+      updatedImages[existingIndex] = image;
+      return { ...currentInfo, images: updatedImages };
+    });
+  }, []);
 
   const handleImagesInfoUpdated = useCallback((images: ImagesView) => {
     setimagesInfo(images);
   }, []);
 
-  const handleImageInfoUpdated = useCallback((image: ImageView) => {
-    setimagesInfo((currentInfo) => {
-      if (!currentInfo) {
-        return currentInfo;
-      }
-
-      const updatedImages = [...(currentInfo.images ?? [])];
-      const existingIndex = updatedImages.findIndex((c) => c.dockerImageId === image.dockerImageId);
-
-      if (existingIndex === -1) {
-        return { ...currentInfo, images: [image, ...updatedImages] };
-      }
-      if (JSON.stringify(updatedImages[existingIndex]) !== JSON.stringify(image)) {
-        updatedImages[existingIndex] = image;
-        return { ...currentInfo, images: updatedImages };
-      }
-
-      return currentInfo;
-    });
-  }, []);
-
-  useEffect(() => {
-    setimagesInfo((currentInfo) => {
-      if (!currentInfo) {
-        return currentInfo;
-      }
-
-      const updatedImages = [...(currentInfo.images ?? [])];
-      const existingIndex = updatedImages.findIndex((c) => c.dockerImageId === imageEvent?.image.dockerImageId);
-
-      switch (imageEvent?.eventType) {
-        case 'delete':
-          if (existingIndex !== -1) {
-            updatedImages.splice(existingIndex, 1);
-            return { ...currentInfo, images: updatedImages };
-          }
-          break;
-
-        default:
-          break;
-      }
-
-      return currentInfo;
-    });
-  }, [imageEvent]);
-
   const getImagesList = useCallback(
     async (hubConnection: HubConnection) => {
+      if (!platformId) return;
       try {
         setIsLoading(true);
         const images = await hubConnection.invoke<ImagesView>('GetImages', platformId);
-        if (images) {
-          setimagesInfo(images);
-        }
+        if (images) setimagesInfo(images);
+      } catch (err) {
+        console.error('Failed to fetch images', err);
       } finally {
         setIsLoading(false);
       }
@@ -90,22 +81,13 @@ export const useImagesGroup = (platformId?: string) => {
     [handleImagesInfoUpdated, handleImageInfoUpdated],
   );
 
-  const onJoinedGroup = useCallback(
-    (hubConnection: HubConnection) => {
-      if (!hubConnection) return;
-      getImagesList(hubConnection);
-      hubConnection.onreconnected(() => {
-        getImagesList(hubConnection);
-      });
-    },
-    [getImagesList],
-  );
-
   useSignalRGroup({
     groupName: `images:${platformId}`,
     setupEventListeners,
     removeEventListeners,
-    onJoinedGroup,
+    // Note: removed manual onreconnected leak.
+    // useSignalRGroup should call onJoinedGroup again automatically on reconnect.
+    onJoinedGroup: getImagesList,
     skip: !platformId,
   });
 

@@ -37,16 +37,15 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         return result?.ToDomain();
     }
 
-    public async Task<IEnumerable<Container>> GetByIdAsync(IEnumerable<string> dockerContainersId, CancellationToken cancellationToken)
+    public async Task<IEnumerable<Container>> GetByIdAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         var sql = """
             SELECT * FROM Containers c
-            WHERE DockerContainerId IN (SELECT value FROM json_each(@DockerContainersId))
-            LIMIT 1
+            WHERE Id IN (SELECT value FROM json_each(@Ids))
             """;
         var result = await db.QueryAsync<ContainerDto>(sql, new 
         {
-            DockerContainersId = JsonSerializer.Serialize(dockerContainersId, DeploymentJsonContext.Default.IEnumerableString) 
+            Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid) 
         }, transaction: tx());
         return result?.ToDomain() ?? [];
     }

@@ -1,42 +1,54 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { VolumesView } from '@/api/generated/api.types';
-import { useDockerDaemonGroup } from '@/features/platforms/hooks/useDockerDaemonGroup';
+import { useDockerDaemonGroup, VolumeEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useVolumesGroup = (platformId?: string) => {
   const { data, isLoading } = useRead('listVolumes', { platformId });
   const [volumes, setVolumes] = useState<VolumesView | undefined>();
-  const { volumeEvent } = useDockerDaemonGroup(platformId);
 
-  useEffect(() => {
-    if (data?.data) {
-      setVolumes(data.data);
-    }
-  }, [data]);
-
-  useEffect(() => {
+  const onVolumeEvent = useCallback((event: VolumeEvent) => {
     setVolumes((prev) => {
-      if (!prev) return;
+      if (!prev?.volumes) return prev;
 
-      const updatedVolumes = [...(prev.volumes ?? [])];
-      const existingIndex = updatedVolumes.findIndex((v) => v.id === volumeEvent?.actorId);
+      const { volume, eventType, actorId } = event;
 
-      switch (volumeEvent?.eventType) {
-        case 'destroy':
-          if (existingIndex !== -1) {
-            updatedVolumes.splice(existingIndex, 1);
-            return { ...prev, volumes: updatedVolumes };
+      const existingIndex = prev.volumes.findIndex((v) => v.id === actorId);
+
+      switch (eventType) {
+        case 'create':
+          if (existingIndex === -1) {
+            return {
+              ...prev,
+              volumes: [volume, ...prev.volumes],
+            };
           }
           break;
-        case 'create':
-          return { ...prev, volumes: [volumeEvent.volume, ...updatedVolumes] };
+
+        case 'destroy':
+          if (existingIndex !== -1) {
+            return {
+              ...prev,
+              volumes: prev.volumes.filter((v) => v.id !== actorId),
+            };
+          }
+          break;
+
         default:
           break;
       }
 
       return prev;
     });
-  }, [volumeEvent]);
+  }, []);
+
+  useDockerDaemonGroup(platformId, { onVolumeEvent });
+
+  useEffect(() => {
+    if (data?.data) {
+      setVolumes(data.data);
+    }
+  }, [data]);
 
   return { volumes, isLoading };
 };

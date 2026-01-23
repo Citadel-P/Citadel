@@ -1,10 +1,9 @@
 import { useMemo } from 'react';
 import { useRead } from '@/lib/hooks';
-import { DockerContainerView } from '@/api/types';
 import { MonacoEditor } from '@/lib/monaco';
 
-const ContainerInspect = ({ resource }: { resource: DockerContainerView | undefined }) => {
-  const { data, isSuccess, isLoading } = useRead('inspectContainer', { id: resource?.id });
+const ContainerInspect = ({ containerId }: { containerId: string | undefined }) => {
+  const { data, isSuccess, isLoading } = useRead('inspectContainer', { id: containerId });
 
   const code = useMemo(() => {
     if (isLoading) return '// Loading container inspection data...';
@@ -21,7 +20,7 @@ const ContainerInspect = ({ resource }: { resource: DockerContainerView | undefi
       <MonacoEditor
         value={code}
         language="json"
-        filename={`inspect-${resource?.id?.slice(0, 8)}.json`}
+        filename={`inspect-${containerId?.slice(0, 8)}.json`}
         className="my-0 mx-0 min-h-[600px]"
         readOnly={true}
         folding={true}

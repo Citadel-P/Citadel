@@ -57,8 +57,11 @@ internal sealed class ContainerUpdatedWorkItem(
     private async Task<Container> UpdateContainer(IUnitOfWork uow, Container container, CancellationToken cancellationToken)
     {
         container.PartialUpdate(
-                state: eventInfo.Container?.State,
+                name: eventInfo.Container?.Name,
+                state : eventInfo.Container?.State,
                 ports: eventInfo.Container?.Ports);
+        await uow.Containers.UpdateAsync(container, cancellationToken);
+
         container.ReleaseProcessing();
 
         await uow.Containers.UpdateProcessingAsync(

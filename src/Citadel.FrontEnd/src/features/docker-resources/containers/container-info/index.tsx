@@ -44,7 +44,7 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<DockerContain
     },
     {
       label: 'Inspect',
-      Content: ({ resource }) => <ContainerInspect resource={resource} />,
+      Content: ({ resource }) => <ContainerInspect containerId={resource?.id} />,
     },
     {
       label: 'Stats',

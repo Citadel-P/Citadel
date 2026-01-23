@@ -1,46 +1,46 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { ContainerView, DockerNetworkResult, DockerVolumeResult, ImageView } from '@/api/generated/api.types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 
-export const useDockerDaemonGroup = (platformId?: string) => {
-  const [imageEvent, setImageEvent] = useState<ImageEvent | undefined>();
-  const [volumeEvent, setVolumeEvent] = useState<VolumeEvent | undefined>();
-  const [networkEvent, setNetworkEvent] = useState<NetworkEvent | undefined>();
-  const [containerEvent, setContainerEvent] = useState<ContainerEvent | undefined>();
+export const useDockerDaemonGroup = (platformId?: string, listeners?: DockerDaemonListeners) => {
+  const listenersRef = useRef(listeners);
+  useEffect(() => {
+    listenersRef.current = listeners;
+  }, [listeners]);
 
   const handleContainerEventReceived = useCallback((container: ContainerView, eventType: string) => {
-    setContainerEvent({ container, eventType });
+    listenersRef.current?.onContainerEvent?.({ container, eventType });
   }, []);
 
   const handleImageEventReceived = useCallback((image: ImageView, eventType: string) => {
-    setImageEvent({ image, eventType });
+    listenersRef.current?.onImageEvent?.({ image, eventType });
   }, []);
 
   const handleVolumeEventReceived = useCallback((volume: DockerVolumeResult, eventType: string, actorId: string) => {
-    setVolumeEvent({ volume, eventType, actorId });
+    listenersRef.current?.onVolumeEvent?.({ volume, eventType, actorId });
   }, []);
 
   const handleNetworkEventReceived = useCallback((network: DockerNetworkResult, eventType: string, actorId: string) => {
-    setNetworkEvent({ network, eventType, actorId });
+    listenersRef.current?.onNetworkEvent?.({ network, eventType, actorId });
   }, []);
 
   const setupEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
-      hubConnection.on('ImageEventReceived', handleImageEventReceived);
-      hubConnection.on('VolumeEventReceived', handleVolumeEventReceived);
-      hubConnection.on('NetworkEventReceived', handleNetworkEventReceived);
-      hubConnection.on('ContainerEventReceived', handleContainerEventReceived);
+    (hub: HubConnection) => {
+      hub.on('ImageEventReceived', handleImageEventReceived);
+      hub.on('VolumeEventReceived', handleVolumeEventReceived);
+      hub.on('NetworkEventReceived', handleNetworkEventReceived);
+      hub.on('ContainerEventReceived', handleContainerEventReceived);
     },
     [handleContainerEventReceived, handleImageEventReceived, handleVolumeEventReceived, handleNetworkEventReceived],
   );
 
   const removeEventListeners = useCallback(
-    (hubConnection: HubConnection) => {
-      hubConnection.off('ImageEventReceived', handleImageEventReceived);
-      hubConnection.off('VolumeEventReceived', handleVolumeEventReceived);
-      hubConnection.off('NetworkEventReceived', handleNetworkEventReceived);
-      hubConnection.off('ContainerEventReceived', handleContainerEventReceived);
+    (hub: HubConnection) => {
+      hub.off('ImageEventReceived', handleImageEventReceived);
+      hub.off('VolumeEventReceived', handleVolumeEventReceived);
+      hub.off('NetworkEventReceived', handleNetworkEventReceived);
+      hub.off('ContainerEventReceived', handleContainerEventReceived);
     },
     [handleContainerEventReceived, handleImageEventReceived, handleVolumeEventReceived, handleNetworkEventReceived],
   );
@@ -51,27 +51,33 @@ export const useDockerDaemonGroup = (platformId?: string) => {
     removeEventListeners,
     skip: !platformId,
   });
-
-  return { containerEvent, imageEvent, volumeEvent, networkEvent };
 };
-type BaseEvent = {
+
+export type BaseEvent = {
   eventType: string;
 };
 
-interface ContainerEvent extends BaseEvent {
+export interface ContainerEvent extends BaseEvent {
   container: ContainerView;
 }
 
-interface ImageEvent extends BaseEvent {
+export interface ImageEvent extends BaseEvent {
   image: ImageView;
 }
 
-interface VolumeEvent extends BaseEvent {
+export interface VolumeEvent extends BaseEvent {
   volume: DockerVolumeResult;
   actorId: string;
 }
 
-interface NetworkEvent extends BaseEvent {
+export interface NetworkEvent extends BaseEvent {
   network: DockerNetworkResult;
   actorId: string;
 }
+
+export type DockerDaemonListeners = {
+  onContainerEvent?: (event: ContainerEvent) => void;
+  onImageEvent?: (event: ImageEvent) => void;
+  onVolumeEvent?: (event: VolumeEvent) => void;
+  onNetworkEvent?: (event: NetworkEvent) => void;
+};

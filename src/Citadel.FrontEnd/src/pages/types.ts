@@ -82,6 +82,8 @@ export interface ResourceDataHookResult<T> {
 export interface TabElement<T> {
   /** Tab label shown in the UI */
   label: string;
+  /** Wether this tab is disabled */
+  disabled?(resource: T): boolean;
   /** Component(s) for this tab */
   Content: React.FC<{ resource: T; metadataChanged?: boolean }>;
 }

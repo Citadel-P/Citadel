@@ -1,42 +1,53 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { NetworksView } from '@/api/generated/api.types';
-import { useDockerDaemonGroup } from '@/features/platforms/hooks/useDockerDaemonGroup';
+import { useDockerDaemonGroup, NetworkEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useRead } from '@/lib/hooks';
 
 export const useNetworksGroup = (platformId?: string) => {
   const { data, isLoading } = useRead('listNetworks', { platformId });
   const [networks, setNetworks] = useState<NetworksView | undefined>();
-  const { networkEvent } = useDockerDaemonGroup(platformId);
 
-  useEffect(() => {
-    if (data?.data) {
-      setNetworks(data.data);
-    }
-  }, [data]);
-
-  useEffect(() => {
+  const onNetworkEvent = useCallback((event: NetworkEvent) => {
     setNetworks((prev) => {
-      if (!prev) return;
+      if (!prev?.networks) return prev;
 
-      const updatedNetworks = [...(prev.networks ?? [])];
-      const existingIndex = updatedNetworks.findIndex((n) => n.id === networkEvent?.actorId);
+      const { network, eventType, actorId } = event;
+      const existingIndex = prev.networks.findIndex((n) => n.id === actorId);
 
-      switch (networkEvent?.eventType) {
-        case 'destroy':
-          if (existingIndex !== -1) {
-            updatedNetworks.splice(existingIndex, 1);
-            return { ...prev, networks: updatedNetworks };
+      switch (eventType) {
+        case 'create':
+          if (existingIndex === -1) {
+            return {
+              ...prev,
+              networks: [network, ...prev.networks],
+            };
           }
           break;
-        case 'create':
-          return { ...prev, networks: [networkEvent.network, ...updatedNetworks] };
+
+        case 'destroy':
+          if (existingIndex !== -1) {
+            return {
+              ...prev,
+              networks: prev.networks.filter((n) => n.id !== actorId),
+            };
+          }
+          break;
+
         default:
           break;
       }
 
       return prev;
     });
-  }, [networkEvent]);
+  }, []);
+
+  useDockerDaemonGroup(platformId, { onNetworkEvent });
+
+  useEffect(() => {
+    if (data?.data) {
+      setNetworks(data.data);
+    }
+  }, [data]);
 
   return { networks, isLoading };
 };

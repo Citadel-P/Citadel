@@ -115,7 +115,7 @@ const getColumns = (displayOptions: DisplayOptions): ColumnDef<ContainerInfoRow>
   if (displayOptions.DisplayContainerName) {
     cols.push({
       accessorKey: 'containerName',
-      header: () => <span>Container</span>,
+      header: () => <span>Name</span>,
       cell: ({ row }) => (
         <ContainerCell
           name={row.original.name}

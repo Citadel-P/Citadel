@@ -1,45 +1,14 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { HubConnection } from '@microsoft/signalr';
 import { ContainersView, ContainerStatView } from '@/api/generated/api.types';
-import { useDockerDaemonGroup } from '@/features/platforms/hooks/useDockerDaemonGroup';
+import { useDockerDaemonGroup, ContainerEvent } from '@/features/platforms/hooks/useDockerDaemonGroup';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 
 export const useContainersGroup = (platformId?: string) => {
   const [isLoading, setIsLoading] = useState(false);
   const [containersInfo, setContainersInfo] = useState<ContainersView | undefined>();
-  const { containerEvent } = useDockerDaemonGroup(platformId);
 
-  const handleContainersInfoUpdated = useCallback((containers: ContainersView) => {
-    setContainersInfo(containers);
-  }, []);
-
-  const handleContainersStatsUpdated = useCallback((stats: ContainerStatView[]) => {
-    setContainersInfo((currentInfo) => {
-      if (!currentInfo || !currentInfo.containers) {
-        return currentInfo;
-      }
-
-      const statsMap = new Map(stats.map((stat) => [stat.containerId, stat]));
-      let hasChanged = false;
-
-      const updatedContainers = currentInfo.containers.map((container) => {
-        const stat = statsMap.get(container.id);
-        if (stat) {
-          hasChanged = true;
-          return { ...container, lastStats: stat };
-        }
-        return container;
-      });
-
-      if (hasChanged) {
-        return { ...currentInfo, containers: updatedContainers };
-      }
-
-      return currentInfo;
-    });
-  }, []);
-
-  useEffect(() => {
+  const onContainerEvent = useCallback((containerEvent: ContainerEvent) => {
     setContainersInfo((currentInfo) => {
       if (!currentInfo) {
         return currentInfo;
@@ -81,7 +50,39 @@ export const useContainersGroup = (platformId?: string) => {
 
       return currentInfo;
     });
-  }, [containerEvent]);
+  }, []);
+
+  useDockerDaemonGroup(platformId, { onContainerEvent });
+
+  const handleContainersInfoUpdated = useCallback((containers: ContainersView) => {
+    setContainersInfo(containers);
+  }, []);
+
+  const handleContainersStatsUpdated = useCallback((stats: ContainerStatView[]) => {
+    setContainersInfo((currentInfo) => {
+      if (!currentInfo || !currentInfo.containers) {
+        return currentInfo;
+      }
+
+      const statsMap = new Map(stats.map((stat) => [stat.containerId, stat]));
+      let hasChanged = false;
+
+      const updatedContainers = currentInfo.containers.map((container) => {
+        const stat = statsMap.get(container.id);
+        if (stat) {
+          hasChanged = true;
+          return { ...container, lastStats: stat };
+        }
+        return container;
+      });
+
+      if (hasChanged) {
+        return { ...currentInfo, containers: updatedContainers };
+      }
+
+      return currentInfo;
+    });
+  }, []);
 
   const getContainersList = useCallback(
     async (hubConnection: HubConnection) => {
@@ -111,22 +112,11 @@ export const useContainersGroup = (platformId?: string) => {
     [handleContainersInfoUpdated, handleContainersStatsUpdated],
   );
 
-  const onJoinedGroup = useCallback(
-    (hubConnection: HubConnection) => {
-      if (!hubConnection) return;
-      getContainersList(hubConnection);
-      hubConnection.onreconnected(() => {
-        getContainersList(hubConnection);
-      });
-    },
-    [getContainersList],
-  );
-
   useSignalRGroup({
     groupName: `containers:${platformId}`,
     setupEventListeners,
     removeEventListeners,
-    onJoinedGroup,
+    onJoinedGroup: getContainersList,
     skip: !platformId,
   });
 

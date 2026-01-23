@@ -4,10 +4,15 @@ import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { DeploymentActions } from './actions';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useDeploymentGroup } from './hooks/useDeploymentGroup';
+import { DeploymentStatus, DeploymentView, ResourceControlState } from '@/api/generated/api.types';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ContainerLogs } from '@/features/docker-resources/containers/container-info/container-logs';
-import { DeploymentRuntime } from './deployment-runtime';
-import { DeploymentView, ResourceControlState } from '@/api/generated/api.types';
+import { DockerContainerView } from '@/api/types';
+import ContainerInspect from '@/features/docker-resources/containers/container-info/container-inspect';
 import { normalizeDockerId } from '@/lib/utils';
+import { ContainerInfoTable } from '@/features/docker-resources/containers/container-info/container-info-table';
+import { useContainerInfoGroup } from '@/features/docker-resources/containers/hooks/useContainerInfoGroup';
+import Loader from '@/components/ui/loader';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -29,9 +34,6 @@ export const DeploymentFormComponents: RequiredFormComponents = {
         return <GenericActionBarButtons resource={resource} actions={Object.values(DeploymentActions)} />;
       },
     },
-    SubHeader: ({ resource }: { resource: DeploymentView }) => {
-      return <DeploymentRuntime key={resource.containerId} deployment={resource} />;
-    },
     Tabs: [
       {
         label: 'Config',
@@ -40,10 +42,10 @@ export const DeploymentFormComponents: RequiredFormComponents = {
         },
       },
       {
-        label: 'Logs',
+        label: 'Container',
+        disabled: (resource: DeploymentView): boolean => resource.status === DeploymentStatus.Degraded,
         Content: ({ resource }: { resource: DeploymentView }) => {
-          const nid = normalizeDockerId(resource?.dockerContainerId ?? undefined);
-          return <ContainerLogs key={nid} containerId={nid} />;
+          return <DeploymentRuntime key={resource.containerId} deployment={resource} />;
         },
       },
     ],
@@ -52,4 +54,63 @@ export const DeploymentFormComponents: RequiredFormComponents = {
       return { item: deployment, isLoading };
     },
   },
+};
+
+const DeploymentRuntime = ({ deployment }: { deployment: DeploymentView }) => {
+  const { containerInfo, isLoading } = useContainerInfoGroup(
+    deployment.dockerContainerId ?? undefined,
+    deployment.platformId,
+  );
+
+  if (deployment.status === DeploymentStatus.Degraded) return null;
+
+  if (isLoading || !containerInfo) return <Loader />;
+
+  return <RuntimeView containerInfo={containerInfo} />;
+};
+
+const RuntimeView = ({ containerInfo }: { containerInfo: DockerContainerView }) => {
+  return (
+    <div className="flex flex-col gap-4 w-full">
+      <ContainerInfoTable
+        container={containerInfo}
+        displayOptions={{
+          DisplayContainerName: true,
+          DisplayStatus: false,
+        }}
+      />
+      <RuntimeTabs containerId={containerInfo.id} />
+    </div>
+  );
+};
+
+const RuntimeTabs = ({ containerId }: { containerId: string }) => {
+  const nid = normalizeDockerId(containerId);
+
+  return (
+    <Tabs defaultValue="logs" className="w-full">
+      <TabsList className="w-fit justify-start">
+        <TabsTrigger className="text-xs" value="logs">
+          Logs
+        </TabsTrigger>
+        <TabsTrigger className="text-xs" value="inspect">
+          Inspect
+        </TabsTrigger>
+        <TabsTrigger className="text-xs" value="terminal">
+          Terminal
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="logs" className="w-full mt-2">
+        <ContainerLogs key={nid} containerId={nid} />
+      </TabsContent>
+      <TabsContent value="inspect" className="w-full mt-2">
+        <ContainerInspect key={nid} containerId={nid} />
+      </TabsContent>
+      <TabsContent value="terminal" className="w-full mt-2">
+        <div className="p-4 border border-dashed rounded text-muted-foreground text-center">
+          Terminal not implemented yet
+        </div>
+      </TabsContent>
+    </Tabs>
+  );
 };
