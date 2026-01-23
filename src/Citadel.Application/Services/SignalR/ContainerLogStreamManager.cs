@@ -135,8 +135,6 @@ internal sealed class ContainerLogStreamManager(
 
                 if (ev.Action == "start")
                 {
-                    logger.LogInformation("Container {Id} started, resetting log stream", containerId);
-
                     // Stop current producer/consumer and create fresh ones
                     context.Reset();
                     if (context.TryStart())

@@ -11,13 +11,18 @@ public sealed class User(
     Guid actorId,
     Guid createdByActorId,
     DateTime? createdAt = null
-    ) : AuditedEntity(createdByActorId, createdAt)
+    ) : IAuditedEntity
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public string Name { get; private set; } = name;
     public string Email { get; private set; } = email;
     public string Password { get; private set; } = HashPassword(password);
     public Guid ActorId { get; private set; } = actorId;
+
+    #region IAuditedEntity Members
+    public DateTime CreatedAt { get; private set; } = createdAt ?? DateTime.UtcNow;
+    public Guid CreatedByActorId { get; private set; } = createdByActorId;
+    #endregion
 
     public ICollection<Team> Teams { get; } = [];
     public ICollection<RefreshToken> RefreshTokens { get; } = [];

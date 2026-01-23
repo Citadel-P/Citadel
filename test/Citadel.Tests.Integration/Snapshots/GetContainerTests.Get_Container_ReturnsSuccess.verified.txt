@@ -6,6 +6,7 @@
   dockerImageId: container-01-id,
   created: 1768686293,
   state: Created,
+  controlState: Idle,
   updated: 0,
   deploymentId: Guid_3,
   imageView: {

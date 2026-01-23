@@ -374,6 +374,7 @@ export interface ContainerView {
    */
   created: number | string;
   state: ContainerStateStatus;
+  controlState: ResourceControlState;
   /**
    * @format int64
    * @pattern ^-?(?:0|[1-9]\d*)$

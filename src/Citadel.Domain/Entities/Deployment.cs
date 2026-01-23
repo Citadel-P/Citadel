@@ -7,7 +7,7 @@ public sealed class Deployment(
     Guid platformId,
     UpdateBehavior updateBehavior,
     DeploymentSpec? spec = null,
-    string? description = null) : AuditedEntity(createdByActorId), IReconcilableResource
+    string? description = null) : IAuditedEntity, IReconcilableResource
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid PlatformId { get; private set; } = platformId;
@@ -23,6 +23,11 @@ public sealed class Deployment(
     public ResourceControlState ControlState { get; private set; } = ResourceControlState.Idle;
     public long? ControlStartedAt { get; private set; }
     public long RowVersion { get; private set; }
+    #endregion
+
+    #region IAuditedEntity Members
+    public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
+    public Guid CreatedByActorId { get; private set; } = createdByActorId;
     #endregion
 
     public DeploymentSpec? Spec { get; private set; } = spec;
@@ -73,8 +78,7 @@ public sealed class Deployment(
             RowVersion = rowVersion,
             ControlState = controlState,
             AutoUpdateState = autoUpdateState,
-            ControlStartedAt = controlStartedAt,
-
+            ControlStartedAt = controlStartedAt
         };
     }
 

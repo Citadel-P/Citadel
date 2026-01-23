@@ -1,5 +1,5 @@
 import { Ban, Eye, Pause, Play, RotateCcw, StepForward, Trash } from 'lucide-react';
-import { ContainerView, ContainerStateStatus } from '@/api/generated/api.types';
+import { ContainerView, ContainerStateStatus, ResourceControlState } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { formatId } from '@/lib/utils';
 import { useNavigate } from 'react-router';
@@ -7,6 +7,7 @@ import { useAppContext } from '@/lib/context/app-context';
 
 const useVariables = (resources: ContainerView | ContainerView[]) =>
   Array.isArray(resources) ? resources.map((r) => r.containerId) : [resources.containerId];
+const isProcessing = (r: ContainerView) => r.controlState === ResourceControlState.Processing;
 
 export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions } =
   createActionsBuilder<ContainerView>()
@@ -20,7 +21,8 @@ export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions 
         const can = (x: ContainerView) =>
           x.state !== ContainerStateStatus.Running &&
           x.state !== ContainerStateStatus.Offline &&
-          x.state !== ContainerStateStatus.Paused;
+          x.state !== ContainerStateStatus.Paused &&
+          !isProcessing(x);
         return Array.isArray(r) ? r.some(can) : can(r);
       },
     })
@@ -32,7 +34,7 @@ export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions 
       useVariables,
       canExecute: (r) => {
         const can = (x: ContainerView) =>
-          x.state === ContainerStateStatus.Running || x.state === ContainerStateStatus.Paused;
+          (x.state === ContainerStateStatus.Running || x.state === ContainerStateStatus.Paused) && !isProcessing(x);
         return Array.isArray(r) ? r.some(can) : can(r);
       },
     })
@@ -45,7 +47,7 @@ export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions 
         mutateKey: 'pauseContainers',
         useVariables,
         canExecute: (r) => {
-          const can = (x: ContainerView) => x.state === ContainerStateStatus.Running;
+          const can = (x: ContainerView) => x.state === ContainerStateStatus.Running && !isProcessing(x);
           return Array.isArray(r) ? r.some(can) : can(r);
         },
       },
@@ -55,7 +57,7 @@ export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions 
         mutateKey: 'unpauseContainers',
         useVariables,
         canExecute: (r) => {
-          const can = (x: ContainerView) => x.state === ContainerStateStatus.Paused;
+          const can = (x: ContainerView) => x.state === ContainerStateStatus.Paused && !isProcessing(x);
           return Array.isArray(r) ? r.some(can) : can(r);
         },
       },
@@ -68,7 +70,7 @@ export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions 
       useVariables,
       canExecute: (r) => {
         const can = (x: ContainerView) =>
-          x.state === ContainerStateStatus.Running || x.state === ContainerStateStatus.Paused;
+          (x.state === ContainerStateStatus.Running || x.state === ContainerStateStatus.Paused) && !isProcessing(x);
         return Array.isArray(r) ? r.some(can) : can(r);
       },
     })
@@ -101,7 +103,7 @@ export const { dropdown: ContainerDropdownActions, group: ContainerGroupActions 
       icon: Trash,
       mutateKey: 'deleteContainers',
       canExecute: (r) => {
-        const can = (x: ContainerView) => x.state !== ContainerStateStatus.Offline;
+        const can = (x: ContainerView) => x.state !== ContainerStateStatus.Offline && !isProcessing(x);
         return Array.isArray(r) ? r.some(can) : can(r);
       },
       separatorBefore: true,

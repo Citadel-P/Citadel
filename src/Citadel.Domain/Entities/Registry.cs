@@ -10,13 +10,18 @@ public class Registry(
     RegistryStatus status,
     Guid createdByActorId,
     RegistryConfigurationBase configuration,
-    string? description = null) : AuditedEntity(createdByActorId)
+    string? description = null) : IAuditedEntity
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public string Name { get; private set; } = name;
     public string? Description { get; private set; } = description;
     public string RegistryHost { get; private set; } = registryHost;
     public RegistryStatus Status { get; private set; } = status;
+
+    #region IAuditedEntity Members
+    public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
+    public Guid CreatedByActorId { get; private set; } = createdByActorId;
+    #endregion
 
     public RegistryConfigurationBase Configuration { get; private set; } = configuration;
 

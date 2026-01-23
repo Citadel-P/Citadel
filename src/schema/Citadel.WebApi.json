@@ -6003,6 +6003,7 @@
           "dockerImageId",
           "created",
           "state",
+          "controlState",
           "updated",
           "stack",
           "lastStats",
@@ -6038,6 +6039,9 @@
           },
           "state": {
             "$ref": "#/components/schemas/ContainerStateStatus"
+          },
+          "controlState": {
+            "$ref": "#/components/schemas/ResourceControlState"
           },
           "updated": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",

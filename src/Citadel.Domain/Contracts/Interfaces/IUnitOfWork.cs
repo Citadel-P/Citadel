@@ -43,6 +43,8 @@ public interface IContainerRepository
 {
     Task<Container?> GetByIdAsync(string dockerContainerId, CancellationToken cancellationToken);
     Task<Container?> GetContainerInfoAsync(string dockerContainerId, CancellationToken cancellationToken);
+    Task<IEnumerable<Container>> GetByIdAsync(IEnumerable<string> dockerContainersId, CancellationToken cancellationToken);
+    Task<IEnumerable<Container>> GetStuckContainersAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
     Task<Container?> GetByDeploymentIdAsync(Guid deploymentId, CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetByDeploymentIdsAsync(IEnumerable<Guid> deploymentIds, CancellationToken cancellationToken);
     Task<IEnumerable<Container>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
@@ -53,6 +55,7 @@ public interface IContainerRepository
 
     Task<int> UpdateAsync(Container container, CancellationToken cancellationToken);
     Task<int> UpdateContainersStateAsync(IEnumerable<Guid> ids, ContainerStateStatus state, CancellationToken cancellationToken);
+    Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, CancellationToken cancellationToken);
 
     Task<int> DeleteAsync(IEnumerable<Guid> containersId, CancellationToken cancellationToken);
 }

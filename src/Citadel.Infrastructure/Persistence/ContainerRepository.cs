@@ -37,6 +37,37 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         return result?.ToDomain();
     }
 
+    public async Task<IEnumerable<Container>> GetByIdAsync(IEnumerable<string> dockerContainersId, CancellationToken cancellationToken)
+    {
+        var sql = """
+            SELECT * FROM Containers c
+            WHERE DockerContainerId IN (SELECT value FROM json_each(@DockerContainersId))
+            LIMIT 1
+            """;
+        var result = await db.QueryAsync<ContainerDto>(sql, new 
+        {
+            DockerContainersId = JsonSerializer.Serialize(dockerContainersId, DeploymentJsonContext.Default.IEnumerableString) 
+        }, transaction: tx());
+        return result?.ToDomain() ?? [];
+    }
+
+    public async Task<IEnumerable<Container>> GetStuckContainersAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
+    {
+        var sql = """
+            SELECT * FROM Containers c
+            WHERE ControlState = @ControlState
+              AND ControlStartedAt IS NOT NULL
+              AND ControlStartedAt < @TimeoutThreshold
+            """;
+        var timeoutThreshold = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s;
+        var result = await db.QueryAsync<ContainerDto>(sql, new 
+        { 
+            ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
+            TimeoutThreshold = timeoutThreshold
+        }, transaction: tx());
+        return result?.ToDomain() ?? [];
+    }
+
     public async Task<Container?> GetByDeploymentIdAsync(Guid deploymentId, CancellationToken cancellationToken)
     {
         var sql = """
@@ -240,6 +271,38 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
                 Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid),
                 State = state,
                 Updated = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            },
+            transaction: tx()
+        );
+    }
+
+    public Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, CancellationToken cancellationToken)
+    {
+        var conditions = new List<string>
+        {
+            "Id = @Id"
+        };
+
+        if (checkRowVersion == true)
+            conditions.Add("RowVersion = @RowVersion");
+
+        var sql = $"""
+            UPDATE Containers
+            SET
+                ControlState = @State,
+                ControlStartedAt = @StartedAt,
+                RowVersion = RowVersion + 1
+            WHERE {string.Join(" AND ", conditions)}
+        """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id.Format(),
+                State = EnumFormatter<ResourceControlState>.GetValue(state),
+                RowVersion = rowVersion,
+                StartedAt = startedAt
             },
             transaction: tx()
         );

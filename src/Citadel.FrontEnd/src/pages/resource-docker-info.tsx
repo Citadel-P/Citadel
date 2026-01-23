@@ -26,7 +26,7 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
   }>();
 
   const { resource, isLoading, error } = Components.useData(platformId, resourceId);
-  
+
   const tabs = Components.Tabs ?? [];
   const Header = Components.Header;
 
@@ -37,38 +37,42 @@ const ResourceInfoView = <T extends { id: string; name: string }>({ Components, 
     <div className="flex-col justify-between relative">
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
         <div className="max-w-full rounded-lg border border-border bg-background p-4">
-          {isLoading ? (
-            <Loader />
-          ) : error || !resource ? (
-            <AlertMessage title={`${errorDetail?.status}  ${errorDetail?.title}`} type="error">
-              {errorDetail?.detail ?? 'Unknown error'}{' '}
-            </AlertMessage>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {/* Header */}
-              <div className="flex flex-col sm:flex-row gap-2 items-start justify-between">
-                <div className="flex items-center sm:gap-2">
-                  <Header.Indicator resource={resource} />
-                  <div className="flex flex-col text-md font-bold text-foreground min-w-0">
-                    <span>{resource.name}</span>
+          <div className="flex flex-col gap-2">
+            {(isLoading || !resource) && !error ? (
+              <Loader />
+            ) : error ? (
+              <AlertMessage title={`${errorDetail?.status}  ${errorDetail?.title}`} type="error">
+                {errorDetail?.detail ?? 'Unknown error'}{' '}
+              </AlertMessage>
+            ) : (
+              resource && (
+                <>
+                  {/* Header */}
+                  <div className="flex flex-col sm:flex-row gap-2 items-start justify-between">
+                    <div className="flex items-center sm:gap-2">
+                      <Header.Indicator resource={resource} />
+                      <div className="flex flex-col text-md font-bold text-foreground min-w-0">
+                        <span>{resource.name}</span>
 
-                    <span className="text-sm text-foreground/40 min-w-0 max-w-[200px] xl:max-w-full">
-                      <CopyToClipboard textToCopy={resource.id ?? '-'} />
-                    </span>
+                        <span className="text-sm text-foreground/40 min-w-0 max-w-[200px] xl:max-w-full">
+                          <CopyToClipboard textToCopy={resource.id ?? '-'} />
+                        </span>
+                      </div>
+                    </div>
+                    {Components.Header.ActionButtons && (
+                      <div className="flex gap-4 items-center overflow-auto flex-wrap">
+                        <Components.Header.ActionButtons resource={resource} />
+                      </div>
+                    )}
                   </div>
-                </div>
-                {Components.Header.ActionButtons && (
-                  <div className="flex gap-4 items-center overflow-auto flex-wrap">
-                    <Components.Header.ActionButtons resource={resource} />
-                  </div>
-                )}
-              </div>
-              {/* Sub Header */}
-              {Components.SubHeader && <Components.SubHeader resource={resource} />}
-              {/* Tabs */}
-              <ResourceTabs localKey={key} resource={resource as any} tabs={tabs} />
-            </div>
-          )}
+                  {/* Sub Header */}
+                  {Components.SubHeader && <Components.SubHeader resource={resource} />}
+                  {/* Tabs */}
+                  <ResourceTabs localKey={key} resource={resource as any} tabs={tabs} />
+                </>
+              )
+            )}
+          </div>
         </div>
       </div>
     </div>

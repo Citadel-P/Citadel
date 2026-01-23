@@ -26,6 +26,9 @@ internal static class ContainerMappers
             stack: container.Stack,
             imageId: container.ImageId,
             deploymentId: container.DeploymentId,
+            rowVersion: container.RowVersion,
+            controlStartedAt: container.ControlStartedAt,
+            controlState: Enum.Parse<ResourceControlState>(container.ControlState),
             stats: container.Stats?.Select(ToDomain).ToList());
     }
 
@@ -40,6 +43,9 @@ internal static class ContainerMappers
             dockerImageId: container.DockerImageId,
             created: container.Created,
             updated: container.Updated,
+            rowVersion: container.RowVersion,
+            controlStartedAt: container.ControlStartedAt,
+            controlState: Enum.Parse<ResourceControlState>(container.ControlState),
             state: Enum.Parse<ContainerStateStatus>(container.State),
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             stack: container.Stack,
@@ -86,6 +92,9 @@ internal static class ContainerMappers
             dockerImageId: container.DockerImageId,
             created: container.Created,
             updated: container.Updated,
+            rowVersion: container.RowVersion,
+            controlStartedAt: container.ControlStartedAt,
+            controlState: Enum.Parse<ResourceControlState>(container.ControlState),
             state: Enum.Parse<ContainerStateStatus>(container.State),
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
             stack: container.Stack,

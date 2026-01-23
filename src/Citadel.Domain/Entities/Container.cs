@@ -75,8 +75,19 @@ public class Container(
         return this;
     }
 
-    public static Container FromPersistence
-        (
+    public void MarkProcessing()
+    {
+        ControlState = ResourceControlState.Processing;
+        ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    }
+
+    public void ReleaseProcessing()
+    {
+        ControlState = ResourceControlState.Idle;
+        ControlStartedAt = null;
+    }
+
+    public static Container FromPersistence (
         Guid id,
         Guid platformId,
         string dockerContainerId,
@@ -84,6 +95,9 @@ public class Container(
         string name,
         long created,
         long updated,
+        long rowVersion,
+        long? controlStartedAt,
+        ResourceControlState controlState,
         ContainerStateStatus state,
         IDictionary<string, IReadOnlyList<HostPortBinding>> ports,
         string? stack = null,
@@ -107,9 +121,12 @@ public class Container(
             deploymentId: deploymentId)
         {
             Id = id,
-            Updated = updated,
             Image = image,
-            Deployment = deployment
+            Updated = updated,
+            Deployment = deployment,
+            RowVersion = rowVersion,
+            ControlState = controlState,
+            ControlStartedAt = controlStartedAt,
         };
 
         if (stats is not null)

@@ -1,7 +1,12 @@
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ContainerView, ContainerStateStatus, ContainerStatView } from '@/api/generated/api.types';
+import {
+  ContainerView,
+  ContainerStateStatus,
+  ContainerStatView,
+  ResourceControlState,
+} from '@/api/generated/api.types';
 import { truncate } from '@/lib/truncate';
 import { formatId } from '@/lib/utils';
 import SortableCell from '@/components/custom/sortable-cell';
@@ -68,7 +73,10 @@ const columns = (
     header: ({ column }) => <SortableCell cellName="Name" column={column} />,
     cell: ({ row }) => (
       <div className="flex items-center gap-2">
-        <StateIndicator value={row.original.state ?? ContainerStateStatus.Exited} />
+        <StateIndicator
+          value={row.original.state ?? ContainerStateStatus.Exited}
+          isProcessing={row.original.controlState === ResourceControlState.Processing}
+        />
         <Link to={`./${formatId(row.original.containerId)}`} className="table-link">
           {row.original.name ? row.original.name?.slice(1) : ''}
         </Link>

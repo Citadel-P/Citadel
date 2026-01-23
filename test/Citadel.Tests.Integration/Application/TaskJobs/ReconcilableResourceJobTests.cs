@@ -3,6 +3,7 @@ using Application.TaskJobs;
 using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Hosting.Common;
 using Infrastructure.Repositories.DbQueue;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Moq;
+using System;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
@@ -18,6 +20,7 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
 {
     private readonly Mock<IDeploymentStreamManager> streamManagerMock = new();
     private readonly Mock<INotificationQueue> notificationMock = new();
+    private Guid platformId;
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
@@ -34,6 +37,7 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
         var platform = Fakes.GetDummyPlatform();
+        platformId = platform.Id;
 
         var deployment = new Deployment
         (
@@ -55,9 +59,19 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
             )
 
         );
+        var container = new Container(
+            platformId: platformId,
+            dockerContainerId: "old-container-123",
+            dockerImageId: "old-image",
+            name: "old-deployment-container",
+            created: 999999,
+            state: ContainerStateStatus.Running,
+            deploymentId: deployment.Id
+        );
 
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.Deployments.AddAsync(deployment, TestContext.Current.CancellationToken);
+        await uow.Containers.AddAsync(container, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
     }
 
@@ -82,6 +96,26 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task RunPeriodicJanitor_Clean_Stuck_Container()
+    {
+        // Arrange
+        await MarkContainerAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
+
+        await Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        // Assert
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var container = (await uow.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken)).First();
+        Assert.Equal(ResourceControlState.Idle, container.ControlState);
+
+        notificationMock.Verify(
+           nq => nq.EnqueueAsync(It.IsAny<ContainerNotificationWorkItem>(), It.IsAny<CancellationToken>()),
+           Times.Once);
+    }
+
+    [Fact]
     public async Task RunPeriodicJanitor_DoesNotEnqueue_WhenNoStuckDeployments()
     {
         // Arrange
@@ -92,6 +126,20 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
         // Assert
         notificationMock.Verify(
            nq => nq.EnqueueAsync(It.IsAny<DeploymentNotificationWorkItem>(), It.IsAny<CancellationToken>()),
+           Times.Never);
+    }
+
+    [Fact]
+    public async Task RunPeriodicJanitor_DoesNotEnqueue_WhenNoStuckContainers()
+    {
+        // Arrange
+        await MarkContainerAsync(ResourceControlState.Idle, null);
+
+        await Task.Delay(5000, TestContext.Current.CancellationToken); // wait for jobs to process
+
+        // Assert
+        notificationMock.Verify(
+           nq => nq.EnqueueAsync(It.IsAny<ContainerNotificationWorkItem>(), It.IsAny<CancellationToken>()),
            Times.Never);
     }
 
@@ -107,6 +155,23 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
             state: state,
             startedAt: startedAt,
             rowVersion: deployment.RowVersion,
+            checkRowVersion: false,
+            TestContext.Current.CancellationToken);
+
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+    }
+
+    private async Task MarkContainerAsync(ResourceControlState state, long? startedAt)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var container = (await uow.Containers.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken)).First();
+
+        await uow.Containers.UpdateProcessingAsync(
+            id: container.Id,
+            state: state,
+            startedAt: startedAt,
+            rowVersion: container.RowVersion,
             checkRowVersion: false,
             TestContext.Current.CancellationToken);
 

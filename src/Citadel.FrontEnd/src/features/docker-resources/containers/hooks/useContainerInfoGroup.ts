@@ -38,10 +38,7 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
   });
 
   useEffect(() => {
-    if (nid && 
-      containerEvent?.container.containerId.startsWith(nid) && 
-      containerEvent?.eventType !== 'destroy'
-    ) {
+    if (nid && containerEvent?.container.containerId.startsWith(nid) && containerEvent?.eventType !== 'destroy') {
       const container: DockerContainerView = {
         id: containerEvent.container.containerId,
         name: containerEvent.container.name,
@@ -50,6 +47,7 @@ export const useContainerInfoGroup = (containerId?: string, platformId?: string)
         stack: containerEvent.container.stack,
         containerStat: containerEvent.container.lastStats ?? {},
         containerPort: containerEvent.container.ports as any,
+        controlState: containerEvent.container.controlState,
       };
       setContainerInfo(container);
     }

@@ -8,14 +8,19 @@ import ContainerInspect from './container-inspect';
 import { ContainerStats } from './container-stats';
 import { ContainerInfoActions } from './actions';
 import { ContainerInfoTable } from './container-info-table';
-import { ImageView } from '@/api/generated/api.types';
+import { ImageView, ResourceControlState } from '@/api/generated/api.types';
 import { Link } from 'react-router';
 import { truncate } from '@/lib/truncate';
 
 export const ContainerInfoComponents: RequiredDockerInfoComponents<DockerContainerView> = {
   Header: {
     Indicator: ({ resource }) => {
-      return <StateIndicator value={resource.state} />;
+      return (
+        <StateIndicator
+          value={resource.state}
+          isProcessing={resource.controlState === ResourceControlState.Processing}
+        />
+      );
     },
     ActionButtons: ({ resource }) => {
       return <GenericActionBarButtons resource={resource} actions={Object.values(ContainerInfoActions)} />;

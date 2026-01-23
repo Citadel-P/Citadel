@@ -22,23 +22,18 @@ internal sealed class ChangeDeploymentStateHandler(
     public async ValueTask<Result> Handle(ChangeDeploymentState command, CancellationToken cancellationToken)
     {
         IEnumerable<Deployment>? deployments;
+        IEnumerable<Container?> containers;
+        List<Deployment> successfullyUpdated = [];
         await using (var scope = scopeFactory.CreateAsyncScope())
         {
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             deployments = await uow.Deployments.GetInfoAsync(command.DeploymentIds, cancellationToken);
-        }
-
-        var containers = deployments?.Select(s => s.Container).Where(s => s is not null) ?? [];
-        if (!containers.Any()) 
-        {
-            return Result.Failure(new NotFoundError("No containers found for the provided deployment ID (s)."));
-        }
-
-        var successfullyUpdated = new List<Deployment>();
-
-        await using (var scope = scopeFactory.CreateAsyncScope())
-        {
-            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        
+            containers = deployments?.Select(s => s.Container).Where(s => s is not null) ?? [];
+            if (!containers.Any()) 
+            {
+                return Result.Failure(new NotFoundError("No containers found for the provided deployment ID (s)."));
+            }
 
             foreach (var original in deployments ?? [])
             {

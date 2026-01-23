@@ -59,8 +59,16 @@ internal sealed class ContainerUpdatedWorkItem(
         container.PartialUpdate(
                 state: eventInfo.Container?.State,
                 ports: eventInfo.Container?.Ports);
+        container.ReleaseProcessing();
 
-        await uow.Containers.UpdateAsync(container, cancellationToken);
+        await uow.Containers.UpdateProcessingAsync(
+            id: container.Id,
+            state: container.ControlState,
+            startedAt: container.ControlStartedAt,
+            rowVersion: container.RowVersion,
+            checkRowVersion: false,
+            cancellationToken);
+
         return container;
     }
 }

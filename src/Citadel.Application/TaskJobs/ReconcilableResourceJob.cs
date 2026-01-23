@@ -1,7 +1,9 @@
-﻿using Application.Services.SignalR;
+﻿using Application.Services;
+using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +17,8 @@ internal class ReconcilableResourceJob(
     INotificationQueue notifQueue,
     IServiceScopeFactory scopeFactory,
     IDeploymentStreamManager deploymentHub,
+    IDockerDaemonStreamManager dockerDaemonHub,
+    IContainerEventBroadcaster containerEventBroadcaster,
     ILogger<ReconcilableResourceJob> logger) : BackgroundService
 {
     private static readonly TimeSpan SyncInterval = TimeSpan.FromMinutes(2);
@@ -33,10 +37,19 @@ internal class ReconcilableResourceJob(
                 {
                     var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
+                    // Deployments
                     var stuckDeployments = await uow.Deployments.GetStuckDeploymentsAsync(cancellationToken: cancellationToken);
                     if (stuckDeployments.Any())
                     {
                         var workItem = new StuckDeploymentsSyncWorkItem(deploymentHub, notifQueue, stuckDeployments);
+                        await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
+                    }
+
+                    // Containers
+                    var stuckContainers = await uow.Containers.GetStuckContainersAsync(cancellationToken: cancellationToken);
+                    if (stuckContainers.Any())
+                    {
+                        var workItem = new StuckContainersSyncWorkItem(deploymentHub, notifQueue, dockerDaemonHub, containerEventBroadcaster, stuckContainers);
                         await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
                     }
                 }
@@ -51,9 +64,9 @@ internal class ReconcilableResourceJob(
     }
 
     internal sealed class StuckDeploymentsSyncWorkItem(
-    IDeploymentStreamManager deploymentHub,
-    INotificationQueue notificationQueue,
-    IEnumerable<Deployment> deployments)
+        IDeploymentStreamManager deploymentHub,
+        INotificationQueue notificationQueue,
+        IEnumerable<Deployment> deployments)
         : IDbWorkItem
     {
         public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
@@ -62,10 +75,7 @@ internal class ReconcilableResourceJob(
 
             foreach (var deployment in deployments)
             {
-                deployment.PartialUpdate(
-                    status: DeploymentStatus.Unknown,
-                    resourceControlState: ResourceControlState.Idle
-                    );
+                deployment.ReleaseProcessing(DeploymentStatus.Unknown);
                 var row = await uow.Deployments.UpdateProcessingAsync(
                                     id: deployment.Id,
                                     status: deployment.Status,
@@ -85,6 +95,44 @@ internal class ReconcilableResourceJob(
             foreach (var deployment in successfullyUpdated)
             {
                 await notificationQueue.EnqueueAsync(new DeploymentNotificationWorkItem(deploymentHub, deployment), cancellationToken);
+            }
+        }
+    }
+
+    internal sealed class StuckContainersSyncWorkItem(
+        IDeploymentStreamManager deploymentHub,
+        INotificationQueue notificationQueue,
+        IDockerDaemonStreamManager dockerDaemonHub,
+        IContainerEventBroadcaster containerEventBroadcaster,
+        IEnumerable<Container> containers)
+        : IDbWorkItem
+    {
+        public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
+        {
+            var successfullyUpdated = new List<Container>();
+
+            foreach (var container in containers)
+            {
+                container.ReleaseProcessing();
+                var row = await uow.Containers.UpdateProcessingAsync(
+                                    id: container.Id,
+                                    state: container.ControlState,
+                                    startedAt: null,
+                                    rowVersion: container.RowVersion,
+                                    checkRowVersion: true,
+                                    cancellationToken);
+                if (row > 0)
+                {
+                    successfullyUpdated.Add(container);
+                }
+            }
+
+            await uow.CommitAsync(cancellationToken);
+
+            foreach (var container in successfullyUpdated)
+            {
+                await notificationQueue.EnqueueAsync(new ContainerNotificationWorkItem(container,
+                new DaemonContainerEventInfo("processing", container.DockerContainerId, null), dockerDaemonHub, containerEventBroadcaster), cancellationToken);
             }
         }
     }
