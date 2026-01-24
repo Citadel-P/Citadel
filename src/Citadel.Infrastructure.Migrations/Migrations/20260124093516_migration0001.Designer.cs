@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260122130856_migration0001")]
+    [Migration("20260124093516_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -265,6 +265,15 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(0);
 
+                    b.Property<long?>("ControlStartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ControlState")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Idle");
+
                     b.Property<string>("CreatedAt")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -283,6 +292,11 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.Property<string>("RegistryId")
                         .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0L);
 
                     b.Property<double>("Size")
                         .ValueGeneratedOnAdd()

@@ -3,7 +3,6 @@ using Application.TaskJobs;
 using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Hosting.Common;
 using Infrastructure.Repositories.DbQueue;
@@ -11,7 +10,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Moq;
-using System;
 using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
@@ -61,17 +59,27 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
         );
         var container = new Container(
             platformId: platformId,
-            dockerContainerId: "old-container-123",
-            dockerImageId: "old-image",
-            name: "old-deployment-container",
+            dockerContainerId: "container-123",
+            dockerImageId: "image",
+            name: "deployment-container",
             created: 999999,
             state: ContainerStateStatus.Running,
             deploymentId: deployment.Id
+        );
+        var image = new Image(
+            platformId: platformId,
+            dockerImageId: "image",
+            name: "deployment-image",
+            tags: new List<string> { "nginx:latest" },
+            containers: 1,
+            size: 123456,
+            createdAt: DateTime.UtcNow
         );
 
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.Deployments.AddAsync(deployment, TestContext.Current.CancellationToken);
         await uow.Containers.AddAsync(container, TestContext.Current.CancellationToken);
+        await uow.Images.AddOrUpdateAsync(image, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
     }
 
@@ -116,12 +124,32 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task RunPeriodicJanitor_Clean_Stuck_Image()
+    {
+        // Arrange
+        await MarkImageAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
+
+        await Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        // Assert
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var image = (await uow.Images.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken)).First();
+        Assert.Equal(ResourceControlState.Idle, image.ControlState);
+
+        notificationMock.Verify(
+           nq => nq.EnqueueAsync(It.IsAny<ImageNotificationWorkItem>(), It.IsAny<CancellationToken>()),
+           Times.Once);
+    }
+
+    [Fact]
     public async Task RunPeriodicJanitor_DoesNotEnqueue_WhenNoStuckDeployments()
     {
         // Arrange
         await MarkDeploymentAsync(ResourceControlState.Idle, null);
 
-        await Task.Delay(5000, TestContext.Current.CancellationToken); // wait for jobs to process
+        await Task.Delay(1000, TestContext.Current.CancellationToken); 
 
         // Assert
         notificationMock.Verify(
@@ -135,11 +163,25 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
         // Arrange
         await MarkContainerAsync(ResourceControlState.Idle, null);
 
-        await Task.Delay(5000, TestContext.Current.CancellationToken); // wait for jobs to process
+        await Task.Delay(1000, TestContext.Current.CancellationToken); 
 
         // Assert
         notificationMock.Verify(
            nq => nq.EnqueueAsync(It.IsAny<ContainerNotificationWorkItem>(), It.IsAny<CancellationToken>()),
+           Times.Never);
+    }
+
+    [Fact]
+    public async Task RunPeriodicJanitor_DoesNotEnqueue_WhenNoStuckImages()
+    {
+        // Arrange
+        await MarkImageAsync(ResourceControlState.Idle, null);
+
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
+
+        // Assert
+        notificationMock.Verify(
+           nq => nq.EnqueueAsync(It.IsAny<ImageNotificationWorkItem>(), It.IsAny<CancellationToken>()),
            Times.Never);
     }
 
@@ -172,6 +214,23 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
             state: state,
             startedAt: startedAt,
             rowVersion: container.RowVersion,
+            checkRowVersion: false,
+            TestContext.Current.CancellationToken);
+
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+    }
+
+    private async Task MarkImageAsync(ResourceControlState state, long? startedAt)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var image = (await uow.Images.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken)).First();
+
+        await uow.Images.UpdateProcessingAsync(
+            id: image.Id,
+            state: state,
+            startedAt: startedAt,
+            rowVersion: image.RowVersion,
             checkRowVersion: false,
             TestContext.Current.CancellationToken);
 

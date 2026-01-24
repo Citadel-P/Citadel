@@ -52,6 +52,14 @@ internal class ReconcilableResourceJob(
                         var workItem = new StuckContainersSyncWorkItem(deploymentHub, notifQueue, dockerDaemonHub, containerEventBroadcaster, stuckContainers);
                         await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
                     }
+
+                    // Images
+                    var stuckImages = await uow.Images.GetStuckImagesAsync(cancellationToken: cancellationToken);
+                    if (stuckImages.Any())
+                    {
+                        var workItem = new StuckImagesSyncWorkItem(notifQueue, dockerDaemonHub, stuckImages);
+                        await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
+                    }
                 }
             }
             catch (Exception ex)
@@ -133,6 +141,41 @@ internal class ReconcilableResourceJob(
             {
                 await notificationQueue.EnqueueAsync(new ContainerNotificationWorkItem(container,
                 new DaemonContainerEventInfo("processing", container.DockerContainerId, null), dockerDaemonHub, containerEventBroadcaster), cancellationToken);
+            }
+        }
+    }
+
+    internal sealed class StuckImagesSyncWorkItem(
+        INotificationQueue notificationQueue,
+        IDockerDaemonStreamManager dockerDaemonHub,
+        IEnumerable<Image> images)
+        : IDbWorkItem
+    {
+        public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
+        {
+            var successfullyUpdated = new List<Image>();
+
+            foreach (var container in images)
+            {
+                container.ReleaseProcessing();
+                var row = await uow.Images.UpdateProcessingAsync(
+                                    id: container.Id,
+                                    state: container.ControlState,
+                                    startedAt: null,
+                                    rowVersion: container.RowVersion,
+                                    checkRowVersion: true,
+                                    cancellationToken);
+                if (row > 0)
+                {
+                    successfullyUpdated.Add(container);
+                }
+            }
+
+            await uow.CommitAsync(cancellationToken);
+
+            foreach (var image in successfullyUpdated)
+            {
+                await notificationQueue.EnqueueAsync(new ImageNotificationWorkItem(dockerDaemonHub, image, "update"), cancellationToken);
             }
         }
     }

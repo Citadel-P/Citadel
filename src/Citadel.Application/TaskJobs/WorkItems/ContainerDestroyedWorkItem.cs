@@ -57,7 +57,7 @@ internal sealed class ContainerDestroyedWorkItem(
             }
             if (image != null)
             {
-                var imageNotificationItem = new SendImageNotificationWorkItem(dockerDaemonHub, image, "update");
+                var imageNotificationItem = new ImageNotificationWorkItem(dockerDaemonHub, image, "update");
                 await notificationQueue.EnqueueAsync(imageNotificationItem, cancellationToken);
             }
         }

@@ -19,7 +19,8 @@
     size: 1000,
     isInUse: true,
     platformId: Guid_2,
-    createdAt: Date_MinValue
+    createdAt: Date_MinValue,
+    controlState: Idle
   },
   deploymentView: {
     id: Guid_3,

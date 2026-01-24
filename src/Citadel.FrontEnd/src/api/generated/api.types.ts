@@ -1068,6 +1068,7 @@ export interface ImageView {
   platformId: string;
   /** @format date-time */
   createdAt: any;
+  controlState: ResourceControlState;
   updatedAt?: any;
   /** @format uuid */
   registryId?: null | string;

@@ -107,11 +107,14 @@ CREATE TABLE "Teams" (
 CREATE TABLE "Images" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Images" PRIMARY KEY,
     "Containers" INTEGER NOT NULL DEFAULT 0,
+    "ControlStartedAt" INTEGER NULL,
+    "ControlState" TEXT NULL DEFAULT 'Idle',
     "CreatedAt" TEXT NOT NULL,
     "DockerImageId" TEXT NOT NULL,
     "Name" TEXT NOT NULL,
     "PlatformId" TEXT NOT NULL,
     "RegistryId" TEXT NULL,
+    "RowVersion" INTEGER NOT NULL DEFAULT 0,
     "Size" REAL NOT NULL DEFAULT 0.0,
     "Tags" TEXT NOT NULL,
     "UpdatedAt" TEXT NULL,
@@ -251,7 +254,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260122130856_migration0001', '10.0.2');
+VALUES ('20260124093516_migration0001', '10.0.2');
 
 COMMIT;
 

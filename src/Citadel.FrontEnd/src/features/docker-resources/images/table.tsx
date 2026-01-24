@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { ImageView } from '@/api/generated/api.types';
+import { ImageView, ResourceControlState } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -128,11 +128,11 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
   function onNameClick() {
     navigate(`/platforms/${platformId}/images/${formatId(image.dockerImageId)}/`);
   }
-
+  //console.log(image.controlState)
   return (
     <div className="flex items-center whitespace-nowrap">
       <div className="flex items-center">
-        <StateIndicator value={image.isInUse} />
+        <StateIndicator value={image.isInUse} isProcessing={image.controlState === ResourceControlState.Processing} />
       </div>
       <span
         className="cursor-pointer table-link"

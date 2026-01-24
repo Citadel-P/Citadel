@@ -23,6 +23,16 @@ export const useImagesGroup = (platformId?: string) => {
           };
         }
       }
+
+      if (existingIndex !== -1) {
+        const updatedImages = [...currentInfo.images];
+        updatedImages[existingIndex] = {
+          ...updatedImages[existingIndex],
+          controlState: image.controlState,
+        };
+        return { ...currentInfo, images: updatedImages };
+      }
+
       return currentInfo;
     });
   }, []);

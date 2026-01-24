@@ -22,6 +22,9 @@ internal static class ImageMappers
                 createdAt: image.CreatedAt,
                 updatedAt: image.UpdatedAt,
                 registryId: image.RegistryId,
+                rowVersion: image.RowVersion,
+                controlStartedAt: image.ControlStartedAt,
+                controlState: image.ControlState != null ? Enum.Parse<ResourceControlState>(image.ControlState) : ResourceControlState.Idle,
                 registry: Registry.FromPersistence(
                     id: image?.RegistryId ?? Guid.Empty,
                     name: image?.RegistryName ?? "",

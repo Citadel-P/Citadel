@@ -74,7 +74,10 @@ internal static class ContainerMappers
                 platformId: container.Image_platformId ?? Guid.Empty,
                 createdAt: container.Image_CreatedAt ?? DateTime.MinValue,
                 updatedAt: container.Image_UpdatedAt,
-                registryId: container.Image_RegistryId
+                registryId: container.Image_RegistryId,
+                rowVersion: 0,
+                controlStartedAt: null,
+                controlState: ResourceControlState.Idle
                 ) : null);
     }
 
@@ -111,7 +114,10 @@ internal static class ContainerMappers
                 platformId: container.Image_platformId ?? Guid.Empty,
                 createdAt: container.Image_CreatedAt ?? DateTime.MinValue,
                 updatedAt: container.Image_UpdatedAt,
-                registryId: container.Image_RegistryId
+                registryId: container.Image_RegistryId,
+                rowVersion: 0,
+                controlStartedAt: null,
+                controlState: ResourceControlState.Idle
             ),
             deployment: container.Deployment_DeploymentId == null ? null : Deployment.FromPersistence
             (

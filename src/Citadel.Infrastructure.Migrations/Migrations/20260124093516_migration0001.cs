@@ -222,11 +222,14 @@ namespace Infrastructure.Migrations.Migrations
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
                     Containers = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 0),
+                    ControlStartedAt = table.Column<long>(type: "INTEGER", nullable: true),
+                    ControlState = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true, defaultValue: "Idle"),
                     CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
                     DockerImageId = table.Column<string>(type: "TEXT", nullable: false),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
                     PlatformId = table.Column<string>(type: "TEXT", nullable: false),
                     RegistryId = table.Column<string>(type: "TEXT", nullable: true),
+                    RowVersion = table.Column<long>(type: "INTEGER", nullable: false, defaultValue: 0L),
                     Size = table.Column<double>(type: "REAL", nullable: false, defaultValue: 0.0),
                     Tags = table.Column<string>(type: "TEXT", nullable: false),
                     UpdatedAt = table.Column<string>(type: "TEXT", nullable: true)

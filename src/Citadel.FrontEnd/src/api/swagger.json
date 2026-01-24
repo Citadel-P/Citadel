@@ -8691,7 +8691,8 @@
           "size",
           "isInUse",
           "platformId",
-          "createdAt"
+          "createdAt",
+          "controlState"
         ],
         "type": "object",
         "properties": {
@@ -8728,6 +8729,9 @@
           },
           "createdAt": {
             "format": "date-time"
+          },
+          "controlState": {
+            "$ref": "#/components/schemas/ResourceControlState"
           },
           "updatedAt": { },
           "registryId": {

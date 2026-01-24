@@ -10,7 +10,7 @@ public sealed class Image(
     DateTime createdAt,
     DateTime? updatedAt = null,
     Guid? registryId = null,
-    Registry? registry = null)
+    Registry? registry = null) : IReconcilableResource
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid PlatformId { get; private set; } = platformId;
@@ -22,7 +22,24 @@ public sealed class Image(
     public string Name { get; private set; } = name;
     public DateTime CreatedAt { get; private set; } = createdAt;
     public DateTime? UpdatedAt { get; private set; } = updatedAt;
+    #region IReconcilableResource Members
+    public ResourceControlState ControlState { get; private set; } = ResourceControlState.Idle;
+    public long? ControlStartedAt { get; private set; }
+    public long RowVersion { get; private set; }
+    #endregion
     public Registry? Registry { get; private set; } = registry;
+
+    public void MarkProcessing()
+    {
+        ControlState = ResourceControlState.Processing;
+        ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    }
+
+    public void ReleaseProcessing()
+    {
+        ControlState = ResourceControlState.Idle;
+        ControlStartedAt = null;
+    }
 
     public void PartialUpdate(
         string? name = null,
@@ -58,6 +75,9 @@ public sealed class Image(
         int containers,
         Guid platformId,
         DateTime createdAt,
+        long rowVersion,
+        long? controlStartedAt,
+        ResourceControlState controlState,
         DateTime? updatedAt = null,
         Guid? registryId = null,
         Registry? registry = null)
@@ -74,7 +94,10 @@ public sealed class Image(
             registryId: registryId)
         { 
             Id = id,
-            Registry = registry
+            Registry = registry,
+            RowVersion = rowVersion,
+            ControlState = controlState,
+            ControlStartedAt = controlStartedAt
         };
     }
 }

@@ -27,6 +27,9 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.CreatedAt,
                 i.UpdatedAt,
                 i.RegistryId,
+                i.ControlState,
+                i.ControlStartedAt,
+                i.RowVersion,
                 r.Name AS RegistryName,
                 r.Status AS RegistryStatus,
                 r.RegistryHost AS RegistryHost,
@@ -58,13 +61,76 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 i.PlatformId,
                 i.CreatedAt,
                 i.UpdatedAt,
-                i.RegistryId
+                i.RegistryId,
+                i.ControlState,
+                i.ControlStartedAt,
+                i.RowVersion,
             FROM Images i
             WHERE PlatformId = @PlatformId AND i.Id = @Id
             LIMIT 1
             """;
         var result = await db.QuerySingleOrDefaultAsync<ImageDto>(sql, new { Id = id.Format(), PlatformId = platformId.Format() }, transaction: tx());
         return result?.ToDomain();
+    }
+
+    public async Task<IEnumerable<Image>> GetByIdAsync(string[] ids, Guid platformId, CancellationToken cancellationToken)
+    {
+        var sql = """
+             SELECT
+                i.Id,
+                i.Name AS Name,
+                i.Tags,
+                i.DockerImageId,
+                i.Size,
+                i.Containers,
+                i.PlatformId,
+                i.CreatedAt,
+                i.UpdatedAt,
+                i.RegistryId,
+                i.ControlState,
+                i.ControlStartedAt,
+                i.RowVersion
+            FROM Images i
+            WHERE DockerImageId IN (SELECT value FROM json_each(@Ids)) AND PlatformId = @PlatformId
+            """;
+        var result = await db.QueryAsync<ImageDto>(sql, new
+        {
+            Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableString),
+            PlatformId = platformId.Format()
+        }, transaction: tx());
+        return result?.ToDomain() ?? [];
+    }
+
+    public Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, CancellationToken cancellationToken)
+    {
+        var conditions = new List<string>
+        {
+            "Id = @Id"
+        };
+
+        if (checkRowVersion == true)
+            conditions.Add("RowVersion = @RowVersion");
+
+        var sql = $"""
+            UPDATE Images
+            SET
+                ControlState = @State,
+                ControlStartedAt = @StartedAt,
+                RowVersion = RowVersion + 1
+            WHERE {string.Join(" AND ", conditions)}
+        """;
+
+        return db.ExecuteAsync(
+            sql,
+            new
+            {
+                Id = id.Format(),
+                State = EnumFormatter<ResourceControlState>.GetValue(state),
+                RowVersion = rowVersion,
+                StartedAt = startedAt
+            },
+            transaction: tx()
+        );
     }
 
     public async Task<Image?> GetByDockerImageIdAsync(string dockerImageId, Guid platformId, CancellationToken cancellationToken)
@@ -127,6 +193,23 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
             CreatedAt = image.CreatedAt,
             UpdatedAt = image.UpdatedAt
         }, transaction: tx());
+    }
+
+    public async Task<IEnumerable<Image>> GetStuckImagesAsync(int timeout_s = 60, CancellationToken cancellationToken = default)
+    {
+        var sql = """
+            SELECT * FROM Images c
+            WHERE ControlState = @ControlState
+              AND ControlStartedAt IS NOT NULL
+              AND ControlStartedAt < @TimeoutThreshold
+            """;
+        var timeoutThreshold = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timeout_s;
+        var result = await db.QueryAsync<ImageDto>(sql, new
+        {
+            ControlState = EnumFormatter<ResourceControlState>.GetValue(ResourceControlState.Processing),
+            TimeoutThreshold = timeoutThreshold
+        }, transaction: tx());
+        return result?.ToDomain() ?? [];
     }
 
     public Task<int> BulkUpsertAsync(IEnumerable<Image> images, CancellationToken cancellationToken)

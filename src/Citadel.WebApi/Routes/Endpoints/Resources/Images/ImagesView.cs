@@ -1,4 +1,5 @@
-﻿using Domain.Entities;
+﻿using Domain;
+using Domain.Entities;
 using WebApi.Routes.Endpoints.Resources.Registries;
 
 namespace WebApi.Routes.Endpoints.Resources.Images;
@@ -12,6 +13,7 @@ public sealed record ImageView(
     bool IsInUse,
     Guid PlatformId,
     DateTime CreatedAt,
+    ResourceControlState ControlState,
     DateTime? UpdatedAt = null,
     Guid? RegistryId = null,
     RegistryView? Registry = null);
@@ -31,6 +33,7 @@ public sealed record ImagesView(IEnumerable<ImageView> Images)
             CreatedAt: image.CreatedAt,
             UpdatedAt: image.UpdatedAt,
             RegistryId: image.RegistryId,
+            ControlState: image.ControlState,
             Registry: image.Registry is not null ? RegistryView.Map(image.Registry) : null
         );
 }

@@ -501,6 +501,7 @@ internal static class Configuration
         image.Property<string?>("UpdatedAt").HasColumnType("TEXT").HasDefaultValue(null);
         image.Property<int>("Containers").HasColumnType("INTEGER").HasDefaultValue(0);
         image.Property<double>("Size").HasColumnType("REAL").HasDefaultValue(0);
+        image.AddReconcilableMember();
 
         image
             .HasOne("Platform")
