@@ -449,7 +449,6 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   const abortControllerRef = useRef<AbortController | null>(null);
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   const startRef = useRef<number | null>(null);
-  const timerRef = useRef<number | null>(null);
 
   const handleChunkReceived = useCallback((chunk: string) => {
     bufferRef.current += chunk;
@@ -556,22 +555,30 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
   useEffect(() => {
     const controller = new AbortController();
     abortControllerRef.current = controller;
+
+    startRef.current = null;
+    setElapsedMs(0);
+
     mutate({ ...request, signal: controller.signal });
     return () => {
       controller.abort();
-      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [mutate, request]);
 
   useEffect(() => {
+    let intervalId: number | undefined;
+
     if (isPending) {
       if (startRef.current == null) startRef.current = performance.now();
-      timerRef.current = window.setInterval(() => {
+
+      intervalId = window.setInterval(() => {
         setElapsedMs(Math.max(0, performance.now() - (startRef.current ?? 0)));
       }, 100);
-    } else if (timerRef.current) {
-      clearInterval(timerRef.current);
     }
+
+    return () => {
+      if (intervalId) window.clearInterval(intervalId);
+    };
   }, [isPending]);
 
   useEffect(() => {

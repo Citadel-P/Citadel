@@ -47,6 +47,8 @@ public static class ApplicationModule
         => services
             .AddSingleton<IJwtService, JwtService>()
             .AddSingleton<ISyncBarrier, SyncBarrier>()
+            .AddScoped<IContainerProcessingService, ContainerProcessingService>()
+            .AddScoped<IDeploymentProcessingService, DeploymentProcessingService>()
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>()
             .AddSingleton<IContainerEventBroadcaster, ContainerEventBroadcaster>()
             .AddSingleton<IPlatformHealthBroadCaster, PlatformHealthBroadCaster>()

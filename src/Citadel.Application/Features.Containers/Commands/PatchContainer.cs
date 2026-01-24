@@ -1,17 +1,13 @@
 ﻿using Application.Services;
-using Application.Services.SignalR;
-using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
-using Domain.Entities;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Application.Features.Containers.Commands;
 
@@ -25,11 +21,8 @@ public sealed record PatchContainer(string[] ContainerIds, ContainerAction Actio
 }
 
 internal sealed class PatchContainerHandler(
-    IServiceScopeFactory scopeFactory,
-    INotificationQueue notificationQueue,
-    IDockerDaemonStreamManager dockerDaemonHub,
+    IContainerProcessingService containerService,
     IPlatformContainerCache platformContainerCache,
-    IContainerEventBroadcaster containerEventBroadcaster,
     IConnectorFactory<IContainerConnector> connectorFactory)
     : ICommandHandler<PatchContainer, Result>
 {
@@ -42,7 +35,7 @@ internal sealed class PatchContainerHandler(
         }
 
         var containerIds = platforms.SelectMany(p => p.Containers.Values).ToArray();
-        var containers = await MarkContainersProcessingAsync(containerIds, ct);
+        var containers = await containerService.MarkProcessingAsync(containerIds, ct);
 
         if (containers.Count == 0)
         {
@@ -50,88 +43,19 @@ internal sealed class PatchContainerHandler(
                 "No containers found for the provided ID(s)."));
         }
 
-        await NotifyProcessingAsync(containers, ct);
+        await containerService.NotifyProcessingAsync(containers, ct);
 
         foreach (var platform in platforms)
         {
             var result = await PatchPlatformAsync(platform, request.Action, ct);
             if (result.IsFailure())
             {
-                await RollbackProcessingAsync(containers, ct);
+                await containerService.RollbackProcessingAsync(containers, ct);
                 return result;
             }
         }
 
         return Result.Success();
-    }
-
-    private async Task<List<Container>> MarkContainersProcessingAsync(Guid[] containerIds, CancellationToken ct)
-    {
-        var updated = new List<Container>();
-
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var containers = await uow.Containers.GetByIdAsync(containerIds, ct);
-
-        foreach (var container in containers)
-        {
-            container.MarkProcessing();
-
-            var affected = await uow.Containers.UpdateProcessingAsync(
-                container.Id,
-                container.ControlState,
-                container.ControlStartedAt,
-                container.RowVersion,
-                checkRowVersion: true,
-                ct);
-
-            if (affected != 0)
-            {
-                updated.Add(container);
-            }
-        }
-
-        await uow.CommitAsync(ct);
-        return updated;
-    }
-
-    private async Task RollbackProcessingAsync(IEnumerable<Container> containers, CancellationToken ct)
-    {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-        foreach (var container in containers)
-        {
-            container.ReleaseProcessing();
-
-            await uow.Containers.UpdateProcessingAsync(
-                container.Id,
-                container.ControlState,
-                container.ControlStartedAt,
-                container.RowVersion,
-                checkRowVersion: true,
-                ct);
-        }
-
-        await uow.CommitAsync(ct);
-        await NotifyProcessingAsync(containers, ct);
-    }
-
-    private async Task NotifyProcessingAsync(IEnumerable<Container> containers, CancellationToken ct)
-    {
-        foreach (var container in containers)
-        {
-            await notificationQueue.EnqueueAsync(
-                new ContainerNotificationWorkItem(
-                    container,
-                    new DaemonContainerEventInfo(
-                        "processing",
-                        container.DockerContainerId,
-                        null),
-                    dockerDaemonHub,
-                    containerEventBroadcaster),
-                ct);
-        }
     }
 
     private Task<Result> PatchPlatformAsync(PlatformCacheEntry platform, ContainerAction action, CancellationToken ct)
