@@ -32,9 +32,14 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         d.ControlStartedAt,
         d.RowVersion,
         c.Id AS Container_ContainerId,
-        c.DockerContainerId AS Container_DockerContainerId
+        c.DockerContainerId AS Container_DockerContainerId,
+        p.Name AS Platform_Name,
+        p.status AS Platform_Status
     FROM Deployments d 
-    LEFT JOIN Containers c ON d.Id = c.DeploymentId
+    LEFT JOIN Containers c
+        ON d.Id = c.DeploymentId
+    LEFT JOIN Platforms p 
+        ON d.PlatformId = p.Id
     """;
 
     public async Task<Deployment?> GetAsync(Guid id, CancellationToken cancellationToken)

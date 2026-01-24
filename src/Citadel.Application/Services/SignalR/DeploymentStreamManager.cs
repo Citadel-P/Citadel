@@ -7,7 +7,6 @@ namespace Application.Services.SignalR;
 internal interface IDeploymentStreamManager : IStreamGroupManager
 {
     Task SendDeploymentInfo(Deployment deployment);
-    Task SendDeploymentsInfo(IEnumerable<Deployment> deployments);
 }
 
 internal class DeploymentStreamManager(IApplicationHubDispatcher dispatcher) : BaseStreamManager<StreamContext>, IDeploymentStreamManager
@@ -20,16 +19,6 @@ internal class DeploymentStreamManager(IApplicationHubDispatcher dispatcher) : B
         }
 
         return dispatcher.SendDeploymentInfo(deployment);
-    }
-
-    public Task SendDeploymentsInfo(IEnumerable<Deployment> deployments)
-    {
-        if (streams.IsEmpty)
-        {
-            return Task.CompletedTask;
-        }
-
-        return dispatcher.SendDeploymentsInfo(deployments);
     }
 }
 

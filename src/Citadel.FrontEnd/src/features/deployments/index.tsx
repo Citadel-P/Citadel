@@ -1,9 +1,9 @@
 import { Rocket } from 'lucide-react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
-import { useRead } from '@/lib/hooks';
 import { ActionBar } from '@/components/custom/action-bar';
 import { DeploymentDropdownActions, DeploymentGroupActions } from './actions';
 import { DeploymentsTable } from './table';
+import { useDeploymentGroup } from './hooks/useDeploymentsGroup';
 
 export const DeploymentComponents: RequiredComponents = {
   Icon: <Rocket className="h-4 w-4" />,
@@ -16,8 +16,8 @@ export const DeploymentComponents: RequiredComponents = {
   },
 
   useData: function (): ResourceDataHookResult<any> {
-    const { data, isLoading } = useRead(`listDeployments`);
-    return { items: data?.data?.deployments ?? [], isLoading };
+    const { deployments, isLoading } = useDeploymentGroup();
+    return { items: deployments ?? [], isLoading };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

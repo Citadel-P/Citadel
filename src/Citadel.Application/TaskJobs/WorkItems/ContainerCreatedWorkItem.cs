@@ -103,9 +103,3 @@ internal class DeploymentNotificationWorkItem(IDeploymentStreamManager deploymen
     public Task ExecuteAsync(CancellationToken cancellationToken)
         => deploymentHub.SendDeploymentInfo(deployment);
 }
-
-internal class DeploymentsNotificationWorkItem(IDeploymentStreamManager deploymentHub, IEnumerable<Deployment> deployments) : INotificationWorkItem
-{
-    public Task ExecuteAsync(CancellationToken cancellationToken)
-        => deploymentHub.SendDeploymentsInfo(deployments);
-}

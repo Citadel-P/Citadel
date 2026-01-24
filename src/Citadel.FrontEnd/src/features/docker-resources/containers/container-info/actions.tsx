@@ -1,78 +1,20 @@
-import { Ban, Pause, Play, RotateCcw, StepForward, Trash } from 'lucide-react';
+import { Trash } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAppContext } from '@/lib/context/app-context';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { DockerContainerView } from '@/api/types';
-import { ContainerStateStatus, ResourceControlState } from '@/api/generated/api.types';
+import { createContainerActions } from '../actions';
 
 const useVariables = (resources: DockerContainerView | DockerContainerView[]) =>
   Array.isArray(resources) ? resources.map((r) => r.id) : [resources.id];
-const isProcessing = (r: DockerContainerView) => r.controlState === ResourceControlState.Processing;
+
+const { startAction, stopAction, pauseAction, restartAction } = createContainerActions(useVariables);
 
 export const { info: ContainerInfoActions } = createActionsBuilder<DockerContainerView>()
-  .addAction({
-    key: 'start',
-    type: 'command',
-    icon: Play,
-    mutateKey: 'startContainers',
-    useVariables,
-    canExecute: (r) => {
-      const can = (x: DockerContainerView) =>
-        x.state !== ContainerStateStatus.Running &&
-        x.state !== ContainerStateStatus.Offline &&
-        x.state !== ContainerStateStatus.Paused &&
-        !isProcessing(x);
-      return Array.isArray(r) ? r.some(can) : can(r);
-    },
-  })
-  .addAction({
-    key: 'stop',
-    type: 'command',
-    icon: Ban,
-    mutateKey: 'stopContainers',
-    useVariables,
-    canExecute: (r) => {
-      const can = (x: DockerContainerView) =>
-        (x.state === ContainerStateStatus.Running || x.state === ContainerStateStatus.Paused) && !isProcessing(x);
-      return Array.isArray(r) ? r.some(can) : can(r);
-    },
-  })
-  .addAction({
-    key: 'pauseToggle',
-    type: 'toggle',
-    primary: {
-      title: 'Pause',
-      icon: Pause,
-      mutateKey: 'pauseContainers',
-      useVariables,
-      canExecute: (r) => {
-        const can = (x: DockerContainerView) => x.state === ContainerStateStatus.Running && !isProcessing(x);
-        return Array.isArray(r) ? r.some(can) : can(r);
-      },
-    },
-    secondary: {
-      title: 'Resume',
-      icon: StepForward,
-      mutateKey: 'unpauseContainers',
-      useVariables,
-      canExecute: (r) => {
-        const can = (x: DockerContainerView) => x.state === ContainerStateStatus.Paused && !isProcessing(x);
-        return Array.isArray(r) ? r.some(can) : can(r);
-      },
-    },
-  })
-  .addAction({
-    key: 'restart',
-    type: 'command',
-    icon: RotateCcw,
-    mutateKey: 'restartContainers',
-    useVariables,
-    canExecute: (r) => {
-      const can = (x: DockerContainerView) =>
-        (x.state === ContainerStateStatus.Running || x.state === ContainerStateStatus.Paused) && !isProcessing(x);
-      return Array.isArray(r) ? r.some(can) : can(r);
-    },
-  })
+  .addAction(startAction)
+  .addAction(stopAction)
+  .addAction(pauseAction)
+  .addAction(restartAction)
   .addAction({
     key: 'delete',
     type: 'command',

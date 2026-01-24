@@ -43,6 +43,5 @@ public interface IApplicationHubDispatcher
 
     #region Deployments
     Task SendDeploymentInfo(Deployment deployment);
-    Task SendDeploymentsInfo(IEnumerable<Deployment> deployments);
     #endregion
 }

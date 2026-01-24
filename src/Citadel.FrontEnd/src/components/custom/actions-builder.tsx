@@ -336,13 +336,7 @@ function useMutationLogic<R, K extends KnownResourceName>(
   const { mutateAsync, isPending } = useMutate(act.mutateKey || ('none' as any));
   const client = useQueryClient();
 
-  const canExecute = act.mutateKey
-    ? act.canExecute
-      ? Array.isArray(resources)
-        ? resources.some(act.canExecute)
-        : act.canExecute(resources)
-      : true
-    : false;
+  const canExecute = act.mutateKey ? (act.canExecute ? act.canExecute(resources) : true) : false;
 
   const vars = act.useVariables ? act.useVariables(resources) : undefined;
 
