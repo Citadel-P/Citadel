@@ -64,3 +64,8 @@
 
 # Verify
 *.verified.txt text eol=lf working-tree-encoding=UTF-8
+
+###############################################################################
+# Shell scripts must use LF line endings (avoid CRLF/BOM issues in Alpine)
+###############################################################################
+*.sh text eol=lf

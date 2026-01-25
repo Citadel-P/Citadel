@@ -1,5 +1,5 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot AS build
-RUN apk add --no-cache clang lld musl-dev libc6-compat
+RUN apk add --no-cache clang lld musl-dev libc6-compat docker-cli docker-cli-compose
 
 WORKDIR /src
 
@@ -36,6 +36,16 @@ RUN dotnet publish Citadel.WebApi.csproj -c Release -o /app/publish \
 # Final stage
 FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-alpine AS final
 WORKDIR /app
+
+# Copy and run deps
+COPY install-deps.sh .
+RUN apk add --no-cache bash \
+    && chmod +x install-deps.sh \
+    && ./install-deps.sh \
+    && rm install-deps.sh
+
+COPY starship.toml /root/.config/starship.toml
+ENV STARSHIP_CONFIG=/root/.config/starship.toml
 
 # Copy the published self-contained binary
 COPY --from=build /app/publish .

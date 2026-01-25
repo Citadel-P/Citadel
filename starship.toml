@@ -1,0 +1,62 @@
+﻿# Citadel Agent - Starship Configuration
+# Designed for professional container management 
+
+"$schema" = 'https://starship.rs/config-schema.json'
+
+# Layout: [Citadel Branding] [Directory] [Git Info] [Memory]
+format = """
+[ ](bg:blue)\
+$container\
+[ ](bg:cyan)\
+$directory\
+[ ](bg:purple)\
+$git_branch\
+$git_status\
+$fill\
+$memory_usage\
+$cmd_duration\
+$line_break\
+$character"""
+
+# Fill the gap between left and right info
+[fill]
+symbol = " "
+
+[container]
+style = "bg:blue fg:white"
+symbol = "⬢" 
+format = "[$symbol Citadel Agent]($style) "
+
+[directory]
+style = "bg:cyan fg:black"
+format = "[ $path ]($style)"
+truncation_length = 3
+truncation_symbol = "…/"
+
+[git_branch]
+symbol = " "
+style = "bg:purple fg:white"
+format = "[[ $symbol$branch ]($style)]()"
+
+[git_status]
+style = "bg:purple fg:white"
+format = "[[($all_status$ahead_behind )]($style)]()"
+
+[memory_usage]
+disabled = false
+threshold = -1
+symbol = "RAM "
+style = "dimmed white"
+format = "[$symbol${ram}]($style) "
+
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
+
+[cmd_duration]
+min_time = 500
+style = "yellow"
+format = "took [$duration]($style) "
+
+[line_break]
+disabled = false
