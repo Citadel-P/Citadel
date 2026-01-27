@@ -869,3 +869,24 @@ internal static class ContainerMappers
             _ => Citadel.Containers.V1.RestartPolicy.No
         };
 }
+
+internal sealed class LocalExecSessionAdapter : Domain.Contracts.Interfaces.IExecSession
+{
+    private readonly Hosting.DockerClient.Services.IExecSession _inner;
+
+    public LocalExecSessionAdapter(Hosting.DockerClient.Services.IExecSession inner)
+        => _inner = inner;
+
+    public IAsyncEnumerable<ReadOnlyMemory<byte>> Output => _inner.Output;
+
+    public Task SendAsync(ReadOnlyMemory<byte> input, CancellationToken ct)
+        => _inner.SendAsync(input, ct);
+
+    public Task ResizeAsync(int cols, int rows, CancellationToken ct)
+        => _inner.ResizeAsync(cols, rows, ct);
+
+    public ValueTask DisposeAsync() => _inner.DisposeAsync();
+
+    internal static Domain.Contracts.Interfaces.IExecSession Map(Hosting.DockerClient.Services.IExecSession session)
+        => new LocalExecSessionAdapter(session);
+}

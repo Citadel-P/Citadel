@@ -50,6 +50,17 @@ internal class LocalContainerConnector(IContainerService containerService) : ICo
             ),
             cancellationToken);
 
+    public async Task<Domain.Contracts.Interfaces.IExecSession> ExecAsync(string containerId, string cmd, CancellationToken cancellationToken)
+    {
+        var result = await containerService.ExecAsync(containerId, cmd, cancellationToken);
+        if (result.IsFailure(out var error, out var resp))
+        {
+            throw new InvalidOperationException($"Failed to create exec session: {error.Message}");
+        }
+
+        return new LocalExecSessionAdapter(resp);
+    }
+
     public async Task<Result<ContainerInspectionInfo>> InspectAsync(InspectContainerCommand inspectContainerCommand, CancellationToken cancellationToken)
     {
         var result = await containerService.InspectAsync(inspectContainerCommand.ContainerId,cancellationToken);

@@ -3,7 +3,7 @@
 
 @theme {
   --font-sans: system-ui, sans-serif;
-  /* Animations  */
+  /* Animations */
   --animate-wiggle: wiggle 1s ease-in-out infinite;
   --animate-fade-in-down: fade-in-down 0.3s ease-out;
   --animate-fade-out-down: fade-out-down 0.3s ease-out;
@@ -13,7 +13,7 @@
   /* Shadows */
   --shadow-custom: 0px 0px 50px 0px rgb(82 63 105 / 15%);
 
-  /* Color Aliases (Maps to CSS variables defined in @layer base) */
+  /* Color Aliases */
   --color-border: var(--border);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -52,7 +52,6 @@
     100% {
       transform: rotate(-3deg);
     }
-
     50% {
       transform: rotate(3deg);
     }
@@ -63,7 +62,6 @@
       opacity: 0;
       transform: translateY(-10px);
     }
-
     100% {
       opacity: 1;
       transform: translateY(0);
@@ -73,9 +71,8 @@
   @keyframes fade-out-down {
     from {
       opacity: 1;
-      transform: translateY(0px);
+      transform: translateY(0);
     }
-
     to {
       opacity: 0;
       transform: translateY(10px);
@@ -87,7 +84,6 @@
       opacity: 0;
       transform: translateY(10px);
     }
-
     100% {
       opacity: 1;
       transform: translateY(0);
@@ -97,12 +93,11 @@
   @keyframes fade-out-up {
     from {
       opacity: 1;
-      transform: translateY(0px);
+      transform: translateY(0);
     }
-
     to {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(-10px);
     }
   }
 }
@@ -122,7 +117,7 @@
     --accent: #f5f5f5;
     --accent-foreground: #171717;
     --destructive: #ef4444;
-    --destructive-foreground: #ef4444;
+    --destructive-foreground: #ffffff;
     --border: #e2e8f0;
     --input: #e5e5e5;
     --ring: #0a0a0a;
@@ -135,40 +130,44 @@
     --warning: #f97316;
     --warning-foreground: #fafaf9;
     --danger: #ff0f0f;
+
     --chart-1: #2490ff;
     --chart-2: #e76a4b;
+
+    /* Sidebar Variables */
     --sidebar-width: 250px;
-    --sidebar-minimized-width: 200px;
   }
 
   .dark {
     --background: #0a0a0a;
     --foreground: #f2f2f2;
-    --card: #525252;
-    --card-foreground: #262626;
+    --card: #1c1c1c;
+    --card-foreground: #f2f2f2;
     --primary: #e63946;
     --primary-foreground: #ffffff;
+    --secondary: #333333;
     --secondary-foreground: #fafafa;
     --muted: #262626;
     --muted-foreground: #a3a3a3;
     --accent: #262626;
     --accent-foreground: #fafafa;
     --destructive: #ff0033;
-    --destructive-foreground: #c21943;
+    --destructive-foreground: #ffffff;
     --border: #262626;
     --input: #262626;
     --ring: #d4d4d4;
-    --secondary: #333333;
     --success: #22c55e;
-    --success-foreground: #d9e6f8;
+    --success-foreground: #f0fdf4;
     --info: #3b82f6;
-    --info-foreground: #d9e6f8;
+    --info-foreground: #eff6ff;
     --warning: #f97316;
-    --warning-foreground: #f9f9f9;
+    --warning-foreground: #fff7ed;
+    --danger: #ff3333;
     --chart-1: #cc0022;
     --chart-2: #e23670;
   }
 
+  /* Multi-theme support */
   :root[data-theme='violet'] {
     --primary: #6e56cf;
     --chart-1: #6e56cf;
@@ -177,105 +176,61 @@
     --background: #060815;
     --foreground: #f6f8fb;
     --primary: #6d28d9;
-    --primary-foreground: #f6f8fb;
-    --muted: #232b3d;
-    --muted-foreground: #a1a8bf;
     --border: #232b3d;
-    --chart-1: #6e56cf;
   }
+
   :root[data-theme='red'] {
     --primary: #cc0033;
-    --chart-1: #cc0033;
-  }
-  .dark[data-theme='red'] {
-    --primary-foreground: #fef2f2;
     --chart-1: #cc0033;
   }
   :root[data-theme='blue'] {
     --primary: #2490ff;
     --chart-1: #2490ff;
   }
-  .dark[data-theme='blue'] {
-    --background: #02080f;
-    --foreground: #f8fafc;
-    --primary: #3b82f6;
-    --primary-foreground: #0f1729;
-    --muted: #1e293b;
-    --muted-foreground: #94a3b8;
-    --border: #1e293b;
-    --chart-1: #2490ff;
-  }
   :root[data-theme='orange'] {
     --primary: #ea580c;
-    --chart-1: #ea580c;
-  }
-  .dark[data-theme='orange'] {
-    --background: #0c0a09;
-    --foreground: #fafaf9;
-    --primary-foreground: #fafaf9;
-    --muted: #292524;
-    --muted-foreground: #a8a29e;
-    --border: #292524;
     --chart-1: #ea580c;
   }
   :root[data-theme='yellow'] {
     --primary: #facc15;
     --chart-1: #facc15;
   }
-  .dark[data-theme='yellow'] {
-    --background: #0c0a09;
-    --foreground: #fafaf9;
-    --primary: #facc15;
-    --primary-foreground: #422006;
-    --muted: #292524;
-    --muted-foreground: #a8a29e;
-    --border: #292524;
-    --chart-1: #facc15;
-  }
   :root[data-theme='green'] {
     --primary: #22c55e;
     --chart-1: #22c55e;
   }
-  .dark[data-theme='green'] {
-    --primary: #22c55e;
-    --primary-foreground: #052e16;
-    --chart-1: #22c55e;
-  }
 
-  /* 3. Global Styles & Resets */
+  /* Global Styles & Resets */
   *,
   ::after,
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentColor);
+    border-color: var(--border, currentColor);
   }
-  * {
-    @apply border-border scroll-smooth;
-  }
+
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
   }
 
-  /* 4. Scrollbar Styles */
+  /* Scrollbar Styles */
   *::-webkit-scrollbar {
     @apply w-1 h-1 bg-background;
   }
   *::-webkit-scrollbar-thumb {
-    @apply rounded-lg bg-foreground/50;
+    @apply rounded-lg bg-foreground/30;
   }
 
-  /* 5. Form Element Resets */
+  /* Form Element Resets */
   [type='checkbox'],
   [type='radio'] {
-    @apply h-4 w-4 rounded-sm border-border bg-background checked:border-primary checked:bg-primary indeterminate:border-primary indeterminate:bg-primary focus:ring-2 focus:ring-primary;
+    @apply h-4 w-4 rounded-sm border-border bg-background checked:border-primary checked:bg-primary focus:ring-2 focus:ring-primary;
   }
 }
 
 @utility container {
   padding-inline: 1rem;
-
   @media (width >=theme(--breakpoint-sm)) {
     padding-inline: 2rem;
   }
@@ -290,18 +245,17 @@
   }
 }
 
+/* Dropdown Utility */
 @utility dropdown-content {
   @apply pointer-events-none scale-95 opacity-0 duration-100 ease-in;
 
-  .dropdown:hover > & {
-    @apply pointer-events-auto block scale-100 animate-fade-in-up opacity-100 duration-200;
+  .dropdown:hover & {
+    @apply pointer-events-auto scale-100 animate-fade-in-up opacity-100 duration-200;
   }
 }
 
 @utility dropdown {
-  &:hover > .dropdown-content {
-    @apply pointer-events-auto block scale-100 animate-fade-in-up opacity-100 duration-200;
-  }
+  position: relative;
 }
 
 .sidebar-expanded {
@@ -314,12 +268,20 @@
 
 .action-bar-left {
   left: var(--sidebar-width);
-}
-
-.action-bar-left-collapsed {
-  left: calc(var(--sidebar-minimized-width) - 50px);
+  transition: left 0.2s ease-in-out;
 }
 
 .table-link {
   @apply hover:underline;
+}
+
+.xterm,
+.xterm-viewport {
+  padding: 12px;
+  background-color: #f7f8f9 !important;
+}
+
+.dark .xterm,
+.dark .xterm-viewport {
+  background-color: #151b25 !important;
 }

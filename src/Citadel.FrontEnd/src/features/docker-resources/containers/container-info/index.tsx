@@ -11,6 +11,7 @@ import { ContainerInfoTable } from './container-info-table';
 import { ImageView, ResourceControlState } from '@/api/generated/api.types';
 import { Link } from 'react-router';
 import { truncate } from '@/lib/truncate';
+import { ContainerExec } from './container-exec';
 
 export const ContainerInfoComponents: RequiredDockerInfoComponents<DockerContainerView> = {
   Header: {
@@ -45,6 +46,10 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<DockerContain
     {
       label: 'Inspect',
       Content: ({ resource }) => <ContainerInspect containerId={resource?.id} />,
+    },
+    {
+      label: 'Terminal',
+      Content: ({ resource }) => <ContainerExec containerId={resource?.id} />,
     },
     {
       label: 'Stats',

@@ -13,6 +13,7 @@ import { normalizeDockerId } from '@/lib/utils';
 import { ContainerInfoTable } from '@/features/docker-resources/containers/container-info/container-info-table';
 import { useContainerInfoGroup } from '@/features/docker-resources/containers/hooks/useContainerInfoGroup';
 import Loader from '@/components/ui/loader';
+import { ContainerExec } from '@/features/docker-resources/containers/container-info/container-exec';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -107,9 +108,7 @@ const RuntimeTabs = ({ containerId }: { containerId: string }) => {
         <ContainerInspect key={nid} containerId={nid} />
       </TabsContent>
       <TabsContent value="terminal" className="w-full mt-2">
-        <div className="p-4 border border-dashed rounded text-muted-foreground text-center">
-          Terminal not implemented yet
-        </div>
+        <ContainerExec key={nid} containerId={nid} />
       </TabsContent>
     </Tabs>
   );

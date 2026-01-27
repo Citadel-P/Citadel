@@ -11,7 +11,7 @@ using WebApi.Routes.Endpoints.Resources.Platforms;
 namespace WebApi.Hubs;
 
 [Authorize]
-internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMediator mediator) : Hub
+internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMediator mediator, IExecSessionManager execSessionManager) : Hub
 {
     #region Overrides
     public override Task OnDisconnectedAsync(Exception? exception)
@@ -52,9 +52,9 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
     #endregion
 
     #region Client Methods
-    public async Task<PlatformsView> GetPlatforms()
+    public async Task<PlatformsView> GetPlatforms(CancellationToken ct)
     {
-        var result = await mediator.Send(new GetPlatforms());
+        var result = await mediator.Send(new GetPlatforms(), ct);
         if (result.IsSuccess(out var platforms))
         {
             return PlatformsView.Map(platforms);
@@ -62,9 +62,9 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
         else return new PlatformsView([]);
     }
 
-    public async Task<ContainersView> GetContainers(Guid id)
+    public async Task<ContainersView> GetContainers(Guid id, CancellationToken ct)
     {
-        var response = await mediator.Send(new GetContainers(id));
+        var response = await mediator.Send(new GetContainers(id), ct);
         if (response.IsSuccess(out var containers))
         {
             return ContainersView.Map(containers);
@@ -72,14 +72,18 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
         else return new ContainersView([]);
     }
 
-    public async Task<ImagesView> GetImages(Guid id)
+    public async Task<ImagesView> GetImages(Guid id, CancellationToken ct)
     {
-        var response = await mediator.Send(new GetAllLocalImages(id));
+        var response = await mediator.Send(new GetAllLocalImages(id), ct);
         if (response.IsSuccess(out var images))
         {
             return ImagesView.Map(images);
         }
         else return new ImagesView([]);
     }
+
+    public Task ResizeExec(string groupId, int cols, int rows, CancellationToken ct) => execSessionManager.ResizeAsync(groupId, cols, rows, ct);
+
+    public Task SendExecInput(string groupId, byte[] data, CancellationToken ct) => execSessionManager.SendInputAsync(groupId, data, ct);
     #endregion
 }

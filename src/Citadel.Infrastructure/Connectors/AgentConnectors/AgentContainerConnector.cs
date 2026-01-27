@@ -167,4 +167,8 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : ICont
         }
     }
 
+    public Task<IExecSession> ExecAsync(string containerId, string cmd, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
 }
