@@ -335,18 +335,21 @@ interface LogViewerProps {
   onClear?: () => void;
 }
 
-interface LogActionProps {
+interface QuickActionProps {
   label: string;
   icon: React.ReactNode;
   active?: boolean;
+  disabled?: boolean;
+  side?: "left" | "top" | "right" | "bottom";
   onClick: () => void;
 }
 
-const LogAction = ({ label, icon, active, onClick }: LogActionProps) => (
+export const QuickAction = ({ label, icon, active, disabled, side = "left", onClick }: QuickActionProps) => (
   <TooltipProvider delayDuration={200}>
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
+          disabled={disabled}
           size="icon-sm"
           variant={active ? 'secondary' : 'outline'}
           className={'rounded-full h-7 w-7 shadow-sm'}
@@ -354,7 +357,7 @@ const LogAction = ({ label, icon, active, onClick }: LogActionProps) => (
           {icon}
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="left">{label}</TooltipContent>
+      <TooltipContent side={side}>{label}</TooltipContent>
     </Tooltip>
   </TooltipProvider>
 );
@@ -410,7 +413,7 @@ export const LogViewer = ({
       {(enableTimestamps || allowWrap || onClear) && (
         <div className="absolute top-2 right-2 flex flex-col gap-2 z-10">
           {enableTimestamps && (
-            <LogAction
+            <QuickAction
               label="Timestamps"
               icon={<Timer className="h-3.5 w-3.5" />}
               active={showTimestamps}
@@ -418,14 +421,14 @@ export const LogViewer = ({
             />
           )}
           {allowWrap && (
-            <LogAction
+            <QuickAction
               label="Wrap Lines"
               icon={<WrapText className="h-3.5 w-3.5" />}
               active={wrapLines}
               onClick={() => setWrapLines(!wrapLines)}
             />
           )}
-          {onClear && <LogAction label="Clear Console" icon={<Eraser className="h-3.5 w-3.5" />} onClick={onClear} />}
+          {onClear && <QuickAction label="Clear Console" icon={<Eraser className="h-3.5 w-3.5" />} onClick={onClear} />}
         </div>
       )}
       <div
@@ -469,12 +472,18 @@ export const MemoryUsageCell = ({
   if (state !== ContainerStateStatus.Running) {
     return <div className="text-muted">0B / 0B</div>;
   }
-  return <span className='text-[13px]'>{byteTransform(stats?.memoryActive ?? 0, 2) + ' / ' + byteTransform(stats?.memoryLimit ?? 0, 2)}</span>;
+  return (
+    <span className="text-[13px]">
+      {byteTransform(stats?.memoryActive ?? 0, 2) + ' / ' + byteTransform(stats?.memoryLimit ?? 0, 2)}
+    </span>
+  );
 };
 
 export const CPUCell = ({ state, stats }: { state: ContainerStateStatus; stats?: ContainerStatView | null }) => {
   if (state !== ContainerStateStatus.Running) {
     return <div className="text-muted">0%</div>;
   }
-  return <span className='text-[13px]'>{stats?.cpuUsage ? toFixedNumber(stats?.cpuUsage as number, 'percent') : '0%'}</span>;
+  return (
+    <span className="text-[13px]">{stats?.cpuUsage ? toFixedNumber(stats?.cpuUsage as number, 'percent') : '0%'}</span>
+  );
 };

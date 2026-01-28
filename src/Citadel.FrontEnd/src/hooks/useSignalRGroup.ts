@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { HubConnection } from '@microsoft/signalr';
+import { HubConnection, HubConnectionState } from '@microsoft/signalr';
 import { useSignalRContext } from '@/lib/context/signalr-context';
 
 type UseSignalRGroupOpts = {
@@ -8,6 +8,7 @@ type UseSignalRGroupOpts = {
   removeEventListeners?: (hub: HubConnection) => void;
   onJoinedGroup?: (hub: HubConnection) => void;
   skip?: boolean;
+  enabled?: boolean;
 };
 
 export const useSignalRGroup = ({
@@ -16,60 +17,57 @@ export const useSignalRGroup = ({
   removeEventListeners,
   onJoinedGroup,
   skip,
+  enabled = true,
 }: UseSignalRGroupOpts) => {
-  const { joinGroup, leaveGroup, connection } = useSignalRContext();
+  const { joinGroup, leaveGroup, connection, connectionState } = useSignalRContext();
+  const [isLoading, setIsLoading] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
 
   const setupRef = useRef(setupEventListeners);
-  const removeRef = useRef(removeEventListeners);
   const onJoinedRef = useRef(onJoinedGroup);
 
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => void (setupRef.current = setupEventListeners), [setupEventListeners]);
-  useEffect(() => void (removeRef.current = removeEventListeners), [removeEventListeners]);
-  useEffect(() => void (onJoinedRef.current = onJoinedGroup), [onJoinedGroup]);
+  useEffect(() => {
+    setupRef.current = setupEventListeners;
+  }, [setupEventListeners]);
 
   useEffect(() => {
-    if (skip || !groupName || !connection) {
-      setIsLoading(false);
+    onJoinedRef.current = onJoinedGroup;
+  }, [onJoinedGroup]);
+
+  const state = connectionState;
+
+  useEffect(() => {
+    if (skip || !enabled || !groupName || !connection || state !== HubConnectionState.Connected) {
+      setIsConnected(false);
       return;
     }
 
-    let cancelled = false;
     let joined = false;
 
-    const join = async () => {
-      setIsLoading(true);
+    const run = async () => {
       try {
-        await joinGroup(groupName, (hub) => setupRef.current?.(hub));
+        setIsLoading(true);
+        await joinGroup(groupName, (hub) => setupRef.current(hub));
         joined = true;
-        if (!cancelled) {
-          onJoinedRef.current?.(connection);
-          setIsLoading(false);
-        }
+        setIsConnected(true);
+        setIsLoading(false);
+
+        onJoinedRef.current?.(connection);
       } catch (err) {
-        if (!cancelled) {
-          console.error(`Failed to join SignalR group "${groupName}"`, err);
-          setIsLoading(false);
-        }
+        console.error('[SignalR] join failed', err);
+        setIsConnected(false);
+        setIsLoading(false);
       }
     };
 
-    join();
+    run();
 
     return () => {
-      cancelled = true;
-
       if (joined) {
-        leaveGroup(groupName, (hub) => removeRef.current?.(hub)).catch((err) =>
-          console.warn(`Failed to leave SignalR group "${groupName}"`, err),
-        );
-      } else if (connection) {
-        // In case listeners were partially attached
-        removeRef.current?.(connection);
+        leaveGroup(groupName, (hub) => removeEventListeners?.(hub)).catch(console.warn);
       }
     };
-  }, [groupName, skip, connection, joinGroup, leaveGroup]);
+  }, [groupName, skip, enabled, state, connection, joinGroup, leaveGroup, removeEventListeners]);
 
-  return { isLoading };
+  return { isLoading, isConnected };
 };

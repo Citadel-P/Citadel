@@ -121,9 +121,11 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
     #endregion
 
     #region Exec Sessions
-    public Task SendExecOutput(string containerId, byte[] data) =>
-        hubContext.Clients
-            .Group(WellKnownSignalRGroups.ContainerExecGroup(containerId))
+    public Task SendExecOutput(string containerId, string sessionId, byte[] data)
+    {
+        return hubContext.Clients
+            .Group(WellKnownSignalRGroups.ContainerExecGroup(containerId, sessionId))
             .SendAsync("SendContainerExec", data);
+    }
     #endregion
 }

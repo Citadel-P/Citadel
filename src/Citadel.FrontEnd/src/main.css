@@ -277,7 +277,7 @@
 
 .xterm,
 .xterm-viewport {
-  padding: 12px;
+  padding: 0px 0px 0px 8px;
   background-color: #f7f8f9 !important;
 }
 

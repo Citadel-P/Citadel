@@ -20,10 +20,8 @@ internal class StreamContext
         using (@lock.EnterScope())
         {
             subscribers.Remove(connectionId);
-            if (IsEmpty)
-            {
+            if (subscribers.Count == 0)
                 started = false;
-            }
         }
     }
 
@@ -43,6 +41,14 @@ internal class StreamContext
             if (started) return false;
             started = true;
             return true;
+        }
+    }
+
+    public void ResetStarted()
+    {
+        using (@lock.EnterScope())
+        {
+            started = false;
         }
     }
 }

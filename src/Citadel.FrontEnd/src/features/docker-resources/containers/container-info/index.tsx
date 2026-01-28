@@ -8,7 +8,7 @@ import ContainerInspect from './container-inspect';
 import { ContainerStats } from './container-stats';
 import { ContainerInfoActions } from './actions';
 import { ContainerInfoTable } from './container-info-table';
-import { ImageView, ResourceControlState } from '@/api/generated/api.types';
+import { ContainerStateStatus, ImageView, ResourceControlState } from '@/api/generated/api.types';
 import { Link } from 'react-router';
 import { truncate } from '@/lib/truncate';
 import { ContainerExec } from './container-exec';
@@ -49,7 +49,10 @@ export const ContainerInfoComponents: RequiredDockerInfoComponents<DockerContain
     },
     {
       label: 'Terminal',
-      Content: ({ resource }) => <ContainerExec containerId={resource?.id} />,
+      disabled: (resource: DockerContainerView) => resource.state !== ContainerStateStatus.Running,
+      Content: ({ resource }) => (
+        <ContainerExec containerId={resource?.id} disabled={resource.state !== ContainerStateStatus.Running} />
+      ),
     },
     {
       label: 'Stats',

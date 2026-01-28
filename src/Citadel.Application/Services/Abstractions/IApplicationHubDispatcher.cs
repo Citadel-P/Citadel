@@ -46,6 +46,6 @@ public interface IApplicationHubDispatcher
     #endregion
 
     #region Exec Sessions
-    Task SendExecOutput(string containerId, byte[] data);
+    Task SendExecOutput(string containerId, string sessionId, byte[] data);
     #endregion
 }

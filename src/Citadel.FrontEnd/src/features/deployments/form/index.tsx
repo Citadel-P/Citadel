@@ -4,7 +4,7 @@ import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { DeploymentActions } from './actions';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useDeploymentGroup } from './hooks/useDeploymentGroup';
-import { DeploymentStatus, DeploymentView, ResourceControlState } from '@/api/generated/api.types';
+import { ContainerStateStatus, DeploymentStatus, DeploymentView, ResourceControlState } from '@/api/generated/api.types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ContainerLogs } from '@/features/docker-resources/containers/container-info/container-logs';
 import { DockerContainerView } from '@/api/types';
@@ -80,12 +80,12 @@ const RuntimeView = ({ containerInfo }: { containerInfo: DockerContainerView }) 
           DisplayStatus: false,
         }}
       />
-      <RuntimeTabs containerId={containerInfo.id} />
+      <RuntimeTabs containerId={containerInfo.id} disabled={containerInfo.state !== ContainerStateStatus.Running}/>
     </div>
   );
 };
 
-const RuntimeTabs = ({ containerId }: { containerId: string }) => {
+const RuntimeTabs = ({ containerId, disabled }: { containerId: string, disabled?: boolean}) => {
   const nid = normalizeDockerId(containerId);
 
   return (
@@ -97,7 +97,7 @@ const RuntimeTabs = ({ containerId }: { containerId: string }) => {
         <TabsTrigger className="text-xs" value="inspect">
           Inspect
         </TabsTrigger>
-        <TabsTrigger className="text-xs" value="terminal">
+        <TabsTrigger className="text-xs" value="terminal" disabled={disabled}>
           Terminal
         </TabsTrigger>
       </TabsList>
@@ -107,8 +107,8 @@ const RuntimeTabs = ({ containerId }: { containerId: string }) => {
       <TabsContent value="inspect" className="w-full mt-2">
         <ContainerInspect key={nid} containerId={nid} />
       </TabsContent>
-      <TabsContent value="terminal" className="w-full mt-2">
-        <ContainerExec key={nid} containerId={nid} />
+      <TabsContent value="terminal" className="w-full mt-2" >
+        <ContainerExec key={nid} containerId={nid} disabled={disabled} />
       </TabsContent>
     </Tabs>
   );

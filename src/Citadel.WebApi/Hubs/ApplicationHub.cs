@@ -52,9 +52,9 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
     #endregion
 
     #region Client Methods
-    public async Task<PlatformsView> GetPlatforms(CancellationToken ct)
+    public async Task<PlatformsView> GetPlatforms()
     {
-        var result = await mediator.Send(new GetPlatforms(), ct);
+        var result = await mediator.Send(new GetPlatforms(), Context.ConnectionAborted);
         if (result.IsSuccess(out var platforms))
         {
             return PlatformsView.Map(platforms);
@@ -62,9 +62,9 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
         else return new PlatformsView([]);
     }
 
-    public async Task<ContainersView> GetContainers(Guid id, CancellationToken ct)
+    public async Task<ContainersView> GetContainers(Guid id)
     {
-        var response = await mediator.Send(new GetContainers(id), ct);
+        var response = await mediator.Send(new GetContainers(id), Context.ConnectionAborted);
         if (response.IsSuccess(out var containers))
         {
             return ContainersView.Map(containers);
@@ -72,9 +72,9 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
         else return new ContainersView([]);
     }
 
-    public async Task<ImagesView> GetImages(Guid id, CancellationToken ct)
+    public async Task<ImagesView> GetImages(Guid id)
     {
-        var response = await mediator.Send(new GetAllLocalImages(id), ct);
+        var response = await mediator.Send(new GetAllLocalImages(id), Context.ConnectionAborted);
         if (response.IsSuccess(out var images))
         {
             return ImagesView.Map(images);
@@ -82,8 +82,10 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
         else return new ImagesView([]);
     }
 
-    public Task ResizeExec(string groupId, int cols, int rows, CancellationToken ct) => execSessionManager.ResizeAsync(groupId, cols, rows, ct);
+    public Task StartExecProcess(string groupId, string shell) => execSessionManager.StartExecProcess(groupId, shell, Context.ConnectionAborted);
 
-    public Task SendExecInput(string groupId, byte[] data, CancellationToken ct) => execSessionManager.SendInputAsync(groupId, data, ct);
+    public Task ResizeExec(string groupId, int cols, int rows, string shell) => execSessionManager.ResizeAsync(groupId, cols, rows, shell, Context.ConnectionAborted);
+
+    public Task SendExecInput(string groupId, byte[] data) => execSessionManager.SendInputAsync(groupId, data, Context.ConnectionAborted);
     #endregion
 }
