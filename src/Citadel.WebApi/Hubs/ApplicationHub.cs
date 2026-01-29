@@ -84,7 +84,7 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
 
     public Task StartExecProcess(string groupId, string shell) => execSessionManager.StartExecProcess(groupId, shell, Context.ConnectionAborted);
 
-    public Task ResizeExec(string groupId, int cols, int rows, string shell) => execSessionManager.ResizeAsync(groupId, cols, rows, shell, Context.ConnectionAborted);
+    public Task ResizeExec(string groupId, int cols, int rows) => execSessionManager.ResizeAsync(groupId, cols, rows, Context.ConnectionAborted);
 
     public Task SendExecInput(string groupId, byte[] data) => execSessionManager.SendInputAsync(groupId, data, Context.ConnectionAborted);
     #endregion

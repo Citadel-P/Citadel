@@ -18,8 +18,8 @@ internal class AgentDeploymentConnector(IGrpcClientFactory clientFactory) : IDep
             var deploymentClient = clientFactory.GetDeploymentClient(applyDeployment.PlatformAddress);
             var request = new ApplyDeploymentRequest() 
             {
-                ImageId = applyDeployment.ImageId,
-                Name = applyDeployment.Name,
+                ImageId = applyDeployment.ImageId ?? "",
+                Name = applyDeployment.Name ?? "",
                 Spec = new DeploymentSpec
                 {
                     LifeCycleSpec = new LifeCycleSpec
@@ -33,12 +33,12 @@ internal class AgentDeploymentConnector(IGrpcClientFactory clientFactory) : IDep
                         NanoCpus = applyDeployment.Spec.ResourceSpec?.NanoCpus ?? 0,
                         MemoryLimit = applyDeployment.Spec.ResourceSpec?.MemoryLimit ?? 0
                     },
-                    Labels = { applyDeployment.Spec.Labels },
-                    Networks = { applyDeployment.Spec.Networks },
-                    Command = { applyDeployment.Spec.Command },
-                    EnvVars = { applyDeployment.Spec.EnvVars },
-                    Ports = { applyDeployment.Spec.Ports },
-                    Volumes = { applyDeployment.Spec.Volumes }
+                    Labels = { applyDeployment.Spec.Labels ?? [] },
+                    Networks = { applyDeployment.Spec.Networks ?? [] },
+                    Command = { applyDeployment.Spec.Command ?? [] },
+                    EnvVars = { applyDeployment.Spec.EnvVars ?? [] },
+                    Ports = { applyDeployment.Spec.Ports ?? [] },
+                    Volumes = { applyDeployment.Spec.Volumes ?? [] }
                 }
                 
             };

@@ -1,13 +1,16 @@
-﻿using System.Runtime.CompilerServices;
-using Citadel.Containers.V1;
+﻿using Citadel.Containers.V1;
+using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
+using Google.Protobuf;
 using Grpc.Core;
 using Hosting.Common.ErrorTypes;
 using Infrastructure.Connectors.Mappers;
 using Infrastructure.Repositories;
 using LightResults;
+using System.Runtime.CompilerServices;
+using System.Text;
 using static Citadel.Containers.V1.ContainerService;
 
 namespace Infrastructure.Connectors.AgentConnectors;
@@ -167,8 +170,74 @@ internal class AgentContainerConnector(IGrpcClientFactory clientFactory) : ICont
         }
     }
 
-    public Task<IExecSession> ExecAsync(string containerId, string cmd, CancellationToken cancellationToken)
+    public async Task<IExecSession> ExecAsync(string platformAddress, string containerId, string cmd, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        var containerClient = clientFactory.GetContainerClient(platformAddress);
+        var call = containerClient.Exec(cancellationToken: cancellationToken);
+
+        var open = new ExecClientMessage
+        {
+            Open = new ExecOpen
+            {
+                ContainerId = containerId,
+                Cmd = { cmd },
+                Tty = true
+            }
+        };
+
+        await call.RequestStream.WriteAsync(open, cancellationToken).ConfigureAwait(false);
+
+        return new AgentExecSession(call);
+    }
+}
+
+internal sealed class AgentExecSession(AsyncDuplexStreamingCall<ExecClientMessage, ExecServerMessage> call) : IExecSession
+{
+    private readonly AsyncDuplexStreamingCall<ExecClientMessage, ExecServerMessage> _call = call;
+
+    public IAsyncEnumerable<ReadOnlyMemory<byte>> Output => ReadOutputAsync();
+
+    private async IAsyncEnumerable<ReadOnlyMemory<byte>> ReadOutputAsync([EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await foreach (var msg in _call.ResponseStream.ReadAllAsync(ct))
+        {
+            switch (msg.MsgCase)
+            {
+                case ExecServerMessage.MsgOneofCase.Output when msg.Output?.Data.Length > 0:
+                    yield return msg.Output.Data.Memory;
+                    break;
+
+                case ExecServerMessage.MsgOneofCase.Error:
+                    yield return Encoding.UTF8.GetBytes(msg.Error?.Message ?? "Exec error");
+                    yield break;
+
+                case ExecServerMessage.MsgOneofCase.Exit:
+                    yield return Encoding.UTF8.GetBytes($"[exit {msg.Exit?.ExitCode ?? 0}]");
+                    yield break;
+            }
+        }
+    }
+
+    public Task SendAsync(ReadOnlyMemory<byte> input, CancellationToken ct) =>
+        _call.RequestStream.WriteAsync(new ExecClientMessage
+        {
+            Stdin = new ExecStdin { Data = ByteString.CopyFrom(input.Span) }
+        }, ct);
+
+    public Task ResizeAsync(int cols, int rows, CancellationToken ct) =>
+        _call.RequestStream.WriteAsync(new ExecClientMessage
+        {
+            Resize = new ExecResize { Cols = cols, Rows = rows }
+        }, ct);
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await _call.RequestStream.CompleteAsync().ConfigureAwait(false);
+        }
+        catch { }
+
+        _call.Dispose();
     }
 }

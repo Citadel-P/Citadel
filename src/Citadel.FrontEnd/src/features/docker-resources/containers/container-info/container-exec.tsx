@@ -84,6 +84,8 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hubRef = useRef<HubConnection | null>(null);
 
+  const execStartedRef = useRef(false);
+
   const handleExecOutput = useCallback((data: Uint8Array | ArrayBuffer) => {
     termRef.current?.write(new Uint8Array(data));
   }, []);
@@ -105,7 +107,7 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
     termRef.current = term;
 
     const onDataDisposable = term.onData((data) => {
-      if (hubRef.current?.state === HubConnectionState.Connected && groupId) {
+      if (execStartedRef.current && hubRef.current?.state === HubConnectionState.Connected && groupId) {
         const bytes = new TextEncoder().encode(data);
         hubRef.current.invoke('SendExecInput', groupId, bytes).catch(console.error);
       }
@@ -113,10 +115,17 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
 
     const ro = new ResizeObserver(() => {
       fitRef.current.fit();
-      if (hubRef.current?.state === HubConnectionState.Connected && groupId) {
-        hubRef.current.invoke('ResizeExec', groupId, term.cols, term.rows).catch(console.error);
+
+      if (
+        execStartedRef.current &&
+        hubRef.current?.state === HubConnectionState.Connected &&
+        groupId &&
+        termRef.current
+      ) {
+        hubRef.current.invoke('ResizeExec', groupId, termRef.current.cols, termRef.current.rows).catch(console.error);
       }
     });
+
     ro.observe(containerRef.current);
 
     return () => {
@@ -125,13 +134,14 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
       term.dispose();
       termRef.current = null;
     };
-  }, [containerId, disabled]); // Only recreate if container ID changes
+  }, [containerId, disabled]);
 
   useEffect(() => {
     if (!disabled) return;
     termRef.current?.dispose();
     termRef.current = null;
     hubRef.current = null;
+    execStartedRef.current = false;
   }, [disabled]);
 
   useEffect(() => {
@@ -158,12 +168,14 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
 
   const onJoinedGroup = useCallback(
     async (hub: HubConnection) => {
+      if (!groupId) return;
+
       try {
-        if (termRef.current && groupId) {
-          await hub.invoke('ResizeExec', groupId, termRef.current.cols, termRef.current.rows, shell);
-        }
-        if (groupId) {
-          await hub.invoke('StartExecProcess', groupId, shell);
+        await hub.invoke('StartExecProcess', groupId, shell);
+        execStartedRef.current = true;
+
+        if (termRef.current) {
+          await hub.invoke('ResizeExec', groupId, termRef.current.cols, termRef.current.rows);
         }
       } catch {
         termRef.current?.writeln('\r\n\x1b[31m[failed to start process]\x1b[0m');
@@ -184,14 +196,22 @@ export const useContainerExecTerminal = (containerId?: string, disabled?: boolea
   const toggleConnection = () => {
     if (isConnected) {
       setIsActive(false);
+      execStartedRef.current = false;
       termRef.current?.writeln('\r\n\x1b[31m[disconnected]\x1b[0m');
     } else {
+      execStartedRef.current = false;
       termRef.current?.clear();
-      //termRef.current?.writeln(`\x1b[32m[connecting via ${shell}...]\x1b[0m`);
       termRef.current?.focus();
       setIsActive(true);
     }
   };
 
-  return { terminalRef: containerRef, isLoading, isConnected, shell, setShell, toggleConnection };
+  return {
+    terminalRef: containerRef,
+    isLoading,
+    isConnected,
+    shell,
+    setShell,
+    toggleConnection,
+  };
 };

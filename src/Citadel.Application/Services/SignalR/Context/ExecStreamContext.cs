@@ -8,7 +8,6 @@ internal sealed class ExecStreamContext : StreamContext
     public CancellationTokenSource Cancellation { get; private set; } = new();
     public int LatestCols { get; set; }
     public int LatestRows { get; set; }
-    public string Shell { get; set; }
     public override void RemoveSubscriber(string connectionId)
     {
         base.RemoveSubscriber(connectionId);

@@ -44,7 +44,7 @@ export const DeploymentFormComponents: RequiredFormComponents = {
       },
       {
         label: 'Container',
-        disabled: (resource: DeploymentView): boolean => resource.status === DeploymentStatus.Degraded,
+        disabled: (resource: DeploymentView): boolean => resource.status === DeploymentStatus.Degraded || resource.status === DeploymentStatus.Created,
         Content: ({ resource }: { resource: DeploymentView }) => {
           return <DeploymentRuntime key={resource.containerId} deployment={resource} />;
         },
