@@ -1,7 +1,6 @@
 using Application;
 using Application.Configs;
 using Application.Models;
-using Domain;
 using Hosting;
 using Hosting.Common;
 using Hosting.OpenApi;
@@ -31,7 +30,7 @@ void WithServices(WebApplicationBuilder builder)
 // Configures the HTTP request pipeline.
 void Configure(WebApplication app)
 {
-    if (app.Environment.IsDevelopment())
+    if (app.Configuration.GetValue<bool>("EnableSwagger"))
     {
         app.MapOpenApi();
         app.UseSwaggerUI(options => 

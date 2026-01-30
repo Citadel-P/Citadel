@@ -33,7 +33,8 @@ internal static class WebApiModule
             })
             .AddCors();
 
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        services
+            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
                 var key = (string.IsNullOrEmpty(configuration["Jwt:Key"])

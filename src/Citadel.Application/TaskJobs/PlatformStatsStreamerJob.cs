@@ -24,7 +24,7 @@ internal class PlatformStatsStreamerJob(
     ChannelWriter<(Guid Id, PlatformStatsResult Stats)> platformStatsWriter,
     ILogger<PlatformStatsStreamerJob> logger) : BackgroundService
 {
-    private readonly int _fetchIntervalMs = options.Value.SystemInfoInterval * 1000;
+    private readonly int _fetchIntervalMs = options.Value.MonitoringInterval * 1000;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _runningStreams = new();
     private readonly ChannelReader<PlatformHealth> _platformHealthReader = platformHealthBroadCaster.AddSubscriber();
 

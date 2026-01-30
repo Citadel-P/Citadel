@@ -25,7 +25,7 @@ internal class ContainerStatsStreamerJob(
     IConnectorFactory<IContainerConnector> connectorFactory,
     ILogger<ContainerStatsStreamerJob> logger) : BackgroundService
 {
-    private readonly int _fetchIntervalMs = options.Value.ContainersInfoInterval * 1000;
+    private readonly int _fetchIntervalMs = options.Value.MonitoringInterval * 1000;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _runningStreams = new();
     private readonly ChannelReader<PlatformHealth> _platformHealthReader = platformHealthBroadCaster.AddSubscriber();
 

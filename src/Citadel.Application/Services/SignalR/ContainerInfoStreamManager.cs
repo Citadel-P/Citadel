@@ -59,7 +59,7 @@ internal sealed class ContainerInfoStreamManager(
 
         try
         {
-            await foreach (var container in connectorFactory.GetConnector(platformInfo.ConnectorType).StreamContainerStatsAsync(new StreamContainerStatsCommand(containerId, platformInfo.Address, options.Value.ContainersInfoInterval * 1000), token))
+            await foreach (var container in connectorFactory.GetConnector(platformInfo.ConnectorType).StreamContainerStatsAsync(new StreamContainerStatsCommand(containerId, platformInfo.Address, options.Value.MonitoringInterval * 1000), token))
             {
                 await writer.WriteAsync(container, token);
             }

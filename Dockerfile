@@ -38,13 +38,13 @@ FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-alpine AS final
 WORKDIR /app
 
 # Copy and run deps
-COPY install-deps.sh .
+COPY src/Citadel.Contracts/install-deps.sh .
 RUN apk add --no-cache bash \
     && chmod +x install-deps.sh \
     && ./install-deps.sh \
     && rm install-deps.sh
 
-COPY starship.toml /root/.config/starship.toml
+COPY src/Citadel.Contracts/starship.toml /root/.config/starship.toml
 ENV STARSHIP_CONFIG=/root/.config/starship.toml
 
 # Copy the published self-contained binary
