@@ -11,7 +11,7 @@ internal class MulticastChannel<T>
     // Add a subscriber
     public ChannelReader<T> AddSubscriber()
     {
-        var channel = Channel.CreateBounded<T>(Helpers.ChannelDefaultOptions());
+        var channel = Channel.CreateBounded<T>(Helpers.ChannelDefaultOptions(boundedChannelFullMode: BoundedChannelFullMode.DropOldest));
         using (@lock.EnterScope())
         {
             subscribers.Add(channel);
@@ -66,7 +66,7 @@ internal class MulticastChannel<T>
             }
             catch (ChannelClosedException)
             {
-                // Already removed → ignore
+                // Already removed -> ignore
             }
         }
     }

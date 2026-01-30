@@ -95,8 +95,6 @@ export const useImagesGroup = (platformId?: string) => {
     groupName: `images:${platformId}`,
     setupEventListeners,
     removeEventListeners,
-    // Note: removed manual onreconnected leak.
-    // useSignalRGroup should call onJoinedGroup again automatically on reconnect.
     onJoinedGroup: getImagesList,
     skip: !platformId,
   });

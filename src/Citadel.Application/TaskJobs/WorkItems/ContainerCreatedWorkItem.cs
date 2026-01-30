@@ -98,8 +98,8 @@ internal class ImageNotificationWorkItem(IDockerDaemonStreamManager dockerDaemon
         => dockerDaemonHub.SendImageEvent(image, action);
 }
 
-internal class DeploymentNotificationWorkItem(IDeploymentStreamManager deploymentHub, Deployment deployment) : INotificationWorkItem
+internal class DeploymentNotificationWorkItem(IDeploymentStreamManager deploymentHub, Deployment deployment, string action = "update") : INotificationWorkItem
 {
     public Task ExecuteAsync(CancellationToken cancellationToken)
-        => deploymentHub.SendDeploymentInfo(deployment);
+        => deploymentHub.SendDeploymentInfo(deployment, action);
 }

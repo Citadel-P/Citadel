@@ -409,12 +409,13 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                       set((prev) => ({
                         spec: {
                           ...prev.spec!,
-                          networks: v?.map((s) => s.id) ?? [],
+                          networks: v?.map((s) => s.name) ?? [],
                         },
                       }))
                     }
                     placeholder="Select Network(s)"
                     platformId={currentPlatformId}
+                    valueKey="name"
                   />
                 ),
               }),

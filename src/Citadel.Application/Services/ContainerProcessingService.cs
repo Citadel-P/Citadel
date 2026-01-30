@@ -1,8 +1,12 @@
-﻿using Application.Services.SignalR;
+﻿using Application.Features.Containers.Commands;
+using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using Hosting.Common.ErrorTypes;
+using LightResults;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Application.Services;
@@ -16,13 +20,16 @@ internal interface IContainerProcessingService
     Task<List<Container>> MarkProcessingAsync(Guid[] containerIds, CancellationToken ct);
     Task RollbackProcessingAsync(IEnumerable<Container> containers, CancellationToken ct);
     Task NotifyProcessingAsync(IEnumerable<Container> containers, CancellationToken ct);
+    Task<Result> DeleteContainers(DeleteContainers request, CancellationToken ct);
 }
 
 internal sealed class ContainerProcessingService(
     IServiceScopeFactory scopeFactory,
     INotificationQueue notificationQueue,
     IDockerDaemonStreamManager dockerDaemonHub,
-    IContainerEventBroadcaster containerEventBroadcaster) : IContainerProcessingService
+    IPlatformContainerCache platformContainerCache,
+    IContainerEventBroadcaster containerEventBroadcaster,
+    IConnectorFactory<IContainerConnector> connectorFactory) : IContainerProcessingService
 {
     public async Task<List<Container>> MarkProcessingAsync(Guid[] containerIds, CancellationToken ct)
     {
@@ -91,5 +98,49 @@ internal sealed class ContainerProcessingService(
                     containerEventBroadcaster),
                 ct);
         }
+    }
+
+    public async Task<Result> DeleteContainers(DeleteContainers request, CancellationToken ct)
+    {
+        if (!platformContainerCache.TryGetPlatformsWithContainers(request.ContainerIds, out var platforms))
+        {
+            return Result.Failure(new NotFoundError("No platform found for the given IDs."));
+        }
+
+        var containerIds = platforms.SelectMany(p => p.Containers.Values).ToArray();
+        var containers = await MarkProcessingAsync(containerIds, ct);
+
+        if (containers.Count == 0)
+        {
+            return Result.Failure(new NotFoundError("No containers found for the provided ID(s)."));
+        }
+
+        await NotifyProcessingAsync(containers, ct);
+
+        foreach (var platform in platforms)
+        {
+            var result = await DeleteFromPlatformAsync(platform, request, ct);
+            if (result.IsFailure())
+            {
+                await RollbackProcessingAsync(containers, ct);
+                return result;
+            }
+        }
+
+        return Result.Success();
+    }
+
+    private async Task<Result> DeleteFromPlatformAsync(PlatformCacheEntry platform, DeleteContainers request, CancellationToken ct)
+    {
+        var command = new DeleteContainerCommand(
+            ContainerIds: platform.Containers.Keys,
+            PlatformAddress: platform.Address,
+            Volume: request.V,
+            Force: request.Force,
+            Link: request.Link);
+
+        var connector = connectorFactory.GetConnector(platform.ConnectorType);
+        await connector.DeleteAsync(command, ct);
+        return Result.Success();
     }
 }

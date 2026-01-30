@@ -36,7 +36,7 @@ internal sealed class ChangeDeploymentStateHandler(
             return Result.Failure(new NotFoundError("Platform resolution failed for ID(s). Platform may be disconnected."));
         }
 
-        await deploymentProcessingService.NotifyProcessingAsync(deployments, cancellationToken);
+        await deploymentProcessingService.NotifyProcessingAsync(deployments, ct: cancellationToken);
 
         var containerAction = ActionMap.GetValueOrDefault(command.Action, ContainerAction.START);
         foreach (var platform in platformContainers)

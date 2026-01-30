@@ -1,4 +1,4 @@
-import { useMemo, useState, useLayoutEffect, useRef } from 'react';
+import { useMemo, useState, useLayoutEffect, useRef, useCallback, useEffect } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AutoUpdateStatus, ContainerStateStatus, ContainerStatView, UpdateBehavior } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
@@ -61,7 +61,9 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
     filter?.item ?? (typeof selected === 'string' ? items.find((i) => i.id === selected) : selected) ?? undefined;
 
   const filtered = filterBySplit(items, search, (i) => i.name).sort((a, b) => a.name.localeCompare(b.name));
-
+  useEffect(() => {
+    setFilter(null);
+  }, [selected]);
   const handleSelect = (item: T | undefined) => {
     setFilter(item ? { item } : null);
     onSelect?.(item);
@@ -143,6 +145,7 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
   placeholder,
   platformId,
   className,
+  valueKey = 'id',
 }: {
   type: ResourceType;
   selected?: string[] | T[];
@@ -152,30 +155,40 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
   placeholder?: string;
   platformId?: string;
   className?: string;
+  valueKey?: 'id' | 'name';
 }) {
   const resourceName = PluralResourceMap[type];
 
   const read = useRead(`list${resourceName}`, { platformId });
   const items = (Object.values(read.data?.data ?? {}).at(0) as T[]) ?? [];
 
+  const getValue = useCallback((item: T) => (valueKey === 'name' ? item.name : item.id), [valueKey]);
+
   const options: MultiSelectOption[] = useMemo(
     () =>
       items
         .map((item) => ({
           label: item.name,
-          value: item.id,
+          value: getValue(item),
         }))
         .sort((a, b) => a.label.localeCompare(b.label)),
-    [items],
+    [items, getValue],
   );
 
   const selectedIds = useMemo(() => {
     if (!selected) return [];
-    return selected.map((s) => (typeof s === 'string' ? s : s.id));
-  }, [selected]);
+    return selected.map((s) => {
+      if (typeof s !== 'string') return getValue(s);
+      if (valueKey === 'name') {
+        const match = items.find((item) => item.id === s || item.name === s);
+        return match ? match.name : s;
+      }
+      return s;
+    });
+  }, [selected, getValue, items, valueKey]);
 
   const handleValueChange = (newIds: string[]) => {
-    const newSelectedItems = items.filter((item) => newIds.includes(item.id));
+    const newSelectedItems = items.filter((item) => newIds.includes(getValue(item)));
     onSelect?.(newSelectedItems);
   };
 
@@ -340,11 +353,11 @@ interface QuickActionProps {
   icon: React.ReactNode;
   active?: boolean;
   disabled?: boolean;
-  side?: "left" | "top" | "right" | "bottom";
+  side?: 'left' | 'top' | 'right' | 'bottom';
   onClick: () => void;
 }
 
-export const QuickAction = ({ label, icon, active, disabled, side = "left", onClick }: QuickActionProps) => (
+export const QuickAction = ({ label, icon, active, disabled, side = 'left', onClick }: QuickActionProps) => (
   <TooltipProvider delayDuration={200}>
     <Tooltip>
       <TooltipTrigger asChild>

@@ -3,24 +3,32 @@ import { useParams } from 'react-router';
 import { AppContext } from './app-context';
 import { SignalRProvider } from './signalr-provider';
 import { useRead } from '../hooks';
+import { usePlatformsGroup } from '@/features/platforms/hooks/usePlatformsGroup';
 
-export const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
-  const { platformId, containerId } = useParams();
+const AppProviderContent: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+  const { platformId } = useParams();
   const { data: platformData, isLoading: platformIsLoading } = useRead('getPlatfom', { id: platformId });
-  const { data: containerData, isLoading: containerIsLoading } = useRead('getContainerInfo', { id: containerId });
+  const { platformsMessage, isLoading: platformsIsLoading } = usePlatformsGroup();
+
+  const currentPlatform = useMemo(() => {
+    if (!platformId) return platformData?.data;
+
+    const livePlatform = platformsMessage?.find((platform) => platform.id === platformId);
+    return livePlatform ?? platformData?.data;
+  }, [platformId, platformsMessage, platformData]);
 
   const contextValue = useMemo(
     () => ({
-      isLoading: platformIsLoading || containerIsLoading,
-      currentPlatform: platformData?.data,
-      currentContainer: containerData?.data,
+      isLoading: platformIsLoading || platformsIsLoading,
+      currentPlatform,
     }),
-    [platformIsLoading, containerIsLoading, platformData, containerData],
+    [platformIsLoading, platformsIsLoading, currentPlatform],
   );
-
-  return (
-    <AppContext.Provider value={contextValue}>
-      <SignalRProvider>{children}</SignalRProvider>
-    </AppContext.Provider>
-  );
+  return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
 };
+
+export const AppProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => (
+  <SignalRProvider>
+    <AppProviderContent>{children}</AppProviderContent>
+  </SignalRProvider>
+);

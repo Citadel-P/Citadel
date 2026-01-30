@@ -4,6 +4,9 @@ namespace Tests.Unit.Application.Services;
 
 public class SyncBarrierTests
 {
+    private readonly Guid _id = Guid.NewGuid();
+    private readonly Guid _otherId = Guid.NewGuid();
+
     // Dummy job marker types
     private class JobA { }
     private class JobB { }
@@ -14,52 +17,17 @@ public class SyncBarrierTests
     {
         var barrier = new SyncBarrier();
 
-        // Start waiting on JobA in the background
-        var waiting = Task.Run(() => barrier.WaitForAsync<JobA>().AsTask(), TestContext.Current.CancellationToken);
+        var waiting = Task.Run(() => barrier.WaitForAsync<JobA>(_id).AsTask(), TestContext.Current.CancellationToken);
 
-        // Ensure the waiter is not yet completed
         await Task.Delay(50, TestContext.Current.CancellationToken);
         Assert.False(waiting.IsCompleted);
 
-        // Mark JobA synced and assert waiter completes promptly
-        barrier.MarkSynced<JobA>();
+        barrier.MarkSynced<JobA>(_id);
 
         var finished = await Task.WhenAny(waiting, Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken));
         Assert.Equal(waiting, finished);
-        await waiting; // propagate any exception (there should be none)
-    }
 
-    [Fact]
-    public async Task WaitForAllAsync_WaitsForBothJobs()
-    {
-        var barrier = new SyncBarrier();
-
-        // Start waiting for both JobA and JobB
-        var waitAll = Task.Run(() => barrier.WaitForAllAsync<JobA, JobB>(TestContext.Current.CancellationToken).AsTask(), TestContext.Current.CancellationToken);
-
-        // Mark only JobA and ensure waitAll is not completed yet
-        barrier.MarkSynced<JobA>();
-        await Task.Delay(50, TestContext.Current.CancellationToken);
-        Assert.False(waitAll.IsCompleted);
-
-        // Now mark JobB and ensure completion
-        barrier.MarkSynced<JobB>();
-        var finished = await Task.WhenAny(waitAll, Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken));
-        Assert.Equal(waitAll, finished);
-        await waitAll;
-    }
-
-    [Fact]
-    public void WaitForAsync_AlreadyMarked_CompletesImmediately()
-    {
-        var barrier = new SyncBarrier();
-
-        // Mark before waiting
-        barrier.MarkSynced<JobA>();
-
-        var vt = barrier.WaitForAsync<JobA>(TestContext.Current.CancellationToken);
-        // ValueTask should be already completed
-        Assert.True(vt.IsCompleted);
+        await waiting;
     }
 
     [Fact]
@@ -68,7 +36,70 @@ public class SyncBarrierTests
         var barrier = new SyncBarrier();
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
 
-        // Awaiting should observe cancellation and throw
-        await Assert.ThrowsAsync<TaskCanceledException>(() => barrier.WaitForAsync<JobC>(cts.Token).AsTask());
+        await Assert.ThrowsAsync<TaskCanceledException>(() =>
+            barrier.WaitForAsync<JobC>(_id, cts.Token).AsTask());
+    }
+
+    [Fact]
+    public async Task DifferentJobs_DoNotUnblockEachOther()
+    {
+        var barrier = new SyncBarrier();
+
+        var waitA = barrier.WaitForAsync<JobA>(_id).AsTask();
+        var waitB = barrier.WaitForAsync<JobB>(_id).AsTask();
+
+        barrier.MarkSynced<JobA>(_id);
+
+        await Task.Delay(100);
+        Assert.True(waitA.IsCompleted);
+        Assert.False(waitB.IsCompleted);
+
+        barrier.MarkSynced<JobB>(_id);
+        await waitB;
+    }
+
+    [Fact]
+    public async Task DifferentPlatformIds_DoNotUnblockEachOther()
+    {
+        var barrier = new SyncBarrier();
+
+        var wait1 = barrier.WaitForAsync<JobA>(_id).AsTask();
+        var wait2 = barrier.WaitForAsync<JobA>(_otherId).AsTask();
+
+        barrier.MarkSynced<JobA>(_id);
+
+        await Task.Delay(100);
+        Assert.True(wait1.IsCompleted);
+        Assert.False(wait2.IsCompleted);
+
+        barrier.MarkSynced<JobA>(_otherId);
+        await wait2;
+    }
+
+    [Fact]
+    public async Task MarkSynced_BeforeWait_CompletesImmediately()
+    {
+        var barrier = new SyncBarrier();
+
+        barrier.MarkSynced<JobA>(_id);
+
+        var wait = barrier.WaitForAsync<JobA>(_id).AsTask();
+        Assert.True(wait.IsCompleted, "Task should already be completed immediately.");
+
+        await wait;
+    }
+
+    [Fact]
+    public async Task MultipleWaiters_AreAllReleased()
+    {
+        var barrier = new SyncBarrier();
+
+        var wait1 = barrier.WaitForAsync<JobA>(_id).AsTask();
+        var wait2 = barrier.WaitForAsync<JobA>(_id).AsTask();
+        var wait3 = barrier.WaitForAsync<JobA>(_id).AsTask();
+
+        barrier.MarkSynced<JobA>(_id);
+
+        await Task.WhenAll(wait1, wait2, wait3);
     }
 }

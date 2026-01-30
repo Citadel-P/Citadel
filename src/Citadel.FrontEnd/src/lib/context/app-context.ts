@@ -1,11 +1,10 @@
 import { createContext } from 'react';
 import { useRequiredContext } from '../../hooks/useRequiredContext';
-import { ContainerInfoView, PlatformView } from '../../api/generated/api.types';
+import { PlatformView } from '../../api/generated/api.types';
 
 interface IContext {
   isLoading: boolean;
   currentPlatform: PlatformView | undefined;
-  currentContainer: ContainerInfoView | undefined;
 }
 
 export const AppContext = createContext<IContext | undefined>(undefined);

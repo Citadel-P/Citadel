@@ -34,7 +34,7 @@ internal class ImageSyncJob(
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("{ImageSyncJob} started. Runs every {Hours} hours.",
+        logger.LogInformation("{JobName} started. Running every {H} hours.",
             nameof(ImageSyncJob), SyncInterval.TotalHours);
 
         var eventDriven = RunEventDrivenSync(cancellationToken);
@@ -56,7 +56,7 @@ internal class ImageSyncJob(
                     logger.LogError("failed to list images for {Platform}", platform.Address);
                     continue;
                 }
-                await dbQueue.EnqueueAsync(new ImageSyncWorkItem(freshImages, imageStreamManager, notifQueue, syncBarrier, platform, logger), ct);
+                await dbQueue.EnqueueAsync(new ImageSyncWorkItem(freshImages, imageStreamManager, notifQueue, syncBarrier, platform), ct);
             }
             catch (Exception ex)
             {
@@ -83,7 +83,7 @@ internal class ImageSyncJob(
                             continue;
                         }
                         if (ct.IsCancellationRequested) break;
-                        await dbQueue.EnqueueAsync(new ImageSyncWorkItem(freshImages, imageStreamManager, notifQueue, syncBarrier, new PlatformHealth(p.Id, p.Address, p.ConnectorType, true), logger), ct);
+                        await dbQueue.EnqueueAsync(new ImageSyncWorkItem(freshImages, imageStreamManager, notifQueue, syncBarrier, new PlatformHealth(p.Id, p.Address, p.ConnectorType, true)), ct);
                     }
                 }
             }
@@ -102,8 +102,7 @@ internal sealed class ImageSyncWorkItem(
     IImageStreamManager imageStreamManager,
     INotificationQueue notificationQueue,
     ISyncBarrier syncBarrier,
-    PlatformHealth platform,
-    ILogger logger
+    PlatformHealth platform
 ) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
@@ -146,7 +145,7 @@ internal sealed class ImageSyncWorkItem(
         await notificationQueue.EnqueueAsync(new SendImagesNotificationWorkItem(imageStreamManager, upserts, platform.Id), ct);
 
         // Mark first successful sync
-        syncBarrier.MarkSynced<ImageSyncJob>();
+        syncBarrier.MarkSynced<ImageSyncJob>(platform.Id);
     }
 }
 

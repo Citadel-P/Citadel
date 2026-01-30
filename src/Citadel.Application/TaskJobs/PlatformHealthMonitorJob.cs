@@ -8,119 +8,159 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.TaskJobs;
 
-/// <summary>
-/// Monitors external platforms (gRPC services) by periodically checking their availability and reporting their status.
-/// </summary>
 public interface IPlatformHealthMonitorJob : IHostedService
 {
     bool TrackPlatform(string address, Guid id, PlatformConnectorType type);
     Task<bool> UntrackPlatform(string address, CancellationToken cancellationToken);
 }
 
-internal class PlatformHealthMonitorJob(
+internal sealed class PlatformHealthMonitorJob(
     IServiceScopeFactory scopeFactory,
     IPlatformHealthBroadCaster broadcaster,
     IConnectorFactory<IPlatformConnector> connectorFactory,
-    ILogger<PlatformHealthMonitorJob> logger) : BackgroundService, IPlatformHealthMonitorJob
+    ILogger<PlatformHealthMonitorJob> logger)
+    : BackgroundService, IPlatformHealthMonitorJob
 {
-    private readonly ConcurrentDictionary<string, PlatformTrackingInfo> trackedPlatforms = [];
-    private readonly ConcurrentDictionary<string, bool> status = new();
+    private readonly ConcurrentDictionary<string, PlatformState> platforms = new();
     private readonly TimeSpan checkInterval = TimeSpan.FromSeconds(5);
+    private readonly TimeSpan healthTimeout = TimeSpan.FromSeconds(2);
 
-    // Debounce settings
     private const int FailThreshold = 3;
     private const int SuccessThreshold = 2;
 
-    private readonly ConcurrentDictionary<string, int> failureCounts = [];
-    private readonly ConcurrentDictionary<string, int> successCounts = [];
-
-    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Create a scope and uow only for the initial fetch
-        await using (var scope = scopeFactory.CreateAsyncScope())
+        await LoadFromDatabase(stoppingToken);
+
+        var parallelOptions = new ParallelOptions
         {
-            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            var platforms = await uow.Platforms.GetPlatformsInfoAsync(cancellationToken);
-            if (platforms.Any())
-            {
-                foreach (var platform in platforms)
-                {
-                    TrackPlatform(address: platform.Address, id: platform.Id, type: platform.ConnectorType);
-                }
-            }
-        }
+            MaxDegreeOfParallelism = Environment.ProcessorCount,
+            CancellationToken = stoppingToken
+        };
 
-        while (!cancellationToken.IsCancellationRequested)
+        while (!stoppingToken.IsCancellationRequested)
         {
-            
-            foreach (var (address, val) in trackedPlatforms)
+            await Parallel.ForEachAsync(platforms, parallelOptions, async (entry, ct) =>
             {
-                var isOnline = (await connectorFactory.GetConnector(val.Type).CheckHealthAsync(address, cancellationToken)).Healthy;
-                var hasPreviousStatus = status.TryGetValue(address, out var wasOnline);
+                var address = entry.Key;
+                var state = entry.Value;
 
-                // If we've never seen this address before, initialize and emit
-                if (!hasPreviousStatus)
+                bool isOnline;
+                try
                 {
-                    await UpdateStatus(address, isOnline, cancellationToken);
-                    continue;
+                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    timeoutCts.CancelAfter(healthTimeout);
+
+                    var connector = connectorFactory.GetConnector(state.Type);
+                    var result = await connector.CheckHealthAsync(address, timeoutCts.Token);
+                    isOnline = result.Healthy;
+                }
+                catch (OperationCanceledException)
+                {
+                    return; // shutdown or timeout -> skip this cycle
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Health check failed for {Address}", address);
+                    isOnline = false;
                 }
 
-                if (ShouldEmitUpdate(address, isOnline, wasOnline))
+                if (state.TryUpdate(isOnline, FailThreshold, SuccessThreshold, out var shouldEmit))
                 {
-                    logger.LogInformation("Platform {Address} status changed to {Status}", address, isOnline ? "Online" : "Offline");
-                    await UpdateStatus(address, isOnline, cancellationToken);
-                }
-            }
+                    if (shouldEmit)
+                    {
+                        logger.LogInformation(
+                            "Platform {Address} status changed to {Status}",
+                            address,
+                            isOnline ? "Online" : "Offline");
 
-            await Task.Delay(checkInterval, cancellationToken);
+                        await broadcaster.PublishAsync(
+                            new PlatformHealth(state.Id, address, state.Type, isOnline),
+                            ct);
+                    }
+                }
+            });
+
+            await Task.Delay(checkInterval, stoppingToken);
         }
 
         broadcaster.Complete();
     }
 
+    private async Task LoadFromDatabase(CancellationToken ct)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platformsInfo = await uow.Platforms.GetPlatformsInfoAsync(ct);
+
+        foreach (var p in platformsInfo)
+        {
+            TrackPlatform(p.Address, p.Id, p.ConnectorType);
+        }
+    }
+
     public bool TrackPlatform(string address, Guid id, PlatformConnectorType type)
-        => trackedPlatforms.TryAdd(address, new PlatformTrackingInfo(Id: id, Type: type));
+        => platforms.TryAdd(address, new PlatformState(id, type));
 
     public async Task<bool> UntrackPlatform(string address, CancellationToken cancellationToken)
     {
-        var removed = trackedPlatforms.TryRemove(address, out var platform) &&
-           status.TryRemove(address, out _) &&
-           successCounts.TryRemove(address, out _) &&
-           failureCounts.TryRemove(address, out _);
+        if (!platforms.TryRemove(address, out var state))
+            return false;
 
-        if (removed && platform is not null)
-        {
-            await broadcaster.PublishAsync(new PlatformHealth(platform.Id, address, platform.Type, false), cancellationToken);
-        }
+        // Todo: tell UI it disappeared instead of "offline"
+        await broadcaster.PublishAsync(
+            new PlatformHealth(state.Id, address, state.Type, false), cancellationToken);
 
-        return removed;
+        return true;
     }
-         
+}
 
-    private async Task UpdateStatus(string address, bool isOnline, CancellationToken cancellationToken)
+internal sealed class PlatformState(Guid id, PlatformConnectorType type)
+{
+    public Guid Id { get; } = id;
+    public PlatformConnectorType Type { get; } = type;
+
+    private bool? lastStatus;
+    private int successCount;
+    private int failureCount;
+    private readonly Lock @lock = new();
+
+    public bool TryUpdate(
+        bool isOnline,
+        int failThreshold,
+        int successThreshold,
+        out bool shouldEmit)
     {
-        if (!trackedPlatforms.TryGetValue(address, out var platform)) return;
-
-        status[address] = isOnline;
-        await broadcaster.PublishAsync(new PlatformHealth(platform.Id, address, platform.Type, isOnline), cancellationToken);
-    }
-
-    private bool ShouldEmitUpdate(string address, bool isOnline, bool wasOnline)
-    {
-        if (isOnline)
+        using (@lock.EnterScope())
         {
-            failureCounts[address] = 0;
-            successCounts[address] = successCounts.GetOrAdd(address, 0) + 1;
-            return !wasOnline && successCounts[address] >= SuccessThreshold;
-        }
-        else
-        {
-            successCounts[address] = 0;
-            failureCounts[address] = failureCounts.GetOrAdd(address, 0) + 1;
-            return wasOnline && failureCounts[address] >= FailThreshold;
+            shouldEmit = false;
+
+            if (isOnline)
+            {
+                failureCount = 0;
+                successCount++;
+
+                if (lastStatus != true && successCount >= successThreshold)
+                {
+                    lastStatus = true;
+                    shouldEmit = true;
+                }
+            }
+            else
+            {
+                successCount = 0;
+                failureCount++;
+
+                if (lastStatus != false && failureCount >= failThreshold)
+                {
+                    lastStatus = false;
+                    shouldEmit = true;
+                }
+            }
+
+            return true;
         }
     }
 }
 
-public sealed record PlatformTrackingInfo(Guid Id, PlatformConnectorType Type);
 public sealed record PlatformHealth(Guid Id, string Address, PlatformConnectorType Type, bool IsOnLine);

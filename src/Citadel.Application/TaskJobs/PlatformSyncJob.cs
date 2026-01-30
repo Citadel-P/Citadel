@@ -31,7 +31,7 @@ internal class PlatformSyncJob(
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("{PlatformSyncJob} started. Running every {Hours} hours.", nameof(PlatformSyncJob), SyncInterval.TotalHours);
+        logger.LogInformation("{JobName} started. Running every {H} hours.", nameof(PlatformSyncJob), SyncInterval.TotalHours);
 
         // Event-driven sync starts immediately
         var eventDrivenTask = RunEventDrivenSync(cancellationToken);

@@ -11,7 +11,8 @@ public sealed record DeleteDeployments(IEnumerable<Guid> Ids) : ICommand<Result>
 
 internal sealed class DeleteDeploymentsHandler(
     IServiceScopeFactory scopeFactory,
-    IDeploymentProcessingService deploymentProcessingService)
+    IDeploymentProcessingService deploymentProcessingService,
+    IContainerProcessingService containerService)
     : ICommandHandler<DeleteDeployments, Result>
 {
     public async ValueTask<Result> Handle(DeleteDeployments command, CancellationToken cancellationToken)
@@ -23,14 +24,27 @@ internal sealed class DeleteDeploymentsHandler(
             return Result.Failure(new NotFoundError("No deployments found matching the provided IDs for deletion."));
         }
 
-        await deploymentProcessingService.NotifyProcessingAsync(deployments, cancellationToken);
+        await deploymentProcessingService.NotifyProcessingAsync(deployments, ct: cancellationToken);
 
+        var containerIds = deployments
+            .Where(s => s.Container != null && s.Container?.DockerContainerId != null)
+            .Select(s => s.Container!.DockerContainerId)
+            .ToArray();
+
+        if (containerIds != null && containerIds.Length > 0)
+        {
+            var cmd = new Containers.Commands.DeleteContainers(containerIds, V: true, Force: true);
+            await containerService.DeleteContainers(cmd, cancellationToken);
+        }
+        
         var deleted = await DeleteAsync(command.Ids, cancellationToken);
         if (deleted <= 0)
         {
             await deploymentProcessingService.RollbackProcessingAsync(deployments, cancellationToken);
             return Result.Failure(new NotFoundError("No deployments found matching the provided IDs for deletion."));
         }
+
+        await deploymentProcessingService.NotifyProcessingAsync(deployments, "delete", cancellationToken);
 
         return Result.Success();
     }

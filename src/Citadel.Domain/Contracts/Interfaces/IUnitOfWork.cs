@@ -124,14 +124,16 @@ public interface IDeploymentRepository
 {
     Task<Deployment?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<Deployment?> GetInfoAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<Deployment>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Deployment>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>?> GetInfoAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetStuckDeploymentsAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
     Task<bool> ExistsAsync(string name, Guid platformId, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, string name, Guid platformId, CancellationToken cancellationToken);
     Task<int> AddAsync(Deployment deployment, CancellationToken cancellationToken);
-    Task<IEnumerable<Deployment>> GetAllAsync(CancellationToken cancellationToken);
     Task<int> UpdateAsync(Deployment deployment, CancellationToken cancellationToken);
     Task<int> UpdateProcessingAsync(Guid id, DeploymentStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, CancellationToken cancellationToken);
+    Task<int> UpdateStatusAsync(IEnumerable<Guid> ids, DeploymentStatus status, CancellationToken cancellationToken);
 
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
 }

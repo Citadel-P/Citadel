@@ -87,6 +87,7 @@ public static class ApplicationModule
             .AddHostedService<PlatformStatsWriterJob>()
             .AddHostedService<ContainerStatsWriterJob>()
             .AddHostedService<ContainerSyncJob>()
+            .AddHostedService<DeploymentSyncJob>()
             .AddHostedService<ImageSyncJob>()
             .AddHostedService<ReconcilableResourceJob>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());

@@ -27,6 +27,7 @@ internal sealed class ContainerSyncJob(
     INotificationQueue notificationQueue,
     IPlatformContainerCache platformContainerCache,
     IContainerStreamManager containerStreamManager,
+    IDeploymentStreamManager deploymentStreamManager,
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IConnectorFactory<IContainerConnector> connectorFactory,
     ILogger<ContainerSyncJob> logger) : BackgroundService
@@ -36,11 +37,8 @@ internal sealed class ContainerSyncJob(
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("{Job} started. Running every {Hours} hours.",
+        logger.LogInformation("{JobName} started. Running every {H} hours.",
             nameof(ContainerSyncJob), SyncInterval.TotalHours);
-
-        // Wait until ImageSyncJob has synced images at least once
-        await syncBarrier.WaitForAsync<ImageSyncJob>(cancellationToken);
 
         // Event-driven sync starts immediately
         var eventDrivenTask = RunEventDrivenSync(cancellationToken);
@@ -60,7 +58,7 @@ internal sealed class ContainerSyncJob(
         {
             try
             {
-                await EnqueueSyncForPlatform(platformEvent, cancellationToken);
+                await EnqueueSyncForPlatform(syncBarrier, platformEvent, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -115,6 +113,9 @@ internal sealed class ContainerSyncJob(
             if (cancellationToken.IsCancellationRequested)
                 break;
 
+            // Wait until ImageSyncJob has synced images at least once
+            await syncBarrier.WaitForAsync<ImageSyncJob>(platform.Id);
+
             try
             {
                 var platformEvent = new PlatformHealth(
@@ -123,7 +124,7 @@ internal sealed class ContainerSyncJob(
                     Address: platform.Address,
                     IsOnLine: true);
 
-                await EnqueueSyncForPlatform(platformEvent, cancellationToken);
+                await EnqueueSyncForPlatform(syncBarrier, platformEvent, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -140,6 +141,7 @@ internal sealed class ContainerSyncJob(
     /// - If offline → enqueue DB work that marks containers offline.
     /// </summary>
     private async Task EnqueueSyncForPlatform(
+        ISyncBarrier syncBarrier,
         PlatformHealth platformEvent,
         CancellationToken cancellationToken)
     {
@@ -171,6 +173,8 @@ internal sealed class ContainerSyncJob(
                 freshContainers,
                 platformContainerCache,
                 containerStreamManager,
+                dbWorkQueue,
+                deploymentStreamManager,
                 logger);
 
             await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
@@ -186,6 +190,8 @@ internal sealed class ContainerSyncJob(
                 notificationQueue,
                 platformContainerCache,
                 containerStreamManager,
+                dbWorkQueue,
+                deploymentStreamManager,
                 logger);
 
             await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
@@ -199,6 +205,8 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
     IReadOnlyDictionary<string, DockerContainer> freshContainers,
     IPlatformContainerCache platformContainerCache,
     IContainerStreamManager containerStreamManager,
+    IDbWorkQueue dbWorkQueue,
+    IDeploymentStreamManager deploymentStreamManager,
     ILogger logger) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
@@ -281,6 +289,8 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
                 platformEvent.Id);
             await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
 
+            await ScheduleDeploymentSync(platformEvent.Id, true, cancellationToken);
+
             logger.LogInformation(
                 "Synchronized {Count} containers for platform {PlatformId}.",
                 currentActiveContainers.Count, platformEvent.Id);
@@ -293,6 +303,15 @@ internal sealed class SyncOnlinePlatformContainersWorkItem(
                 platformEvent.Id, platformEvent.Address);
         }
     }
+
+    internal ValueTask ScheduleDeploymentSync(Guid platformId, bool isOnline, CancellationToken ct)
+        => dbWorkQueue.EnqueueAsync(
+                new DeploymentSyncWorkItem(
+                    deploymentStreamManager,
+                    notificationQueue,
+                    platformId,
+                    isOnline),
+                ct);
 }
 
 internal sealed class SyncOfflinePlatformContainersWorkItem(
@@ -300,6 +319,8 @@ internal sealed class SyncOfflinePlatformContainersWorkItem(
     INotificationQueue notificationQueue,
     IPlatformContainerCache platformContainerCache,
     IContainerStreamManager containerStreamManager,
+    IDbWorkQueue dbWorkQueue,
+    IDeploymentStreamManager deploymentStreamManager,
     ILogger logger) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
@@ -330,6 +351,8 @@ internal sealed class SyncOfflinePlatformContainersWorkItem(
                 platformId);
             await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
 
+            await ScheduleDeploymentSync(platformId, false, cancellationToken);
+
             logger.LogInformation(
                 "Marked {Count} containers as offline for platform {PlatformId}.",
                 offlineContainers.Count(), platformId);
@@ -342,6 +365,15 @@ internal sealed class SyncOfflinePlatformContainersWorkItem(
                 platformId);
         }
     }
+
+    internal ValueTask ScheduleDeploymentSync(Guid platformId, bool isOnline, CancellationToken ct)
+        => dbWorkQueue.EnqueueAsync(
+                new DeploymentSyncWorkItem(
+                    deploymentStreamManager,
+                    notificationQueue,
+                    platformId,
+                    isOnline),
+                ct);
 }
 
 internal class SendContainersInfoNotificationWorkItem(IContainerStreamManager containerStreamManager, IEnumerable<Container> containers, Guid platformId) : INotificationWorkItem

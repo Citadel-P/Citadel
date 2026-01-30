@@ -135,6 +135,8 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
 
     public async Task<Image?> GetByDockerImageIdAsync(string dockerImageId, Guid platformId, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrEmpty(dockerImageId)) throw new ArgumentNullException(nameof(dockerImageId));
+
         var sql = """
             SELECT 
                 i.Id,
@@ -172,6 +174,7 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 @Id, @PlatformId, @DockerImageId, @Name, @Containers, @Tags, @Size, @RegistryId, @CreatedAt, @UpdatedAt
             )
             ON CONFLICT(DockerImageId, PlatformId) DO UPDATE SET
+                Id = excluded.Id,
                 Name = excluded.Name,
                 Containers = excluded.Containers,
                 Tags = excluded.Tags,

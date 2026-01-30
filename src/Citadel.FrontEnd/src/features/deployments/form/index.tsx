@@ -4,7 +4,12 @@ import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { DeploymentActions } from './actions';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useDeploymentGroup } from './hooks/useDeploymentGroup';
-import { ContainerStateStatus, DeploymentStatus, DeploymentView, ResourceControlState } from '@/api/generated/api.types';
+import {
+  ContainerStateStatus,
+  DeploymentStatus,
+  DeploymentView,
+  ResourceControlState,
+} from '@/api/generated/api.types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ContainerLogs } from '@/features/docker-resources/containers/container-info/container-logs';
 import { DockerContainerView } from '@/api/types';
@@ -14,6 +19,7 @@ import { ContainerInfoTable } from '@/features/docker-resources/containers/conta
 import { useContainerInfoGroup } from '@/features/docker-resources/containers/hooks/useContainerInfoGroup';
 import Loader from '@/components/ui/loader';
 import { ContainerExec } from '@/features/docker-resources/containers/container-info/container-exec';
+import { ContainerStats } from '@/features/docker-resources/containers/container-info/container-stats';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -44,7 +50,8 @@ export const DeploymentFormComponents: RequiredFormComponents = {
       },
       {
         label: 'Container',
-        disabled: (resource: DeploymentView): boolean => resource.status === DeploymentStatus.Degraded || resource.status === DeploymentStatus.Created,
+        disabled: (resource: DeploymentView): boolean =>
+          resource.status === DeploymentStatus.Degraded || resource.status === DeploymentStatus.Created,
         Content: ({ resource }: { resource: DeploymentView }) => {
           return <DeploymentRuntime key={resource.containerId} deployment={resource} />;
         },
@@ -80,13 +87,13 @@ const RuntimeView = ({ containerInfo }: { containerInfo: DockerContainerView }) 
           DisplayStatus: false,
         }}
       />
-      <RuntimeTabs containerId={containerInfo.id} disabled={containerInfo.state !== ContainerStateStatus.Running}/>
+      <RuntimeTabs containerInfo={containerInfo} disabled={containerInfo.state !== ContainerStateStatus.Running} />
     </div>
   );
 };
 
-const RuntimeTabs = ({ containerId, disabled }: { containerId: string, disabled?: boolean}) => {
-  const nid = normalizeDockerId(containerId);
+const RuntimeTabs = ({ containerInfo, disabled }: { containerInfo: DockerContainerView; disabled?: boolean }) => {
+  const nid = normalizeDockerId(containerInfo.id);
 
   return (
     <Tabs defaultValue="logs" className="w-full">
@@ -100,6 +107,9 @@ const RuntimeTabs = ({ containerId, disabled }: { containerId: string, disabled?
         <TabsTrigger className="text-xs" value="terminal" disabled={disabled}>
           Terminal
         </TabsTrigger>
+        <TabsTrigger className="text-xs" value="stats">
+          Stats
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="logs" className="w-full mt-2">
         <ContainerLogs key={nid} containerId={nid} />
@@ -107,8 +117,11 @@ const RuntimeTabs = ({ containerId, disabled }: { containerId: string, disabled?
       <TabsContent value="inspect" className="w-full mt-2">
         <ContainerInspect key={nid} containerId={nid} />
       </TabsContent>
-      <TabsContent value="terminal" className="w-full mt-2" >
+      <TabsContent value="terminal" className="w-full mt-2">
         <ContainerExec key={nid} containerId={nid} disabled={disabled} />
+      </TabsContent>
+      <TabsContent value="stats" className="w-full mt-2">
+        <ContainerStats key={nid} resource={containerInfo} />
       </TabsContent>
     </Tabs>
   );

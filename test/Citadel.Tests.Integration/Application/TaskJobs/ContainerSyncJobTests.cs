@@ -78,7 +78,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
     public async Task SynchronizesContainers_WhenPlatformBecomesOnline()
     {
         // Arrange
-        syncBarrierMock.Setup(x => x.WaitForAsync<ImageSyncJob>(It.IsAny<CancellationToken>())).Returns(ValueTask.CompletedTask);
+        syncBarrierMock.Setup(x => x.WaitForAsync<ImageSyncJob>(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).Returns(ValueTask.CompletedTask);
         containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(containerConnector.Object);
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success(Fakes.GetDummyContainers().ToDictionary(c => c.Id) as IReadOnlyDictionary<string, DockerContainer>));
@@ -123,7 +123,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         // Return fresh containers
-        syncBarrierMock.Setup(x => x.WaitForAsync<ImageSyncJob>(It.IsAny<CancellationToken>())).Returns(ValueTask.CompletedTask);
+        syncBarrierMock.Setup(x => x.WaitForAsync<ImageSyncJob>(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).Returns(ValueTask.CompletedTask);
         containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(containerConnector.Object);
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success(Fakes.GetDummyContainers().ToDictionary(c => c.Id) as IReadOnlyDictionary<string, DockerContainer>));
@@ -156,7 +156,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
             Stack: null
         );
 
-        syncBarrierMock.Setup(x => x.WaitForAsync<ImageSyncJob>(It.IsAny<CancellationToken>())).Returns(ValueTask.CompletedTask);
+        syncBarrierMock.Setup(x => x.WaitForAsync<ImageSyncJob>(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).Returns(ValueTask.CompletedTask);
         containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(containerConnector.Object);
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success(new Dictionary<string, DockerContainer> { { "new-id", newDockerContainer } } as IReadOnlyDictionary<string, DockerContainer>));
@@ -202,7 +202,7 @@ public class ContainerSyncJobTests : IntegrationTestBase
             Stack: null
         );
 
-        syncBarrierMock.Setup(x => x.WaitForAsync<ImageSyncJob>(It.IsAny<CancellationToken>())).Returns(ValueTask.CompletedTask);
+        syncBarrierMock.Setup(x => x.WaitForAsync<ImageSyncJob>(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).Returns(ValueTask.CompletedTask);
         containerFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>())).Returns(containerConnector.Object);
         containerConnector.Setup(x => x.ListContainersAsync(It.IsAny<ContainerFilterCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success(new Dictionary<string, DockerContainer> { { containerId, updatedDockerContainer } } as IReadOnlyDictionary<string, DockerContainer>));

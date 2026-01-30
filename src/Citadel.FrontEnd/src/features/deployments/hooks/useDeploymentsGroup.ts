@@ -13,11 +13,13 @@ export const useDeploymentGroup = () => {
     setDeployments(data.data.deployments);
   }, [data]);
 
-  const handleDeploymentInfoUpdated = useCallback((deployment: DeploymentView) => {
-    console.log(deployment);
-
+  const handleDeploymentInfoUpdated = useCallback((deployment: DeploymentView, action: string) => {
     setDeployments((prev) => {
       if (!prev) return prev;
+
+      if (action === 'delete') {
+        return prev.filter((d) => d.id !== deployment.id);
+      }
 
       const index = prev.findIndex((d) => d.id === deployment.id);
       if (index !== -1) {

@@ -105,15 +105,15 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
     #endregion
 
     #region Deployments
-    public Task SendDeploymentInfo(Deployment deployment)
+    public Task SendDeploymentInfo(Deployment deployment, string action)
     {
         hubContext.Clients
             .Group(WellKnownSignalRGroups.DeploymentGroup(deployment.Id))
-            .SendAsync("DeploymentInfoUpdated", DeploymentView.Map(deployment));
+            .SendAsync("DeploymentInfoUpdated", DeploymentView.Map(deployment), action);
 
         hubContext.Clients
             .Group(WellKnownSignalRGroups.DeploymentsGroup)
-            .SendAsync("DeploymentInfoUpdated", DeploymentView.Map(deployment));
+            .SendAsync("DeploymentInfoUpdated", DeploymentView.Map(deployment), action);
 
         return Task.CompletedTask;
     }

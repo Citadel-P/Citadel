@@ -42,7 +42,7 @@ public interface IApplicationHubDispatcher
     #endregion
 
     #region Deployments
-    Task SendDeploymentInfo(Deployment deployment);
+    Task SendDeploymentInfo(Deployment deployment, string action);
     #endregion
 
     #region Exec Sessions

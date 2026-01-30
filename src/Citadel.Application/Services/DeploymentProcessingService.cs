@@ -14,7 +14,7 @@ public interface IDeploymentProcessingService
 {
     Task<List<Deployment>> MarkProcessingAsync(IEnumerable<Guid> deploymentIds, CancellationToken ct);
     Task RollbackProcessingAsync(IEnumerable<Deployment> deployments, CancellationToken ct);
-    Task NotifyProcessingAsync(IEnumerable<Deployment> deployments, CancellationToken ct);
+    Task NotifyProcessingAsync(IEnumerable<Deployment> deployments, string action = "update", CancellationToken ct = default);
 }
 
 internal sealed class DeploymentProcessingService(
@@ -73,14 +73,14 @@ internal sealed class DeploymentProcessingService(
         }
 
         await uow.CommitAsync(ct);
-        await NotifyProcessingAsync(deployments, ct);
+        await NotifyProcessingAsync(deployments, ct: ct);
     }
 
-    public async Task NotifyProcessingAsync(IEnumerable<Deployment> deployments, CancellationToken ct)
+    public async Task NotifyProcessingAsync(IEnumerable<Deployment> deployments, string action = "update", CancellationToken ct = default)
     {
         foreach (var deployment in deployments)
         {
-            await notificationQueue.EnqueueAsync(new DeploymentNotificationWorkItem(deploymentHub, deployment), ct);
+            await notificationQueue.EnqueueAsync(new DeploymentNotificationWorkItem(deploymentHub, deployment, action), ct);
         }
     }
 }

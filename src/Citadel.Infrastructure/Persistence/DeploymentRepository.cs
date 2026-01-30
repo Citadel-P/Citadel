@@ -178,6 +178,16 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return result.ToDomain();
     }
 
+    public async Task<IEnumerable<Deployment>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken)
+    {
+        const string sql = BaseSelect + " " + """
+            WHERE d.PlatformId = @PlatformId
+            ORDER BY d.CreatedAt DESC, d.Name ASC
+        """;
+        var result = await db.QueryAsync<DeploymentDto>(sql, new { PlatformId = platformId.Format(), cancellationToken }, transaction: tx());
+        return result.ToDomain();
+    }
+
     public Task<int> UpdateAsync(Deployment deployment, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -234,6 +244,26 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
                 Status = EnumFormatter<DeploymentStatus>.GetValue(status),
                 RowVersion = rowVersion,
                 StartedAt = startedAt
+            },
+            transaction: tx()
+        );
+    }
+
+    public async Task<int> UpdateStatusAsync(IEnumerable<Guid> ids, DeploymentStatus status, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE Deployments
+            SET Status = @Status
+            WHERE Id IN (
+                SELECT value FROM json_each(@Ids)
+            )
+        """;
+        return await db.ExecuteAsync(
+            sql,
+            new
+            {
+                Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid),
+                Status = EnumFormatter<DeploymentStatus>.GetValue(status)
             },
             transaction: tx()
         );

@@ -28,7 +28,7 @@ internal class GetContainerInfoByIdHandler(IConnectorFactory<IContainerConnector
         var platform = await unitOfWork.Platforms.GetPlatformByContainerIdAsync(query.ContainerId, cancellationToken);
         if (platform is null)
         {
-            return Result.Failure<ContainerInfo>(new NotFoundError("No platform found for the given ID."));
+            return Result.Failure<ContainerInfo>(new NotFoundError("Platform is disconnected or unavailable."));
         }
 
         var command = new InspectContainerCommand

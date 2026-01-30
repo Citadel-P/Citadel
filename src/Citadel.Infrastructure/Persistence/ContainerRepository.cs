@@ -86,7 +86,6 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         WHERE c.DeploymentId IN (
             SELECT value FROM json_each(@DeploymentIds)
         )
-        LIMIT 1
         """;
 
         var result = await db.QueryAsync<ContainerDto>(sql, 

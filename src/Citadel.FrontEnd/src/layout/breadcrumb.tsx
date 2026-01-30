@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from 'react';
+import { Fragment, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import {
   Breadcrumb,
@@ -19,8 +19,8 @@ export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
   const navigate = useNavigate();
   const params = useParams();
 
-  const { currentPlatform, currentContainer } = useAppContext();
-  const [segmentTitle, _] = useSegmentTitle();
+  const { currentPlatform } = useAppContext();
+  const [segmentTitle, setSegmentTitle] = useSegmentTitle();
 
   // Split path segments
   let segments = pathname.split('/').filter(Boolean);
@@ -30,21 +30,25 @@ export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
     segments = ['platforms'];
   }
 
+  const { platformId, type, resourceId, id } = params;
+
+  useEffect(() => {
+    setSegmentTitle(null);
+  }, [resourceId, id, setSegmentTitle]);
+
   const crumbs = useMemo(() => {
     const result: { title: string; link?: string }[] = [];
     let pathAcc = '';
-
-    const { platformId, type, resourceId, id } = params;
 
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i];
       pathAcc += `/${segment}`;
 
-      if (i > 0 && segments[i-1] == 'edit') {
+      if (i > 0 && segments[i - 1] == 'edit') {
         continue;
       }
 
-      // CASE 1: Platform ID → use platform name
+      // Platform ID → use platform name
       if (segment === platformId) {
         result.push({
           title: currentPlatform?.name ?? 'Platform',
@@ -53,17 +57,14 @@ export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
         continue;
       }
 
-      // CASE 2: Resource ID → use resource name
+      // Resource ID -> use resource name
       if (segment === resourceId || segment === id) {
-        const name = segmentTitle?.name.startsWith('/')
-          ? segmentTitle?.name.slice(1)
-          : (segmentTitle?.name ?? currentContainer?.name?.slice(1) ?? segment);
-
+        const name = segmentTitle?.name.startsWith('/') ? segmentTitle?.name.slice(1) : (segmentTitle?.name ?? "");
         result.push({ title: truncate(name), link: pathAcc });
         continue;
       }
 
-      // CASE 3: Static “add” → “Add ResourceName”
+      // Static “add” -> “Add ResourceName”
       // /platforms/:id/:type/add
       // /:type/add or /:type/edit
       if (segment === 'add' || segment === 'edit') {
@@ -74,31 +75,27 @@ export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
         continue;
       }
 
-      // CASE 4: Known static collections
+      // Known static collections
       if (segment === 'platforms') {
         result.push({ title: 'Platforms', link: '/platforms' });
         continue;
       }
 
-      // ──────────────────────────
-      // CASE 7: Resource type (containers, networks, images, volumes…)
-      // ──────────────────────────
+      // Resource type (containers, networks, images, volumes…)
       if (segment === type) {
         result.push({ title: capitalize(type), link: pathAcc });
         continue;
       }
 
-      // ──────────────────────────
       // Fallback
-      // ──────────────────────────
       result.push({ title: segment, link: pathAcc });
     }
 
-    // Last breadcrumb is active → no link
+    // Last breadcrumb is active -> no link
     if (result.length > 0) result[result.length - 1].link = undefined;
 
     return result;
-  }, [segments, params, currentPlatform, currentContainer, segmentTitle]);
+  }, [segments, platformId, type, resourceId, id, currentPlatform, segmentTitle]);
 
   return (
     <div className={`sticky top-0 z-40 mx-auto px-4 lg:container sm:px-6 ${isSticky ? 'pt-0' : 'pt-3'}`}>

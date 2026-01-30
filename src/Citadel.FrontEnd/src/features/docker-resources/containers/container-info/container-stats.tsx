@@ -9,7 +9,6 @@ import NetworkUsage from './stats/network-usage';
 export const ContainerStats = ({ resource }: { resource: DockerContainerView | undefined }) => {
   const { data, isSuccess, isLoading } = useRead('getContainerStats', { id: resource?.id });
   const [stats, setStats] = useState<ContainerStatView[]>([]);
-
   useEffect(() => {
     if (isSuccess && data?.data) {
       setStats(data?.data.stats);
