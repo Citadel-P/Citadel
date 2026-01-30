@@ -38,7 +38,7 @@ public class ContainerStatsStreamerJobTests : IntegrationTestBase
         _configMock.Setup(x => x.Value).Returns(new JobConfiguration()
         {
             BatchSize = 100,
-            ContainersInfoInterval = 10
+            MonitoringInterval = 10
         });
     }
 
