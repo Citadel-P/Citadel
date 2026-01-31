@@ -27,6 +27,7 @@ internal class UnitOfWork : IUnitOfWork
         RefreshTokens = new Lazy<IRefreshTokenRepository>(() => new RefreshTokenRepository(connection, GetTransaction));
         PlatformStats = new Lazy<IPlatformStatRepository>(() => new PlatformStatRepository(connection, GetTransaction));
         ContainerStats = new Lazy<IContainerStatRepository>(() => new ContainerStatRepository(connection, GetTransaction));
+        ActivityEvents = new Lazy<IActivityEventRepository>(() => new ActivityEventRepository(connection, GetTransaction));
     }
 
     private Lazy<IUserRepository> Users { get; }
@@ -37,8 +38,9 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IContainerRepository> Containers { get; }
     private Lazy<IDeploymentRepository> Deployments { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
-    private Lazy<IContainerStatRepository> ContainerStats { get; }
     private Lazy<IPlatformStatRepository> PlatformStats { get; }
+    private Lazy<IActivityEventRepository> ActivityEvents { get; }
+    private Lazy<IContainerStatRepository> ContainerStats { get; }
 
     IUserRepository IUnitOfWork.Users => Users.Value;
     ITeamRepository IUnitOfWork.Teams => Teams.Value;
@@ -47,9 +49,10 @@ internal class UnitOfWork : IUnitOfWork
     IRegistryRepository IUnitOfWork.Registries => Registries.Value;
     IContainerRepository IUnitOfWork.Containers => Containers.Value;
     IDeploymentRepository IUnitOfWork.Deployments => Deployments.Value;
+    IPlatformStatRepository IUnitOfWork.PlatformStats => PlatformStats.Value;
     IRefreshTokenRepository IUnitOfWork.RefreshTokens => RefreshTokens.Value;
     IContainerStatRepository IUnitOfWork.ContainerStats => ContainerStats.Value;
-    IPlatformStatRepository IUnitOfWork.PlatformStats => PlatformStats.Value;
+    IActivityEventRepository IUnitOfWork.ActivityEventRepository => ActivityEvents.Value;
 
     // Lazily creates a transaction
     private IDbTransaction GetTransaction()

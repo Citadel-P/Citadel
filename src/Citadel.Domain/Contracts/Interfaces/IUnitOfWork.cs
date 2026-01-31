@@ -11,12 +11,13 @@ public interface IUnitOfWork : IAsyncDisposable
     ITeamRepository Teams { get; }
     IImageRepository Images { get; }
     IPlatformRepository Platforms { get; }
+    IRegistryRepository Registries { get; }
     IContainerRepository Containers { get; }
     IDeploymentRepository Deployments { get; }
-    IRegistryRepository Registries { get; }
     IRefreshTokenRepository RefreshTokens { get; }
-    IContainerStatRepository ContainerStats { get; }
     IPlatformStatRepository PlatformStats { get; }
+    IContainerStatRepository ContainerStats { get; }
+    IActivityEventRepository ActivityEventRepository { get; }
 
     Task CommitAsync(CancellationToken cancellationToken);
     Task RollbackAsync();
@@ -65,6 +66,12 @@ public interface IContainerStatRepository
     Task<IEnumerable<ContainerStat>> GetStatsAggregatedLast24HoursAsync(string containerId, CancellationToken cancellationToken);
     Task<int> BulkInsertAsync(IEnumerable<ContainerStat> stats, CancellationToken cancellationToken);
     Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken);
+}
+
+public interface IActivityEventRepository 
+{
+    Task<int> AddAsync(ActivityEvent activityEvent, CancellationToken cancellationToken);
+    Task<ActivityEvent?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 }
 
 public interface IRefreshTokenRepository 

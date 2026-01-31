@@ -346,3 +346,42 @@ public enum ResourceControlState
     Idle,
     Processing
 }
+
+public enum ActivityResourceType
+{
+    Platform,
+    Registry,
+    Deployment,
+    Stack
+}
+
+public enum ActivityEventType
+{
+    #region Deployment Events
+    DeploymentCreated,
+    DeploymentUpdated,
+    DeploymentRenamed,
+    DeploymentDeleted,
+    DeploymentStarted,
+    DeploymentStopped,
+    DeploymentPaused,
+    DeploymentUnpaused,
+    DeploymentDeployed,
+    DeploymentFailed,
+    DeploymentRecreated,
+    #endregion
+
+    #region Platform Events
+    PlatformConnected,
+    PlatformDisconnected,
+    PlatformRenamed,
+    #endregion
+
+    #region Registry Events
+    RegistryCreated,
+    RegistryRenamed,
+    RegistryUpdated,
+    RegistryDeleted,
+    #endregion
+
+}

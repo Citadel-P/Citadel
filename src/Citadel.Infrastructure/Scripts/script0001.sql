@@ -57,6 +57,20 @@ CREATE TABLE "Users" (
     CONSTRAINT "FK_Users_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
 );
 
+CREATE TABLE "ActivityEvents" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_ActivityEvents" PRIMARY KEY,
+    "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    "CreatedByActorId" TEXT NOT NULL,
+    "EventType" TEXT NOT NULL,
+    "Info" TEXT NOT NULL,
+    "PlatformId" TEXT NOT NULL,
+    "ResourceId" TEXT NOT NULL,
+    "ResourceName" TEXT NOT NULL,
+    "ResourceType" TEXT NOT NULL,
+    CONSTRAINT "FK_ActivityEvents_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_ActivityEvents_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
+);
+
 CREATE TABLE "Deployments" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Deployments" PRIMARY KEY,
     "AutoUpdateState_CurrentDigest" TEXT NULL,
@@ -205,6 +219,14 @@ VALUES ('cede9601-67e9-507d-832c-0ca0155465a1', 'd1de9601-f113-ce77-884e-3cb636e
 SELECT changes();
 
 
+CREATE INDEX "IX_ActivityEvents_CreatedByActorId" ON "ActivityEvents" ("CreatedByActorId");
+
+CREATE INDEX "IX_ActivityEvents_EventType" ON "ActivityEvents" ("EventType");
+
+CREATE INDEX "IX_ActivityEvents_Platform_CreatedAt" ON "ActivityEvents" ("PlatformId", "CreatedAt");
+
+CREATE INDEX "IX_ActivityEvents_Resource_CreatedAt" ON "ActivityEvents" ("ResourceId", "CreatedAt");
+
 CREATE UNIQUE INDEX "IX_ContainerStats_ContainerId_Created" ON "ContainerStats" ("ContainerId", "Created");
 
 CREATE INDEX "IX_Containers_DeploymentId" ON "Containers" ("DeploymentId");
@@ -254,7 +276,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260124093516_migration0001', '10.0.2');
+VALUES ('20260130224631_migration0001', '10.0.2');
 
 COMMIT;
 

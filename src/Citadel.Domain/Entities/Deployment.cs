@@ -2,7 +2,6 @@
 
 public sealed class Deployment(
     string name,
-    DeploymentStatus status,
     Guid createdByActorId,
     Guid platformId,
     UpdateBehavior updateBehavior,
@@ -14,7 +13,7 @@ public sealed class Deployment(
     public string Name { get; private set; } = name;
     public string? Description { get; private set; } = description;
 
-    public DeploymentStatus Status { get; private set; } = status;
+    public DeploymentStatus Status { get; private set; } = DeploymentStatus.Created;
 
     public UpdateBehavior UpdateBehavior { get; private set; } = updateBehavior;
     public AutoUpdateState? AutoUpdateState { get; private set; } = new AutoUpdateState(LastCheckedAt: DateTime.MinValue, Status: AutoUpdateStatus.Unknown);
@@ -68,10 +67,11 @@ public sealed class Deployment(
         Image? image = null,
         Container? container = null)
     {
-        return new Deployment(name, status, createdByActorId, platformId, updateBehavior, spec, description)
+        return new Deployment(name, createdByActorId, platformId, updateBehavior, spec, description)
         {
             Id = id,
             Image = image,
+            Status = status,
             Platform = platform,
             CreatedAt = createdAt,
             Container = container,

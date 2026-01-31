@@ -76,3 +76,20 @@ public partial class ImagTagsContext : JsonSerializerContext
 public partial class  DeploymentJsonContext: JsonSerializerContext
 { 
 }
+
+
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Default,
+    PropertyNameCaseInsensitive = true,
+    Converters = new[]
+    {
+    typeof(JsonStringEnumConverter<ActivityEventType>),
+    })]
+[JsonSerializable(typeof(EventInfo))]
+[JsonSerializable(typeof(DeploymentCreated))]
+[JsonSerializable(typeof(DeploymentUpdated))]
+[JsonSerializable(typeof(DeploymentDeleted))]
+public partial class  EventInfoJsonContext : JsonSerializerContext
+{
+    
+}

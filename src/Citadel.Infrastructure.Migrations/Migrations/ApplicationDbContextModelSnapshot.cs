@@ -17,6 +17,61 @@ namespace Infrastructure.Migrations.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.2");
 
+            modelBuilder.Entity("ActivityEvent", b =>
+                {
+                    b.Property<string>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CreatedByActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Info")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PlatformId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResourceId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResourceName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResourceType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByActorId");
+
+                    b.HasIndex("EventType")
+                        .HasDatabaseName("IX_ActivityEvents_EventType");
+
+                    b.HasIndex("PlatformId", "CreatedAt")
+                        .HasDatabaseName("IX_ActivityEvents_Platform_CreatedAt");
+
+                    b.HasIndex("ResourceId", "CreatedAt")
+                        .HasDatabaseName("IX_ActivityEvents_Resource_CreatedAt");
+
+                    b.ToTable("ActivityEvents", (string)null);
+                });
+
             modelBuilder.Entity("Actor", b =>
                 {
                     b.Property<string>("Id")
@@ -658,6 +713,21 @@ namespace Infrastructure.Migrations.Migrations
                             UserId = "d1de9601-f113-ce77-884e-3cb636ec09a8",
                             TeamId = "cede9601-67e9-507d-832c-0ca0155465a1"
                         });
+                });
+
+            modelBuilder.Entity("ActivityEvent", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Container", b =>

@@ -17,7 +17,7 @@ public class GetContainerTests : IntegrationTestBase
         var image = new Image("image-01", ["sha256:abcd1234"], "image0123", 1000, 1, platform.Id, new DateTime(1768686293));
         await uow.Images.AddOrUpdateAsync(image, TestContext.Current.CancellationToken);
 
-        var deployment = new Deployment("deployment-01", DeploymentStatus.Created, Constants.DefaultAdminId, platform.Id, UpdateBehavior.Disabled);
+        var deployment = new Deployment("deployment-01", Constants.DefaultAdminId, platform.Id, UpdateBehavior.Disabled);
         await uow.Deployments.AddAsync(deployment, TestContext.Current.CancellationToken);
 
         var container = new Container(deployment.Name, "container-01-id", platform.Id, containerId, ContainerStateStatus.Created, deploymentId: deployment.Id, imageId: image.Id, created: 1768686293);

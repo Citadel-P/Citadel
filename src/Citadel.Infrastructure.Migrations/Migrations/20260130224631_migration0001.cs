@@ -117,6 +117,37 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "ActivityEvents",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
+                    EventType = table.Column<string>(type: "TEXT", nullable: false),
+                    Info = table.Column<string>(type: "TEXT", nullable: false),
+                    PlatformId = table.Column<string>(type: "TEXT", nullable: false),
+                    ResourceId = table.Column<string>(type: "TEXT", nullable: false),
+                    ResourceName = table.Column<string>(type: "TEXT", nullable: false),
+                    ResourceType = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ActivityEvents", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ActivityEvents_Actors_CreatedByActorId",
+                        column: x => x.CreatedByActorId,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_ActivityEvents_Platforms_PlatformId",
+                        column: x => x.PlatformId,
+                        principalTable: "Platforms",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Deployments",
                 columns: table => new
                 {
@@ -397,6 +428,26 @@ namespace Infrastructure.Migrations.Migrations
                 values: new object[] { "cede9601-67e9-507d-832c-0ca0155465a1", "d1de9601-f113-ce77-884e-3cb636ec09a8" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_ActivityEvents_CreatedByActorId",
+                table: "ActivityEvents",
+                column: "CreatedByActorId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ActivityEvents_EventType",
+                table: "ActivityEvents",
+                column: "EventType");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ActivityEvents_Platform_CreatedAt",
+                table: "ActivityEvents",
+                columns: new[] { "PlatformId", "CreatedAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ActivityEvents_Resource_CreatedAt",
+                table: "ActivityEvents",
+                columns: new[] { "ResourceId", "CreatedAt" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_ContainerStats_ContainerId_Created",
                 table: "ContainerStats",
                 columns: new[] { "ContainerId", "Created" },
@@ -529,6 +580,9 @@ namespace Infrastructure.Migrations.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "ActivityEvents");
+
             migrationBuilder.DropTable(
                 name: "ContainerStats");
 

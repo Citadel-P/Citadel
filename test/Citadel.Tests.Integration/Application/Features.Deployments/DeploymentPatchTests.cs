@@ -22,7 +22,6 @@ public class DeploymentPatchTests : IntegrationTestBase
             name: "Test Deployment",
             description: "A deployment for testing",
             platformId: platform.Id,
-            status: DeploymentStatus.Created,
             createdByActorId: Constants.SystemId,
             updateBehavior: UpdateBehavior.AutoDeploy,
             spec: new DeploymentSpec

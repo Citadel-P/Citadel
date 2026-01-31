@@ -32,11 +32,11 @@ public sealed record CreateDeployment(
     }
 }
 
-internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateDeployment, Result<Deployment>>
+internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, INotificationQueue notificationQueue, IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateDeployment, Result<Deployment>>
 {
     public async ValueTask<Result<Deployment>> Handle(CreateDeployment command, CancellationToken cancellationToken)
     {
-        var user = httpContextAccessor.HttpContext?.User
+        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
            ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
 
         var exist = await unitOfWork.Deployments.ExistsAsync(command.Name, command.PlatformId, cancellationToken);
@@ -61,18 +61,52 @@ internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, IHttpContextAcces
             }
         }
 
+        // Add deployment
         var deployment = new Deployment(
             name : command.Name,
             description : command.Description,
-            status : DeploymentStatus.Created,
-            createdByActorId: user.GetActorId(),
+            createdByActorId: actorId,
             platformId : command.PlatformId,
             updateBehavior : command.UpdateBehavior,
             spec : command.Spec
             );
 
         var result = await unitOfWork.Deployments.AddAsync(deployment, cancellationToken);
+
+        // Add activity
+        var activity = new ActivityEvent(
+            actorId: actorId,
+            resourceId: deployment.Id,
+            platformId: command.PlatformId,
+            resourceName: deployment.Name,
+            eventType: ActivityEventType.DeploymentCreated,
+            info: new DeploymentCreated(command.Spec)
+            );
+
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+
         await unitOfWork.CommitAsync(cancellationToken);
+
+        // Notify
+        await notificationQueue.EnqueueAsync(new ActivityNotification(activity), cancellationToken);
         return deployment;
+    }
+}
+
+internal class ActivityNotification(ActivityEvent activity) : INotificationWorkItem
+{
+    public Task ExecuteAsync(CancellationToken cancellationToken)
+    {
+        return activity.ResourceType switch 
+        {
+            ActivityResourceType.Deployment => EnqueueDeploymentNotification(cancellationToken),
+            _ => Task.CompletedTask
+        };
+    }
+
+    private Task EnqueueDeploymentNotification(CancellationToken cancellationToken)
+    {
+        // Todo: notify clients
+        return Task.CompletedTask;
     }
 }

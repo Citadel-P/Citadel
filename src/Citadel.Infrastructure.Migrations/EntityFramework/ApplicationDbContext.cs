@@ -26,7 +26,8 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .RoleConfiguration()
             .UserTeamConfiguration()
             .DeploymentConfiguration()
-            .ImageConfiguration();
+            .ImageConfiguration()
+            .ActivityEventConfiguration();
 
         SeedDb(modelBuilder);
     }
@@ -264,12 +265,6 @@ internal static class Configuration
 
         registry.HasIndex("Name").IsUnique().HasDatabaseName($"IX_{tableName}_Name");
 
-        registry
-            .HasOne("Actor")
-            .WithMany()
-            .HasForeignKey("CreatedByActorId")
-            .OnDelete(DeleteBehavior.Restrict);
-
         return builder;
     }
 
@@ -337,12 +332,6 @@ internal static class Configuration
             .HasOne("Actor")
             .WithOne()
             .HasForeignKey("User", "ActorId")
-            .OnDelete(DeleteBehavior.Restrict);
-
-        user
-            .HasOne("Actor")
-            .WithMany()
-            .HasForeignKey("CreatedByActorId")
             .OnDelete(DeleteBehavior.Restrict);
 
         return builder;
@@ -471,12 +460,6 @@ internal static class Configuration
            .HasForeignKey("PlatformId")
            .OnDelete(DeleteBehavior.Cascade);
 
-        deployment
-            .HasOne("Actor")
-            .WithMany()
-            .HasForeignKey("CreatedByActorId")
-            .OnDelete(DeleteBehavior.Restrict);
-
         deployment.HasIndex("Name", "PlatformId").IsUnique().HasDatabaseName($"IX_{tableName}_Name_PlatformId");
 
         return builder;
@@ -522,6 +505,37 @@ internal static class Configuration
         return builder;
     }
 
+    public static ModelBuilder ActivityEventConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "ActivityEvents";
+        var activityEvent = builder.Entity("ActivityEvent");
+
+        activityEvent.ToTable(tableName);
+
+        activityEvent.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        activityEvent.HasKey("Id");
+
+        activityEvent.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        activityEvent.Property<Guid>("ResourceId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        activityEvent.Property<string>("ResourceName").HasColumnType("TEXT").IsRequired();
+        activityEvent.Property<string>("ResourceType").HasColumnType("TEXT").IsRequired();
+        activityEvent.Property<string>("EventType").HasColumnType("TEXT").IsRequired();
+        activityEvent.Property<string>("Info").HasColumnType("TEXT").IsRequired();
+        activityEvent.AddAuditedMemebers();
+
+        activityEvent
+            .HasOne("Platform")
+            .WithMany()
+            .HasForeignKey("PlatformId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        activityEvent.HasIndex("PlatformId", "CreatedAt").HasDatabaseName($"IX_{tableName}_Platform_CreatedAt");
+        activityEvent.HasIndex("ResourceId", "CreatedAt").HasDatabaseName($"IX_{tableName}_Resource_CreatedAt");
+        activityEvent.HasIndex("EventType").HasDatabaseName($"IX_{tableName}_EventType");
+
+        return builder;
+    }
+
     private static EntityTypeBuilder AddReconcilableMember(this EntityTypeBuilder builder)
     {
         builder.Property<long>("RowVersion").HasColumnType("INTEGER").HasDefaultValue(0);
@@ -535,6 +549,12 @@ internal static class Configuration
     {
         builder.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
         builder.Property<Guid>("CreatedByActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+
+        builder
+            .HasOne("Actor")
+            .WithMany()
+            .HasForeignKey("CreatedByActorId")
+            .OnDelete(DeleteBehavior.Restrict);
 
         return builder;
     }

@@ -68,7 +68,6 @@ public class DeploymentApplyTests : IntegrationTestBase
             name: "Test Deployment",
             description: "A deployment for testing apply",
             platformId: platform.Id,
-            status: DeploymentStatus.Created,
             createdByActorId: Constants.SystemId,
             updateBehavior: UpdateBehavior.AutoDeploy,
             spec: new DeploymentSpec(
@@ -165,7 +164,6 @@ public class DeploymentApplyTests : IntegrationTestBase
             name: "External Image Deployment",
             description: "Uses external image",
             platformId: _platformId,
-            status: DeploymentStatus.Created,
             createdByActorId: Constants.SystemId,
             updateBehavior: UpdateBehavior.AutoDeploy,
             spec: new DeploymentSpec(
