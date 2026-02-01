@@ -63,8 +63,8 @@ CREATE TABLE "ActivityEvents" (
     "CreatedByActorId" TEXT NOT NULL,
     "EventType" TEXT NOT NULL,
     "Info" TEXT NOT NULL,
-    "PlatformId" TEXT NOT NULL,
-    "ResourceId" TEXT NOT NULL,
+    "PlatformId" TEXT NULL,
+    "ResourceId" TEXT NULL,
     "ResourceName" TEXT NOT NULL,
     "ResourceType" TEXT NOT NULL,
     CONSTRAINT "FK_ActivityEvents_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
@@ -80,6 +80,7 @@ CREATE TABLE "Deployments" (
     "AutoUpdateState_Status" TEXT NULL,
     "ControlStartedAt" INTEGER NULL,
     "ControlState" TEXT NULL DEFAULT 'Idle',
+    "ControlTriggeredBy" TEXT NULL,
     "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     "CreatedByActorId" TEXT NOT NULL,
     "Description" TEXT NULL,
@@ -89,6 +90,7 @@ CREATE TABLE "Deployments" (
     "Spec" TEXT NOT NULL,
     "Status" TEXT NOT NULL,
     "UpdateBehavior" TEXT NULL,
+    CONSTRAINT "FK_Deployments_Actors_ControlTriggeredBy" FOREIGN KEY ("ControlTriggeredBy") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_Deployments_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_Deployments_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
 );
@@ -123,6 +125,7 @@ CREATE TABLE "Images" (
     "Containers" INTEGER NOT NULL DEFAULT 0,
     "ControlStartedAt" INTEGER NULL,
     "ControlState" TEXT NULL DEFAULT 'Idle',
+    "ControlTriggeredBy" TEXT NULL,
     "CreatedAt" TEXT NOT NULL,
     "DockerImageId" TEXT NOT NULL,
     "Name" TEXT NOT NULL,
@@ -132,6 +135,7 @@ CREATE TABLE "Images" (
     "Size" REAL NOT NULL DEFAULT 0.0,
     "Tags" TEXT NOT NULL,
     "UpdatedAt" TEXT NULL,
+    CONSTRAINT "FK_Images_Actors_ControlTriggeredBy" FOREIGN KEY ("ControlTriggeredBy") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_Images_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE,
     CONSTRAINT "FK_Images_Registries_RegistryId" FOREIGN KEY ("RegistryId") REFERENCES "Registries" ("Id") ON DELETE SET NULL
 );
@@ -155,6 +159,7 @@ CREATE TABLE "Containers" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Containers" PRIMARY KEY,
     "ControlStartedAt" INTEGER NULL,
     "ControlState" TEXT NULL DEFAULT 'Idle',
+    "ControlTriggeredBy" TEXT NULL,
     "Created" REAL NOT NULL,
     "DeploymentId" TEXT NULL,
     "DockerContainerId" TEXT NOT NULL,
@@ -167,6 +172,7 @@ CREATE TABLE "Containers" (
     "Stack" TEXT NULL,
     "State" TEXT NOT NULL,
     "Updated" TEXT NOT NULL,
+    CONSTRAINT "FK_Containers_Actors_ControlTriggeredBy" FOREIGN KEY ("ControlTriggeredBy") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_Containers_Deployments_DeploymentId" FOREIGN KEY ("DeploymentId") REFERENCES "Deployments" ("Id") ON DELETE SET NULL,
     CONSTRAINT "FK_Containers_Images_ImageId" FOREIGN KEY ("ImageId") REFERENCES "Images" ("Id") ON DELETE SET NULL,
     CONSTRAINT "FK_Containers_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
@@ -229,6 +235,8 @@ CREATE INDEX "IX_ActivityEvents_Resource_CreatedAt" ON "ActivityEvents" ("Resour
 
 CREATE UNIQUE INDEX "IX_ContainerStats_ContainerId_Created" ON "ContainerStats" ("ContainerId", "Created");
 
+CREATE INDEX "IX_Containers_ControlTriggeredBy" ON "Containers" ("ControlTriggeredBy");
+
 CREATE INDEX "IX_Containers_DeploymentId" ON "Containers" ("DeploymentId");
 
 CREATE INDEX "IX_Containers_DockerImageId" ON "Containers" ("DockerImageId");
@@ -239,11 +247,15 @@ CREATE INDEX "IX_Containers_PlatformId" ON "Containers" ("PlatformId");
 
 CREATE UNIQUE INDEX "IX__Containers_DockerContainerId_PlatformId" ON "Containers" ("DockerContainerId", "PlatformId");
 
+CREATE INDEX "IX_Deployments_ControlTriggeredBy" ON "Deployments" ("ControlTriggeredBy");
+
 CREATE INDEX "IX_Deployments_CreatedByActorId" ON "Deployments" ("CreatedByActorId");
 
 CREATE UNIQUE INDEX "IX_Deployments_Name_PlatformId" ON "Deployments" ("Name", "PlatformId");
 
 CREATE INDEX "IX_Deployments_PlatformId" ON "Deployments" ("PlatformId");
+
+CREATE INDEX "IX_Images_ControlTriggeredBy" ON "Images" ("ControlTriggeredBy");
 
 CREATE UNIQUE INDEX "IX_Images_DockerImageId_PlatformId" ON "Images" ("DockerImageId", "PlatformId");
 
@@ -276,7 +288,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260130224631_migration0001', '10.0.2');
+VALUES ('20260201204536_migration0001', '10.0.2');
 
 COMMIT;
 

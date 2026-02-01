@@ -20,6 +20,7 @@ public sealed class Deployment(
 
     #region IReconcilableResource Members
     public ResourceControlState ControlState { get; private set; } = ResourceControlState.Idle;
+    public Guid? ControlTriggeredBy { get; private set; }
     public long? ControlStartedAt { get; private set; }
     public long RowVersion { get; private set; }
     #endregion
@@ -35,9 +36,10 @@ public sealed class Deployment(
     public Image? Image { get; private set; } = null;
     public Container? Container { get; private set; } = null;
 
-    public void MarkProcessing()
+    public void MarkProcessing(Guid controlTriggeredBy)
     {
         Status = DeploymentStatus.Pending;
+        ControlTriggeredBy = controlTriggeredBy;
         ControlState = ResourceControlState.Processing;
         ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     }
@@ -47,6 +49,7 @@ public sealed class Deployment(
         Status = status;
         ControlState = ResourceControlState.Idle;
         ControlStartedAt = null;
+        ControlTriggeredBy = null;
     }
 
     public static Deployment FromPersistence(
@@ -60,6 +63,7 @@ public sealed class Deployment(
         DateTime createdAt,
         Guid createdByActorId,
         UpdateBehavior updateBehavior,
+        Guid? controlTriggeredBy,
         string? description = null,
         AutoUpdateState? autoUpdateState = null,
         DeploymentSpec? spec = null,
@@ -78,7 +82,8 @@ public sealed class Deployment(
             RowVersion = rowVersion,
             ControlState = controlState,
             AutoUpdateState = autoUpdateState,
-            ControlStartedAt = controlStartedAt
+            ControlStartedAt = controlStartedAt,
+            ControlTriggeredBy = controlTriggeredBy
         };
     }
 

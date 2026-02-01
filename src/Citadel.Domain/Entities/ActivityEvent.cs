@@ -9,8 +9,8 @@ public sealed class ActivityEvent : IAuditedEntity
         Enum.GetValues<ActivityResourceType>();
 
     public Guid Id { get; private set; } = Guid.CreateVersion7();
-    public Guid PlatformId { get; private set; }
-    public Guid ResourceId { get; private set; }
+    public Guid? PlatformId { get; private set; }
+    public Guid? ResourceId { get; private set; }
     public string ResourceName { get; private set; }
     public ActivityResourceType ResourceType { get; }
     public ActivityEventType EventType { get; private set; }
@@ -22,8 +22,8 @@ public sealed class ActivityEvent : IAuditedEntity
     #endregion
 
     public ActivityEvent(
-        Guid platformId,
-        Guid resourceId,
+        Guid? platformId,
+        Guid? resourceId,
         Guid actorId,
         string resourceName,
         ActivityEventType eventType,
@@ -71,8 +71,8 @@ public sealed class ActivityEvent : IAuditedEntity
 
     public static ActivityEvent FromPersistence(
         Guid id,
-        Guid platformId,
-        Guid resourceId,
+        Guid? platformId,
+        Guid? resourceId,
         string resourceName,
         ActivityResourceType resourceType,
         ActivityEventType eventType,
@@ -106,6 +106,12 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.DeploymentCreated, DeploymentCreated) => true,
             (ActivityEventType.DeploymentUpdated, DeploymentUpdated) => true,
             (ActivityEventType.DeploymentDeleted, DeploymentDeleted) => true,
+            (ActivityEventType.DeploymentRenamed, DeploymentRenamed) => true,
+            (ActivityEventType.DeploymentStarted, DeploymentStarted) => true,
+            (ActivityEventType.DeploymentStopped, DeploymentStopped) => true,
+            (ActivityEventType.DeploymentFailed, DeploymentFailed) => true,
+            (ActivityEventType.DeploymentPaused, DeploymentPaused) => true,
+
 
             // Todo: Add mappings
             _ => false
@@ -117,9 +123,21 @@ public sealed class ActivityEvent : IAuditedEntity
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 [JsonDerivedType(typeof(DeploymentCreated), nameof(ActivityEventType.DeploymentCreated))]
 [JsonDerivedType(typeof(DeploymentUpdated), nameof(ActivityEventType.DeploymentUpdated))]
+[JsonDerivedType(typeof(DeploymentRenamed), nameof(ActivityEventType.DeploymentRenamed))]
 [JsonDerivedType(typeof(DeploymentDeleted), nameof(ActivityEventType.DeploymentDeleted))]
+[JsonDerivedType(typeof(DeploymentStarted), nameof(ActivityEventType.DeploymentStarted))]
+[JsonDerivedType(typeof(DeploymentStopped), nameof(ActivityEventType.DeploymentStopped))]
+[JsonDerivedType(typeof(DeploymentPaused), nameof(ActivityEventType.DeploymentPaused))]
+[JsonDerivedType(typeof(DeploymentDegraded), nameof(ActivityEventType.DeploymentDegraded))]
 public abstract record EventInfo;
 public sealed record DeploymentCreated(DeploymentSpec Spec) : EventInfo;
 public sealed record DeploymentUpdated(DeploymentSpec OldSpec, DeploymentSpec NewSpec) : EventInfo;
+public sealed record DeploymentRenamed(string OldName, string NewName) : EventInfo;
 public sealed record DeploymentDeleted(string Name) : EventInfo;
+public sealed record DeploymentStarted: EventInfo;
+public sealed record DeploymentStopped: EventInfo;
+public sealed record DeploymentPaused: EventInfo;
+public sealed record DeploymentDegraded: EventInfo;
+
+public sealed record DeploymentFailed(DeploymentStatus From, string Reason) : EventInfo;
 

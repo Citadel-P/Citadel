@@ -24,6 +24,7 @@ public sealed class Image(
     public DateTime? UpdatedAt { get; private set; } = updatedAt;
     #region IReconcilableResource Members
     public ResourceControlState ControlState { get; private set; } = ResourceControlState.Idle;
+    public Guid? ControlTriggeredBy { get; private set; }
     public long? ControlStartedAt { get; private set; }
     public long RowVersion { get; private set; }
     #endregion

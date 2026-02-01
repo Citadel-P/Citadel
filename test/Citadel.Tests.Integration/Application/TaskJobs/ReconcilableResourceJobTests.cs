@@ -197,6 +197,7 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
             startedAt: startedAt,
             rowVersion: deployment.RowVersion,
             checkRowVersion: false,
+            controlTriggeredBy: deployment.ControlTriggeredBy,
             TestContext.Current.CancellationToken);
 
         await uow.CommitAsync(TestContext.Current.CancellationToken);
@@ -214,6 +215,7 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
             startedAt: startedAt,
             rowVersion: container.RowVersion,
             checkRowVersion: false,
+            controlTriggeredBy: container.ControlTriggeredBy,
             TestContext.Current.CancellationToken);
 
         await uow.CommitAsync(TestContext.Current.CancellationToken);

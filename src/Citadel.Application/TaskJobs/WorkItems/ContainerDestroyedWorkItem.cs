@@ -4,6 +4,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using Hosting.Common;
 using Microsoft.Extensions.Logging;
 
 namespace Application.TaskJobs.WorkItems;
@@ -23,6 +24,7 @@ internal sealed class ContainerDestroyedWorkItem(
     {
         try
         {
+            ActivityEvent? activityEvent = null;
             Deployment? deployment = null;
             Image? image = null;
             var existing = await uow.Containers.GetByIdAsync(eventInfo.ContainerId, cancellationToken);
@@ -37,7 +39,7 @@ internal sealed class ContainerDestroyedWorkItem(
 
             if (existing.DeploymentId != null)
             {
-                deployment = await UpdateDeploymentStatus(uow, existing.DeploymentId.Value, DeploymentStatus.Degraded, cancellationToken);
+                (deployment, activityEvent) = await UpdateDeploymentStatus(uow, existing.DeploymentId.Value, DeploymentStatus.Degraded, cancellationToken);
             }
 
             await uow.Containers.DeleteAsync([existing.Id], cancellationToken);
@@ -60,6 +62,10 @@ internal sealed class ContainerDestroyedWorkItem(
                 var imageNotificationItem = new ImageNotificationWorkItem(dockerDaemonHub, image, "update");
                 await notificationQueue.EnqueueAsync(imageNotificationItem, cancellationToken);
             }
+            if (activityEvent != null)
+            {
+                await notificationQueue.EnqueueAsync(new ActivityNotification(activityEvent), cancellationToken);
+            }
         }
         catch (Exception ex)
         {
@@ -78,14 +84,13 @@ internal sealed class ContainerDestroyedWorkItem(
         return image;
     }
 
-    internal static async Task<Deployment?> UpdateDeploymentStatus(IUnitOfWork uow, Guid deploymentId, 
+    internal static async Task<(Deployment?, ActivityEvent?)> UpdateDeploymentStatus(IUnitOfWork uow, Guid deploymentId, 
         DeploymentStatus status, CancellationToken cancellationToken)
     {
         var deployment = await uow.Deployments.GetInfoAsync(deploymentId, cancellationToken);
-        if (deployment is null) return null;
+        if (deployment is null) return (null, null);
 
         deployment.ReleaseProcessing(status);
-
         await uow.Deployments.UpdateProcessingAsync(
             id: deployment.Id,
             status: deployment.Status,
@@ -93,8 +98,33 @@ internal sealed class ContainerDestroyedWorkItem(
             startedAt: deployment.ControlStartedAt,
             rowVersion: deployment.RowVersion,
             checkRowVersion: false,
+            controlTriggeredBy: deployment.ControlTriggeredBy,
             cancellationToken);
 
-        return deployment;
+        EventInfo? eventInfo = deployment.Status switch
+        {
+            DeploymentStatus.Healthy => new DeploymentStarted(),
+            DeploymentStatus.Stopped => new DeploymentStopped(),
+            DeploymentStatus.Pending => new DeploymentPaused(),
+            DeploymentStatus.Degraded => new DeploymentDegraded(),
+            _ => null
+        };
+
+        if (eventInfo == null)
+        {
+            return (deployment, null);
+        }
+
+        var activity = new ActivityEvent(
+                info: eventInfo,
+                resourceId: deployment.Id,
+                platformId: deployment.PlatformId,
+                resourceName: deployment.Name,
+                eventType: ActivityEventType.DeploymentUpdated,
+                actorId: deployment.ControlTriggeredBy ?? Constants.SystemId
+                );
+        await uow.ActivityEventRepository.AddAsync(activity, cancellationToken);
+
+        return (deployment, activity);
     }
 }

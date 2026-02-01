@@ -20,6 +20,7 @@ internal sealed class ContainerUpdatedWorkItem(
     {
         try
         {
+            ActivityEvent? activityEvent = null;
             Deployment? deployment = null;
             Container? container = null;
             var existing = await uow.Containers.GetContainerInfoAsync(
@@ -31,7 +32,7 @@ internal sealed class ContainerUpdatedWorkItem(
             if (existing.DeploymentId != null)
             {
                 var status = Deployment.ToDeploymentStatus(eventInfo.Container?.State ?? ContainerStateStatus.Unknown);
-                deployment = await ContainerDestroyedWorkItem.UpdateDeploymentStatus(uow, existing.DeploymentId.Value, status, cancellationToken);
+                (deployment, activityEvent) = await ContainerDestroyedWorkItem.UpdateDeploymentStatus(uow, existing.DeploymentId.Value, status, cancellationToken);
             }
 
             container = await UpdateContainer(uow, existing, cancellationToken);
@@ -70,6 +71,7 @@ internal sealed class ContainerUpdatedWorkItem(
             startedAt: container.ControlStartedAt,
             rowVersion: container.RowVersion,
             checkRowVersion: false,
+            controlTriggeredBy: container.ControlTriggeredBy,
             cancellationToken);
 
         return container;

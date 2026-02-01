@@ -28,6 +28,7 @@ internal static class ContainerMappers
             deploymentId: container.DeploymentId,
             rowVersion: container.RowVersion,
             controlStartedAt: container.ControlStartedAt,
+            controlTriggeredBy: container.ControlTriggeredBy,
             controlState: Enum.Parse<ResourceControlState>(container.ControlState),
             stats: container.Stats?.Select(ToDomain).ToList());
     }
@@ -45,6 +46,7 @@ internal static class ContainerMappers
             updated: container.Updated,
             rowVersion: container.RowVersion,
             controlStartedAt: container.ControlStartedAt,
+            controlTriggeredBy: container.ControlTriggeredBy,
             controlState: Enum.Parse<ResourceControlState>(container.ControlState),
             state: Enum.Parse<ContainerStateStatus>(container.State),
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
@@ -62,7 +64,8 @@ internal static class ContainerMappers
                 updateBehavior: UpdateBehavior.Disabled,
                 rowVersion:0,
                 controlState: ResourceControlState.Idle,
-                controlStartedAt: 0
+                controlStartedAt: 0,
+                controlTriggeredBy: null
             ),
             image: container.Image_ImageId != null ? Image.FromPersistence(
                 id: container.Image_ImageId ?? Guid.Empty,
@@ -97,6 +100,7 @@ internal static class ContainerMappers
             updated: container.Updated,
             rowVersion: container.RowVersion,
             controlStartedAt: container.ControlStartedAt,
+            controlTriggeredBy: container.ControlTriggeredBy,
             controlState: Enum.Parse<ResourceControlState>(container.ControlState),
             state: Enum.Parse<ContainerStateStatus>(container.State),
             ports: JsonSerializer.Deserialize(container.Ports, ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding) ?? new Dictionary<string, IReadOnlyList<HostPortBinding>>(),
@@ -130,7 +134,8 @@ internal static class ContainerMappers
                 updateBehavior: UpdateBehavior.Disabled,
                 rowVersion: 0,
                 controlState: ResourceControlState.Idle,
-                controlStartedAt: 0
+                controlStartedAt: 0,
+                controlTriggeredBy: null
             ),
             stats: [new ContainerStat(
                 ContainerId: container.Id,

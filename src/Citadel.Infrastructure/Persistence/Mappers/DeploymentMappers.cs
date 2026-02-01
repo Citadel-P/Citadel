@@ -24,6 +24,7 @@ internal static class DeploymentMappers
             status: Enum.Parse<DeploymentStatus>(dto.Status),
             updateBehavior: Enum.Parse<UpdateBehavior>(dto.UpdateBehavior),
             controlState: Enum.Parse<ResourceControlState>(dto.ControlState),
+            controlTriggeredBy: dto.ControlTriggeredBy,
             autoUpdateState: new AutoUpdateState(
                 LastCheckedAt: dto.AutoUpdateState_LastCheckedAt,
                 Status: Enum.Parse<AutoUpdateStatus>(dto.AutoUpdateState_Status),
@@ -39,6 +40,7 @@ internal static class DeploymentMappers
                 updated: 0,
                 rowVersion: 0,
                 controlStartedAt: null,
+                controlTriggeredBy: null,
                 controlState: ResourceControlState.Idle,
                 ports: null,
                 state: ContainerStateStatus.Unknown,

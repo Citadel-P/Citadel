@@ -49,7 +49,7 @@ internal class ReconcilableResourceJob(
                     var stuckContainers = await uow.Containers.GetStuckContainersAsync(cancellationToken: cancellationToken);
                     if (stuckContainers.Any())
                     {
-                        var workItem = new StuckContainersSyncWorkItem(deploymentHub, notifQueue, dockerDaemonHub, containerEventBroadcaster, stuckContainers);
+                        var workItem = new StuckContainersSyncWorkItem(notifQueue, dockerDaemonHub, containerEventBroadcaster, stuckContainers);
                         await dbWorkQueue.EnqueueAsync(workItem, cancellationToken);
                     }
 
@@ -91,6 +91,7 @@ internal class ReconcilableResourceJob(
                                     startedAt: null,
                                     rowVersion: deployment.RowVersion,
                                     checkRowVersion: true,
+                                    controlTriggeredBy: deployment.ControlTriggeredBy ?? Constants.SystemId,
                                     cancellationToken);
                 if (row > 0)
                 {
@@ -108,7 +109,6 @@ internal class ReconcilableResourceJob(
     }
 
     internal sealed class StuckContainersSyncWorkItem(
-        IDeploymentStreamManager deploymentHub,
         INotificationQueue notificationQueue,
         IDockerDaemonStreamManager dockerDaemonHub,
         IContainerEventBroadcaster containerEventBroadcaster,
@@ -128,6 +128,7 @@ internal class ReconcilableResourceJob(
                                     startedAt: null,
                                     rowVersion: container.RowVersion,
                                     checkRowVersion: true,
+                                    controlTriggeredBy: container.ControlTriggeredBy ?? Constants.SystemId,
                                     cancellationToken);
                 if (row > 0)
                 {

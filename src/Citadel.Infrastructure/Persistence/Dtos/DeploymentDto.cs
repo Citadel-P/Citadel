@@ -10,6 +10,7 @@ internal sealed record DeploymentDto(
     Guid PlatformId,
     string ControlState,
     long? ControlStartedAt,
+    Guid? ControlTriggeredBy,
     string UpdateBehavior,
     DateTime AutoUpdateState_LastCheckedAt,
     string AutoUpdateState_Status,

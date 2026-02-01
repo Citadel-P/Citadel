@@ -14,12 +14,13 @@ internal record ContainerDto(
     long RowVersion,
     string ControlState,
     long? ControlStartedAt,
+    Guid? ControlTriggeredBy,
     Guid? ImageId = null,
     Guid? DeploymentId = null)
 {
     public ICollection<ContainerStatDto> Stats { get; init; } = [];
 
-    public ContainerDto() : this(Guid.Empty, Guid.Empty, string.Empty, string.Empty, string.Empty, 0, 0, string.Empty, string.Empty, string.Empty, 0, string.Empty, null)
+    public ContainerDto() : this(Guid.Empty, Guid.Empty, string.Empty, string.Empty, string.Empty, 0, 0, string.Empty, string.Empty, string.Empty, 0, string.Empty, null, null)
     {
         
     }

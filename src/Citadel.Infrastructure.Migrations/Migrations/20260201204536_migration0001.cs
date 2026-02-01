@@ -125,8 +125,8 @@ namespace Infrastructure.Migrations.Migrations
                     CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
                     EventType = table.Column<string>(type: "TEXT", nullable: false),
                     Info = table.Column<string>(type: "TEXT", nullable: false),
-                    PlatformId = table.Column<string>(type: "TEXT", nullable: false),
-                    ResourceId = table.Column<string>(type: "TEXT", nullable: false),
+                    PlatformId = table.Column<string>(type: "TEXT", nullable: true),
+                    ResourceId = table.Column<string>(type: "TEXT", nullable: true),
                     ResourceName = table.Column<string>(type: "TEXT", nullable: false),
                     ResourceType = table.Column<string>(type: "TEXT", nullable: false)
                 },
@@ -159,6 +159,7 @@ namespace Infrastructure.Migrations.Migrations
                     AutoUpdateState_Status = table.Column<string>(type: "TEXT", nullable: true),
                     ControlStartedAt = table.Column<long>(type: "INTEGER", nullable: true),
                     ControlState = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true, defaultValue: "Idle"),
+                    ControlTriggeredBy = table.Column<string>(type: "TEXT", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
                     Description = table.Column<string>(type: "TEXT", nullable: true),
@@ -172,6 +173,12 @@ namespace Infrastructure.Migrations.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Deployments", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Deployments_Actors_ControlTriggeredBy",
+                        column: x => x.ControlTriggeredBy,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_Deployments_Actors_CreatedByActorId",
                         column: x => x.CreatedByActorId,
@@ -255,6 +262,7 @@ namespace Infrastructure.Migrations.Migrations
                     Containers = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 0),
                     ControlStartedAt = table.Column<long>(type: "INTEGER", nullable: true),
                     ControlState = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true, defaultValue: "Idle"),
+                    ControlTriggeredBy = table.Column<string>(type: "TEXT", nullable: true),
                     CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
                     DockerImageId = table.Column<string>(type: "TEXT", nullable: false),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
@@ -268,6 +276,12 @@ namespace Infrastructure.Migrations.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Images", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Images_Actors_ControlTriggeredBy",
+                        column: x => x.ControlTriggeredBy,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_Images_Platforms_PlatformId",
                         column: x => x.PlatformId,
@@ -332,6 +346,7 @@ namespace Infrastructure.Migrations.Migrations
                     Id = table.Column<string>(type: "TEXT", nullable: false),
                     ControlStartedAt = table.Column<long>(type: "INTEGER", nullable: true),
                     ControlState = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true, defaultValue: "Idle"),
+                    ControlTriggeredBy = table.Column<string>(type: "TEXT", nullable: true),
                     Created = table.Column<long>(type: "REAL", nullable: false),
                     DeploymentId = table.Column<string>(type: "TEXT", nullable: true),
                     DockerContainerId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
@@ -348,6 +363,12 @@ namespace Infrastructure.Migrations.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Containers", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Containers_Actors_ControlTriggeredBy",
+                        column: x => x.ControlTriggeredBy,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_Containers_Deployments_DeploymentId",
                         column: x => x.DeploymentId,
@@ -454,6 +475,11 @@ namespace Infrastructure.Migrations.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_Containers_ControlTriggeredBy",
+                table: "Containers",
+                column: "ControlTriggeredBy");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Containers_DeploymentId",
                 table: "Containers",
                 column: "DeploymentId");
@@ -480,6 +506,11 @@ namespace Infrastructure.Migrations.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_Deployments_ControlTriggeredBy",
+                table: "Deployments",
+                column: "ControlTriggeredBy");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Deployments_CreatedByActorId",
                 table: "Deployments",
                 column: "CreatedByActorId");
@@ -494,6 +525,11 @@ namespace Infrastructure.Migrations.Migrations
                 name: "IX_Deployments_PlatformId",
                 table: "Deployments",
                 column: "PlatformId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Images_ControlTriggeredBy",
+                table: "Images",
+                column: "ControlTriggeredBy");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Images_DockerImageId_PlatformId",

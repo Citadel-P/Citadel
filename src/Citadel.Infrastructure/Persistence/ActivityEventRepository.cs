@@ -1,7 +1,6 @@
 ﻿using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
@@ -25,8 +24,8 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
         return db.ExecuteAsync(sql, new
         {
             Id = activityEvent.Id.Format(),
-            PlatformId = activityEvent.PlatformId.Format(),
-            ResourceId = activityEvent.ResourceId.Format(),
+            PlatformId = activityEvent.PlatformId.Value.Format(),
+            ResourceId = activityEvent.ResourceId.Value.Format(),
             ResourceName = activityEvent.ResourceName,
             EventType = EnumFormatter<ActivityEventType>.GetValue(activityEvent.EventType),
             ResourceType = EnumFormatter<ActivityResourceType>.GetValue(activityEvent.ResourceType),

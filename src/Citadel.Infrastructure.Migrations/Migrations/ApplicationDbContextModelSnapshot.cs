@@ -41,11 +41,9 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("PlatformId")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ResourceId")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ResourceName")
@@ -120,6 +118,9 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("TEXT")
                         .HasDefaultValue("Idle");
 
+                    b.Property<string>("ControlTriggeredBy")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("Created")
                         .HasColumnType("REAL");
 
@@ -167,6 +168,8 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ControlTriggeredBy");
 
                     b.HasIndex("DeploymentId");
 
@@ -257,6 +260,9 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("TEXT")
                         .HasDefaultValue("Idle");
 
+                    b.Property<string>("ControlTriggeredBy")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
@@ -295,6 +301,8 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ControlTriggeredBy");
+
                     b.HasIndex("CreatedByActorId");
 
                     b.HasIndex("PlatformId");
@@ -325,6 +333,9 @@ namespace Infrastructure.Migrations.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT")
                         .HasDefaultValue("Idle");
+
+                    b.Property<string>("ControlTriggeredBy")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("CreatedAt")
                         .IsRequired()
@@ -363,6 +374,8 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ControlTriggeredBy");
 
                     b.HasIndex("PlatformId")
                         .HasDatabaseName("IX_Images_PlatformId");
@@ -726,12 +739,16 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasOne("Platform", null)
                         .WithMany()
                         .HasForeignKey("PlatformId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Container", b =>
                 {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("ControlTriggeredBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Deployment", null)
                         .WithMany()
                         .HasForeignKey("DeploymentId")
@@ -762,6 +779,11 @@ namespace Infrastructure.Migrations.Migrations
                 {
                     b.HasOne("Actor", null)
                         .WithMany()
+                        .HasForeignKey("ControlTriggeredBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Actor", null)
+                        .WithMany()
                         .HasForeignKey("CreatedByActorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -775,6 +797,11 @@ namespace Infrastructure.Migrations.Migrations
 
             modelBuilder.Entity("Image", b =>
                 {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("ControlTriggeredBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Platform", null)
                         .WithMany()
                         .HasForeignKey("PlatformId")

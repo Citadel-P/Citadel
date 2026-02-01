@@ -4,8 +4,11 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Hosting.Common.ErrorTypes;
+using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 
 namespace Application.Features.Deployments.Commands;
 
@@ -14,11 +17,15 @@ public sealed record ChangeDeploymentState(IEnumerable<Guid> DeploymentIds, Depl
 internal sealed class ChangeDeploymentStateHandler(
     IDeploymentProcessingService deploymentProcessingService,
     IPlatformContainerCache platformContainerCache,
+    IHttpContextAccessor httpContextAccessor,
     IConnectorFactory<IContainerConnector> connectorFactory) : ICommandHandler<ChangeDeploymentState, Result>
 {
     public async ValueTask<Result> Handle(ChangeDeploymentState command, CancellationToken cancellationToken)
     {
-        var deployments = await deploymentProcessingService.MarkProcessingAsync(command.DeploymentIds, cancellationToken);
+        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
+           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
+
+        var deployments = await deploymentProcessingService.MarkProcessingAsync(command.DeploymentIds, actorId, cancellationToken);
 
         if (deployments.Count == 0)
         {

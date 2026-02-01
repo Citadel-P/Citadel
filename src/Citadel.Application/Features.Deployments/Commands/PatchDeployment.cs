@@ -1,4 +1,5 @@
-﻿using Application.Services.SignalR;
+﻿using Application.Services;
+using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -7,9 +8,12 @@ using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
+using Hosting.Common.Extensions;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 
 namespace Application.Features.Deployments.Commands;
 
@@ -39,10 +43,13 @@ public sealed record PatchDeployment(Guid Id, JsonMergePatchDocument<Deployment>
     }
 }
 
-internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeploymentStreamManager deploymentHub, INotificationQueue notificationQueue) : ICommandHandler<PatchDeployment, Result<Deployment>>
+internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeploymentStreamManager deploymentHub, INotificationQueue notificationQueue, IHttpContextAccessor httpContextAccessor) : ICommandHandler<PatchDeployment, Result<Deployment>>
 {
     public async ValueTask<Result<Deployment>> Handle(PatchDeployment command, CancellationToken cancellationToken)
     {
+        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
+           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
+
         var deployment = await unitOfWork.Deployments.GetAsync(command.Id, cancellationToken);
         if (deployment == null)
         {
@@ -75,6 +82,34 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
             }
         }
 
+        // Add activity
+        ActivityEvent? activity = null;
+        if (string.IsNullOrEmpty(patchedDeployment.Name) && deployment.Name != patchedDeployment.Name)
+        {
+            activity = new ActivityEvent(
+               actorId: actorId,
+               resourceId: patchedDeployment.Id,
+               platformId: patchedDeployment.PlatformId,
+               resourceName: patchedDeployment.Name,
+               eventType: ActivityEventType.DeploymentRenamed,
+               info: new DeploymentRenamed(deployment.Name, patchedDeployment.Name)
+           );
+        }
+        else if(deployment.Spec != null && patchedDeployment.Spec != null)
+        {
+            activity = new ActivityEvent(
+                actorId: actorId,
+                resourceId: patchedDeployment.Id,
+                platformId: patchedDeployment.PlatformId,
+                resourceName: patchedDeployment.Name,
+                eventType: ActivityEventType.DeploymentUpdated,
+                info: new DeploymentUpdated(deployment.Spec, patchedDeployment.Spec)
+            );
+        }
+        
+        if (activity != null)
+            await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+
         deployment.PartialUpdate(
             name: patchedDeployment.Name, 
             platformId: patchedDeployment.PlatformId,
@@ -83,11 +118,16 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
             spec: patchedDeployment.Spec);
 
         await unitOfWork.Deployments.UpdateAsync(deployment, cancellationToken);
+        
+
         await unitOfWork.CommitAsync(cancellationToken);
 
         var workItem = new DeploymentNotificationWorkItem(deploymentHub, deployment);
+        
+        // Notify
         await notificationQueue.EnqueueAsync(workItem, cancellationToken);
-
+        if (activity != null)
+            await notificationQueue.EnqueueAsync(new ActivityNotification(activity), cancellationToken);
         return deployment;
     }
 }

@@ -56,7 +56,7 @@ public interface IContainerRepository
 
     Task<int> UpdateAsync(Container container, CancellationToken cancellationToken);
     Task<int> UpdateContainersStateAsync(IEnumerable<Guid> ids, ContainerStateStatus state, CancellationToken cancellationToken);
-    Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, CancellationToken cancellationToken);
+    Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken);
 
     Task<int> DeleteAsync(IEnumerable<Guid> containersId, CancellationToken cancellationToken);
 }
@@ -139,7 +139,7 @@ public interface IDeploymentRepository
     Task<bool> ExistsAsync(Guid id, string name, Guid platformId, CancellationToken cancellationToken);
     Task<int> AddAsync(Deployment deployment, CancellationToken cancellationToken);
     Task<int> UpdateAsync(Deployment deployment, CancellationToken cancellationToken);
-    Task<int> UpdateProcessingAsync(Guid id, DeploymentStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, CancellationToken cancellationToken);
+    Task<int> UpdateProcessingAsync(Guid id, DeploymentStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken);
     Task<int> UpdateStatusAsync(IEnumerable<Guid> ids, DeploymentStatus status, CancellationToken cancellationToken);
 
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);

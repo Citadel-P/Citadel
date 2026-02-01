@@ -2,8 +2,8 @@
 
 internal record ActivityEventDto(
     Guid Id,
-    Guid PlatformId,
-    Guid ResourceId,
+    Guid? PlatformId,
+    Guid? ResourceId,
     string ResourceName,
     string ResourceType,
     string EventType,

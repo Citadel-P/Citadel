@@ -274,7 +274,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
         );
     }
 
-    public Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, CancellationToken cancellationToken)
+    public Task<int> UpdateProcessingAsync(Guid id, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken)
     {
         var conditions = new List<string>
         {
@@ -289,6 +289,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             SET
                 ControlState = @State,
                 ControlStartedAt = @StartedAt,
+                ControlTriggeredBy = @ControlTriggeredBy,
                 RowVersion = RowVersion + 1
             WHERE {string.Join(" AND ", conditions)}
         """;
@@ -298,6 +299,7 @@ internal class ContainerRepository(IDbConnection db, Func<IDbTransaction> tx) : 
             new
             {
                 Id = id.Format(),
+                ControlTriggeredBy = controlTriggeredBy?.Format(),
                 State = EnumFormatter<ResourceControlState>.GetValue(state),
                 RowVersion = rowVersion,
                 StartedAt = startedAt

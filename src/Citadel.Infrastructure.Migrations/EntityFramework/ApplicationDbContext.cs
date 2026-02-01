@@ -515,8 +515,8 @@ internal static class Configuration
         activityEvent.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         activityEvent.HasKey("Id");
 
-        activityEvent.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        activityEvent.Property<Guid>("ResourceId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        activityEvent.Property<Guid?>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
+        activityEvent.Property<Guid?>("ResourceId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
         activityEvent.Property<string>("ResourceName").HasColumnType("TEXT").IsRequired();
         activityEvent.Property<string>("ResourceType").HasColumnType("TEXT").IsRequired();
         activityEvent.Property<string>("EventType").HasColumnType("TEXT").IsRequired();
@@ -540,7 +540,14 @@ internal static class Configuration
     {
         builder.Property<long>("RowVersion").HasColumnType("INTEGER").HasDefaultValue(0);
         builder.Property<long?>("ControlStartedAt").HasColumnType("INTEGER").HasDefaultValue(null);
+        builder.Property<Guid?>("ControlTriggeredBy").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
         builder.Property<string>("ControlState").HasColumnType("TEXT").HasMaxLength(64).HasDefaultValue(ResourceControlState.Idle);
+
+        builder
+            .HasOne("Actor")
+            .WithMany()
+            .HasForeignKey("ControlTriggeredBy")
+            .OnDelete(DeleteBehavior.Restrict);
 
         return builder;
     }

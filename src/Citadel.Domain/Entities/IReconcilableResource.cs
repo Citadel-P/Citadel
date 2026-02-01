@@ -21,4 +21,10 @@ internal interface IReconcilableResource
     /// Gets the current row version used for optimistic concurrency control.
     /// </summary>
     long RowVersion { get; }
+
+    /// <summary>
+    /// The unique identifier of the user or process that triggered the control action.
+    /// Null if the last action was external or the state is unknown.
+    /// </summary>
+    Guid? ControlTriggeredBy { get; }
 }

@@ -1,8 +1,11 @@
 ﻿using Application.Services;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 
 namespace Application.Features.Containers.Commands;
 
@@ -18,11 +21,15 @@ public sealed record DeleteContainers(string[] ContainerIds, bool? V = false, bo
     }
 }
 
-internal sealed class DeleteContainersHandler(IContainerProcessingService containerService): ICommandHandler<DeleteContainers, Result>
+internal sealed class DeleteContainersHandler(IContainerProcessingService containerService, IHttpContextAccessor httpContextAccessor)
+    : ICommandHandler<DeleteContainers, Result>
 {
     public async ValueTask<Result> Handle(DeleteContainers request, CancellationToken ct)
     {
-        return await containerService.DeleteContainers(request, ct);
+        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
+           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
+
+        return await containerService.DeleteContainers(request, actorId, ct);
     }
 
 }

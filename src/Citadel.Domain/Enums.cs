@@ -368,6 +368,7 @@ public enum ActivityEventType
     DeploymentUnpaused,
     DeploymentDeployed,
     DeploymentFailed,
+    DeploymentDegraded,
     DeploymentRecreated,
     #endregion
 

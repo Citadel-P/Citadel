@@ -31,6 +31,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         d.ControlState,
         d.ControlStartedAt,
         d.RowVersion,
+        d.ControlTriggeredBy,
         c.Id AS Container_ContainerId,
         c.DockerContainerId AS Container_DockerContainerId,
         p.Name AS Platform_Name,
@@ -150,6 +151,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
                 d.RowVersion,
                 d.ControlState,
                 d.ControlStartedAt,
+                d.ControlTriggeredBy,
                 d.Status,
                 d.CreatedAt, 
                 d.CreatedByActorId, 
@@ -215,7 +217,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         }, transaction: tx());
     }
 
-    public Task<int> UpdateProcessingAsync(Guid id, DeploymentStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, CancellationToken cancellationToken)
+    public Task<int> UpdateProcessingAsync(Guid id, DeploymentStatus status, ResourceControlState state, long? startedAt, long rowVersion, bool? checkRowVersion, Guid? controlTriggeredBy, CancellationToken cancellationToken)
     {
         var conditions = new List<string>
         {
@@ -230,6 +232,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             SET
                 ControlState = @State,
                 ControlStartedAt = @StartedAt,
+                ControlTriggeredBy = @ControlTriggeredBy,
                 Status = @Status,
                 RowVersion = RowVersion + 1
             WHERE {string.Join(" AND ", conditions)}
@@ -240,6 +243,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             new
             {
                 Id = id.Format(),
+                ControlTriggeredBy = controlTriggeredBy?.Format(),
                 State = EnumFormatter<ResourceControlState>.GetValue(state),
                 Status = EnumFormatter<DeploymentStatus>.GetValue(status),
                 RowVersion = rowVersion,

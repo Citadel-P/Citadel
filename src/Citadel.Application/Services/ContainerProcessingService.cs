@@ -17,10 +17,10 @@ namespace Application.Services;
 /// </summary>
 internal interface IContainerProcessingService
 {
-    Task<List<Container>> MarkProcessingAsync(Guid[] containerIds, CancellationToken ct);
-    Task RollbackProcessingAsync(IEnumerable<Container> containers, CancellationToken ct);
+    Task<List<Container>> MarkProcessingAsync(Guid[] containerIds, Guid controlTriggeredBy, CancellationToken ct);
+    Task RollbackProcessingAsync(IEnumerable<Container> containers, Guid controlTriggeredBy, CancellationToken ct);
+    Task<Result> DeleteContainers(DeleteContainers request, Guid controlTriggeredBy, CancellationToken ct);
     Task NotifyProcessingAsync(IEnumerable<Container> containers, CancellationToken ct);
-    Task<Result> DeleteContainers(DeleteContainers request, CancellationToken ct);
 }
 
 internal sealed class ContainerProcessingService(
@@ -31,7 +31,7 @@ internal sealed class ContainerProcessingService(
     IContainerEventBroadcaster containerEventBroadcaster,
     IConnectorFactory<IContainerConnector> connectorFactory) : IContainerProcessingService
 {
-    public async Task<List<Container>> MarkProcessingAsync(Guid[] containerIds, CancellationToken ct)
+    public async Task<List<Container>> MarkProcessingAsync(Guid[] containerIds, Guid controlTriggeredBy, CancellationToken ct)
     {
         var updated = new List<Container>();
 
@@ -41,7 +41,7 @@ internal sealed class ContainerProcessingService(
 
         foreach (var container in containers)
         {
-            container.MarkProcessing();
+            container.MarkProcessing(controlTriggeredBy);
 
             var affected = await uow.Containers.UpdateProcessingAsync(
                 container.Id,
@@ -49,6 +49,7 @@ internal sealed class ContainerProcessingService(
                 container.ControlStartedAt,
                 container.RowVersion,
                 checkRowVersion: true,
+                controlTriggeredBy,
                 ct);
 
             if (affected != 0)
@@ -61,7 +62,7 @@ internal sealed class ContainerProcessingService(
         return updated;
     }
 
-    public async Task RollbackProcessingAsync(IEnumerable<Container> containers, CancellationToken ct)
+    public async Task RollbackProcessingAsync(IEnumerable<Container> containers, Guid controlTriggeredBy, CancellationToken ct)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -76,6 +77,7 @@ internal sealed class ContainerProcessingService(
                 container.ControlStartedAt,
                 container.RowVersion,
                 checkRowVersion: true,
+                controlTriggeredBy,
                 ct);
         }
 
@@ -100,7 +102,7 @@ internal sealed class ContainerProcessingService(
         }
     }
 
-    public async Task<Result> DeleteContainers(DeleteContainers request, CancellationToken ct)
+    public async Task<Result> DeleteContainers(DeleteContainers request, Guid controlTriggeredBy, CancellationToken ct)
     {
         if (!platformContainerCache.TryGetPlatformsWithContainers(request.ContainerIds, out var platforms))
         {
@@ -108,7 +110,7 @@ internal sealed class ContainerProcessingService(
         }
 
         var containerIds = platforms.SelectMany(p => p.Containers.Values).ToArray();
-        var containers = await MarkProcessingAsync(containerIds, ct);
+        var containers = await MarkProcessingAsync(containerIds, controlTriggeredBy, ct);
 
         if (containers.Count == 0)
         {
@@ -122,7 +124,7 @@ internal sealed class ContainerProcessingService(
             var result = await DeleteFromPlatformAsync(platform, request, ct);
             if (result.IsFailure())
             {
-                await RollbackProcessingAsync(containers, ct);
+                await RollbackProcessingAsync(containers, controlTriggeredBy, ct);
                 return result;
             }
         }

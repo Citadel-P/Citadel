@@ -30,6 +30,7 @@ public class Container(
 
     #region IReconcilableResource Members
     public ResourceControlState ControlState { get; private set; } = ResourceControlState.Idle;
+    public Guid? ControlTriggeredBy { get; private set; }
     public long? ControlStartedAt { get; private set; }
     public long RowVersion { get; private set; }
     #endregion
@@ -75,8 +76,9 @@ public class Container(
         return this;
     }
 
-    public void MarkProcessing()
+    public void MarkProcessing(Guid controlTriggeredBy)
     {
+        ControlTriggeredBy = controlTriggeredBy;
         ControlState = ResourceControlState.Processing;
         ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     }
@@ -84,6 +86,7 @@ public class Container(
     public void ReleaseProcessing()
     {
         ControlState = ResourceControlState.Idle;
+        ControlTriggeredBy = null;
         ControlStartedAt = null;
     }
 
@@ -97,6 +100,7 @@ public class Container(
         long updated,
         long rowVersion,
         long? controlStartedAt,
+        Guid? controlTriggeredBy,
         ResourceControlState controlState,
         ContainerStateStatus state,
         IDictionary<string, IReadOnlyList<HostPortBinding>> ports,
@@ -127,6 +131,7 @@ public class Container(
             RowVersion = rowVersion,
             ControlState = controlState,
             ControlStartedAt = controlStartedAt,
+            ControlTriggeredBy = controlTriggeredBy
         };
 
         if (stats is not null)

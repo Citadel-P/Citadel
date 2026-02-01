@@ -1,9 +1,14 @@
 ﻿using Application.Services;
+using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities;
 using Hosting.Common.ErrorTypes;
+using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using System.Security.Claims;
 
 namespace Application.Features.Deployments.Commands;
 
@@ -12,12 +17,16 @@ public sealed record DeleteDeployments(IEnumerable<Guid> Ids) : ICommand<Result>
 internal sealed class DeleteDeploymentsHandler(
     IServiceScopeFactory scopeFactory,
     IDeploymentProcessingService deploymentProcessingService,
-    IContainerProcessingService containerService)
+    IContainerProcessingService containerService,
+    IHttpContextAccessor httpContextAccessor)
     : ICommandHandler<DeleteDeployments, Result>
 {
     public async ValueTask<Result> Handle(DeleteDeployments command, CancellationToken cancellationToken)
     {
-        var deployments = await deploymentProcessingService.MarkProcessingAsync(command.Ids, cancellationToken);
+        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
+           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
+
+        var deployments = await deploymentProcessingService.MarkProcessingAsync(command.Ids, actorId, cancellationToken);
 
         if (deployments.Count == 0)
         {
@@ -34,10 +43,10 @@ internal sealed class DeleteDeploymentsHandler(
         if (containerIds != null && containerIds.Length > 0)
         {
             var cmd = new Containers.Commands.DeleteContainers(containerIds, V: true, Force: true);
-            await containerService.DeleteContainers(cmd, cancellationToken);
+            await containerService.DeleteContainers(cmd, actorId, cancellationToken);
         }
         
-        var deleted = await DeleteAsync(command.Ids, cancellationToken);
+        var deleted = await DeleteAsync(command.Ids, actorId, cancellationToken);
         if (deleted <= 0)
         {
             await deploymentProcessingService.RollbackProcessingAsync(deployments, cancellationToken);
@@ -49,10 +58,28 @@ internal sealed class DeleteDeploymentsHandler(
         return Result.Success();
     }
 
-    private async Task<int> DeleteAsync(IEnumerable<Guid> ids, CancellationToken ct)
+    private async Task<int> DeleteAsync(IEnumerable<Guid> ids, Guid actorId, CancellationToken ct)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var deployments = await uow.Deployments.GetInfoAsync(ids, ct);
+        if (deployments is null || !deployments.Any())
+            return 0;
+
+        foreach (var deployment in deployments)
+        {
+            var activity = new ActivityEvent(
+                actorId: actorId,
+                resourceId: deployment.Id,
+                platformId: deployment.PlatformId,
+                resourceName: deployment.Name,
+                eventType: ActivityEventType.DeploymentDeleted,
+                info: new DeploymentDeleted(deployment.Name)
+                );
+
+            await uow.ActivityEventRepository.AddAsync(activity, ct);
+        }
 
         var deleted = await uow.Deployments.RemoveRangeAsync(ids, ct);
         await uow.CommitAsync(ct);

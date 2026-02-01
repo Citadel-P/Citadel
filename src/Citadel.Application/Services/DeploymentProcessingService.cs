@@ -12,7 +12,7 @@ namespace Application.Services;
 /// </summary>
 public interface IDeploymentProcessingService
 {
-    Task<List<Deployment>> MarkProcessingAsync(IEnumerable<Guid> deploymentIds, CancellationToken ct);
+    Task<List<Deployment>> MarkProcessingAsync(IEnumerable<Guid> deploymentIds, Guid actorId, CancellationToken ct);
     Task RollbackProcessingAsync(IEnumerable<Deployment> deployments, CancellationToken ct);
     Task NotifyProcessingAsync(IEnumerable<Deployment> deployments, string action = "update", CancellationToken ct = default);
 }
@@ -22,7 +22,7 @@ internal sealed class DeploymentProcessingService(
     INotificationQueue notificationQueue,
     IDeploymentStreamManager deploymentHub) : IDeploymentProcessingService
 {
-    public async Task<List<Deployment>> MarkProcessingAsync(IEnumerable<Guid> deploymentIds, CancellationToken ct)
+    public async Task<List<Deployment>> MarkProcessingAsync(IEnumerable<Guid> deploymentIds, Guid actorId, CancellationToken ct)
     {
         var successfullyUpdated = new List<Deployment>();
 
@@ -32,7 +32,7 @@ internal sealed class DeploymentProcessingService(
         var deployments = await uow.Deployments.GetInfoAsync(deploymentIds, ct);
         foreach (var deployment in deployments ?? [])
         {
-            deployment.MarkProcessing();
+            deployment.MarkProcessing(actorId);
 
             var affectedRow = await uow.Deployments.UpdateProcessingAsync(
                 deployment.Id,
@@ -41,6 +41,7 @@ internal sealed class DeploymentProcessingService(
                 deployment.ControlStartedAt,
                 deployment.RowVersion,
                 checkRowVersion: true,
+                actorId,
                 ct);
 
             if (affectedRow != 0)
@@ -69,6 +70,7 @@ internal sealed class DeploymentProcessingService(
                 deployment.ControlStartedAt,
                 deployment.RowVersion,
                 checkRowVersion: true,
+                deployment.ControlTriggeredBy.Value,
                 ct);
         }
 
