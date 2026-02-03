@@ -33,34 +33,32 @@ internal class PlatformStatsStreamerJob(
         await foreach (var platform in _platformHealthReader.ReadAllAsync(cancellationToken))
         {
             if (platform.IsOnLine)
-            {
                 StartStreamStatsForPlatform(platform, cancellationToken);
-            }
             else
-            {
                 StopStreamStatsForPlatform(platform.Address);
-            }
         }
     }
 
-    public void StartStreamStatsForPlatform(PlatformHealth platform, CancellationToken cancellationToken)
+    private void StartStreamStatsForPlatform(PlatformHealth platform, CancellationToken cancellationToken)
     {
-        if (!_runningStreams.TryAdd(platform.Address, CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)))
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        if (!_runningStreams.TryAdd(platform.Address, cts))
         {
-            logger.LogWarning("Streaming platform stats for {Address} is already running.", platform.Address);
+            cts.Dispose(); // Prevent leak
             return;
         }
 
-        var cts = _runningStreams[platform.Address];
         _ = StreamPlatformStats(platform.Id, platform.Type, platform.Address, cts.Token);
     }
 
-    public void StopStreamStatsForPlatform(string address)
+    private void StopStreamStatsForPlatform(string address)
     {
         if (_runningStreams.TryRemove(address, out var cts))
         {
-            logger.LogInformation("Aborting streaming containers stats for {Address}", address);
+            logger.LogInformation("Stopping platform stream for {Address}", address);
             cts.Cancel();
+            cts.Dispose();
         }
     }
 
@@ -69,25 +67,18 @@ internal class PlatformStatsStreamerJob(
         try
         {
             var connector = connectorFactory.GetConnector(connectorType);
-            var command = new StreamPlatformStatsCommand(
-                PlatformAddress: address,
-                FetchIntervalMs: _fetchIntervalMs);
+            var command = new StreamPlatformStatsCommand(address, _fetchIntervalMs);
 
             await foreach (var platformStats in connector.StreamStatsAsync(command, cancellationToken))
             {
-                if (!platformStatsWriter.TryWrite((platformId, platformStats)))
-                {
-                    await platformStatsWriter.WriteAsync((platformId, platformStats), cancellationToken);
-                }
+                await platformStatsWriter.WriteAsync((platformId, platformStats), cancellationToken);
             }
         }
-        catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)
-        {
-            logger.LogInformation("Stream for {Address} was canceled.", address);
-        }
+        catch (OperationCanceledException) { }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled) { }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error while streaming container stats for {Address}", address);
+            logger.LogError(ex, "Error while streaming platform stats for {Address}. Retrying in 10s...", address);
             await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
         }
         finally

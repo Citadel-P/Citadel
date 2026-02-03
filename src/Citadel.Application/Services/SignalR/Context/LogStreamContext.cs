@@ -16,11 +16,13 @@ internal sealed class LogStreamContext : StreamContext, IDisposable
     public override void RemoveSubscriber(string connectionId)
     {
         base.RemoveSubscriber(connectionId);
-
-        if (IsEmpty)
+        using (@lock.EnterScope())
         {
-            ResetInternal();       // stops producer/consumer
-            StopWatcherInternal(); // stops watcher
+            if (IsEmpty)
+            {
+                ResetInternal();       // stops producer/consumer
+                StopWatcherInternal(); // stops watcher
+            }
         }
     }
 
@@ -37,11 +39,15 @@ internal sealed class LogStreamContext : StreamContext, IDisposable
     {
         logBuffer.Clear();
 
-        try { Cancellation.Cancel(); } catch { }
-        try { Cancellation.Dispose(); } catch { }
+        var oldCts = Cancellation;
         Cancellation = new CancellationTokenSource();
+        try { oldCts.Cancel(); } catch { }
+        try { oldCts.Dispose(); } catch { }
 
         started = false;
+
+        var oldChannel = LogChannel;
+        oldChannel.Writer.TryComplete();
         LogChannel = Channel.CreateUnbounded<byte[]>();
 
         var t = StreamTask;
@@ -59,9 +65,10 @@ internal sealed class LogStreamContext : StreamContext, IDisposable
 
     private void StopWatcherInternal()
     {
-        try { WatcherCts.Cancel(); } catch { }
-        try { WatcherCts.Dispose(); } catch { }
+        var oldWatcherCts = WatcherCts;
         WatcherCts = new CancellationTokenSource();
+        try { oldWatcherCts.Cancel(); } catch { }
+        try { oldWatcherCts.Dispose(); } catch { }
 
         var wt = EventWatcherTask;
         EventWatcherTask = null;
@@ -105,10 +112,13 @@ internal sealed class PooledLogBuffer : IDisposable
     {
         using (@lock.EnterScope())
         {
-            foreach (byte b in logBytes)
+            foreach (var b in logBytes)
             {
                 buffer[writeIndex] = b;
-                writeIndex = (writeIndex + 1) % capacity;
+                writeIndex++;
+                if (writeIndex == capacity)
+                    writeIndex = 0;
+
                 if (lengthUsed < capacity)
                     lengthUsed++;
             }
@@ -119,8 +129,13 @@ internal sealed class PooledLogBuffer : IDisposable
     {
         using (@lock.EnterScope())
         {
+            if (lengthUsed == 0)
+                return Array.Empty<byte>();
+
             byte[] output = new byte[lengthUsed];
-            int start = (writeIndex - lengthUsed + capacity) % capacity;
+            int start = writeIndex - lengthUsed;
+            if (start < 0)
+                start += capacity;
 
             if (start + lengthUsed <= capacity)
             {
@@ -138,13 +153,13 @@ internal sealed class PooledLogBuffer : IDisposable
             return output;
         }
     }
+
     public void Clear()
     {
         using (@lock.EnterScope())
         {
             writeIndex = 0;
             lengthUsed = 0;
-            Array.Clear(buffer, 0, buffer.Length);
         }
     }
 
@@ -156,8 +171,11 @@ internal sealed class PooledLogBuffer : IDisposable
 
     public void Dispose()
     {
-        ArrayPool<byte>.Shared.Return(buffer);
-        buffer = null!;
+        if (buffer != null)
+        {
+            ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+            buffer = null!;
+        }
     }
 }
 

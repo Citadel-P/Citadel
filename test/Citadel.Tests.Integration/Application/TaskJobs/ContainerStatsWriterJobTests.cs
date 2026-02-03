@@ -77,7 +77,7 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
             new(_containerId, 200, 150, 2, 600, 200, 400, time - 60),
         ]);
 
-        var batch = new ContainersStatBatch(_platformId, stats);
+        var batch = new ContainersStatBatch(_platformId, stats, (e) => { });
 
         // Act
         await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);
@@ -106,7 +106,7 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
         ]);
 
 
-        var batch = new ContainersStatBatch(_platformId, stats);
+        var batch = new ContainersStatBatch(_platformId, stats, (e) => { });
 
         // Act
         await _channel.Writer.WriteAsync(batch, TestContext.Current.CancellationToken);

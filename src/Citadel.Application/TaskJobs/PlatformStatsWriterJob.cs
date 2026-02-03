@@ -16,7 +16,7 @@ namespace Application.TaskJobs;
 /// Background service that batches and persists platform statistics received from a channel, 
 /// periodically flushing them to the database and notifying connected clients with the latest platformStat updates.
 /// </summary>
-internal class PlatformStatsWriterJob(
+internal sealed class PlatformStatsWriterJob(
     IDbWorkQueue dbQueue,
     INotificationQueue notificationQueue,
     IPlatformStreamManager platformStreamManager,
@@ -25,8 +25,9 @@ internal class PlatformStatsWriterJob(
     ILogger<PlatformStatsWriterJob> logger
 ) : BackgroundService
 {
-    private readonly Dictionary<Guid, List<PlatformStatsResult>> _buffer = [];
+    private int _bufferedCount;
     private DateTime _lastFlush = DateTime.UtcNow;
+    private Dictionary<Guid, List<PlatformStatsResult>> _buffer = [];
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -36,14 +37,13 @@ internal class PlatformStatsWriterJob(
             {
                 Accumulate(platformId, stat);
 
-                // Push to notification queue
-                var notificationWorkItem = new SendPlatformNotificationWorkItem(platformStreamManager, stat, platformId);
-                await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
+                // Push notification
+                await notificationQueue.EnqueueAsync(
+                    new SendPlatformNotificationWorkItem(platformStreamManager, stat, platformId),
+                    cancellationToken);
 
                 if (ShouldFlush())
-                {
                     await FlushAsync(cancellationToken);
-                }
             }
         }
         catch (OperationCanceledException) { }
@@ -52,7 +52,7 @@ internal class PlatformStatsWriterJob(
             logger.LogError(ex, "Error in PlatformStatsWriterJob");
         }
 
-        if (_buffer.Count > 0)
+        if (_bufferedCount > 0)
             await FlushAsync(CancellationToken.None);
     }
 
@@ -62,43 +62,44 @@ internal class PlatformStatsWriterJob(
             _buffer[id] = list = [];
 
         list.Add(stat);
+        _bufferedCount++;
     }
 
-    private bool ShouldFlush()
-    {
-        var count = _buffer.Sum(x => x.Value.Count);
-        return count >= options.Value?.BatchSize ||
-               (DateTime.UtcNow - _lastFlush) >= TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60);
-    }
+    private bool ShouldFlush() =>
+        _bufferedCount >= options.Value.BatchSize ||
+        (DateTime.UtcNow - _lastFlush) >= TimeSpan.FromSeconds(options.Value.FlashInterval);
 
-    private async Task FlushAsync(CancellationToken cancellationToken)
+    private async Task FlushAsync(CancellationToken ct)
     {
+        if (_bufferedCount == 0) return;
+
+        var dataToFlush = _buffer;
+        _buffer = new Dictionary<Guid, List<PlatformStatsResult>>();
+
+        _bufferedCount = 0;
+        _lastFlush = DateTime.UtcNow;
+
         try
         {
-            var copy = new Dictionary<Guid, List<PlatformStatsResult>>(_buffer);
-            await dbQueue.EnqueueAsync(new PersistPlatformStatsWorkItem(copy, logger), cancellationToken);
+            await dbQueue.EnqueueAsync(new PersistPlatformStatsWorkItem(dataToFlush, logger), ct);
         }
-        finally
+        catch (Exception ex)
         {
-            _buffer.Clear();
-            _lastFlush = DateTime.UtcNow;
+            logger.LogError(ex, "Failed to enqueue platform stats persist work item.");
         }
     }
 }
 
-
-internal sealed class PersistPlatformStatsWorkItem(Dictionary<Guid, List<PlatformStatsResult>> buffer, ILogger logger) : IDbWorkItem
+internal sealed class PersistPlatformStatsWorkItem(
+    Dictionary<Guid, List<PlatformStatsResult>> buffer,
+    ILogger logger) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
         foreach (var (platformId, stats) in buffer)
         {
             var existing = await uow.Platforms.GetByIdAsync(platformId, cancellationToken);
-            if (existing == null)
-            {
-                logger.LogWarning("Platform with ID {PlatformId} not found in DB.", platformId);
-                continue;
-            }
+            if (existing == null) continue;
 
             var last = stats.LastOrDefault();
             if (last == null) continue;
@@ -113,7 +114,6 @@ internal sealed class PersistPlatformStatsWorkItem(Dictionary<Guid, List<Platfor
                     containersPaused: last.PlatformStat.ContainersPaused,
                     containersStopped: last.PlatformStat.ContainersStopped
                 ),
-                
                 _ => null
             };
 
@@ -128,16 +128,19 @@ internal sealed class PersistPlatformStatsWorkItem(Dictionary<Guid, List<Platfor
             await uow.Platforms.UpdateAsync(existing, cancellationToken);
         }
 
+        // Bulk Insert Historical Stats
         try
         {
             var mapped = buffer.Map();
-            await uow.PlatformStats.BulkInsertAsync(mapped, cancellationToken);
-            await uow.CommitAsync(cancellationToken);
+            if (mapped.Count != 0)
+            {
+                await uow.PlatformStats.BulkInsertAsync(mapped, cancellationToken);
+                await uow.CommitAsync(cancellationToken);
+            }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error while persisting PlatformStats batch (size: {Size})",
-                buffer.Sum(s => s.Value.Count));
+            logger.LogError(ex, "Error bulk inserting PlatformStats");
         }
     }
 }

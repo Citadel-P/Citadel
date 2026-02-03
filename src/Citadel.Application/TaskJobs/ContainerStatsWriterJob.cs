@@ -9,16 +9,17 @@ using System.Threading.Channels;
 
 namespace Application.TaskJobs;
 
-internal class ContainerStatsWriterJob(
+internal sealed class ContainerStatsWriterJob(
     IDbWorkQueue dbQueue,
     INotificationQueue notificationQueue,
     IOptions<JobConfiguration> options,
     ChannelReader<ContainersStatBatch> reader,
     IContainerStreamManager containersStreamManager,
-    ILogger<ContainerStatsWriterJob> logger
-) : BackgroundService
+    ILogger<ContainerStatsWriterJob> logger) : BackgroundService
 {
-    private readonly Dictionary<Guid, List<ContainerStat>> _buffer = [];
+    private readonly JobConfiguration _config = options.Value;
+    private Dictionary<Guid, List<ContainerStat>> _buffer = new();
+    private int _bufferedCount;
     private DateTime _lastFlush = DateTime.UtcNow;
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
@@ -29,86 +30,91 @@ internal class ContainerStatsWriterJob(
             {
                 Accumulate(batch);
 
-                // Push to notification queue
-                var notificationWorkItem = new SendContainersNotificationWorkItem(containersStreamManager, batch);
-                await notificationQueue.EnqueueAsync(notificationWorkItem, cancellationToken);
+                // We create a new list here so SignalR doesn't point to a pooled list that gets cleared
+                var notificationStats = batch.Stats.ToList();
+                _ = notificationQueue.EnqueueAsync(new SendContainersNotificationWorkItem(
+                    containersStreamManager, batch.PlatformId, notificationStats), cancellationToken);
+
+                // Release the pooled list back to the Streamer as fast as possible
+                batch.Release();
 
                 if (ShouldFlush())
                     await FlushAsync(cancellationToken);
             }
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, $"Error in {nameof(ContainerStatsWriterJob)}");
-        }
 
         // final flush
-        if (_buffer.Count > 0)
+        if (_bufferedCount > 0)
             await FlushAsync(CancellationToken.None);
     }
 
     private void Accumulate(ContainersStatBatch batch)
     {
         if (!_buffer.TryGetValue(batch.PlatformId, out var list))
-            _buffer[batch.PlatformId] = list = [];
+        {
+            list = [];
+            _buffer[batch.PlatformId] = list;
+        }
 
         list.AddRange(batch.Stats);
+        _bufferedCount += batch.Stats.Count;
     }
 
-    private bool ShouldFlush()
-    {
-        int count = _buffer.Sum(kvp => kvp.Value.Count);
-
-        return count >= options.Value?.BatchSize ||
-               (DateTime.UtcNow - _lastFlush) >=
-                 TimeSpan.FromSeconds(options.Value?.FlashInterval ?? 60);
-    }
+    private bool ShouldFlush() =>
+        _bufferedCount >= _config.BatchSize ||
+        (DateTime.UtcNow - _lastFlush) >= TimeSpan.FromSeconds(_config.FlashInterval);
 
     private async Task FlushAsync(CancellationToken ct)
     {
+        if (_bufferedCount == 0) return;
+
+        // SWAP Strategy: Capture current buffer and replace with a fresh one
+        // This ensures the DB worker has its own private copy that won't be modified
+        var dataToFlush = _buffer;
+        _buffer = new Dictionary<Guid, List<ContainerStat>>();
+
+        _bufferedCount = 0;
+        _lastFlush = DateTime.UtcNow;
+
         try
         {
-            // snapshot the buffer to avoid mutation while queued
-            var snapshot = _buffer.ToDictionary(
-                kvp => kvp.Key,
-                kvp => kvp.Value.ToList()
-            );
-
-            await dbQueue.EnqueueAsync(new ContainerStatsBatchWorkItem(snapshot, logger), ct);
+            await dbQueue.EnqueueAsync(new ContainerStatsBatchWorkItem(dataToFlush, logger), ct);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to enqueue container stats batch.");
-        }
-        finally
-        {
-            _buffer.Clear();
-            _lastFlush = DateTime.UtcNow;
+            logger.LogError(ex, "Failed to enqueue DB batch");
         }
     }
 }
 
-internal sealed class ContainerStatsBatchWorkItem(IReadOnlyDictionary<Guid, List<ContainerStat>> batch, ILogger logger) : IDbWorkItem
+internal sealed class ContainerStatsBatchWorkItem(
+    IReadOnlyDictionary<Guid, List<ContainerStat>> batch,
+    ILogger logger) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken token)
     {
         try
         {
-            var flatList = batch.SelectMany(x => x.Value);
+            // Flatten the dictionary into a single list for bulk insert
+            var flatList = batch.Values.SelectMany(x => x).ToList();
+            if (flatList.Count == 0) return;
 
             await uow.ContainerStats.BulkInsertAsync(flatList, token);
             await uow.CommitAsync(token);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to persist container stats batch.");
+            logger.LogError(ex, "Database bulk insert failed.");
         }
     }
 }
 
-internal class SendContainersNotificationWorkItem(IContainerStreamManager containersStreamManager, ContainersStatBatch batch): INotificationWorkItem
+internal class SendContainersNotificationWorkItem(
+    IContainerStreamManager containersStreamManager,
+    Guid platformId,
+    List<ContainerStat> stats) : INotificationWorkItem
 {
     public Task ExecuteAsync(CancellationToken cancellationToken)
-        => containersStreamManager.SendContainersStats(batch.PlatformId, batch.Stats);
+        => containersStreamManager.SendContainersStats(platformId, stats);
 }
