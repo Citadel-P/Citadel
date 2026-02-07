@@ -13,6 +13,7 @@ import { PlatformComponents } from './platforms';
 import { DeploymentComponents } from './deployments';
 import { RegistryFormComponents } from './registries/form';
 import { DeploymentFormComponents } from './deployments/form';
+import { ActivityComponents } from './activities';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
@@ -25,6 +26,7 @@ export const ResourceComponents: {
   Platform: PlatformComponents,
   Registry: RegistryComponents,
   Deployment: DeploymentComponents,
+  Activity: ActivityComponents,
 };
 
 export const ResourceFormComponents: {
@@ -38,6 +40,7 @@ export const ResourceFormComponents: {
 
   Registry: RegistryFormComponents,
   Deployment: DeploymentFormComponents,
+  Activity: undefined,
 };
 
 export const DockerResourceInfoComponents: {

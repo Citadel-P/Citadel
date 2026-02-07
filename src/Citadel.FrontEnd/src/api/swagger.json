@@ -5037,10 +5037,257 @@
           }
         ]
       }
+    },
+    "/api/v1/activities": {
+      "get": {
+        "tags": [
+          "Activities"
+        ],
+        "summary": "List activity events",
+        "operationId": "listActivities",
+        "parameters": [
+          {
+            "name": "ResourceId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "ResourceType",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ActivityResourceType"
+            }
+          },
+          {
+            "name": "EventType",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ActivityEventType"
+            }
+          },
+          {
+            "name": "Page",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivitiesView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
     }
   },
   "components": {
     "schemas": {
+      "ActivitiesView": {
+        "required": [
+          "pagedResult"
+        ],
+        "type": "object",
+        "properties": {
+          "pagedResult": {
+            "$ref": "#/components/schemas/PagedResultViewOfActivityView"
+          }
+        }
+      },
+      "ActivityEventType": {
+        "enum": [
+          "DeploymentCreated",
+          "DeploymentUpdated",
+          "DeploymentRenamed",
+          "DeploymentDeleted",
+          "DeploymentStarted",
+          "DeploymentStopped",
+          "DeploymentPaused",
+          "DeploymentUnpaused",
+          "DeploymentDeployed",
+          "DeploymentFailed",
+          "DeploymentDegraded",
+          "DeploymentRecreated",
+          "PlatformConnected",
+          "PlatformDisconnected",
+          "PlatformRenamed",
+          "RegistryCreated",
+          "RegistryRenamed",
+          "RegistryUpdated",
+          "RegistryDeleted"
+        ]
+      },
+      "ActivityResourceType": {
+        "enum": [
+          "Platform",
+          "Registry",
+          "Deployment",
+          "Stack"
+        ]
+      },
+      "ActivityStatus": {
+        "enum": [
+          "Success",
+          "Failure",
+          "Warning",
+          "Information"
+        ]
+      },
+      "ActivityView": {
+        "required": [
+          "id",
+          "platformId",
+          "resourceId",
+          "platformName",
+          "resourceName",
+          "platformStatus",
+          "resourceType",
+          "eventType",
+          "status",
+          "createdAt",
+          "info",
+          "actorId",
+          "actorName",
+          "actorType"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platformId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "resourceId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "platformName": {
+            "type": "string"
+          },
+          "resourceName": {
+            "type": "string"
+          },
+          "platformStatus": {
+            "$ref": "#/components/schemas/PlatformStatus"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/ActivityResourceType"
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/ActivityEventType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActivityStatus"
+          },
+          "createdAt": {
+            "format": "date-time"
+          },
+          "info": {
+            "$ref": "#/components/schemas/EventInfo"
+          },
+          "actorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actorName": {
+            "type": "string"
+          },
+          "actorType": {
+            "$ref": "#/components/schemas/ActorType"
+          }
+        }
+      },
+      "ActorType": {
+        "enum": [
+          "User",
+          "System",
+          "Agent",
+          "Service"
+        ]
+      },
       "ApplyDeploymentInput": {
         "required": [
           "id"
@@ -7721,6 +7968,193 @@
           }
         }
       },
+      "EventInfo": {
+        "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/EventInfoDeploymentCreated"
+          },
+          {
+            "$ref": "#/components/schemas/EventInfoDeploymentUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/EventInfoDeploymentRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/EventInfoDeploymentDeleted"
+          },
+          {
+            "$ref": "#/components/schemas/EventInfoDeploymentStarted"
+          },
+          {
+            "$ref": "#/components/schemas/EventInfoDeploymentStopped"
+          },
+          {
+            "$ref": "#/components/schemas/EventInfoDeploymentPaused"
+          },
+          {
+            "$ref": "#/components/schemas/EventInfoDeploymentFailed"
+          },
+          {
+            "$ref": "#/components/schemas/EventInfoDeploymentDegraded"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "DeploymentCreated": "#/components/schemas/EventInfoDeploymentCreated",
+            "DeploymentUpdated": "#/components/schemas/EventInfoDeploymentUpdated",
+            "DeploymentRenamed": "#/components/schemas/EventInfoDeploymentRenamed",
+            "DeploymentDeleted": "#/components/schemas/EventInfoDeploymentDeleted",
+            "DeploymentStarted": "#/components/schemas/EventInfoDeploymentStarted",
+            "DeploymentStopped": "#/components/schemas/EventInfoDeploymentStopped",
+            "DeploymentPaused": "#/components/schemas/EventInfoDeploymentPaused",
+            "DeploymentFailed": "#/components/schemas/EventInfoDeploymentFailed",
+            "DeploymentDegraded": "#/components/schemas/EventInfoDeploymentDegraded"
+          }
+        }
+      },
+      "EventInfoDeploymentCreated": {
+        "required": [
+          "spec"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentCreated"
+            ],
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          }
+        }
+      },
+      "EventInfoDeploymentDegraded": {
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentDegraded"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "EventInfoDeploymentDeleted": {
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentDeleted"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "EventInfoDeploymentFailed": {
+        "required": [
+          "from",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentFailed"
+            ],
+            "type": "string"
+          },
+          "from": {
+            "$ref": "#/components/schemas/DeploymentStatus"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "EventInfoDeploymentPaused": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentPaused"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "EventInfoDeploymentRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
+      "EventInfoDeploymentStarted": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentStarted"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "EventInfoDeploymentStopped": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentStopped"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "EventInfoDeploymentUpdated": {
+        "required": [
+          "oldSpec",
+          "newSpec"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentUpdated"
+            ],
+            "type": "string"
+          },
+          "oldSpec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          },
+          "newSpec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          }
+        }
+      },
       "ExposedPortsResult": {
         "required": [
           "ports"
@@ -9332,6 +9766,47 @@
           }
         }
       },
+      "PagedResultViewOfActivityView": {
+        "required": [
+          "items",
+          "totalCount",
+          "page",
+          "pageSize"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityView"
+            }
+          },
+          "totalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "page": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "PlatformConnectorType": {
         "enum": [
           "Unknown",
@@ -10750,6 +11225,9 @@
     },
     {
       "name": "Deployments"
+    },
+    {
+      "name": "Activities"
     }
   ]
 }

@@ -1,4 +1,5 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using Domain.Entities.Identity;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
 namespace Domain.Entities;
@@ -13,6 +14,7 @@ public sealed class ActivityEvent : IAuditedEntity
     public Guid? ResourceId { get; private set; }
     public string ResourceName { get; private set; }
     public ActivityResourceType ResourceType { get; }
+    public ActivityStatus Status { get; private set; }
     public ActivityEventType EventType { get; private set; }
     public EventInfo Info { get; private set; }
 
@@ -21,12 +23,16 @@ public sealed class ActivityEvent : IAuditedEntity
     public DateTime CreatedAt { get; private set; }
     #endregion
 
+    public Platform? Platform { get; private set; }
+    public Actor? Actor { get; private set; }
+
     public ActivityEvent(
         Guid? platformId,
         Guid? resourceId,
         Guid actorId,
         string resourceName,
         ActivityEventType eventType,
+        ActivityStatus status,
         EventInfo info)
     {
         if (platformId == Guid.Empty)
@@ -41,7 +47,7 @@ public sealed class ActivityEvent : IAuditedEntity
         if (string.IsNullOrWhiteSpace(resourceName))
             throw new ArgumentException("ResourceName is required", nameof(resourceName));
 
-        if (!IsValidInfoForEvent(eventType, info))
+        if (info != null && !IsValidInfoForEvent(eventType, info))
             throw new ArgumentException(
                 $"EventInfo type '{info.GetType().Name}' does not match EventType '{eventType}'");
 
@@ -51,6 +57,7 @@ public sealed class ActivityEvent : IAuditedEntity
         ResourceName = resourceName;
         EventType = eventType;
         Info = info;
+        Status = status;
         ResourceType = GetResourceType(eventType);
         CreatedAt = DateTime.UtcNow;
     }
@@ -76,11 +83,14 @@ public sealed class ActivityEvent : IAuditedEntity
         string resourceName,
         ActivityResourceType resourceType,
         ActivityEventType eventType,
+        ActivityStatus status,
         EventInfo info,
         Guid createdByActorId,
-        DateTime createdAt)
+        DateTime createdAt,
+        Platform? platform = null,
+        Actor? actor = null)
     {
-        if (!IsValidInfoForEvent(eventType, info))
+        if (info != null && !IsValidInfoForEvent(eventType, info))
             throw new ArgumentException(
                 $"EventInfo type '{info.GetType().Name}' does not match EventType '{eventType}'");
         if (resourceType != GetResourceType(eventType))
@@ -92,10 +102,13 @@ public sealed class ActivityEvent : IAuditedEntity
             actorId: createdByActorId,
             resourceName: resourceName,
             eventType: eventType,
+            status: status,
             info: info)
         {
             Id = id,
-            CreatedAt = createdAt
+            CreatedAt = createdAt,
+            Platform = platform,
+            Actor = actor
         };
     }
 
@@ -111,6 +124,7 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.DeploymentStopped, DeploymentStopped) => true,
             (ActivityEventType.DeploymentFailed, DeploymentFailed) => true,
             (ActivityEventType.DeploymentPaused, DeploymentPaused) => true,
+            (ActivityEventType.DeploymentDegraded, DeploymentDegraded) => true,
 
 
             // Todo: Add mappings
@@ -128,6 +142,7 @@ public sealed class ActivityEvent : IAuditedEntity
 [JsonDerivedType(typeof(DeploymentStarted), nameof(ActivityEventType.DeploymentStarted))]
 [JsonDerivedType(typeof(DeploymentStopped), nameof(ActivityEventType.DeploymentStopped))]
 [JsonDerivedType(typeof(DeploymentPaused), nameof(ActivityEventType.DeploymentPaused))]
+[JsonDerivedType(typeof(DeploymentFailed), nameof(ActivityEventType.DeploymentFailed))]
 [JsonDerivedType(typeof(DeploymentDegraded), nameof(ActivityEventType.DeploymentDegraded))]
 public abstract record EventInfo;
 public sealed record DeploymentCreated(DeploymentSpec Spec) : EventInfo;
@@ -137,7 +152,7 @@ public sealed record DeploymentDeleted(string Name) : EventInfo;
 public sealed record DeploymentStarted: EventInfo;
 public sealed record DeploymentStopped: EventInfo;
 public sealed record DeploymentPaused: EventInfo;
-public sealed record DeploymentDegraded: EventInfo;
+public sealed record DeploymentDegraded(string Reason) : EventInfo;
 
 public sealed record DeploymentFailed(DeploymentStatus From, string Reason) : EventInfo;
 

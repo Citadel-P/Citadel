@@ -13,12 +13,14 @@ using Domain.Entities.Registries;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json.Serialization;
 using WebApi.Routes.Endpoints.Resources;
+using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Auth;
 using WebApi.Routes.Endpoints.Resources.Compose;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Networks;
+using WebApi.Routes.Endpoints.Resources.Paging;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.Volumes;
@@ -145,6 +147,11 @@ namespace Application.Models;
 [JsonSerializable(typeof(DeploymentConfigView))]
 [JsonSerializable(typeof(IAsyncEnumerable<DeploymentStreamItem>))]
 [JsonSerializable(typeof(ApplyDeploymentInput))]
+[JsonSerializable(typeof(ActivitiesView))]
+[JsonSerializable(typeof(ActivityView))]
+[JsonSerializable(typeof(ActivityFilter))]
+[JsonSerializable(typeof(PagingInput))]
+[JsonSerializable(typeof(PagedResultView<>))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

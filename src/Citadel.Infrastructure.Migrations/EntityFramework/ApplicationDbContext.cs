@@ -519,6 +519,7 @@ internal static class Configuration
         activityEvent.Property<Guid?>("ResourceId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
         activityEvent.Property<string>("ResourceName").HasColumnType("TEXT").IsRequired();
         activityEvent.Property<string>("ResourceType").HasColumnType("TEXT").IsRequired();
+        activityEvent.Property<string>("Status").HasColumnType("TEXT").IsRequired();
         activityEvent.Property<string>("EventType").HasColumnType("TEXT").IsRequired();
         activityEvent.Property<string>("Info").HasColumnType("TEXT").IsRequired();
         activityEvent.AddAuditedMemebers();
@@ -532,6 +533,7 @@ internal static class Configuration
         activityEvent.HasIndex("PlatformId", "CreatedAt").HasDatabaseName($"IX_{tableName}_Platform_CreatedAt");
         activityEvent.HasIndex("ResourceId", "CreatedAt").HasDatabaseName($"IX_{tableName}_Resource_CreatedAt");
         activityEvent.HasIndex("EventType").HasDatabaseName($"IX_{tableName}_EventType");
+        activityEvent.HasIndex("Status").HasDatabaseName($"IX_{tableName}_Status");
 
         return builder;
     }

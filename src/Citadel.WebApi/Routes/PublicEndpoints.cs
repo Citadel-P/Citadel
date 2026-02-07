@@ -17,6 +17,7 @@ public static class PublicEndpoints
     const string NetworksName = nameof(Networks);
     const string PlatformsName = nameof(Platforms);
     const string ContainersName = nameof(Containers);
+    const string ActivitiesName = nameof(Activities);
     const string RegistriesName = nameof(Registries);
     const string DeploymentsName = nameof(Deployments);
     const string AuthenticationName = nameof(Authentication);
@@ -57,9 +58,13 @@ public static class PublicEndpoints
             {
                 MapComposeEndpoints(compose);
             }
-            var deployment = group.MapGroup("/deployments").WithTags(DeploymentsName).RequireAuthorization();
+            var deployments = group.MapGroup("/deployments").WithTags(DeploymentsName).RequireAuthorization();
             {
-                MapDeploymentEndpoints(deployment);
+                MapDeploymentEndpoints(deployments);
+            }
+            var activities = group.MapGroup("/activities").WithTags(ActivitiesName).RequireAuthorization();
+            {
+                MapActivityEndpoints(activities);
             }
         }
 
@@ -551,5 +556,15 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("startDeployments");
+    }
+
+    private static void MapActivityEndpoints(RouteGroupBuilder activities)
+    {
+        activities.MapGet("/", Activities.List)
+            .WithSummary("List activity events")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("listActivities");
     }
 }

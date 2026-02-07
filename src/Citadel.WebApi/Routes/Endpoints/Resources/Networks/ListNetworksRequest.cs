@@ -1,5 +1,4 @@
-﻿using System.Reflection;
-using Application.Features.Networks.Queries;
+﻿using Application.Features.Networks.Queries;
 using Microsoft.AspNetCore.Mvc;
 
 namespace WebApi.Routes.Endpoints.Resources.Networks;
@@ -12,7 +11,7 @@ public sealed record ListNetworksRequest(
 {
     internal ListNetworks ToQuery(Guid platformId) => new (platformId, Dangling, Driver, Id, Name);
 
-    public static ValueTask<ListNetworksRequest> BindAsync(HttpContext context, ParameterInfo parameter)
+    public static ValueTask<ListNetworksRequest> BindAsync(HttpContext context)
     {
         var query = context.Request.Query;
 

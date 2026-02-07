@@ -54,12 +54,19 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedByActorId");
 
                     b.HasIndex("EventType")
                         .HasDatabaseName("IX_ActivityEvents_EventType");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_ActivityEvents_Status");
 
                     b.HasIndex("PlatformId", "CreatedAt")
                         .HasDatabaseName("IX_ActivityEvents_Platform_CreatedAt");

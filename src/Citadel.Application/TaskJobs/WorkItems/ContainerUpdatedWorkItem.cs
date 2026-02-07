@@ -32,7 +32,7 @@ internal sealed class ContainerUpdatedWorkItem(
             if (existing.DeploymentId != null)
             {
                 var status = Deployment.ToDeploymentStatus(eventInfo.Container?.State ?? ContainerStateStatus.Unknown);
-                (deployment, activityEvent) = await ContainerDestroyedWorkItem.UpdateDeploymentStatus(uow, existing.DeploymentId.Value, status, cancellationToken);
+                (deployment, activityEvent) = await ContainerDestroyedWorkItem.UpdateDeploymentStatus(uow, existing.DeploymentId.Value, status, existing.DockerContainerId, cancellationToken);
             }
 
             container = await UpdateContainer(uow, existing, cancellationToken);

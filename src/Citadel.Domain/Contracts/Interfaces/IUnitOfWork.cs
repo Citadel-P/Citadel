@@ -2,6 +2,8 @@
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Identity;
+using Hosting.Common.Models;
+using System.Linq.Expressions;
 
 namespace Domain.Contracts.Interfaces;
 
@@ -72,6 +74,8 @@ public interface IActivityEventRepository
 {
     Task<int> AddAsync(ActivityEvent activityEvent, CancellationToken cancellationToken);
     Task<ActivityEvent?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
+    Task<PagedResult<ActivityEvent>> GetPagedAsync(Guid? resourceId, ActivityResourceType? resourceType, ActivityEventType? eventType, int page,
+        int pageSize, CancellationToken cancellationToken);
 }
 
 public interface IRefreshTokenRepository 

@@ -2,6 +2,7 @@
 using Application.TaskJobs.WorkItems;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
+using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Application.Services;
@@ -70,7 +71,7 @@ internal sealed class DeploymentProcessingService(
                 deployment.ControlStartedAt,
                 deployment.RowVersion,
                 checkRowVersion: true,
-                deployment.ControlTriggeredBy.Value,
+                deployment.ControlTriggeredBy != null ? deployment.ControlTriggeredBy.Value : Constants.SystemId,
                 ct);
         }
 

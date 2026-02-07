@@ -92,6 +92,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
                platformId: patchedDeployment.PlatformId,
                resourceName: patchedDeployment.Name,
                eventType: ActivityEventType.DeploymentRenamed,
+               status: ActivityStatus.Success,
                info: new DeploymentRenamed(deployment.Name, patchedDeployment.Name)
            );
         }
@@ -101,6 +102,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
                 actorId: actorId,
                 resourceId: patchedDeployment.Id,
                 platformId: patchedDeployment.PlatformId,
+                status: ActivityStatus.Success,
                 resourceName: patchedDeployment.Name,
                 eventType: ActivityEventType.DeploymentUpdated,
                 info: new DeploymentUpdated(deployment.Spec, patchedDeployment.Spec)

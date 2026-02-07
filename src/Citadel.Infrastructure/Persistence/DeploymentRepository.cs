@@ -64,6 +64,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         const string sql = BaseSelect + " "+ "WHERE d.Id = @Id LIMIT 1";
 
         var result = await db.QuerySingleOrDefaultAsync<DeploymentDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        var d = result?.ToDomain();
         return result?.ToDomain();
     }
 

@@ -67,6 +67,7 @@ CREATE TABLE "ActivityEvents" (
     "ResourceId" TEXT NULL,
     "ResourceName" TEXT NOT NULL,
     "ResourceType" TEXT NOT NULL,
+    "Status" TEXT NOT NULL,
     CONSTRAINT "FK_ActivityEvents_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_ActivityEvents_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
 );
@@ -233,6 +234,8 @@ CREATE INDEX "IX_ActivityEvents_Platform_CreatedAt" ON "ActivityEvents" ("Platfo
 
 CREATE INDEX "IX_ActivityEvents_Resource_CreatedAt" ON "ActivityEvents" ("ResourceId", "CreatedAt");
 
+CREATE INDEX "IX_ActivityEvents_Status" ON "ActivityEvents" ("Status");
+
 CREATE UNIQUE INDEX "IX_ContainerStats_ContainerId_Created" ON "ContainerStats" ("ContainerId", "Created");
 
 CREATE INDEX "IX_Containers_ControlTriggeredBy" ON "Containers" ("ControlTriggeredBy");
@@ -288,7 +291,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260201204536_migration0001', '10.0.2');
+VALUES ('20260207164254_migration0001', '10.0.2');
 
 COMMIT;
 

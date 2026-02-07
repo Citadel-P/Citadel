@@ -347,6 +347,14 @@ public enum ResourceControlState
     Processing
 }
 
+public enum ActivityStatus
+{
+    Success,
+    Failure,
+    Warning,
+    Information
+}
+
 public enum ActivityResourceType
 {
     Platform,

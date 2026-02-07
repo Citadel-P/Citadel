@@ -74,6 +74,7 @@ internal sealed class DeleteDeploymentsHandler(
                 resourceId: deployment.Id,
                 platformId: deployment.PlatformId,
                 resourceName: deployment.Name,
+                status: ActivityStatus.Success,
                 eventType: ActivityEventType.DeploymentDeleted,
                 info: new DeploymentDeleted(deployment.Name)
                 );

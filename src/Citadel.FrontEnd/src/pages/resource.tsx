@@ -24,12 +24,12 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
   const platformId = useParams().platformId ?? '';
   const [search, setSearch] = useState('');
 
-  const { items = [], isLoading = false } = Components.useData?.(platformId) ?? {};
+  const { items, isLoading = false } = Components.useData?.(platformId) ?? {};
 
   const headerCfg = Components.header ?? { showSearch: true, showAdd: true };
 
   const filtered = useMemo(
-    () => (Components.filterItems ? Components.filterItems(items, search) : items),
+    () => (Components.filterItems ? Components.filterItems(items ?? [], search) : items),
     [items, search, Components],
   );
 
@@ -68,7 +68,7 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
 
           {/* Content */}
           <ActiveContent
-            items={filtered}
+            items={filtered ?? []}
             actions={Components.DropdownActions ?? {}}
             isLoading={isLoading}
             isFiltered={Boolean(search.trim())}
@@ -76,7 +76,7 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
         </div>
       </div>
 
-      {Components.GroupActions && <Components.GroupActions items={items} />}
+      {Components.GroupActions && <Components.GroupActions items={items ?? []} />}
       <TaskSheet type={type} />
     </div>
   );

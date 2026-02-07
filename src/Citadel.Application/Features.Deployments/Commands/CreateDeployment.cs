@@ -81,6 +81,7 @@ internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, INotificationQueu
             platformId: command.PlatformId,
             resourceName: deployment.Name,
             eventType: ActivityEventType.DeploymentCreated,
+            status: ActivityStatus.Information,
             info: new DeploymentCreated(command.Spec)
             );
 

@@ -129,6 +129,7 @@ export function useMutate<TResource extends KnownResourceName, TVariables = UseM
 export const useResourceParamType = (): ResourceType => {
   const type = useParams().type;
   if (type === 'registries') return 'Registry';
+  if (type === 'activities') return 'Activity';
   return type ? ((type[0].toUpperCase() + type.slice(1, -1)) as ResourceType) : 'Platform';
 };
 

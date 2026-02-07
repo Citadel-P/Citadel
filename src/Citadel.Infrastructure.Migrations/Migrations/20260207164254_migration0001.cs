@@ -128,7 +128,8 @@ namespace Infrastructure.Migrations.Migrations
                     PlatformId = table.Column<string>(type: "TEXT", nullable: true),
                     ResourceId = table.Column<string>(type: "TEXT", nullable: true),
                     ResourceName = table.Column<string>(type: "TEXT", nullable: false),
-                    ResourceType = table.Column<string>(type: "TEXT", nullable: false)
+                    ResourceType = table.Column<string>(type: "TEXT", nullable: false),
+                    Status = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -467,6 +468,11 @@ namespace Infrastructure.Migrations.Migrations
                 name: "IX_ActivityEvents_Resource_CreatedAt",
                 table: "ActivityEvents",
                 columns: new[] { "ResourceId", "CreatedAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ActivityEvents_Status",
+                table: "ActivityEvents",
+                column: "Status");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ContainerStats_ContainerId_Created",

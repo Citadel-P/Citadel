@@ -7,7 +7,12 @@ internal record ActivityEventDto(
     string ResourceName,
     string ResourceType,
     string EventType,
+    string Status,
     string Info,
     Guid CreatedByActorId,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    string? Platform_Name = null,
+    string? Platform_Status= null,
+    string? Actor_Name = null,
+    string? Actor_Type = null
     );

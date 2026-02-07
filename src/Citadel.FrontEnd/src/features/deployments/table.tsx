@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { DeploymentView, PlatformStatus, ResourceControlState } from '@/api/generated/api.types';
+import { DeploymentView, ResourceControlState, UpdateBehavior } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -10,9 +10,15 @@ import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
-import { HardDrive, Layers } from 'lucide-react';
+import { HardDrive } from 'lucide-react';
 import { formatId } from '@/lib/utils';
-import { AutoUpdateIcon, UPDATE_BEHAVIOR_UI, UPDATE_STATUS_UI, UpdateStatusIcon } from '@/components/custom/common';
+import {
+  AutoUpdateIcon,
+  PlatformStatusCell,
+  UPDATE_BEHAVIOR_UI,
+  UPDATE_STATUS_UI,
+  UpdateStatusIcon,
+} from '@/components/custom/common';
 
 export const DeploymentsTable = ({
   items,
@@ -105,8 +111,10 @@ const columns = (
     accessorKey: 'updateStatus',
     header: ({ column }) => <SortableCell cellName="Update Status" column={column} />,
     cell: ({ row }) => {
+      const behavior = row.original.updateBehavior;
       const status = row.original.autoUpdateState.status;
       const { label } = UPDATE_STATUS_UI[status];
+      if (behavior === UpdateBehavior.Disabled) return <span className="text-xs text-muted">N/A</span>;
 
       return (
         <div className="flex items-center gap-2">
@@ -121,16 +129,11 @@ const columns = (
     accessorKey: 'platform',
     header: ({ column }) => <SortableCell cellName="Platform" column={column} />,
     cell: ({ row }) => (
-      <div className="flex flex-row items-center gap-2">
-        <Layers
-          width={13}
-          height={13}
-          className={row.original.platformStatus === PlatformStatus.Online ? 'text-green-500' : 'text-red-500'}
-        />
-        <Link to={`/platforms/${row.original.platformId}`} className="table-link">
-          {row.original.platformName}
-        </Link>
-      </div>
+      <PlatformStatusCell
+        status={row.original.platformStatus}
+        id={row.original.platformId}
+        name={row.original.platformName ?? ''}
+      />
     ),
     sortingFn: (rowA, rowB) => (rowA.original.platformName! < rowB.original.platformName! ? 1 : -1),
   },

@@ -4,7 +4,7 @@ import { DeploymentView } from '@/api/generated/api.types';
 import { useSignalRGroup } from '@/hooks/useSignalRGroup';
 import { useRead } from '@/lib/hooks';
 
-export const useDeploymentGroup = () => {
+export const useDeploymentsGroup = () => {
   const { data, isLoading } = useRead('listDeployments');
   const [deployments, setDeployments] = useState<DeploymentView[] | undefined>();
 

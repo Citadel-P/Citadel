@@ -133,6 +133,75 @@ export enum AutoUpdateStatus {
   Failed = "Failed",
 }
 
+export enum ActorType {
+  User = "User",
+  System = "System",
+  Agent = "Agent",
+  Service = "Service",
+}
+
+export enum ActivityStatus {
+  Success = "Success",
+  Failure = "Failure",
+  Warning = "Warning",
+  Information = "Information",
+}
+
+export enum ActivityResourceType {
+  Platform = "Platform",
+  Registry = "Registry",
+  Deployment = "Deployment",
+  Stack = "Stack",
+}
+
+export enum ActivityEventType {
+  DeploymentCreated = "DeploymentCreated",
+  DeploymentUpdated = "DeploymentUpdated",
+  DeploymentRenamed = "DeploymentRenamed",
+  DeploymentDeleted = "DeploymentDeleted",
+  DeploymentStarted = "DeploymentStarted",
+  DeploymentStopped = "DeploymentStopped",
+  DeploymentPaused = "DeploymentPaused",
+  DeploymentUnpaused = "DeploymentUnpaused",
+  DeploymentDeployed = "DeploymentDeployed",
+  DeploymentFailed = "DeploymentFailed",
+  DeploymentDegraded = "DeploymentDegraded",
+  DeploymentRecreated = "DeploymentRecreated",
+  PlatformConnected = "PlatformConnected",
+  PlatformDisconnected = "PlatformDisconnected",
+  PlatformRenamed = "PlatformRenamed",
+  RegistryCreated = "RegistryCreated",
+  RegistryRenamed = "RegistryRenamed",
+  RegistryUpdated = "RegistryUpdated",
+  RegistryDeleted = "RegistryDeleted",
+}
+
+export interface ActivitiesView {
+  pagedResult: PagedResultViewOfActivityView;
+}
+
+export interface ActivityView {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  platformId: null | string;
+  /** @format uuid */
+  resourceId: null | string;
+  platformName: string;
+  resourceName: string;
+  platformStatus: PlatformStatus;
+  resourceType: ActivityResourceType;
+  eventType: ActivityEventType;
+  status: ActivityStatus;
+  /** @format date-time */
+  createdAt: any;
+  info: EventInfo;
+  /** @format uuid */
+  actorId: string;
+  actorName: string;
+  actorType: ActorType;
+}
+
 export interface ApplyDeploymentInput {
   /** @format uuid */
   id: string;
@@ -778,6 +847,67 @@ export interface EndpointSettingsInfo {
   dnsNames: string[];
 }
 
+export type EventInfo = BaseEventInfo &
+  (
+    | BaseEventInfoTypeMapping<"DeploymentCreated", EventInfoDeploymentCreated>
+    | BaseEventInfoTypeMapping<"DeploymentUpdated", EventInfoDeploymentUpdated>
+    | BaseEventInfoTypeMapping<"DeploymentRenamed", EventInfoDeploymentRenamed>
+    | BaseEventInfoTypeMapping<"DeploymentDeleted", EventInfoDeploymentDeleted>
+    | BaseEventInfoTypeMapping<"DeploymentStarted", EventInfoDeploymentStarted>
+    | BaseEventInfoTypeMapping<"DeploymentStopped", EventInfoDeploymentStopped>
+    | BaseEventInfoTypeMapping<"DeploymentPaused", EventInfoDeploymentPaused>
+    | BaseEventInfoTypeMapping<"DeploymentFailed", EventInfoDeploymentFailed>
+    | BaseEventInfoTypeMapping<
+        "DeploymentDegraded",
+        EventInfoDeploymentDegraded
+      >
+  );
+
+export interface EventInfoDeploymentCreated {
+  $type?: "DeploymentCreated";
+  spec: DeploymentSpec;
+}
+
+export interface EventInfoDeploymentDegraded {
+  $type?: "DeploymentDegraded";
+  reason: string;
+}
+
+export interface EventInfoDeploymentDeleted {
+  $type?: "DeploymentDeleted";
+  name: string;
+}
+
+export interface EventInfoDeploymentFailed {
+  $type?: "DeploymentFailed";
+  from: DeploymentStatus;
+  reason: string;
+}
+
+export interface EventInfoDeploymentPaused {
+  $type?: "DeploymentPaused";
+}
+
+export interface EventInfoDeploymentRenamed {
+  $type?: "DeploymentRenamed";
+  oldName: string;
+  newName: string;
+}
+
+export interface EventInfoDeploymentStarted {
+  $type?: "DeploymentStarted";
+}
+
+export interface EventInfoDeploymentStopped {
+  $type?: "DeploymentStopped";
+}
+
+export interface EventInfoDeploymentUpdated {
+  $type?: "DeploymentUpdated";
+  oldSpec: DeploymentSpec;
+  newSpec: DeploymentSpec;
+}
+
 export interface ExposedPortsResult {
   ports: string[];
 }
@@ -1211,6 +1341,25 @@ export interface NetworkSettingsInfo {
 
 export interface NetworksView {
   networks: DockerNetworkResult[];
+}
+
+export interface PagedResultViewOfActivityView {
+  items: ActivityView[];
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  totalCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  page: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  pageSize: number | string;
 }
 
 export type PlatformDescriptor = BasePlatformDescriptor &
@@ -1661,6 +1810,12 @@ export interface VolumesView {
 type BaseDeploymentImageInfo = object;
 
 type BaseDeploymentImageInfoTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseEventInfo = object;
+
+type BaseEventInfoTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
@@ -3487,6 +3642,53 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Activities
+     * @name ListActivities
+     * @summary List activity events
+     * @request GET:/api/v1/activities
+     * @secure
+     * @response `200` `ActivitiesView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listActivities: (
+      query?: {
+        /** @format uuid */
+        ResourceId?: string;
+        ResourceType?: ActivityResourceType;
+        EventType?: ActivityEventType;
+        /**
+         * @format int32
+         * @default 1
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        Page?: number | string;
+        /**
+         * @format int32
+         * @default 50
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        PageSize?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        ActivitiesView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/activities`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
         ...params,
       }),
   };

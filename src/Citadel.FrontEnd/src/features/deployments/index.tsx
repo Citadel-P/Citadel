@@ -3,7 +3,7 @@ import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { DeploymentDropdownActions, DeploymentGroupActions } from './actions';
 import { DeploymentsTable } from './table';
-import { useDeploymentGroup } from './hooks/useDeploymentsGroup';
+import { useDeploymentsGroup } from './hooks/useDeploymentsGroup';
 
 export const DeploymentComponents: RequiredComponents = {
   Icon: <Rocket className="h-4 w-4" />,
@@ -16,7 +16,7 @@ export const DeploymentComponents: RequiredComponents = {
   },
 
   useData: function (): ResourceDataHookResult<any> {
-    const { deployments, isLoading } = useDeploymentGroup();
+    const { deployments, isLoading } = useDeploymentsGroup();
     return { items: deployments ?? [], isLoading };
   },
   filterItems: (items, search) => {

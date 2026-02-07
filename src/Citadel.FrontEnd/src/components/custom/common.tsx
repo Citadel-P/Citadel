@@ -1,9 +1,17 @@
 import { useMemo, useState, useLayoutEffect, useRef, useCallback, useEffect } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { AutoUpdateStatus, ContainerStateStatus, ContainerStatView, UpdateBehavior } from '@/api/generated/api.types';
+import {
+  ActorType,
+  ActivityStatus,
+  AutoUpdateStatus,
+  ContainerStateStatus,
+  ContainerStatView,
+  PlatformStatus,
+  UpdateBehavior,
+} from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem, CommandEmpty } from '@/components/ui/command';
-import { Check, ChevronDown, LucideIcon, Tags, X } from 'lucide-react';
+import { Check, ChevronDown, LucideIcon, Server, Settings, Tags, User, X } from 'lucide-react';
 import { cn, filterBySplit, toFixedNumber } from '@/lib/utils';
 import { PluralResourceMap, ResourceType } from '@/api/types';
 import { useMeasuredWidth, useRead, useLocalStorage } from '@/lib/hooks';
@@ -26,6 +34,7 @@ import {
   WrapText,
 } from 'lucide-react';
 import { byteTransform } from '@/lib/bytes.helper';
+import { Link } from 'react-router';
 
 export function ResourceSelectorField<T extends { id: string; name: string }>({
   type,
@@ -499,4 +508,46 @@ export const CPUCell = ({ state, stats }: { state: ContainerStateStatus; stats?:
   return (
     <span className="text-[13px]">{stats?.cpuUsage ? toFixedNumber(stats?.cpuUsage as number, 'percent') : '0%'}</span>
   );
+};
+
+export const PlatformStatusCell = ({
+  status,
+  id,
+  name,
+}: {
+  status: PlatformStatus;
+  id: string;
+  name: string | undefined;
+}) => {
+  return (
+    <div className="flex flex-row items-center gap-2">
+      <Server width={13} height={13} className={status === PlatformStatus.Online ? 'text-green-500' : 'text-red-500'} />
+      <Link to={`/platforms/${id}`} className="table-link">
+        {name}
+      </Link>
+    </div>
+  );
+};
+
+export const ActorCell = ({ type, id, name }: { type: ActorType; id: string; name: string | undefined }) => {
+  return (
+    <div className="flex flex-row items-center gap-2">
+      {type === ActorType.User && <User width={13} height={13} className="text-foreground/80" />}
+      {type === ActorType.System && <Settings width={13} height={13} className="text-foreground/80" />}
+      {name}
+    </div>
+  );
+};
+
+export const ActivityStatusCell = ({ status }: { status: ActivityStatus }) => {
+  const statusConfig: Record<ActivityStatus, { className: string; label: string }> = {
+    [ActivityStatus.Success]: { className: 'bg-green-200/25 text-green-700', label: 'Success' },
+    [ActivityStatus.Information]: { className: 'bg-blue-200/25 text-blue-700', label: 'Info' },
+    [ActivityStatus.Warning]: { className: 'bg-orange-200/25 text-orange-500', label: 'Warning' },
+    [ActivityStatus.Failure]: { className: 'bg-red-200/25 text-red-700', label: 'Failure' },
+  };
+
+  const { className, label } = statusConfig[status] ?? statusConfig[ActivityStatus.Failure];
+
+  return <Badge className={className}>{label}</Badge>;
 };

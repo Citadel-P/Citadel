@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260201204536_migration0001")]
+    [Migration("20260207164254_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -57,12 +57,19 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedByActorId");
 
                     b.HasIndex("EventType")
                         .HasDatabaseName("IX_ActivityEvents_EventType");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_ActivityEvents_Status");
 
                     b.HasIndex("PlatformId", "CreatedAt")
                         .HasDatabaseName("IX_ActivityEvents_Platform_CreatedAt");

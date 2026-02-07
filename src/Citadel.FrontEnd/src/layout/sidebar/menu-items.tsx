@@ -10,6 +10,7 @@ import {
   Settings,
   Megaphone,
   TriangleAlert,
+  Activity,
 } from 'lucide-react';
 import { JSX } from 'react';
 import DockerIcon from '@/assets/docker.min.svg';
@@ -67,9 +68,9 @@ const MenuItems: IMenuItem[] = [
         route: '/alerts',
       },
       {
-        icon: <Bell width={14} height={14} />,
-        label: 'Notifications',
-        route: '/notifications',
+        icon: <Activity width={14} height={14} />,
+        label: 'Activities',
+        route: '/activities',
       },
       {
         icon: <Settings className="w-4 h-4" />,
