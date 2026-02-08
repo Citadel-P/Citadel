@@ -4,10 +4,10 @@ import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
-import { useSelectedResources } from '@/lib/atoms';
+import { useActivityQuery, useSelectedResources } from '@/lib/atoms';
 import { ContentCard } from '@/components/custom/content-card';
 import { Cable, Layers, Rocket, Server } from 'lucide-react';
-import { ActorCell, ActivityStatusCell } from '@/components/custom/common';
+import { ActorCell, ActivityStatusCell, PaginationControls } from '@/components/custom/common';
 
 export const ActivitiesTable = ({
   pagedResult,
@@ -16,17 +16,32 @@ export const ActivitiesTable = ({
   pagedResult: PagedResultViewOfActivityView;
   isLoading: boolean;
 }) => {
-  const [_, setSelectedResources] = useSelectedResources<ActivityView>('Deployment');
+  const [, setSelectedResources] = useSelectedResources<ActivityView>('Deployment');
+
+  const [query, setQuery] = useActivityQuery();
+
   const cols = useMemo(() => columns(), []);
+
+  const totalCount = Number(pagedResult?.totalCount ?? 0);
+  const totalPages = Math.max(1, Math.ceil(totalCount / query.pageSize));
+
+  const goToPage = (page: number) => {
+    if (page < 1 || page > totalPages || page === query.page) return;
+    setQuery({ page }); 
+  };
+
   return (
-    <ContentCard>
-      <DataTable
-        columns={cols}
-        data={pagedResult?.items ?? []}
-        isLoading={isLoading}
-        onSelectionChange={setSelectedResources}
-      />
-    </ContentCard>
+    <div className="flex flex-col gap-4">
+      <ContentCard>
+        <DataTable
+          columns={cols}
+          data={pagedResult?.items ?? []}
+          isLoading={isLoading}
+          onSelectionChange={setSelectedResources}
+        />
+      </ContentCard>
+      <PaginationControls currentPage={query.page} totalPages={totalPages} onPageChange={goToPage} />
+    </div>
   );
 };
 

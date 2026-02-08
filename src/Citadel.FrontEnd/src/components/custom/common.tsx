@@ -21,6 +21,15 @@ import { Badge } from '../ui/badge';
 import { MultiSelect, MultiSelectOption } from '../ui/multi-select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
+import {
   Bell,
   CircleCheck,
   CircleQuestionMark,
@@ -35,6 +44,7 @@ import {
 } from 'lucide-react';
 import { byteTransform } from '@/lib/bytes.helper';
 import { Link } from 'react-router';
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export function ResourceSelectorField<T extends { id: string; name: string }>({
   type,
@@ -551,3 +561,143 @@ export const ActivityStatusCell = ({ status }: { status: ActivityStatus }) => {
 
   return <Badge className={className}>{label}</Badge>;
 };
+
+type PaginationControlsProps = {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  className?: string;
+};
+
+export const PaginationControls = ({ currentPage, totalPages, onPageChange, className }: PaginationControlsProps) => {
+  const pageItems = useMemo(() => buildPageItems(currentPage, totalPages), [currentPage, totalPages]);
+
+  if (totalPages <= 1) return null;
+
+  return (
+    <Pagination className={className}>
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious
+            size={'sm'}
+            href="#"
+            onClick={(event) => {
+              event.preventDefault();
+              onPageChange(currentPage - 1);
+            }}
+            aria-disabled={currentPage <= 1}
+            className={currentPage <= 1 ? 'pointer-events-none opacity-50' : undefined}
+          />
+        </PaginationItem>
+        {pageItems.map((item, index) =>
+          item === 'ellipsis' ? (
+            <PaginationItem key={`ellipsis-${index}`}>
+              <PaginationEllipsis />
+            </PaginationItem>
+          ) : (
+            <PaginationItem key={item}>
+              <PaginationLink
+                size={'sm'}
+                href="#"
+                isActive={item === currentPage}
+                onClick={(event) => {
+                  event.preventDefault();
+                  onPageChange(item);
+                }}>
+                {item}
+              </PaginationLink>
+            </PaginationItem>
+          ),
+        )}
+        <PaginationItem>
+          <PaginationNext
+            size={'sm'}
+            href="#"
+            onClick={(event) => {
+              event.preventDefault();
+              onPageChange(currentPage + 1);
+            }}
+            aria-disabled={currentPage >= totalPages}
+            className={currentPage >= totalPages ? 'pointer-events-none opacity-50' : undefined}
+          />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  );
+};
+
+const buildPageItems = (currentPage: number, totalPages: number) => {
+  const pages = new Set<number>();
+  pages.add(1);
+  pages.add(totalPages);
+  pages.add(currentPage);
+  pages.add(currentPage - 1);
+  pages.add(currentPage + 1);
+
+  const sorted = Array.from(pages)
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((a, b) => a - b);
+
+  const items: Array<number | 'ellipsis'> = [];
+  for (let i = 0; i < sorted.length; i += 1) {
+    const page = sorted[i];
+    const prev = sorted[i - 1];
+    if (prev && page - prev > 1) items.push('ellipsis');
+    items.push(page);
+  }
+
+  return items;
+};
+
+export function SelectField({
+  value,
+  onChange,
+  options,
+  placeholder,
+  allLabel,
+  allIcon: AllIcon,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: (string | { value: string; label: string; icon?: React.ComponentType<{ className?: string }> })[];
+  placeholder: string;
+  allLabel: string;
+  allIcon?: React.ComponentType<{ className?: string }>;
+}) {
+  return (
+    <div className="min-w-[200px]">
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="w-full bg-background">
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent className="bg-background">
+          <SelectItem value="All">
+            <div className="flex items-center gap-3">
+              {AllIcon && <AllIcon className="size-3.5 text-muted-foreground" />}
+              <span>{allLabel}</span>
+            </div>
+          </SelectItem>
+          <SelectSeparator />
+          {options.map((option) => {
+            if (typeof option === 'string') {
+              return (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              );
+            }
+            const Icon = option.icon;
+            return (
+              <SelectItem key={option.value} value={option.value}>
+                <div className="flex items-center gap-3">
+                  {Icon && <Icon className="size-3.5 text-muted-foreground" />}
+                  <span>{option.label}</span>
+                </div>
+              </SelectItem>
+            );
+          })}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
