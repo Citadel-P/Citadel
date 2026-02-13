@@ -29,11 +29,19 @@ export function useActivityQuery() {
     atom: activityQueryAtom,
     params: ['resourceType', 'eventType', 'resourceId', 'page', 'pageSize'],
     defaults: { resourceType: 'All', eventType: 'All', resourceId: undefined, page: 1, pageSize: 50 },
-    serialize: (v) => (v === 'All' ? null : String(v)),
+    serialize: (v, key) => {
+      if (key === 'resourceId') {
+        return v ? String(v) : null;
+      }
+      return v === 'All' ? null : String(v);
+    },
     deserialize: (raw, key) => {
       if (key === 'page' || key === 'pageSize') {
         const n = Number(raw);
         return Number.isFinite(n) && n > 0 ? n : key === 'page' ? 1 : 50;
+      }
+      if (key === 'resourceId') {
+        return raw ?? undefined;
       }
       return (raw ?? 'All') as any;
     },

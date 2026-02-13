@@ -7,9 +7,12 @@ using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities;
+using Hosting.Common.Extensions;
 using Mediator;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using System.Runtime.CompilerServices;
+using System.Security.Claims;
 
 namespace Application.Features.Deployments.Commands;
 
@@ -22,12 +25,16 @@ internal sealed class ApplyDeploymentHandler(
     INotificationQueue notificationQueue,
     IPlatformContainerCache platformCache,
     IDeploymentStreamManager deploymentHub,
+    IHttpContextAccessor httpContextAccessor,
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
     IConnectorFactory<IDeploymentConnector> deploymentConnectorFactory)
     : IStreamCommandHandler<ApplyDeployment, DeploymentStreamItem>
 {
     public async IAsyncEnumerable<DeploymentStreamItem> Handle(ApplyDeployment command, [EnumeratorCancellation] CancellationToken ct)
     {
+        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
+           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
+
         var deployment = await LoadDeployment(command.Id, ct);
         if (deployment is null)
         {
@@ -43,11 +50,13 @@ internal sealed class ApplyDeploymentHandler(
 
         if (!platformCache.TryGetCacheEntry(deployment.PlatformId, out var platform, out _))
         {
-            yield return Error(404, "Platform not found or disconnected.");
+            var message = "Platform not found or disconnected.";
+            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, message, ct);
+            yield return Error(404, message);
             yield break;
         }
 
-        await EnqueueStatus(deployment.Id, DeploymentStatus.Applying, ct);
+        await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Applying, null, ct);
 
         string? imageId = null;
 
@@ -81,7 +90,7 @@ internal sealed class ApplyDeploymentHandler(
 
                 if (!string.IsNullOrEmpty(item.ErrorMessage))
                 {
-                    await EnqueueStatus(deployment.Id, DeploymentStatus.Failed, ct);
+                    await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, item.ErrorMessage, ct);
                     yield break;
                 }
 
@@ -94,8 +103,9 @@ internal sealed class ApplyDeploymentHandler(
 
         if (string.IsNullOrEmpty(imageId))
         {
-            await EnqueueStatus(deployment.Id, DeploymentStatus.Failed, ct);
-            yield return Error(400, "Image ID could not be resolved.");
+            var message = "Image ID could not be resolved.";
+            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, message, ct);
+            yield return Error(400, message);
             yield break;
         }
 
@@ -122,7 +132,7 @@ internal sealed class ApplyDeploymentHandler(
         var result = await connector.ApplyDeploymentAsync(commandToApply, ct);
         if (!result.IsSuccess(out var deploymentResult, out var error))
         {
-            await EnqueueStatus(deployment.Id, DeploymentStatus.Failed, ct);
+            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, error.Message, ct);
             yield return Error(500, error.Message);
             yield break;
         }
@@ -131,14 +141,16 @@ internal sealed class ApplyDeploymentHandler(
 
         if (deploymentResult.DeployedContainerState != DeployedContainerState.Running)
         {
-            await EnqueueStatus(deployment.Id, DeploymentStatus.Failed, ct);
-            yield return Error(422, $"Deployment failed: container did not start successfully - Container state: {deploymentResult.DeployedContainerState}");
+            var message = $"Deployment failed: container did not start successfully - Container state: {deploymentResult.DeployedContainerState}";
+            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, message, ct);
+            yield return Error(422, message);
             yield break;
         }
 
         await dbWorkQueue.EnqueueAsync(
             new DeploymentSucceededWorkItem(
                 deployment.Id,
+                actorId,
                 deploymentResult.ContainerId,
                 deploymentHub,
                 notificationQueue),
@@ -172,12 +184,14 @@ internal sealed class ApplyDeploymentHandler(
     private static DeploymentStreamItem Error(int code, string message)
         => new(ErrorMessage: $"❌ {message}", Error: new DeploymentApplyError(code, $"❌ {message}"));
 
-    private async Task EnqueueStatus(Guid deploymentId, DeploymentStatus status, CancellationToken ct)
+    private async Task EnqueueStatus(Guid deploymentId, Guid actorId, DeploymentStatus status, string? message, CancellationToken ct)
     {
         await dbWorkQueue.EnqueueAsync(
             new UpdateDeploymentStatusWorkItem(
                 deploymentId,
+                actorId,
                 status,
+                message,
                 deploymentHub,
                 notificationQueue),
             ct);
@@ -215,7 +229,7 @@ internal sealed class ApplyDeploymentHandler(
     }
 }
 
-internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, DeploymentStatus targetStatus, IDeploymentStreamManager deploymentHub, INotificationQueue notificationQueue)
+internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid actorId, DeploymentStatus status, string? message, IDeploymentStreamManager deploymentHub, INotificationQueue notificationQueue)
     : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
@@ -223,8 +237,25 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Deployme
         var deployment = await uow.Deployments.GetAsync(deploymentId, ct);
         if (deployment is null) return;
 
-        deployment.PartialUpdate(status: targetStatus);
+        deployment.PartialUpdate(status: status);
         await uow.Deployments.UpdateAsync(deployment, ct);
+
+        // Add activity event
+        if (status == DeploymentStatus.Failed)
+        {
+            var activity = new ActivityEvent(
+                            actorId: actorId,
+                            resourceId: deployment.Id,
+                            platformId: deployment.PlatformId,
+                            resourceName: deployment.Name,
+                            status: ActivityStatus.Failure,
+                            eventType: ActivityEventType.DeploymentApplied,
+                            info: new DeploymentApplied(null, null, message)
+                            );
+
+            await uow.ActivityEventRepository.AddAsync(activity, ct);
+        }
+
         await uow.CommitAsync(ct);
 
         // Push notification
@@ -233,7 +264,7 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Deployme
     }
 }
 
-internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, string containerId, IDeploymentStreamManager deploymentHub, INotificationQueue notificationQueue)
+internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, Guid actorId, string containerId, IDeploymentStreamManager deploymentHub, INotificationQueue notificationQueue)
     : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
@@ -248,6 +279,20 @@ internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, string cont
 
         await uow.Containers.UpdateAsync(container, ct);
         await uow.Deployments.UpdateAsync(deployment, ct);
+
+        // Add activity event
+        var activity = new ActivityEvent(
+                        actorId: actorId,
+                        resourceId: deployment.Id,
+                        platformId: deployment.PlatformId,
+                        resourceName: deployment.Name,
+                        status: ActivityStatus.Success,
+                        eventType: ActivityEventType.DeploymentApplied,
+                        info: new DeploymentApplied(deployment.Spec, [containerId], null)
+                        );
+
+        await uow.ActivityEventRepository.AddAsync(activity, ct);
+
         await uow.CommitAsync(ct);
 
         // Push notification

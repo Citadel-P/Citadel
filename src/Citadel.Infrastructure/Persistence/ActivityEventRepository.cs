@@ -26,8 +26,8 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
         return db.ExecuteAsync(sql, new
         {
             Id = activityEvent.Id.Format(),
-            PlatformId = activityEvent.PlatformId.Value.Format(),
-            ResourceId = activityEvent.ResourceId.Value.Format(),
+            PlatformId = activityEvent.PlatformId != null ? activityEvent.PlatformId.Value.Format() : null,
+            ResourceId = activityEvent.ResourceId != null ? activityEvent.ResourceId.Value.Format() : null,
             ResourceName = activityEvent.ResourceName,
             EventType = EnumFormatter<ActivityEventType>.GetValue(activityEvent.EventType),
             ResourceType = EnumFormatter<ActivityResourceType>.GetValue(activityEvent.ResourceType),
@@ -41,7 +41,19 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
 
     public async Task<ActivityEvent?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
-        var sql = "SELECT * FROM ActivityEvents WHERE Id = @Id LIMIT 1";
+        var sql = """
+            SELECT 
+                a.*,
+                p.Name AS Platform_Name,
+                p.Status AS Platform_Status,
+                ac.Name AS Actor_Name,
+                ac.Type AS Actor_Type
+            FROM ActivityEvents a
+            LEFT JOIN Actors ac ON a.CreatedByActorId = ac.Id
+            LEFT JOIN Platforms p ON a.PlatformId = p.Id
+            WHERE a.Id = @Id
+            LIMIT 1;
+        """;
         var result = await db.QuerySingleOrDefaultAsync<ActivityEventDto>(sql, new { Id = id.Format() }, transaction: tx());
         return result?.ToDomain();
     }

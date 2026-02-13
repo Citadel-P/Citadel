@@ -122,7 +122,7 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.DeploymentRenamed, DeploymentRenamed) => true,
             (ActivityEventType.DeploymentStarted, DeploymentStarted) => true,
             (ActivityEventType.DeploymentStopped, DeploymentStopped) => true,
-            (ActivityEventType.DeploymentFailed, DeploymentFailed) => true,
+            (ActivityEventType.DeploymentApplied, DeploymentApplied) => true,
             (ActivityEventType.DeploymentPaused, DeploymentPaused) => true,
             (ActivityEventType.DeploymentDegraded, DeploymentDegraded) => true,
 
@@ -142,17 +142,16 @@ public sealed class ActivityEvent : IAuditedEntity
 [JsonDerivedType(typeof(DeploymentStarted), nameof(ActivityEventType.DeploymentStarted))]
 [JsonDerivedType(typeof(DeploymentStopped), nameof(ActivityEventType.DeploymentStopped))]
 [JsonDerivedType(typeof(DeploymentPaused), nameof(ActivityEventType.DeploymentPaused))]
-[JsonDerivedType(typeof(DeploymentFailed), nameof(ActivityEventType.DeploymentFailed))]
+[JsonDerivedType(typeof(DeploymentApplied), nameof(ActivityEventType.DeploymentApplied))]
 [JsonDerivedType(typeof(DeploymentDegraded), nameof(ActivityEventType.DeploymentDegraded))]
 public abstract record EventInfo;
 public sealed record DeploymentCreated(DeploymentSpec Spec) : EventInfo;
 public sealed record DeploymentUpdated(DeploymentSpec OldSpec, DeploymentSpec NewSpec) : EventInfo;
 public sealed record DeploymentRenamed(string OldName, string NewName) : EventInfo;
-public sealed record DeploymentDeleted(string Name) : EventInfo;
-public sealed record DeploymentStarted: EventInfo;
-public sealed record DeploymentStopped: EventInfo;
-public sealed record DeploymentPaused: EventInfo;
+public sealed record DeploymentDeleted(DeploymentSpec Spec) : EventInfo;
+public sealed record DeploymentStarted(IEnumerable<string> ContainerIds) : EventInfo;
+public sealed record DeploymentStopped(IEnumerable<string> ContainerIds) : EventInfo;
+public sealed record DeploymentPaused(IEnumerable<string> ContainerIds) : EventInfo;
 public sealed record DeploymentDegraded(string Reason) : EventInfo;
-
-public sealed record DeploymentFailed(DeploymentStatus From, string Reason) : EventInfo;
+public sealed record DeploymentApplied(DeploymentSpec? Spec, IEnumerable<string>? ContainerIds, string? Reason) : EventInfo;
 

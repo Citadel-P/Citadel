@@ -174,7 +174,6 @@ internal class ImageRepository(IDbConnection db, Func<IDbTransaction> tx) : IIma
                 @Id, @PlatformId, @DockerImageId, @Name, @Containers, @Tags, @Size, @RegistryId, @CreatedAt, @UpdatedAt
             )
             ON CONFLICT(DockerImageId, PlatformId) DO UPDATE SET
-                Id = excluded.Id,
                 Name = excluded.Name,
                 Containers = excluded.Containers,
                 Tags = excluded.Tags,

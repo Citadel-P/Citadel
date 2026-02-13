@@ -94,7 +94,7 @@ public partial class  DeploymentJsonContext: JsonSerializerContext
 [JsonSerializable(typeof(DeploymentStopped))]
 [JsonSerializable(typeof(DeploymentPaused))]
 [JsonSerializable(typeof(DeploymentDegraded))]
-[JsonSerializable(typeof(DeploymentFailed))]
+[JsonSerializable(typeof(DeploymentApplied))]
 public partial class  EventInfoJsonContext : JsonSerializerContext
 {
     

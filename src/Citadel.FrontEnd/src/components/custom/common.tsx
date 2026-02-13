@@ -8,11 +8,12 @@ import {
   ContainerStatView,
   PlatformStatus,
   UpdateBehavior,
+  ActivityResourceType,
 } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem, CommandEmpty } from '@/components/ui/command';
-import { Check, ChevronDown, LucideIcon, Server, Settings, Tags, User, X } from 'lucide-react';
-import { cn, filterBySplit, toFixedNumber } from '@/lib/utils';
+import { Cable, Check, ChevronDown, Layers, LucideIcon, Rocket, Server, Settings, Tags, User, X } from 'lucide-react';
+import { cn, filterBySplit, serializeData, toFixedNumber } from '@/lib/utils';
 import { PluralResourceMap, ResourceType } from '@/api/types';
 import { useMeasuredWidth, useRead, useLocalStorage } from '@/lib/hooks';
 import { useResourceFilter } from '@/lib/atoms';
@@ -545,6 +546,36 @@ export const ActorCell = ({ type, id, name }: { type: ActorType; id: string; nam
       {type === ActorType.User && <User width={13} height={13} className="text-foreground/80" />}
       {type === ActorType.System && <Settings width={13} height={13} className="text-foreground/80" />}
       {name}
+    </div>
+  );
+};
+
+export const TargetCell = ({
+  resourceType,
+  resourceId,
+  resourceName,
+}: {
+  resourceType: ActivityResourceType;
+  resourceId: string | undefined;
+  resourceName: string | undefined;
+}) => {
+  const resourceConfig: Partial<Record<ActivityResourceType, { Icon: any; path: string }>> = {
+    [ActivityResourceType.Deployment]: { Icon: Rocket, path: `/deployments/edit/${resourceId}` },
+    [ActivityResourceType.Registry]: { Icon: Cable, path: `/registries/edit/${resourceId}` },
+    [ActivityResourceType.Platform]: { Icon: Server, path: `/platforms/edit/${resourceId}` },
+    [ActivityResourceType.Stack]: { Icon: Layers, path: `/stacks/edit/${resourceId}` },
+  };
+
+  const config = resourceConfig[resourceType];
+  if (!config) return null;
+  const { Icon, path } = config;
+
+  return (
+    <div className="flex flex-row items-center gap-2">
+      <Icon width={13} height={13} className="text-foreground/80" />
+      <Link to={path} className="table-link">
+        {resourceName}
+      </Link>
     </div>
   );
 };

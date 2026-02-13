@@ -57,6 +57,7 @@ export const resources = {
   restartDeployments: { method: "POST", key: "restartDeployments", params: ["data","params"], requiredParams: [], queryParams: [] },
   stopDeployments: { method: "POST", key: "stopDeployments", params: ["data","params"], requiredParams: [], queryParams: [] },
   startDeployments: { method: "POST", key: "startDeployments", params: ["data","params"], requiredParams: [], queryParams: [] },
+  getActivity: { method: "GET", key: "getActivity", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   listActivities: { method: "GET", key: "listActivities", params: ["query","params"], requiredParams: [], queryParams: ["ResourceId","ResourceType","EventType","Page","PageSize"] },
 } as const;
 

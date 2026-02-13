@@ -11,7 +11,7 @@ namespace Application.Features.Deployments.Queries
     {
         public async ValueTask<Result<IEnumerable<Deployment>>> Handle(GetAllDeployments query, CancellationToken cancellationToken)
         {
-            var deployments = await unitOfWork.Deployments.GetAllAsync(cancellationToken) ?? [];
+            var deployments = await unitOfWork.Deployments.GetInfoAsync(cancellationToken) ?? [];
             return Result.Success(deployments);
         }
     }

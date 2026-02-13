@@ -63,7 +63,7 @@ internal sealed class DeleteDeploymentsHandler(
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-        var deployments = await uow.Deployments.GetInfoAsync(ids, ct);
+        var deployments = await uow.Deployments.GetAllAsync(ids, ct);
         if (deployments is null || !deployments.Any())
             return 0;
 
@@ -76,7 +76,7 @@ internal sealed class DeleteDeploymentsHandler(
                 resourceName: deployment.Name,
                 status: ActivityStatus.Success,
                 eventType: ActivityEventType.DeploymentDeleted,
-                info: new DeploymentDeleted(deployment.Name)
+                info: new DeploymentDeleted(deployment.Spec)
                 );
 
             await uow.ActivityEventRepository.AddAsync(activity, ct);

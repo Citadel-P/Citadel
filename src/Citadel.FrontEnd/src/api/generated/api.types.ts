@@ -162,11 +162,8 @@ export enum ActivityEventType {
   DeploymentStarted = "DeploymentStarted",
   DeploymentStopped = "DeploymentStopped",
   DeploymentPaused = "DeploymentPaused",
-  DeploymentUnpaused = "DeploymentUnpaused",
-  DeploymentDeployed = "DeploymentDeployed",
-  DeploymentFailed = "DeploymentFailed",
+  DeploymentApplied = "DeploymentApplied",
   DeploymentDegraded = "DeploymentDegraded",
-  DeploymentRecreated = "DeploymentRecreated",
   PlatformConnected = "PlatformConnected",
   PlatformDisconnected = "PlatformDisconnected",
   PlatformRenamed = "PlatformRenamed",
@@ -856,12 +853,19 @@ export type EventInfo = BaseEventInfo &
     | BaseEventInfoTypeMapping<"DeploymentStarted", EventInfoDeploymentStarted>
     | BaseEventInfoTypeMapping<"DeploymentStopped", EventInfoDeploymentStopped>
     | BaseEventInfoTypeMapping<"DeploymentPaused", EventInfoDeploymentPaused>
-    | BaseEventInfoTypeMapping<"DeploymentFailed", EventInfoDeploymentFailed>
+    | BaseEventInfoTypeMapping<"DeploymentApplied", EventInfoDeploymentApplied>
     | BaseEventInfoTypeMapping<
         "DeploymentDegraded",
         EventInfoDeploymentDegraded
       >
   );
+
+export interface EventInfoDeploymentApplied {
+  $type?: "DeploymentApplied";
+  spec: null | DeploymentSpec;
+  containerIds: null | any[];
+  reason: null | string;
+}
 
 export interface EventInfoDeploymentCreated {
   $type?: "DeploymentCreated";
@@ -875,17 +879,12 @@ export interface EventInfoDeploymentDegraded {
 
 export interface EventInfoDeploymentDeleted {
   $type?: "DeploymentDeleted";
-  name: string;
-}
-
-export interface EventInfoDeploymentFailed {
-  $type?: "DeploymentFailed";
-  from: DeploymentStatus;
-  reason: string;
+  spec: DeploymentSpec;
 }
 
 export interface EventInfoDeploymentPaused {
   $type?: "DeploymentPaused";
+  containerIds: string[];
 }
 
 export interface EventInfoDeploymentRenamed {
@@ -896,10 +895,12 @@ export interface EventInfoDeploymentRenamed {
 
 export interface EventInfoDeploymentStarted {
   $type?: "DeploymentStarted";
+  containerIds: string[];
 }
 
 export interface EventInfoDeploymentStopped {
   $type?: "DeploymentStopped";
+  containerIds: string[];
 }
 
 export interface EventInfoDeploymentUpdated {
@@ -3644,6 +3645,31 @@ export class Api<
         type: ContentType.Json,
         ...params,
       }),
+
+    /**
+     * No description
+     *
+     * @tags Activities
+     * @name GetActivity
+     * @summary Get activity by id
+     * @request GET:/api/v1/activities/{id}
+     * @secure
+     * @response `200` `ActivityView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getActivity: (id: string, params: RequestParams = {}) =>
+      this.request<ActivityView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/activities/${id}`,
+          method: "GET",
+          secure: true,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description

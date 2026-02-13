@@ -560,6 +560,13 @@ public static class PublicEndpoints
 
     private static void MapActivityEndpoints(RouteGroupBuilder activities)
     {
+        activities.MapGet("{id}", Activities.Get)
+            .WithSummary("Get activity by id")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getActivity");
+
         activities.MapGet("/", Activities.List)
             .WithSummary("List activity events")
             .ProducesValidationProblem()

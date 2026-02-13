@@ -5038,6 +5038,83 @@
         ]
       }
     },
+    "/api/v1/activities/{id}": {
+      "get": {
+        "tags": [
+          "Activities"
+        ],
+        "summary": "Get activity by id",
+        "operationId": "getActivity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/activities": {
       "get": {
         "tags": [
@@ -5177,11 +5254,8 @@
           "DeploymentStarted",
           "DeploymentStopped",
           "DeploymentPaused",
-          "DeploymentUnpaused",
-          "DeploymentDeployed",
-          "DeploymentFailed",
+          "DeploymentApplied",
           "DeploymentDegraded",
-          "DeploymentRecreated",
           "PlatformConnected",
           "PlatformDisconnected",
           "PlatformRenamed",
@@ -7996,7 +8070,7 @@
             "$ref": "#/components/schemas/EventInfoDeploymentPaused"
           },
           {
-            "$ref": "#/components/schemas/EventInfoDeploymentFailed"
+            "$ref": "#/components/schemas/EventInfoDeploymentApplied"
           },
           {
             "$ref": "#/components/schemas/EventInfoDeploymentDegraded"
@@ -8012,8 +8086,48 @@
             "DeploymentStarted": "#/components/schemas/EventInfoDeploymentStarted",
             "DeploymentStopped": "#/components/schemas/EventInfoDeploymentStopped",
             "DeploymentPaused": "#/components/schemas/EventInfoDeploymentPaused",
-            "DeploymentFailed": "#/components/schemas/EventInfoDeploymentFailed",
+            "DeploymentApplied": "#/components/schemas/EventInfoDeploymentApplied",
             "DeploymentDegraded": "#/components/schemas/EventInfoDeploymentDegraded"
+          }
+        }
+      },
+      "EventInfoDeploymentApplied": {
+        "required": [
+          "spec",
+          "containerIds",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentApplied"
+            ],
+            "type": "string"
+          },
+          "spec": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DeploymentSpec"
+              }
+            ]
+          },
+          "containerIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -8051,7 +8165,7 @@
       },
       "EventInfoDeploymentDeleted": {
         "required": [
-          "name"
+          "spec"
         ],
         "properties": {
           "$type": {
@@ -8060,38 +8174,27 @@
             ],
             "type": "string"
           },
-          "name": {
-            "type": "string"
-          }
-        }
-      },
-      "EventInfoDeploymentFailed": {
-        "required": [
-          "from",
-          "reason"
-        ],
-        "properties": {
-          "$type": {
-            "enum": [
-              "DeploymentFailed"
-            ],
-            "type": "string"
-          },
-          "from": {
-            "$ref": "#/components/schemas/DeploymentStatus"
-          },
-          "reason": {
-            "type": "string"
+          "spec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
           }
         }
       },
       "EventInfoDeploymentPaused": {
+        "required": [
+          "containerIds"
+        ],
         "properties": {
           "$type": {
             "enum": [
               "DeploymentPaused"
             ],
             "type": "string"
+          },
+          "containerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -8116,22 +8219,40 @@
         }
       },
       "EventInfoDeploymentStarted": {
+        "required": [
+          "containerIds"
+        ],
         "properties": {
           "$type": {
             "enum": [
               "DeploymentStarted"
             ],
             "type": "string"
+          },
+          "containerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
       "EventInfoDeploymentStopped": {
+        "required": [
+          "containerIds"
+        ],
         "properties": {
           "$type": {
             "enum": [
               "DeploymentStopped"
             ],
             "type": "string"
+          },
+          "containerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

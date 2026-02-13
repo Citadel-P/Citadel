@@ -64,7 +64,7 @@ public class DeploymentDeleteTests : IntegrationTestBase
         // Check DB
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var deployments = await uow.Deployments.GetAllAsync(TestContext.Current.CancellationToken);
+        var deployments = await uow.Deployments.GetInfoAsync(TestContext.Current.CancellationToken);
 
         Assert.Empty(deployments);
         // Response has no content

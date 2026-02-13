@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { truncate } from './truncate';
+import yaml from 'js-yaml';
 
 /**
  * A utility function to conditionally join CSS class names together.
@@ -110,3 +111,16 @@ export const normalizeDockerId = (id?: string) => (id ? id.slice(0, 12).toLowerC
 export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export const pluralize = (word: string) => (word.endsWith('y') ? word.slice(0, -1) + 'ies' : word + 's');
+
+export const formatActivityEvent = (event: string) => event.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+export const serializeData = (data: unknown, format: 'json' | 'yaml' = 'yaml') => {
+  try {
+    if (format === 'yaml') {
+      return yaml.dump(data, { noRefs: true });
+    }
+    return JSON.stringify(data, null, 2);
+  } catch {
+    return format === 'yaml' ? '# Error serializing YAML' : '// Error serializing JSON';
+  }
+};

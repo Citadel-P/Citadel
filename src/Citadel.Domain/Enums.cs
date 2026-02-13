@@ -373,11 +373,8 @@ public enum ActivityEventType
     DeploymentStarted,
     DeploymentStopped,
     DeploymentPaused,
-    DeploymentUnpaused,
-    DeploymentDeployed,
-    DeploymentFailed,
+    DeploymentApplied,
     DeploymentDegraded,
-    DeploymentRecreated,
     #endregion
 
     #region Platform Events

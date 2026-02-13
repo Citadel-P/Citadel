@@ -1040,14 +1040,17 @@ export function FormShell<T>({
 
       {/* Preview Modal */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent aria-describedby={undefined} className="w-full max-w-[1100px] sm:max-w-[1100px]">
+        <DialogContent
+          aria-describedby={undefined}
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+          }}
+          className="w-full max-w-[1100px] sm:max-w-[1100px]">
           <DialogHeader>
             <DialogTitle>Configuration changes</DialogTitle>
           </DialogHeader>
 
-          <div className="pt-4">
-            <MonacoDiff original={original} modified={merged} format="yaml" />
-          </div>
+          <MonacoDiff original={original} modified={merged} format="yaml" />
         </DialogContent>
       </Dialog>
     </div>

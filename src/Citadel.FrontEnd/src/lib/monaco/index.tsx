@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DiffEditor, Editor, Monaco, type OnMount } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
-import yaml from 'js-yaml';
 import * as prettier from 'prettier/standalone';
 import * as pluginTypescript from 'prettier/plugins/typescript';
 import * as pluginEsTree from 'prettier/plugins/estree';
 import * as pluginYaml from 'prettier/plugins/yaml';
 
 import { useLayoutContext } from '@/lib/context/layout-context';
-import { useWindowDimensions } from '../hooks';
-import { cn } from '../utils';
+import { useLocalStorage, useWindowDimensions } from '../hooks';
+import { cn, serializeData } from '../utils';
+import { ButtonGroup } from '@/components/ui/button-group';
+import { Button } from '@/components/ui/button';
+import { Columns2, Rows4 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // --- Configuration Constants ---
 const LINE_HEIGHT_PX = 18;
@@ -28,17 +31,9 @@ export type SupportedLanguage =
   | 'string_list' // Custom language support
   | 'key_value';
 
+type DiffFormat = 'json' | 'yaml';
+type DiffLayout = 'side-by-side' | 'inline';
 // --- Helper: Serialization ---
-const serializeData = (data: unknown, format: 'json' | 'yaml') => {
-  try {
-    if (format === 'yaml') {
-      return yaml.dump(data, { noRefs: true });
-    }
-    return JSON.stringify(data, null, 2);
-  } catch {
-    return format === 'yaml' ? '# Error serializing YAML' : '// Error serializing JSON';
-  }
-};
 
 const useDynamicHeight = (
   content: string | undefined,
@@ -123,6 +118,7 @@ interface MonacoEditorProps {
   folding?: boolean;
   minimap?: boolean;
   fontSize?: number;
+  title?: string;
 }
 
 export const MonacoEditor = ({
@@ -136,6 +132,7 @@ export const MonacoEditor = ({
   folding = false,
   minimap = false,
   fontSize = 13,
+  title,
 }: MonacoEditorProps) => {
   const [editorInstance, setEditorInstance] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
   const { currentTheme, handleBeforeMount } = useThemeEditor();
@@ -171,7 +168,9 @@ export const MonacoEditor = ({
 
   return (
     <div className={cn('mx-2 my-1 w-full relative min-w-0', className)} style={{ height: `${containerHeight}px` }}>
-      <div className="absolute inset-0">
+      <div className="flex flex-col gap-2 absolute inset-0">
+        <span className="text-sm font-medium text-foreground">{title}</span>
+
         <Editor
           language={language}
           value={value}
@@ -356,55 +355,113 @@ export function MonacoDiff({
   original,
   modified,
   format,
+  title,
 }: {
   original: unknown;
   modified: unknown;
-  format: 'json' | 'yaml';
+  format: DiffFormat;
+  title?: string;
 }) {
   const [editor, setEditor] = useState<monaco.editor.IStandaloneDiffEditor | null>(null);
+  const [layout, setLayout] = useLocalStorage<DiffLayout>('monaco-diff-layout', 'side-by-side');
   const { currentTheme, handleBeforeMount } = useThemeEditor();
 
-  const origText = serializeData(original, format);
-  const modText = serializeData(modified, format);
+  const originalText = useMemo(() => serializeData(original, format), [original, format]);
+  const modifiedText = useMemo(() => serializeData(modified, format), [modified, format]);
 
-  const lineCount = Math.max(origText.split(/\r\n|\r|\n/).length, modText.split(/\r\n|\r|\n/).length);
+  const maxLineCount = useMemo(() => {
+    const originalLines = countLines(originalText);
+    const modifiedLines = countLines(modifiedText);
+    return Math.max(originalLines, modifiedLines);
+  }, [originalText, modifiedText]);
 
   useEffect(() => {
     if (!editor) return;
 
     const container = editor.getContainerDomNode();
-    const height = Math.max(Math.min(lineCount * 18 + 40, DEFAULT_MAX_HEIGHT), DEFAULT_MIN_HEIGHT);
+    const height = clamp(maxLineCount * 18 + 40, DEFAULT_MIN_HEIGHT, DEFAULT_MAX_HEIGHT);
 
     container.style.height = `${height}px`;
-
     editor.layout();
-  }, [editor, lineCount]);
+  }, [editor, maxLineCount]);
 
   return (
-    <div className="w-full min-w-0 mx-1">
+    <div className="flex flex-col gap-2 w-full min-w-0">
+      <DiffEditorHeader layout={layout} onChange={setLayout} title={title} />
+
       <DiffEditor
-        original={origText}
-        modified={modText}
+        original={originalText}
+        modified={modifiedText}
         language={format}
         beforeMount={handleBeforeMount}
         theme={currentTheme}
-        keepCurrentModifiedModel={true}
-        keepCurrentOriginalModel={true}
+        keepCurrentModifiedModel
+        keepCurrentOriginalModel
         options={{
           automaticLayout: true,
-          renderSideBySide: true,
+          renderSideBySide: layout === 'side-by-side',
           scrollBeyondLastLine: false,
           minimap: { enabled: false },
           hideUnchangedRegions: { enabled: true },
           readOnly: true,
         }}
-        onMount={(editorInstance) => {
-          setEditor(editorInstance);
-          requestAnimationFrame(() => {
-            editorInstance.layout();
-          });
+        onMount={(instance) => {
+          setEditor(instance);
+          requestAnimationFrame(() => instance.layout());
         }}
       />
     </div>
   );
+}
+
+function DiffEditorHeader({
+  layout,
+  title,
+  onChange,
+}: {
+  layout: DiffLayout;
+  title?: string;
+  onChange: (layout: DiffLayout) => void;
+}) {
+  const tooltip = layout === 'side-by-side' ? 'Switch to inline diff' : 'Switch to side-by-side diff';
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <div className="flex items-center justify-between w-full gap-2">
+          <span className="text-sm font-medium text-foreground truncate">{title}</span>
+          <TooltipTrigger asChild>
+            <ButtonGroup aria-label="Diff layout">
+              <Button
+                variant={layout === 'inline' ? 'secondary' : 'outline'}
+                size="icon-sm"
+                className="rounded-none"
+                onClick={() => onChange('inline')}
+                disabled={layout === 'inline'}>
+                <Rows4 className="size-3.5" />
+              </Button>
+
+              <Button
+                variant={layout === 'side-by-side' ? 'secondary' : 'outline'}
+                size="icon-sm"
+                className="rounded-none"
+                onClick={() => onChange('side-by-side')}
+                disabled={layout === 'side-by-side'}>
+                <Columns2 className="size-3.5" />
+              </Button>
+            </ButtonGroup>
+          </TooltipTrigger>
+        </div>
+
+        <TooltipContent side="top">{tooltip}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+function countLines(text: string) {
+  return text.split(/\r\n|\r|\n/).length;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }

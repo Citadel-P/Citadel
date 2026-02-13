@@ -92,9 +92,9 @@ internal sealed class ContainerDestroyedWorkItem(
 
         EventInfo? eventInfo = status switch
         {
-            DeploymentStatus.Healthy => new DeploymentStarted(),
-            DeploymentStatus.Stopped => new DeploymentStopped(),
-            DeploymentStatus.Pending => new DeploymentPaused(),
+            DeploymentStatus.Healthy => new DeploymentStarted([containerId]),
+            DeploymentStatus.Stopped => new DeploymentStopped([containerId]),
+            DeploymentStatus.Pending => new DeploymentPaused([containerId]),
             DeploymentStatus.Degraded => new DeploymentDegraded($"The associated container was deleted (ID: {containerId})."),
             _ => null
         };
@@ -113,21 +113,29 @@ internal sealed class ContainerDestroyedWorkItem(
             return (deployment, null);
         }
 
-        var activity = new ActivityEvent(
-                info: eventInfo,
-                eventType: type,
-                resourceId: deployment.Id,
-                platformId: deployment.PlatformId,
-                resourceName: deployment.Name,
-                status: eventInfo is DeploymentDegraded ? ActivityStatus.Warning : ActivityStatus.Success,
-                actorId: deployment.ControlTriggeredBy ?? Constants.SystemId
-                );
-        await uow.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        // When a deployment is applying, we don't want to update the status & log the activities
+        ActivityEvent? activity = null;
+        var deploymentInProgress = deployment.Status == DeploymentStatus.Applying;
+        if (!deploymentInProgress)
+        {
+            activity = new ActivityEvent(
+                    info: eventInfo,
+                    eventType: type,
+                    resourceId: deployment.Id,
+                    platformId: deployment.PlatformId,
+                    resourceName: deployment.Name,
+                    status: eventInfo is DeploymentDegraded ? ActivityStatus.Warning : ActivityStatus.Success,
+                    actorId: deployment.ControlTriggeredBy ?? Constants.SystemId
+                    );
+
+            await uow.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        }
+        
 
         deployment.ReleaseProcessing(status);
         await uow.Deployments.UpdateProcessingAsync(
             id: deployment.Id,
-            status: deployment.Status,
+            status: deploymentInProgress ? DeploymentStatus.Applying : deployment.Status,
             state: deployment.ControlState,
             startedAt: deployment.ControlStartedAt,
             rowVersion: deployment.RowVersion,

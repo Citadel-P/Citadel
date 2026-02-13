@@ -68,9 +68,20 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return result?.ToDomain();
     }
 
-    public async Task<IEnumerable<Deployment>?> GetInfoAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
+    public async Task<IEnumerable<Deployment>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string sql = BaseSelect + " " + """
+        const string sql = """
+        SELECT
+            d.*,
+            c.Id AS Container_ContainerId,
+            c.DockerContainerId AS Container_DockerContainerId,
+            p.Name AS Platform_Name,
+            p.status AS Platform_Status
+        FROM Deployments d 
+        LEFT JOIN Containers c
+            ON d.Id = c.DeploymentId
+        LEFT JOIN Platforms p 
+            ON d.PlatformId = p.Id
             WHERE d.Id IN (SELECT value FROM json_each(@Ids))
             ORDER BY d.CreatedAt DESC, d.Name ASC
         """;
@@ -141,7 +152,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         }, transaction: tx());
     }
 
-    public async Task<IEnumerable<Deployment>> GetAllAsync(CancellationToken cancellationToken)
+    public async Task<IEnumerable<Deployment>> GetInfoAsync(CancellationToken cancellationToken)
     {
         const string sql = """
             SELECT

@@ -30,7 +30,7 @@ internal sealed class DeploymentProcessingService(
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-        var deployments = await uow.Deployments.GetInfoAsync(deploymentIds, ct);
+        var deployments = await uow.Deployments.GetAllAsync(deploymentIds, ct);
         foreach (var deployment in deployments ?? [])
         {
             deployment.MarkProcessing(actorId);

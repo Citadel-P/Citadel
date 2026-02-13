@@ -84,7 +84,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
 
         // Add activity
         ActivityEvent? activity = null;
-        if (string.IsNullOrEmpty(patchedDeployment.Name) && deployment.Name != patchedDeployment.Name)
+        if (!string.IsNullOrEmpty(patchedDeployment.Name) && string.Compare(deployment.Name, patchedDeployment.Name, StringComparison.OrdinalIgnoreCase) != 0)
         {
             activity = new ActivityEvent(
                actorId: actorId,

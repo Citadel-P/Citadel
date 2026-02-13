@@ -94,7 +94,7 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-        var deployment = (await uow.Deployments.GetAllAsync(TestContext.Current.CancellationToken)).First();
+        var deployment = (await uow.Deployments.GetInfoAsync(TestContext.Current.CancellationToken)).First();
         Assert.Equal(ResourceControlState.Idle, deployment.ControlState);
 
         notificationMock.Verify(
@@ -188,7 +188,7 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
     {
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var deployment = (await uow.Deployments.GetAllAsync(TestContext.Current.CancellationToken)).First();
+        var deployment = (await uow.Deployments.GetInfoAsync(TestContext.Current.CancellationToken)).First();
 
         await uow.Deployments.UpdateProcessingAsync(
             id: deployment.Id,
