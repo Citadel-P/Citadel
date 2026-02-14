@@ -20,6 +20,7 @@ import { useContainerInfoGroup } from '@/features/docker-resources/containers/ho
 import Loader from '@/components/ui/loader';
 import { ContainerExec } from '@/features/docker-resources/containers/container-info/container-exec';
 import { ContainerStats } from '@/features/docker-resources/containers/container-info/container-stats';
+import { ActivitiesTab } from '@/features/activities';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -54,6 +55,12 @@ export const DeploymentFormComponents: RequiredFormComponents = {
           resource.status === DeploymentStatus.Degraded || resource.status === DeploymentStatus.Created,
         Content: ({ resource }: { resource: DeploymentView }) => {
           return <DeploymentRuntime key={resource.containerId} deployment={resource} />;
+        },
+      },
+      {
+        label: 'Activities',
+        Content: ({ resource }: { resource: DeploymentView }) => {
+          return <ActivitiesTab resourceId={resource.id} resourceType="Deployment" />;
         },
       },
     ],

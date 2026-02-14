@@ -3,7 +3,6 @@ using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
 using Domain.Entities.Identity;
 using Hosting.Common.Models;
-using System.Linq.Expressions;
 
 namespace Domain.Contracts.Interfaces;
 
@@ -11,6 +10,7 @@ public interface IUnitOfWork : IAsyncDisposable
 {
     IUserRepository Users { get; }
     ITeamRepository Teams { get; }
+    IActorRepository Actors { get; }
     IImageRepository Images { get; }
     IPlatformRepository Platforms { get; }
     IRegistryRepository Registries { get; }
@@ -23,6 +23,11 @@ public interface IUnitOfWork : IAsyncDisposable
 
     Task CommitAsync(CancellationToken cancellationToken);
     Task RollbackAsync();
+}
+
+public interface IActorRepository
+{
+    Task<Actor?> GetById(Guid id, CancellationToken cancellationToken);
 }
 
 public interface IUserRepository 

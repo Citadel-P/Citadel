@@ -386,11 +386,10 @@ public class DeploymentApplyTests : IntegrationTestBase
 
         // Assert
         Assert.True(response.IsSuccessStatusCode);
-        // Deployment should remain in original state
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var deployment = await uow.Deployments.GetAsync(_deploymentId, TestContext.Current.CancellationToken);
-        Assert.Equal(DeploymentStatus.Created, deployment?.Status);
+        Assert.Equal(DeploymentStatus.Failed, deployment?.Status);
     }
 
     [Fact]

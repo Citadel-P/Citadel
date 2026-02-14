@@ -1,4 +1,6 @@
-﻿using Application.Services;
+﻿using Application.Features.Deployments.Notifications;
+using Application.Services;
+using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
@@ -33,7 +35,7 @@ public sealed record CreateDeployment(
     }
 }
 
-internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, INotificationQueue notificationQueue, IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateDeployment, Result<Deployment>>
+internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, INotificationQueue notificationQueue, IActivityStreamManager activityHub, IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateDeployment, Result<Deployment>>
 {
     public async ValueTask<Result<Deployment>> Handle(CreateDeployment command, CancellationToken cancellationToken)
     {
@@ -90,7 +92,7 @@ internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, INotificationQueu
         await unitOfWork.CommitAsync(cancellationToken);
 
         // Notify
-        await notificationQueue.EnqueueAsync(new ActivityNotification(activity), cancellationToken);
+        await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return deployment;
     }
 }

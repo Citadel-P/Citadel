@@ -45,6 +45,10 @@ public interface IApplicationHubDispatcher
     Task SendDeploymentInfo(Deployment deployment, string action);
     #endregion
 
+    #region Activities
+    Task SendActivityInfo(ActivityEvent activity);
+    #endregion
+
     #region Exec Sessions
     Task SendExecOutput(string containerId, string sessionId, byte[] data);
     #endregion

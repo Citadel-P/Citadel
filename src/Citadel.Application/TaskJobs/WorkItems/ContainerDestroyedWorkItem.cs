@@ -1,4 +1,5 @@
-﻿using Application.Services;
+﻿using Application.Features.Deployments.Notifications;
+using Application.Services;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -14,6 +15,7 @@ internal sealed class ContainerDestroyedWorkItem(
     Guid platformId,
     DaemonContainerEventInfo eventInfo,
     INotificationQueue notificationQueue,
+    IActivityStreamManager activityHub,
     IDeploymentStreamManager deploymentHub,
     IDockerDaemonStreamManager dockerDaemonHub,
     IPlatformContainerCache platformContainerCache,
@@ -64,7 +66,7 @@ internal sealed class ContainerDestroyedWorkItem(
             }
             if (activityEvent != null)
             {
-                await notificationQueue.EnqueueAsync(new ActivityNotification(activityEvent), cancellationToken);
+                await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activityEvent.AssignActor(uow, cancellationToken)), cancellationToken);
             }
         }
         catch (Exception ex)

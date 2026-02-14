@@ -1,4 +1,5 @@
-﻿using Application.Services;
+﻿using Application.Features.Deployments.Notifications;
+using Application.Services;
 using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
@@ -25,6 +26,7 @@ internal sealed class ApplyDeploymentHandler(
     INotificationQueue notificationQueue,
     IPlatformContainerCache platformCache,
     IDeploymentStreamManager deploymentHub,
+    IActivityStreamManager activityHub,
     IHttpContextAccessor httpContextAccessor,
     IConnectorFactory<IContainerConnector> containerConnectorFactory,
     IConnectorFactory<IDeploymentConnector> deploymentConnectorFactory)
@@ -153,6 +155,7 @@ internal sealed class ApplyDeploymentHandler(
                 actorId,
                 deploymentResult.ContainerId,
                 deploymentHub,
+                activityHub,
                 notificationQueue),
             ct);
 
@@ -193,6 +196,7 @@ internal sealed class ApplyDeploymentHandler(
                 status,
                 message,
                 deploymentHub,
+                activityHub,
                 notificationQueue),
             ct);
     }
@@ -229,8 +233,8 @@ internal sealed class ApplyDeploymentHandler(
     }
 }
 
-internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid actorId, DeploymentStatus status, string? message, IDeploymentStreamManager deploymentHub, INotificationQueue notificationQueue)
-    : IDbWorkItem
+internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid actorId, DeploymentStatus status, string? message, IDeploymentStreamManager deploymentHub,
+    IActivityStreamManager activityHub, INotificationQueue notificationQueue) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
@@ -241,9 +245,10 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid act
         await uow.Deployments.UpdateAsync(deployment, ct);
 
         // Add activity event
+        ActivityEvent? activity = null;
         if (status == DeploymentStatus.Failed)
         {
-            var activity = new ActivityEvent(
+            activity = new ActivityEvent(
                             actorId: actorId,
                             resourceId: deployment.Id,
                             platformId: deployment.PlatformId,
@@ -258,14 +263,20 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid act
 
         await uow.CommitAsync(ct);
 
-        // Push notification
-        var workItem = new DeploymentNotificationWorkItem(deploymentHub, deployment);
-        await notificationQueue.EnqueueAsync(workItem, ct);
+        // Push notifications
+        var deploymentWorkItem = new DeploymentNotificationWorkItem(deploymentHub, deployment);
+        await notificationQueue.EnqueueAsync(deploymentWorkItem, ct);
+
+        if (activity is not null)
+        {
+            var activityWorkItem = new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, ct));
+            await notificationQueue.EnqueueAsync(activityWorkItem, ct);
+        }
     }
 }
 
-internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, Guid actorId, string containerId, IDeploymentStreamManager deploymentHub, INotificationQueue notificationQueue)
-    : IDbWorkItem
+internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, Guid actorId, string containerId,
+    IDeploymentStreamManager deploymentHub, IActivityStreamManager activityHub, INotificationQueue notificationQueue): IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
@@ -295,9 +306,12 @@ internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, Guid actorI
 
         await uow.CommitAsync(ct);
 
-        // Push notification
-        var workItem = new DeploymentNotificationWorkItem(deploymentHub, deployment );
-        await notificationQueue.EnqueueAsync(workItem, ct);
+        // Push notifications
+        var deploymentWorkItem = new DeploymentNotificationWorkItem(deploymentHub, deployment );
+        await notificationQueue.EnqueueAsync(deploymentWorkItem, ct);
+
+        var activityWorkItem = new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, ct));
+        await notificationQueue.EnqueueAsync(activityWorkItem, ct);
     }
 }
 

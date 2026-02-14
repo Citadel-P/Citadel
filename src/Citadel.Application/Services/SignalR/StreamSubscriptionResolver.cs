@@ -16,6 +16,7 @@ internal sealed class StreamSubscriptionResolver(IServiceProvider provider) : IS
         ["container-log"] = typeof(ContainerLogStreamManager),
         ["container-exec"] = typeof(ExecSessionManager),
         ["images"] = typeof(ImageStreamManager),
+        ["activity"] = typeof(ActivityStreamManager),
         ["platforms"] = typeof(PlatformStreamManager),
         ["containers"] = typeof(ContainerStreamManager),
         ["deployment"] = typeof(DeploymentStreamManager),

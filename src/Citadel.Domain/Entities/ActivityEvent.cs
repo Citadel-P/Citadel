@@ -1,4 +1,5 @@
-﻿using Domain.Entities.Identity;
+﻿using Domain.Contracts.Interfaces;
+using Domain.Entities.Identity;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
@@ -110,6 +111,13 @@ public sealed class ActivityEvent : IAuditedEntity
             Platform = platform,
             Actor = actor
         };
+    }
+
+    public async Task<ActivityEvent> AssignActor(IUnitOfWork uow, CancellationToken ct)
+    {
+        var actor = await uow.Actors.GetById(CreatedByActorId, ct);
+        Actor = actor;
+        return this;
     }
 
     private static bool IsValidInfoForEvent(ActivityEventType type, EventInfo info)

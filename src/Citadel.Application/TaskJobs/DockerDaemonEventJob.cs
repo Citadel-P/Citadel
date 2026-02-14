@@ -14,6 +14,7 @@ namespace Application.TaskJobs;
 
 internal sealed class DockerDaemonEventJob(
     ILogger<DockerDaemonEventJob> logger,
+    IActivityStreamManager activityHub,
     IDockerDaemonStreamManager dockerDaemonHub,
     IPlatformContainerCache platformContainerCache,
     IConnectorFactory<IPlatformConnector> connectorFactory,
@@ -147,7 +148,7 @@ internal sealed class DockerDaemonEventJob(
 
     private ValueTask OnContainerUpdated(DaemonContainerEventInfo eventInfo, CancellationToken cancellationToken)
     {
-        var item = new ContainerUpdatedWorkItem(eventInfo, notificationQueue, deploymentHub, dockerDaemonHub, containerEventBroadcaster, logger);
+        var item = new ContainerUpdatedWorkItem(eventInfo, notificationQueue, activityHub, deploymentHub, dockerDaemonHub, containerEventBroadcaster, logger);
 
         return dbWorkQueue.EnqueueAsync(item, cancellationToken);
     }
@@ -158,6 +159,7 @@ internal sealed class DockerDaemonEventJob(
             platformId,
             eventInfo,
             notificationQueue,
+            activityHub,
             deploymentHub,
             dockerDaemonHub,
             platformContainerCache,

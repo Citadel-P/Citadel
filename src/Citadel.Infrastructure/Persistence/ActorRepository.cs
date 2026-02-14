@@ -1,0 +1,19 @@
+﻿using Dapper;
+using Domain.Contracts.Interfaces;
+using Domain.Entities.Identity;
+using Infrastructure.Persistence.Dtos;
+using Infrastructure.Persistence.Mappers;
+using Infrastructure.TypeHandlers;
+using System.Data;
+
+namespace Infrastructure.Persistence;
+
+public sealed class ActorRepository(IDbConnection db, Func<IDbTransaction> tx) : IActorRepository
+{
+    public async Task<Actor?> GetById(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT * FROM Actors WHERE Id = @Id LIMIT 1";
+        var result = await db.QuerySingleOrDefaultAsync<ActorDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        return result?.ToDomain();
+    }
+}

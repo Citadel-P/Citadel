@@ -1,4 +1,4 @@
-import { Activity, Cable, Layers, Rocket, Server, SquareStack } from 'lucide-react';
+import { Activity, Cable, Layers, MoveUpRight, Rocket, Server, SquareStack } from 'lucide-react';
 import { useMemo } from 'react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useActivitiesGroup } from './hooks/useActivitiesGroup';
@@ -6,11 +6,16 @@ import { ActivitiesTable } from './table';
 import { ActivityEventType, ActivityResourceType } from '@/api/generated/api.types';
 import { useActivityQuery } from '@/lib/atoms';
 import { ResourceSelectorField, SelectField } from '@/components/custom/common';
+import { ResourceType } from '@/api/types';
+import TaskSheet from '@/components/custom/task-sheet';
+import { Link } from 'react-router';
 
 export const ActivityComponents: RequiredComponents = {
   Icon: <Activity className="h-4 w-4" />,
   Content: ({ items, actions, isLoading }) => {
-    return <ActivitiesTable pagedResult={items as any} isLoading={isLoading} />;
+    return (
+      <ActivitiesTable pagedResult={items as any} isLoading={isLoading} displayTarget={true} displayPagging={true} />
+    );
   },
   header: {
     showSearch: false,
@@ -109,6 +114,26 @@ function SearchSection() {
         placeholder="All Events"
         allLabel="All Events"
       />
+    </div>
+  );
+}
+
+export function ActivitiesTab({ resourceId, resourceType }: { resourceId: string; resourceType: ResourceType }) {
+  const { pagedActivities, isLoading } = useActivitiesGroup(resourceId, resourceType, 20);
+  const link = useMemo(
+    () => `../activities?resourceType=${resourceType}&resourceId=${resourceId}`,
+    [resourceId, resourceType],
+  );
+  return (
+    <div className="flex flex-col gap-4">
+      <ActivitiesTable pagedResult={pagedActivities as any} isLoading={isLoading} />
+      <Link
+        to={link}
+        className="border border-dashed p-2 rounded-md flex items-center justify-center text-muted-foreground gap-2 cursor-pointer">
+        <span>Show All</span>
+        <MoveUpRight className="h-3.5 w-3.5" />
+      </Link>
+      <TaskSheet type={'Activity'} />
     </div>
   );
 }

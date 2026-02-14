@@ -1,4 +1,5 @@
-﻿using Application.Services;
+﻿using Application.Features.Deployments.Notifications;
+using Application.Services;
 using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
@@ -43,7 +44,8 @@ public sealed record PatchDeployment(Guid Id, JsonMergePatchDocument<Deployment>
     }
 }
 
-internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeploymentStreamManager deploymentHub, INotificationQueue notificationQueue, IHttpContextAccessor httpContextAccessor) : ICommandHandler<PatchDeployment, Result<Deployment>>
+internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeploymentStreamManager deploymentHub, INotificationQueue notificationQueue, 
+    IActivityStreamManager activityHub, IHttpContextAccessor httpContextAccessor) : ICommandHandler<PatchDeployment, Result<Deployment>>
 {
     public async ValueTask<Result<Deployment>> Handle(PatchDeployment command, CancellationToken cancellationToken)
     {
@@ -88,7 +90,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
         {
             activity = new ActivityEvent(
                actorId: actorId,
-               resourceId: patchedDeployment.Id,
+               resourceId: deployment.Id,
                platformId: patchedDeployment.PlatformId,
                resourceName: patchedDeployment.Name,
                eventType: ActivityEventType.DeploymentRenamed,
@@ -100,7 +102,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
         {
             activity = new ActivityEvent(
                 actorId: actorId,
-                resourceId: patchedDeployment.Id,
+                resourceId: deployment.Id,
                 platformId: patchedDeployment.PlatformId,
                 status: ActivityStatus.Success,
                 resourceName: patchedDeployment.Name,
@@ -129,7 +131,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
         // Notify
         await notificationQueue.EnqueueAsync(workItem, cancellationToken);
         if (activity != null)
-            await notificationQueue.EnqueueAsync(new ActivityNotification(activity), cancellationToken);
+            await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return deployment;
     }
 }

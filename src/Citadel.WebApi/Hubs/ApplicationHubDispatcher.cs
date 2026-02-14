@@ -5,6 +5,7 @@ using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Microsoft.AspNetCore.SignalR;
+using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.Images;
@@ -126,6 +127,15 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
         return hubContext.Clients
             .Group(WellKnownSignalRGroups.ContainerExecGroup(containerId, sessionId))
             .SendAsync("SendContainerExec", data);
+    }
+    #endregion
+
+    #region Activities
+    public Task SendActivityInfo(ActivityEvent activity)
+    {
+        return hubContext.Clients
+            .Group(WellKnownSignalRGroups.ActivityGroup(activity.ResourceId ?? Guid.Empty))
+            .SendAsync("ActivityEventReceived", ActivityView.Map(activity));
     }
     #endregion
 }

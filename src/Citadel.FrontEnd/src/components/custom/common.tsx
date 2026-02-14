@@ -45,7 +45,14 @@ import {
 } from 'lucide-react';
 import { byteTransform } from '@/lib/bytes.helper';
 import { Link } from 'react-router';
-import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export function ResourceSelectorField<T extends { id: string; name: string }>({
   type,
@@ -687,6 +694,7 @@ export function SelectField({
   placeholder,
   allLabel,
   allIcon: AllIcon,
+  selectableLabel = true,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -694,6 +702,7 @@ export function SelectField({
   placeholder: string;
   allLabel: string;
   allIcon?: React.ComponentType<{ className?: string }>;
+  selectableLabel?: boolean;
 }) {
   return (
     <div className="min-w-[200px]">
@@ -702,13 +711,19 @@ export function SelectField({
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent className="bg-background">
-          <SelectItem value="All">
-            <div className="flex items-center gap-3">
-              {AllIcon && <AllIcon className="size-3.5 text-muted-foreground" />}
-              <span>{allLabel}</span>
-            </div>
-          </SelectItem>
-          <SelectSeparator />
+          {selectableLabel ? (
+            <>
+              <SelectItem value="All">
+                <div className="flex items-center gap-3">
+                  {AllIcon && <AllIcon className="size-3.5 text-muted-foreground" />}
+                  <span>{allLabel}</span>
+                </div>
+              </SelectItem>
+              <SelectSeparator />
+            </>
+          ) : (
+            <span className="p-2 text-muted-foreground text-sm">{allLabel}</span>
+          )}
           {options.map((option) => {
             if (typeof option === 'string') {
               return (
@@ -732,3 +747,10 @@ export function SelectField({
     </div>
   );
 }
+
+export const pageSizeOptions = [
+  { value: '25', label: '25' },
+  { value: '50', label: '50' },
+  { value: '100', label: '100' },
+  { value: '200', label: '200' },
+];

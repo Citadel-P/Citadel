@@ -1,4 +1,5 @@
-﻿using Application.Services;
+﻿using Application.Features.Deployments.Notifications;
+using Application.Services;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -11,6 +12,7 @@ namespace Application.TaskJobs.WorkItems;
 internal sealed class ContainerUpdatedWorkItem(
     DaemonContainerEventInfo eventInfo,
     INotificationQueue notificationQueue,
+    IActivityStreamManager activityHub,
     IDeploymentStreamManager deploymentHub,
     IDockerDaemonStreamManager dockerDaemonHub,
     IContainerEventBroadcaster containerEventBroadcaster,
@@ -47,6 +49,13 @@ internal sealed class ContainerUpdatedWorkItem(
             {
                 var deploymentWorkItem = new DeploymentNotificationWorkItem(deploymentHub, deployment);
                 await notificationQueue.EnqueueAsync(deploymentWorkItem, cancellationToken);
+            }
+
+            // Notify Activity
+            if (activityEvent != null)
+            {
+                var activityWorkItem = new ActivityNotificationWorkItem(activityHub, await activityEvent.AssignActor(uow, cancellationToken));
+                await notificationQueue.EnqueueAsync(activityWorkItem, cancellationToken);
             }
         }
         catch (Exception ex)
