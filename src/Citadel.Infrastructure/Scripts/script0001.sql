@@ -90,7 +90,6 @@ CREATE TABLE "Deployments" (
     "RowVersion" INTEGER NOT NULL DEFAULT 0,
     "Spec" TEXT NOT NULL,
     "Status" TEXT NOT NULL,
-    "UpdateBehavior" TEXT NULL,
     CONSTRAINT "FK_Deployments_Actors_ControlTriggeredBy" FOREIGN KEY ("ControlTriggeredBy") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_Deployments_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_Deployments_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
@@ -291,7 +290,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260207164254_migration0001', '10.0.2');
+VALUES ('20260215130724_migration0001', '10.0.2');
 
 COMMIT;
 

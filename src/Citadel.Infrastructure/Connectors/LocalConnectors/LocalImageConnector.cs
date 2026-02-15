@@ -1,10 +1,10 @@
-﻿using System.Runtime.CompilerServices;
-using Domain.Contracts.Interfaces;
+﻿using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Images;
 using Hosting.DockerClient.Services;
 using Hosting.Extensions;
 using Infrastructure.Connectors.Mappers;
 using LightResults;
+using System.Runtime.CompilerServices;
 
 namespace Infrastructure.Connectors.LocalConnectors;
 
@@ -60,6 +60,12 @@ internal class LocalImageConnector(IImageService imageService) : IImageConnector
     public async Task<Result<ExposedPortsResult>> GetExposedPortsAsync(RunImageInfoCommand command, CancellationToken cancellationToken)
     {
         var result = await imageService.GetExposedPorts(command.ImageId, cancellationToken);
+        return ServiceResultHandlers.HandleResult(result, ImageMappers.Map);
+    }
+
+    public async Task<Result<DistributionResult>> DistributionInspectAsync(DistributionInspectCommand command, CancellationToken cancellationToken)
+    {
+        var result = await imageService.DistributionInspect(command.ImageName, command.Auth, cancellationToken);
         return ServiceResultHandlers.HandleResult(result, ImageMappers.Map);
     }
 }

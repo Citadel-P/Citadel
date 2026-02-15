@@ -35,10 +35,17 @@ internal class ContainerStatRepository(IDbConnection db, Func<IDbTransaction> tx
         return result?.ToDomain() ?? [];
     }
 
-    public Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken)
+    public async Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken)
     {
+        var p = new { CreatedBefore = createdBeforeEpochSeconds };
+
+        var countstats = "SELECT COUNT(*) from  ContainerStats WHERE Created < @CreatedBefore";
+        var totalCount = await db.QuerySingleAsync<int>(countstats, p, transaction: tx());
+
         const string sql = "DELETE FROM ContainerStats WHERE Created < @CreatedBefore";
-        return db.ExecuteAsync(sql, new { CreatedBefore = createdBeforeEpochSeconds }, transaction: tx());
+        await db.ExecuteAsync(sql, new { CreatedBefore = createdBeforeEpochSeconds }, transaction: tx());
+
+        return totalCount;
     }
 
     public Task<int> BulkInsertAsync(IEnumerable<ContainerStat> stats, CancellationToken cancellationToken)

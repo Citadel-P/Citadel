@@ -16,6 +16,7 @@
       $type: Local,
       imageId: Guid_4
     },
+    updateBehavior: Disabled,
     lifeCycleSpec: {
       stopTimeout: 15,
       stopSignal: SIGKILL,
@@ -42,6 +43,5 @@
       --housekeeping_interval=5s
     ]
   },
-  updateBehavior: Disabled,
   platformStatus: Offline
 }

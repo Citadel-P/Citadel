@@ -82,10 +82,11 @@ public static class ApplicationModule
     {
         services
             .AddHostedService<DockerDaemonEventJob>()
-            .AddHostedService<CleanupStatsJob>()
+            .AddHostedService<CleanupJob>()
             .AddHostedService<PlatformSyncJob>()
             .AddHostedService<PlatformStatsStreamerJob>()
             .AddHostedService<ContainerStatsStreamerJob>()
+            .AddHostedService<DeploymentAutoUpdateJob>()
             .AddHostedService<PlatformStatsWriterJob>()
             .AddHostedService<ContainerStatsWriterJob>()
             .AddHostedService<ContainerSyncJob>()

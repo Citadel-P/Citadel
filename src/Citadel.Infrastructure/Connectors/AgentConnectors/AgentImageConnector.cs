@@ -135,4 +135,9 @@ internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageCon
             return Result.Failure<ExposedPortsResult>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
         }
     }
+
+    public Task<Result<DistributionResult>> DistributionInspectAsync(DistributionInspectCommand command, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
 }

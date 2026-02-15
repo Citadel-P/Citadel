@@ -4,7 +4,6 @@ public sealed class Deployment(
     string name,
     Guid createdByActorId,
     Guid platformId,
-    UpdateBehavior updateBehavior,
     DeploymentSpec? spec = null,
     string? description = null) : IAuditedEntity, IReconcilableResource
 {
@@ -15,7 +14,6 @@ public sealed class Deployment(
 
     public DeploymentStatus Status { get; private set; } = DeploymentStatus.Created;
 
-    public UpdateBehavior UpdateBehavior { get; private set; } = updateBehavior;
     public AutoUpdateState? AutoUpdateState { get; private set; } = new AutoUpdateState(LastCheckedAt: DateTime.MinValue, Status: AutoUpdateStatus.Unknown);
 
     #region IReconcilableResource Members
@@ -62,7 +60,6 @@ public sealed class Deployment(
         DeploymentStatus status,
         DateTime createdAt,
         Guid createdByActorId,
-        UpdateBehavior updateBehavior,
         Guid? controlTriggeredBy,
         string? description = null,
         AutoUpdateState? autoUpdateState = null,
@@ -71,7 +68,7 @@ public sealed class Deployment(
         Image? image = null,
         Container? container = null)
     {
-        return new Deployment(name, createdByActorId, platformId, updateBehavior, spec, description)
+        return new Deployment(name, createdByActorId, platformId, spec, description)
         {
             Id = id,
             Image = image,
@@ -87,12 +84,16 @@ public sealed class Deployment(
         };
     }
 
+    public void SetAutoUpdateState(AutoUpdateState? autoUpdateState)
+    {
+        AutoUpdateState = autoUpdateState;
+    }
+
     public void PartialUpdate(
         string? name = null,
         string? description = null,
         Guid? platformId = null,
         DeploymentStatus? status = null,
-        UpdateBehavior? updateBehavior = null,
         ResourceControlState? resourceControlState = null,
         DeploymentSpec? spec = null,
         Container? container = null)
@@ -102,7 +103,6 @@ public sealed class Deployment(
         if (description != null) Description = description;
         if (platformId != null) PlatformId = platformId.Value;
         if (spec != null) Spec = spec;
-        if (updateBehavior != null) UpdateBehavior = updateBehavior.Value;
         if (container != null) Container = container;
         if (resourceControlState != null) ControlState = resourceControlState.Value;
     }

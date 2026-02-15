@@ -43,9 +43,9 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
             description: "A deployment for testing",
             platformId: platform.Id,
             createdByActorId: Constants.SystemId,
-            updateBehavior: UpdateBehavior.AutoDeploy,
             spec: new DeploymentSpec
             (
+                UpdateBehavior: UpdateBehavior.AutoDeploy,
                 Image: new ExternalImage
                 (
                     RegistryId: Constants.DefaultRegistryId,

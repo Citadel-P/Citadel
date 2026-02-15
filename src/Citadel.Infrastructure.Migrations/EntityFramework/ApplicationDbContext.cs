@@ -443,7 +443,6 @@ internal static class Configuration
         deployment.Property<string>("Spec").HasColumnType("TEXT").IsRequired();
         deployment.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
 
-        deployment.Property<string>("UpdateBehavior").HasColumnType("TEXT").HasDefaultValue(null);
         deployment.Property<DateTime?>("AutoUpdateState_LastCheckedAt").HasColumnType("TEXT").HasDefaultValue(null).IsRequired(false);
         deployment.Property<string>("AutoUpdateState_Status").HasColumnType("TEXT").HasDefaultValue(null);
         deployment.Property<string>("AutoUpdateState_CurrentDigest").HasColumnType("TEXT").HasDefaultValue(null);

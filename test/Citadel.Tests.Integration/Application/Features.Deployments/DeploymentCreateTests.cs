@@ -24,9 +24,9 @@ public class DeploymentCreateTests : IntegrationTestBase
         var createJson = $$"""
             {
                 "name":"deployment-1",
-                "updateBehavior":"Notify",
                 "platformId":"{{_platformId}}",
                 "spec":{
+                    "updateBehavior":"Notify",
                     "image":{
                         "$type":"External",
                         "registryId":"{{Constants.DefaultRegistryId}}",
@@ -62,9 +62,9 @@ public class DeploymentCreateTests : IntegrationTestBase
         var createJson = $$"""
             {
                 "name":"deployment-auto-update",
-                "updateBehavior":"AutoDeploy",
                 "platformId":"{{_platformId}}",
                 "spec":{
+                    "updateBehavior":"AutoDeploy",
                     "image":{
                         "$type":"Internal",
                         "registryId":"{{Constants.DefaultRegistryId}}",
@@ -88,9 +88,9 @@ public class DeploymentCreateTests : IntegrationTestBase
         var createJson = $$"""
             {
                 "name":"deployment-auto-update",
-                "updateBehavior":"AutoDeploy",
                 "platformId":"{{_platformId}}",
                 "spec":{
+                    "updateBehavior":"AutoDeploy",
                     "image":{
                         "$type":"External",
                         "registryId":"{{Constants.DefaultRegistryId}}",
@@ -115,9 +115,9 @@ public class DeploymentCreateTests : IntegrationTestBase
         var createJson = $$"""
             {
                 "name":"deployment-duplicate",
-                "updateBehavior":"Notify",
                 "platformId":"{{_platformId}}",
                 "spec":{
+                    "updateBehavior":"Notify",
                     "image":{
                         "$type":"External",
                         "registryId":"{{Constants.DefaultRegistryId}}",

@@ -1,7 +1,6 @@
 ﻿using Application.Mappers;
 using Application.Services.SignalR;
 using Domain.Contracts.Interfaces;
-using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Images;
 using Domain.Entities;
 using Domain.Entities.Registries;
@@ -115,7 +114,7 @@ internal class PullImageService(
                         (
                             PlatformAddress: platformAddress,
                             FromImage: $"{domainName}/{ghCfg.NameSpace}/{BuildImageAndTag()}",
-                            Auth: ghCfg.GhcrAuthEnabled == true ? ghCfg.GetRegistryAuth(domainName) : null
+                            Auth: ghCfg.GetRegistryAuth(domainName)
                         );
 
                 case CustomRegistry customCfg:
@@ -123,7 +122,7 @@ internal class PullImageService(
                     (
                         PlatformAddress: platformAddress,
                         FromImage: $"{domainName}/{BuildImageAndTag()}",
-                        Auth: customCfg.AuthEnabled == true ? customCfg.GetRegistryAuth(domainName) : null
+                        Auth: customCfg.GetRegistryAuth(domainName)
                     );
 
                 case DockerHubRegistry dockerCfg:

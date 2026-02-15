@@ -1,5 +1,5 @@
-﻿using Citadel.SharedModels.V1;
-using Citadel.Images.V1;
+﻿using Citadel.Images.V1;
+using Citadel.SharedModels.V1;
 using Domain.Contracts.Resources.Images;
 using Google.Protobuf.Collections;
 using static Citadel.Images.V1.ConfigMessage.Types;
@@ -410,5 +410,24 @@ internal static class ImageMappers
             RepoDigests: image?.RepoDigests,
             Labels: image?.Labels ?? new Dictionary<string, string>()
         );
+    }
+
+    internal static DistributionResult Map(this Hosting.DockerClient.DistributionInspect distribution)
+    {
+        var platform = new OCIPlatformResult(
+            Architecture : distribution?.Descriptor?.Platform?.Architecture,
+            Os: distribution?.Descriptor?.Platform?.Os,
+            OsVersion: distribution?.Descriptor?.Platform?.OsVersion
+            );
+
+        var descriptor = new OCIDescriptorResult(
+            MediaType: distribution?.Descriptor?.MediaType,
+            Digest: distribution?.Descriptor?.Digest,
+            Size: distribution?.Descriptor?.Size,
+            Platform : platform,
+            ArtifactType: distribution?.Descriptor?.ArtifactType
+            );
+
+        return new(descriptor);
     }
 }

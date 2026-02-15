@@ -11,14 +11,14 @@ namespace Application.TaskJobs;
 
 internal sealed class ContainerStatsWriterJob(
     IDbWorkQueue dbQueue,
-    INotificationQueue notificationQueue,
     IOptions<JobConfiguration> options,
+    INotificationQueue notificationQueue,
     ChannelReader<ContainersStatBatch> reader,
     IContainerStreamManager containersStreamManager,
     ILogger<ContainerStatsWriterJob> logger) : BackgroundService
 {
     private readonly JobConfiguration _config = options.Value;
-    private Dictionary<Guid, List<ContainerStat>> _buffer = new();
+    private Dictionary<Guid, List<ContainerStat>> _buffer = [];
     private int _bufferedCount;
     private DateTime _lastFlush = DateTime.UtcNow;
 
@@ -32,7 +32,7 @@ internal sealed class ContainerStatsWriterJob(
 
                 // We create a new list here so SignalR doesn't point to a pooled list that gets cleared
                 var notificationStats = batch.Stats.ToList();
-                _ = notificationQueue.EnqueueAsync(new SendContainersNotificationWorkItem(
+                await notificationQueue.EnqueueAsync(new SendContainersNotificationWorkItem(
                     containersStreamManager, batch.PlatformId, notificationStats), cancellationToken);
 
                 // Release the pooled list back to the Streamer as fast as possible

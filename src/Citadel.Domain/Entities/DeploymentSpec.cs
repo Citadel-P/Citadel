@@ -5,6 +5,7 @@ namespace Domain.Entities;
 
 public sealed record DeploymentSpec(
     DeploymentImageInfo Image,
+    UpdateBehavior UpdateBehavior,
     LifeCycleSpec? LifeCycleSpec = null,
     ResourceSpec? ResourceSpec = null,
     Dictionary<string, string>? Labels = null,

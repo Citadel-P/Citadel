@@ -69,9 +69,9 @@ public class DeploymentApplyTests : IntegrationTestBase
             description: "A deployment for testing apply",
             platformId: platform.Id,
             createdByActorId: Constants.SystemId,
-            updateBehavior: UpdateBehavior.AutoDeploy,
             spec: new DeploymentSpec(
                 Image: new LocalImage(ImageId: "sha256:1234567890abcdef"),
+                UpdateBehavior: UpdateBehavior.AutoDeploy,
                 Ports: new List<string> { "80:80" },
                 ResourceSpec: new ResourceSpec(
                     NanoCpus: (float)0.5,
@@ -165,8 +165,8 @@ public class DeploymentApplyTests : IntegrationTestBase
             description: "Uses external image",
             platformId: _platformId,
             createdByActorId: Constants.SystemId,
-            updateBehavior: UpdateBehavior.AutoDeploy,
             spec: new DeploymentSpec(
+                UpdateBehavior: UpdateBehavior.AutoDeploy,
                 Image: new ExternalImage(
                     RegistryId: _registryId,
                     ImageTag: "nginx:latest"

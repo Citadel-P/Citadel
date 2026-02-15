@@ -23,9 +23,9 @@ public class DeploymentPatchTests : IntegrationTestBase
             description: "A deployment for testing",
             platformId: platform.Id,
             createdByActorId: Constants.SystemId,
-            updateBehavior: UpdateBehavior.AutoDeploy,
             spec: new DeploymentSpec
             (
+                UpdateBehavior: UpdateBehavior.AutoDeploy,
                 Image: new ExternalImage
                 (
                     RegistryId: Constants.DefaultRegistryId,
@@ -53,9 +53,9 @@ public class DeploymentPatchTests : IntegrationTestBase
           "name":"Updated-Deployment-Name",
           "description":"Updated description for testing",
           "platformId":"{{_platformId}}",
-          "updateBehavior":"Disabled",
           "spec": 
           {
+            "updateBehavior":"Disabled",
             "image":
             {
                 "$type":"Local",
@@ -114,7 +114,10 @@ public class DeploymentPatchTests : IntegrationTestBase
     {
         var patchJson = """
         {
-          "updateBehavior": "disabled"
+            "spec": 
+              {
+                "updateBehavior": "disabled"
+              }
         }
         """;
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
@@ -130,7 +133,7 @@ public class DeploymentPatchTests : IntegrationTestBase
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var deployment = await uow.Deployments.GetAsync(_deploymentId, TestContext.Current.CancellationToken);
 
-        Assert.Equal(UpdateBehavior.Disabled, deployment.UpdateBehavior);
+        Assert.Equal(UpdateBehavior.Disabled, deployment?.Spec?.UpdateBehavior);
     }
 
     [Fact]

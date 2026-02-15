@@ -122,4 +122,16 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
             page,
             pageSize);
     }
+
+    public async Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken)
+    {
+        var p = new { CreatedBefore = createdBeforeEpochSeconds };
+
+        var countstats = "SELECT COUNT(*) from  ActivityEvents WHERE CreatedAt < @CreatedBefore";
+        var totalCount = await db.QuerySingleAsync<int>(countstats, p, transaction: tx());
+
+        const string sql = "DELETE FROM ActivityEvents WHERE CreatedAt < @CreatedBefore";
+        await db.ExecuteAsync(sql, p, transaction: tx());
+        return totalCount;
+    }
 }

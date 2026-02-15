@@ -11,7 +11,6 @@ internal sealed record DeploymentDto(
     string ControlState,
     long? ControlStartedAt,
     Guid? ControlTriggeredBy,
-    string UpdateBehavior,
     DateTime AutoUpdateState_LastCheckedAt,
     string AutoUpdateState_Status,
     string? AutoUpdateState_CurrentDigest,
@@ -24,5 +23,6 @@ internal sealed record DeploymentDto(
     string? Image_Name = null,
     Guid? Image_Id = null,
     Guid? Container_ContainerId = null,
-    string? Container_DockerContainerId = null
+    string? Container_DockerContainerId = null,
+    string? Container_DockerImageId = null
     );

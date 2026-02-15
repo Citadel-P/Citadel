@@ -34,7 +34,6 @@
       lastCheckedAt: Date_MinValue,
       status: Unknown
     },
-    updateBehavior: Disabled,
     platformStatus: Offline
   },
   metadata: {

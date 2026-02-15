@@ -22,7 +22,6 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         d.Status, 
         d.CreatedAt, 
         d.CreatedByActorId, 
-        d.UpdateBehavior,
         d.AutoUpdateState_LastCheckedAt, 
         d.AutoUpdateState_Status,
         d.AutoUpdateState_CurrentDigest,
@@ -35,7 +34,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         c.Id AS Container_ContainerId,
         c.DockerContainerId AS Container_DockerContainerId,
         p.Name AS Platform_Name,
-        p.status AS Platform_Status
+        p.Status AS Platform_Status
     FROM Deployments d 
     LEFT JOIN Containers c
         ON d.Id = c.DeploymentId
@@ -124,10 +123,10 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
     {
         const string sql = """
             INSERT INTO Deployments (
-                Id, Name, Description, PlatformId, Status, CreatedAt, CreatedByActorId, Spec, UpdateBehavior, AutoUpdateState_LastCheckedAt, AutoUpdateState_Status, AutoUpdateState_CurrentDigest,
+                Id, Name, Description, PlatformId, Status, CreatedAt, CreatedByActorId, Spec, AutoUpdateState_LastCheckedAt, AutoUpdateState_Status, AutoUpdateState_CurrentDigest,
                 AutoUpdateState_RemoteDigest, AutoUpdateState_LastError
             ) VALUES (
-                 @Id, @Name, @Description, @PlatformId, @Status, @CreatedAt, @CreatedByActorId, @Spec, @UpdateBehavior,
+                 @Id, @Name, @Description, @PlatformId, @Status, @CreatedAt, @CreatedByActorId, @Spec,
                  @AutoUpdateState_LastCheckedAt, @AutoUpdateState_Status, @AutoUpdateState_CurrentDigest,
                  @AutoUpdateState_RemoteDigest, @AutoUpdateState_LastError
             )
@@ -142,7 +141,6 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             CreatedAt = deployment.CreatedAt.ToString(),
             Status = EnumFormatter<DeploymentStatus>.GetValue(deployment.Status),
             Spec = JsonSerializer.Serialize(deployment.Spec, DeploymentJsonContext.Default.DeploymentSpec),
-            UpdateBehavior = EnumFormatter<UpdateBehavior>.GetValue(deployment.UpdateBehavior),
             AutoUpdateState_LastCheckedAt = deployment.AutoUpdateState?.LastCheckedAt.ToString(),
             AutoUpdateState_Status = deployment.AutoUpdateState != null ? EnumFormatter<AutoUpdateStatus>.GetValue(deployment.AutoUpdateState.Status) : null,
             AutoUpdateState_CurrentDigest = deployment.AutoUpdateState?.CurrentDigest,
@@ -150,6 +148,21 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             AutoUpdateState_LastError = deployment.AutoUpdateState?.LastError,
 
         }, transaction: tx());
+    }
+
+    public async Task<IEnumerable<Deployment>> GetAllAsync(CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT 
+                d.*,
+                c.Id AS Container_ContainerId,
+                c.DockerImageId AS Container_DockerImageId
+            FROM Deployments d
+            LEFT JOIN Containers c
+                ON c.DeploymentId = d.Id
+            """;
+        var result = await db.QueryAsync<DeploymentDto>(sql, transaction: tx());
+        return result.ToDomain();
     }
 
     public async Task<IEnumerable<Deployment>> GetInfoAsync(CancellationToken cancellationToken)
@@ -167,15 +180,14 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
                 d.Status,
                 d.CreatedAt, 
                 d.CreatedByActorId, 
-                d.UpdateBehavior,
                 d.AutoUpdateState_LastCheckedAt, 
                 d.AutoUpdateState_Status,
                 d.AutoUpdateState_CurrentDigest,
                 d.AutoUpdateState_RemoteDigest,
                 d.AutoUpdateState_LastError,
                 p.Name AS Platform_Name,
-                p.status AS Platform_Status,
-                i.name as Image_Name,
+                p.Status AS Platform_Status,
+                i.Name as Image_Name,
                 i.Id AS Image_Id
             FROM Deployments d 
             LEFT JOIN Platforms p 
@@ -206,7 +218,7 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
     {
         const string sql = """
             UPDATE Deployments
-            SET Name = @Name, Description = @Description, PlatformId = @PlatformId, Status = @Status, Spec = @Spec, UpdateBehavior = @UpdateBehavior,
+            SET Name = @Name, Description = @Description, PlatformId = @PlatformId, Status = @Status, Spec = @Spec,
                 AutoUpdateState_LastCheckedAt = @AutoUpdateState_LastCheckedAt, AutoUpdateState_Status = @AutoUpdateState_Status, 
                 AutoUpdateState_CurrentDigest = @AutoUpdateState_CurrentDigest, AutoUpdateState_RemoteDigest = @AutoUpdateState_RemoteDigest, 
                 AutoUpdateState_LastError = @AutoUpdateState_LastError
@@ -220,7 +232,6 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
             PlatformId = deployment.PlatformId.Format(),
             Status = EnumFormatter<DeploymentStatus>.GetValue(deployment.Status),
             Spec = JsonSerializer.Serialize(deployment.Spec, DeploymentJsonContext.Default.DeploymentSpec),
-            UpdateBehavior = EnumFormatter<UpdateBehavior>.GetValue(deployment.UpdateBehavior),
             AutoUpdateState_LastCheckedAt = deployment.AutoUpdateState?.LastCheckedAt.ToString(),
             AutoUpdateState_Status = deployment.AutoUpdateState != null ? EnumFormatter<AutoUpdateStatus>.GetValue(deployment.AutoUpdateState.Status) : null,
             AutoUpdateState_CurrentDigest = deployment.AutoUpdateState?.CurrentDigest,

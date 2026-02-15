@@ -615,7 +615,6 @@ export interface DeploymentConfigView {
   platformId: string;
   description: null | string;
   spec: DeploymentSpec;
-  updateBehavior: UpdateBehavior;
 }
 
 export type DeploymentImageInfo = BaseDeploymentImageInfo &
@@ -650,6 +649,7 @@ export interface DeploymentInput {
 
 export interface DeploymentSpec {
   image: DeploymentImageInfo;
+  updateBehavior: UpdateBehavior;
   lifeCycleSpec?: null | LifeCycleSpec;
   resourceSpec?: null | ResourceSpec;
   labels?: null | object;
@@ -685,7 +685,6 @@ export interface DeploymentView {
   controlState: ResourceControlState;
   autoUpdateState: AutoUpdateState;
   spec: DeploymentSpec;
-  updateBehavior: UpdateBehavior;
   platformStatus: PlatformStatus;
   platformName?: null | string;
   imageName?: null | string;

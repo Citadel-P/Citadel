@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260207164254_migration0001")]
+    [Migration("20260215130724_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -304,9 +304,6 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("UpdateBehavior")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");

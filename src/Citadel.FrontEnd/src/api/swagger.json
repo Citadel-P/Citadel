@@ -7066,8 +7066,7 @@
           "name",
           "platformId",
           "description",
-          "spec",
-          "updateBehavior"
+          "spec"
         ],
         "type": "object",
         "properties": {
@@ -7090,9 +7089,6 @@
           },
           "spec": {
             "$ref": "#/components/schemas/DeploymentSpec"
-          },
-          "updateBehavior": {
-            "$ref": "#/components/schemas/UpdateBehavior"
           }
         }
       },
@@ -7187,12 +7183,16 @@
       },
       "DeploymentSpec": {
         "required": [
-          "image"
+          "image",
+          "updateBehavior"
         ],
         "type": "object",
         "properties": {
           "image": {
             "$ref": "#/components/schemas/DeploymentImageInfo"
+          },
+          "updateBehavior": {
+            "$ref": "#/components/schemas/UpdateBehavior"
           },
           "lifeCycleSpec": {
             "oneOf": [
@@ -7349,7 +7349,6 @@
           "controlState",
           "autoUpdateState",
           "spec",
-          "updateBehavior",
           "platformStatus"
         ],
         "type": "object",
@@ -7389,9 +7388,6 @@
           },
           "spec": {
             "$ref": "#/components/schemas/DeploymentSpec"
-          },
-          "updateBehavior": {
-            "$ref": "#/components/schemas/UpdateBehavior"
           },
           "platformStatus": {
             "$ref": "#/components/schemas/PlatformStatus"

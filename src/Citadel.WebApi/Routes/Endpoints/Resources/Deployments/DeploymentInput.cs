@@ -8,10 +8,9 @@ public sealed record DeploymentInput(
     string Name,
     Guid PlatformId,
     string? Description,
-    DeploymentSpec Spec,
-    UpdateBehavior UpdateBehavior
+    DeploymentSpec Spec
     )
 {
-    internal CreateDeployment ToCommand() => new(Name, PlatformId, Description, UpdateBehavior, Spec);
+    internal CreateDeployment ToCommand() => new(Name, PlatformId, Description, Spec);
 }
 

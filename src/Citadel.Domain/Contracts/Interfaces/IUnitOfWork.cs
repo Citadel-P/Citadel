@@ -81,6 +81,8 @@ public interface IActivityEventRepository
     Task<ActivityEvent?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
     Task<PagedResult<ActivityEvent>> GetPagedAsync(Guid? resourceId, ActivityResourceType? resourceType, ActivityEventType? eventType, int page,
         int pageSize, CancellationToken cancellationToken);
+
+    Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken);
 }
 
 public interface IRefreshTokenRepository 
@@ -140,6 +142,7 @@ public interface IDeploymentRepository
 {
     Task<Deployment?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<Deployment?> GetInfoAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<Deployment>> GetAllAsync(CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetInfoAsync(CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);

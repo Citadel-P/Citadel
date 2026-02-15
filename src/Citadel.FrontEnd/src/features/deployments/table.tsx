@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { DeploymentView, ResourceControlState, UpdateBehavior } from '@/api/generated/api.types';
+import { DeploymentView, ResourceControlState } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -12,13 +12,7 @@ import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
 import { HardDrive } from 'lucide-react';
 import { formatId } from '@/lib/utils';
-import {
-  AutoUpdateIcon,
-  PlatformStatusCell,
-  UPDATE_BEHAVIOR_UI,
-  UPDATE_STATUS_UI,
-  UpdateStatusIcon,
-} from '@/components/custom/common';
+import { PlatformStatusCell, UPDATE_STATUS_UI, UpdateStatusIcon } from '@/components/custom/common';
 
 export const DeploymentsTable = ({
   items,
@@ -92,29 +86,11 @@ const columns = (
     sortingFn: (rowA, rowB) => (rowA.original.platformName! < rowB.original.platformName! ? 1 : -1),
   },
   {
-    accessorKey: 'updateBehaviour',
-    header: ({ column }) => <SortableCell cellName="Update Strategy" column={column} />,
-    cell: ({ row }) => {
-      const behavior = row.original.updateBehavior;
-      const { label } = UPDATE_BEHAVIOR_UI[behavior];
-
-      return (
-        <div className="flex items-center gap-2">
-          <AutoUpdateIcon updateBehavior={behavior} />
-          <span>{label}</span>
-        </div>
-      );
-    },
-    sortingFn: (rowA, rowB) => (rowA.original.updateBehavior! < rowB.original.updateBehavior! ? 1 : -1),
-  },
-  {
     accessorKey: 'updateStatus',
     header: ({ column }) => <SortableCell cellName="Update Status" column={column} />,
     cell: ({ row }) => {
-      const behavior = row.original.updateBehavior;
       const status = row.original.autoUpdateState.status;
       const { label } = UPDATE_STATUS_UI[status];
-      if (behavior === UpdateBehavior.Disabled) return <span className="text-xs text-muted">N/A</span>;
 
       return (
         <div className="flex items-center gap-2">
@@ -123,7 +99,7 @@ const columns = (
         </div>
       );
     },
-    sortingFn: (rowA, rowB) => (rowA.original.updateBehavior! < rowB.original.updateBehavior! ? 1 : -1),
+    sortingFn: (rowA, rowB) => (rowA.original.autoUpdateState.status! < rowB.original.autoUpdateState.status! ? 1 : -1),
   },
   {
     accessorKey: 'platform',

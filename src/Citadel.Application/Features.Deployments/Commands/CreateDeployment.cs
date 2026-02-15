@@ -21,7 +21,6 @@ public sealed record CreateDeployment(
     string Name,
     Guid PlatformId,
     string? Description,
-    UpdateBehavior UpdateBehavior,
     DeploymentSpec Spec) 
     : ICommand<Result<Deployment>>
 {
@@ -50,7 +49,7 @@ internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, INotificationQueu
 
         if (command.Spec.Image is not ExternalImage)
         {
-            if (command.UpdateBehavior != UpdateBehavior.Disabled)
+            if (command.Spec.UpdateBehavior != UpdateBehavior.Disabled)
             {
                 return Result.Failure<Deployment>(new BadRequestError("Auto-update requires an external image source."));
             }
@@ -58,7 +57,7 @@ internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, INotificationQueu
 
         if (command.Spec.Image is ExternalImage extImage && extImage.ImageTag.Contains('@'))
         {
-            if (command.UpdateBehavior != UpdateBehavior.Disabled)
+            if (command.Spec.UpdateBehavior != UpdateBehavior.Disabled)
             {
                 return Result.Failure<Deployment>(new BadRequestError("Cannot enable Auto-update for an image pinned by digest (contains '@')."));
             }
@@ -70,7 +69,6 @@ internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, INotificationQueu
             description : command.Description,
             createdByActorId: actorId,
             platformId : command.PlatformId,
-            updateBehavior : command.UpdateBehavior,
             spec : command.Spec
             );
 

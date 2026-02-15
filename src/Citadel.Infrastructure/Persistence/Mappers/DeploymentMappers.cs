@@ -22,7 +22,6 @@ internal static class DeploymentMappers
             createdAt: dto.CreatedAt,
             controlStartedAt: dto.ControlStartedAt,
             status: Enum.Parse<DeploymentStatus>(dto.Status),
-            updateBehavior: Enum.Parse<UpdateBehavior>(dto.UpdateBehavior),
             controlState: Enum.Parse<ResourceControlState>(dto.ControlState),
             controlTriggeredBy: dto.ControlTriggeredBy,
             autoUpdateState: new AutoUpdateState(
@@ -34,7 +33,7 @@ internal static class DeploymentMappers
             container: dto.Container_ContainerId == null ? null : Container.FromPersistence(
                 id: dto.Container_ContainerId.Value,
                 platformId: dto.PlatformId,
-                dockerImageId: string.Empty,
+                dockerImageId: dto.Container_DockerImageId,
                 name: string.Empty,
                 created: 0,
                 updated: 0,

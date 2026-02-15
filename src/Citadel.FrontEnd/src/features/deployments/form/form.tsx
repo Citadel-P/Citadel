@@ -505,7 +505,7 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
             ),
           }),
           defineField({
-            key: 'updateBehavior',
+            key: 'spec.updateBehavior',
             label: 'Auto Update',
             description: 'Define how the platform handles new image versions.',
             render: (value, set) => {
@@ -527,8 +527,10 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
                     disabled={disabled}
                     onChange={(updateBehavior: UpdateBehavior) => {
                       set((prev) => ({
-                        ...prev,
-                        updateBehavior,
+                        spec: {
+                          ...prev.spec!,
+                          updateBehavior: updateBehavior,
+                        },
                       }));
                     }}
                   />

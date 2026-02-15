@@ -70,7 +70,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
 
         if (patchedDeployment.Spec?.Image is not ExternalImage)
         {
-            if (patchedDeployment.UpdateBehavior != UpdateBehavior.Disabled)
+            if (patchedDeployment.Spec?.UpdateBehavior != UpdateBehavior.Disabled)
             {
                 return Result.Failure<Deployment>(new BadRequestError("Auto-update requires an external image source."));
             }
@@ -78,7 +78,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
 
         if (patchedDeployment.Spec?.Image is ExternalImage extImage && extImage.ImageTag.Contains('@'))
         {
-            if (patchedDeployment.UpdateBehavior != UpdateBehavior.Disabled)
+            if (patchedDeployment.Spec?.UpdateBehavior != UpdateBehavior.Disabled)
             {
                 return Result.Failure<Deployment>(new BadRequestError("Cannot enable Auto-update for an image pinned by digest (contains '@')."));
             }
@@ -118,7 +118,6 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
             name: patchedDeployment.Name, 
             platformId: patchedDeployment.PlatformId,
             description: patchedDeployment.Description,
-            updateBehavior: patchedDeployment.UpdateBehavior,
             spec: patchedDeployment.Spec);
 
         await unitOfWork.Deployments.UpdateAsync(deployment, cancellationToken);

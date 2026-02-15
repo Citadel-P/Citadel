@@ -16,10 +16,10 @@
       registryId: Guid_4,
       imageTag: nginx
     },
+    updateBehavior: Notify,
     networks: [
       96da77baf016bb722c40f10c023b2f5d1a4296b4bc6593cfad74de4bd31e8b14
     ]
   },
-  updateBehavior: Notify,
   platformStatus: Offline
 }

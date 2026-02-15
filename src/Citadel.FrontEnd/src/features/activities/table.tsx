@@ -63,14 +63,14 @@ export const ActivitiesTable = ({
             onPageChange={goToPage}
             className="justify-start"
           />
-          <SelectField
+          {totalPages > 1 && <SelectField
             value={query.pageSize.toString()}
             options={pageSizeOptions}
             onChange={handlePageSizeChange}
             placeholder="Page Size"
             allLabel="Page Size"
             selectableLabel={false}
-          />
+          />}
         </div>
       )}
     </div>

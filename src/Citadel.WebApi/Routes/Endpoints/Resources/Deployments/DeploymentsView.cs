@@ -21,7 +21,6 @@ public sealed record DeploymentView(
     ResourceControlState ControlState,
     AutoUpdateState AutoUpdateState,
     DeploymentSpec Spec,
-    UpdateBehavior UpdateBehavior,
     PlatformStatus PlatformStatus,
     string? PlatformName = null,
     string? ImageName = null,
@@ -40,7 +39,6 @@ public sealed record DeploymentView(
         Status: deployment.Status,
         Spec: deployment.Spec,
         ControlState: deployment.ControlState,
-        UpdateBehavior: deployment.UpdateBehavior,
         AutoUpdateState: deployment.AutoUpdateState ?? new AutoUpdateState(LastCheckedAt : DateTime.MinValue, Status: AutoUpdateStatus.Unknown),
         PlatformName: deployment.Platform?.Name,
         PlatformStatus: deployment.Platform?.Status ?? PlatformStatus.Offline,
@@ -56,8 +54,7 @@ public sealed record DeploymentConfigView(
     string Name,
     Guid PlatformId,
     string? Description,
-    DeploymentSpec Spec,
-    UpdateBehavior UpdateBehavior
+    DeploymentSpec Spec
     )
 {
     internal static DeploymentConfigView Map(Deployment deployment) => new(
@@ -65,7 +62,6 @@ public sealed record DeploymentConfigView(
         Name: deployment.Name,
         PlatformId: deployment.PlatformId,
         Description: deployment.Description,
-        Spec: deployment.Spec,
-        UpdateBehavior: deployment.UpdateBehavior
+        Spec: deployment.Spec
         );
 }

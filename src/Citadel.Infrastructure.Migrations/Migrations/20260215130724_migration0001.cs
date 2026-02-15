@@ -168,8 +168,7 @@ namespace Infrastructure.Migrations.Migrations
                     PlatformId = table.Column<string>(type: "TEXT", nullable: false),
                     RowVersion = table.Column<long>(type: "INTEGER", nullable: false, defaultValue: 0L),
                     Spec = table.Column<string>(type: "TEXT", nullable: false),
-                    Status = table.Column<string>(type: "TEXT", nullable: false),
-                    UpdateBehavior = table.Column<string>(type: "TEXT", nullable: true)
+                    Status = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
