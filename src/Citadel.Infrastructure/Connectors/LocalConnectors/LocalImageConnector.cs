@@ -59,13 +59,13 @@ internal class LocalImageConnector(IImageService imageService) : IImageConnector
 
     public async Task<Result<ExposedPortsResult>> GetExposedPortsAsync(RunImageInfoCommand command, CancellationToken cancellationToken)
     {
-        var result = await imageService.GetExposedPorts(command.ImageId, cancellationToken);
+        var result = await imageService.GetExposedPortsAsync(command.ImageId, cancellationToken);
         return ServiceResultHandlers.HandleResult(result, ImageMappers.Map);
     }
 
     public async Task<Result<DistributionResult>> DistributionInspectAsync(DistributionInspectCommand command, CancellationToken cancellationToken)
     {
-        var result = await imageService.DistributionInspect(command.ImageName, command.Auth, cancellationToken);
+        var result = await imageService.DistributionInspectAsync(command.ImageName, command.Auth, cancellationToken);
         return ServiceResultHandlers.HandleResult(result, ImageMappers.Map);
     }
 }
