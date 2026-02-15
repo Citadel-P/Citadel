@@ -7155,8 +7155,7 @@
           "name",
           "platformId",
           "description",
-          "spec",
-          "updateBehavior"
+          "spec"
         ],
         "type": "object",
         "properties": {
@@ -7175,9 +7174,6 @@
           },
           "spec": {
             "$ref": "#/components/schemas/DeploymentSpec"
-          },
-          "updateBehavior": {
-            "$ref": "#/components/schemas/UpdateBehavior"
           }
         }
       },

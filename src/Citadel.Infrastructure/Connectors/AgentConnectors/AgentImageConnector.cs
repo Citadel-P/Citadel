@@ -136,8 +136,23 @@ internal class AgentImageConnector(IGrpcClientFactory clientFactory) : IImageCon
         }
     }
 
-    public Task<Result<DistributionResult>> DistributionInspectAsync(DistributionInspectCommand command, CancellationToken cancellationToken)
+    public async Task<Result<DistributionResult>> DistributionInspectAsync(DistributionInspectCommand command, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        try
+        {
+            var client = clientFactory.GetImageClient(command.PlatformAddress);
+            var request = new DistributionInspectRequest
+            {
+                ImageName = command.ImageName,
+                Auth = command.Auth
+            };
+
+            var response = await client.DistributionInspectAsync(request, cancellationToken: cancellationToken);
+            return response.Map();
+        }
+        catch (RpcException ex)
+        {
+            return Result.Failure<DistributionResult>(new ClientRpcException($"An error occurred while sending the request, {ex.Message}", ex.StatusCode));
+        }
     }
 }

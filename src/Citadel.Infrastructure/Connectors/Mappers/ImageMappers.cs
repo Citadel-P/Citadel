@@ -2,6 +2,7 @@
 using Citadel.SharedModels.V1;
 using Domain.Contracts.Resources.Images;
 using Google.Protobuf.Collections;
+using Google.Protobuf.Reflection;
 using static Citadel.Images.V1.ConfigMessage.Types;
 
 namespace Infrastructure.Connectors.Mappers;
@@ -395,6 +396,22 @@ internal static class ImageMappers
             Size: item.Size,
             Comment: item.Comment
         );
+
+    internal static DistributionResult Map(this DistributionInspectResponse item)
+    {
+        var descriptor = item.Descriptor_;
+        var descriptorMap = new OCIDescriptorResult(
+            MediaType: descriptor.MediaType,
+            Digest: descriptor.Digest,
+            Size: descriptor.Size,
+            Platform: new OCIPlatformResult(
+                Architecture: descriptor.Platform.Architecture, 
+                Os: descriptor.Platform.Os, OsVersion: 
+                descriptor.Platform.OsVersion),
+            ArtifactType: descriptor.ArtifactType
+            );
+        return new DistributionResult(descriptorMap);
+    }
 
     internal static ImageResult Map(this Hosting.DockerClient.Models.Images.ImageResult image)
     {
