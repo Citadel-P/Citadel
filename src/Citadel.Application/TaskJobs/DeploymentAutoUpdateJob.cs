@@ -16,7 +16,7 @@ internal sealed class DeploymentAutoUpdateJob(
     IDbWorkQueue dbWorkQueue,
     ILogger<DeploymentAutoUpdateJob> logger) : BackgroundService
 {
-    private const int CheckIntervalInHours = 6;
+    private const int CheckIntervalInHours = 3;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
         => Helpers.DelayWithJitterFor(RunPeriodicAutoUpdate, cancellationToken: stoppingToken);
@@ -111,6 +111,7 @@ internal sealed class DeploymentAutoUpdateJob(
             );
         }
 
+        // Todo: send alert
         logger.LogInformation(
             "Auto-update available for deployment {DeploymentId}: new digest detected.",
             deployment.Id);

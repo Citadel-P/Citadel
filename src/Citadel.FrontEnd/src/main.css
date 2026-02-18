@@ -221,6 +221,9 @@
   *::-webkit-scrollbar-thumb {
     @apply rounded-lg bg-foreground/30;
   }
+  *::-webkit-scrollbar-thumb:hover {
+    @apply bg-foreground/50;
+  }
 
   /* Form Element Resets */
   [type='checkbox'],

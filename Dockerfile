@@ -1,6 +1,5 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot AS build
-RUN apk add --no-cache clang lld musl-dev libc6-compat docker-cli docker-cli-compose
-
+RUN apk add --no-cache clang lld musl-dev libc6-compat
 WORKDIR /src
 
 COPY ["nuget.config", "."]
@@ -23,31 +22,30 @@ COPY ["src/Citadel.Contracts/src/Citadel.Hosting.DockerClient/Citadel.Hosting.Do
 # Restore
 RUN dotnet restore "Citadel.WebApi/Citadel.WebApi.csproj"
 
-# Copy full source
 COPY src/ .
 
 WORKDIR /src/Citadel.WebApi
-
 # Publish
 RUN dotnet publish Citadel.WebApi.csproj -c Release -o /app/publish \
     -r linux-musl-x64 --self-contained true /p:StripSymbols=true \
-     && rm /app/publish/*.dbg
+    && rm /app/publish/*.dbg
 
-# Final stage
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-alpine AS final
+# Final
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-alpine
 WORKDIR /app
 
 # Copy and run deps
 COPY src/Citadel.Contracts/install-deps.sh .
-RUN apk add --no-cache bash \
-    && chmod +x install-deps.sh \
-    && ./install-deps.sh \
-    && rm install-deps.sh
+COPY install-server-deps.sh .
 
+RUN chmod +x install-deps.sh install-server-deps.sh \
+    && ./install-deps.sh \
+    && ./install-server-deps.sh \
+    && rm install-deps.sh install-server-deps.sh
+    
 COPY src/Citadel.Contracts/starship.toml /root/.config/starship.toml
 ENV STARSHIP_CONFIG=/root/.config/starship.toml
 
-# Copy the published self-contained binary
 COPY --from=build /app/publish .
 
 EXPOSE 8000
