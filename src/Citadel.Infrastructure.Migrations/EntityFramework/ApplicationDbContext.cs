@@ -1,8 +1,10 @@
 ﻿using Domain;
+using Domain.Entities;
 using Hosting.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using System.Diagnostics;
 
 namespace Infrastructure.Migrations.EntityFramework;
 
@@ -27,7 +29,10 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .UserTeamConfiguration()
             .DeploymentConfiguration()
             .ImageConfiguration()
-            .ActivityEventConfiguration();
+            .ActivityEventConfiguration()
+            .AddAlertRuleConfiguration()
+            .AddAlertEventConfiguration()
+            .AddAlertRuleStateConfiguration();
 
         SeedDb(modelBuilder);
     }
@@ -536,6 +541,76 @@ internal static class Configuration
 
         return builder;
     }
+
+    public static ModelBuilder AddAlertRuleConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "AlertRules";
+        var alertRule = builder.Entity("AlertRule");
+        alertRule.ToTable(tableName);
+
+        alertRule.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        alertRule.HasKey("Id");
+
+        alertRule.Property<string>("Url").HasColumnType("TEXT").IsRequired();
+        alertRule.Property<string>("Type").HasColumnType("TEXT").IsRequired();
+        alertRule.Property<int>("CooldownSeconds").HasColumnType("INTEGER").IsRequired().HasDefaultValue(60);
+        alertRule.Property<bool>("IsEnabled").HasColumnType("INTEGER").IsRequired().HasDefaultValue(true);
+        alertRule.Property<string>("Scope").HasColumnType("TEXT").IsRequired();
+        alertRule.Property<string>("LimitedTo").HasColumnType("TEXT").IsRequired();
+        alertRule.Property<string>("QuietHours").HasColumnType("TEXT").IsRequired();
+
+        alertRule.AddAuditedMemebers();
+        return builder;
+    }
+
+    public static ModelBuilder AddAlertRuleStateConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "AlertRuleStates";
+        var alertRuleState = builder.Entity("AlertRuleState");
+        alertRuleState.ToTable(tableName);
+
+        alertRuleState.Property<Guid?>("ResourceId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
+        alertRuleState.Property<Guid>("AlertRuleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        alertRuleState.Property<DateTime?>("LastTriggeredAt").HasColumnType("TEXT").HasDefaultValue(null);
+
+        alertRuleState.HasKey("AlertRuleId", "ResourceId");
+
+        alertRuleState
+            .HasOne("AlertRule")
+            .WithMany()
+            .HasForeignKey("AlertRuleId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        alertRuleState.AddAuditedMemebers();
+        return builder;
+    }
+
+    public static ModelBuilder AddAlertEventConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "AlertEvents";
+        var alertEvent = builder.Entity("AlertEvent");
+        alertEvent.ToTable(tableName);
+
+        alertEvent.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        alertEvent.HasKey("Id");
+
+        alertEvent.Property<Guid?>("ResourceId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
+        alertEvent.Property<Guid>("AlertRuleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        alertEvent.Property<string>("Type").HasColumnType("TEXT").IsRequired();
+        alertEvent.Property<string>("Severity").HasColumnType("TEXT").IsRequired();
+        alertEvent.Property<string>("Info").HasColumnType("TEXT").IsRequired();
+        alertEvent.Property<string>("ResourceType").HasColumnType("TEXT").IsRequired();
+
+        alertEvent
+            .HasOne("AlertRule")
+            .WithMany()
+            .HasForeignKey("AlertRuleId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        alertEvent.AddAuditedMemebers();
+        return builder;
+    }
+
 
     private static EntityTypeBuilder AddReconcilableMember(this EntityTypeBuilder builder)
     {

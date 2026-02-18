@@ -33,6 +33,20 @@ CREATE TABLE "Roles" (
     "UpdatedAt" TEXT NOT NULL DEFAULT '2000-01-01 00:00:00'
 );
 
+CREATE TABLE "AlertRules" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_AlertRules" PRIMARY KEY,
+    "CooldownSeconds" INTEGER NOT NULL DEFAULT 60,
+    "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    "CreatedByActorId" TEXT NOT NULL,
+    "IsEnabled" INTEGER NOT NULL DEFAULT 1,
+    "LimitedTo" TEXT NOT NULL,
+    "QuietHours" TEXT NOT NULL,
+    "Scope" TEXT NOT NULL,
+    "Type" TEXT NOT NULL,
+    "Url" TEXT NOT NULL,
+    CONSTRAINT "FK_AlertRules_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
+);
+
 CREATE TABLE "Registries" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Registries" PRIMARY KEY,
     "Configuration" TEXT NOT NULL,
@@ -118,6 +132,31 @@ CREATE TABLE "Teams" (
     "Name" TEXT NOT NULL,
     "RoleId" TEXT NOT NULL,
     CONSTRAINT "FK_Teams_Roles_RoleId" FOREIGN KEY ("RoleId") REFERENCES "Roles" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "AlertEvents" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_AlertEvents" PRIMARY KEY,
+    "AlertRuleId" TEXT NOT NULL,
+    "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    "CreatedByActorId" TEXT NOT NULL,
+    "Info" TEXT NOT NULL,
+    "ResourceId" TEXT NULL,
+    "ResourceType" TEXT NOT NULL,
+    "Severity" TEXT NOT NULL,
+    "Type" TEXT NOT NULL,
+    CONSTRAINT "FK_AlertEvents_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_AlertEvents_AlertRules_AlertRuleId" FOREIGN KEY ("AlertRuleId") REFERENCES "AlertRules" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "AlertRuleStates" (
+    "AlertRuleId" TEXT NOT NULL,
+    "ResourceId" TEXT NOT NULL,
+    "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    "CreatedByActorId" TEXT NOT NULL,
+    "LastTriggeredAt" TEXT NULL,
+    CONSTRAINT "PK_AlertRuleStates" PRIMARY KEY ("AlertRuleId", "ResourceId"),
+    CONSTRAINT "FK_AlertRuleStates_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_AlertRuleStates_AlertRules_AlertRuleId" FOREIGN KEY ("AlertRuleId") REFERENCES "AlertRules" ("Id") ON DELETE CASCADE
 );
 
 CREATE TABLE "Images" (
@@ -235,6 +274,14 @@ CREATE INDEX "IX_ActivityEvents_Resource_CreatedAt" ON "ActivityEvents" ("Resour
 
 CREATE INDEX "IX_ActivityEvents_Status" ON "ActivityEvents" ("Status");
 
+CREATE INDEX "IX_AlertEvents_AlertRuleId" ON "AlertEvents" ("AlertRuleId");
+
+CREATE INDEX "IX_AlertEvents_CreatedByActorId" ON "AlertEvents" ("CreatedByActorId");
+
+CREATE INDEX "IX_AlertRuleStates_CreatedByActorId" ON "AlertRuleStates" ("CreatedByActorId");
+
+CREATE INDEX "IX_AlertRules_CreatedByActorId" ON "AlertRules" ("CreatedByActorId");
+
 CREATE UNIQUE INDEX "IX_ContainerStats_ContainerId_Created" ON "ContainerStats" ("ContainerId", "Created");
 
 CREATE INDEX "IX_Containers_ControlTriggeredBy" ON "Containers" ("ControlTriggeredBy");
@@ -290,7 +337,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260215130724_migration0001', '10.0.2');
+VALUES ('20260218224935_migration0001', '10.0.2');
 
 COMMIT;
 

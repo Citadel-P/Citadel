@@ -391,3 +391,50 @@ public enum ActivityEventType
     #endregion
 
 }
+
+public enum AlertType
+{
+    #region Platform Alerts
+    PlatformCpuHigh,
+    PlatformRamHigh,
+    PlatformVersionMismatch,
+    #endregion
+
+    #region Deployment Alerts
+    DeploymentImageUpdateAvailable,
+    DeploymentAutoUpdated,
+    DeploymentFailed,
+    #endregion
+
+    #region Stack Alerts
+    StackImageUpdateAvailable,
+    StackAutoUpdated,
+    StackDeployFailed
+    #endregion
+}
+
+public enum AlertSeverity
+{
+    Info,
+    Warning,
+    Critical
+}
+
+public enum ScheduleType
+{
+    Daily,
+    Weekly
+}
+
+public enum AlertResourceType
+{
+    Platform,
+    Deployment,
+    Stack
+}
+
+public enum AlertScope
+{
+    All,
+    Specific
+}

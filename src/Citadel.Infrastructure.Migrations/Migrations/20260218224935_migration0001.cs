@@ -64,6 +64,32 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AlertRules",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    CooldownSeconds = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 60),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
+                    IsEnabled = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: true),
+                    LimitedTo = table.Column<string>(type: "TEXT", nullable: false),
+                    QuietHours = table.Column<string>(type: "TEXT", nullable: false),
+                    Scope = table.Column<string>(type: "TEXT", nullable: false),
+                    Type = table.Column<string>(type: "TEXT", nullable: false),
+                    Url = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AlertRules", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AlertRules_Actors_CreatedByActorId",
+                        column: x => x.CreatedByActorId,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Registries",
                 columns: table => new
                 {
@@ -250,6 +276,64 @@ namespace Infrastructure.Migrations.Migrations
                         name: "FK_Teams_Roles_RoleId",
                         column: x => x.RoleId,
                         principalTable: "Roles",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AlertEvents",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    AlertRuleId = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
+                    Info = table.Column<string>(type: "TEXT", nullable: false),
+                    ResourceId = table.Column<string>(type: "TEXT", nullable: true),
+                    ResourceType = table.Column<string>(type: "TEXT", nullable: false),
+                    Severity = table.Column<string>(type: "TEXT", nullable: false),
+                    Type = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AlertEvents", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AlertEvents_Actors_CreatedByActorId",
+                        column: x => x.CreatedByActorId,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AlertEvents_AlertRules_AlertRuleId",
+                        column: x => x.AlertRuleId,
+                        principalTable: "AlertRules",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AlertRuleStates",
+                columns: table => new
+                {
+                    AlertRuleId = table.Column<string>(type: "TEXT", nullable: false),
+                    ResourceId = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
+                    LastTriggeredAt = table.Column<DateTime>(type: "TEXT", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AlertRuleStates", x => new { x.AlertRuleId, x.ResourceId });
+                    table.ForeignKey(
+                        name: "FK_AlertRuleStates_Actors_CreatedByActorId",
+                        column: x => x.CreatedByActorId,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AlertRuleStates_AlertRules_AlertRuleId",
+                        column: x => x.AlertRuleId,
+                        principalTable: "AlertRules",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -474,6 +558,26 @@ namespace Infrastructure.Migrations.Migrations
                 column: "Status");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AlertEvents_AlertRuleId",
+                table: "AlertEvents",
+                column: "AlertRuleId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AlertEvents_CreatedByActorId",
+                table: "AlertEvents",
+                column: "CreatedByActorId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AlertRuleStates_CreatedByActorId",
+                table: "AlertRuleStates",
+                column: "CreatedByActorId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AlertRules_CreatedByActorId",
+                table: "AlertRules",
+                column: "CreatedByActorId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_ContainerStats_ContainerId_Created",
                 table: "ContainerStats",
                 columns: new[] { "ContainerId", "Created" },
@@ -625,6 +729,12 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ActivityEvents");
 
             migrationBuilder.DropTable(
+                name: "AlertEvents");
+
+            migrationBuilder.DropTable(
+                name: "AlertRuleStates");
+
+            migrationBuilder.DropTable(
                 name: "ContainerStats");
 
             migrationBuilder.DropTable(
@@ -638,6 +748,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "UsersTeams");
+
+            migrationBuilder.DropTable(
+                name: "AlertRules");
 
             migrationBuilder.DropTable(
                 name: "Containers");

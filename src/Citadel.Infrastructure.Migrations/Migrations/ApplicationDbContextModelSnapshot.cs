@@ -110,6 +110,132 @@ namespace Infrastructure.Migrations.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AlertEvent", b =>
+                {
+                    b.Property<string>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AlertRuleId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CreatedByActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Info")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResourceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResourceType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AlertRuleId");
+
+                    b.HasIndex("CreatedByActorId");
+
+                    b.ToTable("AlertEvents", (string)null);
+                });
+
+            modelBuilder.Entity("AlertRule", b =>
+                {
+                    b.Property<string>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CooldownSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(60);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CreatedByActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("LimitedTo")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("QuietHours")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByActorId");
+
+                    b.ToTable("AlertRules", (string)null);
+                });
+
+            modelBuilder.Entity("AlertRuleState", b =>
+                {
+                    b.Property<string>("AlertRuleId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResourceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CreatedByActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastTriggeredAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("AlertRuleId", "ResourceId");
+
+                    b.HasIndex("CreatedByActorId");
+
+                    b.ToTable("AlertRuleStates", (string)null);
+                });
+
             modelBuilder.Entity("Container", b =>
                 {
                     b.Property<string>("Id")
@@ -744,6 +870,45 @@ namespace Infrastructure.Migrations.Migrations
                         .WithMany()
                         .HasForeignKey("PlatformId")
                         .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("AlertEvent", b =>
+                {
+                    b.HasOne("AlertRule", null)
+                        .WithMany()
+                        .HasForeignKey("AlertRuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AlertRule", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AlertRuleState", b =>
+                {
+                    b.HasOne("AlertRule", null)
+                        .WithMany()
+                        .HasForeignKey("AlertRuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Container", b =>
