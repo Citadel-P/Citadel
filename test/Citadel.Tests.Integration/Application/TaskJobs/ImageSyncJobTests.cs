@@ -210,7 +210,7 @@ public class ImageSyncJobTests : IntegrationTestBase
             cancellationToken: TestContext.Current.CancellationToken);
         await Task.Delay(500, TestContext.Current.CancellationToken);
 
-        // Assert: Image should be updated
+        // Assert: CurrentImage should be updated
         await using var scope = Services.CreateAsyncScope();
         var uow2 = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var dbImages = await uow2.Images.GetByPlatformIdAsync(platformId, TestContext.Current.CancellationToken);

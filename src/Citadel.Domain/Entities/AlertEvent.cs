@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace Domain.Entities;
 
-public class AlertEvent : IAuditedEntity
+public sealed class AlertEvent : IAuditedEntity
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid AlertRuleId { get; private set; }
@@ -27,8 +27,14 @@ public class AlertEvent : IAuditedEntity
         AlertResourceType resourceType,
         Guid actorId)
     {
-        if (info != null && !IsValidInfoForAlert(type, info))
+        if (!AlertTypeMetadata.IsValidInfo(type, info))
             throw new ArgumentException("AlertInfo does not match AlertType.");
+
+        if (resourceType == AlertResourceType.Platform && resourceId is not null)
+            throw new InvalidOperationException("Platform alerts must not have ResourceId.");
+
+        if (resourceType != AlertResourceType.Platform && resourceId is null)
+            throw new InvalidOperationException("Non-platform alerts must have ResourceId.");
 
         AlertRuleId = alertRuleId;
         Type = type;
@@ -39,25 +45,6 @@ public class AlertEvent : IAuditedEntity
 
         CreatedByActorId = actorId;
         CreatedAt = DateTime.UtcNow;
-    }
-
-    private static bool IsValidInfoForAlert(AlertType alertType, AlertInfo alertInfo)
-    {
-        return (alertType, alertInfo) switch
-        {
-            (AlertType.PlatformCpuHigh, PlatformCpuHighAlertInfo) => true,
-            (AlertType.PlatformRamHigh, PlatformRamHighAlertInfo) => true,
-            (AlertType.PlatformVersionMismatch, PlatformVersionMismatchAlertInfo) => true,
-            (AlertType.DeploymentImageUpdateAvailable, DeploymentImageUpdateAvailableAlertInfo) => true,
-            (AlertType.DeploymentAutoUpdated, DeploymentAutoUpdatedAlertInfo) => true,
-            (AlertType.DeploymentFailed, DeploymentFailedAlertInfo) => true,
-            (AlertType.StackImageUpdateAvailable, StackImageUpdateAvailableAlertInfo) => true,
-            (AlertType.StackAutoUpdated, StackAutoUpdatedAlertInfo) => true,
-            (AlertType.StackDeployFailed, StackDeployFailedAlertInfo) => true,
-
-            // Todo: add mappings
-            _ => false
-        };
     }
 }
 

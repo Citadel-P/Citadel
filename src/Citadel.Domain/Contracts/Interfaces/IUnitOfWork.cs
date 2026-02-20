@@ -12,6 +12,7 @@ public interface IUnitOfWork : IAsyncDisposable
     ITeamRepository Teams { get; }
     IActorRepository Actors { get; }
     IImageRepository Images { get; }
+    IAlerterRepository Alerters { get; }
     IPlatformRepository Platforms { get; }
     IRegistryRepository Registries { get; }
     IContainerRepository Containers { get; }
@@ -34,6 +35,7 @@ public interface IUserRepository
 {
     Task<UserAuthInfo?> GetUserAuthInfoByEmailAsync(string email, CancellationToken cancellationToken);
 }
+
 public interface IRegistryRepository 
 {
     Task<Registry?> GetAsync(Guid id, CancellationToken cancellationToken);
@@ -155,4 +157,13 @@ public interface IDeploymentRepository
     Task<int> UpdateStatusAsync(IEnumerable<Guid> ids, DeploymentStatus status, CancellationToken cancellationToken);
 
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+}
+
+public interface IAlerterRepository
+{
+    Task<AlertRuleState?> GetStateAsync(Guid alertRuleId, Guid resourceId, CancellationToken cancellationToken);
+    Task<int> AddAlertRuleAsync(AlertRule alertRule, CancellationToken cancellationToken);
+    Task<int> AddAlertRuleStateAsync(AlertRuleState alertRuleState, CancellationToken cancellationToken);
+    Task<IEnumerable<AlertRule>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<int> UpdateStateAsync(AlertRuleState alertRuleState, CancellationToken cancellationToken);
 }

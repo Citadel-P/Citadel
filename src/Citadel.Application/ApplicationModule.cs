@@ -1,7 +1,7 @@
-﻿using System.Threading.Channels;
-using Application.Permissions;
+﻿using Application.Permissions;
 using Application.Permissions.Requirements;
 using Application.Services;
+using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Application.TaskJobs;
 using Citadel.SourceGen;
@@ -12,6 +12,7 @@ using Hosting.Common.Pipelines;
 using Hosting.Common.Pipelines.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using System.Threading.Channels;
 
 namespace Application;
 
@@ -47,6 +48,10 @@ public static class ApplicationModule
         => services
             .AddSingleton<IJwtService, JwtService>()
             .AddSingleton<ISyncBarrier, SyncBarrier>()
+            .AddAlertEvaluators()
+            .AddSingleton<IAlertService, AlertService>()
+            .AddSingleton<AlertRuleCache>()
+            .AddSingleton<IAlertRuleProvider>(sp => sp.GetRequiredService<AlertRuleCache>())
             .AddScoped<IContainerProcessingService, ContainerProcessingService>()
             .AddScoped<IDeploymentProcessingService, DeploymentProcessingService>()
             .AddSingleton<IPlatformContainerCache, PlatformContainerCache>()
@@ -92,6 +97,7 @@ public static class ApplicationModule
             .AddHostedService<ContainerSyncJob>()
             .AddHostedService<DeploymentSyncJob>()
             .AddHostedService<ImageSyncJob>()
+            .AddHostedService<AlertRuleCacheWarmup>()
             .AddHostedService<ReconcilableResourceJob>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services

@@ -74,7 +74,10 @@ namespace Infrastructure.Migrations.Migrations
                     IsEnabled = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: true),
                     LimitedTo = table.Column<string>(type: "TEXT", nullable: false),
                     QuietHours = table.Column<string>(type: "TEXT", nullable: false),
+                    RequiredMatches = table.Column<int>(type: "INTEGER", nullable: true),
                     Scope = table.Column<string>(type: "TEXT", nullable: false),
+                    Severity = table.Column<string>(type: "TEXT", nullable: false),
+                    Threshold = table.Column<double>(type: "REAL", nullable: true),
                     Type = table.Column<string>(type: "TEXT", nullable: false),
                     Url = table.Column<string>(type: "TEXT", nullable: false)
                 },
@@ -317,6 +320,7 @@ namespace Infrastructure.Migrations.Migrations
                 {
                     AlertRuleId = table.Column<string>(type: "TEXT", nullable: false),
                     ResourceId = table.Column<string>(type: "TEXT", nullable: false),
+                    ConsecutiveMatches = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 3),
                     CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
                     LastTriggeredAt = table.Column<DateTime>(type: "TEXT", nullable: true)

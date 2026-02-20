@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace Domain.Entities;
 
-public class AlertRule : IAuditedEntity
+public sealed class AlertRule : IAuditedEntity
 {
     private readonly List<AlertRuleLimitedTo> _limitedTo = [];
     private readonly List<AlertRuleQuietHour> _quietHours = [];
@@ -11,7 +11,20 @@ public class AlertRule : IAuditedEntity
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public string Url { get; private set; }
     public AlertType Type { get; private set; }
+    public AlertSeverity Severity { get; private set; }
+    /// <summary>
+    /// Gets the cooldown period, in seconds, before the alert can be raised again.
+    /// </summary>
     public int CooldownSeconds { get; private set; }
+    /// <summary>
+    /// Gets the number of matches required to satisfy the condition, only meaningful for threshold rules: CpuHigh, RamHigh, VersionMismatch.
+    /// For example, if RequiredMatches is 3 for a CpuHigh rule, the alert will only be triggered if the CPU usage is high for 3 consecutive checks.  
+    /// </summary>
+    public int? RequiredMatches { get; private set; }
+    /// <summary>
+    /// Gets the threshold value used to determine whether a specific condition is met.
+    /// </summary>
+    public double? Threshold { get; private set; }
     public bool IsEnabled { get; private set; }
     public AlertScope Scope { get; private set; }
 
@@ -23,25 +36,34 @@ public class AlertRule : IAuditedEntity
     public DateTime CreatedAt { get; private set; }
     #endregion
 
+    public AlertRuleState? AlertRuleState { get; private set; }
+
     public AlertRule(
         string url,
         AlertType type,
+        AlertSeverity severity,
         int cooldownSeconds,
         bool isEnabled,
         AlertScope scope,
-        IEnumerable<AlertRuleLimitedTo>? limitedTo,
-        IEnumerable<AlertRuleQuietHour>? quietHours,
-        Guid createdByActorId)
+        Guid createdByActorId,
+        int? requiredMatches = null,
+        double? threshold = null,
+        IEnumerable<AlertRuleLimitedTo>? limitedTo = null,
+        IEnumerable<AlertRuleQuietHour>? quietHours = null,
+        AlertRuleState? alertRuleState = null)
     {
         if (string.IsNullOrWhiteSpace(url))
-            throw new ArgumentException("URL is required", nameof(url));
+            throw new ArgumentException("URL is required.", nameof(url));
 
         if (cooldownSeconds < 10 || cooldownSeconds > 86400)
             throw new ArgumentOutOfRangeException(nameof(cooldownSeconds), "Cooldown must be between 10s and 24h.");
 
         Url = url;
         Type = type;
+        Severity = severity;
         CooldownSeconds = cooldownSeconds;
+        RequiredMatches = requiredMatches;
+        Threshold = threshold;
         IsEnabled = isEnabled;
         Scope = scope;
 
@@ -51,9 +73,49 @@ public class AlertRule : IAuditedEntity
         CreatedByActorId = createdByActorId;
         CreatedAt = DateTime.UtcNow;
 
+        ValidateThresholdConfiguration();
         ValidateScope();
         ValidateResourceCompatibility();
         ValidateQuietHours();
+        AlertRuleState = alertRuleState;
+    }
+
+    public static AlertRule FromPersistence(
+        Guid id,
+        string url,
+        AlertType type,
+        AlertSeverity severity,
+        int cooldownSeconds,
+        bool isEnabled,
+        AlertScope scope,
+        Guid createdByActorId,
+        DateTime createdAt,
+        int? requiredMatches = null,
+        double? threshold = null,
+        IEnumerable<AlertRuleLimitedTo>? limitedTo = null,
+        IEnumerable<AlertRuleQuietHour>? quietHours = null,
+        AlertRuleState? alertRuleState = null)
+    {
+        var rule = new AlertRule(
+            url,
+            type,
+            severity,
+            cooldownSeconds,
+            isEnabled,
+            scope,
+            createdByActorId,
+            requiredMatches,
+            threshold,
+            limitedTo,
+            quietHours)
+        {
+            Id = id,
+            CreatedAt = createdAt,
+            CreatedByActorId = createdByActorId,
+            AlertRuleState = alertRuleState
+        };
+       
+        return rule;
     }
 
     public bool CanTrigger(DateTime utcNow, AlertRuleState? state)
@@ -62,10 +124,10 @@ public class AlertRule : IAuditedEntity
             return false;
 
         if (state is not null &&
-            (utcNow - state.LastTriggeredAt).TotalSeconds < CooldownSeconds)
+            (utcNow - state.LastTriggeredAt)?.TotalSeconds < CooldownSeconds)
             return false;
 
-        if (IsInQuietHours(utcNow))
+        if (_quietHours.Any(q => q.IsInQuietHours(utcNow)))
             return false;
 
         return true;
@@ -74,134 +136,227 @@ public class AlertRule : IAuditedEntity
     private void ValidateScope()
     {
         if (Scope == AlertScope.All && _limitedTo.Any())
-            throw new InvalidOperationException("LimitedTo must be empty when scope is All.");
+            throw new InvalidOperationException($"{nameof(LimitedTo)} must be empty when {nameof(Scope)} is All.");
 
         if (Scope == AlertScope.Specific && !_limitedTo.Any())
-            throw new InvalidOperationException("LimitedTo must contain at least one resource when scope is Specific.");
+            throw new InvalidOperationException($"{nameof(LimitedTo)} must contain at least one resource when {nameof(Scope)} is Specific.");
+    }
+
+    private void ValidateThresholdConfiguration()
+    {
+        if (AlertTypeMetadata.IsThreshold(Type))
+        {
+            if (RequiredMatches is null || Threshold is null)
+                throw new InvalidOperationException($"{nameof(Threshold)} alerts require {nameof(RequiredMatches)} and {nameof(Threshold)}.");
+        }
+        else
+        {
+            if (RequiredMatches is not null || Threshold is not null)
+                throw new InvalidOperationException($"Non-threshold alerts must not define {nameof(RequiredMatches)} or {nameof(Threshold)}.");
+        }
     }
 
     private void ValidateResourceCompatibility()
     {
-        var expected = Type switch
-        {
-            AlertType.PlatformCpuHigh or AlertType.PlatformRamHigh or AlertType.PlatformVersionMismatch
-                => AlertResourceType.Platform,
-
-            AlertType.DeploymentImageUpdateAvailable or AlertType.DeploymentAutoUpdated or AlertType.DeploymentFailed
-                => AlertResourceType.Deployment,
-
-            _ => AlertResourceType.Stack
-        };
+        var expected = AlertTypeMetadata.GetResourceType(Type);
 
         if (Scope == AlertScope.Specific &&
             _limitedTo.Any(x => x.ResourceType != expected))
             throw new InvalidOperationException("ResourceType does not match AlertType.");
     }
 
-    private bool IsInQuietHours(DateTime utcNow)
-    {
-        foreach (var quietHour in _quietHours)
-        {
-            if (quietHour.ScheduleType == ScheduleType.Daily)
-            {
-                if (IsInTimeRange(utcNow, quietHour.StartTime, quietHour.EndTime, quietHour.Timezone))
-                    return true;
-            }
-            else if (quietHour is WeeklyQuietHour weekly)
-            {
-                if (utcNow.DayOfWeek == weekly.DayOfWeek &&
-                    IsInTimeRange(utcNow, quietHour.StartTime, quietHour.EndTime, quietHour.Timezone))
-                    return true;
-            }
-        }
-
-        return false;
-    }
-
     private void ValidateQuietHours()
     {
         for (int i = 0; i < _quietHours.Count; i++)
             for (int j = i + 1; j < _quietHours.Count; j++)
-                if (Overlaps(_quietHours[i], _quietHours[j]))
+                if (_quietHours[i].Overlaps(_quietHours[j]))
                     throw new InvalidOperationException("Quiet hours overlap.");
     }
+}
+[JsonPolymorphic]
+[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+[JsonDerivedType(typeof(DailyQuietHour), nameof(ScheduleType.Daily))]
+[JsonDerivedType(typeof(WeeklyQuietHour), nameof(ScheduleType.Weekly))]
+public abstract record AlertRuleQuietHour(
+    string Name,
+    ScheduleType ScheduleType,
+    TimeOnly StartTime,
+    TimeOnly EndTime,
+    string Timezone,
+    string? Description)
+{
+    public TimeZoneInfo TimeZoneInfo { get; } =
+        TimeZoneInfo.FindSystemTimeZoneById(Timezone);
 
-    private static bool Overlaps(AlertRuleQuietHour first, AlertRuleQuietHour second)
+    public bool IsInQuietHours(DateTime utcNow)
     {
-        if (!string.Equals(first.Timezone, second.Timezone, StringComparison.OrdinalIgnoreCase))
+        var localTime = TimeOnly.FromTimeSpan(
+            TimeZoneInfo.ConvertTimeFromUtc(utcNow, TimeZoneInfo).TimeOfDay);
+
+        return IsInRange(localTime) && MatchesDay(utcNow, TimeZoneInfo);
+    }
+
+    protected abstract bool MatchesDay(DateTime utcNow, TimeZoneInfo tz);
+
+    protected bool IsInRange(TimeOnly localTime)
+        => StartTime <= EndTime
+            ? localTime >= StartTime && localTime <= EndTime
+            : localTime >= StartTime || localTime <= EndTime;
+
+    public bool Overlaps(AlertRuleQuietHour other)
+    {
+        if (!string.Equals(Timezone, other.Timezone, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        if (first is WeeklyQuietHour fw && second is WeeklyQuietHour sw &&
-            fw.DayOfWeek != sw.DayOfWeek)
+        if (!DayMatches(other))
             return false;
 
-        foreach (var r1 in GetTimeRanges(first.StartTime, first.EndTime))
-            foreach (var r2 in GetTimeRanges(second.StartTime, second.EndTime))
+        foreach (var r1 in GetRanges())
+            foreach (var r2 in other.GetRanges())
                 if (r1.Start <= r2.End && r2.Start <= r1.End)
                     return true;
 
         return false;
     }
 
-    private static IEnumerable<(TimeSpan Start, TimeSpan End)> GetTimeRanges(TimeOnly startTime, TimeOnly endTime)
-    {
-        var start = startTime.ToTimeSpan();
-        var end = endTime.ToTimeSpan();
+    protected abstract bool DayMatches(AlertRuleQuietHour other);
 
-        if (startTime <= endTime)
-        {
+    protected IEnumerable<(TimeSpan Start, TimeSpan End)> GetRanges()
+    {
+        var start = StartTime.ToTimeSpan();
+        var end = EndTime.ToTimeSpan();
+
+        if (StartTime <= EndTime)
             yield return (start, end);
-            yield break;
+        else
+        {
+            yield return (start, TimeSpan.FromDays(1));
+            yield return (TimeSpan.Zero, end);
         }
-
-        yield return (start, TimeSpan.FromDays(1));
-        yield return (TimeSpan.Zero, end);
     }
+}
 
-    private static bool IsInTimeRange(DateTime utcNow, TimeOnly startTime, TimeOnly endTime, string timezone)
-    {
-        var tz = TimeZoneInfo.FindSystemTimeZoneById(timezone);
-        var localNow = TimeOnly.FromTimeSpan(TimeZoneInfo.ConvertTime(utcNow, tz).TimeOfDay);
+public sealed record DailyQuietHour(
+    string Name,
+    TimeOnly StartTime,
+    TimeOnly EndTime,
+    string Timezone,
+    string? Description)
+    : AlertRuleQuietHour(Name, ScheduleType.Daily, StartTime, EndTime, Timezone, Description)
+{
+    protected override bool MatchesDay(DateTime utcNow, TimeZoneInfo tz) => true;
+    protected override bool DayMatches(AlertRuleQuietHour other) => true;
+}
 
-        return startTime <= endTime
-            ? localNow >= startTime && localNow <= endTime
-            : localNow >= startTime || localNow <= endTime;
-    }
+public sealed record WeeklyQuietHour(
+    string Name,
+    DayOfWeek DayOfWeek,
+    TimeOnly StartTime,
+    TimeOnly EndTime,
+    string Timezone,
+    string? Description)
+    : AlertRuleQuietHour(Name, ScheduleType.Weekly, StartTime, EndTime, Timezone, Description)
+{
+    protected override bool MatchesDay(DateTime utcNow, TimeZoneInfo tz)
+        => TimeZoneInfo.ConvertTimeFromUtc(utcNow, tz).DayOfWeek == DayOfWeek;
+
+    protected override bool DayMatches(AlertRuleQuietHour other)
+        => other is WeeklyQuietHour w && w.DayOfWeek == DayOfWeek;
 }
 
 public sealed record AlertRuleLimitedTo(AlertResourceType ResourceType, Guid ResourceId);
 
-[JsonPolymorphic]
-[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-[JsonDerivedType(typeof(DailyQuietHour), nameof(ScheduleType.Daily))]
-[JsonDerivedType(typeof(WeeklyQuietHour), nameof(ScheduleType.Weekly))]
-public record AlertRuleQuietHour(string Name, ScheduleType ScheduleType, TimeOnly StartTime, TimeOnly EndTime, string Timezone, string? Description);
-
-public sealed record DailyQuietHour(string Name, TimeOnly StartTime, TimeOnly EndTime, string Timezone, string? Description)
-    : AlertRuleQuietHour(Name, ScheduleType.Daily, StartTime, EndTime, Timezone, Description);
-
-public sealed record WeeklyQuietHour(string Name, DayOfWeek DayOfWeek, TimeOnly StartTime, TimeOnly EndTime, string Timezone, string? Description)
-    : AlertRuleQuietHour(Name, ScheduleType.Weekly, StartTime, EndTime, Timezone, Description);
-
-
-public class AlertRuleState
+public sealed class AlertRuleState : IAuditedEntity
 {
-    public Guid AlertRuleId { get; private set; }
-    public Guid ResourceId { get; private set; }
+    public Guid AlertRuleId { get; }
+    public Guid ResourceId { get; }
+    /// <summary>
+    /// Gets the number of consecutive matches required to trigger the alert - only available for types that has threshold.
+    /// </summary>
+    public int ConsecutiveMatches { get; private set; }
+    public DateTime? LastTriggeredAt { get; private set; }
 
-    public DateTime LastTriggeredAt { get; private set; }
+    #region IAuditedEntity
+    public Guid CreatedByActorId { get; private set; }
+    public DateTime CreatedAt { get; private set; }
+    #endregion
 
-    private AlertRuleState() { }
-
-    public AlertRuleState(Guid alertRuleId, Guid resourceId)
+    public AlertRuleState(Guid alertRuleId, Guid resourceId, Guid actorId, int consecutiveMatches)
     {
         AlertRuleId = alertRuleId;
         ResourceId = resourceId;
-        LastTriggeredAt = DateTime.MinValue;
+        CreatedByActorId = actorId;
+        ConsecutiveMatches = consecutiveMatches;
+        CreatedAt = DateTime.UtcNow;
+        LastTriggeredAt = null;
     }
 
-    public void MarkTriggered(DateTime utcNow)
+    public static AlertRuleState FromPersistence(
+        Guid alertRuleId, 
+        Guid resourceId, 
+        int consecutiveMatches, 
+        DateTime? lastTriggeredAt, 
+        Guid createdByActorId, 
+        DateTime createdAt)
     {
-        LastTriggeredAt = utcNow;
+        return new AlertRuleState(alertRuleId, resourceId, createdByActorId, consecutiveMatches)
+        {
+            LastTriggeredAt = lastTriggeredAt,
+            CreatedAt = createdAt
+        };
     }
+
+    public void RegisterMatch() => ConsecutiveMatches++;
+    public void Reset() => ConsecutiveMatches = 0;
+
+    public bool CanFire(AlertRule rule)
+        => rule.RequiredMatches is null || ConsecutiveMatches >= rule.RequiredMatches;
+
+    public void MarkTriggered(DateTime utcNow)
+        => LastTriggeredAt = utcNow;
+}
+
+public static class AlertTypeMetadata
+{
+    private static readonly Dictionary<AlertType, AlertResourceType> ResourceMap = new()
+    {
+        { AlertType.PlatformCpuHigh, AlertResourceType.Platform },
+        { AlertType.PlatformRamHigh, AlertResourceType.Platform },
+        { AlertType.PlatformVersionMismatch, AlertResourceType.Platform },
+
+        { AlertType.DeploymentImageUpdateAvailable, AlertResourceType.Deployment },
+        { AlertType.DeploymentAutoUpdated, AlertResourceType.Deployment },
+        { AlertType.DeploymentFailed, AlertResourceType.Deployment },
+
+        { AlertType.StackImageUpdateAvailable, AlertResourceType.Stack },
+        { AlertType.StackAutoUpdated, AlertResourceType.Stack },
+        { AlertType.StackDeployFailed, AlertResourceType.Stack },
+    };
+
+    private static readonly HashSet<AlertType> ThresholdTypes =
+    [
+        AlertType.PlatformCpuHigh,
+        AlertType.PlatformRamHigh,
+    ];
+
+    public static AlertResourceType GetResourceType(AlertType type)
+        => ResourceMap[type];
+
+    public static bool IsThreshold(AlertType type)
+        => ThresholdTypes.Contains(type);
+
+    public static bool IsValidInfo(AlertType type, AlertInfo info)
+        => (type, info) switch
+        {
+            (AlertType.PlatformCpuHigh, PlatformCpuHighAlertInfo) => true,
+            (AlertType.PlatformRamHigh, PlatformRamHighAlertInfo) => true,
+            (AlertType.PlatformVersionMismatch, PlatformVersionMismatchAlertInfo) => true,
+            (AlertType.DeploymentImageUpdateAvailable, DeploymentImageUpdateAvailableAlertInfo) => true,
+            (AlertType.DeploymentAutoUpdated, DeploymentAutoUpdatedAlertInfo) => true,
+            (AlertType.DeploymentFailed, DeploymentFailedAlertInfo) => true,
+            (AlertType.StackImageUpdateAvailable, StackImageUpdateAvailableAlertInfo) => true,
+            (AlertType.StackAutoUpdated, StackAutoUpdatedAlertInfo) => true,
+            (AlertType.StackDeployFailed, StackDeployFailedAlertInfo) => true,
+            _ => false
+        };
 }

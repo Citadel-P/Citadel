@@ -21,6 +21,7 @@ internal class UnitOfWork : IUnitOfWork
         Teams = new Lazy<ITeamRepository>(() => new TeamRepository(connection, GetTransaction));
         Actors = new Lazy<IActorRepository>(() => new ActorRepository(connection, GetTransaction));
         Images = new Lazy<IImageRepository>(() => new ImageRepository(connection, GetTransaction));
+        Alerters = new Lazy<IAlerterRepository>(() => new AlerterRepository(connection, GetTransaction));
         Platforms = new Lazy<IPlatformRepository>(() => new PlatformRepository(connection, GetTransaction));
         Registries = new Lazy<IRegistryRepository>(() => new RegistryRepository(connection, GetTransaction));
         Containers = new Lazy<IContainerRepository>(() => new ContainerRepository(connection, GetTransaction));
@@ -35,6 +36,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<ITeamRepository> Teams { get; }
     private Lazy<IImageRepository> Images { get; }
     private Lazy<IActorRepository> Actors { get; }
+    private Lazy<IAlerterRepository> Alerters { get; }
     private Lazy<IPlatformRepository> Platforms { get; }
     private Lazy<IRegistryRepository> Registries { get; }
     private Lazy<IContainerRepository> Containers { get; }
@@ -48,6 +50,7 @@ internal class UnitOfWork : IUnitOfWork
     ITeamRepository IUnitOfWork.Teams => Teams.Value;
     IImageRepository IUnitOfWork.Images => Images.Value;
     IActorRepository IUnitOfWork.Actors => Actors.Value;
+    IAlerterRepository IUnitOfWork.Alerters => Alerters.Value;
     IPlatformRepository IUnitOfWork.Platforms => Platforms.Value;
     IRegistryRepository IUnitOfWork.Registries => Registries.Value;
     IContainerRepository IUnitOfWork.Containers => Containers.Value;

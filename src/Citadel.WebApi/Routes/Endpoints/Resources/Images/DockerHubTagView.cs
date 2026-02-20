@@ -20,7 +20,7 @@ public sealed record DockerHubTagView(int Id, string Name, DockerHubImageView? I
 /// 
 /// </summary>
 /// <param name="Architecture">CPU architecture</param>
-/// <param name="Digest">Image digest</param>
+/// <param name="Digest">CurrentImage digest</param>
 /// <param name="Os">Operating system</param>
 /// <param name="Size">Size of the image</param>
 /// <param name="Status">Status of the image</param>

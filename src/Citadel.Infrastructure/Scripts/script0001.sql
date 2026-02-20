@@ -41,7 +41,10 @@ CREATE TABLE "AlertRules" (
     "IsEnabled" INTEGER NOT NULL DEFAULT 1,
     "LimitedTo" TEXT NOT NULL,
     "QuietHours" TEXT NOT NULL,
+    "RequiredMatches" INTEGER NULL,
     "Scope" TEXT NOT NULL,
+    "Severity" TEXT NOT NULL,
+    "Threshold" REAL NULL,
     "Type" TEXT NOT NULL,
     "Url" TEXT NOT NULL,
     CONSTRAINT "FK_AlertRules_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
@@ -151,6 +154,7 @@ CREATE TABLE "AlertEvents" (
 CREATE TABLE "AlertRuleStates" (
     "AlertRuleId" TEXT NOT NULL,
     "ResourceId" TEXT NOT NULL,
+    "ConsecutiveMatches" INTEGER NOT NULL DEFAULT 3,
     "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     "CreatedByActorId" TEXT NOT NULL,
     "LastTriggeredAt" TEXT NULL,
@@ -337,7 +341,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260218224935_migration0001', '10.0.2');
+VALUES ('20260219205123_migration0001', '10.0.2');
 
 COMMIT;
 

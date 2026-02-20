@@ -8,7 +8,7 @@ using System.Data;
 
 namespace Infrastructure.Persistence;
 
-public sealed class ActorRepository(IDbConnection db, Func<IDbTransaction> tx) : IActorRepository
+internal sealed class ActorRepository(IDbConnection db, Func<IDbTransaction> tx) : IActorRepository
 {
     public async Task<Actor?> GetById(Guid id, CancellationToken cancellationToken)
     {

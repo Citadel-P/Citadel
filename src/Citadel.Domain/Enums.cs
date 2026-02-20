@@ -409,7 +409,7 @@ public enum AlertType
     #region Stack Alerts
     StackImageUpdateAvailable,
     StackAutoUpdated,
-    StackDeployFailed
+    StackDeployFailed,
     #endregion
 }
 

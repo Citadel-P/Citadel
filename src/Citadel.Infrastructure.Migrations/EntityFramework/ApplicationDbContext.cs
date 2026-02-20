@@ -1,6 +1,7 @@
 ﻿using Domain;
 using Domain.Entities;
 using Hosting.Common;
+using Hosting.DockerClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -558,6 +559,9 @@ internal static class Configuration
         alertRule.Property<string>("Scope").HasColumnType("TEXT").IsRequired();
         alertRule.Property<string>("LimitedTo").HasColumnType("TEXT").IsRequired();
         alertRule.Property<string>("QuietHours").HasColumnType("TEXT").IsRequired();
+        alertRule.Property<int?>("RequiredMatches").HasColumnType("INTEGER").IsRequired(false);
+        alertRule.Property<double?>("Threshold").HasColumnType("REAL").IsRequired(false);
+        alertRule.Property<string>("Severity").HasColumnType("TEXT").IsRequired();
 
         alertRule.AddAuditedMemebers();
         return builder;
@@ -572,6 +576,7 @@ internal static class Configuration
         alertRuleState.Property<Guid?>("ResourceId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
         alertRuleState.Property<Guid>("AlertRuleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         alertRuleState.Property<DateTime?>("LastTriggeredAt").HasColumnType("TEXT").HasDefaultValue(null);
+        alertRuleState.Property<int>("ConsecutiveMatches").HasColumnType("INTEGER").IsRequired().HasDefaultValue(3);
 
         alertRuleState.HasKey("AlertRuleId", "ResourceId");
 

@@ -190,9 +190,19 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("RequiredMatches")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Scope")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<double?>("Threshold")
+                        .HasColumnType("REAL");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -216,6 +226,11 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.Property<string>("ResourceId")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("ConsecutiveMatches")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(3);
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
