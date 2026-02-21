@@ -56,10 +56,11 @@ internal sealed class AlertStateWorkItem(AlertRule rule, AlertMatch match, DateT
     {
         try
         {
-            var state = await uow.AlertRules.GetStateAsync(
+            var existingState = await uow.AlertRules.GetStateAsync(
                 rule.Id,
                 match.ResourceId,
-                token)
+                token);
+            var state = existingState
                 ?? new AlertRuleState(
                     rule.Id,
                     match.ResourceId,
@@ -71,7 +72,7 @@ internal sealed class AlertStateWorkItem(AlertRule rule, AlertMatch match, DateT
             {
                 if (!rule.CanTrigger(utcNow, state))
                 {
-                    await uow.AlertRules.UpdateStateAsync(state, token);
+                    await uow.AlertRules.UpsertAlertRuleStateAsync(state, token);
                     await uow.CommitAsync(token);
                     return;
                 }
@@ -80,7 +81,7 @@ internal sealed class AlertStateWorkItem(AlertRule rule, AlertMatch match, DateT
 
                 if (!state.CanFire(rule) || !rule.CanTrigger(utcNow, state))
                 {
-                    await uow.AlertRules.UpdateStateAsync(state, token);
+                    await uow.AlertRules.UpsertAlertRuleStateAsync(state, token);
                     await uow.CommitAsync(token);
                     return;
                 }
@@ -90,7 +91,7 @@ internal sealed class AlertStateWorkItem(AlertRule rule, AlertMatch match, DateT
             {
                 if (!rule.CanTrigger(utcNow, state))
                 {
-                    await uow.AlertRules.UpdateStateAsync(state, token);
+                    await uow.AlertRules.UpsertAlertRuleStateAsync(state, token);
                     await uow.CommitAsync(token);
                     return;
                 }
@@ -110,7 +111,7 @@ internal sealed class AlertStateWorkItem(AlertRule rule, AlertMatch match, DateT
             if (AlertTypeMetadata.IsThreshold(rule.Type))
                 state.Reset();
 
-            await uow.AlertRules.UpdateStateAsync(state, token);
+            await uow.AlertRules.UpsertAlertRuleStateAsync(state, token);
             await uow.AlertEvents.AddAsync(evt, token);
             // TODO: send to client (Shoutrrr & signalr)
 

@@ -72,7 +72,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         transaction: tx());
     }
 
-    public Task<int> AddAlertRuleStateAsync(AlertRuleState alertRuleState, CancellationToken cancellationToken)
+    public Task<int> UpsertAlertRuleStateAsync(AlertRuleState alertRuleState, CancellationToken cancellationToken)
     {
         const string sql = @"
         INSERT INTO AlertRuleStates (
@@ -80,7 +80,11 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         )
         VALUES (
             @AlertRuleId, @ResourceId, @ConsecutiveMatches, @LastTriggeredAt, @CreatedByActorId, @CreatedAt
-        )";
+        )
+        ON CONFLICT(AlertRuleId, ResourceId) DO UPDATE SET
+            ConsecutiveMatches = excluded.ConsecutiveMatches,
+            LastTriggeredAt = excluded.LastTriggeredAt
+        ";
         return db.ExecuteAsync(sql, new
         {
             AlertRuleId = alertRuleState.AlertRuleId.Format(),
@@ -179,26 +183,6 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             LimitedTo = JsonSerializer.Serialize(alertRule.LimitedTo, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleLimitedTo),
             RequiredMatches = alertRule.RequiredMatches,
             Threshold = alertRule.Threshold
-        },
-        transaction: tx());
-    }
-
-    public Task<int> UpdateStateAsync(AlertRuleState alertRuleState, CancellationToken cancellationToken)
-    {
-        const string sql = @"
-        UPDATE AlertRuleStates
-        SET
-            ConsecutiveMatches = @ConsecutiveMatches,
-            LastTriggeredAt = @LastTriggeredAt
-        WHERE AlertRuleId = @AlertRuleId
-          AND ResourceId = @ResourceId";
-
-        return db.ExecuteAsync(sql, new
-        {
-            AlertRuleId = alertRuleState.AlertRuleId.Format(),
-            ResourceId = alertRuleState.ResourceId.Format(),
-            ConsecutiveMatches = alertRuleState.ConsecutiveMatches,
-            LastTriggeredAt = alertRuleState.LastTriggeredAt
         },
         transaction: tx());
     }

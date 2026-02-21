@@ -1,5 +1,6 @@
 ﻿using Application.Configs;
 using Application.Services;
+using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
@@ -11,6 +12,7 @@ using Infrastructure.Repositories.DbQueue;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using System.Threading.Channels;
@@ -72,7 +74,7 @@ public class ThresholdAlertTests: IntegrationTestBase
             3);
         
         await uow.AlertRules.AddAlertRuleAsync(alertRule, TestContext.Current.CancellationToken);
-        await uow.AlertRules.AddAlertRuleStateAsync(alertRuleState, TestContext.Current.CancellationToken);
+        await uow.AlertRules.UpsertAlertRuleStateAsync(alertRuleState, TestContext.Current.CancellationToken);
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
@@ -176,7 +178,7 @@ public class ThresholdAlertTests: IntegrationTestBase
             var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             var state = await db.AlertRules.GetStateAsync(_alertRuleId, _platformId, TestContext.Current.CancellationToken);
             state!.Reset();
-            await db.AlertRules.UpdateStateAsync(state, TestContext.Current.CancellationToken);
+            await db.AlertRules.UpsertAlertRuleStateAsync(state, TestContext.Current.CancellationToken);
             await db.CommitAsync(TestContext.Current.CancellationToken);
         }
 
@@ -185,7 +187,7 @@ public class ThresholdAlertTests: IntegrationTestBase
             new PlatformHealth(_platformId, "addr", PlatformConnectorType.Agent, true),
             TestContext.Current.CancellationToken);
 
-        await Task.Delay(1500, TestContext.Current.CancellationToken);
+        await WaitForAlertEventCountAsync(1, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Second trigger (still within cooldown)
         await _broadcaster.PublishAsync(
@@ -199,6 +201,159 @@ public class ThresholdAlertTests: IntegrationTestBase
         var alertEvents = await dbFinal.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
 
         Assert.Single(alertEvents.Items);
+    }
+
+    [Fact]
+    public async Task CpuHighAlert_ShouldNotTrigger_DuringQuietHours()
+    {
+        await UpdateAlertRuleAsync(rule =>
+        {
+            var now = DateTime.UtcNow;
+            var quietHour = new DailyQuietHour("quiet", TimeOnly.FromDateTime(now.AddHours(-1)), TimeOnly.FromDateTime(now.AddHours(1)), "UTC", null);
+            return AlertRule.FromPersistence(
+                id: rule.Id,
+                url: rule.Url,
+                type: rule.Type,
+                severity: rule.Severity,
+                cooldownSeconds: rule.CooldownSeconds,
+                isEnabled: true,
+                scope: rule.Scope,
+                createdByActorId: rule.CreatedByActorId,
+                createdAt: rule.CreatedAt,
+                requiredMatches: rule.RequiredMatches,
+                threshold: rule.Threshold,
+                limitedTo: rule.LimitedTo,
+                quietHours: [quietHour]);
+        }, TestContext.Current.CancellationToken);
+
+        _platformFactoryMock
+            .Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+            .Returns(_platformConnector.Object);
+
+        _platformConnector
+            .Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(() => GetStatsAsync());
+
+        await _broadcaster.PublishAsync(
+            new PlatformHealth(_platformId, "addr", PlatformConnectorType.Agent, true),
+            TestContext.Current.CancellationToken);
+
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
+
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
+
+        Assert.Empty(alertEvents.Items);
+    }
+
+    [Fact]
+    public async Task CpuHighAlert_ShouldNotTrigger_WhenScopeSpecificDoesNotMatch()
+    {
+        await UpdateAlertRuleAsync(rule =>
+        {
+            var limitedTo = new AlertRuleLimitedTo(AlertResourceType.Platform, Guid.NewGuid());
+            return AlertRule.FromPersistence(
+                id: rule.Id,
+                url: rule.Url,
+                type: rule.Type,
+                severity: rule.Severity,
+                cooldownSeconds: rule.CooldownSeconds,
+                isEnabled: true,
+                scope: AlertScope.Specific,
+                createdByActorId: rule.CreatedByActorId,
+                createdAt: rule.CreatedAt,
+                requiredMatches: rule.RequiredMatches,
+                threshold: rule.Threshold,
+                limitedTo: [limitedTo],
+                quietHours: rule.QuietHours);
+        }, TestContext.Current.CancellationToken);
+
+        _platformFactoryMock
+            .Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
+            .Returns(_platformConnector.Object);
+
+        _platformConnector
+            .Setup(x => x.StreamStatsAsync(It.IsAny<StreamPlatformStatsCommand>(), It.IsAny<CancellationToken>()))
+            .Returns(() => GetStatsAsync());
+
+        await _broadcaster.PublishAsync(
+            new PlatformHealth(_platformId, "addr", PlatformConnectorType.Agent, true),
+            TestContext.Current.CancellationToken);
+
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
+
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
+
+        Assert.Empty(alertEvents.Items);
+    }
+
+    [Fact]
+    public async Task CpuHighAlert_ShouldRequireNewMatches_AfterTrigger()
+    {
+        await EnsureAlertRuleCacheLoadedAsync(TestContext.Current.CancellationToken);
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var context = BuildCpuContext([86, 87, 88]);
+            await RunAlertInlineAsync(scope.ServiceProvider, context, TestContext.Current.CancellationToken);
+        }
+
+        await WaitForAlertEventCountAsync(1, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var rule = await db.AlertRules.GetByIdAsync(_alertRuleId, TestContext.Current.CancellationToken);
+            var state = await db.AlertRules.GetStateAsync(_alertRuleId, _platformId, TestContext.Current.CancellationToken);
+            var updatedState = AlertRuleState.FromPersistence(
+                alertRuleId: state!.AlertRuleId,
+                resourceId: state.ResourceId,
+                consecutiveMatches: 0,
+                lastTriggeredAt: DateTime.UtcNow.AddSeconds(-(rule!.CooldownSeconds + 1)),
+                createdByActorId: state.CreatedByActorId,
+                createdAt: state.CreatedAt);
+            await db.AlertRules.UpsertAlertRuleStateAsync(updatedState, TestContext.Current.CancellationToken);
+            await db.CommitAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var context = BuildCpuContext([86, 87]);
+            await RunAlertInlineAsync(scope.ServiceProvider, context, TestContext.Current.CancellationToken);
+        }
+
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+
+        await using var finalScope = Services.CreateAsyncScope();
+        var dbFinal = finalScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var alertEvents = await dbFinal.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
+
+        Assert.Single(alertEvents.Items);
+    }
+
+    private static async Task RunAlertInlineAsync(IServiceProvider services, AlertEvaluationContext context, CancellationToken cancellationToken)
+    {
+        var uow = services.GetRequiredService<IUnitOfWork>();
+        var evaluators = services.GetRequiredService<IEnumerable<IAlertEvaluator>>();
+        var ruleProvider = services.GetRequiredService<IAlertRuleProvider>();
+        var logger = services.GetRequiredService<ILogger<AlertService>>();
+
+        var queue = new InlineDbWorkQueue(uow);
+        var alertService = new AlertService(evaluators, ruleProvider, queue, logger);
+
+        await alertService.ProcessAsync(AlertType.PlatformCpuHigh, context, cancellationToken);
+    }
+
+    private sealed class InlineDbWorkQueue(IUnitOfWork uow) : IDbWorkQueue
+    {
+        private readonly Channel<IDbWorkItem> _channel = Channel.CreateUnbounded<IDbWorkItem>();
+
+        public ChannelReader<IDbWorkItem> Reader => _channel.Reader;
+
+        public ValueTask EnqueueAsync(IDbWorkItem item, CancellationToken cancellationToken)
+            => new(item.ExecuteAsync(uow, cancellationToken));
     }
 
     [Fact]
@@ -330,5 +485,58 @@ public class ThresholdAlertTests: IntegrationTestBase
             );
             yield return stat2;
         }
+    }
+
+    private AlertEvaluationContext BuildCpuContext(IEnumerable<double> cpuUsages)
+    {
+        var snapshots = cpuUsages
+            .Select(cpu => new PlatformAlertSnapshot(_platformId, "platform", cpu, 0, string.Empty))
+            .ToArray();
+
+        return new AlertEvaluationContext(
+            UtcNow: DateTime.UtcNow,
+            Platforms: snapshots,
+            Deployments: [],
+            Stacks: []);
+    }
+
+    private async Task<int> WaitForAlertEventCountAsync(int expectedCount, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var start = DateTime.UtcNow;
+        var count = 0;
+
+        while (DateTime.UtcNow - start < timeout)
+        {
+            await using var scope = Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, cancellationToken);
+            count = alertEvents.Items.Count();
+
+            if (count >= expectedCount)
+                break;
+
+            await Task.Delay(200, cancellationToken);
+        }
+
+        return count;
+    }
+
+    private async Task UpdateAlertRuleAsync(Func<AlertRule, AlertRule> update, CancellationToken cancellationToken)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var cache = scope.ServiceProvider.GetRequiredService<AlertRuleCache>();
+        var rule = await db.AlertRules.GetByIdAsync(_alertRuleId, cancellationToken);
+        var updated = update(rule!);
+        await db.AlertRules.UpdateAsync(updated, cancellationToken);
+        await db.CommitAsync(cancellationToken);
+        await cache.ReloadAsync(cancellationToken);
+    }
+
+    private async Task EnsureAlertRuleCacheLoadedAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var cache = scope.ServiceProvider.GetRequiredService<AlertRuleCache>();
+        await cache.ReloadAsync(cancellationToken);
     }
 }

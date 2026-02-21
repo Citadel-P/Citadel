@@ -1,5 +1,6 @@
 ﻿using Application.Configs;
 using Application.Services;
+using Application.Services.Alerts;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -29,8 +30,12 @@ public class EventAlertTests : IntegrationTestBase
     private readonly Mock<IDelayWithJitterService> _delayWithJitter = new();
     private readonly Mock<IPlatformContainerCache> _platformCach = new();
 
+    private Func<CancellationToken, Task>? _runAutoUpdateJob;
+
     private Guid _platformId;
     private Guid _alertRuleId;
+    private Guid _deploymentId;
+
     protected override void ConfigureTestServices(IServiceCollection services)
     {
         // Remove all existing hosted services
@@ -38,10 +43,13 @@ public class EventAlertTests : IntegrationTestBase
         services.RemoveAll<IOptions<JobConfiguration>>();
         services.RemoveAll<IDelayWithJitterService>();
         services.RemoveAll<IPlatformContainerCache>();
-        services.AddHostedService<DeploymentAutoUpdateJob>();
-        services.AddHostedService<DbWriteWorker>();
-        services.AddHostedService<NotificationWorker>();
-        services.AddHostedService<AlertRuleCacheWarmup>();
+
+        services
+            .AddHostedService<DeploymentAutoUpdateJob>()
+            .AddHostedService<DbWriteWorker>()
+            .AddHostedService<NotificationWorker>()
+            .AddHostedService<AlertRuleCacheWarmup>();
+
         services.AddSingleton(_ => _configMock.Object);
         services.AddSingleton(_ => _platformConnector.Object);
         services.AddSingleton(_ => _platformConnectorFactoryMock.Object);
@@ -54,21 +62,23 @@ public class EventAlertTests : IntegrationTestBase
         var cacheEntry = new PlatformCacheEntry(_platformId, "localhost", PlatformConnectorType.Local, new Dictionary<string, Guid>().ToImmutableDictionary());
         var emptyError = Error.Empty as Error;
         _platformCach.Setup(x => x.TryGetCacheEntry(It.IsAny<Guid>(), out cacheEntry, out emptyError)).Returns(true);
-        // Setup connectors
+
         _imageConnectorFactoryMock.Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
             .Returns(_imageConnectorMock.Object);
 
-        // Returns new Distribution image
         var dist = new DistributionResult(new OCIDescriptorResult("zip", "new-digest", 2000000, new OCIPlatformResult("x86", "linux", "6.2"), "art-1"));
         _imageConnectorMock.Setup(x => x.DistributionInspectAsync(It.IsAny<DistributionInspectCommand>(), It.IsAny<CancellationToken>()))
             .Returns(Task.FromResult(Result.Success(dist)));
 
-        // Start immediately
         _delayWithJitter
            .Setup(x => x.DelayWithJitterForAsync(It.IsAny<Func<CancellationToken, Task>>(),
                                                  It.IsAny<TimeSpan>(),
                                                  It.IsAny<CancellationToken>()))
-           .Returns<Func<CancellationToken, Task>, TimeSpan, CancellationToken>((func, _, ct) => func(ct));
+           .Returns<Func<CancellationToken, Task>, TimeSpan, CancellationToken>((func, _, __) =>
+           {
+               _runAutoUpdateJob = func;
+               return Task.CompletedTask;
+           });
     }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
@@ -133,13 +143,16 @@ public class EventAlertTests : IntegrationTestBase
 
         _platformId = platform.Id;
         _alertRuleId = alertRule.Id;
+        _deploymentId = deployment.Id;
     }
 
     [Fact]
     public async Task EventAlert_ShouldTrigger_Immediately()
     {
-        // Setup is done in the ConfigureTestServices method
-        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        await EnsureAlertRuleCacheLoadedAsync(TestContext.Current.CancellationToken);
+        await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
+
+        await WaitForAlertEventCountAsync(1, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -147,5 +160,164 @@ public class EventAlertTests : IntegrationTestBase
 
         Assert.Single(alertEvents.Items);
         Assert.Equal(AlertType.DeploymentImageUpdateAvailable, alertEvents.Items.ElementAt(0).Type);
+    }
+
+    [Fact]
+    public async Task EventAlert_ShouldNotRetrigger_DuringCooldown()
+    {
+        await EnsureAlertRuleCacheLoadedAsync(TestContext.Current.CancellationToken);
+
+        await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
+        await WaitForAlertEventCountAsync(1, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+
+        await using var finalScope = Services.CreateAsyncScope();
+        var db = finalScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
+
+        Assert.Single(alertEvents.Items);
+    }
+
+    [Fact]
+    public async Task EventAlert_ShouldNotTrigger_DuringQuietHours()
+    {
+        await UpdateAlertRuleAsync(rule =>
+        {
+            var now = DateTime.UtcNow;
+            var quietHour = new DailyQuietHour("quiet", TimeOnly.FromDateTime(now.AddHours(-1)), TimeOnly.FromDateTime(now.AddHours(1)), "UTC", null);
+            return AlertRule.FromPersistence(
+                id: rule.Id,
+                url: rule.Url,
+                type: rule.Type,
+                severity: rule.Severity,
+                cooldownSeconds: rule.CooldownSeconds,
+                isEnabled: true,
+                scope: rule.Scope,
+                createdByActorId: rule.CreatedByActorId,
+                createdAt: rule.CreatedAt,
+                requiredMatches: rule.RequiredMatches,
+                threshold: rule.Threshold,
+                limitedTo: rule.LimitedTo,
+                quietHours: [quietHour]);
+        }, TestContext.Current.CancellationToken);
+
+        await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
+
+        Assert.Empty(alertEvents.Items);
+    }
+
+    [Fact]
+    public async Task EventAlert_ShouldNotTrigger_WhenScopeSpecificDoesNotMatch()
+    {
+        await UpdateAlertRuleAsync(rule =>
+        {
+            var limitedTo = new AlertRuleLimitedTo(AlertResourceType.Deployment, Guid.NewGuid());
+            return AlertRule.FromPersistence(
+                id: rule.Id,
+                url: rule.Url,
+                type: rule.Type,
+                severity: rule.Severity,
+                cooldownSeconds: rule.CooldownSeconds,
+                isEnabled: true,
+                scope: AlertScope.Specific,
+                createdByActorId: rule.CreatedByActorId,
+                createdAt: rule.CreatedAt,
+                requiredMatches: rule.RequiredMatches,
+                threshold: rule.Threshold,
+                limitedTo: [limitedTo],
+                quietHours: rule.QuietHours);
+        }, TestContext.Current.CancellationToken);
+
+        await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
+
+        Assert.Empty(alertEvents.Items);
+    }
+
+    [Fact]
+    public async Task EventAlert_ShouldNotTrigger_WhenDisabled()
+    {
+        await UpdateAlertRuleAsync(rule =>
+        {
+            rule.Disable();
+            return rule;
+        }, TestContext.Current.CancellationToken);
+
+        await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
+
+        Assert.Empty(alertEvents.Items);
+    }
+
+    private async Task RunAutoUpdateJobOnceAsync(CancellationToken cancellationToken)
+    {
+        if (_runAutoUpdateJob is null)
+            throw new InvalidOperationException("Deployment auto-update job was not initialized.");
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromSeconds(1));
+
+        try
+        {
+            await _runAutoUpdateJob(cts.Token);
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+        }
+    }
+
+    private async Task<int> WaitForAlertEventCountAsync(int expectedCount, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var start = DateTime.UtcNow;
+        var count = 0;
+
+        while (DateTime.UtcNow - start < timeout)
+        {
+            await using var scope = Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, cancellationToken);
+            count = alertEvents.Items.Count();
+
+            if (count >= expectedCount)
+                break;
+
+            await Task.Delay(200, cancellationToken);
+        }
+
+        return count;
+    }
+
+    private async Task UpdateAlertRuleAsync(Func<AlertRule, AlertRule> update, CancellationToken cancellationToken)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var cache = scope.ServiceProvider.GetRequiredService<AlertRuleCache>();
+        var rule = await db.AlertRules.GetByIdAsync(_alertRuleId, cancellationToken);
+        var updated = update(rule!);
+        await db.AlertRules.UpdateAsync(updated, cancellationToken);
+        await db.CommitAsync(cancellationToken);
+        await cache.ReloadAsync(cancellationToken);
+    }
+
+    private async Task EnsureAlertRuleCacheLoadedAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var cache = scope.ServiceProvider.GetRequiredService<AlertRuleCache>();
+        await cache.ReloadAsync(cancellationToken);
     }
 }

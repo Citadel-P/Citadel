@@ -51,6 +51,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
             });
 
         Client = factory.CreateClient();
+        Services = factory.Services;
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateJwtToken());
     }
 

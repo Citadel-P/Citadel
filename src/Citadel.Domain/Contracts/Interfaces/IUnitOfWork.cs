@@ -164,11 +164,10 @@ public interface IAlertRuleRepository
 {
     Task<AlertRule?> GetByIdAsync(Guid alertRuleId, CancellationToken cancellationToken);
     Task<AlertRuleState?> GetStateAsync(Guid alertRuleId, Guid resourceId, CancellationToken cancellationToken);
-    Task<int> AddAlertRuleAsync(AlertRule alertRule, CancellationToken cancellationToken);
-    Task<int> AddAlertRuleStateAsync(AlertRuleState alertRuleState, CancellationToken cancellationToken);
     Task<IEnumerable<AlertRule>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<int> AddAlertRuleAsync(AlertRule alertRule, CancellationToken cancellationToken);
     Task<int> UpdateAsync(AlertRule alertRule, CancellationToken cancellationToken);
-    Task<int> UpdateStateAsync(AlertRuleState alertRuleState, CancellationToken cancellationToken);
+    Task<int> UpsertAlertRuleStateAsync(AlertRuleState alertRuleState, CancellationToken cancellationToken);
 }
 
 public interface IAlertEventRepository
