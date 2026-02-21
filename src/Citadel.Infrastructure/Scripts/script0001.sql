@@ -282,9 +282,17 @@ CREATE INDEX "IX_AlertEvents_AlertRuleId" ON "AlertEvents" ("AlertRuleId");
 
 CREATE INDEX "IX_AlertEvents_CreatedByActorId" ON "AlertEvents" ("CreatedByActorId");
 
+CREATE INDEX "IX_AlertEvents_ResourceType" ON "AlertEvents" ("ResourceType");
+
+CREATE INDEX "IX_AlertEvents_Resource_CreatedAt" ON "AlertEvents" ("ResourceId", "CreatedAt");
+
+CREATE INDEX "IX_AlertEvents_Type" ON "AlertEvents" ("Type");
+
 CREATE INDEX "IX_AlertRuleStates_CreatedByActorId" ON "AlertRuleStates" ("CreatedByActorId");
 
 CREATE INDEX "IX_AlertRules_CreatedByActorId" ON "AlertRules" ("CreatedByActorId");
+
+CREATE INDEX "IX_AlertRules_Type" ON "AlertRules" ("Type");
 
 CREATE UNIQUE INDEX "IX_ContainerStats_ContainerId_Created" ON "ContainerStats" ("ContainerId", "Created");
 
@@ -341,7 +349,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260219205123_migration0001', '10.0.2');
+VALUES ('20260221000114_migration0001', '10.0.2');
 
 COMMIT;
 

@@ -1,12 +1,12 @@
-﻿using Domain.Contracts.Interfaces;
-using Hosting.Common;
+﻿using Application.Services;
+using Domain.Contracts.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Application.TaskJobs;
 
-internal class CleanupJob(IServiceScopeFactory scopeFactory, ILogger<CleanupJob> logger) : BackgroundService
+internal class CleanupJob(IServiceScopeFactory scopeFactory, IDelayWithJitterService delayWithJitterService, ILogger<CleanupJob> logger) : BackgroundService
 {
     private const int stats_purgeDays = 7;
     private const int activities_purgeDays = 90;
@@ -14,7 +14,7 @@ internal class CleanupJob(IServiceScopeFactory scopeFactory, ILogger<CleanupJob>
 
     protected override Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        return Helpers.DelayWithJitterFor(RunPeriodicCleanUp, cancellationToken: cancellationToken);
+        return delayWithJitterService.DelayWithJitterForAsync(RunPeriodicCleanUp, cancellationToken: cancellationToken);
     }
 
     private async Task RunPeriodicCleanUp(CancellationToken cancellationToken)

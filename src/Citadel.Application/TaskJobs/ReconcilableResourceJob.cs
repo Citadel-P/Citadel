@@ -18,13 +18,14 @@ internal class ReconcilableResourceJob(
     IServiceScopeFactory scopeFactory,
     IDeploymentStreamManager deploymentHub,
     IDockerDaemonStreamManager dockerDaemonHub,
+    IDelayWithJitterService delayWithJitterService,
     IContainerEventBroadcaster containerEventBroadcaster,
     ILogger<ReconcilableResourceJob> logger) : BackgroundService
 {
-    private static readonly TimeSpan SyncInterval = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan SyncInterval = TimeSpan.FromMinutes(5);
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await Helpers.DelayWithJitterFor(RunPeriodicJanitor, maxJitter: TimeSpan.FromSeconds(20), cancellationToken: stoppingToken);
+        await delayWithJitterService.DelayWithJitterForAsync(RunPeriodicJanitor, cancellationToken: stoppingToken);
     }
 
     private async Task RunPeriodicJanitor(CancellationToken cancellationToken)

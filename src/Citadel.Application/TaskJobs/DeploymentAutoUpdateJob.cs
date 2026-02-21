@@ -1,8 +1,10 @@
-﻿using Domain;
+﻿using Application.Services;
+using Application.Services.Alerts;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Images;
 using Domain.Entities;
-using Hosting.Common;
+using Google.Api;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -10,16 +12,18 @@ using Microsoft.Extensions.Logging;
 namespace Application.TaskJobs;
 
 internal sealed class DeploymentAutoUpdateJob(
+    IDbWorkQueue dbWorkQueue,
+    IAlertService alertService,
     IServiceScopeFactory scopeFactory,
     IPlatformContainerCache platformContainerCache,
+    IDelayWithJitterService delayWithJitterService,
     IConnectorFactory<IImageConnector> connectorFactory,
-    IDbWorkQueue dbWorkQueue,
     ILogger<DeploymentAutoUpdateJob> logger) : BackgroundService
 {
     private const int CheckIntervalInHours = 3;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
-        => Helpers.DelayWithJitterFor(RunPeriodicAutoUpdate, cancellationToken: stoppingToken);
+        => delayWithJitterService.DelayWithJitterForAsync(RunPeriodicAutoUpdate, cancellationToken: stoppingToken);
 
     private async Task RunPeriodicAutoUpdate(CancellationToken cancellationToken)
     {
@@ -111,7 +115,19 @@ internal sealed class DeploymentAutoUpdateJob(
             );
         }
 
-        // Todo: send alert
+        var context = new AlertEvaluationContext(
+                UtcNow: now,
+                Platforms: [],
+                Deployments: [
+                    new DeploymentAlertSnapshot(Id: deployment.Id, Name: deployment.Name, CurrentImage: currentDigest, PreviousImage: null, 
+                        LatestImage: remoteDigest, Failed: false)],
+                Stacks: []); 
+
+        await alertService.ProcessAsync(
+               AlertType.DeploymentImageUpdateAvailable,
+               context,
+               cancellationToken);
+
         logger.LogInformation(
             "Auto-update available for deployment {DeploymentId}: new digest detected.",
             deployment.Id);

@@ -23,18 +23,12 @@ public sealed class AlertEvent : IAuditedEntity
         AlertType type,
         AlertSeverity severity,
         AlertInfo info,
-        Guid? resourceId,
+        Guid resourceId,
         AlertResourceType resourceType,
         Guid actorId)
     {
         if (!AlertTypeMetadata.IsValidInfo(type, info))
             throw new ArgumentException("AlertInfo does not match AlertType.");
-
-        if (resourceType == AlertResourceType.Platform && resourceId is not null)
-            throw new InvalidOperationException("Platform alerts must not have ResourceId.");
-
-        if (resourceType != AlertResourceType.Platform && resourceId is null)
-            throw new InvalidOperationException("Non-platform alerts must have ResourceId.");
 
         AlertRuleId = alertRuleId;
         Type = type;
@@ -45,6 +39,34 @@ public sealed class AlertEvent : IAuditedEntity
 
         CreatedByActorId = actorId;
         CreatedAt = DateTime.UtcNow;
+    }
+
+    public static AlertEvent FromPersistence(
+        Guid id,
+        Guid alertRuleId,
+        AlertType type,
+        AlertSeverity severity,
+        AlertInfo info,
+        Guid resourceId,
+        AlertResourceType resourceType,
+        Guid createdByActorId,
+        DateTime createdAt)
+    {
+        if (!AlertTypeMetadata.IsValidInfo(type, info))
+            throw new ArgumentException("AlertInfo does not match AlertType.");
+
+        return new AlertEvent(
+            alertRuleId: alertRuleId,
+            type: type,
+            severity: severity,
+            info: info,
+            resourceId: resourceId,
+            resourceType: resourceType,
+            actorId: createdByActorId)
+        {
+            Id = id,
+            CreatedAt = createdAt
+        };
     }
 }
 

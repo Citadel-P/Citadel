@@ -564,6 +564,9 @@ internal static class Configuration
         alertRule.Property<string>("Severity").HasColumnType("TEXT").IsRequired();
 
         alertRule.AddAuditedMemebers();
+
+        alertRule.HasIndex("Type").HasDatabaseName($"IX_{tableName}_Type");
+
         return builder;
     }
 
@@ -613,9 +616,13 @@ internal static class Configuration
             .OnDelete(DeleteBehavior.Cascade);
 
         alertEvent.AddAuditedMemebers();
+
+        alertEvent.HasIndex("Type").HasDatabaseName($"IX_{tableName}_Type");
+        alertEvent.HasIndex("ResourceId", "CreatedAt").HasDatabaseName($"IX_{tableName}_Resource_CreatedAt");
+        alertEvent.HasIndex("ResourceType").HasDatabaseName($"IX_{tableName}_ResourceType");
+
         return builder;
     }
-
 
     private static EntityTypeBuilder AddReconcilableMember(this EntityTypeBuilder builder)
     {

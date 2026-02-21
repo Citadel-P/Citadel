@@ -1,6 +1,7 @@
 ﻿using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Services.Alerts;
@@ -18,7 +19,7 @@ public sealed class AlertRuleSnapshot(Dictionary<AlertType, IReadOnlyList<AlertR
         => ByResourceType.TryGetValue(type, out var rules) ? rules : [];
 }
 
-public sealed class AlertRuleCache(IDbWorkQueue dbQueue, ILogger<AlertRuleCache> logger) : IAlertRuleProvider
+public sealed class AlertRuleCache(IServiceScopeFactory scopeFactory, ILogger<AlertRuleCache> logger) : IAlertRuleProvider
 {
     private volatile AlertRuleSnapshot _snapshot = Empty();
 
@@ -28,12 +29,7 @@ public sealed class AlertRuleCache(IDbWorkQueue dbQueue, ILogger<AlertRuleCache>
     {
         try
         {
-            var tcs = new TaskCompletionSource<IEnumerable<AlertRule>>();
-
-            await dbQueue.EnqueueAsync(new LoadAlertRulesWorkItem(tcs), ct);
-
-            var rules = await tcs.Task;
-
+            var rules = await GetRules(ct);
             _snapshot = BuildSnapshot(rules);
 
             logger.LogInformation("AlertRuleCache reloaded with {Count} rules", rules.Count());
@@ -55,21 +51,14 @@ public sealed class AlertRuleCache(IDbWorkQueue dbQueue, ILogger<AlertRuleCache>
         return new AlertRuleSnapshot (dict);
     }
 
-    private static AlertRuleSnapshot Empty() => new([]);
-}
-
-internal sealed class LoadAlertRulesWorkItem(TaskCompletionSource<IEnumerable<AlertRule>> tcs) : IDbWorkItem
-{
-    public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken token)
+    private async Task<IEnumerable<AlertRule>> GetRules(CancellationToken token)
     {
-        try
+        await using (var scope = scopeFactory.CreateAsyncScope())
         {
-            var rules = await uow.Alerters.GetAllAsync(token);
-            tcs.SetResult(rules);
-        }
-        catch (Exception ex)
-        {
-            tcs.SetException(ex);
+            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            return await uow.AlertRules.GetAllAsync(token);
         }
     }
+
+    private static AlertRuleSnapshot Empty() => new([]);
 }

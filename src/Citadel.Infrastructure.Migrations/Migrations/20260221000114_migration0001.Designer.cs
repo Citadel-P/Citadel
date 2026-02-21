@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260219205123_migration0001")]
+    [Migration("20260221000114_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -157,6 +157,15 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.HasIndex("CreatedByActorId");
 
+                    b.HasIndex("ResourceType")
+                        .HasDatabaseName("IX_AlertEvents_ResourceType");
+
+                    b.HasIndex("Type")
+                        .HasDatabaseName("IX_AlertEvents_Type");
+
+                    b.HasIndex("ResourceId", "CreatedAt")
+                        .HasDatabaseName("IX_AlertEvents_Resource_CreatedAt");
+
                     b.ToTable("AlertEvents", (string)null);
                 });
 
@@ -218,6 +227,9 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedByActorId");
+
+                    b.HasIndex("Type")
+                        .HasDatabaseName("IX_AlertRules_Type");
 
                     b.ToTable("AlertRules", (string)null);
                 });

@@ -1,4 +1,5 @@
-﻿using Application.Services.SignalR;
+﻿using Application.Services;
+using Application.Services.SignalR;
 using Application.TaskJobs;
 using Application.TaskJobs.WorkItems;
 using Domain;
@@ -17,12 +18,14 @@ namespace Tests.Integration.Application.TaskJobs;
 public class ReconcilableResourceJobTests : IntegrationTestBase
 {
     private readonly Mock<IDeploymentStreamManager> streamManagerMock = new();
+    private readonly Mock<IDelayWithJitterService> _delayWithJitter = new();
     private readonly Mock<INotificationQueue> notificationMock = new();
     private Guid platformId;
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
         services.RemoveAll<IHostedService>();
+        services.RemoveAll<IDelayWithJitterService>();
 
         services
             .AddHostedService<DbWriteWorker>()
@@ -30,6 +33,17 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
 
         services.AddSingleton(streamManagerMock.Object);
         services.AddSingleton(notificationMock.Object);
+        services.AddSingleton(_ => _delayWithJitter.Object);
+
+        _delayWithJitter
+         .Setup(x => x.DelayWithJitterForAsync(It.IsAny<Func<CancellationToken, Task>>(),
+                                               It.IsAny<TimeSpan>(),
+                                               It.IsAny<CancellationToken>()))
+         .Returns<Func<CancellationToken, Task>, TimeSpan, CancellationToken>(async (func, _, ct) =>
+         {
+             await Task.Delay(TimeSpan.FromMilliseconds(500), ct);
+             await func(ct);
+         });
     }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
@@ -88,7 +102,7 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
         // Arrange
         await MarkDeploymentAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
 
-        await Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
 
         // Assert
         await using var scope = Services.CreateAsyncScope();
@@ -107,8 +121,7 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
     {
         // Arrange
         await MarkContainerAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
-
-        await Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
 
         // Assert
         await using var scope = Services.CreateAsyncScope();
@@ -128,7 +141,7 @@ public class ReconcilableResourceJobTests : IntegrationTestBase
         // Arrange
         await MarkImageAsync(ResourceControlState.Processing, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 90);
 
-        await Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
 
         // Assert
         await using var scope = Services.CreateAsyncScope();

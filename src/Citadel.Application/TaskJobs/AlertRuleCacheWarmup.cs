@@ -1,12 +1,10 @@
 ﻿using Application.Services.Alerts;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Application.TaskJobs;
 
-internal class AlertRuleCacheWarmup(IServiceScopeFactory scopeFactory, AlertRuleCache alertRuleCache,
-    ILogger<CleanupJob> logger) : BackgroundService
+internal class AlertRuleCacheWarmup(AlertRuleCache alertRuleCache, ILogger<AlertRuleCacheWarmup> logger) : BackgroundService
 {
     private static readonly TimeSpan SyncInterval = TimeSpan.FromHours(12);
 

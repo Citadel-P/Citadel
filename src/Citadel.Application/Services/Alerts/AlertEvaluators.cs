@@ -34,6 +34,7 @@ public sealed class PlatformCpuHighEvaluator : IAlertEvaluator
 
             yield return new AlertMatch(
                 platform.Id,
+                platform.Name,
                 AlertResourceType.Platform,
                 new PlatformCpuHighAlertInfo(platform.CpuUsage)
             );
@@ -55,6 +56,7 @@ public sealed class PlatformRamHighEvaluator : IAlertEvaluator
 
             yield return new AlertMatch(
                 platform.Id,
+                platform.Name,
                 AlertResourceType.Platform,
                 new PlatformRamHighAlertInfo(platform.RamUsage)
             );
@@ -79,8 +81,9 @@ public sealed class DeploymentFailedEvaluator : IAlertEvaluator
 
             yield return new AlertMatch(
                 deployment.Id,
+                deployment.Name,
                 AlertResourceType.Deployment,
-                new DeploymentFailedAlertInfo("Deployment failed"));
+                new DeploymentFailedAlertInfo($"Deployment failed: {deployment.Raison}"));
         }
     }
 }
@@ -96,6 +99,7 @@ public sealed class DeploymentImageUpdateAvailableEvaluator : IAlertEvaluator
         {
             yield return new AlertMatch(
                 deployment.Id,
+                deployment.Name,
                 AlertResourceType.Deployment,
                 new DeploymentImageUpdateAvailableAlertInfo(
                     deployment.PreviousImage,
@@ -115,6 +119,7 @@ public sealed class DeploymentAutoUpdatedEvaluator : IAlertEvaluator
         {
             yield return new AlertMatch(
                 deployment.Id,
+                deployment.Name,
                 AlertResourceType.Deployment,
                 new DeploymentAutoUpdatedAlertInfo(
                     deployment.PreviousImage,
@@ -140,8 +145,9 @@ public sealed class StackDeployFailedEvaluator : IAlertEvaluator
 
             yield return new AlertMatch(
                 stack.Id,
+                stack.Name,
                 AlertResourceType.Stack,
-                new StackDeployFailedAlertInfo("Stack deployment failed"));
+                new StackDeployFailedAlertInfo($"Stack deployment failed: {stack.Raison}"));
         }
     }
 }
@@ -157,6 +163,7 @@ public sealed class StackImageUpdateAvailableEvaluator : IAlertEvaluator
         {
             yield return new AlertMatch(
                 stack.Id,
+                stack.Name,
                 AlertResourceType.Stack,
                 new StackImageUpdateAvailableAlertInfo(
                     stack.CurrentImage,
@@ -176,6 +183,7 @@ public sealed class StackAutoUpdatedEvaluator : IAlertEvaluator
         {
             yield return new AlertMatch(
                 stack.Id,
+                stack.Name,
                 AlertResourceType.Stack,
                 new StackAutoUpdatedAlertInfo(
                     stack.PreviousImage,

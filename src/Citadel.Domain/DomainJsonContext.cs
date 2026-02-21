@@ -106,6 +106,20 @@ public partial class  EventInfoJsonContext : JsonSerializerContext
     Converters = new[]
     {
     typeof(JsonStringEnumConverter<AlertType>),
+    typeof(JsonStringEnumConverter<AlertSeverity>),
+    typeof(JsonStringEnumConverter<AlertResourceType>),
+    })]
+[JsonSerializable(typeof(AlertInfo))]
+public partial class AlertEventJsonContext : JsonSerializerContext
+{
+}
+
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Default,
+    PropertyNameCaseInsensitive = true,
+    Converters = new[]
+    {
+    typeof(JsonStringEnumConverter<AlertType>),
     typeof(JsonStringEnumConverter<AlertScope>),
     typeof(JsonStringEnumConverter<ScheduleType>),
     typeof(JsonStringEnumConverter<AlertSeverity>),
@@ -117,4 +131,4 @@ public partial class  EventInfoJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(IReadOnlyCollection<AlertRuleLimitedTo>))]
 [JsonSerializable(typeof(IReadOnlyCollection<AlertRuleLimitedTo>))]
 [JsonSerializable(typeof(IReadOnlyCollection<AlertRuleQuietHour>))]
-public partial class AlerterJsonContext : JsonSerializerContext { }
+public partial class AlertRuleJsonContext : JsonSerializerContext { }

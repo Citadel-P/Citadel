@@ -572,6 +572,21 @@ namespace Infrastructure.Migrations.Migrations
                 column: "CreatedByActorId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AlertEvents_ResourceType",
+                table: "AlertEvents",
+                column: "ResourceType");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AlertEvents_Resource_CreatedAt",
+                table: "AlertEvents",
+                columns: new[] { "ResourceId", "CreatedAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AlertEvents_Type",
+                table: "AlertEvents",
+                column: "Type");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AlertRuleStates_CreatedByActorId",
                 table: "AlertRuleStates",
                 column: "CreatedByActorId");
@@ -580,6 +595,11 @@ namespace Infrastructure.Migrations.Migrations
                 name: "IX_AlertRules_CreatedByActorId",
                 table: "AlertRules",
                 column: "CreatedByActorId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AlertRules_Type",
+                table: "AlertRules",
+                column: "Type");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ContainerStats_ContainerId_Created",

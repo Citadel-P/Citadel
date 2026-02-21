@@ -118,6 +118,12 @@ public sealed class AlertRule : IAuditedEntity
         return rule;
     }
 
+    public AlertRule Disable()
+    {
+        IsEnabled = false; 
+        return this;
+    }
+
     public bool CanTrigger(DateTime utcNow, AlertRuleState? state)
     {
         if (!IsEnabled)

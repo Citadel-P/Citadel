@@ -12,10 +12,11 @@ public interface IUnitOfWork : IAsyncDisposable
     ITeamRepository Teams { get; }
     IActorRepository Actors { get; }
     IImageRepository Images { get; }
-    IAlerterRepository Alerters { get; }
     IPlatformRepository Platforms { get; }
     IRegistryRepository Registries { get; }
     IContainerRepository Containers { get; }
+    IAlertRuleRepository AlertRules { get; }
+    IAlertEventRepository AlertEvents { get; }
     IDeploymentRepository Deployments { get; }
     IRefreshTokenRepository RefreshTokens { get; }
     IPlatformStatRepository PlatformStats { get; }
@@ -159,11 +160,20 @@ public interface IDeploymentRepository
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
 }
 
-public interface IAlerterRepository
+public interface IAlertRuleRepository
 {
+    Task<AlertRule?> GetByIdAsync(Guid alertRuleId, CancellationToken cancellationToken);
     Task<AlertRuleState?> GetStateAsync(Guid alertRuleId, Guid resourceId, CancellationToken cancellationToken);
     Task<int> AddAlertRuleAsync(AlertRule alertRule, CancellationToken cancellationToken);
     Task<int> AddAlertRuleStateAsync(AlertRuleState alertRuleState, CancellationToken cancellationToken);
     Task<IEnumerable<AlertRule>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<int> UpdateAsync(AlertRule alertRule, CancellationToken cancellationToken);
     Task<int> UpdateStateAsync(AlertRuleState alertRuleState, CancellationToken cancellationToken);
+}
+
+public interface IAlertEventRepository
+{
+    Task<int> AddAsync(AlertEvent alertEvent, CancellationToken cancellationToken);
+    Task<PagedResult<AlertEvent>> GetPagedAsync(Guid? resourceId, AlertType? alertType, AlertResourceType? resourceType,
+        int page, int pageSize, CancellationToken cancellationToken);
 }

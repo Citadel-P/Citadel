@@ -61,7 +61,8 @@ public static class ApplicationModule
             .AddScoped<DockerHubConnectorStrategy>()
             .AddScoped<CustomRegistryConnectorStrategy>()
             .AddScoped<IPullImageService, PullImageService>()
-            .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>();
+            .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>()
+            .AddSingleton<IDelayWithJitterService, DelayWithJitterService>();
 
     private static IServiceCollection AddSignalRServices(this IServiceCollection services) =>
         services

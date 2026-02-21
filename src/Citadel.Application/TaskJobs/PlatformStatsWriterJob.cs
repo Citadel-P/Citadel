@@ -1,5 +1,6 @@
 ﻿using Application.Configs;
 using Application.Mappers;
+using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -18,6 +19,7 @@ namespace Application.TaskJobs;
 /// </summary>
 internal sealed class PlatformStatsWriterJob(
     IDbWorkQueue dbQueue,
+    IAlertService alertService,
     INotificationQueue notificationQueue,
     IPlatformStreamManager platformStreamManager,
     ChannelReader<(Guid Id, PlatformStatsResult Stats)> reader,
@@ -81,7 +83,7 @@ internal sealed class PlatformStatsWriterJob(
 
         try
         {
-            await dbQueue.EnqueueAsync(new PersistPlatformStatsWorkItem(dataToFlush, logger), ct);
+            await dbQueue.EnqueueAsync(new PersistPlatformStatsWorkItem(dataToFlush, alertService, logger), ct);
         }
         catch (Exception ex)
         {
@@ -92,10 +94,14 @@ internal sealed class PlatformStatsWriterJob(
 
 internal sealed class PersistPlatformStatsWorkItem(
     Dictionary<Guid, List<PlatformStatsResult>> buffer,
+    IAlertService alertService,
     ILogger logger) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken cancellationToken)
     {
+        var now = DateTime.UtcNow;
+        var platformSnapshots = new List<PlatformAlertSnapshot>();
+
         foreach (var (platformId, stats) in buffer)
         {
             var existing = await uow.Platforms.GetByIdAsync(platformId, cancellationToken);
@@ -103,6 +109,16 @@ internal sealed class PersistPlatformStatsWorkItem(
 
             var last = stats.LastOrDefault();
             if (last == null) continue;
+
+            foreach (var stat in stats)
+            {
+                platformSnapshots.Add(new PlatformAlertSnapshot(
+                   platformId,
+                   existing.Name,
+                   CpuUsage: stat.PlatformStat.CpuUsage,
+                   RamUsage: stat.PlatformStat.MemoryUsage,
+                   Version: ""));
+            }
 
             PlatformDescriptor? descriptor = existing.PlatformDescriptor switch
             {
@@ -141,6 +157,26 @@ internal sealed class PersistPlatformStatsWorkItem(
         catch (Exception ex)
         {
             logger.LogError(ex, "Error bulk inserting PlatformStats");
+        }
+
+        // Alert processing
+        if (platformSnapshots.Count != 0)
+        {
+            var context = new AlertEvaluationContext(
+                UtcNow: now,
+                Platforms: platformSnapshots,
+                Deployments: [],
+                Stacks: []);
+
+            await alertService.ProcessAsync(
+                AlertType.PlatformCpuHigh,
+                context,
+                cancellationToken);
+
+            await alertService.ProcessAsync(
+                AlertType.PlatformRamHigh,
+                context,
+                cancellationToken);
         }
     }
 }

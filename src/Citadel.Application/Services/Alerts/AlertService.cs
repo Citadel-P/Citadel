@@ -7,21 +7,16 @@ namespace Application.Services.Alerts;
 
 internal interface IAlertService
 {
-    Task<IReadOnlyCollection<AlertEvent>> EvaluateAsync(AlertType type, AlertEvaluationContext context, CancellationToken ct);
+    Task ProcessAsync(AlertType type, AlertEvaluationContext context, CancellationToken ct);
 }
 
-public sealed class AlertService(
-    IEnumerable<IAlertEvaluator> evaluators,
-    IAlertRuleProvider alertRuleProvider,
-    IDbWorkQueue dbQueue,
+public sealed class AlertService(IEnumerable<IAlertEvaluator> evaluators, IAlertRuleProvider alertRuleProvider, IDbWorkQueue dbQueue,
     ILogger<AlertService> logger) : IAlertService
 {
     private readonly Dictionary<AlertType, IAlertEvaluator> _evaluators = evaluators.ToDictionary(x => x.Type);
 
-    public async Task<IReadOnlyCollection<AlertEvent>> EvaluateAsync(AlertType type, AlertEvaluationContext context, CancellationToken ct)
+    public async Task ProcessAsync(AlertType type, AlertEvaluationContext context, CancellationToken ct)
     {
-        var result = new List<AlertEvent>();
-
         foreach (var rule in alertRuleProvider.Current.Get(type))
         {
             if (!_evaluators.TryGetValue(rule.Type, out var evaluator))
@@ -31,21 +26,15 @@ public sealed class AlertService(
 
             foreach (var match in ApplyScope(rule, matches))
             {
-                if (match.ResourceId is null)
-                    continue;
-
                 var workItem = new AlertStateWorkItem(
                     rule,
                     match,
                     context.UtcNow,
-                    result,
                     logger);
 
                 await dbQueue.EnqueueAsync(workItem, ct);
             }
         }
-
-        return result;
     }
 
     private static IEnumerable<AlertMatch> ApplyScope(AlertRule rule, IEnumerable<AlertMatch> matches)
@@ -57,52 +46,51 @@ public sealed class AlertService(
             .Select(x => x.ResourceId)
             .ToHashSet();
 
-        return matches.Where(m =>
-            m.ResourceId is not null &&
-            allowed.Contains(m.ResourceId.Value));
+        return matches.Where(m => allowed.Contains(m.ResourceId));
     }
 }
 
-internal sealed class AlertStateWorkItem(
-    AlertRule rule,
-    AlertMatch match,
-    DateTime utcNow,
-    List<AlertEvent> resultSink,
-    ILogger logger) : IDbWorkItem
+internal sealed class AlertStateWorkItem(AlertRule rule, AlertMatch match, DateTime utcNow, ILogger logger) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken token)
     {
         try
         {
-            var state = await uow.Alerters.GetStateAsync(
+            var state = await uow.AlertRules.GetStateAsync(
                 rule.Id,
-                match.ResourceId!.Value,
+                match.ResourceId,
                 token)
                 ?? new AlertRuleState(
                     rule.Id,
-                    match.ResourceId!.Value,
+                    match.ResourceId,
                     rule.CreatedByActorId,
                     0);
 
-            // Threshold alerts (e.g CPU/RAM)
+            // Threshold alerts (e.g. CPU/RAM)
             if (AlertTypeMetadata.IsThreshold(rule.Type))
             {
+                if (!rule.CanTrigger(utcNow, state))
+                {
+                    await uow.AlertRules.UpdateStateAsync(state, token);
+                    await uow.CommitAsync(token);
+                    return;
+                }
+
                 state.RegisterMatch();
 
-                if (!state.CanFire(rule))
+                if (!state.CanFire(rule) || !rule.CanTrigger(utcNow, state))
                 {
-                    await uow.Alerters.UpdateStateAsync(state, token);
+                    await uow.AlertRules.UpdateStateAsync(state, token);
                     await uow.CommitAsync(token);
                     return;
                 }
             }
-            // event alerts (e.g DeploymentAutoUpdated, etc.)
+            // Event alerts (DeploymentAutoUpdated, etc.)
             else
             {
-                // No counter logic at all
                 if (!rule.CanTrigger(utcNow, state))
                 {
-                    await uow.Alerters.UpdateStateAsync(state, token);
+                    await uow.AlertRules.UpdateStateAsync(state, token);
                     await uow.CommitAsync(token);
                     return;
                 }
@@ -119,18 +107,18 @@ internal sealed class AlertStateWorkItem(
 
             state.MarkTriggered(utcNow);
 
-            // Reset only for threshold alerts
             if (AlertTypeMetadata.IsThreshold(rule.Type))
                 state.Reset();
 
-            await uow.Alerters.UpdateStateAsync(state, token);
-            await uow.CommitAsync(token);
+            await uow.AlertRules.UpdateStateAsync(state, token);
+            await uow.AlertEvents.AddAsync(evt, token);
+            // TODO: send to client (Shoutrrr & signalr)
 
-            resultSink.Add(evt);
+            await uow.CommitAsync(token);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Alert evaluation DB work failed.");
+            logger.LogError(ex, "Alert processing DB work failed.");
         }
     }
 }
