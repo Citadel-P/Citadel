@@ -1,4 +1,6 @@
-﻿namespace Domain.Entities;
+﻿using Domain.Entities.Registries;
+
+namespace Domain.Entities;
 
 public sealed class Image(
     string name,

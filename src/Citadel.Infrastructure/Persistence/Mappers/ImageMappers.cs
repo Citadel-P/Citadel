@@ -1,5 +1,6 @@
 ﻿using Domain;
 using Domain.Entities;
+using Domain.Entities.Registries;
 using Infrastructure.Persistence.Dtos;
 using System.Text.Json;
 
@@ -34,7 +35,7 @@ internal static class ImageMappers
                     createdAt: image?.RegistryCreatedAt ?? DateTime.MinValue,
                     createdByActorId: image?.RegistryCreatedByActorId ?? Guid.Empty,
                     configuration: image.RegistryConfiguration != null 
-                        ? JsonSerializer.Deserialize(image.RegistryConfiguration, RegistryJsonContext.Default.RegistryConfigurationBase)
+                        ? JsonSerializer.Deserialize(image.RegistryConfiguration, RegistryJsonContext.Default.RegistryConfiguration)
                         : null)
             );
 }

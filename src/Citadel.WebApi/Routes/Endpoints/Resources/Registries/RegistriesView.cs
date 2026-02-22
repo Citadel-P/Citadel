@@ -1,4 +1,4 @@
-﻿using Domain.Entities;
+﻿using Domain.Entities.Registries;
 
 namespace WebApi.Routes.Endpoints.Resources.Registries;
 

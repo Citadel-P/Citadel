@@ -177,6 +177,95 @@ export interface ActivitiesView {
   pagedResult: PagedResultViewOfActivityView;
 }
 
+export type ActivityEventInfo = BaseActivityEventInfo &
+  (
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentCreated",
+        ActivityEventInfoDeploymentCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentUpdated",
+        ActivityEventInfoDeploymentUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentRenamed",
+        ActivityEventInfoDeploymentRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentDeleted",
+        ActivityEventInfoDeploymentDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentStarted",
+        ActivityEventInfoDeploymentStarted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentStopped",
+        ActivityEventInfoDeploymentStopped
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentPaused",
+        ActivityEventInfoDeploymentPaused
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentApplied",
+        ActivityEventInfoDeploymentApplied
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "DeploymentDegraded",
+        ActivityEventInfoDeploymentDegraded
+      >
+  );
+
+export interface ActivityEventInfoDeploymentApplied {
+  $type?: "DeploymentApplied";
+  spec: null | DeploymentSpec;
+  containerIds: null | any[];
+  reason: null | string;
+}
+
+export interface ActivityEventInfoDeploymentCreated {
+  $type?: "DeploymentCreated";
+  spec: DeploymentSpec;
+}
+
+export interface ActivityEventInfoDeploymentDegraded {
+  $type?: "DeploymentDegraded";
+  reason: string;
+}
+
+export interface ActivityEventInfoDeploymentDeleted {
+  $type?: "DeploymentDeleted";
+  spec: DeploymentSpec;
+}
+
+export interface ActivityEventInfoDeploymentPaused {
+  $type?: "DeploymentPaused";
+  containerIds: string[];
+}
+
+export interface ActivityEventInfoDeploymentRenamed {
+  $type?: "DeploymentRenamed";
+  oldName: string;
+  newName: string;
+}
+
+export interface ActivityEventInfoDeploymentStarted {
+  $type?: "DeploymentStarted";
+  containerIds: string[];
+}
+
+export interface ActivityEventInfoDeploymentStopped {
+  $type?: "DeploymentStopped";
+  containerIds: string[];
+}
+
+export interface ActivityEventInfoDeploymentUpdated {
+  $type?: "DeploymentUpdated";
+  oldSpec: DeploymentSpec;
+  newSpec: DeploymentSpec;
+}
+
 export interface ActivityView {
   /** @format uuid */
   id: string;
@@ -192,7 +281,7 @@ export interface ActivityView {
   status: ActivityStatus;
   /** @format date-time */
   createdAt: any;
-  info: EventInfo;
+  info: ActivityEventInfo;
   /** @format uuid */
   actorId: string;
   actorName: string;
@@ -644,7 +733,6 @@ export interface DeploymentInput {
   platformId: string;
   description: null | string;
   spec: DeploymentSpec;
-  updateBehavior: UpdateBehavior;
 }
 
 export interface DeploymentSpec {
@@ -841,71 +929,6 @@ export interface EndpointSettingsInfo {
   globalIPv6PrefixLen: null | number | string;
   driverOpts: Record<string, string>;
   dnsNames: string[];
-}
-
-export type EventInfo = BaseEventInfo &
-  (
-    | BaseEventInfoTypeMapping<"DeploymentCreated", EventInfoDeploymentCreated>
-    | BaseEventInfoTypeMapping<"DeploymentUpdated", EventInfoDeploymentUpdated>
-    | BaseEventInfoTypeMapping<"DeploymentRenamed", EventInfoDeploymentRenamed>
-    | BaseEventInfoTypeMapping<"DeploymentDeleted", EventInfoDeploymentDeleted>
-    | BaseEventInfoTypeMapping<"DeploymentStarted", EventInfoDeploymentStarted>
-    | BaseEventInfoTypeMapping<"DeploymentStopped", EventInfoDeploymentStopped>
-    | BaseEventInfoTypeMapping<"DeploymentPaused", EventInfoDeploymentPaused>
-    | BaseEventInfoTypeMapping<"DeploymentApplied", EventInfoDeploymentApplied>
-    | BaseEventInfoTypeMapping<
-        "DeploymentDegraded",
-        EventInfoDeploymentDegraded
-      >
-  );
-
-export interface EventInfoDeploymentApplied {
-  $type?: "DeploymentApplied";
-  spec: null | DeploymentSpec;
-  containerIds: null | any[];
-  reason: null | string;
-}
-
-export interface EventInfoDeploymentCreated {
-  $type?: "DeploymentCreated";
-  spec: DeploymentSpec;
-}
-
-export interface EventInfoDeploymentDegraded {
-  $type?: "DeploymentDegraded";
-  reason: string;
-}
-
-export interface EventInfoDeploymentDeleted {
-  $type?: "DeploymentDeleted";
-  spec: DeploymentSpec;
-}
-
-export interface EventInfoDeploymentPaused {
-  $type?: "DeploymentPaused";
-  containerIds: string[];
-}
-
-export interface EventInfoDeploymentRenamed {
-  $type?: "DeploymentRenamed";
-  oldName: string;
-  newName: string;
-}
-
-export interface EventInfoDeploymentStarted {
-  $type?: "DeploymentStarted";
-  containerIds: string[];
-}
-
-export interface EventInfoDeploymentStopped {
-  $type?: "DeploymentStopped";
-  containerIds: string[];
-}
-
-export interface EventInfoDeploymentUpdated {
-  $type?: "DeploymentUpdated";
-  oldSpec: DeploymentSpec;
-  newSpec: DeploymentSpec;
 }
 
 export interface ExposedPortsResult {
@@ -1587,38 +1610,38 @@ export interface RegistryConfigView {
   registryHost: string;
   status: RegistryStatus;
   description: string;
-  configuration: null | RegistryConfigurationBase;
+  configuration: null | RegistryConfiguration;
 }
 
-export type RegistryConfigurationBase = BaseRegistryConfigurationBase &
+export type RegistryConfiguration = BaseRegistryConfiguration &
   (
-    | BaseRegistryConfigurationBaseTypeMapping<
+    | BaseRegistryConfigurationTypeMapping<
         "AWS",
-        RegistryConfigurationBaseAWSRegistry
+        RegistryConfigurationAWSRegistry
       >
-    | BaseRegistryConfigurationBaseTypeMapping<
+    | BaseRegistryConfigurationTypeMapping<
         "Azure",
-        RegistryConfigurationBaseAzureRegistry
+        RegistryConfigurationAzureRegistry
       >
-    | BaseRegistryConfigurationBaseTypeMapping<
+    | BaseRegistryConfigurationTypeMapping<
         "Gitlab",
-        RegistryConfigurationBaseGitlabRegistry
+        RegistryConfigurationGitlabRegistry
       >
-    | BaseRegistryConfigurationBaseTypeMapping<
+    | BaseRegistryConfigurationTypeMapping<
         "DockerHub",
-        RegistryConfigurationBaseDockerHubRegistry
+        RegistryConfigurationDockerHubRegistry
       >
-    | BaseRegistryConfigurationBaseTypeMapping<
+    | BaseRegistryConfigurationTypeMapping<
         "GitHub",
-        RegistryConfigurationBaseGitHubRegistry
+        RegistryConfigurationGitHubRegistry
       >
-    | BaseRegistryConfigurationBaseTypeMapping<
+    | BaseRegistryConfigurationTypeMapping<
         "Custom",
-        RegistryConfigurationBaseCustomRegistry
+        RegistryConfigurationCustomRegistry
       >
   );
 
-export interface RegistryConfigurationBaseAWSRegistry {
+export interface RegistryConfigurationAWSRegistry {
   $type?: "AWS";
   accessKey: string;
   authenticationRequired: boolean;
@@ -1626,13 +1649,13 @@ export interface RegistryConfigurationBaseAWSRegistry {
   region: string;
 }
 
-export interface RegistryConfigurationBaseAzureRegistry {
+export interface RegistryConfigurationAzureRegistry {
   $type?: "Azure";
   userName: string;
   password: string;
 }
 
-export interface RegistryConfigurationBaseCustomRegistry {
+export interface RegistryConfigurationCustomRegistry {
   $type?: "Custom";
   /** @default false */
   authEnabled?: null | boolean;
@@ -1640,13 +1663,13 @@ export interface RegistryConfigurationBaseCustomRegistry {
   password?: null | string;
 }
 
-export interface RegistryConfigurationBaseDockerHubRegistry {
+export interface RegistryConfigurationDockerHubRegistry {
   $type?: "DockerHub";
   userName?: null | string;
   pat?: null | string;
 }
 
-export interface RegistryConfigurationBaseGitHubRegistry {
+export interface RegistryConfigurationGitHubRegistry {
   $type?: "GitHub";
   nameSpace: string;
   /** @default false */
@@ -1654,7 +1677,7 @@ export interface RegistryConfigurationBaseGitHubRegistry {
   pat?: null | string;
 }
 
-export interface RegistryConfigurationBaseGitlabRegistry {
+export interface RegistryConfigurationGitlabRegistry {
   $type?: "Gitlab";
   userName: string;
   pat: string;
@@ -1665,7 +1688,7 @@ export interface RegistryInput {
   name: string;
   registryHost: string;
   status: RegistryStatus;
-  configuration: RegistryConfigurationBase;
+  configuration: RegistryConfiguration;
   description?: null | string;
 }
 
@@ -1807,15 +1830,15 @@ export interface VolumesView {
   volumes: DockerVolumeResult[];
 }
 
-type BaseDeploymentImageInfo = object;
+type BaseActivityEventInfo = object;
 
-type BaseDeploymentImageInfoTypeMapping<Key, Type> = {
+type BaseActivityEventInfoTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
-type BaseEventInfo = object;
+type BaseDeploymentImageInfo = object;
 
-type BaseEventInfoTypeMapping<Key, Type> = {
+type BaseDeploymentImageInfoTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
@@ -1831,9 +1854,9 @@ type BasePlatformDescriptorTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
-type BaseRegistryConfigurationBase = object;
+type BaseRegistryConfiguration = object;
 
-type BaseRegistryConfigurationBaseTypeMapping<Key, Type> = {
+type BaseRegistryConfigurationTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 

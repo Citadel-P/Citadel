@@ -1,5 +1,5 @@
 ﻿using Domain;
-using Domain.Entities;
+using Domain.Entities.Alerts;
 
 namespace Application.Services.Alerts;
 
@@ -9,7 +9,7 @@ public sealed record AlertEvaluationContext(
     IReadOnlyCollection<DeploymentAlertSnapshot> Deployments,
     IReadOnlyCollection<StackAlertSnapshot> Stacks);
 
-public sealed record AlertMatch(Guid ResourceId, string ResourceName, AlertResourceType ResourceType, AlertInfo? Info)
+public sealed record AlertMatch(Guid ResourceId, string ResourceName, AlertResourceType ResourceType, AlertEventInfo? Info)
 {
     public bool IsMatch => Info is not null;
 }

@@ -1,5 +1,6 @@
 ﻿using Domain.Contracts.Resources.Images;
 using Domain.Entities;
+using Domain.Entities.Registries;
 
 namespace Application.Mappers;
 

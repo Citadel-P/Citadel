@@ -1,5 +1,6 @@
 ﻿using Domain;
 using Domain.Entities;
+using Domain.Entities.Alerts;
 
 namespace Application.Services.Alerts;
 

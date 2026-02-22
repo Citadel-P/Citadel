@@ -1,5 +1,6 @@
 ﻿using Domain;
 using Domain.Entities;
+using Domain.Entities.Deployments;
 using Infrastructure.Persistence.Dtos;
 using System.Text.Json;
 

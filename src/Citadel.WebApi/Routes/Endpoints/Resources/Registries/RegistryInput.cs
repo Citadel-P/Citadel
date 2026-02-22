@@ -8,7 +8,7 @@ public sealed record RegistryInput(
     string Name, 
     string RegistryHost,
     RegistryStatus Status,
-    RegistryConfigurationBase Configuration,
+    RegistryConfiguration Configuration,
     string? Description = null
     )
 {

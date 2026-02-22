@@ -1,4 +1,4 @@
-﻿namespace Domain.Entities;
+﻿namespace Domain.Entities.Platforms;
 
 public record struct PlatformStat(
     long Created,

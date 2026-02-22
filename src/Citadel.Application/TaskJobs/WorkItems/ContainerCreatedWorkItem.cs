@@ -4,6 +4,7 @@ using Application.Services.SignalR;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using Domain.Entities.Deployments;
 using Microsoft.Extensions.Logging;
 
 namespace Application.TaskJobs.WorkItems;

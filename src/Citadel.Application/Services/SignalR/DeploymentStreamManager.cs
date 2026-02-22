@@ -1,6 +1,6 @@
 ﻿using Application.Services.Abstractions;
 using Application.Services.SignalR.Context;
-using Domain.Entities;
+using Domain.Entities.Deployments;
 using System;
 
 namespace Application.Services.SignalR;

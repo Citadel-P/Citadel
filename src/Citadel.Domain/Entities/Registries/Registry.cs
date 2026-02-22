@@ -1,7 +1,6 @@
-﻿using Domain.Entities.Registries;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
-namespace Domain.Entities;
+namespace Domain.Entities.Registries;
 
 [method: JsonConstructor]
 public class Registry(
@@ -9,7 +8,7 @@ public class Registry(
     string registryHost,
     RegistryStatus status,
     Guid createdByActorId,
-    RegistryConfigurationBase configuration,
+    RegistryConfiguration configuration,
     string? description = null) : IAuditedEntity
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
@@ -23,14 +22,14 @@ public class Registry(
     public Guid CreatedByActorId { get; private set; } = createdByActorId;
     #endregion
 
-    public RegistryConfigurationBase Configuration { get; private set; } = configuration;
+    public RegistryConfiguration Configuration { get; private set; } = configuration;
 
     public void PartialUpdate(
         string? name = null,
         string? description = null,
         string? registryHost = null,
         RegistryStatus? status = null,
-        RegistryConfigurationBase? configuration = null)
+        RegistryConfiguration? configuration = null)
     {
         if (name != null) Name = name;
         if (status != null) Status = status.Value;
@@ -48,7 +47,7 @@ public class Registry(
         string registryHost,
         DateTime createdAt, 
         Guid createdByActorId,
-        RegistryConfigurationBase configuration)
+        RegistryConfiguration configuration)
     {
         return new Registry(name, registryHost, status, createdByActorId, configuration, description)
         {

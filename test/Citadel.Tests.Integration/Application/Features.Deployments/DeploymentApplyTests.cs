@@ -6,6 +6,7 @@ using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities;
+using Domain.Entities.Deployments;
 using Hosting.Common;
 using Infrastructure.Repositories.DbQueue;
 using Microsoft.Extensions.DependencyInjection;

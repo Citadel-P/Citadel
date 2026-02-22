@@ -2,7 +2,7 @@
 using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities;
+using Domain.Entities.Deployments;
 using Hosting.Common;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

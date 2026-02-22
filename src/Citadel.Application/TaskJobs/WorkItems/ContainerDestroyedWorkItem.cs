@@ -5,6 +5,8 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using Domain.Entities.Activities;
+using Domain.Entities.Deployments;
 using Hosting.Common;
 using Microsoft.Extensions.Logging;
 
@@ -92,7 +94,7 @@ internal sealed class ContainerDestroyedWorkItem(
         var deployment = await uow.Deployments.GetInfoAsync(deploymentId, cancellationToken);
         if (deployment is null) return (null, null);
 
-        EventInfo? eventInfo = status switch
+        ActivityEventInfo? eventInfo = status switch
         {
             DeploymentStatus.Healthy => new DeploymentStarted([containerId]),
             DeploymentStatus.Stopped => new DeploymentStopped([containerId]),

@@ -438,3 +438,28 @@ public enum AlertScope
     All,
     Specific
 }
+
+public enum AlertDestination
+{
+    Generic,
+    Bark,
+    Discord,
+    Gotify,
+    Google_Chat,
+    IFTTT,
+    Join,
+    Lark,
+    Mattermost,
+    Matrix,
+    Ntfy,
+    OpsGenie,
+    Pushbullet,
+    Pushover,
+    Rocketchat,
+    Signal,
+    Slack,
+    Teams,
+    Telegram,
+    WeCom,
+    Zulip_Chat
+}

@@ -2,13 +2,13 @@
 using Application.Features.Platforms.Commands;
 using Application.Features.Platforms.Queries;
 using Hosting.Extensions;
-using Domain.Entities;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using Hosting.Common.MergePatch;
+using Domain.Entities.Platforms;
 
 namespace WebApi.Routes.Endpoints;
 

@@ -1,5 +1,5 @@
 using Domain;
-using Domain.Entities;
+using Domain.Entities.Alerts;
 using Infrastructure.Persistence.Dtos;
 using System.Text.Json;
 
@@ -9,7 +9,7 @@ internal static class AlertEventMappers
 {
     internal static AlertEvent ToDomain(this AlertEventDto alertEventDto)
     {
-        var info = JsonSerializer.Deserialize(alertEventDto.Info, AlertEventJsonContext.Default.AlertInfo);
+        var info = JsonSerializer.Deserialize(alertEventDto.Info, AlertEventJsonContext.Default.AlertEventInfo);
         if (info is null)
             throw new InvalidOperationException("Alert info could not be deserialized.");
         if (alertEventDto.ResourceId is null)
@@ -23,7 +23,6 @@ internal static class AlertEventMappers
             info: info,
             resourceId: alertEventDto.ResourceId.Value,
             resourceType: Enum.Parse<AlertResourceType>(alertEventDto.ResourceType),
-            createdByActorId: alertEventDto.CreatedByActorId,
             createdAt: alertEventDto.CreatedAt);
     }
 }

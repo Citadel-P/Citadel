@@ -1,6 +1,7 @@
 ﻿using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
+using Domain.Entities.Alerts;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Services.Alerts;
@@ -103,8 +104,7 @@ internal sealed class AlertStateWorkItem(AlertRule rule, AlertMatch match, DateT
                 rule.Severity,
                 match.Info!,
                 match.ResourceId,
-                match.ResourceType,
-                rule.CreatedByActorId);
+                match.ResourceType);
 
             state.MarkTriggered(utcNow);
 

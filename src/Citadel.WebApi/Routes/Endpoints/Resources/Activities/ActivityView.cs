@@ -1,5 +1,5 @@
 using Domain;
-using Domain.Entities;
+using Domain.Entities.Activities;
 
 namespace WebApi.Routes.Endpoints.Resources.Activities;
 
@@ -14,7 +14,7 @@ public sealed record ActivityView(
     ActivityEventType EventType,
     ActivityStatus Status,
     DateTime CreatedAt,
-    EventInfo Info,
+    ActivityEventInfo Info,
     Guid ActorId,
     string ActorName,
     ActorType ActorType

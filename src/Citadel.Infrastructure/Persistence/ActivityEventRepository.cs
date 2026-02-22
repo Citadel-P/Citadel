@@ -1,7 +1,7 @@
 ﻿using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities;
+using Domain.Entities.Activities;
 using Hosting.Common.Models;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
@@ -32,7 +32,7 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
             EventType = EnumFormatter<ActivityEventType>.GetValue(activityEvent.EventType),
             ResourceType = EnumFormatter<ActivityResourceType>.GetValue(activityEvent.ResourceType),
             Status = EnumFormatter<ActivityStatus>.GetValue(activityEvent.Status),
-            Info = JsonSerializer.Serialize(activityEvent.Info, EventInfoJsonContext.Default.EventInfo),
+            Info = JsonSerializer.Serialize(activityEvent.Info, EventInfoJsonContext.Default.ActivityEventInfo),
             CreatedByActorId = activityEvent.CreatedByActorId.Format(),
             CreatedAt = activityEvent.CreatedAt
         },

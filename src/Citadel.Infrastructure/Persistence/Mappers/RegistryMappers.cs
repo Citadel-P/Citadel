@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 using Domain;
-using Domain.Entities;
+using Domain.Entities.Registries;
 using Infrastructure.Persistence.Dtos;
 
 namespace Infrastructure.Persistence.Mappers;
@@ -20,7 +20,7 @@ internal static class RegistryMappers
             createdByActorId: dto.CreatedByActorId,
             createdAt: dto.CreatedAt,
             status: Enum.Parse<RegistryStatus>(dto.Status),
-            configuration: JsonSerializer.Deserialize(dto.Configuration, RegistryJsonContext.Default.RegistryConfigurationBase)
+            configuration: JsonSerializer.Deserialize(dto.Configuration, RegistryJsonContext.Default.RegistryConfiguration)
                 ?? throw new NotImplementedException($"Registry configuration is missing for registry id {dto.Id}"));
     }
 }

@@ -1,4 +1,5 @@
 ﻿using Domain.Entities;
+using Domain.Entities.Registries;
 
 namespace Domain.Contracts.Resources.Images;
 

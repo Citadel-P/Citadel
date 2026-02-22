@@ -25,10 +25,10 @@ public class RegistryCreateTests : IntegrationTestBase
     public async Task Create_DockerHubRegistry_ReturnsSuccess()
     {
         // Arrange
-        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfigurationBase>()))
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfiguration>()))
            .Returns(registryConnectorMock.Object);
 
-        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
+        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfiguration>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((true, null));
 
         var createJson = """
@@ -65,10 +65,10 @@ public class RegistryCreateTests : IntegrationTestBase
     public async Task Create_CustomRegistry_ReturnsSuccess()
     {
         // Arrange
-        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfigurationBase>()))
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfiguration>()))
            .Returns(registryConnectorMock.Object);
 
-        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
+        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfiguration>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((true, null));
 
         var createJson = """
@@ -107,10 +107,10 @@ public class RegistryCreateTests : IntegrationTestBase
     public async Task Create_GitHubRegistry_ReturnsSuccess()
     {
         // Arrange
-        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfigurationBase>()))
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfiguration>()))
            .Returns(registryConnectorMock.Object);
 
-        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
+        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfiguration>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((true, null));
 
         var createJson = """
@@ -221,7 +221,7 @@ public class RegistryCreateTests : IntegrationTestBase
         await using (var scope = Services.CreateAsyncScope())
         {
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            await uow.Registries.AddAsync(new Domain.Entities.Registry(
+            await uow.Registries.AddAsync(new Registry(
                 name: "R-NEW",
                 status: RegistryStatus.Active,
                 registryHost: "https://existing.url",
@@ -231,10 +231,10 @@ public class RegistryCreateTests : IntegrationTestBase
             await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
 
-        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfigurationBase>()))
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfiguration>()))
             .Returns(registryConnectorMock.Object);
 
-        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
+        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfiguration>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((true, null));
 
         var createJson = """
@@ -260,7 +260,7 @@ public class RegistryCreateTests : IntegrationTestBase
     [Fact]
     public async Task Create_Registry_With_UnsupportedType_Returns_BadRequest()
     {
-        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfigurationBase>()))
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfiguration>()))
             .Returns((IRegistryConnectorStrategy?)null);
 
         var createJson = """
@@ -287,10 +287,10 @@ public class RegistryCreateTests : IntegrationTestBase
     [Fact]
     public async Task Create_Registry_When_Connector_Fails_Returns_BadRequest()
     {
-        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfigurationBase>()))
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfiguration>()))
             .Returns(registryConnectorMock.Object);
 
-        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
+        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfiguration>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((false, "Connection failed"));
 
         var createJson = """

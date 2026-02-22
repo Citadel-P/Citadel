@@ -1,7 +1,7 @@
 ﻿using Application.Services.Abstractions;
 using Application.Services.SignalR.Context;
 using Domain.Contracts.Resources.Platforms;
-using Domain.Entities;
+using Domain.Entities.Platforms;
 
 namespace Application.Services.SignalR;
 

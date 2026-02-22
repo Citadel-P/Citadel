@@ -1,6 +1,7 @@
 ﻿using Domain;
-using Domain.Entities;
+using Domain.Entities.Activities;
 using Domain.Entities.Identity;
+using Domain.Entities.Platforms;
 using Infrastructure.Persistence.Dtos;
 using System.Text.Json;
 
@@ -18,7 +19,7 @@ internal static class ActivityEventMappers
             resourceType: Enum.Parse<ActivityResourceType>(activityEventDto.ResourceType),
             eventType: Enum.Parse<ActivityEventType>(activityEventDto.EventType),
             status: Enum.Parse<ActivityStatus>(activityEventDto.Status),
-            info: activityEventDto.Info != null ? JsonSerializer.Deserialize(activityEventDto.Info, EventInfoJsonContext.Default.EventInfo) : null,
+            info: activityEventDto.Info != null ? JsonSerializer.Deserialize(activityEventDto.Info, EventInfoJsonContext.Default.ActivityEventInfo) : null,
             createdByActorId: activityEventDto.CreatedByActorId,
             createdAt: activityEventDto.CreatedAt,
             platform: activityEventDto.Platform_Name == null ? null : Platform.FromPersistence(id: activityEventDto.PlatformId.Value, name: activityEventDto.Platform_Name, address: string.Empty,

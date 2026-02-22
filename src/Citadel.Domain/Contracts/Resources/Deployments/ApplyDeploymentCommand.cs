@@ -1,4 +1,4 @@
-﻿using Domain.Entities;
+﻿using Domain.Entities.Deployments;
 
 namespace Domain.Contracts.Resources.Deployments;
 

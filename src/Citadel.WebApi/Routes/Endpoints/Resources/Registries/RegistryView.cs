@@ -1,5 +1,5 @@
 ﻿using Domain;
-using Domain.Entities;
+using Domain.Entities.Registries;
 using Domain.Entities.Registries;
 using Hosting.Common;
 
@@ -24,7 +24,7 @@ public sealed record RegistryView(
         GetHost(registry.RegistryHost, registry.Configuration),
         GetType(registry.Configuration), registry.CreatedAt);
 
-    private static RegistryType GetType(RegistryConfigurationBase config)
+    private static RegistryType GetType(RegistryConfiguration config)
     {
         return config switch
         {
@@ -35,7 +35,7 @@ public sealed record RegistryView(
         };
     }
 
-    private static string GetHost(string host, RegistryConfigurationBase config)
+    private static string GetHost(string host, RegistryConfiguration config)
     {
         return config switch
         {

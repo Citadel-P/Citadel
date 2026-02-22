@@ -141,13 +141,11 @@ CREATE TABLE "AlertEvents" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_AlertEvents" PRIMARY KEY,
     "AlertRuleId" TEXT NOT NULL,
     "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    "CreatedByActorId" TEXT NOT NULL,
     "Info" TEXT NOT NULL,
     "ResourceId" TEXT NULL,
     "ResourceType" TEXT NOT NULL,
     "Severity" TEXT NOT NULL,
     "Type" TEXT NOT NULL,
-    CONSTRAINT "FK_AlertEvents_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_AlertEvents_AlertRules_AlertRuleId" FOREIGN KEY ("AlertRuleId") REFERENCES "AlertRules" ("Id") ON DELETE CASCADE
 );
 
@@ -280,8 +278,6 @@ CREATE INDEX "IX_ActivityEvents_Status" ON "ActivityEvents" ("Status");
 
 CREATE INDEX "IX_AlertEvents_AlertRuleId" ON "AlertEvents" ("AlertRuleId");
 
-CREATE INDEX "IX_AlertEvents_CreatedByActorId" ON "AlertEvents" ("CreatedByActorId");
-
 CREATE INDEX "IX_AlertEvents_ResourceType" ON "AlertEvents" ("ResourceType");
 
 CREATE INDEX "IX_AlertEvents_Resource_CreatedAt" ON "AlertEvents" ("ResourceId", "CreatedAt");
@@ -349,7 +345,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260221000114_migration0001', '10.0.2');
+VALUES ('20260222113408_migration0001', '10.0.3');
 
 COMMIT;
 

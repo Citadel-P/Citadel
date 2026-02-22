@@ -1,7 +1,6 @@
 ﻿using System.Text.Json.Serialization;
-using Domain.Entities.Platforms;
 
-namespace Domain.Entities;
+namespace Domain.Entities.Platforms;
 
 [method: JsonConstructor]
 public class Platform(

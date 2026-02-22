@@ -608,14 +608,13 @@ internal static class Configuration
         alertEvent.Property<string>("Severity").HasColumnType("TEXT").IsRequired();
         alertEvent.Property<string>("Info").HasColumnType("TEXT").IsRequired();
         alertEvent.Property<string>("ResourceType").HasColumnType("TEXT").IsRequired();
+        alertEvent.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
 
         alertEvent
             .HasOne("AlertRule")
             .WithMany()
             .HasForeignKey("AlertRuleId")
             .OnDelete(DeleteBehavior.Cascade);
-
-        alertEvent.AddAuditedMemebers();
 
         alertEvent.HasIndex("Type").HasDatabaseName($"IX_{tableName}_Type");
         alertEvent.HasIndex("ResourceId", "CreatedAt").HasDatabaseName($"IX_{tableName}_Resource_CreatedAt");

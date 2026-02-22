@@ -1,5 +1,8 @@
 ﻿using System.Text.Json.Serialization;
 using Domain.Entities;
+using Domain.Entities.Activities;
+using Domain.Entities.Alerts;
+using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 
@@ -40,7 +43,7 @@ public partial class PlatformJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(CustomRegistry))]
 [JsonSerializable(typeof(DockerHubRegistry))]
 [JsonSerializable(typeof(GitHubRegistry))]
-[JsonSerializable(typeof(RegistryConfigurationBase))]
+[JsonSerializable(typeof(RegistryConfiguration))]
 public partial class RegistryJsonContext : JsonSerializerContext
 {
 }
@@ -85,7 +88,7 @@ public partial class  DeploymentJsonContext: JsonSerializerContext
     {
     typeof(JsonStringEnumConverter<ActivityEventType>),
     })]
-[JsonSerializable(typeof(EventInfo))]
+[JsonSerializable(typeof(ActivityEventInfo))]
 [JsonSerializable(typeof(DeploymentCreated))]
 [JsonSerializable(typeof(DeploymentUpdated))]
 [JsonSerializable(typeof(DeploymentDeleted))]
@@ -109,7 +112,7 @@ public partial class  EventInfoJsonContext : JsonSerializerContext
     typeof(JsonStringEnumConverter<AlertSeverity>),
     typeof(JsonStringEnumConverter<AlertResourceType>),
     })]
-[JsonSerializable(typeof(AlertInfo))]
+[JsonSerializable(typeof(AlertEventInfo))]
 public partial class AlertEventJsonContext : JsonSerializerContext
 {
 }

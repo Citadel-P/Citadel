@@ -5245,6 +5245,240 @@
           }
         }
       },
+      "ActivityEventInfo": {
+        "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoDeploymentCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoDeploymentUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoDeploymentRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoDeploymentDeleted"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoDeploymentStarted"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoDeploymentStopped"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoDeploymentPaused"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoDeploymentApplied"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoDeploymentDegraded"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "DeploymentCreated": "#/components/schemas/ActivityEventInfoDeploymentCreated",
+            "DeploymentUpdated": "#/components/schemas/ActivityEventInfoDeploymentUpdated",
+            "DeploymentRenamed": "#/components/schemas/ActivityEventInfoDeploymentRenamed",
+            "DeploymentDeleted": "#/components/schemas/ActivityEventInfoDeploymentDeleted",
+            "DeploymentStarted": "#/components/schemas/ActivityEventInfoDeploymentStarted",
+            "DeploymentStopped": "#/components/schemas/ActivityEventInfoDeploymentStopped",
+            "DeploymentPaused": "#/components/schemas/ActivityEventInfoDeploymentPaused",
+            "DeploymentApplied": "#/components/schemas/ActivityEventInfoDeploymentApplied",
+            "DeploymentDegraded": "#/components/schemas/ActivityEventInfoDeploymentDegraded"
+          }
+        }
+      },
+      "ActivityEventInfoDeploymentApplied": {
+        "required": [
+          "spec",
+          "containerIds",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentApplied"
+            ],
+            "type": "string"
+          },
+          "spec": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DeploymentSpec"
+              }
+            ]
+          },
+          "containerIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ActivityEventInfoDeploymentCreated": {
+        "required": [
+          "spec"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentCreated"
+            ],
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          }
+        }
+      },
+      "ActivityEventInfoDeploymentDegraded": {
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentDegraded"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoDeploymentDeleted": {
+        "required": [
+          "spec"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentDeleted"
+            ],
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          }
+        }
+      },
+      "ActivityEventInfoDeploymentPaused": {
+        "required": [
+          "containerIds"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentPaused"
+            ],
+            "type": "string"
+          },
+          "containerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ActivityEventInfoDeploymentRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoDeploymentStarted": {
+        "required": [
+          "containerIds"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentStarted"
+            ],
+            "type": "string"
+          },
+          "containerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ActivityEventInfoDeploymentStopped": {
+        "required": [
+          "containerIds"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentStopped"
+            ],
+            "type": "string"
+          },
+          "containerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ActivityEventInfoDeploymentUpdated": {
+        "required": [
+          "oldSpec",
+          "newSpec"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentUpdated"
+            ],
+            "type": "string"
+          },
+          "oldSpec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          },
+          "newSpec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          }
+        }
+      },
       "ActivityEventType": {
         "enum": [
           "DeploymentCreated",
@@ -5340,7 +5574,7 @@
             "format": "date-time"
           },
           "info": {
-            "$ref": "#/components/schemas/EventInfo"
+            "$ref": "#/components/schemas/ActivityEventInfo"
           },
           "actorId": {
             "type": "string",
@@ -8034,240 +8268,6 @@
           }
         }
       },
-      "EventInfo": {
-        "required": [
-          "$type"
-        ],
-        "type": "object",
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/EventInfoDeploymentCreated"
-          },
-          {
-            "$ref": "#/components/schemas/EventInfoDeploymentUpdated"
-          },
-          {
-            "$ref": "#/components/schemas/EventInfoDeploymentRenamed"
-          },
-          {
-            "$ref": "#/components/schemas/EventInfoDeploymentDeleted"
-          },
-          {
-            "$ref": "#/components/schemas/EventInfoDeploymentStarted"
-          },
-          {
-            "$ref": "#/components/schemas/EventInfoDeploymentStopped"
-          },
-          {
-            "$ref": "#/components/schemas/EventInfoDeploymentPaused"
-          },
-          {
-            "$ref": "#/components/schemas/EventInfoDeploymentApplied"
-          },
-          {
-            "$ref": "#/components/schemas/EventInfoDeploymentDegraded"
-          }
-        ],
-        "discriminator": {
-          "propertyName": "$type",
-          "mapping": {
-            "DeploymentCreated": "#/components/schemas/EventInfoDeploymentCreated",
-            "DeploymentUpdated": "#/components/schemas/EventInfoDeploymentUpdated",
-            "DeploymentRenamed": "#/components/schemas/EventInfoDeploymentRenamed",
-            "DeploymentDeleted": "#/components/schemas/EventInfoDeploymentDeleted",
-            "DeploymentStarted": "#/components/schemas/EventInfoDeploymentStarted",
-            "DeploymentStopped": "#/components/schemas/EventInfoDeploymentStopped",
-            "DeploymentPaused": "#/components/schemas/EventInfoDeploymentPaused",
-            "DeploymentApplied": "#/components/schemas/EventInfoDeploymentApplied",
-            "DeploymentDegraded": "#/components/schemas/EventInfoDeploymentDegraded"
-          }
-        }
-      },
-      "EventInfoDeploymentApplied": {
-        "required": [
-          "spec",
-          "containerIds",
-          "reason"
-        ],
-        "properties": {
-          "$type": {
-            "enum": [
-              "DeploymentApplied"
-            ],
-            "type": "string"
-          },
-          "spec": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/DeploymentSpec"
-              }
-            ]
-          },
-          "containerIds": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "reason": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      },
-      "EventInfoDeploymentCreated": {
-        "required": [
-          "spec"
-        ],
-        "properties": {
-          "$type": {
-            "enum": [
-              "DeploymentCreated"
-            ],
-            "type": "string"
-          },
-          "spec": {
-            "$ref": "#/components/schemas/DeploymentSpec"
-          }
-        }
-      },
-      "EventInfoDeploymentDegraded": {
-        "required": [
-          "reason"
-        ],
-        "properties": {
-          "$type": {
-            "enum": [
-              "DeploymentDegraded"
-            ],
-            "type": "string"
-          },
-          "reason": {
-            "type": "string"
-          }
-        }
-      },
-      "EventInfoDeploymentDeleted": {
-        "required": [
-          "spec"
-        ],
-        "properties": {
-          "$type": {
-            "enum": [
-              "DeploymentDeleted"
-            ],
-            "type": "string"
-          },
-          "spec": {
-            "$ref": "#/components/schemas/DeploymentSpec"
-          }
-        }
-      },
-      "EventInfoDeploymentPaused": {
-        "required": [
-          "containerIds"
-        ],
-        "properties": {
-          "$type": {
-            "enum": [
-              "DeploymentPaused"
-            ],
-            "type": "string"
-          },
-          "containerIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "EventInfoDeploymentRenamed": {
-        "required": [
-          "oldName",
-          "newName"
-        ],
-        "properties": {
-          "$type": {
-            "enum": [
-              "DeploymentRenamed"
-            ],
-            "type": "string"
-          },
-          "oldName": {
-            "type": "string"
-          },
-          "newName": {
-            "type": "string"
-          }
-        }
-      },
-      "EventInfoDeploymentStarted": {
-        "required": [
-          "containerIds"
-        ],
-        "properties": {
-          "$type": {
-            "enum": [
-              "DeploymentStarted"
-            ],
-            "type": "string"
-          },
-          "containerIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "EventInfoDeploymentStopped": {
-        "required": [
-          "containerIds"
-        ],
-        "properties": {
-          "$type": {
-            "enum": [
-              "DeploymentStopped"
-            ],
-            "type": "string"
-          },
-          "containerIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "EventInfoDeploymentUpdated": {
-        "required": [
-          "oldSpec",
-          "newSpec"
-        ],
-        "properties": {
-          "$type": {
-            "enum": [
-              "DeploymentUpdated"
-            ],
-            "type": "string"
-          },
-          "oldSpec": {
-            "$ref": "#/components/schemas/DeploymentSpec"
-          },
-          "newSpec": {
-            "$ref": "#/components/schemas/DeploymentSpec"
-          }
-        }
-      },
       "ExposedPortsResult": {
         "required": [
           "ports"
@@ -10597,50 +10597,50 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/RegistryConfigurationBase"
+                "$ref": "#/components/schemas/RegistryConfiguration"
               }
             ]
           }
         }
       },
-      "RegistryConfigurationBase": {
+      "RegistryConfiguration": {
         "required": [
           "$type"
         ],
         "type": "object",
         "anyOf": [
           {
-            "$ref": "#/components/schemas/RegistryConfigurationBaseAWSRegistry"
+            "$ref": "#/components/schemas/RegistryConfigurationAWSRegistry"
           },
           {
-            "$ref": "#/components/schemas/RegistryConfigurationBaseAzureRegistry"
+            "$ref": "#/components/schemas/RegistryConfigurationAzureRegistry"
           },
           {
-            "$ref": "#/components/schemas/RegistryConfigurationBaseGitlabRegistry"
+            "$ref": "#/components/schemas/RegistryConfigurationGitlabRegistry"
           },
           {
-            "$ref": "#/components/schemas/RegistryConfigurationBaseDockerHubRegistry"
+            "$ref": "#/components/schemas/RegistryConfigurationDockerHubRegistry"
           },
           {
-            "$ref": "#/components/schemas/RegistryConfigurationBaseGitHubRegistry"
+            "$ref": "#/components/schemas/RegistryConfigurationGitHubRegistry"
           },
           {
-            "$ref": "#/components/schemas/RegistryConfigurationBaseCustomRegistry"
+            "$ref": "#/components/schemas/RegistryConfigurationCustomRegistry"
           }
         ],
         "discriminator": {
           "propertyName": "$type",
           "mapping": {
-            "AWS": "#/components/schemas/RegistryConfigurationBaseAWSRegistry",
-            "Azure": "#/components/schemas/RegistryConfigurationBaseAzureRegistry",
-            "Gitlab": "#/components/schemas/RegistryConfigurationBaseGitlabRegistry",
-            "DockerHub": "#/components/schemas/RegistryConfigurationBaseDockerHubRegistry",
-            "GitHub": "#/components/schemas/RegistryConfigurationBaseGitHubRegistry",
-            "Custom": "#/components/schemas/RegistryConfigurationBaseCustomRegistry"
+            "AWS": "#/components/schemas/RegistryConfigurationAWSRegistry",
+            "Azure": "#/components/schemas/RegistryConfigurationAzureRegistry",
+            "Gitlab": "#/components/schemas/RegistryConfigurationGitlabRegistry",
+            "DockerHub": "#/components/schemas/RegistryConfigurationDockerHubRegistry",
+            "GitHub": "#/components/schemas/RegistryConfigurationGitHubRegistry",
+            "Custom": "#/components/schemas/RegistryConfigurationCustomRegistry"
           }
         }
       },
-      "RegistryConfigurationBaseAWSRegistry": {
+      "RegistryConfigurationAWSRegistry": {
         "required": [
           "accessKey",
           "authenticationRequired",
@@ -10668,7 +10668,7 @@
           }
         }
       },
-      "RegistryConfigurationBaseAzureRegistry": {
+      "RegistryConfigurationAzureRegistry": {
         "required": [
           "userName",
           "password"
@@ -10688,7 +10688,7 @@
           }
         }
       },
-      "RegistryConfigurationBaseCustomRegistry": {
+      "RegistryConfigurationCustomRegistry": {
         "properties": {
           "$type": {
             "enum": [
@@ -10717,7 +10717,7 @@
           }
         }
       },
-      "RegistryConfigurationBaseDockerHubRegistry": {
+      "RegistryConfigurationDockerHubRegistry": {
         "properties": {
           "$type": {
             "enum": [
@@ -10739,7 +10739,7 @@
           }
         }
       },
-      "RegistryConfigurationBaseGitHubRegistry": {
+      "RegistryConfigurationGitHubRegistry": {
         "required": [
           "nameSpace"
         ],
@@ -10768,7 +10768,7 @@
           }
         }
       },
-      "RegistryConfigurationBaseGitlabRegistry": {
+      "RegistryConfigurationGitlabRegistry": {
         "required": [
           "userName",
           "pat",
@@ -10811,7 +10811,7 @@
             "$ref": "#/components/schemas/RegistryStatus"
           },
           "configuration": {
-            "$ref": "#/components/schemas/RegistryConfigurationBase"
+            "$ref": "#/components/schemas/RegistryConfiguration"
           },
           "description": {
             "type": [

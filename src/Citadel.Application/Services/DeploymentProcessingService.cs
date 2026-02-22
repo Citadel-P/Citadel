@@ -1,7 +1,7 @@
 ﻿using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain.Contracts.Interfaces;
-using Domain.Entities;
+using Domain.Entities.Deployments;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 

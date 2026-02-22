@@ -1,6 +1,6 @@
 ﻿using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities;
+using Domain.Entities.Activities;
 using FluentValidation;
 using Hosting.Common.Models;
 using LightResults;

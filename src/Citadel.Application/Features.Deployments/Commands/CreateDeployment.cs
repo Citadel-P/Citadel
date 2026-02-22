@@ -4,6 +4,8 @@ using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
+using Domain.Entities.Activities;
+using Domain.Entities.Deployments;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;

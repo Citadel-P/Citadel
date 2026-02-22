@@ -7,6 +7,6 @@ internal sealed record RegistryDto(
     string Status,
     DateTime CreatedAt,
     Guid CreatedByActorId,
-    string Configuration, // RegistryConfigurationBase
+    string Configuration, // RegistryConfiguration
     string? Description = null
     );

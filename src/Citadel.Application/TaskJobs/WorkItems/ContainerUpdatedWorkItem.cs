@@ -5,6 +5,8 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
+using Domain.Entities.Activities;
+using Domain.Entities.Deployments;
 using Microsoft.Extensions.Logging;
 
 namespace Application.TaskJobs.WorkItems;

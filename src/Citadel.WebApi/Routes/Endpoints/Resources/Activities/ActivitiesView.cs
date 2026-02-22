@@ -1,4 +1,4 @@
-using Domain.Entities;
+using Domain.Entities.Activities;
 using Hosting.Common.Models;
 using WebApi.Routes.Endpoints.Resources.Paging;
 

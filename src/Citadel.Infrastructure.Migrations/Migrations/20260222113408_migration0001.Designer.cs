@@ -11,14 +11,14 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260221000114_migration0001")]
+    [Migration("20260222113408_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.2");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.3");
 
             modelBuilder.Entity("ActivityEvent", b =>
                 {
@@ -128,10 +128,6 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("TEXT")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("CreatedByActorId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("Info")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -154,8 +150,6 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AlertRuleId");
-
-                    b.HasIndex("CreatedByActorId");
 
                     b.HasIndex("ResourceType")
                         .HasDatabaseName("IX_AlertEvents_ResourceType");
@@ -908,12 +902,6 @@ namespace Infrastructure.Migrations.Migrations
                         .WithMany()
                         .HasForeignKey("AlertRuleId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Actor", null)
-                        .WithMany()
-                        .HasForeignKey("CreatedByActorId")
-                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

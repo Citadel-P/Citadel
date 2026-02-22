@@ -1,7 +1,6 @@
 ﻿using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities;
 using Domain.Entities.Registries;
 using FluentValidation;
 using Hosting.Common;
@@ -20,7 +19,7 @@ public sealed record CreateRegistry(
     string Name, 
     string RegistryHost,
     RegistryStatus Status,
-    RegistryConfigurationBase Configuration, 
+    RegistryConfiguration Configuration, 
     string? Description = null) : ICommand<Result<Registry>>
 {
     internal sealed class Validator : AbstractValidator<CreateRegistry>

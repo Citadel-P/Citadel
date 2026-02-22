@@ -11,7 +11,7 @@ import {
   ActivityView,
   ApplyDeploymentInput,
   DeploymentStreamItem,
-  EventInfo,
+  ActivityEventInfo,
   PullImageInput,
   PullImageStreamItem,
   RegistryView,
@@ -124,10 +124,10 @@ function SpecViewer({ spec, title, resourceId }: { spec: unknown; title: string;
   );
 }
 
-type InfoOf<T extends EventInfo['$type']> = Extract<EventInfo, { $type: T }>;
+type InfoOf<T extends ActivityEventInfo['$type']> = Extract<ActivityEventInfo, { $type: T }>;
 
 type ActivityInfoRendererMap = {
-  [K in EventInfo['$type']]: (info: InfoOf<K>, activity: ActivityView) => React.ReactNode;
+  [K in ActivityEventInfo['$type']]: (info: InfoOf<K>, activity: ActivityView) => React.ReactNode;
 };
 
 const activityInfoRenderers: ActivityInfoRendererMap = {
@@ -162,7 +162,7 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
       Deployment renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
     </span>
   ),
-  
+
   DeploymentStarted: (info) => <KeyValueBlock label="Container id" value={info.containerIds} />,
   DeploymentStopped: (info) => <KeyValueBlock label="Container id" value={info.containerIds} />,
   DeploymentPaused: (info) => <KeyValueBlock label="Container id" value={info.containerIds} />,

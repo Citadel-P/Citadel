@@ -2,7 +2,7 @@
 using Application.Features.Deployments.Queries;
 using Domain;
 using Domain.Contracts.Resources.Deployments;
-using Domain.Entities;
+using Domain.Entities.Deployments;
 using Hosting.Common.MergePatch;
 using Hosting.Extensions;
 using Mediator;

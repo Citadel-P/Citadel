@@ -8,6 +8,7 @@ using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Registries;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
+using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Microsoft.AspNetCore.Mvc;
@@ -77,7 +78,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(DeleteRegistriesInput))]
 [JsonSerializable(typeof(RegistriesView))]
 [JsonSerializable(typeof(RegistryView))]
-[JsonSerializable(typeof(RegistryConfigurationBase))]
+[JsonSerializable(typeof(RegistryConfiguration))]
 [JsonSerializable(typeof(DeleteImagesRequest))]
 [JsonSerializable(typeof(DockerHubImageView))]
 [JsonSerializable(typeof(ImageView))]

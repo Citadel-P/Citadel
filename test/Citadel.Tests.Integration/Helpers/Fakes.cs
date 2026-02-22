@@ -2,7 +2,6 @@
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Images;
 using Domain.Contracts.Resources.Platforms;
-using Domain.Entities;
 using Domain.Entities.Platforms;
 
 namespace Tests.Integration.Helpers;

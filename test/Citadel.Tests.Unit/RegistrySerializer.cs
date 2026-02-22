@@ -16,7 +16,7 @@ public class RegistrySerializer
             "PAT": "fake-pat-1"
         }
         """;
-        var cfg = JsonSerializer.Deserialize(json, RegistryJsonContext.Default.RegistryConfigurationBase);
+        var cfg = JsonSerializer.Deserialize(json, RegistryJsonContext.Default.RegistryConfiguration);
         Assert.NotNull(cfg);
         Assert.IsType<DockerHubRegistry>(cfg);
         Assert.Equal("fake-pat-1", (cfg as DockerHubRegistry)?.PAT );
@@ -27,7 +27,7 @@ public class RegistrySerializer
     public async Task ShouldSerializeeDockerHubRegistryConfiguration()
     {
         var cfg = DockerHubRegistry.Create("username-1", "fake-pat-1");
-        var json = JsonSerializer.Serialize(cfg, RegistryJsonContext.Default.RegistryConfigurationBase);
+        var json = JsonSerializer.Serialize(cfg, RegistryJsonContext.Default.RegistryConfiguration);
         await VerifyJson(json);
     }
 
@@ -41,7 +41,7 @@ public class RegistrySerializer
             "PAT": "fake-pat-1"
         }
         """;
-        var cfg = JsonSerializer.Deserialize(json, RegistryJsonContext.Default.RegistryConfigurationBase);
+        var cfg = JsonSerializer.Deserialize(json, RegistryJsonContext.Default.RegistryConfiguration);
         Assert.NotNull(cfg);
         Assert.IsType<GitHubRegistry>(cfg);
         Assert.Equal("fake-pat-1", (cfg as GitHubRegistry)?.PAT);
@@ -51,7 +51,7 @@ public class RegistrySerializer
     public async Task ShouldSerializeeGitHubRegistryConfiguration()
     {
         var cfg = GitHubRegistry.Create("citadel-p", true, "fake-pat-1");
-        var json = JsonSerializer.Serialize(cfg, RegistryJsonContext.Default.RegistryConfigurationBase);
+        var json = JsonSerializer.Serialize(cfg, RegistryJsonContext.Default.RegistryConfiguration);
         await VerifyJson(json);
     }
 }

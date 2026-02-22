@@ -10,7 +10,7 @@ namespace Application.Services;
 internal interface IRegistryConnectorStrategy
 {
     RegistryType Type { get; }
-    Task<(bool success, string? error)> CanConnectAsync(RegistryConfigurationBase config, CancellationToken cancellationToken);
+    Task<(bool success, string? error)> CanConnectAsync(RegistryConfiguration config, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -20,7 +20,7 @@ internal class DockerHubConnectorStrategy(IDockerHubRegistryRepository dockerHub
 {
     public RegistryType Type => RegistryType.DockerHub;
 
-    public async Task<(bool success, string? error)> CanConnectAsync(RegistryConfigurationBase config, CancellationToken cancellationToken)
+    public async Task<(bool success, string? error)> CanConnectAsync(RegistryConfiguration config, CancellationToken cancellationToken)
     {
         if (config is not DockerHubRegistry cfg)
         {
@@ -42,7 +42,7 @@ internal class GitHubConnectorStrategy(IGitHubCrRepository gitHubCrService) : IR
 {
     public RegistryType Type => RegistryType.GitHub;
 
-    public async Task<(bool success, string? error)> CanConnectAsync(RegistryConfigurationBase config, CancellationToken cancellationToken)
+    public async Task<(bool success, string? error)> CanConnectAsync(RegistryConfiguration config, CancellationToken cancellationToken)
     {
         if (config is not GitHubRegistry cfg)
         {
@@ -64,7 +64,7 @@ internal class GitHubConnectorStrategy(IGitHubCrRepository gitHubCrService) : IR
 internal class CustomRegistryConnectorStrategy() : IRegistryConnectorStrategy
 {
     public RegistryType Type => RegistryType.Custom;
-    public async Task<(bool success, string? error)> CanConnectAsync(RegistryConfigurationBase config, CancellationToken cancellationToken)
+    public async Task<(bool success, string? error)> CanConnectAsync(RegistryConfiguration config, CancellationToken cancellationToken)
     {
         if (config is not CustomRegistry)
         {

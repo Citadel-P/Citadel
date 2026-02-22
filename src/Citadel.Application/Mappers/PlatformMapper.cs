@@ -1,6 +1,6 @@
 ﻿using Domain;
 using Domain.Contracts.Resources.Platforms;
-using Domain.Entities;
+using Domain.Entities.Platforms;
 
 namespace Application.Mappers;
 

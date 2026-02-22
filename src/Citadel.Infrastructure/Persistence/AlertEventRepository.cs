@@ -1,7 +1,7 @@
 ﻿using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities;
+using Domain.Entities.Alerts;
 using Hosting.Common.Models;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
@@ -17,10 +17,10 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
     {
         const string sql = @"
         INSERT INTO AlertEvents (
-            Id, AlertRuleId, Type, Severity, Info, ResourceId, ResourceType, CreatedByActorId, CreatedAt
+            Id, AlertRuleId, Type, Severity, Info, ResourceId, ResourceType, CreatedAt
         )
         VALUES (
-            @Id, @AlertRuleId, @Type, @Severity, @Info, @ResourceId, @ResourceType, @CreatedByActorId, @CreatedAt
+            @Id, @AlertRuleId, @Type, @Severity, @Info, @ResourceId, @ResourceType, @CreatedAt
         )";
         return db.ExecuteAsync(sql, new
         {
@@ -28,10 +28,9 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             AlertRuleId = alertEvent.AlertRuleId.Format(),
             Type = EnumFormatter<AlertType>.GetValue(alertEvent.Type),
             Severity = EnumFormatter<AlertSeverity>.GetValue(alertEvent.Severity),
-            Info = JsonSerializer.Serialize(alertEvent.Info, AlertEventJsonContext.Default.AlertInfo),
+            Info = JsonSerializer.Serialize(alertEvent.Info, AlertEventJsonContext.Default.AlertEventInfo),
             ResourceId = alertEvent.ResourceId?.Format(),
             ResourceType = EnumFormatter<AlertResourceType>.GetValue(alertEvent.ResourceType),
-            CreatedByActorId = alertEvent.CreatedByActorId.Format(),
             CreatedAt = alertEvent.CreatedAt
         },
         transaction: tx());
@@ -54,7 +53,6 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             a.Info,
             a.ResourceId,
             a.ResourceType,
-            a.CreatedByActorId,
             a.CreatedAt
         FROM AlertEvents a
         WHERE (@ResourceId IS NULL OR a.ResourceId = @ResourceId)

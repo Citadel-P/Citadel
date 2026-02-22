@@ -8,12 +8,12 @@ namespace Application.Services;
 /// </summary>
 internal interface IRegistryConnectorResolver
 {
-    IRegistryConnectorStrategy? Resolve(RegistryConfigurationBase baseType);
+    IRegistryConnectorStrategy? Resolve(RegistryConfiguration baseType);
 }
 
 internal class RegistryConnectorResolver(IServiceProvider provider) : IRegistryConnectorResolver
 {
-    public IRegistryConnectorStrategy? Resolve(RegistryConfigurationBase baseType)
+    public IRegistryConnectorStrategy? Resolve(RegistryConfiguration baseType)
     {
         return baseType switch
         {

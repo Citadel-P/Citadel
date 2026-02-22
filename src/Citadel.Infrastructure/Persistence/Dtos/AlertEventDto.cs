@@ -8,5 +8,4 @@ internal record AlertEventDto(
     string Info,
     Guid? ResourceId,
     string ResourceType,
-    Guid CreatedByActorId,
     DateTime CreatedAt);

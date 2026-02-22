@@ -42,10 +42,10 @@ public class RegistryPatchTests : IntegrationTestBase
     public async Task Patch_Registry_Should_Apply_MergePatch()
     {
         // Arrange
-        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfigurationBase>()))
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfiguration>()))
             .Returns(registryConnectorMock.Object);
 
-        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
+        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfiguration>(), It.IsAny<CancellationToken>()))
             .Returns(Task.FromResult<(bool, string?)>((true, null)));
 
         var patchJson = """
@@ -72,10 +72,10 @@ public class RegistryPatchTests : IntegrationTestBase
     public async Task Patch_RegistryStatus_Should_Succeed()
     {
         // Arrange
-        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfigurationBase>()))
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfiguration>()))
             .Returns(registryConnectorMock.Object);
 
-        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
+        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfiguration>(), It.IsAny<CancellationToken>()))
             .Returns(Task.FromResult<(bool, string?)>((true, null)));
 
         var patchJson = """
@@ -143,10 +143,10 @@ public class RegistryPatchTests : IntegrationTestBase
     public async Task Patch_Should_Return_Forbidden_If_User_Lacks_Permission()
     {
         // Arrange
-        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfigurationBase>()))
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfiguration>()))
             .Returns(registryConnectorMock.Object);
 
-        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfigurationBase>(), It.IsAny<CancellationToken>()))
+        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfiguration>(), It.IsAny<CancellationToken>()))
             .Returns(Task.FromResult<(bool, string?)>((true, null)));
 
         var patchJson = """

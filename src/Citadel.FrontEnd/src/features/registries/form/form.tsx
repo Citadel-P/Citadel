@@ -1,9 +1,9 @@
 import {
   RegistryType,
   RegistryInput,
-  RegistryConfigurationBaseGitHubRegistry,
-  RegistryConfigurationBaseCustomRegistry,
-  RegistryConfigurationBaseDockerHubRegistry,
+  RegistryConfigurationGitHubRegistry,
+  RegistryConfigurationCustomRegistry,
+  RegistryConfigurationDockerHubRegistry,
   RegistryStatus,
 } from '@/api/generated/api.types';
 import {
@@ -128,11 +128,11 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
     }
   };
   const isCustomAuthEnabled =
-    ((update.configuration as RegistryConfigurationBaseCustomRegistry)?.authEnabled ??
-      (original.configuration as RegistryConfigurationBaseCustomRegistry)?.authEnabled) === true;
+    ((update.configuration as RegistryConfigurationCustomRegistry)?.authEnabled ??
+      (original.configuration as RegistryConfigurationCustomRegistry)?.authEnabled) === true;
   const isGhcrAuthEnabled =
-    ((update.configuration as RegistryConfigurationBaseGitHubRegistry)?.ghcrAuthEnabled ??
-      (original.configuration as RegistryConfigurationBaseGitHubRegistry)?.ghcrAuthEnabled) === true;
+    ((update.configuration as RegistryConfigurationGitHubRegistry)?.ghcrAuthEnabled ??
+      (original.configuration as RegistryConfigurationGitHubRegistry)?.ghcrAuthEnabled) === true;
 
   const schema = useMemo(
     () => ({
@@ -231,9 +231,9 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                               set((prev) => ({
                                 configuration: {
                                   $type: 'GitHub',
-                                  ...((prev.configuration ?? {}) as RegistryConfigurationBaseGitHubRegistry),
+                                  ...((prev.configuration ?? {}) as RegistryConfigurationGitHubRegistry),
                                   nameSpace: value,
-                                } satisfies RegistryConfigurationBaseGitHubRegistry,
+                                } satisfies RegistryConfigurationGitHubRegistry,
                               }))
                             }
                             prefixPlaceholder="ghcr.io/"
@@ -255,9 +255,9 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                             set((prev) => ({
                               configuration: {
                                 $type: 'GitHub',
-                                ...((prev.configuration ?? {}) as RegistryConfigurationBaseGitHubRegistry),
+                                ...((prev.configuration ?? {}) as RegistryConfigurationGitHubRegistry),
                                 ghcrAuthEnabled: value,
-                              } satisfies RegistryConfigurationBaseGitHubRegistry,
+                              } satisfies RegistryConfigurationGitHubRegistry,
                             }))
                           }
                         />
@@ -292,9 +292,9 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                               set((prev) => ({
                                 configuration: {
                                   $type: 'GitHub',
-                                  ...((prev.configuration as RegistryConfigurationBaseGitHubRegistry) ?? {}),
+                                  ...((prev.configuration as RegistryConfigurationGitHubRegistry) ?? {}),
                                   pat: v,
-                                } satisfies RegistryConfigurationBaseGitHubRegistry,
+                                } satisfies RegistryConfigurationGitHubRegistry,
                               }))
                             }
                           />
@@ -324,9 +324,9 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                         set((prev) => ({
                           configuration: {
                             $type: 'DockerHub',
-                            ...((prev.configuration as RegistryConfigurationBaseDockerHubRegistry) ?? {}),
+                            ...((prev.configuration as RegistryConfigurationDockerHubRegistry) ?? {}),
                             userName: v,
-                          } satisfies RegistryConfigurationBaseDockerHubRegistry,
+                          } satisfies RegistryConfigurationDockerHubRegistry,
                         }))
                       }
                     />
@@ -355,9 +355,9 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                         set((prev) => ({
                           configuration: {
                             $type: 'DockerHub',
-                            ...((prev.configuration as RegistryConfigurationBaseDockerHubRegistry) ?? {}),
+                            ...((prev.configuration as RegistryConfigurationDockerHubRegistry) ?? {}),
                             pat: v,
-                          } satisfies RegistryConfigurationBaseDockerHubRegistry,
+                          } satisfies RegistryConfigurationDockerHubRegistry,
                         }))
                       }
                     />
@@ -409,9 +409,9 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                             set((prev) => ({
                               configuration: {
                                 $type: 'Custom',
-                                ...((prev.configuration ?? {}) as RegistryConfigurationBaseCustomRegistry),
+                                ...((prev.configuration ?? {}) as RegistryConfigurationCustomRegistry),
                                 authEnabled: value,
-                              } satisfies RegistryConfigurationBaseCustomRegistry,
+                              } satisfies RegistryConfigurationCustomRegistry,
                             }))
                           }
                         />
@@ -440,9 +440,9 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                                   set((prev) => ({
                                     configuration: {
                                       $type: 'Custom',
-                                      ...((prev.configuration ?? {}) as RegistryConfigurationBaseCustomRegistry),
+                                      ...((prev.configuration ?? {}) as RegistryConfigurationCustomRegistry),
                                       userName: v,
-                                    } satisfies RegistryConfigurationBaseCustomRegistry,
+                                    } satisfies RegistryConfigurationCustomRegistry,
                                   }))
                                 }
                               />
@@ -463,7 +463,7 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
                                   set((prev) => ({
                                     configuration: {
                                       $type: 'Custom',
-                                      ...((prev.configuration ?? {}) as RegistryConfigurationBaseCustomRegistry),
+                                      ...((prev.configuration ?? {}) as RegistryConfigurationCustomRegistry),
                                       password: v,
                                     },
                                   }))

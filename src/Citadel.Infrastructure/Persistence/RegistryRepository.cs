@@ -3,7 +3,7 @@ using System.Text.Json;
 using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities;
+using Domain.Entities.Registries;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using Infrastructure.TypeHandlers;
@@ -37,7 +37,7 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             CreatedAt = registry.CreatedAt.ToString(), 
             CreatedByActorId = registry.CreatedByActorId.Format(),
             Status = EnumFormatter<RegistryStatus>.GetValue(registry.Status),
-            Configuration = JsonSerializer.Serialize(registry.Configuration, RegistryJsonContext.Default.RegistryConfigurationBase),
+            Configuration = JsonSerializer.Serialize(registry.Configuration, RegistryJsonContext.Default.RegistryConfiguration),
         }, transaction: tx());
     }
 
@@ -82,7 +82,7 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
             Description = registry.Description,
             RegistryHost = registry.RegistryHost,
             Status = EnumFormatter<RegistryStatus>.GetValue(registry.Status),
-            Configuration = JsonSerializer.Serialize(registry.Configuration, RegistryJsonContext.Default.RegistryConfigurationBase),
+            Configuration = JsonSerializer.Serialize(registry.Configuration, RegistryJsonContext.Default.RegistryConfiguration),
         }, transaction: tx());
     }
 

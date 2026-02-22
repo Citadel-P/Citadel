@@ -3,6 +3,9 @@ using Domain.Contracts.Resources.Networks;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
+using Domain.Entities.Activities;
+using Domain.Entities.Deployments;
+using Domain.Entities.Platforms;
 
 namespace Application.Services.Abstractions;
 

@@ -1,6 +1,6 @@
 ﻿using Application.Services.SignalR;
 using Domain.Contracts.Interfaces;
-using Domain.Entities;
+using Domain.Entities.Activities;
 
 namespace Application.Features.Deployments.Notifications;
 

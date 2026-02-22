@@ -1,7 +1,7 @@
 ﻿using System.Text.Json;
 using Domain;
 using Domain.Contracts.Resources.Platforms;
-using Domain.Entities;
+using Domain.Entities.Platforms;
 using Infrastructure.Persistence.Dtos;
 
 namespace Infrastructure.Persistence.Mappers;

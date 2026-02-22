@@ -8,6 +8,8 @@ using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities;
+using Domain.Entities.Activities;
+using Domain.Entities.Deployments;
 using Hosting.Common.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http;

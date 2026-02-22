@@ -1,6 +1,6 @@
 ﻿using Domain;
-using Domain.Entities;
 using Hosting.Common;
+using Domain.Entities.Alerts;
 using Infrastructure.Persistence.Dtos;
 
 namespace Infrastructure.Persistence.Mappers;

@@ -1,6 +1,6 @@
 ﻿
 using Domain;
-using Domain.Entities;
+using Domain.Entities.Deployments;
 namespace WebApi.Routes.Endpoints.Resources.Deployments;
 
 public sealed record DeploymentsView(IEnumerable<DeploymentView> Deployments)

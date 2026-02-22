@@ -1,7 +1,12 @@
 ﻿using Domain.Contracts.Resources.Identity;
 using Domain.Contracts.Resources.Platforms;
 using Domain.Entities;
+using Domain.Entities.Activities;
+using Domain.Entities.Alerts;
+using Domain.Entities.Deployments;
 using Domain.Entities.Identity;
+using Domain.Entities.Platforms;
+using Domain.Entities.Registries;
 using Hosting.Common.Models;
 
 namespace Domain.Contracts.Interfaces;

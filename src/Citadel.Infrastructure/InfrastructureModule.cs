@@ -166,8 +166,8 @@ public static class InfrastructureModule
             ContainerPortsContext.Default.IDictionaryStringIReadOnlyListHostPortBinding));
         SqlMapper.AddTypeHandler(new JsonTypeHandler<PlatformDescriptor>(
            PlatformJsonContext.Default.PlatformDescriptor));
-        SqlMapper.AddTypeHandler(new JsonTypeHandler<RegistryConfigurationBase>(
-           RegistryJsonContext.Default.RegistryConfigurationBase));
+        SqlMapper.AddTypeHandler(new JsonTypeHandler<RegistryConfiguration>(
+           RegistryJsonContext.Default.RegistryConfiguration));
 
         // Enum Converters
         SqlMapper.AddTypeHandler(new StringEnumHandler<Domain.ContainerStateStatus>());

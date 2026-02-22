@@ -1,7 +1,6 @@
 ﻿using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities;
 using Domain.Entities.Registries;
 using FluentValidation;
 using Hosting.Common;

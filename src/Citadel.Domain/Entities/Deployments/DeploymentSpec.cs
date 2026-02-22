@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
-namespace Domain.Entities;
+namespace Domain.Entities.Deployments;
 
 public sealed record DeploymentSpec(
     DeploymentImageInfo Image,

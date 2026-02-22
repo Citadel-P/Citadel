@@ -1,4 +1,7 @@
-﻿namespace Domain.Entities;
+﻿using Domain.Entities.Deployments;
+using Domain.Entities.Platforms;
+
+namespace Domain.Entities;
 
 public class Container(
     string name,

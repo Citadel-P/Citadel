@@ -3,11 +3,11 @@ using Application.Features.Registries.Commands;
 using Application.Features.Registries.Queries;
 using Hosting.Common.MergePatch;
 using Hosting.Extensions;
-using Domain.Entities;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources.Registries;
+using Domain.Entities.Registries;
 
 namespace WebApi.Routes.Endpoints;
 

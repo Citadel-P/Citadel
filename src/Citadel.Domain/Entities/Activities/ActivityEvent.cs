@@ -1,9 +1,8 @@
 ﻿using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
-using System.Diagnostics.CodeAnalysis;
-using System.Text.Json.Serialization;
+using Domain.Entities.Platforms;
 
-namespace Domain.Entities;
+namespace Domain.Entities.Activities;
 
 public sealed class ActivityEvent : IAuditedEntity
 {
@@ -17,7 +16,7 @@ public sealed class ActivityEvent : IAuditedEntity
     public ActivityResourceType ResourceType { get; }
     public ActivityStatus Status { get; private set; }
     public ActivityEventType EventType { get; private set; }
-    public EventInfo Info { get; private set; }
+    public ActivityEventInfo Info { get; private set; }
 
     #region IAuditedEntity
     public Guid CreatedByActorId { get; private set; }
@@ -34,7 +33,7 @@ public sealed class ActivityEvent : IAuditedEntity
         string resourceName,
         ActivityEventType eventType,
         ActivityStatus status,
-        EventInfo info)
+        ActivityEventInfo info)
     {
         if (platformId == Guid.Empty)
             throw new ArgumentException("PlatformId is required", nameof(platformId));
@@ -85,7 +84,7 @@ public sealed class ActivityEvent : IAuditedEntity
         ActivityResourceType resourceType,
         ActivityEventType eventType,
         ActivityStatus status,
-        EventInfo info,
+        ActivityEventInfo info,
         Guid createdByActorId,
         DateTime createdAt,
         Platform? platform = null,
@@ -120,7 +119,7 @@ public sealed class ActivityEvent : IAuditedEntity
         return this;
     }
 
-    private static bool IsValidInfoForEvent(ActivityEventType type, EventInfo info)
+    private static bool IsValidInfoForEvent(ActivityEventType type, ActivityEventInfo info)
     {
         return (type, info) switch
         {
@@ -141,25 +140,5 @@ public sealed class ActivityEvent : IAuditedEntity
     }
 }
 
-[JsonPolymorphic]
-[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-[JsonDerivedType(typeof(DeploymentCreated), nameof(ActivityEventType.DeploymentCreated))]
-[JsonDerivedType(typeof(DeploymentUpdated), nameof(ActivityEventType.DeploymentUpdated))]
-[JsonDerivedType(typeof(DeploymentRenamed), nameof(ActivityEventType.DeploymentRenamed))]
-[JsonDerivedType(typeof(DeploymentDeleted), nameof(ActivityEventType.DeploymentDeleted))]
-[JsonDerivedType(typeof(DeploymentStarted), nameof(ActivityEventType.DeploymentStarted))]
-[JsonDerivedType(typeof(DeploymentStopped), nameof(ActivityEventType.DeploymentStopped))]
-[JsonDerivedType(typeof(DeploymentPaused), nameof(ActivityEventType.DeploymentPaused))]
-[JsonDerivedType(typeof(DeploymentApplied), nameof(ActivityEventType.DeploymentApplied))]
-[JsonDerivedType(typeof(DeploymentDegraded), nameof(ActivityEventType.DeploymentDegraded))]
-public abstract record EventInfo;
-public sealed record DeploymentCreated(DeploymentSpec Spec) : EventInfo;
-public sealed record DeploymentUpdated(DeploymentSpec OldSpec, DeploymentSpec NewSpec) : EventInfo;
-public sealed record DeploymentRenamed(string OldName, string NewName) : EventInfo;
-public sealed record DeploymentDeleted(DeploymentSpec Spec) : EventInfo;
-public sealed record DeploymentStarted(IEnumerable<string> ContainerIds) : EventInfo;
-public sealed record DeploymentStopped(IEnumerable<string> ContainerIds) : EventInfo;
-public sealed record DeploymentPaused(IEnumerable<string> ContainerIds) : EventInfo;
-public sealed record DeploymentDegraded(string Reason) : EventInfo;
-public sealed record DeploymentApplied(DeploymentSpec? Spec, IEnumerable<string>? ContainerIds, string? Reason) : EventInfo;
+
 

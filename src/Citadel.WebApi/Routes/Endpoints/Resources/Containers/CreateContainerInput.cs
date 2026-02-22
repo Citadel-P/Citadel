@@ -1,6 +1,6 @@
 ﻿using Application.Features.Containers.Commands;
 using Domain;
-using Domain.Entities;
+using Domain.Entities.Deployments;
 
 namespace WebApi.Routes.Endpoints.Resources.Containers;
 

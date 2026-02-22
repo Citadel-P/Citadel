@@ -1,4 +1,6 @@
-﻿namespace Domain.Entities;
+﻿using Domain.Entities.Platforms;
+
+namespace Domain.Entities.Deployments;
 
 public sealed class Deployment(
     string name,

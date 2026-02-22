@@ -7,6 +7,8 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Images;
 using Domain.Entities;
+using Domain.Entities.Alerts;
+using Domain.Entities.Deployments;
 using Hosting.Common;
 using Infrastructure.Repositories.DbQueue;
 using LightResults;

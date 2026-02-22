@@ -1,5 +1,4 @@
 ﻿using Domain;
-using Domain.Entities;
 using Domain.Entities.Platforms;
 
 namespace WebApi.Routes.Endpoints.Resources.Platforms;

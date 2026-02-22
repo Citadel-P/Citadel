@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
-namespace Domain.Entities;
+namespace Domain.Entities.Alerts;
 
 public sealed class AlertRule : IAuditedEntity
 {
@@ -351,7 +351,7 @@ public static class AlertTypeMetadata
     public static bool IsThreshold(AlertType type)
         => ThresholdTypes.Contains(type);
 
-    public static bool IsValidInfo(AlertType type, AlertInfo info)
+    public static bool IsValidInfo(AlertType type, AlertEventInfo info)
         => (type, info) switch
         {
             (AlertType.PlatformCpuHigh, PlatformCpuHighAlertInfo) => true,

@@ -1,7 +1,6 @@
 ﻿using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
-using Domain.Entities;
 using Domain.Entities.Platforms;
 using FluentValidation;
 using Grpc.Core;

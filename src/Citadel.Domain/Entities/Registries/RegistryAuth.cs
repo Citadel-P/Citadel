@@ -2,7 +2,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Domain.Entities;
+namespace Domain.Entities.Registries;
 
 internal sealed record RegistryAuth(string Username, string Password, string RegistryHost)
 {
