@@ -57,7 +57,6 @@ public class ThresholdAlertTests: IntegrationTestBase
     {
         var platform = Fakes.GetDummyPlatform();
         var alertRule = new AlertRule(
-            url: "http://example.com/alert",
             type: AlertType.PlatformCpuHigh,
             severity: AlertSeverity.Critical,
             cooldownSeconds: 60,
@@ -213,7 +212,6 @@ public class ThresholdAlertTests: IntegrationTestBase
             var quietHour = new DailyQuietHour("quiet", TimeOnly.FromDateTime(now.AddHours(-1)), TimeOnly.FromDateTime(now.AddHours(1)), "UTC", null);
             return AlertRule.FromPersistence(
                 id: rule.Id,
-                url: rule.Url,
                 type: rule.Type,
                 severity: rule.Severity,
                 cooldownSeconds: rule.CooldownSeconds,
@@ -256,7 +254,6 @@ public class ThresholdAlertTests: IntegrationTestBase
             var limitedTo = new AlertRuleLimitedTo(AlertResourceType.Platform, Guid.NewGuid());
             return AlertRule.FromPersistence(
                 id: rule.Id,
-                url: rule.Url,
                 type: rule.Type,
                 severity: rule.Severity,
                 cooldownSeconds: rule.CooldownSeconds,

@@ -33,6 +33,16 @@ CREATE TABLE "Roles" (
     "UpdatedAt" TEXT NOT NULL DEFAULT '2000-01-01 00:00:00'
 );
 
+CREATE TABLE "AlertChannels" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_AlertChannels" PRIMARY KEY,
+    "AlertDestination" TEXT NOT NULL,
+    "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    "CreatedByActorId" TEXT NOT NULL,
+    "IsActive" INTEGER NOT NULL DEFAULT 1,
+    "Url" TEXT NOT NULL,
+    CONSTRAINT "FK_AlertChannels_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
+);
+
 CREATE TABLE "AlertRules" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_AlertRules" PRIMARY KEY,
     "CooldownSeconds" INTEGER NOT NULL DEFAULT 60,
@@ -46,7 +56,6 @@ CREATE TABLE "AlertRules" (
     "Severity" TEXT NOT NULL,
     "Threshold" REAL NULL,
     "Type" TEXT NOT NULL,
-    "Url" TEXT NOT NULL,
     CONSTRAINT "FK_AlertRules_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
 );
 
@@ -147,6 +156,14 @@ CREATE TABLE "AlertEvents" (
     "Severity" TEXT NOT NULL,
     "Type" TEXT NOT NULL,
     CONSTRAINT "FK_AlertEvents_AlertRules_AlertRuleId" FOREIGN KEY ("AlertRuleId") REFERENCES "AlertRules" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "AlertRuleChannels" (
+    "AlertRuleId" TEXT NOT NULL,
+    "AlertChannelId" TEXT NOT NULL,
+    CONSTRAINT "PK_AlertRuleChannels" PRIMARY KEY ("AlertRuleId", "AlertChannelId"),
+    CONSTRAINT "FK_AlertRuleChannels_AlertChannels_AlertChannelId" FOREIGN KEY ("AlertChannelId") REFERENCES "AlertChannels" ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_AlertRuleChannels_AlertRules_AlertRuleId" FOREIGN KEY ("AlertRuleId") REFERENCES "AlertRules" ("Id") ON DELETE CASCADE
 );
 
 CREATE TABLE "AlertRuleStates" (
@@ -276,6 +293,8 @@ CREATE INDEX "IX_ActivityEvents_Resource_CreatedAt" ON "ActivityEvents" ("Resour
 
 CREATE INDEX "IX_ActivityEvents_Status" ON "ActivityEvents" ("Status");
 
+CREATE INDEX "IX_AlertChannels_CreatedByActorId" ON "AlertChannels" ("CreatedByActorId");
+
 CREATE INDEX "IX_AlertEvents_AlertRuleId" ON "AlertEvents" ("AlertRuleId");
 
 CREATE INDEX "IX_AlertEvents_ResourceType" ON "AlertEvents" ("ResourceType");
@@ -283,6 +302,8 @@ CREATE INDEX "IX_AlertEvents_ResourceType" ON "AlertEvents" ("ResourceType");
 CREATE INDEX "IX_AlertEvents_Resource_CreatedAt" ON "AlertEvents" ("ResourceId", "CreatedAt");
 
 CREATE INDEX "IX_AlertEvents_Type" ON "AlertEvents" ("Type");
+
+CREATE INDEX "IX_AlertRuleChannels_AlertChannelId" ON "AlertRuleChannels" ("AlertChannelId");
 
 CREATE INDEX "IX_AlertRuleStates_CreatedByActorId" ON "AlertRuleStates" ("CreatedByActorId");
 
@@ -345,7 +366,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260222113408_migration0001', '10.0.3');
+VALUES ('20260222171617_migration0001', '10.0.3');
 
 COMMIT;
 

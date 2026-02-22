@@ -5,11 +5,11 @@ namespace Domain.Entities.Alerts;
 
 public sealed class AlertRule : IAuditedEntity
 {
+    private readonly List<AlertChannel> _channels = [];
     private readonly List<AlertRuleLimitedTo> _limitedTo = [];
     private readonly List<AlertRuleQuietHour> _quietHours = [];
 
     public Guid Id { get; private set; } = Guid.CreateVersion7();
-    public string Url { get; private set; }
     public AlertType Type { get; private set; }
     public AlertSeverity Severity { get; private set; }
     /// <summary>
@@ -28,6 +28,7 @@ public sealed class AlertRule : IAuditedEntity
     public bool IsEnabled { get; private set; }
     public AlertScope Scope { get; private set; }
 
+    public IReadOnlyCollection<AlertChannel> Channels => _channels;
     public IReadOnlyCollection<AlertRuleLimitedTo> LimitedTo => _limitedTo;
     public IReadOnlyCollection<AlertRuleQuietHour> QuietHours => _quietHours;
 
@@ -39,7 +40,6 @@ public sealed class AlertRule : IAuditedEntity
     public AlertRuleState? AlertRuleState { get; private set; }
 
     public AlertRule(
-        string url,
         AlertType type,
         AlertSeverity severity,
         int cooldownSeconds,
@@ -48,17 +48,14 @@ public sealed class AlertRule : IAuditedEntity
         Guid createdByActorId,
         int? requiredMatches = null,
         double? threshold = null,
+        IEnumerable<AlertChannel>? channels = null,
         IEnumerable<AlertRuleLimitedTo>? limitedTo = null,
         IEnumerable<AlertRuleQuietHour>? quietHours = null,
         AlertRuleState? alertRuleState = null)
     {
-        if (string.IsNullOrWhiteSpace(url))
-            throw new ArgumentException("URL is required.", nameof(url));
-
         if (cooldownSeconds < 10 || cooldownSeconds > 86400)
             throw new ArgumentOutOfRangeException(nameof(cooldownSeconds), "Cooldown must be between 10s and 24h.");
 
-        Url = url;
         Type = type;
         Severity = severity;
         CooldownSeconds = cooldownSeconds;
@@ -67,6 +64,7 @@ public sealed class AlertRule : IAuditedEntity
         IsEnabled = isEnabled;
         Scope = scope;
 
+        _channels = channels?.ToList() ?? [];
         _limitedTo = limitedTo?.ToList() ?? [];
         _quietHours = quietHours?.ToList() ?? [];
 
@@ -82,7 +80,6 @@ public sealed class AlertRule : IAuditedEntity
 
     public static AlertRule FromPersistence(
         Guid id,
-        string url,
         AlertType type,
         AlertSeverity severity,
         int cooldownSeconds,
@@ -92,12 +89,12 @@ public sealed class AlertRule : IAuditedEntity
         DateTime createdAt,
         int? requiredMatches = null,
         double? threshold = null,
+        IEnumerable<AlertChannel>? channels = null,
         IEnumerable<AlertRuleLimitedTo>? limitedTo = null,
         IEnumerable<AlertRuleQuietHour>? quietHours = null,
         AlertRuleState? alertRuleState = null)
     {
         var rule = new AlertRule(
-            url,
             type,
             severity,
             cooldownSeconds,
@@ -106,6 +103,7 @@ public sealed class AlertRule : IAuditedEntity
             createdByActorId,
             requiredMatches,
             threshold,
+            channels,
             limitedTo,
             quietHours)
         {

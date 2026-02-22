@@ -14,10 +14,9 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
 {
     public async Task<AlertRule?> GetByIdAsync(Guid alertRuleId, CancellationToken cancellationToken)
     {
-        const string query = """
+        const string ruleQuery = """
         SELECT 
             r.Id, 
-            r.Url,
             r.Type, 
             r.CooldownSeconds, 
             r.IsEnabled, 
@@ -40,23 +39,38 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         LIMIT 1
         """;
 
-        var result = await db.QuerySingleOrDefaultAsync<AlertRuleDto>(query, new { Id = alertRuleId.Format() }, transaction: tx());
-        return result?.ToDomain();
+        const string channelQuery = """
+        SELECT c.Id, arc.AlertRuleId, c.AlertDestination, c.Url, c.IsActive, c.CreatedByActorId, c.CreatedAt
+        FROM AlertChannels c
+        INNER JOIN AlertRuleChannels arc ON c.Id = arc.AlertChannelId
+        WHERE arc.AlertRuleId = @Id
+        """;
+
+        var id = alertRuleId.Format();
+        var result = await db.QuerySingleOrDefaultAsync<AlertRuleDto>(ruleQuery, new { Id = id }, transaction: tx());
+        if (result is null)
+            return null;
+
+        var channels = await db.QueryAsync<AlertChannelDto>(channelQuery, new { Id = id }, transaction: tx());
+        result = result with { Channels = channels.ToList() };
+
+        return result.ToDomain();
     }
 
-    public Task<int> AddAlertRuleAsync(AlertRule alertRule, CancellationToken cancellationToken)
+    public async Task<int> AddAlertRuleAsync(AlertRule alertRule, CancellationToken cancellationToken)
     {
-        const string sql = @"
+        const string ruleSql = @"
         INSERT INTO AlertRules (
-            Id, Url, Type, CooldownSeconds, IsEnabled, Scope, Severity, LimitedTo, QuietHours, RequiredMatches, Threshold, CreatedByActorId, CreatedAt
+            Id, Type, CooldownSeconds, IsEnabled, Scope, Severity, LimitedTo, QuietHours, RequiredMatches, Threshold, CreatedByActorId, CreatedAt
         )
         VALUES (
-            @Id, @Url, @Type, @CooldownSeconds, @IsEnabled, @Scope, @Severity, @LimitedTo, @QuietHours, @RequiredMatches, @Threshold, @CreatedByActorId, @CreatedAt
+            @Id, @Type, @CooldownSeconds, @IsEnabled, @Scope, @Severity, @LimitedTo, @QuietHours, @RequiredMatches, @Threshold, @CreatedByActorId, @CreatedAt
         )";
-        return db.ExecuteAsync(sql, new
+
+        var ruleId = alertRule.Id.Format();
+        var rows = await db.ExecuteAsync(ruleSql, new
         {
-            Id = alertRule.Id.Format(),
-            Url = alertRule.Url,
+            Id = ruleId,
             Type = EnumFormatter<AlertType>.GetValue(alertRule.Type),
             CooldownSeconds = alertRule.CooldownSeconds,
             IsEnabled = alertRule.IsEnabled,
@@ -70,6 +84,11 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             CreatedAt = alertRule.CreatedAt
         },
         transaction: tx());
+
+        if (alertRule.Channels.Count > 0)
+            await InsertChannelsAsync(ruleId, alertRule.Channels);
+
+        return rows;
     }
 
     public Task<int> UpsertAlertRuleStateAsync(AlertRuleState alertRuleState, CancellationToken cancellationToken)
@@ -99,10 +118,9 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
 
     public async Task<IEnumerable<AlertRule>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        const string query= """
+        const string ruleQuery = """
         SELECT 
             r.Id, 
-            r.Url,
             r.Type, 
             r.CooldownSeconds, 
             r.IsEnabled, 
@@ -123,8 +141,27 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         LEFT JOIN AlertRuleStates s ON r.Id = s.AlertRuleId
         """;
 
-        var rows = await db.QueryAsync<AlertRuleDto>(query, transaction: tx());
-        return rows?.ToDomain() ?? [];
+        const string channelQuery = """
+        SELECT c.Id, arc.AlertRuleId, c.AlertDestination, c.Url, c.IsActive, c.CreatedByActorId, c.CreatedAt
+        FROM AlertChannels c
+        INNER JOIN AlertRuleChannels arc ON c.Id = arc.AlertChannelId
+        """;
+
+        var rows = (await db.QueryAsync<AlertRuleDto>(ruleQuery, transaction: tx()))?.ToList();
+        if (rows is null || rows.Count == 0)
+            return [];
+
+        var channels = (await db.QueryAsync<AlertChannelDto>(channelQuery, transaction: tx()))
+            .GroupBy(c => c.AlertRuleId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (channels.TryGetValue(rows[i].Id, out var ruleChannels))
+                rows[i] = rows[i] with { Channels = ruleChannels };
+        }
+
+        return rows.ToDomain();
     }
 
     public async Task<AlertRuleState?> GetStateAsync(Guid alertRuleId, Guid resourceId, CancellationToken cancellationToken)
@@ -154,12 +191,11 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         return dto?.ToDomain();
     }
 
-    public Task<int> UpdateAsync(AlertRule alertRule, CancellationToken cancellationToken)
+    public async Task<int> UpdateAsync(AlertRule alertRule, CancellationToken cancellationToken)
     {
-        const string sql = @"
+        const string ruleSql = @"
         UPDATE AlertRules
         SET
-            Url = @Url,
             Type = @Type,
             CooldownSeconds = @CooldownSeconds,
             IsEnabled = @IsEnabled,
@@ -170,10 +206,13 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             RequiredMatches = @RequiredMatches,
             Threshold = @Threshold
         WHERE Id = @Id";
-        return db.ExecuteAsync(sql, new
+
+        const string unlinkChannelsSql = @"DELETE FROM AlertRuleChannels WHERE AlertRuleId = @AlertRuleId";
+
+        var ruleId = alertRule.Id.Format();
+        var rows = await db.ExecuteAsync(ruleSql, new
         {
-            Id = alertRule.Id.Format(),
-            Url = alertRule.Url,
+            Id = ruleId,
             Type = EnumFormatter<AlertType>.GetValue(alertRule.Type),
             CooldownSeconds = alertRule.CooldownSeconds,
             IsEnabled = alertRule.IsEnabled,
@@ -185,5 +224,65 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             Threshold = alertRule.Threshold
         },
         transaction: tx());
+
+        await db.ExecuteAsync(unlinkChannelsSql, new { AlertRuleId = ruleId }, transaction: tx());
+
+        if (alertRule.Channels.Count > 0)
+            await InsertChannelsAsync(ruleId, alertRule.Channels);
+
+        return rows;
+    }
+
+    public Task<int> UpdateChannelAsync(AlertChannel channel, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+        UPDATE AlertChannels
+        SET
+            AlertDestination = @AlertDestination,
+            Url = @Url,
+            IsActive = @IsActive
+        WHERE Id = @Id";
+
+        return db.ExecuteAsync(sql, new
+        {
+            Id = channel.Id.Format(),
+            AlertDestination = EnumFormatter<AlertDestination>.GetValue(channel.AlertDestination),
+            Url = channel.Url,
+            IsActive = channel.IsActive
+        }, transaction: tx());
+    }
+
+    private async Task InsertChannelsAsync(string alertRuleId, IEnumerable<AlertChannel> channels)
+    {
+        const string upsertChannelSql = @"
+        INSERT INTO AlertChannels (Id, AlertDestination, Url, IsActive, CreatedByActorId, CreatedAt)
+        VALUES (@Id, @AlertDestination, @Url, @IsActive, @CreatedByActorId, @CreatedAt)
+        ON CONFLICT(Id) DO UPDATE SET
+            AlertDestination = excluded.AlertDestination,
+            Url = excluded.Url,
+            IsActive = excluded.IsActive";
+
+        const string linkSql = @"
+        INSERT INTO AlertRuleChannels (AlertRuleId, AlertChannelId)
+        VALUES (@AlertRuleId, @AlertChannelId)
+        ON CONFLICT(AlertRuleId, AlertChannelId) DO NOTHING";
+
+        var channelList = channels.ToList();
+
+        await db.ExecuteAsync(upsertChannelSql, channelList.Select(c => new
+        {
+            Id = c.Id.Format(),
+            AlertDestination = EnumFormatter<AlertDestination>.GetValue(c.AlertDestination),
+            Url = c.Url,
+            IsActive = c.IsActive,
+            CreatedByActorId = c.CreatedByActorId.Format(),
+            CreatedAt = c.CreatedAt
+        }), transaction: tx());
+
+        await db.ExecuteAsync(linkSql, channelList.Select(c => new
+        {
+            AlertRuleId = alertRuleId,
+            AlertChannelId = c.Id.Format()
+        }), transaction: tx());
     }
 }

@@ -173,6 +173,7 @@ public interface IAlertRuleRepository
     Task<int> AddAlertRuleAsync(AlertRule alertRule, CancellationToken cancellationToken);
     Task<int> UpdateAsync(AlertRule alertRule, CancellationToken cancellationToken);
     Task<int> UpsertAlertRuleStateAsync(AlertRuleState alertRuleState, CancellationToken cancellationToken);
+    Task<int> UpdateChannelAsync(AlertChannel channel, CancellationToken cancellationToken);
 }
 
 public interface IAlertEventRepository

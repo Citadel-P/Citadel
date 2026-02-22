@@ -1,5 +1,6 @@
 ﻿using Domain;
 using Domain.Entities;
+using Domain.Entities.Alerts;
 using Hosting.Common;
 using Hosting.DockerClient;
 using Microsoft.EntityFrameworkCore;
@@ -33,7 +34,9 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .ActivityEventConfiguration()
             .AddAlertRuleConfiguration()
             .AddAlertEventConfiguration()
-            .AddAlertRuleStateConfiguration();
+            .AddAlertRuleStateConfiguration()
+            .AddAlertChannelConfiguration()
+            .AddAlertRuleChannelConfiguration();
 
         SeedDb(modelBuilder);
     }
@@ -552,7 +555,6 @@ internal static class Configuration
         alertRule.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         alertRule.HasKey("Id");
 
-        alertRule.Property<string>("Url").HasColumnType("TEXT").IsRequired();
         alertRule.Property<string>("Type").HasColumnType("TEXT").IsRequired();
         alertRule.Property<int>("CooldownSeconds").HasColumnType("INTEGER").IsRequired().HasDefaultValue(60);
         alertRule.Property<bool>("IsEnabled").HasColumnType("INTEGER").IsRequired().HasDefaultValue(true);
@@ -590,6 +592,50 @@ internal static class Configuration
             .OnDelete(DeleteBehavior.Cascade);
 
         alertRuleState.AddAuditedMemebers();
+        return builder;
+    }
+
+    public static ModelBuilder AddAlertChannelConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "AlertChannels";
+        var alertChannel = builder.Entity("AlertChannel");
+        alertChannel.ToTable(tableName);
+
+        alertChannel.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        alertChannel.HasKey("Id");
+
+        alertChannel.Property<string>("AlertDestination").HasColumnType("TEXT").IsRequired();
+        alertChannel.Property<string>("Url").HasColumnType("TEXT").IsRequired();
+        alertChannel.Property<bool>("IsActive").HasColumnType("INTEGER").IsRequired().HasDefaultValue(true);
+
+        alertChannel.AddAuditedMemebers();
+        return builder;
+    }
+
+    public static ModelBuilder AddAlertRuleChannelConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "AlertRuleChannels";
+        var alertRuleChannel = builder.Entity("AlertRuleChannel");
+        alertRuleChannel.ToTable(tableName);
+
+        alertRuleChannel.Property<Guid>("AlertRuleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        alertRuleChannel.Property<Guid>("AlertChannelId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        alertRuleChannel.HasKey("AlertRuleId", "AlertChannelId");
+
+        alertRuleChannel
+            .HasOne("AlertRule")
+            .WithMany()
+            .HasForeignKey("AlertRuleId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        alertRuleChannel
+            .HasOne("AlertChannel")
+            .WithMany()
+            .HasForeignKey("AlertChannelId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        alertRuleChannel.HasIndex("AlertChannelId").HasDatabaseName($"IX_{tableName}_AlertChannelId");
+
         return builder;
     }
 

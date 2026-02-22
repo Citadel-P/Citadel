@@ -2,7 +2,6 @@
 
 internal record AlertRuleDto(
     Guid Id,
-    string Url,
     string Type,
     int CooldownSeconds,
     bool IsEnabled,
@@ -19,4 +18,17 @@ internal record AlertRuleDto(
     DateTime? State_LastTriggeredAt = null,
     Guid? State_CreatedByActorId = null,
     DateTime? State_CreatedAt = null
+    )
+{
+    public ICollection<AlertChannelDto> Channels { get; init; } = [];
+}
+
+internal record AlertChannelDto(
+    Guid Id,
+    Guid AlertRuleId,
+    string AlertDestination,
+    string Url,
+    bool IsActive,
+    Guid CreatedByActorId,
+    DateTime CreatedAt
     );

@@ -28,12 +28,17 @@ internal static class AlerterMappers
     {
         return AlertRule.FromPersistence(
             id: dto.Id,
-            url: dto.Url,
             type: Enum.Parse<AlertType>(dto.Type),
             cooldownSeconds: dto.CooldownSeconds,
             isEnabled: dto.IsEnabled,
             scope: Enum.Parse<AlertScope>(dto.Scope),
             severity: Enum.Parse<AlertSeverity>(dto.Severity),
+            channels: dto.Channels?.Select(c => AlertChannel.FromPersistence(
+                id: c.Id,
+                alertDestination: Enum.Parse<AlertDestination>(c.AlertDestination),
+                url: c.Url,
+                isActive: c.IsActive,
+                actorId: c.CreatedByActorId)),
             limitedTo: System.Text.Json.JsonSerializer.Deserialize(dto.LimitedTo, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleLimitedTo) ?? [],
             quietHours: System.Text.Json.JsonSerializer.Deserialize(dto.QuietHours, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleQuietHour) ?? [],
             requiredMatches: dto.RequiredMatches,

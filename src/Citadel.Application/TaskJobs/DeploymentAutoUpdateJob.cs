@@ -4,7 +4,6 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Images;
 using Domain.Entities.Deployments;
-using Google.Api;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

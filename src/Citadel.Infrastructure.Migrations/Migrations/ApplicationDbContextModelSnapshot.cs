@@ -110,6 +110,41 @@ namespace Infrastructure.Migrations.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AlertChannel", b =>
+                {
+                    b.Property<string>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AlertDestination")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CreatedByActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByActorId");
+
+                    b.ToTable("AlertChannels", (string)null);
+                });
+
             modelBuilder.Entity("AlertEvent", b =>
                 {
                     b.Property<string>("Id")
@@ -211,10 +246,6 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Url")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedByActorId");
@@ -223,6 +254,22 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("IX_AlertRules_Type");
 
                     b.ToTable("AlertRules", (string)null);
+                });
+
+            modelBuilder.Entity("AlertRuleChannel", b =>
+                {
+                    b.Property<string>("AlertRuleId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AlertChannelId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("AlertRuleId", "AlertChannelId");
+
+                    b.HasIndex("AlertChannelId")
+                        .HasDatabaseName("IX_AlertRuleChannels_AlertChannelId");
+
+                    b.ToTable("AlertRuleChannels", (string)null);
                 });
 
             modelBuilder.Entity("AlertRuleState", b =>
@@ -893,6 +940,15 @@ namespace Infrastructure.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
                 });
 
+            modelBuilder.Entity("AlertChannel", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("AlertEvent", b =>
                 {
                     b.HasOne("AlertRule", null)
@@ -908,6 +964,21 @@ namespace Infrastructure.Migrations.Migrations
                         .WithMany()
                         .HasForeignKey("CreatedByActorId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AlertRuleChannel", b =>
+                {
+                    b.HasOne("AlertChannel", null)
+                        .WithMany()
+                        .HasForeignKey("AlertChannelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AlertRule", null)
+                        .WithMany()
+                        .HasForeignKey("AlertRuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

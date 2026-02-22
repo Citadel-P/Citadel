@@ -64,6 +64,28 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AlertChannels",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    AlertDestination = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
+                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: true),
+                    Url = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AlertChannels", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AlertChannels_Actors_CreatedByActorId",
+                        column: x => x.CreatedByActorId,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AlertRules",
                 columns: table => new
                 {
@@ -78,8 +100,7 @@ namespace Infrastructure.Migrations.Migrations
                     Scope = table.Column<string>(type: "TEXT", nullable: false),
                     Severity = table.Column<string>(type: "TEXT", nullable: false),
                     Threshold = table.Column<double>(type: "REAL", nullable: true),
-                    Type = table.Column<string>(type: "TEXT", nullable: false),
-                    Url = table.Column<string>(type: "TEXT", nullable: false)
+                    Type = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -301,6 +322,30 @@ namespace Infrastructure.Migrations.Migrations
                     table.PrimaryKey("PK_AlertEvents", x => x.Id);
                     table.ForeignKey(
                         name: "FK_AlertEvents_AlertRules_AlertRuleId",
+                        column: x => x.AlertRuleId,
+                        principalTable: "AlertRules",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AlertRuleChannels",
+                columns: table => new
+                {
+                    AlertRuleId = table.Column<string>(type: "TEXT", nullable: false),
+                    AlertChannelId = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AlertRuleChannels", x => new { x.AlertRuleId, x.AlertChannelId });
+                    table.ForeignKey(
+                        name: "FK_AlertRuleChannels_AlertChannels_AlertChannelId",
+                        column: x => x.AlertChannelId,
+                        principalTable: "AlertChannels",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_AlertRuleChannels_AlertRules_AlertRuleId",
                         column: x => x.AlertRuleId,
                         principalTable: "AlertRules",
                         principalColumn: "Id",
@@ -555,6 +600,11 @@ namespace Infrastructure.Migrations.Migrations
                 column: "Status");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AlertChannels_CreatedByActorId",
+                table: "AlertChannels",
+                column: "CreatedByActorId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AlertEvents_AlertRuleId",
                 table: "AlertEvents",
                 column: "AlertRuleId");
@@ -573,6 +623,11 @@ namespace Infrastructure.Migrations.Migrations
                 name: "IX_AlertEvents_Type",
                 table: "AlertEvents",
                 column: "Type");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AlertRuleChannels_AlertChannelId",
+                table: "AlertRuleChannels",
+                column: "AlertChannelId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AlertRuleStates_CreatedByActorId",
@@ -744,6 +799,9 @@ namespace Infrastructure.Migrations.Migrations
                 name: "AlertEvents");
 
             migrationBuilder.DropTable(
+                name: "AlertRuleChannels");
+
+            migrationBuilder.DropTable(
                 name: "AlertRuleStates");
 
             migrationBuilder.DropTable(
@@ -760,6 +818,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "UsersTeams");
+
+            migrationBuilder.DropTable(
+                name: "AlertChannels");
 
             migrationBuilder.DropTable(
                 name: "AlertRules");
