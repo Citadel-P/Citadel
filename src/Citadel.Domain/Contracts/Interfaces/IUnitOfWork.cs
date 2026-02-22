@@ -170,6 +170,9 @@ public interface IAlertRuleRepository
     Task<AlertRule?> GetByIdAsync(Guid alertRuleId, CancellationToken cancellationToken);
     Task<AlertRuleState?> GetStateAsync(Guid alertRuleId, Guid resourceId, CancellationToken cancellationToken);
     Task<IEnumerable<AlertRule>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<PagedResult<AlertRule>> GetPagedAsync(int page, int pageSize, CancellationToken cancellationToken);
+    Task<AlertChannel?> GetChannelByIdAsync(Guid channelId, CancellationToken cancellationToken);
+    Task<IEnumerable<AlertChannel>> GetAllChannelsAsync(CancellationToken cancellationToken);
     Task<int> AddAlertRuleAsync(AlertRule alertRule, CancellationToken cancellationToken);
     Task<int> UpdateAsync(AlertRule alertRule, CancellationToken cancellationToken);
     Task<int> UpsertAlertRuleStateAsync(AlertRuleState alertRuleState, CancellationToken cancellationToken);

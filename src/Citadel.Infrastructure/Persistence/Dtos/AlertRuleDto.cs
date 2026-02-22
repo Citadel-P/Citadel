@@ -1,9 +1,12 @@
-﻿namespace Infrastructure.Persistence.Dtos;
+﻿using Domain;
+using Domain.Entities.Alerts;
+
+namespace Infrastructure.Persistence.Dtos;
 
 internal record AlertRuleDto(
     Guid Id,
     string Type,
-    int CooldownSeconds,
+    int? CooldownSeconds,
     bool IsEnabled,
     string Scope,
     string Severity,
@@ -25,10 +28,19 @@ internal record AlertRuleDto(
 
 internal record AlertChannelDto(
     Guid Id,
-    Guid AlertRuleId,
     string AlertDestination,
     string Url,
     bool IsActive,
     Guid CreatedByActorId,
     DateTime CreatedAt
-    );
+    )
+{
+    internal AlertChannel ToDomain() => AlertChannel.FromPersistence(
+        Id,
+        Enum.Parse<AlertDestination>(AlertDestination),
+        Url,
+        IsActive,
+        CreatedByActorId);
+}
+
+internal record AlertRuleChannelLinkDto(Guid AlertRuleId, Guid AlertChannelId);

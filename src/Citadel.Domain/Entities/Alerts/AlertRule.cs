@@ -15,7 +15,7 @@ public sealed class AlertRule : IAuditedEntity
     /// <summary>
     /// Gets the cooldown period, in seconds, before the alert can be raised again.
     /// </summary>
-    public int CooldownSeconds { get; private set; }
+    public int? CooldownSeconds { get; private set; }
     /// <summary>
     /// Gets the number of matches required to satisfy the condition, only meaningful for threshold rules: CpuHigh, RamHigh, VersionMismatch.
     /// For example, if RequiredMatches is 3 for a CpuHigh rule, the alert will only be triggered if the CPU usage is high for 3 consecutive checks.  
@@ -42,7 +42,7 @@ public sealed class AlertRule : IAuditedEntity
     public AlertRule(
         AlertType type,
         AlertSeverity severity,
-        int cooldownSeconds,
+        int? cooldownSeconds,
         bool isEnabled,
         AlertScope scope,
         Guid createdByActorId,
@@ -82,7 +82,7 @@ public sealed class AlertRule : IAuditedEntity
         Guid id,
         AlertType type,
         AlertSeverity severity,
-        int cooldownSeconds,
+        int? cooldownSeconds,
         bool isEnabled,
         AlertScope scope,
         Guid createdByActorId,
@@ -326,15 +326,17 @@ public static class AlertTypeMetadata
     {
         { AlertType.PlatformCpuHigh, AlertResourceType.Platform },
         { AlertType.PlatformRamHigh, AlertResourceType.Platform },
+        { AlertType.PlatformUnreachable, AlertResourceType.Platform },
         { AlertType.PlatformVersionMismatch, AlertResourceType.Platform },
+        { AlertType.UnmanagedContainerCreated, AlertResourceType.Platform },
 
         { AlertType.DeploymentImageUpdateAvailable, AlertResourceType.Deployment },
         { AlertType.DeploymentAutoUpdated, AlertResourceType.Deployment },
-        { AlertType.DeploymentFailed, AlertResourceType.Deployment },
+        { AlertType.DeploymentAutoDeployFailed, AlertResourceType.Deployment },
 
         { AlertType.StackImageUpdateAvailable, AlertResourceType.Stack },
         { AlertType.StackAutoUpdated, AlertResourceType.Stack },
-        { AlertType.StackDeployFailed, AlertResourceType.Stack },
+        { AlertType.StackAutoDeployFailed, AlertResourceType.Stack },
     };
 
     private static readonly HashSet<AlertType> ThresholdTypes =
@@ -354,13 +356,15 @@ public static class AlertTypeMetadata
         {
             (AlertType.PlatformCpuHigh, PlatformCpuHighAlertInfo) => true,
             (AlertType.PlatformRamHigh, PlatformRamHighAlertInfo) => true,
+            (AlertType.PlatformUnreachable, PlatformUnreachableAlertInfo) => true,
             (AlertType.PlatformVersionMismatch, PlatformVersionMismatchAlertInfo) => true,
+            (AlertType.UnmanagedContainerCreated, UnmanagedContainerCreatedAlertInfo) => true,
             (AlertType.DeploymentImageUpdateAvailable, DeploymentImageUpdateAvailableAlertInfo) => true,
             (AlertType.DeploymentAutoUpdated, DeploymentAutoUpdatedAlertInfo) => true,
-            (AlertType.DeploymentFailed, DeploymentFailedAlertInfo) => true,
+            (AlertType.DeploymentAutoDeployFailed, DeploymentFailedAlertInfo) => true,
             (AlertType.StackImageUpdateAvailable, StackImageUpdateAvailableAlertInfo) => true,
             (AlertType.StackAutoUpdated, StackAutoUpdatedAlertInfo) => true,
-            (AlertType.StackDeployFailed, StackDeployFailedAlertInfo) => true,
+            (AlertType.StackAutoDeployFailed, StackDeployFailedAlertInfo) => true,
             _ => false
         };
 }

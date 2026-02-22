@@ -5230,6 +5230,333 @@
           }
         ]
       }
+    },
+    "/api/v1/alerters/rules/{id}": {
+      "get": {
+        "tags": [
+          "Alerters"
+        ],
+        "summary": "Get alert rule by id",
+        "operationId": "getAlertRule",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertRuleView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alerters/rules": {
+      "get": {
+        "tags": [
+          "Alerters"
+        ],
+        "summary": "List alert rules",
+        "operationId": "listAlertRules",
+        "parameters": [
+          {
+            "name": "Page",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertRulesView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alerters/channels/{id}": {
+      "get": {
+        "tags": [
+          "Alerters"
+        ],
+        "summary": "Get alert channel by id",
+        "operationId": "getAlertChannel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertChannelView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alerters/channels": {
+      "get": {
+        "tags": [
+          "Alerters"
+        ],
+        "summary": "List alert channels",
+        "operationId": "listAlertChannels",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AlertChannelView"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -5594,6 +5921,325 @@
           "System",
           "Agent",
           "Service"
+        ]
+      },
+      "AlertChannelView": {
+        "required": [
+          "id",
+          "alertDestination",
+          "url",
+          "isActive",
+          "createdByActorId",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "alertDestination": {
+            "$ref": "#/components/schemas/AlertDestination"
+          },
+          "url": {
+            "type": "string"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "createdByActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "format": "date-time"
+          }
+        }
+      },
+      "AlertDestination": {
+        "enum": [
+          "Generic",
+          "Bark",
+          "Discord",
+          "Gotify",
+          "Google_Chat",
+          "IFTTT",
+          "Join",
+          "Lark",
+          "Mattermost",
+          "Matrix",
+          "Ntfy",
+          "OpsGenie",
+          "Pushbullet",
+          "Pushover",
+          "Rocketchat",
+          "Signal",
+          "Slack",
+          "Teams",
+          "Telegram",
+          "WeCom",
+          "Zulip_Chat"
+        ]
+      },
+      "AlertResourceType": {
+        "enum": [
+          "Platform",
+          "Deployment",
+          "Stack"
+        ]
+      },
+      "AlertRuleLimitedTo": {
+        "required": [
+          "resourceType",
+          "resourceId"
+        ],
+        "type": "object",
+        "properties": {
+          "resourceType": {
+            "$ref": "#/components/schemas/AlertResourceType"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "AlertRuleQuietHour": {
+        "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/AlertRuleQuietHourDailyQuietHour"
+          },
+          {
+            "$ref": "#/components/schemas/AlertRuleQuietHourWeeklyQuietHour"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "Daily": "#/components/schemas/AlertRuleQuietHourDailyQuietHour",
+            "Weekly": "#/components/schemas/AlertRuleQuietHourWeeklyQuietHour"
+          }
+        }
+      },
+      "AlertRuleQuietHourDailyQuietHour": {
+        "required": [
+          "name",
+          "startTime",
+          "endTime",
+          "timezone",
+          "description"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Daily"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scheduleType": {
+            "$ref": "#/components/schemas/ScheduleType"
+          },
+          "startTime": {
+            "type": "string",
+            "format": "time"
+          },
+          "endTime": {
+            "type": "string",
+            "format": "time"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "timeZoneInfo": {
+            "$ref": "#/components/schemas/TimeZoneInfo"
+          }
+        }
+      },
+      "AlertRuleQuietHourWeeklyQuietHour": {
+        "required": [
+          "dayOfWeek",
+          "name",
+          "startTime",
+          "endTime",
+          "timezone",
+          "description"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Weekly"
+            ],
+            "type": "string"
+          },
+          "dayOfWeek": {
+            "$ref": "#/components/schemas/DayOfWeek"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scheduleType": {
+            "$ref": "#/components/schemas/ScheduleType"
+          },
+          "startTime": {
+            "type": "string",
+            "format": "time"
+          },
+          "endTime": {
+            "type": "string",
+            "format": "time"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "timeZoneInfo": {
+            "$ref": "#/components/schemas/TimeZoneInfo"
+          }
+        }
+      },
+      "AlertRuleView": {
+        "required": [
+          "id",
+          "type",
+          "severity",
+          "cooldownSeconds",
+          "requiredMatches",
+          "threshold",
+          "isEnabled",
+          "scope",
+          "channels",
+          "limitedTo",
+          "quietHours",
+          "createdByActorId",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AlertType"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AlertSeverity"
+          },
+          "cooldownSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "requiredMatches": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "threshold": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/AlertScope"
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlertChannelView"
+            }
+          },
+          "limitedTo": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlertRuleLimitedTo"
+            }
+          },
+          "quietHours": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlertRuleQuietHour"
+            }
+          },
+          "createdByActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "format": "date-time"
+          }
+        }
+      },
+      "AlertRulesView": {
+        "required": [
+          "pagedResult"
+        ],
+        "type": "object",
+        "properties": {
+          "pagedResult": {
+            "$ref": "#/components/schemas/PagedResultViewOfAlertRuleView"
+          }
+        }
+      },
+      "AlertScope": {
+        "enum": [
+          "All",
+          "Specific"
+        ]
+      },
+      "AlertSeverity": {
+        "enum": [
+          "Info",
+          "Warning",
+          "Critical"
+        ]
+      },
+      "AlertType": {
+        "enum": [
+          "PlatformCpuHigh",
+          "PlatformRamHigh",
+          "PlatformUnreachable",
+          "PlatformVersionMismatch",
+          "UnmanagedContainerCreated",
+          "DeploymentImageUpdateAvailable",
+          "DeploymentAutoDeployFailed",
+          "DeploymentAutoUpdated",
+          "StackImageUpdateAvailable",
+          "StackAutoDeployFailed",
+          "StackAutoUpdated"
         ]
       },
       "ApplyDeploymentInput": {
@@ -7104,6 +7750,17 @@
             }
           }
         }
+      },
+      "DayOfWeek": {
+        "enum": [
+          "Sunday",
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday"
+        ]
       },
       "DeleteContainersRequest": {
         "required": [
@@ -9920,6 +10577,47 @@
           }
         }
       },
+      "PagedResultViewOfAlertRuleView": {
+        "required": [
+          "items",
+          "totalCount",
+          "page",
+          "pageSize"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlertRuleView"
+            }
+          },
+          "totalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "page": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "PlatformConnectorType": {
         "enum": [
           "Unknown",
@@ -10942,6 +11640,12 @@
           }
         }
       },
+      "ScheduleType": {
+        "enum": [
+          "Daily",
+          "Weekly"
+        ]
+      },
       "SecurityConfig": {
         "type": "object",
         "properties": {
@@ -11010,6 +11714,45 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "TimeZoneInfo": {
+        "type": "object",
+        "properties": {
+          "baseUtcOffset": {
+            "pattern": "^-?(\\d+\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
+            "type": "string"
+          },
+          "daylightName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hasIanaId": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "standardName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "supportsDaylightSavingTime": {
+            "type": "boolean"
           }
         }
       },
@@ -11341,6 +12084,9 @@
     },
     {
       "name": "Activities"
+    },
+    {
+      "name": "Alerters"
     }
   ]
 }

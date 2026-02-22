@@ -2,6 +2,7 @@
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
+using Hosting.Common.Models;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using System.Data;
@@ -40,7 +41,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         """;
 
         const string channelQuery = """
-        SELECT c.Id, arc.AlertRuleId, c.AlertDestination, c.Url, c.IsActive, c.CreatedByActorId, c.CreatedAt
+        SELECT c.Id, c.AlertDestination, c.Url, c.IsActive, c.CreatedByActorId, c.CreatedAt
         FROM AlertChannels c
         INNER JOIN AlertRuleChannels arc ON c.Id = arc.AlertChannelId
         WHERE arc.AlertRuleId = @Id
@@ -141,8 +142,13 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         LEFT JOIN AlertRuleStates s ON r.Id = s.AlertRuleId
         """;
 
+        const string linkQuery = """
+        SELECT arc.AlertRuleId, arc.AlertChannelId
+        FROM AlertRuleChannels arc
+        """;
+
         const string channelQuery = """
-        SELECT c.Id, arc.AlertRuleId, c.AlertDestination, c.Url, c.IsActive, c.CreatedByActorId, c.CreatedAt
+        SELECT c.Id, c.AlertDestination, c.Url, c.IsActive, c.CreatedByActorId, c.CreatedAt
         FROM AlertChannels c
         INNER JOIN AlertRuleChannels arc ON c.Id = arc.AlertChannelId
         """;
@@ -151,17 +157,108 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         if (rows is null || rows.Count == 0)
             return [];
 
-        var channels = (await db.QueryAsync<AlertChannelDto>(channelQuery, transaction: tx()))
-            .GroupBy(c => c.AlertRuleId)
-            .ToDictionary(g => g.Key, g => g.ToList());
+        var allChannels = (await db.QueryAsync<AlertChannelDto>(channelQuery, transaction: tx())).ToDictionary(c => c.Id);
+        var links = (await db.QueryAsync<AlertRuleChannelLinkDto>(linkQuery, transaction: tx()))
+            .GroupBy(l => l.AlertRuleId)
+            .ToDictionary(g => g.Key, g => g.Select(l => allChannels.GetValueOrDefault(l.AlertChannelId)).Where(c => c is not null).ToList()!);
 
         for (var i = 0; i < rows.Count; i++)
         {
-            if (channels.TryGetValue(rows[i].Id, out var ruleChannels))
-                rows[i] = rows[i] with { Channels = ruleChannels };
+            if (links.TryGetValue(rows[i].Id, out var ruleChannels))
+                rows[i] = rows[i] with { Channels = ruleChannels! };
         }
 
         return rows.ToDomain();
+    }
+
+    public async Task<PagedResult<AlertRule>> GetPagedAsync(int page, int pageSize, CancellationToken cancellationToken)
+    {
+        const string countQuery = "SELECT COUNT(*) FROM AlertRules";
+
+        const string ruleQuery = """
+        SELECT 
+            r.Id, 
+            r.Type, 
+            r.CooldownSeconds, 
+            r.IsEnabled, 
+            r.Scope, 
+            r.Severity, 
+            r.LimitedTo, 
+            r.QuietHours, 
+            r.RequiredMatches,
+            r.Threshold, 
+            r.CreatedByActorId, 
+            r.CreatedAt,
+            s.ResourceId AS State_ResourceId,
+            s.ConsecutiveMatches AS State_ConsecutiveMatches,
+            s.LastTriggeredAt AS State_LastTriggeredAt,
+            s.CreatedByActorId AS State_CreatedByActorId,
+            s.CreatedAt AS State_CreatedAt
+        FROM AlertRules r
+        LEFT JOIN AlertRuleStates s ON r.Id = s.AlertRuleId
+        ORDER BY r.CreatedAt DESC
+        LIMIT @PageSize OFFSET @Offset
+        """;
+
+        var totalCount = await db.ExecuteScalarAsync<int>(countQuery, transaction: tx());
+        var offset = (page - 1) * pageSize;
+
+        var rows = (await db.QueryAsync<AlertRuleDto>(ruleQuery, new { PageSize = pageSize, Offset = offset }, transaction: tx()))?.ToList();
+        if (rows is null || rows.Count == 0)
+            return new PagedResult<AlertRule>([], totalCount, page, pageSize);
+
+        var ruleIds = rows.Select(r => r.Id.Format()).ToList();
+
+        const string channelQuery = @"
+        SELECT c.Id, c.AlertDestination, c.Url, c.IsActive, c.CreatedByActorId, c.CreatedAt
+        FROM AlertChannels c
+        WHERE c.Id IN (
+            SELECT arc.AlertChannelId FROM AlertRuleChannels arc
+            WHERE arc.AlertRuleId IN (SELECT value FROM json_each(@RuleIds))
+        )";
+
+        const string linkQuery = @"
+        SELECT arc.AlertRuleId, arc.AlertChannelId
+        FROM AlertRuleChannels arc
+        WHERE arc.AlertRuleId IN (SELECT value FROM json_each(@RuleIds))";
+
+        var ruleIdsJson = JsonSerializer.Serialize(ruleIds);
+        var allChannels = (await db.QueryAsync<AlertChannelDto>(channelQuery, new { RuleIds = ruleIdsJson }, transaction: tx())).ToDictionary(c => c.Id);
+        var links = (await db.QueryAsync<AlertRuleChannelLinkDto>(linkQuery, new { RuleIds = ruleIdsJson }, transaction: tx()))
+            .GroupBy(l => l.AlertRuleId)
+            .ToDictionary(g => g.Key, g => g.Select(l => allChannels.GetValueOrDefault(l.AlertChannelId)).Where(c => c is not null).ToList()!);
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (links.TryGetValue(rows[i].Id, out var ruleChannels))
+                rows[i] = rows[i] with { Channels = ruleChannels! };
+        }
+
+        return new PagedResult<AlertRule>(rows.ToDomain(), totalCount, page, pageSize);
+    }
+
+    public async Task<AlertChannel?> GetChannelByIdAsync(Guid channelId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+        SELECT Id, AlertDestination, Url, IsActive, CreatedByActorId, CreatedAt
+        FROM AlertChannels
+        WHERE Id = @Id
+        LIMIT 1
+        """;
+
+        var dto = await db.QuerySingleOrDefaultAsync<AlertChannelDto>(sql, new { Id = channelId.Format() }, transaction: tx());
+        return dto?.ToDomain();
+    }
+
+    public async Task<IEnumerable<AlertChannel>> GetAllChannelsAsync(CancellationToken cancellationToken)
+    {
+        const string sql = """
+        SELECT Id, AlertDestination, Url, IsActive, CreatedByActorId, CreatedAt
+        FROM AlertChannels
+        """;
+
+        var rows = await db.QueryAsync<AlertChannelDto>(sql, transaction: tx());
+        return rows?.Select(r => r.ToDomain()) ?? [];
     }
 
     public async Task<AlertRuleState?> GetStateAsync(Guid alertRuleId, Guid resourceId, CancellationToken cancellationToken)

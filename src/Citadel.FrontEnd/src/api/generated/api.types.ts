@@ -34,6 +34,11 @@ export enum StopSignal {
   SIGINT = "SIGINT",
 }
 
+export enum ScheduleType {
+  Daily = "Daily",
+  Weekly = "Weekly",
+}
+
 export enum ResourceControlState {
   Idle = "Idle",
   Processing = "Processing",
@@ -106,6 +111,16 @@ export enum DeploymentStatus {
   Stopped = "Stopped",
 }
 
+export enum DayOfWeek {
+  Sunday = "Sunday",
+  Monday = "Monday",
+  Tuesday = "Tuesday",
+  Wednesday = "Wednesday",
+  Thursday = "Thursday",
+  Friday = "Friday",
+  Saturday = "Saturday",
+}
+
 export enum ContainerStateStatus {
   Unknown = "Unknown",
   Created = "Created",
@@ -131,6 +146,61 @@ export enum AutoUpdateStatus {
   UpdateAvailable = "UpdateAvailable",
   Updating = "Updating",
   Failed = "Failed",
+}
+
+export enum AlertType {
+  PlatformCpuHigh = "PlatformCpuHigh",
+  PlatformRamHigh = "PlatformRamHigh",
+  PlatformUnreachable = "PlatformUnreachable",
+  PlatformVersionMismatch = "PlatformVersionMismatch",
+  UnmanagedContainerCreated = "UnmanagedContainerCreated",
+  DeploymentImageUpdateAvailable = "DeploymentImageUpdateAvailable",
+  DeploymentAutoDeployFailed = "DeploymentAutoDeployFailed",
+  DeploymentAutoUpdated = "DeploymentAutoUpdated",
+  StackImageUpdateAvailable = "StackImageUpdateAvailable",
+  StackAutoDeployFailed = "StackAutoDeployFailed",
+  StackAutoUpdated = "StackAutoUpdated",
+}
+
+export enum AlertSeverity {
+  Info = "Info",
+  Warning = "Warning",
+  Critical = "Critical",
+}
+
+export enum AlertScope {
+  All = "All",
+  Specific = "Specific",
+}
+
+export enum AlertResourceType {
+  Platform = "Platform",
+  Deployment = "Deployment",
+  Stack = "Stack",
+}
+
+export enum AlertDestination {
+  Generic = "Generic",
+  Bark = "Bark",
+  Discord = "Discord",
+  Gotify = "Gotify",
+  GoogleChat = "Google_Chat",
+  IFTTT = "IFTTT",
+  Join = "Join",
+  Lark = "Lark",
+  Mattermost = "Mattermost",
+  Matrix = "Matrix",
+  Ntfy = "Ntfy",
+  OpsGenie = "OpsGenie",
+  Pushbullet = "Pushbullet",
+  Pushover = "Pushover",
+  Rocketchat = "Rocketchat",
+  Signal = "Signal",
+  Slack = "Slack",
+  Teams = "Teams",
+  Telegram = "Telegram",
+  WeCom = "WeCom",
+  ZulipChat = "Zulip_Chat",
 }
 
 export enum ActorType {
@@ -286,6 +356,98 @@ export interface ActivityView {
   actorId: string;
   actorName: string;
   actorType: ActorType;
+}
+
+export interface AlertChannelView {
+  /** @format uuid */
+  id: string;
+  alertDestination: AlertDestination;
+  url: string;
+  isActive: boolean;
+  /** @format uuid */
+  createdByActorId: string;
+  /** @format date-time */
+  createdAt: any;
+}
+
+export interface AlertRuleLimitedTo {
+  resourceType: AlertResourceType;
+  /** @format uuid */
+  resourceId: string;
+}
+
+export type AlertRuleQuietHour = BaseAlertRuleQuietHour &
+  (
+    | BaseAlertRuleQuietHourTypeMapping<
+        "Daily",
+        AlertRuleQuietHourDailyQuietHour
+      >
+    | BaseAlertRuleQuietHourTypeMapping<
+        "Weekly",
+        AlertRuleQuietHourWeeklyQuietHour
+      >
+  );
+
+export interface AlertRuleQuietHourDailyQuietHour {
+  $type?: "Daily";
+  name: string;
+  scheduleType?: ScheduleType;
+  /** @format time */
+  startTime: string;
+  /** @format time */
+  endTime: string;
+  timezone: string;
+  description: null | string;
+  timeZoneInfo?: TimeZoneInfo;
+}
+
+export interface AlertRuleQuietHourWeeklyQuietHour {
+  $type?: "Weekly";
+  dayOfWeek: DayOfWeek;
+  name: string;
+  scheduleType?: ScheduleType;
+  /** @format time */
+  startTime: string;
+  /** @format time */
+  endTime: string;
+  timezone: string;
+  description: null | string;
+  timeZoneInfo?: TimeZoneInfo;
+}
+
+export interface AlertRuleView {
+  /** @format uuid */
+  id: string;
+  type: AlertType;
+  severity: AlertSeverity;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  cooldownSeconds: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  requiredMatches: null | number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  threshold: null | number | string;
+  isEnabled: boolean;
+  scope: AlertScope;
+  channels: AlertChannelView[];
+  limitedTo: AlertRuleLimitedTo[];
+  quietHours: AlertRuleQuietHour[];
+  /** @format uuid */
+  createdByActorId: string;
+  /** @format date-time */
+  createdAt: any;
+}
+
+export interface AlertRulesView {
+  pagedResult: PagedResultViewOfAlertRuleView;
 }
 
 export interface ApplyDeploymentInput {
@@ -1385,6 +1547,25 @@ export interface PagedResultViewOfActivityView {
   pageSize: number | string;
 }
 
+export interface PagedResultViewOfAlertRuleView {
+  items: AlertRuleView[];
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  totalCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  page: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  pageSize: number | string;
+}
+
 export type PlatformDescriptor = BasePlatformDescriptor &
   (
     | BasePlatformDescriptorTypeMapping<
@@ -1743,6 +1924,17 @@ export interface SwarmPeer {
   addr: null | string;
 }
 
+export interface TimeZoneInfo {
+  /** @pattern ^-?(\d+\.)?\d{2}:\d{2}:\d{2}(\.\d{1,7})?$ */
+  baseUtcOffset?: string;
+  daylightName?: null | string;
+  displayName?: null | string;
+  hasIanaId?: boolean;
+  id?: null | string;
+  standardName?: null | string;
+  supportsDaylightSavingTime?: boolean;
+}
+
 export interface TopologyEntry {
   labels: Record<string, string>;
 }
@@ -1833,6 +2025,12 @@ export interface VolumesView {
 type BaseActivityEventInfo = object;
 
 type BaseActivityEventInfoTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseAlertRuleQuietHour = object;
+
+type BaseAlertRuleQuietHourTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
@@ -3735,6 +3933,125 @@ export class Api<
         path: `/api/v1/activities`,
         method: "GET",
         query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Alerters
+     * @name GetAlertRule
+     * @summary Get alert rule by id
+     * @request GET:/api/v1/alerters/rules/{id}
+     * @secure
+     * @response `200` `AlertRuleView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getAlertRule: (id: string, params: RequestParams = {}) =>
+      this.request<
+        AlertRuleView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/alerters/rules/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Alerters
+     * @name ListAlertRules
+     * @summary List alert rules
+     * @request GET:/api/v1/alerters/rules
+     * @secure
+     * @response `200` `AlertRulesView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listAlertRules: (
+      query?: {
+        /**
+         * @format int32
+         * @default 1
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        Page?: number | string;
+        /**
+         * @format int32
+         * @default 50
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        PageSize?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AlertRulesView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/alerters/rules`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Alerters
+     * @name GetAlertChannel
+     * @summary Get alert channel by id
+     * @request GET:/api/v1/alerters/channels/{id}
+     * @secure
+     * @response `200` `AlertChannelView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getAlertChannel: (id: string, params: RequestParams = {}) =>
+      this.request<
+        AlertChannelView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/alerters/channels/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Alerters
+     * @name ListAlertChannels
+     * @summary List alert channels
+     * @request GET:/api/v1/alerters/channels
+     * @secure
+     * @response `200` `(AlertChannelView)[]` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listAlertChannels: (params: RequestParams = {}) =>
+      this.request<AlertChannelView[], ProblemDetails>({
+        path: `/api/v1/alerters/channels`,
+        method: "GET",
         secure: true,
         format: "json",
         ...params,

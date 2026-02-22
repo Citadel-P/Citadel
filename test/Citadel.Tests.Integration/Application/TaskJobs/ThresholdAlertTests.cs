@@ -56,30 +56,20 @@ public class ThresholdAlertTests: IntegrationTestBase
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
         var platform = Fakes.GetDummyPlatform();
-        var alertRule = new AlertRule(
-            type: AlertType.PlatformCpuHigh,
-            severity: AlertSeverity.Critical,
-            cooldownSeconds: 60,
-            isEnabled: true,
-            scope: AlertScope.All,
-            createdByActorId: Constants.DefaultAdminId,
-            requiredMatches: 3,
-            threshold: 85
-        );
+        _alertRuleId = (await uow.AlertRules.GetAllAsync(TestContext.Current.CancellationToken))
+            .Where(s => s.Type == AlertType.PlatformCpuHigh).First().Id;
 
         var alertRuleState = new AlertRuleState(
-            alertRuleId: alertRule.Id,
+            alertRuleId: _alertRuleId,
             resourceId: platform.Id,
             actorId: Constants.DefaultAdminId,
             3);
         
-        await uow.AlertRules.AddAlertRuleAsync(alertRule, TestContext.Current.CancellationToken);
         await uow.AlertRules.UpsertAlertRuleStateAsync(alertRuleState, TestContext.Current.CancellationToken);
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         _platformId = platform.Id;
-        _alertRuleId = alertRule.Id;
     }
 
     [Fact]
@@ -294,7 +284,7 @@ public class ThresholdAlertTests: IntegrationTestBase
         await EnsureAlertRuleCacheLoadedAsync(TestContext.Current.CancellationToken);
         await using (var scope = Services.CreateAsyncScope())
         {
-            var context = BuildCpuContext([86, 87, 88]);
+            var context = BuildCpuContext([91, 92, 93]);
             await RunAlertInlineAsync(scope.ServiceProvider, context, TestContext.Current.CancellationToken);
         }
 
@@ -309,7 +299,7 @@ public class ThresholdAlertTests: IntegrationTestBase
                 alertRuleId: state!.AlertRuleId,
                 resourceId: state.ResourceId,
                 consecutiveMatches: 0,
-                lastTriggeredAt: DateTime.UtcNow.AddSeconds(-(rule!.CooldownSeconds + 1)),
+                lastTriggeredAt: DateTime.UtcNow.AddSeconds(-(rule!.CooldownSeconds.Value + 1)),
                 createdByActorId: state.CreatedByActorId,
                 createdAt: state.CreatedAt);
             await db.AlertRules.UpsertAlertRuleStateAsync(updatedState, TestContext.Current.CancellationToken);
@@ -318,7 +308,7 @@ public class ThresholdAlertTests: IntegrationTestBase
 
         await using (var scope = Services.CreateAsyncScope())
         {
-            var context = BuildCpuContext([86, 87]);
+            var context = BuildCpuContext([91, 92]);
             await RunAlertInlineAsync(scope.ServiceProvider, context, TestContext.Current.CancellationToken);
         }
 

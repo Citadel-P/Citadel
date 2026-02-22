@@ -68,10 +68,10 @@ public sealed class PlatformRamHighEvaluator : IAlertEvaluator
 
 #region Deployment
 
-[AlertEvaluator(AlertType.DeploymentFailed)]
+[AlertEvaluator(AlertType.DeploymentAutoDeployFailed)]
 public sealed class DeploymentFailedEvaluator : IAlertEvaluator
 {
-    public AlertType Type => AlertType.DeploymentFailed;
+    public AlertType Type => AlertType.DeploymentAutoDeployFailed;
 
     public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
     {
@@ -132,10 +132,10 @@ public sealed class DeploymentAutoUpdatedEvaluator : IAlertEvaluator
 #endregion
 
 #region Stack
-[AlertEvaluator(AlertType.StackDeployFailed)]
+[AlertEvaluator(AlertType.StackAutoDeployFailed)]
 public sealed class StackDeployFailedEvaluator : IAlertEvaluator
 {
-    public AlertType Type => AlertType.StackDeployFailed;
+    public AlertType Type => AlertType.StackAutoDeployFailed;
 
     public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
     {

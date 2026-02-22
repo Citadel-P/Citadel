@@ -18,6 +18,7 @@ public static class PublicEndpoints
     const string PlatformsName = nameof(Platforms);
     const string ContainersName = nameof(Containers);
     const string ActivitiesName = nameof(Activities);
+    const string AlertersName = nameof(Alerters);
     const string RegistriesName = nameof(Registries);
     const string DeploymentsName = nameof(Deployments);
     const string AuthenticationName = nameof(Authentication);
@@ -65,6 +66,10 @@ public static class PublicEndpoints
             var activities = group.MapGroup("/activities").WithTags(ActivitiesName).RequireAuthorization();
             {
                 MapActivityEndpoints(activities);
+            }
+            var alerters = group.MapGroup("/alerters").WithTags(AlertersName).RequireAuthorization();
+            {
+                MapAlerterEndpoints(alerters);
             }
         }
 
@@ -573,5 +578,41 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("listActivities");
+    }
+
+    private static void MapAlerterEndpoints(RouteGroupBuilder alerters)
+    {
+        var rules = alerters.MapGroup("/rules");
+
+        rules.MapGet("{id}", Alerters.GetRule)
+            .WithSummary("Get alert rule by id")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getAlertRule");
+
+        rules.MapGet("/", Alerters.ListRules)
+            .WithSummary("List alert rules")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("listAlertRules");
+
+        var channels = alerters.MapGroup("/channels");
+
+        channels.MapGet("{id}", Alerters.GetChannel)
+            .WithSummary("Get alert channel by id")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getAlertChannel");
+
+        channels.MapGet("/", Alerters.ListChannels)
+            .WithSummary("List alert channels")
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("listAlertChannels");
     }
 }

@@ -36,7 +36,6 @@ public class EventAlertTests : IntegrationTestBase
 
     private Guid _platformId;
     private Guid _alertRuleId;
-    private Guid _deploymentId;
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
@@ -86,15 +85,6 @@ public class EventAlertTests : IntegrationTestBase
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
         var platform = Fakes.GetDummyPlatform();
-        var alertRule = new AlertRule(
-                type: AlertType.DeploymentImageUpdateAvailable,
-                cooldownSeconds: 60,
-                threshold: null,
-                requiredMatches: null,
-                isEnabled: true,
-                scope: AlertScope.All,
-                createdByActorId: Constants.SystemId,
-                severity: AlertSeverity.Info);
 
         var deployment = new Deployment
         (
@@ -139,12 +129,11 @@ public class EventAlertTests : IntegrationTestBase
         await uow.Containers.AddAsync(container, TestContext.Current.CancellationToken);
         await uow.Images.AddOrUpdateAsync(image, TestContext.Current.CancellationToken);
 
-        await uow.AlertRules.AddAlertRuleAsync(alertRule, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         _platformId = platform.Id;
-        _alertRuleId = alertRule.Id;
-        _deploymentId = deployment.Id;
+        _alertRuleId = (await uow.AlertRules.GetAllAsync(TestContext.Current.CancellationToken))
+            .Where(s => s.Type == AlertType.DeploymentImageUpdateAvailable).First().Id;
     }
 
     [Fact]
@@ -166,7 +155,22 @@ public class EventAlertTests : IntegrationTestBase
     [Fact]
     public async Task EventAlert_ShouldNotRetrigger_DuringCooldown()
     {
-        await EnsureAlertRuleCacheLoadedAsync(TestContext.Current.CancellationToken);
+        await UpdateAlertRuleAsync(rule =>
+        {
+            return AlertRule.FromPersistence(
+                id: rule.Id,
+                type: rule.Type,
+                severity: rule.Severity,
+                cooldownSeconds: 3600,
+                isEnabled: true,
+                scope: rule.Scope,
+                createdByActorId: rule.CreatedByActorId,
+                createdAt: rule.CreatedAt,
+                requiredMatches: rule.RequiredMatches,
+                threshold: rule.Threshold,
+                limitedTo: rule.LimitedTo,
+                quietHours: rule.QuietHours);
+        }, TestContext.Current.CancellationToken);
 
         await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
         await WaitForAlertEventCountAsync(1, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);

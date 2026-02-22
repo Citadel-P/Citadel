@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Text.Json.Serialization;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Activities;
+using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Auth;
 using WebApi.Routes.Endpoints.Resources.Compose;
 using WebApi.Routes.Endpoints.Resources.Containers;
@@ -153,6 +154,10 @@ namespace Application.Models;
 [JsonSerializable(typeof(ActivityFilter))]
 [JsonSerializable(typeof(PagingInput))]
 [JsonSerializable(typeof(PagedResultView<>))]
+[JsonSerializable(typeof(AlertRuleView))]
+[JsonSerializable(typeof(AlertRulesView))]
+[JsonSerializable(typeof(AlertChannelView))]
+[JsonSerializable(typeof(IEnumerable<AlertChannelView>))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

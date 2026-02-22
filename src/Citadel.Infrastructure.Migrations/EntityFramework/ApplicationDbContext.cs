@@ -6,7 +6,6 @@ using Hosting.DockerClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using System.Diagnostics;
 
 namespace Infrastructure.Migrations.EntityFramework;
 
@@ -43,12 +42,13 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
 
     private static void SeedDb(ModelBuilder modelBuilder)
     {
+        var seedDate = DateTime.Parse("2026-01-01");
         modelBuilder.Entity("Role").HasData(new
         {
             Id = Guid.Parse("bdde9601-3b03-1275-a11b-98533d063a04"),
             Name = "Admin",
-            CreatedAt = DateTime.Parse("2026-01-01"),
-            UpdatedAt = DateTime.Parse("2026-01-01 00:00:00")
+            CreatedAt = seedDate,
+            UpdatedAt = seedDate
         });
 
         // --- Actors ---
@@ -72,7 +72,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             Name = "admin",
             Email = "admin@admin.com",
             Password = "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1",
-            CreatedAt = DateTime.Parse("2026-01-01"),
+            CreatedAt = seedDate,
             CreatedByActorId = Constants.SystemId
         });
 
@@ -93,6 +93,25 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             }
         );
 
+        // --- Alert Rules ---
+        modelBuilder.Entity("AlertRule").HasData(
+            // Platform threshold alerts
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000001"), Type = "PlatformCpuHigh",               Severity = "Warning",  CooldownSeconds = 300, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)3,    Threshold = (double?)90.0, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000002"), Type = "PlatformRamHigh",               Severity = "Warning",  CooldownSeconds = 300, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)3,    Threshold = (double?)90.0, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+            // Platform event alerts
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000003"), Type = "PlatformUnreachable",           Severity = "Critical", CooldownSeconds = 600,  IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000004"), Type = "PlatformVersionMismatch",       Severity = "Warning",  CooldownSeconds = 3600, IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000005"), Type = "UnmanagedContainerCreated",     Severity = "Info",     CooldownSeconds = (int?)null,  IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+            // Deployment event alerts
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000006"), Type = "DeploymentImageUpdateAvailable", Severity = "Info",    CooldownSeconds = (int?)null,  IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000007"), Type = "DeploymentAutoDeployFailed",     Severity = "Critical",CooldownSeconds = (int?)null,  IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000008"), Type = "DeploymentAutoUpdated",          Severity = "Info",    CooldownSeconds = (int?)null,  IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+            // Stack event alerts
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-000000000009"), Type = "StackImageUpdateAvailable",      Severity = "Info",    CooldownSeconds = (int?)null,  IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-00000000000a"), Type = "StackAutoDeployFailed",          Severity = "Critical",CooldownSeconds = (int?)null,  IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate },
+            new { Id = Guid.Parse("019d0000-0001-7000-8001-00000000000b"), Type = "StackAutoUpdated",               Severity = "Info",    CooldownSeconds = (int?)null,  IsEnabled = true, Scope = "All", LimitedTo = "[]", QuietHours = "[]", RequiredMatches = (int?)null, Threshold = (double?)null, CreatedByActorId = Constants.SystemId, CreatedAt = seedDate }
+        );
+
         // --- Registries ---
         modelBuilder.Entity("Registry").HasData(new
         {
@@ -101,7 +120,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             Description = "Public Docker Hub Registry",
             RegistryHost = "hub.docker.com",
             CreatedByActorId = Constants.SystemId,
-            CreatedAt = DateTime.Parse("2026-01-01"),
+            CreatedAt = seedDate,
             Status = "Active",
             Configuration = """
             {
@@ -556,7 +575,7 @@ internal static class Configuration
         alertRule.HasKey("Id");
 
         alertRule.Property<string>("Type").HasColumnType("TEXT").IsRequired();
-        alertRule.Property<int>("CooldownSeconds").HasColumnType("INTEGER").IsRequired().HasDefaultValue(60);
+        alertRule.Property<int?>("CooldownSeconds").HasColumnType("INTEGER").IsRequired(false);
         alertRule.Property<bool>("IsEnabled").HasColumnType("INTEGER").IsRequired().HasDefaultValue(true);
         alertRule.Property<string>("Scope").HasColumnType("TEXT").IsRequired();
         alertRule.Property<string>("LimitedTo").HasColumnType("TEXT").IsRequired();

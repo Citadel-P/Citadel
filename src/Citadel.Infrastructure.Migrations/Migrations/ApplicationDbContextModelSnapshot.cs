@@ -201,10 +201,8 @@ namespace Infrastructure.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("CooldownSeconds")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(60);
+                    b.Property<int?>("CooldownSeconds")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -254,6 +252,148 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("IX_AlertRules_Type");
 
                     b.ToTable("AlertRules", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = "019d0000-0001-7000-8001-000000000001",
+                            CooldownSeconds = 300,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            CreatedByActorId = "00000000-0000-0000-0000-000000000001",
+                            IsEnabled = true,
+                            LimitedTo = "[]",
+                            QuietHours = "[]",
+                            RequiredMatches = 3,
+                            Scope = "All",
+                            Severity = "Warning",
+                            Threshold = 90.0,
+                            Type = "PlatformCpuHigh"
+                        },
+                        new
+                        {
+                            Id = "019d0000-0001-7000-8001-000000000002",
+                            CooldownSeconds = 300,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            CreatedByActorId = "00000000-0000-0000-0000-000000000001",
+                            IsEnabled = true,
+                            LimitedTo = "[]",
+                            QuietHours = "[]",
+                            RequiredMatches = 3,
+                            Scope = "All",
+                            Severity = "Warning",
+                            Threshold = 90.0,
+                            Type = "PlatformRamHigh"
+                        },
+                        new
+                        {
+                            Id = "019d0000-0001-7000-8001-000000000003",
+                            CooldownSeconds = 600,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            CreatedByActorId = "00000000-0000-0000-0000-000000000001",
+                            IsEnabled = true,
+                            LimitedTo = "[]",
+                            QuietHours = "[]",
+                            Scope = "All",
+                            Severity = "Critical",
+                            Type = "PlatformUnreachable"
+                        },
+                        new
+                        {
+                            Id = "019d0000-0001-7000-8001-000000000004",
+                            CooldownSeconds = 3600,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            CreatedByActorId = "00000000-0000-0000-0000-000000000001",
+                            IsEnabled = true,
+                            LimitedTo = "[]",
+                            QuietHours = "[]",
+                            Scope = "All",
+                            Severity = "Warning",
+                            Type = "PlatformVersionMismatch"
+                        },
+                        new
+                        {
+                            Id = "019d0000-0001-7000-8001-000000000005",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            CreatedByActorId = "00000000-0000-0000-0000-000000000001",
+                            IsEnabled = true,
+                            LimitedTo = "[]",
+                            QuietHours = "[]",
+                            Scope = "All",
+                            Severity = "Info",
+                            Type = "UnmanagedContainerCreated"
+                        },
+                        new
+                        {
+                            Id = "019d0000-0001-7000-8001-000000000006",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            CreatedByActorId = "00000000-0000-0000-0000-000000000001",
+                            IsEnabled = true,
+                            LimitedTo = "[]",
+                            QuietHours = "[]",
+                            Scope = "All",
+                            Severity = "Info",
+                            Type = "DeploymentImageUpdateAvailable"
+                        },
+                        new
+                        {
+                            Id = "019d0000-0001-7000-8001-000000000007",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            CreatedByActorId = "00000000-0000-0000-0000-000000000001",
+                            IsEnabled = true,
+                            LimitedTo = "[]",
+                            QuietHours = "[]",
+                            Scope = "All",
+                            Severity = "Critical",
+                            Type = "DeploymentAutoDeployFailed"
+                        },
+                        new
+                        {
+                            Id = "019d0000-0001-7000-8001-000000000008",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            CreatedByActorId = "00000000-0000-0000-0000-000000000001",
+                            IsEnabled = true,
+                            LimitedTo = "[]",
+                            QuietHours = "[]",
+                            Scope = "All",
+                            Severity = "Info",
+                            Type = "DeploymentAutoUpdated"
+                        },
+                        new
+                        {
+                            Id = "019d0000-0001-7000-8001-000000000009",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            CreatedByActorId = "00000000-0000-0000-0000-000000000001",
+                            IsEnabled = true,
+                            LimitedTo = "[]",
+                            QuietHours = "[]",
+                            Scope = "All",
+                            Severity = "Info",
+                            Type = "StackImageUpdateAvailable"
+                        },
+                        new
+                        {
+                            Id = "019d0000-0001-7000-8001-00000000000a",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            CreatedByActorId = "00000000-0000-0000-0000-000000000001",
+                            IsEnabled = true,
+                            LimitedTo = "[]",
+                            QuietHours = "[]",
+                            Scope = "All",
+                            Severity = "Critical",
+                            Type = "StackAutoDeployFailed"
+                        },
+                        new
+                        {
+                            Id = "019d0000-0001-7000-8001-00000000000b",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            CreatedByActorId = "00000000-0000-0000-0000-000000000001",
+                            IsEnabled = true,
+                            LimitedTo = "[]",
+                            QuietHours = "[]",
+                            Scope = "All",
+                            Severity = "Info",
+                            Type = "StackAutoUpdated"
+                        });
                 });
 
             modelBuilder.Entity("AlertRuleChannel", b =>

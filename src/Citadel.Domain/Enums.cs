@@ -397,19 +397,21 @@ public enum AlertType
     #region Platform Alerts
     PlatformCpuHigh,
     PlatformRamHigh,
+    PlatformUnreachable,
     PlatformVersionMismatch,
+    UnmanagedContainerCreated,
     #endregion
 
     #region Deployment Alerts
     DeploymentImageUpdateAvailable,
+    DeploymentAutoDeployFailed,
     DeploymentAutoUpdated,
-    DeploymentFailed,
     #endregion
 
     #region Stack Alerts
     StackImageUpdateAvailable,
+    StackAutoDeployFailed,
     StackAutoUpdated,
-    StackDeployFailed,
     #endregion
 }
 

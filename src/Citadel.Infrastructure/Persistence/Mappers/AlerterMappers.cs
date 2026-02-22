@@ -33,12 +33,7 @@ internal static class AlerterMappers
             isEnabled: dto.IsEnabled,
             scope: Enum.Parse<AlertScope>(dto.Scope),
             severity: Enum.Parse<AlertSeverity>(dto.Severity),
-            channels: dto.Channels?.Select(c => AlertChannel.FromPersistence(
-                id: c.Id,
-                alertDestination: Enum.Parse<AlertDestination>(c.AlertDestination),
-                url: c.Url,
-                isActive: c.IsActive,
-                actorId: c.CreatedByActorId)),
+            channels: dto.Channels?.Select(c => c.ToDomain()),
             limitedTo: System.Text.Json.JsonSerializer.Deserialize(dto.LimitedTo, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleLimitedTo) ?? [],
             quietHours: System.Text.Json.JsonSerializer.Deserialize(dto.QuietHours, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleQuietHour) ?? [],
             requiredMatches: dto.RequiredMatches,

@@ -1,7 +1,6 @@
 ﻿using Application.Services;
 using DbUp;
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Identity;
 using Hosting.Common;
 using Infrastructure;
 using Infrastructure.Persistence;
