@@ -6,7 +6,6 @@ using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
-using Domain.Entities;
 using Domain.Entities.Alerts;
 using Hosting.Common;
 using Infrastructure.Repositories.DbQueue;
@@ -414,8 +413,8 @@ public class ThresholdAlertTests: IntegrationTestBase
                 PlatformStat: new DockerPlatformStat
                 (
                     created: time,
-                    memoryUsage: 500,
-                    cpuUsage: 86,
+                    memoryUsage: 50,
+                    cpuUsage: 91,
                     rxBytes: 100,
                     txBytes: 200,
                     containerCount: 3,
@@ -438,8 +437,8 @@ public class ThresholdAlertTests: IntegrationTestBase
                 PlatformStat: new DockerPlatformStat
                 (
                     created: time + (60 * 2),
-                    memoryUsage: 800,
-                    cpuUsage: 87,
+                    memoryUsage: 60,
+                    cpuUsage: 92,
                     rxBytes: 300,
                     txBytes: 400,
                     containerCount: 5,
@@ -461,8 +460,8 @@ public class ThresholdAlertTests: IntegrationTestBase
                 PlatformStat: new DockerPlatformStat
                 (
                     created: time + (60 * 3),
-                    memoryUsage: 800,
-                    cpuUsage: 88,
+                    memoryUsage: 70,
+                    cpuUsage: 93,
                     rxBytes: 300,
                     txBytes: 400,
                     containerCount: 5,
@@ -526,5 +525,102 @@ public class ThresholdAlertTests: IntegrationTestBase
         await using var scope = Services.CreateAsyncScope();
         var cache = scope.ServiceProvider.GetRequiredService<AlertRuleCache>();
         await cache.ReloadAsync(cancellationToken);
+    }
+
+    [Fact]
+    public async Task CpuHighAlert_ShouldOnlyFireMostSevere_WhenMultipleRulesMatch()
+    {
+        // Existing seeded rule: PlatformCpuHigh, threshold=90, severity=Warning, requiredMatches=3
+        // Add a second rule: PlatformCpuHigh, threshold=75, severity=Critical, requiredMatches=3
+        var criticalRuleId = await AddSecondCpuHighRuleAsync(
+            threshold: 75,
+            severity: AlertSeverity.Critical,
+            requiredMatches: 3,
+            cooldownSeconds: 300,
+            TestContext.Current.CancellationToken);
+
+        await EnsureAlertRuleCacheLoadedAsync(TestContext.Current.CancellationToken);
+
+        // CPU=95 exceeds both thresholds (75 and 90) — only Critical should fire
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var context = BuildCpuContext([95, 95, 95]);
+            await RunAlertInlineAsync(scope.ServiceProvider, context, TestContext.Current.CancellationToken);
+        }
+
+        await WaitForAlertEventCountAsync(1, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        await using var finalScope = Services.CreateAsyncScope();
+        var db = finalScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
+
+        Assert.Single(alertEvents.Items);
+        Assert.Equal(AlertSeverity.Critical, alertEvents.Items.First().Severity);
+        Assert.Equal(criticalRuleId, alertEvents.Items.First().AlertRuleId);
+    }
+
+    [Fact]
+    public async Task CpuHighAlert_ShouldFireLowerSeverity_WhenHigherDoesNotMatch()
+    {
+        // Existing seeded rule: PlatformCpuHigh, threshold=90, severity=Warning, requiredMatches=3
+        // Add a second rule: PlatformCpuHigh, threshold=95, severity=Critical, requiredMatches=3
+        await AddSecondCpuHighRuleAsync(
+            threshold: 95,
+            severity: AlertSeverity.Critical,
+            requiredMatches: 3,
+            cooldownSeconds: 300,
+            TestContext.Current.CancellationToken);
+
+        await EnsureAlertRuleCacheLoadedAsync(TestContext.Current.CancellationToken);
+
+        // CPU=92 exceeds only the Warning threshold (90), not Critical (95)
+        await using (var scope = Services.CreateAsyncScope())
+        {
+            var context = BuildCpuContext([92, 92, 92]);
+            await RunAlertInlineAsync(scope.ServiceProvider, context, TestContext.Current.CancellationToken);
+        }
+
+        await WaitForAlertEventCountAsync(1, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        await using var finalScope = Services.CreateAsyncScope();
+        var db = finalScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
+
+        Assert.Single(alertEvents.Items);
+        Assert.Equal(AlertSeverity.Warning, alertEvents.Items.First().Severity);
+        Assert.Equal(_alertRuleId, alertEvents.Items.First().AlertRuleId);
+    }
+
+    private async Task<Guid> AddSecondCpuHighRuleAsync(
+        double threshold,
+        AlertSeverity severity,
+        int requiredMatches,
+        int cooldownSeconds,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        var rule = new AlertRule(
+            type: AlertType.PlatformCpuHigh,
+            severity: severity,
+            cooldownSeconds: cooldownSeconds,
+            isEnabled: true,
+            scope: AlertScope.All,
+            createdByActorId: Constants.DefaultAdminId,
+            requiredMatches: requiredMatches,
+            threshold: threshold);
+
+        var state = new AlertRuleState(
+            alertRuleId: rule.Id,
+            resourceId: _platformId,
+            actorId: Constants.DefaultAdminId,
+            consecutiveMatches: requiredMatches);
+
+        await db.AlertRules.AddAlertRuleAsync(rule, cancellationToken);
+        await db.AlertRules.UpsertAlertRuleStateAsync(state, cancellationToken);
+        await db.CommitAsync(cancellationToken);
+
+        return rule.Id;
     }
 }

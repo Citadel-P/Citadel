@@ -1,4 +1,4 @@
-﻿using Domain;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using Domain.Entities.Alerts;
@@ -18,6 +18,9 @@ public sealed class AlertService(IEnumerable<IAlertEvaluator> evaluators, IAlert
 
     public async Task ProcessAsync(AlertType type, AlertEvaluationContext context, CancellationToken ct)
     {
+        // Most-severe-wins: per resource we keep only the highest-severity rule
+        var candidates = new Dictionary<Guid, (AlertRule Rule, List<AlertMatch> Matches)>();
+
         foreach (var rule in alertRuleProvider.Current.Get(type))
         {
             if (!_evaluators.TryGetValue(rule.Type, out var evaluator))
@@ -26,6 +29,25 @@ public sealed class AlertService(IEnumerable<IAlertEvaluator> evaluators, IAlert
             var matches = evaluator.Evaluate(rule, context);
 
             foreach (var match in ApplyScope(rule, matches))
+            {
+                if (!candidates.TryGetValue(match.ResourceId, out var existing))
+                {
+                    candidates[match.ResourceId] = (rule, [match]);
+                }
+                else if (rule.Severity > existing.Rule.Severity)
+                {
+                    candidates[match.ResourceId] = (rule, [match]);
+                }
+                else if (rule.Id == existing.Rule.Id)
+                {
+                    existing.Matches.Add(match);
+                }
+            }
+        }
+
+        foreach (var (_, (rule, matches)) in candidates)
+        {
+            foreach (var match in matches)
             {
                 var workItem = new AlertStateWorkItem(
                     rule,
