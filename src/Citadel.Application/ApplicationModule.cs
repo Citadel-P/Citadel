@@ -86,6 +86,8 @@ public static class ApplicationModule
 
     private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)
     {
+        if (Helpers.IsDesignTime()) return services;
+
         services
             .AddHostedService<DockerDaemonEventJob>()
             .AddHostedService<CleanupJob>()
