@@ -28,14 +28,8 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             r.RequiredMatches,
             r.Threshold, 
             r.CreatedByActorId, 
-            r.CreatedAt,
-            s.ResourceId AS State_ResourceId,
-            s.ConsecutiveMatches AS State_ConsecutiveMatches,
-            s.LastTriggeredAt AS State_LastTriggeredAt,
-            s.CreatedByActorId AS State_CreatedByActorId,
-            s.CreatedAt AS State_CreatedAt
+            r.CreatedAt
         FROM AlertRules r
-        LEFT JOIN AlertRuleStates s ON r.Id = s.AlertRuleId
         WHERE r.Id = @Id
         LIMIT 1
         """;
@@ -87,7 +81,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         transaction: tx());
 
         if (alertRule.Channels.Count > 0)
-            await InsertChannelsAsync(ruleId, alertRule.Channels);
+            await UpsertChannelsAsync(ruleId, alertRule.Channels);
 
         return rows;
     }
@@ -132,14 +126,8 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             r.RequiredMatches,
             r.Threshold, 
             r.CreatedByActorId, 
-            r.CreatedAt,
-            s.ResourceId AS State_ResourceId,
-            s.ConsecutiveMatches AS State_ConsecutiveMatches,
-            s.LastTriggeredAt AS State_LastTriggeredAt,
-            s.CreatedByActorId AS State_CreatedByActorId,
-            s.CreatedAt AS State_CreatedAt
+            r.CreatedAt
         FROM AlertRules r
-        LEFT JOIN AlertRuleStates s ON r.Id = s.AlertRuleId
         """;
 
         const string linkQuery = """
@@ -188,14 +176,8 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             r.RequiredMatches,
             r.Threshold, 
             r.CreatedByActorId, 
-            r.CreatedAt,
-            s.ResourceId AS State_ResourceId,
-            s.ConsecutiveMatches AS State_ConsecutiveMatches,
-            s.LastTriggeredAt AS State_LastTriggeredAt,
-            s.CreatedByActorId AS State_CreatedByActorId,
-            s.CreatedAt AS State_CreatedAt
+            r.CreatedAt
         FROM AlertRules r
-        LEFT JOIN AlertRuleStates s ON r.Id = s.AlertRuleId
         ORDER BY r.CreatedAt DESC
         LIMIT @PageSize OFFSET @Offset
         """;
@@ -206,8 +188,6 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         var rows = (await db.QueryAsync<AlertRuleDto>(ruleQuery, new { PageSize = pageSize, Offset = offset }, transaction: tx()))?.ToList();
         if (rows is null || rows.Count == 0)
             return new PagedResult<AlertRule>([], totalCount, page, pageSize);
-
-        var ruleIds = rows.Select(r => r.Id.Format()).ToList();
 
         const string channelQuery = @"
         SELECT c.Id, c.AlertDestination, c.Url, c.IsActive, c.CreatedByActorId, c.CreatedAt
@@ -222,7 +202,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         FROM AlertRuleChannels arc
         WHERE arc.AlertRuleId IN (SELECT value FROM json_each(@RuleIds))";
 
-        var ruleIdsJson = JsonSerializer.Serialize(ruleIds);
+        var ruleIdsJson = JsonSerializer.Serialize(rows.Select(r => r.Id).ToList(), DeploymentJsonContext.Default.IEnumerableGuid);
         var allChannels = (await db.QueryAsync<AlertChannelDto>(channelQuery, new { RuleIds = ruleIdsJson }, transaction: tx())).ToDictionary(c => c.Id);
         var links = (await db.QueryAsync<AlertRuleChannelLinkDto>(linkQuery, new { RuleIds = ruleIdsJson }, transaction: tx()))
             .GroupBy(l => l.AlertRuleId)
@@ -325,7 +305,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         await db.ExecuteAsync(unlinkChannelsSql, new { AlertRuleId = ruleId }, transaction: tx());
 
         if (alertRule.Channels.Count > 0)
-            await InsertChannelsAsync(ruleId, alertRule.Channels);
+            await UpsertChannelsAsync(ruleId, alertRule.Channels);
 
         return rows;
     }
@@ -349,7 +329,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         }, transaction: tx());
     }
 
-    private async Task InsertChannelsAsync(string alertRuleId, IEnumerable<AlertChannel> channels)
+    private async Task UpsertChannelsAsync(string alertRuleId, IEnumerable<AlertChannel> channels)
     {
         const string upsertChannelSql = @"
         INSERT INTO AlertChannels (Id, AlertDestination, Url, IsActive, CreatedByActorId, CreatedAt)

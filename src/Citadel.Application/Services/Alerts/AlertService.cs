@@ -1,6 +1,5 @@
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities;
 using Domain.Entities.Alerts;
 using Microsoft.Extensions.Logging;
 

@@ -1,5 +1,4 @@
 ﻿using Domain;
-using Hosting.Common;
 using Domain.Entities.Alerts;
 using Infrastructure.Persistence.Dtos;
 
@@ -39,15 +38,7 @@ internal static class AlerterMappers
             requiredMatches: dto.RequiredMatches,
             threshold: dto.Threshold,
             createdByActorId: dto.CreatedByActorId,
-            createdAt: dto.CreatedAt,
-            alertRuleState: dto.State_ResourceId != null ? AlertRuleState.FromPersistence(
-                alertRuleId: dto.Id,
-                resourceId: dto.State_ResourceId.Value,
-                consecutiveMatches: dto.State_ConsecutiveMatches != null ? dto.State_ConsecutiveMatches.Value : 3,
-                lastTriggeredAt: dto.State_LastTriggeredAt,
-                createdByActorId: dto.State_CreatedByActorId != null ? dto.State_CreatedByActorId.Value : Constants.SystemId,
-                createdAt: dto.State_CreatedAt != null ? dto.State_CreatedAt.Value : DateTime.UtcNow
-            ) : null
+            createdAt: dto.CreatedAt
         );
     }
 }

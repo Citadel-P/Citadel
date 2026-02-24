@@ -530,9 +530,11 @@ public class ThresholdAlertTests: IntegrationTestBase
     [Fact]
     public async Task CpuHighAlert_ShouldOnlyFireMostSevere_WhenMultipleRulesMatch()
     {
-        // Existing seeded rule: PlatformCpuHigh, threshold=90, severity=Warning, requiredMatches=3
-        // Add a second rule: PlatformCpuHigh, threshold=75, severity=Critical, requiredMatches=3
-        var criticalRuleId = await AddSecondCpuHighRuleAsync(
+        // Existing seeded rule:
+        // - PlatformCpuHigh, threshold=90, severity=Critical, requiredMatches=3
+        // - PlatformCpuHigh, threshold=80, severity=Warning, requiredMatches=3
+        // Add a third rule: PlatformCpuHigh, threshold=75, severity=Critical, requiredMatches=3
+        await AddSecondCpuHighRuleAsync(
             threshold: 75,
             severity: AlertSeverity.Critical,
             requiredMatches: 3,
@@ -556,14 +558,15 @@ public class ThresholdAlertTests: IntegrationTestBase
 
         Assert.Single(alertEvents.Items);
         Assert.Equal(AlertSeverity.Critical, alertEvents.Items.First().Severity);
-        Assert.Equal(criticalRuleId, alertEvents.Items.First().AlertRuleId);
     }
 
     [Fact]
     public async Task CpuHighAlert_ShouldFireLowerSeverity_WhenHigherDoesNotMatch()
     {
-        // Existing seeded rule: PlatformCpuHigh, threshold=90, severity=Warning, requiredMatches=3
-        // Add a second rule: PlatformCpuHigh, threshold=95, severity=Critical, requiredMatches=3
+        // Existing seeded rule:
+        // - PlatformCpuHigh, threshold=90, severity=Critical, requiredMatches=3
+        // - PlatformCpuHigh, threshold=80, severity=Warning, requiredMatches=3
+        // Add a third rule: PlatformCpuHigh, threshold=95, severity=Critical, requiredMatches=3
         await AddSecondCpuHighRuleAsync(
             threshold: 95,
             severity: AlertSeverity.Critical,
@@ -587,7 +590,7 @@ public class ThresholdAlertTests: IntegrationTestBase
         var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
 
         Assert.Single(alertEvents.Items);
-        Assert.Equal(AlertSeverity.Warning, alertEvents.Items.First().Severity);
+        Assert.Equal(AlertSeverity.Critical, alertEvents.Items.First().Severity);
         Assert.Equal(_alertRuleId, alertEvents.Items.First().AlertRuleId);
     }
 

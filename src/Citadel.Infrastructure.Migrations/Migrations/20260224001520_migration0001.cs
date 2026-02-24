@@ -559,8 +559,8 @@ namespace Infrastructure.Migrations.Migrations
                 columns: new[] { "Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "IsEnabled", "LimitedTo", "QuietHours", "RequiredMatches", "Scope", "Severity", "Threshold", "Type" },
                 values: new object[,]
                 {
-                    { "019d0000-0001-7000-8001-000000000001", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", 3, "All", "Warning", 90.0, "PlatformCpuHigh" },
-                    { "019d0000-0001-7000-8001-000000000002", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", 3, "All", "Warning", 90.0, "PlatformRamHigh" },
+                    { "019d0000-0001-7000-8001-000000000001", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", 3, "All", "Critical", 90.0, "PlatformCpuHigh" },
+                    { "019d0000-0001-7000-8001-000000000002", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", 3, "All", "Critical", 90.0, "PlatformRamHigh" },
                     { "019d0000-0001-7000-8001-000000000003", 600, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "All", "Critical", null, "PlatformUnreachable" },
                     { "019d0000-0001-7000-8001-000000000004", 3600, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "All", "Warning", null, "PlatformVersionMismatch" },
                     { "019d0000-0001-7000-8001-000000000005", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "All", "Info", null, "UnmanagedContainerCreated" },
@@ -569,7 +569,9 @@ namespace Infrastructure.Migrations.Migrations
                     { "019d0000-0001-7000-8001-000000000008", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "All", "Info", null, "DeploymentAutoUpdated" },
                     { "019d0000-0001-7000-8001-000000000009", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "All", "Info", null, "StackImageUpdateAvailable" },
                     { "019d0000-0001-7000-8001-00000000000a", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "All", "Critical", null, "StackAutoDeployFailed" },
-                    { "019d0000-0001-7000-8001-00000000000b", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "All", "Info", null, "StackAutoUpdated" }
+                    { "019d0000-0001-7000-8001-00000000000b", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "All", "Info", null, "StackAutoUpdated" },
+                    { "019d0000-0001-7000-8001-000000000011", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", 3, "All", "Warning", 80.0, "PlatformCpuHigh" },
+                    { "019d0000-0001-7000-8001-000000000022", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", 3, "All", "Warning", 80.0, "PlatformRamHigh" }
                 });
 
             migrationBuilder.InsertData(

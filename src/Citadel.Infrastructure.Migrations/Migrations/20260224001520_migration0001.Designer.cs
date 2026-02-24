@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260222214202_migration0001")]
+    [Migration("20260224001520_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -268,8 +268,23 @@ namespace Infrastructure.Migrations.Migrations
                             QuietHours = "[]",
                             RequiredMatches = 3,
                             Scope = "All",
-                            Severity = "Warning",
+                            Severity = "Critical",
                             Threshold = 90.0,
+                            Type = "PlatformCpuHigh"
+                        },
+                        new
+                        {
+                            Id = "019d0000-0001-7000-8001-000000000011",
+                            CooldownSeconds = 300,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            CreatedByActorId = "00000000-0000-0000-0000-000000000001",
+                            IsEnabled = true,
+                            LimitedTo = "[]",
+                            QuietHours = "[]",
+                            RequiredMatches = 3,
+                            Scope = "All",
+                            Severity = "Warning",
+                            Threshold = 80.0,
                             Type = "PlatformCpuHigh"
                         },
                         new
@@ -283,8 +298,23 @@ namespace Infrastructure.Migrations.Migrations
                             QuietHours = "[]",
                             RequiredMatches = 3,
                             Scope = "All",
-                            Severity = "Warning",
+                            Severity = "Critical",
                             Threshold = 90.0,
+                            Type = "PlatformRamHigh"
+                        },
+                        new
+                        {
+                            Id = "019d0000-0001-7000-8001-000000000022",
+                            CooldownSeconds = 300,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            CreatedByActorId = "00000000-0000-0000-0000-000000000001",
+                            IsEnabled = true,
+                            LimitedTo = "[]",
+                            QuietHours = "[]",
+                            RequiredMatches = 3,
+                            Scope = "All",
+                            Severity = "Warning",
+                            Threshold = 80.0,
                             Type = "PlatformRamHigh"
                         },
                         new

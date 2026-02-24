@@ -264,11 +264,11 @@ SELECT changes();
 
 
 INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "IsEnabled", "LimitedTo", "QuietHours", "RequiredMatches", "Scope", "Severity", "Threshold", "Type")
-VALUES ('019d0000-0001-7000-8001-000000000001', 300, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', 1, '[]', '[]', 3, 'All', 'Warning', 90.0, 'PlatformCpuHigh');
+VALUES ('019d0000-0001-7000-8001-000000000001', 300, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', 1, '[]', '[]', 3, 'All', 'Critical', 90.0, 'PlatformCpuHigh');
 SELECT changes();
 
 INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "IsEnabled", "LimitedTo", "QuietHours", "RequiredMatches", "Scope", "Severity", "Threshold", "Type")
-VALUES ('019d0000-0001-7000-8001-000000000002', 300, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', 1, '[]', '[]', 3, 'All', 'Warning', 90.0, 'PlatformRamHigh');
+VALUES ('019d0000-0001-7000-8001-000000000002', 300, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', 1, '[]', '[]', 3, 'All', 'Critical', 90.0, 'PlatformRamHigh');
 SELECT changes();
 
 INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "IsEnabled", "LimitedTo", "QuietHours", "RequiredMatches", "Scope", "Severity", "Threshold", "Type")
@@ -305,6 +305,14 @@ SELECT changes();
 
 INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "IsEnabled", "LimitedTo", "QuietHours", "RequiredMatches", "Scope", "Severity", "Threshold", "Type")
 VALUES ('019d0000-0001-7000-8001-00000000000b', NULL, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', 1, '[]', '[]', NULL, 'All', 'Info', NULL, 'StackAutoUpdated');
+SELECT changes();
+
+INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "IsEnabled", "LimitedTo", "QuietHours", "RequiredMatches", "Scope", "Severity", "Threshold", "Type")
+VALUES ('019d0000-0001-7000-8001-000000000011', 300, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', 1, '[]', '[]', 3, 'All', 'Warning', 80.0, 'PlatformCpuHigh');
+SELECT changes();
+
+INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "IsEnabled", "LimitedTo", "QuietHours", "RequiredMatches", "Scope", "Severity", "Threshold", "Type")
+VALUES ('019d0000-0001-7000-8001-000000000022', 300, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', 1, '[]', '[]', 3, 'All', 'Warning', 80.0, 'PlatformRamHigh');
 SELECT changes();
 
 
@@ -411,7 +419,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260222214202_migration0001', '10.0.3');
+VALUES ('20260224001520_migration0001', '10.0.3');
 
 COMMIT;
 

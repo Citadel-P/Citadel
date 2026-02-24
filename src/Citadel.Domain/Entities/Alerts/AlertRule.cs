@@ -37,8 +37,6 @@ public sealed class AlertRule : IAuditedEntity
     public DateTime CreatedAt { get; private set; }
     #endregion
 
-    public AlertRuleState? AlertRuleState { get; private set; }
-
     public AlertRule(
         AlertType type,
         AlertSeverity severity,
@@ -75,7 +73,6 @@ public sealed class AlertRule : IAuditedEntity
         ValidateScope();
         ValidateResourceCompatibility();
         ValidateQuietHours();
-        AlertRuleState = alertRuleState;
     }
 
     public static AlertRule FromPersistence(
@@ -91,8 +88,7 @@ public sealed class AlertRule : IAuditedEntity
         double? threshold = null,
         IEnumerable<AlertChannel>? channels = null,
         IEnumerable<AlertRuleLimitedTo>? limitedTo = null,
-        IEnumerable<AlertRuleQuietHour>? quietHours = null,
-        AlertRuleState? alertRuleState = null)
+        IEnumerable<AlertRuleQuietHour>? quietHours = null)
     {
         var rule = new AlertRule(
             type,
@@ -110,7 +106,6 @@ public sealed class AlertRule : IAuditedEntity
             Id = id,
             CreatedAt = createdAt,
             CreatedByActorId = createdByActorId,
-            AlertRuleState = alertRuleState
         };
        
         return rule;

@@ -15,12 +15,7 @@ internal record AlertRuleDto(
     int? RequiredMatches,
     double? Threshold,
     Guid CreatedByActorId,
-    DateTime CreatedAt,
-    Guid? State_ResourceId = null,
-    int? State_ConsecutiveMatches = null,
-    DateTime? State_LastTriggeredAt = null,
-    Guid? State_CreatedByActorId = null,
-    DateTime? State_CreatedAt = null
+    DateTime CreatedAt
     )
 {
     public ICollection<AlertChannelDto> Channels { get; init; } = [];
