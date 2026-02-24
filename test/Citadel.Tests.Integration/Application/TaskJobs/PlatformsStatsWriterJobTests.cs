@@ -43,6 +43,8 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
         services.AddSingleton(_ => _platformConnector.Object);
         services.AddSingleton(_ => _platformFactoryMock.Object);
         services.AddSingleton<IPlatformHealthBroadCaster>(_ => _broadcaster);
+        services.AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Reader);
+        services.AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Writer);
 
         _configMock.Setup(x => x.Value).Returns(new JobConfiguration());
     }

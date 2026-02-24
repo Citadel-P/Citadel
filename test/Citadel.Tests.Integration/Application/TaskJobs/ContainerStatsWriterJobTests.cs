@@ -36,12 +36,14 @@ public class ContainerStatsWriterJobTests : IntegrationTestBase
             .AddHostedService<NotificationWorker>()
             .AddHostedService<ContainerStatsWriterJob>();
 
-        services.AddSingleton(_channel);
         services.AddSingleton(_configMock.Object);
         services.AddSingleton(_containerFactoryMock.Object);
         services.AddSingleton(_containerConnectorMock.Object);
         services.AddSingleton(_containerStreamManagerMock.Object);
         services.AddSingleton<IPlatformHealthBroadCaster>(_broadcaster);
+        services.AddSingleton(_channel);
+        services.AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader);
+        services.AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer);
 
         _configMock.Setup(x => x.Value).Returns(new JobConfiguration() { BatchSize = 2 });
     }
