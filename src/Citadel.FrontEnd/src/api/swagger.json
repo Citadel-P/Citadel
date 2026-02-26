@@ -5522,10 +5522,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AlertChannelView"
-                  }
+                  "$ref": "#/components/schemas/AlertChannelsView"
                 }
               }
             }
@@ -5953,6 +5950,20 @@
           },
           "createdAt": {
             "format": "date-time"
+          }
+        }
+      },
+      "AlertChannelsView": {
+        "required": [
+          "channels"
+        ],
+        "type": "object",
+        "properties": {
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlertChannelView"
+            }
           }
         }
       },

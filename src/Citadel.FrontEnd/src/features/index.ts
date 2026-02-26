@@ -14,6 +14,8 @@ import { DeploymentComponents } from './deployments';
 import { RegistryFormComponents } from './registries/form';
 import { DeploymentFormComponents } from './deployments/form';
 import { ActivityComponents } from './activities';
+import { AlerterComponents } from './alerters';
+import { AlertRuleFormComponents } from './alerters/form';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
@@ -27,6 +29,7 @@ export const ResourceComponents: {
   Registry: RegistryComponents,
   Deployment: DeploymentComponents,
   Activity: ActivityComponents,
+  Alerter: AlerterComponents,
 };
 
 export const ResourceFormComponents: {
@@ -40,6 +43,7 @@ export const ResourceFormComponents: {
 
   Registry: RegistryFormComponents,
   Deployment: DeploymentFormComponents,
+  Alerter: AlertRuleFormComponents,
   Activity: undefined,
 };
 

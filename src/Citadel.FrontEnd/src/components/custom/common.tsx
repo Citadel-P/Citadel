@@ -9,6 +9,7 @@ import {
   PlatformStatus,
   UpdateBehavior,
   ActivityResourceType,
+  AlertSeverity,
 } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem, CommandEmpty } from '@/components/ui/command';
@@ -45,14 +46,7 @@ import {
 } from 'lucide-react';
 import { byteTransform } from '@/lib/bytes.helper';
 import { Link } from 'react-router';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export function ResourceSelectorField<T extends { id: string; name: string }>({
   type,
@@ -596,6 +590,24 @@ export const ActivityStatusCell = ({ status }: { status: ActivityStatus }) => {
   };
 
   const { className, label } = statusConfig[status] ?? statusConfig[ActivityStatus.Failure];
+
+  return <Badge className={className}>{label}</Badge>;
+};
+
+export const SeverityStatusCell = ({ severity }: { severity: AlertSeverity }) => {
+  const severityConfig: Record<AlertSeverity, { className: string; label: string }> = {
+    [AlertSeverity.Info]: { className: 'bg-blue-200/25 text-blue-700 border-blue-500/20', label: 'Info' },
+    [AlertSeverity.Warning]: {
+      className: 'bg-orange-200/25 text-orange-500 border-orange-500/20',
+      label: 'Warning',
+    },
+    [AlertSeverity.Critical]: {
+      className: 'bg-red-200/25 text-red-700 border-red-500/20',
+      label: 'Critical',
+    },
+  };
+
+  const { className, label } = severityConfig[severity] ?? severityConfig[AlertSeverity.Info];
 
   return <Badge className={className}>{label}</Badge>;
 };

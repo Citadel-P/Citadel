@@ -1,4 +1,6 @@
-﻿namespace Domain.Entities.Alerts;
+﻿using System.Text.Json.Serialization;
+
+namespace Domain.Entities.Alerts;
 
 public class AlertChannel : IAuditedEntity
 {
@@ -12,16 +14,17 @@ public class AlertChannel : IAuditedEntity
     public DateTime CreatedAt { get; private set; }
     #endregion
 
+    [JsonConstructor]
     public AlertChannel(
         AlertDestination alertDestination,
         string url,
         bool isActive,
-        Guid actorId
+        Guid createdByActorId
         )
     {
         Url = url;
         IsActive = isActive;
-        CreatedByActorId = actorId;
+        CreatedByActorId = createdByActorId;
         CreatedAt = DateTime.UtcNow;
         AlertDestination = alertDestination;
     }

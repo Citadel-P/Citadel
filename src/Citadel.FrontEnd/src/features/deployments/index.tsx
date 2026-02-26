@@ -7,6 +7,11 @@ import { useDeploymentsGroup } from './hooks/useDeploymentsGroup';
 
 export const DeploymentComponents: RequiredComponents = {
   Icon: <Rocket className="h-4 w-4" />,
+  header: {
+    subtitle: 'Run and manage containers on your servers.',
+    showSearch: true,
+    showAdd: true,
+  },
   Content: ({ items, actions, isLoading }) => {
     return <DeploymentsTable items={items} actions={actions} isLoading={isLoading} />;
   },

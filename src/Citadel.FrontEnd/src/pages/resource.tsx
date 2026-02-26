@@ -39,15 +39,18 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
   return (
     <div className="flex-col justify-between relative">
       <div className="px-4 py-4 lg:container sm:px-6 mx-auto">
-        <div className="w-full rounded-lg border-border bg-background p-4 flex flex-col gap-2">
+        <div className="w-full rounded-lg border-border bg-background p-4 flex flex-col gap-4">
           {/* Header */}
           <div className="flex flex-col sm:flex-row gap-2 sm:justify-between">
-            <div className="flex items-center gap-1">
-              <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <div className="flex items-center gap-3">
+              <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 {Icon}
                 <span className="sr-only">{PluralResourceMap[type]}</span>
               </div>
-              <div className="text-md font-bold text-foreground">{PluralResourceMap[type]}</div>
+              <div className="flex flex-col">
+                <div className="text-md font-bold text-foreground">{headerCfg.title ?? PluralResourceMap[type]}</div>
+                <p className="text-xs text-muted-foreground">{headerCfg.subtitle}</p>
+              </div>
             </div>
             <div className="flex gap-2">
               {headerCfg.showSearch && <SearchField onSearch={setSearch} />}
@@ -56,7 +59,7 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
                   type="button"
                   onClick={() => navigate('./add')}
                   className="inline-flex items-center bg-primary hover:bg-primary/80 rounded-sm text-sm px-2.5 py-2.5">
-                  <Plus className="h-3 w-3" /> Add {type}
+                  <Plus className="h-3 w-3" /> {headerCfg.addButtonTitle ?? `Add ${type}`}
                 </Button>
               )}
               {headerCfg.Extra && <headerCfg.Extra />}

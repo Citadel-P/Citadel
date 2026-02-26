@@ -6,6 +6,11 @@ import { PlatformDropdownActions } from './actions';
 
 export const PlatformComponents: RequiredComponents = {
   Icon: <Server className="h-4 w-4" />,
+  header: {
+    subtitle: 'Connect platforms for real-time monitoring, alerts, and container workloads.',
+    showSearch: true,
+    showAdd: true,
+  },
   Content: ({ items, actions, isLoading, isFiltered }) => {
     return <Platforms items={items} actions={actions} isLoading={isLoading} isFiltered={isFiltered} />;
   },

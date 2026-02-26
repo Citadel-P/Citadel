@@ -127,7 +127,9 @@ public partial class AlertEventJsonContext : JsonSerializerContext
     typeof(JsonStringEnumConverter<ScheduleType>),
     typeof(JsonStringEnumConverter<AlertSeverity>),
     typeof(JsonStringEnumConverter<AlertResourceType>),
+    typeof(JsonStringEnumConverter<AlertDestination>),
     })]
+[JsonSerializable(typeof(AlertRule))]
 [JsonSerializable(typeof(DailyQuietHour))]
 [JsonSerializable(typeof(WeeklyQuietHour))]
 [JsonSerializable(typeof(AlertRuleQuietHour))]

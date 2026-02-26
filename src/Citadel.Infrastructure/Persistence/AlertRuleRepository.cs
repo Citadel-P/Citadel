@@ -178,7 +178,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             r.CreatedByActorId, 
             r.CreatedAt
         FROM AlertRules r
-        ORDER BY r.CreatedAt DESC
+        ORDER BY r.CreatedAt DESC, r.Type DESC
         LIMIT @PageSize OFFSET @Offset
         """;
 
@@ -202,7 +202,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         FROM AlertRuleChannels arc
         WHERE arc.AlertRuleId IN (SELECT value FROM json_each(@RuleIds))";
 
-        var ruleIdsJson = JsonSerializer.Serialize(rows.Select(r => r.Id).ToList(), DeploymentJsonContext.Default.IEnumerableGuid);
+        var ruleIdsJson = JsonSerializer.Serialize([.. rows.Select(r => r.Id)], DeploymentJsonContext.Default.IEnumerableGuid);
         var allChannels = (await db.QueryAsync<AlertChannelDto>(channelQuery, new { RuleIds = ruleIdsJson }, transaction: tx())).ToDictionary(c => c.Id);
         var links = (await db.QueryAsync<AlertRuleChannelLinkDto>(linkQuery, new { RuleIds = ruleIdsJson }, transaction: tx()))
             .GroupBy(l => l.AlertRuleId)
@@ -327,6 +327,19 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             Url = channel.Url,
             IsActive = channel.IsActive
         }, transaction: tx());
+    }
+
+    public async Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
+    {
+        const string unlinkSql = @"DELETE FROM AlertRuleChannels WHERE AlertRuleId IN (SELECT value FROM json_each(@Ids))";
+        const string deleteStatesSql = @"DELETE FROM AlertRuleStates WHERE AlertRuleId IN (SELECT value FROM json_each(@Ids))";
+        const string deleteSql = @"DELETE FROM AlertRules WHERE Id IN (SELECT value FROM json_each(@Ids))";
+
+        var idsJson = JsonSerializer.Serialize(ids.Select(id => id), DeploymentJsonContext.Default.IEnumerableGuid);
+
+        await db.ExecuteAsync(unlinkSql, new { Ids = idsJson }, transaction: tx());
+        await db.ExecuteAsync(deleteStatesSql, new { Ids = idsJson }, transaction: tx());
+        return await db.ExecuteAsync(deleteSql, new { Ids = idsJson }, transaction: tx());
     }
 
     private async Task UpsertChannelsAsync(string alertRuleId, IEnumerable<AlertChannel> channels)

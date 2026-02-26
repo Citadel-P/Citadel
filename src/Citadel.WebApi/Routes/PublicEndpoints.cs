@@ -3,6 +3,7 @@ using Hosting.Common;
 using Hosting.OpenApi;
 using WebApi.Routes.Endpoints;
 using WebApi.Routes.Endpoints.Resources;
+using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
@@ -598,6 +599,31 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("listAlertRules");
+
+        rules.MapPost("/", Alerters.CreateRule)
+            .WithSummary("Create an alert rule")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("createAlertRule");
+
+        rules.MapPatch("{id}", Alerters.PatchRule)
+            .WithSummary("Update an alert rule")
+            .Accepts<AlertRuleInput>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("updateAlertRule");
+
+        rules.MapDelete("/", Alerters.DeleteRules)
+            .WithSummary("Delete alert rules")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("deleteAlertRules");
 
         var channels = alerters.MapGroup("/channels");
 

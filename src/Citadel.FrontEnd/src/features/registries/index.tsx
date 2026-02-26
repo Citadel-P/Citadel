@@ -10,6 +10,11 @@ export const RegistryComponents: RequiredComponents = {
   Content: ({ items, actions, isLoading }) => {
     return <RegistriesTable items={items} actions={actions} isLoading={isLoading} />;
   },
+  header: {
+    subtitle: 'Connect and configure container image registries.',
+    showSearch: true,
+    showAdd: true,
+  },
   DropdownActions: RegistryDropdownActions,
   GroupActions: ({ items }) => {
     return <ActionBar type="Registry" items={items} actions={Object.values(RegistryGroupActions)} />;

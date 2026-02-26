@@ -22,3 +22,11 @@ public sealed record AlertChannelView(
             channel.CreatedAt);
     }
 }
+
+public sealed record AlertChannelsView(IEnumerable<AlertChannelView> Channels)
+{
+    internal static AlertChannelsView Map(IEnumerable<AlertChannel> channels)
+    {
+        return new(channels.Select(AlertChannelView.Map));
+    }
+}

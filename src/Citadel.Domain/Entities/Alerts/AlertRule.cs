@@ -37,6 +37,7 @@ public sealed class AlertRule : IAuditedEntity
     public DateTime CreatedAt { get; private set; }
     #endregion
 
+    [JsonConstructor]
     public AlertRule(
         AlertType type,
         AlertSeverity severity,
@@ -46,10 +47,9 @@ public sealed class AlertRule : IAuditedEntity
         Guid createdByActorId,
         int? requiredMatches = null,
         double? threshold = null,
-        IEnumerable<AlertChannel>? channels = null,
-        IEnumerable<AlertRuleLimitedTo>? limitedTo = null,
-        IEnumerable<AlertRuleQuietHour>? quietHours = null,
-        AlertRuleState? alertRuleState = null)
+        IReadOnlyCollection<AlertChannel>? channels = null,
+        IReadOnlyCollection<AlertRuleLimitedTo>? limitedTo = null,
+        IReadOnlyCollection<AlertRuleQuietHour>? quietHours = null)
     {
         if (cooldownSeconds < 10 || cooldownSeconds > 86400)
             throw new ArgumentOutOfRangeException(nameof(cooldownSeconds), "Cooldown must be between 10s and 24h.");
@@ -99,9 +99,9 @@ public sealed class AlertRule : IAuditedEntity
             createdByActorId,
             requiredMatches,
             threshold,
-            channels,
-            limitedTo,
-            quietHours)
+            channels?.ToList(),
+            limitedTo?.ToList(),
+            quietHours?.ToList())
         {
             Id = id,
             CreatedAt = createdAt,
@@ -115,6 +115,30 @@ public sealed class AlertRule : IAuditedEntity
     {
         IsEnabled = false; 
         return this;
+    }
+
+    public void PartialUpdate(
+        AlertType type,
+        AlertSeverity severity,
+        int? cooldownSeconds,
+        bool isEnabled,
+        AlertScope scope,
+        int? requiredMatches = null,
+        double? threshold = null,
+        IEnumerable<AlertRuleLimitedTo>? limitedTo = null,
+        IEnumerable<AlertRuleQuietHour>? quietHours = null)
+    {
+        Type = type;
+        Severity = severity;
+        CooldownSeconds = cooldownSeconds;
+        IsEnabled = isEnabled;
+        Scope = scope;
+        RequiredMatches = requiredMatches;
+        Threshold = threshold;
+        _limitedTo.Clear();
+        if (limitedTo is not null) _limitedTo.AddRange(limitedTo);
+        _quietHours.Clear();
+        if (quietHours is not null) _quietHours.AddRange(quietHours);
     }
 
     public bool CanTrigger(DateTime utcNow, AlertRuleState? state)

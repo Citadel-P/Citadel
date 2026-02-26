@@ -95,10 +95,16 @@ interface ResourceInfoHookResult<T> {
 }
 
 interface HeaderOptions {
+  /** Override title */
+  title?: string;
+  /** Override subtitle */
+  subtitle?: string;
   /** Whether to show the search field. Defaults to true. */
   showSearch?: boolean;
   /** Whether to show the "Add" button. Defaults to true. */
   showAdd?: boolean;
+  /** Override add button title */
+  addButtonTitle?: string;
   /** Additional custom header items (buttons, dropdowns, etc.). */
   Extra?: React.FC;
 }

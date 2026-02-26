@@ -1,0 +1,20 @@
+{
+  id: Guid_1,
+  type: PlatformUnreachable,
+  severity: Critical,
+  cooldownSeconds: 120,
+  isEnabled: true,
+  scope: All,
+  channels: [
+    {
+      id: Guid_2,
+      alertDestination: Slack,
+      url: https://hooks.slack.com/services/test,
+      isActive: true,
+      createdByActorId: Guid_3,
+      createdAt: DateTimeOffset_1
+    }
+  ],
+  createdByActorId: Guid_3,
+  createdAt: DateTimeOffset_1
+}

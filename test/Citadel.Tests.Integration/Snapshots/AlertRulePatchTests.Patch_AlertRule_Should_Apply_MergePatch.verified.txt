@@ -1,0 +1,10 @@
+{
+  id: Guid_1,
+  type: PlatformUnreachable,
+  severity: Critical,
+  cooldownSeconds: 600,
+  isEnabled: false,
+  scope: All,
+  createdByActorId: Guid_2,
+  createdAt: DateTimeOffset_1
+}

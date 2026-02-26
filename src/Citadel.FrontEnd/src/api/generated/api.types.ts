@@ -370,6 +370,10 @@ export interface AlertChannelView {
   createdAt: any;
 }
 
+export interface AlertChannelsView {
+  channels: AlertChannelView[];
+}
+
 export interface AlertRuleLimitedTo {
   resourceType: AlertResourceType;
   /** @format uuid */
@@ -4043,13 +4047,13 @@ export class Api<
      * @summary List alert channels
      * @request GET:/api/v1/alerters/channels
      * @secure
-     * @response `200` `(AlertChannelView)[]` OK
+     * @response `200` `AlertChannelsView` OK
      * @response `401` `ProblemDetails` Unauthorized
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
     listAlertChannels: (params: RequestParams = {}) =>
-      this.request<AlertChannelView[], ProblemDetails>({
+      this.request<AlertChannelsView, ProblemDetails>({
         path: `/api/v1/alerters/channels`,
         method: "GET",
         secure: true,

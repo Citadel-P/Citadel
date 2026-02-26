@@ -1,0 +1,36 @@
+import { AlertRuleForm } from './form';
+import { StateIndicator } from '@/components/custom/state-indicator';
+import { AlertRuleActions } from './actions';
+import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
+import { useRead } from '@/lib/hooks';
+import { GenericActionBarButtons } from '@/components/custom/action-bar';
+
+export const AlertRuleFormComponents: RequiredFormComponents = {
+  AddForm: {
+    Content: () => {
+      return <AlertRuleForm mode="add" />;
+    },
+  },
+  EditForm: {
+    Header: {
+      Indicator: ({ resource }: { resource: RequiredFormFields }) => {
+        return <StateIndicator value={resource.status as any} />;
+      },
+      ActionButtons: ({ resource }) => {
+        return <GenericActionBarButtons resource={resource} actions={Object.values(AlertRuleActions)} />;
+      },
+    },
+    Tabs: [
+      {
+        label: 'Config',
+        Content: ({ resource }) => {
+          return <AlertRuleForm mode="edit" resource={resource} />;
+        },
+      },
+    ],
+    useData: function (id?: string): { item?: RequiredFormFields; isLoading: boolean } {
+      const { data, isLoading } = useRead('getRegistryConfig', { id });
+      return { item: data?.data, isLoading };
+    },
+  },
+};
