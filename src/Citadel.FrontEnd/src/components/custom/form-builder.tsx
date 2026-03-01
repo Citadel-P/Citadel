@@ -9,6 +9,7 @@ import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
+import { Slider } from '../ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 type Primitive = string | number | boolean | bigint | symbol | null | undefined | Date;
@@ -262,6 +263,41 @@ export const FieldSwitch = ({
   </div>
 );
 
+export const FieldSlider = ({
+  value,
+  min = 0,
+  max = 100,
+  step = 1,
+  unit = '%',
+  onChange,
+}: {
+  value?: number | null;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+  onChange: (v: number) => void;
+}) => {
+  const current = typeof value === 'number' ? value : min;
+
+  return (
+    <div className="flex items-center gap-4 max-w-[400px]">
+      <Slider
+        min={min}
+        max={max}
+        step={step}
+        value={[current]}
+        onValueChange={([v]) => onChange(v)}
+        className="flex-1"
+      />
+      <span className="text-sm text-muted-foreground font-normal tabular-nums w-12 text-right">
+        {current}
+        {unit}
+      </span>
+    </div>
+  );
+};
+
 export function PortMappingField({
   set,
   ports,
@@ -359,6 +395,13 @@ export function InputGroupField({
   );
 }
 
+type ItemInfo =
+  | string
+  | {
+      label: string;
+      description?: string;
+    };
+
 export function ItemSelector({
   value,
   onChange,
@@ -368,31 +411,33 @@ export function ItemSelector({
   value?: string;
   onChange: (v: any) => void;
   disabled?: boolean;
-  collection: Record<string, { label: string; description?: string }>;
+  collection: Record<string, ItemInfo>;
 }) {
-  const finalValue = value && collection[value] ? value : '';
-  const selected = collection[finalValue];
+  const normalized = Object.fromEntries(
+    Object.entries(collection).map(([key, item]) => [key, typeof item === 'string' ? { label: item } : item]),
+  );
+
+  const finalValue = value && normalized[value] ? value : '';
+  const selected = normalized[finalValue];
   return (
     <Select value={finalValue} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger className="w-full max-w-[400px]">
-        <SelectValue>
-          {selected ? (
+        <SelectValue placeholder="Select a value...">
+          {selected && (
             <div className="flex items-center gap-2">
               <span>{selected.label}</span>
             </div>
-          ) : (
-            'Select a value...'
           )}
         </SelectValue>
       </SelectTrigger>
 
       <SelectContent className="bg-background">
-        {Object.entries(collection).map(([key, info]) => (
+        {Object.entries(normalized).map(([key, info]) => (
           <SelectItem key={key} value={key}>
             <div className="flex items-center gap-2">
               <div className="flex flex-col">
-                <span className="font-medium">{info.label}</span>
-                <span className="text-xs text-muted-foreground">{info.description}</span>
+                <span className={info.description ? 'font-medium' : ''}>{info.label}</span>
+                {info.description && <span className="text-xs text-muted-foreground">{info.description}</span>}
               </div>
             </div>
           </SelectItem>

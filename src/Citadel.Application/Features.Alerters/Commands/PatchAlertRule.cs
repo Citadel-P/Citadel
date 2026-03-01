@@ -1,3 +1,4 @@
+using Application.Services.Alerts;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
@@ -21,7 +22,7 @@ public sealed record PatchAlertRule(Guid Id, JsonMergePatchDocument<AlertRule> P
     }
 }
 
-internal sealed class PatchAlertRuleHandler(IUnitOfWork unitOfWork) : ICommandHandler<PatchAlertRule, Result<AlertRule>>
+internal sealed class PatchAlertRuleHandler(IUnitOfWork unitOfWork, AlertRuleCache alertRuleCache) : ICommandHandler<PatchAlertRule, Result<AlertRule>>
 {
     public async ValueTask<Result<AlertRule>> Handle(PatchAlertRule command, CancellationToken cancellationToken)
     {
@@ -46,7 +47,6 @@ internal sealed class PatchAlertRuleHandler(IUnitOfWork unitOfWork) : ICommandHa
             severity: patchedRule.Severity,
             cooldownSeconds: patchedRule.CooldownSeconds,
             isEnabled: patchedRule.IsEnabled,
-            scope: patchedRule.Scope,
             requiredMatches: patchedRule.RequiredMatches,
             threshold: patchedRule.Threshold,
             limitedTo: patchedRule.LimitedTo,
@@ -54,6 +54,9 @@ internal sealed class PatchAlertRuleHandler(IUnitOfWork unitOfWork) : ICommandHa
 
         await unitOfWork.AlertRules.UpdateAsync(rule, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+
+        // reload cache
+        await alertRuleCache.ReloadAsync(cancellationToken);
 
         return rule;
     }

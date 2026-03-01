@@ -8,7 +8,6 @@ internal record AlertRuleDto(
     string Type,
     int? CooldownSeconds,
     bool IsEnabled,
-    string Scope,
     string Severity,
     string LimitedTo,
     string QuietHours,

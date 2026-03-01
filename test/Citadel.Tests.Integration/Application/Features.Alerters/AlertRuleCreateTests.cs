@@ -1,7 +1,6 @@
 ﻿using System.Text;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.Alerters;
@@ -17,8 +16,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
           "type": "PlatformUnreachable",
           "severity": "Critical",
           "cooldownSeconds": 300,
-          "isEnabled": true,
-          "scope": "All"
+          "isEnabled": true
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
@@ -48,7 +46,6 @@ public class AlertRuleCreateTests : IntegrationTestBase
           "severity": "Warning",
           "cooldownSeconds": 60,
           "isEnabled": true,
-          "scope": "All",
           "requiredMatches": 3,
           "threshold": 85.0
         }
@@ -80,7 +77,6 @@ public class AlertRuleCreateTests : IntegrationTestBase
           "severity": "Critical",
           "cooldownSeconds": 120,
           "isEnabled": true,
-          "scope": "All",
           "channels": [
             {
               "alertDestination": "Slack",
@@ -117,8 +113,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
           "type": "PlatformUnreachable",
           "severity": "Warning",
           "cooldownSeconds": 5,
-          "isEnabled": true,
-          "scope": "All"
+          "isEnabled": true
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
@@ -157,29 +152,6 @@ public class AlertRuleCreateTests : IntegrationTestBase
         await VerifyJson(responseBody);
     }
 
-    [Fact]
-    public async Task Create_AlertRule_With_Scope_Specific_But_No_LimitedTo_Returns_BadRequest()
-    {
-        // Arrange
-        var createJson = """
-        {
-          "type": "PlatformUnreachable",
-          "severity": "Warning",
-          "cooldownSeconds": 60,
-          "isEnabled": true,
-          "scope": "Specific"
-        }
-        """;
-        var content = new StringContent(createJson, Encoding.UTF8, "application/json");
-
-        // Act
-        var response = await Client.PostAsync("/api/v1/alerters/rules", content, cancellationToken: TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
-        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        await VerifyJson(responseBody);
-    }
 
     [Fact]
     public async Task Create_NonThreshold_AlertRule_With_Threshold_Returns_BadRequest()
@@ -191,7 +163,6 @@ public class AlertRuleCreateTests : IntegrationTestBase
           "severity": "Warning",
           "cooldownSeconds": 60,
           "isEnabled": true,
-          "scope": "All",
           "requiredMatches": 3,
           "threshold": 85.0
         }

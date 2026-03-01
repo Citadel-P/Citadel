@@ -580,7 +580,6 @@ internal static class Configuration
         alertRule.Property<string>("Type").HasColumnType("TEXT").IsRequired();
         alertRule.Property<int?>("CooldownSeconds").HasColumnType("INTEGER").IsRequired(false);
         alertRule.Property<bool>("IsEnabled").HasColumnType("INTEGER").IsRequired().HasDefaultValue(true);
-        alertRule.Property<string>("Scope").HasColumnType("TEXT").IsRequired();
         alertRule.Property<string>("LimitedTo").HasColumnType("TEXT").IsRequired();
         alertRule.Property<string>("QuietHours").HasColumnType("TEXT").IsRequired();
         alertRule.Property<int?>("RequiredMatches").HasColumnType("INTEGER").IsRequired(false);

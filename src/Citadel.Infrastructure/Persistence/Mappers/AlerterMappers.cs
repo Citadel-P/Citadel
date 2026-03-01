@@ -30,7 +30,6 @@ internal static class AlerterMappers
             type: Enum.Parse<AlertType>(dto.Type),
             cooldownSeconds: dto.CooldownSeconds,
             isEnabled: dto.IsEnabled,
-            scope: Enum.Parse<AlertScope>(dto.Scope),
             severity: Enum.Parse<AlertSeverity>(dto.Severity),
             channels: dto.Channels?.Select(c => c.ToDomain()),
             limitedTo: System.Text.Json.JsonSerializer.Deserialize(dto.LimitedTo, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleLimitedTo) ?? [],

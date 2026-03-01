@@ -1,3 +1,4 @@
+using Application.Services.Alerts;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
@@ -15,7 +16,6 @@ public sealed record CreateAlertRule(
     AlertSeverity Severity,
     int? CooldownSeconds,
     bool IsEnabled,
-    AlertScope Scope,
     int? RequiredMatches = null,
     double? Threshold = null,
     IEnumerable<CreateAlertRule.ChannelInput>? Channels = null,
@@ -47,22 +47,11 @@ public sealed record CreateAlertRule(
                 RuleFor(x => x.Threshold).Null().WithMessage("Non-threshold alerts must not define Threshold.");
             });
 
-            When(x => x.Scope == AlertScope.Specific, () =>
-            {
-                RuleFor(x => x.LimitedTo).NotNull().NotEmpty()
-                    .WithMessage("LimitedTo must contain at least one resource when Scope is Specific.");
-            });
-
-            When(x => x.Scope == AlertScope.All, () =>
-            {
-                RuleFor(x => x.LimitedTo).Must(l => l is null || !l.Any())
-                    .WithMessage("LimitedTo must be empty when Scope is All.");
-            });
         }
     }
 }
 
-internal sealed class CreateAlertRuleHandler(IUnitOfWork unitOfWork, IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateAlertRule, Result<AlertRule>>
+internal sealed class CreateAlertRuleHandler(IUnitOfWork unitOfWork, AlertRuleCache alertRuleCache, IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateAlertRule, Result<AlertRule>>
 {
     public async ValueTask<Result<AlertRule>> Handle(CreateAlertRule command, CancellationToken cancellationToken)
     {
@@ -77,7 +66,6 @@ internal sealed class CreateAlertRuleHandler(IUnitOfWork unitOfWork, IHttpContex
             severity: command.Severity,
             cooldownSeconds: command.CooldownSeconds,
             isEnabled: command.IsEnabled,
-            scope: command.Scope,
             createdByActorId: actorId,
             requiredMatches: command.RequiredMatches,
             threshold: command.Threshold,
@@ -87,6 +75,9 @@ internal sealed class CreateAlertRuleHandler(IUnitOfWork unitOfWork, IHttpContex
 
         await unitOfWork.AlertRules.AddAlertRuleAsync(alertRule, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+
+        // reload cache
+        await alertRuleCache.ReloadAsync(cancellationToken);
 
         return alertRule;
     }

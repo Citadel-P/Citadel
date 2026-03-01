@@ -18,7 +18,6 @@ public class AlertRuleDeleteTests : IntegrationTestBase
             severity: AlertSeverity.Critical,
             cooldownSeconds: 300,
             isEnabled: true,
-            scope: AlertScope.All,
             createdByActorId: Constants.SystemId);
 
         await uow.AlertRules.AddAlertRuleAsync(rule, TestContext.Current.CancellationToken);

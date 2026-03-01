@@ -17,17 +17,23 @@ import {
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@radix-ui/react-dropdown-menu';
+import { AlertRuleDropdownActions, AlertRuleGroupActions } from './actions';
+import { ActionBar } from '@/components/custom/action-bar';
 
 export const AlerterComponents: RequiredComponents = {
   Icon: <Megaphone className="h-4 w-4" />,
   Content: ({ items, actions, isLoading }) => {
     return (
       <div className="flex flex-col gap-6">
-        <AlertRulesTable pagedResult={items as any} isLoading={isLoading} displayPagging={true} />
+        <AlertRulesTable pagedResult={items as any} actions={actions} isLoading={isLoading} displayPagging={true} />
         <Separator className="border-b-1 border-dashed " />
         <AlertNotificationChannels />
       </div>
     );
+  },
+  DropdownActions: AlertRuleDropdownActions,
+  GroupActions: ({ items }) => {
+    return <ActionBar type="Alerter" items={items} actions={Object.values(AlertRuleGroupActions)} />;
   },
   header: {
     title: 'Alert Rules',
@@ -38,7 +44,7 @@ export const AlerterComponents: RequiredComponents = {
   },
   useData: function (): ResourceDataHookResult<any> {
     const { data, isLoading } = useRead('listAlertRules');
-    return { items: data?.data.pagedResult as any, isLoading };
+    return { items: data?.data.pagedResult, isLoading };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

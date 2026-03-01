@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260224001520_migration0001")]
+    [Migration("20260228161201_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -232,10 +232,6 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<int?>("RequiredMatches")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("Scope")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("Severity")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -267,7 +263,6 @@ namespace Infrastructure.Migrations.Migrations
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             RequiredMatches = 3,
-                            Scope = "All",
                             Severity = "Critical",
                             Threshold = 90.0,
                             Type = "PlatformCpuHigh"
@@ -282,7 +277,6 @@ namespace Infrastructure.Migrations.Migrations
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             RequiredMatches = 3,
-                            Scope = "All",
                             Severity = "Warning",
                             Threshold = 80.0,
                             Type = "PlatformCpuHigh"
@@ -297,7 +291,6 @@ namespace Infrastructure.Migrations.Migrations
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             RequiredMatches = 3,
-                            Scope = "All",
                             Severity = "Critical",
                             Threshold = 90.0,
                             Type = "PlatformRamHigh"
@@ -312,7 +305,6 @@ namespace Infrastructure.Migrations.Migrations
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             RequiredMatches = 3,
-                            Scope = "All",
                             Severity = "Warning",
                             Threshold = 80.0,
                             Type = "PlatformRamHigh"
@@ -326,7 +318,6 @@ namespace Infrastructure.Migrations.Migrations
                             IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
-                            Scope = "All",
                             Severity = "Critical",
                             Type = "PlatformUnreachable"
                         },
@@ -339,7 +330,6 @@ namespace Infrastructure.Migrations.Migrations
                             IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
-                            Scope = "All",
                             Severity = "Warning",
                             Type = "PlatformVersionMismatch"
                         },
@@ -351,7 +341,6 @@ namespace Infrastructure.Migrations.Migrations
                             IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
-                            Scope = "All",
                             Severity = "Info",
                             Type = "UnmanagedContainerCreated"
                         },
@@ -363,7 +352,6 @@ namespace Infrastructure.Migrations.Migrations
                             IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
-                            Scope = "All",
                             Severity = "Info",
                             Type = "DeploymentImageUpdateAvailable"
                         },
@@ -375,7 +363,6 @@ namespace Infrastructure.Migrations.Migrations
                             IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
-                            Scope = "All",
                             Severity = "Critical",
                             Type = "DeploymentAutoDeployFailed"
                         },
@@ -387,7 +374,6 @@ namespace Infrastructure.Migrations.Migrations
                             IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
-                            Scope = "All",
                             Severity = "Info",
                             Type = "DeploymentAutoUpdated"
                         },
@@ -399,7 +385,6 @@ namespace Infrastructure.Migrations.Migrations
                             IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
-                            Scope = "All",
                             Severity = "Info",
                             Type = "StackImageUpdateAvailable"
                         },
@@ -411,7 +396,6 @@ namespace Infrastructure.Migrations.Migrations
                             IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
-                            Scope = "All",
                             Severity = "Critical",
                             Type = "StackAutoDeployFailed"
                         },
@@ -423,7 +407,6 @@ namespace Infrastructure.Migrations.Migrations
                             IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
-                            Scope = "All",
                             Severity = "Info",
                             Type = "StackAutoUpdated"
                         });

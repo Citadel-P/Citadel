@@ -1,10 +1,10 @@
 {
   id: Guid_1,
+  name: Platform unreachable,
   type: PlatformUnreachable,
   severity: Critical,
   cooldownSeconds: 120,
   isEnabled: true,
-  scope: All,
   channels: [
     {
       id: Guid_2,

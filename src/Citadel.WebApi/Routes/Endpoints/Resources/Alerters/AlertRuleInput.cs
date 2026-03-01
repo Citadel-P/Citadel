@@ -9,7 +9,6 @@ public sealed record AlertRuleInput(
     AlertSeverity Severity,
     int? CooldownSeconds,
     bool IsEnabled,
-    AlertScope Scope,
     int? RequiredMatches = null,
     double? Threshold = null,
     IEnumerable<AlertChannelInput>? Channels = null,
@@ -17,7 +16,7 @@ public sealed record AlertRuleInput(
     IEnumerable<AlertRuleQuietHour>? QuietHours = null)
 {
     internal CreateAlertRule ToCommand() => new(
-        Type, Severity, CooldownSeconds, IsEnabled, Scope,
+        Type, Severity, CooldownSeconds, IsEnabled,
         RequiredMatches, Threshold,
         Channels?.Select(c => new CreateAlertRule.ChannelInput(c.AlertDestination, c.Url, c.IsActive)),
         LimitedTo, QuietHours);

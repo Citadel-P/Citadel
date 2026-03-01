@@ -26,7 +26,6 @@ public sealed class AlertRule : IAuditedEntity
     /// </summary>
     public double? Threshold { get; private set; }
     public bool IsEnabled { get; private set; }
-    public AlertScope Scope { get; private set; }
 
     public IReadOnlyCollection<AlertChannel> Channels => _channels;
     public IReadOnlyCollection<AlertRuleLimitedTo> LimitedTo => _limitedTo;
@@ -43,7 +42,6 @@ public sealed class AlertRule : IAuditedEntity
         AlertSeverity severity,
         int? cooldownSeconds,
         bool isEnabled,
-        AlertScope scope,
         Guid createdByActorId,
         int? requiredMatches = null,
         double? threshold = null,
@@ -60,7 +58,6 @@ public sealed class AlertRule : IAuditedEntity
         RequiredMatches = requiredMatches;
         Threshold = threshold;
         IsEnabled = isEnabled;
-        Scope = scope;
 
         _channels = channels?.ToList() ?? [];
         _limitedTo = limitedTo?.ToList() ?? [];
@@ -70,7 +67,6 @@ public sealed class AlertRule : IAuditedEntity
         CreatedAt = DateTime.UtcNow;
 
         ValidateThresholdConfiguration();
-        ValidateScope();
         ValidateResourceCompatibility();
         ValidateQuietHours();
     }
@@ -81,7 +77,6 @@ public sealed class AlertRule : IAuditedEntity
         AlertSeverity severity,
         int? cooldownSeconds,
         bool isEnabled,
-        AlertScope scope,
         Guid createdByActorId,
         DateTime createdAt,
         int? requiredMatches = null,
@@ -95,7 +90,6 @@ public sealed class AlertRule : IAuditedEntity
             severity,
             cooldownSeconds,
             isEnabled,
-            scope,
             createdByActorId,
             requiredMatches,
             threshold,
@@ -122,7 +116,6 @@ public sealed class AlertRule : IAuditedEntity
         AlertSeverity severity,
         int? cooldownSeconds,
         bool isEnabled,
-        AlertScope scope,
         int? requiredMatches = null,
         double? threshold = null,
         IEnumerable<AlertRuleLimitedTo>? limitedTo = null,
@@ -132,7 +125,6 @@ public sealed class AlertRule : IAuditedEntity
         Severity = severity;
         CooldownSeconds = cooldownSeconds;
         IsEnabled = isEnabled;
-        Scope = scope;
         RequiredMatches = requiredMatches;
         Threshold = threshold;
         _limitedTo.Clear();
@@ -156,15 +148,6 @@ public sealed class AlertRule : IAuditedEntity
         return true;
     }
 
-    private void ValidateScope()
-    {
-        if (Scope == AlertScope.All && _limitedTo.Any())
-            throw new InvalidOperationException($"{nameof(LimitedTo)} must be empty when {nameof(Scope)} is All.");
-
-        if (Scope == AlertScope.Specific && !_limitedTo.Any())
-            throw new InvalidOperationException($"{nameof(LimitedTo)} must contain at least one resource when {nameof(Scope)} is Specific.");
-    }
-
     private void ValidateThresholdConfiguration()
     {
         if (AlertTypeMetadata.IsThreshold(Type))
@@ -183,8 +166,7 @@ public sealed class AlertRule : IAuditedEntity
     {
         var expected = AlertTypeMetadata.GetResourceType(Type);
 
-        if (Scope == AlertScope.Specific &&
-            _limitedTo.Any(x => x.ResourceType != expected))
+        if (_limitedTo.Any(x => x.ResourceType != expected))
             throw new InvalidOperationException("ResourceType does not match AlertType.");
     }
 

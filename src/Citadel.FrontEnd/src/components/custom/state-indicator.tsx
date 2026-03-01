@@ -5,12 +5,12 @@ import { LoaderCircle } from 'lucide-react';
 
 type StateValue = boolean | ContainerStateStatus | RegistryStatus | DeploymentStatus;
 
-const getStatusStyle = (value: StateValue) => {
+const getStatusStyle = (value: StateValue, enableLabel?: boolean) => {
   // Boolean-based statuses
   if (typeof value === 'boolean') {
     return {
       colorClass: value ? 'bg-green-500' : 'bg-gray-500',
-      tooltip: value ? 'In use' : 'Unused',
+      tooltip: value ? (enableLabel ? 'Enabled' : 'In use') : enableLabel ? 'Disabled' : 'Unused',
     };
   }
 
@@ -55,22 +55,24 @@ const getStatusStyle = (value: StateValue) => {
   }
 };
 
-export const StateIndicator = memo(({ value, isProcessing }: { value: StateValue; isProcessing?: boolean }) => {
-  const { colorClass, tooltip } = getStatusStyle(value);
+export const StateIndicator = memo(
+  ({ value, isProcessing, enableLabel }: { value: StateValue; isProcessing?: boolean; enableLabel?: boolean }) => {
+    const { colorClass, tooltip } = getStatusStyle(value, enableLabel);
 
-  if (isProcessing) return <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />;
-  return (
-    <TooltipProvider delayDuration={200}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className={`${colorClass} mr-2 h-2 w-2 rounded-full`} />
-        </TooltipTrigger>
-        <TooltipContent>
-          <span>{tooltip}</span>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-});
+    if (isProcessing) return <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />;
+    return (
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className={`${colorClass} mr-2 h-2 w-2 rounded-full`} />
+          </TooltipTrigger>
+          <TooltipContent>
+            <span>{tooltip}</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  },
+);
 
 StateIndicator.displayName = 'StateIndicator';

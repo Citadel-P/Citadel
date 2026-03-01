@@ -2,16 +2,22 @@ import { DataTable } from '@/components/ui/data-table';
 import { AlertRuleView, PagedResultViewOfAlertRuleView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
-import { useRef } from 'react';
-import { useActivityQuery } from '@/lib/atoms';
+import { useMemo, useRef } from 'react';
+import { useActivityQuery, useSelectedResources } from '@/lib/atoms';
 import { ContentCard } from '@/components/custom/content-card';
 import { PaginationControls, SelectField, SeverityStatusCell, pageSizeOptions } from '@/components/custom/common';
 import { Activity, Clock, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
+import { StateIndicator } from '@/components/custom/state-indicator';
+import { useNavigate } from 'react-router';
+import { ActionData } from '@/pages/types';
+import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 
 const EMPTY_ROWS: AlertRuleView[] = [];
 
 export const AlertRulesTable = ({
+  actions,
   pagedResult,
   isLoading,
   displayPagging = false,
@@ -20,6 +26,10 @@ export const AlertRulesTable = ({
   isLoading: boolean;
   displayTarget?: boolean;
   displayPagging?: boolean;
+  actions: Record<
+    string,
+    React.FC<{ resource: AlertRuleView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >;
 }) => {
   const [query, setQuery] = useActivityQuery();
   const tableTopRef = useRef<HTMLDivElement | null>(null);
@@ -42,10 +52,18 @@ export const AlertRulesTable = ({
     });
   };
 
+  const [_, setSelectedResources] = useSelectedResources<AlertRuleView>('Alerter');
+  const cols = useMemo(() => columns(actions ?? {}), [actions]);
+
   return (
     <div className="flex flex-col gap-4" ref={tableTopRef}>
       <ContentCard>
-        <DataTable columns={columns()} data={pagedResult?.items ?? EMPTY_ROWS} isLoading={isLoading} />
+        <DataTable
+          columns={cols}
+          data={pagedResult?.items ?? EMPTY_ROWS}
+          isLoading={isLoading}
+          onSelectionChange={setSelectedResources}
+        />
       </ContentCard>
       {displayPagging && (
         <div className="flex sm:flex-row flex-col gap-2 sm:items-center sm:justify-between">
@@ -71,19 +89,37 @@ export const AlertRulesTable = ({
   );
 };
 
-const columns = (): ColumnDef<AlertRuleView>[] => {
+const columns = (
+  actions: Record<
+    string,
+    React.FC<{ resource: AlertRuleView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+  >,
+): ColumnDef<AlertRuleView>[] => {
   const cols: ColumnDef<AlertRuleView>[] = [
     {
-      accessorKey: 'status',
-      header: ({ column }) => <SortableCell cellName="Status" column={column} />,
-      cell: ({ row }) => row.original.isEnabled,
-      sortingFn: (rowA: any, rowB: any): number => rowA.original?.eventType?.localeCompare(rowB.original?.eventType),
+      id: 'select',
+      header: ({ table }) => (
+        <Checkbox
+          checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select alert rule"
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
     },
     {
-      accessorKey: 'type',
-      header: ({ column }) => <SortableCell cellName="Rule Type" column={column} />,
-      cell: ({ row }) => row.original.type,
-      sortingFn: (rowA: any, rowB: any): number => rowA.original?.type?.localeCompare(rowB.original?.type),
+      accessorKey: 'name',
+      header: ({ column }) => <SortableCell cellName="Name" column={column} />,
+      cell: ({ row }) => <RuleNameRow alertRule={row.original} />,
+      sortingFn: (rowA: any, rowB: any): number => rowA.original?.name?.localeCompare(rowB.original?.name),
     },
     {
       accessorKey: 'severity',
@@ -102,6 +138,10 @@ const columns = (): ColumnDef<AlertRuleView>[] => {
       header: ({ column }) => <SortableCell cellName="Channels" column={column} />,
       cell: ({ row }) => <ChannelsCell rule={row.original} />,
       sortingFn: (rowA: any, rowB: any): number => rowA.original?.threshold?.localeCompare(rowB.original?.threshold),
+    },
+    {
+      id: 'actions',
+      cell: ({ row }) => <RowActionMenu resource={row.original as any} actions={actions} />,
     },
   ];
 
@@ -163,3 +203,30 @@ function ChannelsCell({ rule }: { rule: AlertRuleView }) {
     </div>
   );
 }
+
+const RuleNameRow = ({ alertRule }: { alertRule: AlertRuleView }) => {
+  const navigate = useNavigate();
+  function onClick() {
+    navigate(`/alerters/edit/${alertRule.id}/`);
+  }
+  return (
+    <div className="flex items-center whitespace-nowrap">
+      <div className="flex items-center">
+        <StateIndicator value={alertRule.isEnabled} enableLabel={true} />
+      </div>
+      <span
+        className="cursor-pointer hover:underline"
+        onClick={onClick}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            onClick();
+          }
+        }}
+        tabIndex={0}
+        role="button"
+        aria-label="Show alert rule details">
+        {alertRule.name}
+      </span>
+    </div>
+  );
+};

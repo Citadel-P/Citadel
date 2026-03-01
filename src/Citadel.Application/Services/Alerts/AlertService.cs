@@ -61,7 +61,7 @@ public sealed class AlertService(IEnumerable<IAlertEvaluator> evaluators, IAlert
 
     private static IEnumerable<AlertMatch> ApplyScope(AlertRule rule, IEnumerable<AlertMatch> matches)
     {
-        if (rule.Scope == AlertScope.All)
+        if (rule.LimitedTo.Count == 0)
             return matches;
 
         var allowed = rule.LimitedTo

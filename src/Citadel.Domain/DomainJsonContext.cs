@@ -123,7 +123,6 @@ public partial class AlertEventJsonContext : JsonSerializerContext
     Converters = new[]
     {
     typeof(JsonStringEnumConverter<AlertType>),
-    typeof(JsonStringEnumConverter<AlertScope>),
     typeof(JsonStringEnumConverter<ScheduleType>),
     typeof(JsonStringEnumConverter<AlertSeverity>),
     typeof(JsonStringEnumConverter<AlertResourceType>),

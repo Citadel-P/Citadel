@@ -207,7 +207,6 @@ public class ThresholdAlertTests: IntegrationTestBase
                 severity: rule.Severity,
                 cooldownSeconds: rule.CooldownSeconds,
                 isEnabled: true,
-                scope: rule.Scope,
                 createdByActorId: rule.CreatedByActorId,
                 createdAt: rule.CreatedAt,
                 requiredMatches: rule.RequiredMatches,
@@ -249,7 +248,6 @@ public class ThresholdAlertTests: IntegrationTestBase
                 severity: rule.Severity,
                 cooldownSeconds: rule.CooldownSeconds,
                 isEnabled: true,
-                scope: AlertScope.Specific,
                 createdByActorId: rule.CreatedByActorId,
                 createdAt: rule.CreatedAt,
                 requiredMatches: rule.RequiredMatches,
@@ -611,7 +609,6 @@ public class ThresholdAlertTests: IntegrationTestBase
             severity: severity,
             cooldownSeconds: cooldownSeconds,
             isEnabled: true,
-            scope: AlertScope.All,
             createdByActorId: Constants.DefaultAdminId,
             requiredMatches: requiredMatches,
             threshold: threshold);

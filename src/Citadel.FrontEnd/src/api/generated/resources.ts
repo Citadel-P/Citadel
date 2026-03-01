@@ -60,7 +60,10 @@ export const resources = {
   getActivity: { method: "GET", key: "getActivity", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   listActivities: { method: "GET", key: "listActivities", params: ["query","params"], requiredParams: [], queryParams: ["ResourceId","ResourceType","EventType","Page","PageSize"] },
   getAlertRule: { method: "GET", key: "getAlertRule", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
+  updateAlertRule: { method: "PATCH", key: "updateAlertRule", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
   listAlertRules: { method: "GET", key: "listAlertRules", params: ["query","params"], requiredParams: [], queryParams: ["Page","PageSize"] },
+  createAlertRule: { method: "POST", key: "createAlertRule", params: ["data","params"], requiredParams: [], queryParams: [] },
+  deleteAlertRules: { method: "DELETE", key: "deleteAlertRules", params: ["params"], requiredParams: [], queryParams: [] },
   getAlertChannel: { method: "GET", key: "getAlertChannel", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   listAlertChannels: { method: "GET", key: "listAlertChannels", params: ["params"], requiredParams: [], queryParams: [] },
 } as const;

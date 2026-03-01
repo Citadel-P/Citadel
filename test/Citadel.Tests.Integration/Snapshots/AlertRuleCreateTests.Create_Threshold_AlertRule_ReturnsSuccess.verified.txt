@@ -1,12 +1,12 @@
 {
   id: Guid_1,
+  name: Platform cpu high,
   type: PlatformCpuHigh,
   severity: Warning,
   cooldownSeconds: 60,
   requiredMatches: 3,
   threshold: 85,
   isEnabled: true,
-  scope: All,
   createdByActorId: Guid_2,
   createdAt: DateTimeOffset_1
 }

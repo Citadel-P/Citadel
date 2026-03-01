@@ -6285,8 +6285,7 @@
           "type",
           "severity",
           "cooldownSeconds",
-          "isEnabled",
-          "scope"
+          "isEnabled"
         ],
         "type": "object",
         "properties": {
@@ -6307,9 +6306,6 @@
           },
           "isEnabled": {
             "type": "boolean"
-          },
-          "scope": {
-            "$ref": "#/components/schemas/AlertScope"
           },
           "requiredMatches": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -6488,13 +6484,13 @@
       "AlertRuleView": {
         "required": [
           "id",
+          "name",
           "type",
           "severity",
           "cooldownSeconds",
           "requiredMatches",
           "threshold",
           "isEnabled",
-          "scope",
           "channels",
           "limitedTo",
           "quietHours",
@@ -6506,6 +6502,9 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "name": {
+            "type": "string"
           },
           "type": {
             "$ref": "#/components/schemas/AlertType"
@@ -6542,9 +6541,6 @@
           },
           "isEnabled": {
             "type": "boolean"
-          },
-          "scope": {
-            "$ref": "#/components/schemas/AlertScope"
           },
           "channels": {
             "type": "array",
@@ -6583,12 +6579,6 @@
             "$ref": "#/components/schemas/PagedResultViewOfAlertRuleView"
           }
         }
-      },
-      "AlertScope": {
-        "enum": [
-          "All",
-          "Specific"
-        ]
       },
       "AlertSeverity": {
         "enum": [

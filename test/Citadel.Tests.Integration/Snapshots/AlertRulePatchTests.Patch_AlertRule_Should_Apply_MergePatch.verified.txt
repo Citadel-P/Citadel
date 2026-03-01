@@ -1,10 +1,10 @@
 {
   id: Guid_1,
+  name: Platform unreachable,
   type: PlatformUnreachable,
   severity: Critical,
   cooldownSeconds: 600,
   isEnabled: false,
-  scope: All,
   createdByActorId: Guid_2,
   createdAt: DateTimeOffset_1
 }

@@ -13,8 +13,8 @@ import {
 } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem, CommandEmpty } from '@/components/ui/command';
-import { Cable, Check, ChevronDown, Layers, LucideIcon, Rocket, Server, Settings, Tags, User, X } from 'lucide-react';
-import { cn, filterBySplit, serializeData, toFixedNumber } from '@/lib/utils';
+import { Cable, Check, ChevronDown, Layers, LucideIcon, Rocket, Server, Settings, Tags, User } from 'lucide-react';
+import { cn, filterBySplit, toFixedNumber } from '@/lib/utils';
 import { PluralResourceMap, ResourceType } from '@/api/types';
 import { useMeasuredWidth, useRead, useLocalStorage } from '@/lib/hooks';
 import { useResourceFilter } from '@/lib/atoms';
@@ -180,7 +180,7 @@ export function MultiResourceSelectorField<T extends { id: string; name: string 
 }) {
   const resourceName = PluralResourceMap[type];
 
-  const read = useRead(`list${resourceName}`, { platformId });
+  const read = useRead(`list${resourceName}` as any, { platformId });
   const items = (Object.values(read.data?.data ?? {}).at(0) as T[]) ?? [];
 
   const getValue = useCallback((item: T) => (valueKey === 'name' ? item.name : item.id), [valueKey]);

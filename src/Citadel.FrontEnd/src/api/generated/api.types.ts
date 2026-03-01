@@ -168,11 +168,6 @@ export enum AlertSeverity {
   Critical = "Critical",
 }
 
-export enum AlertScope {
-  All = "All",
-  Specific = "Specific",
-}
-
 export enum AlertResourceType {
   Platform = "Platform",
   Deployment = "Deployment",
@@ -358,6 +353,12 @@ export interface ActivityView {
   actorType: ActorType;
 }
 
+export interface AlertChannelInput {
+  alertDestination: AlertDestination;
+  url: string;
+  isActive: boolean;
+}
+
 export interface AlertChannelView {
   /** @format uuid */
   id: string;
@@ -372,6 +373,30 @@ export interface AlertChannelView {
 
 export interface AlertChannelsView {
   channels: AlertChannelView[];
+}
+
+export interface AlertRuleInput {
+  type: AlertType;
+  severity: AlertSeverity;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  cooldownSeconds: null | number | string;
+  isEnabled: boolean;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  requiredMatches?: null | number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  threshold?: null | number | string;
+  channels?: null | any[];
+  limitedTo?: null | any[];
+  quietHours?: null | any[];
 }
 
 export interface AlertRuleLimitedTo {
@@ -422,6 +447,7 @@ export interface AlertRuleQuietHourWeeklyQuietHour {
 export interface AlertRuleView {
   /** @format uuid */
   id: string;
+  name: string;
   type: AlertType;
   severity: AlertSeverity;
   /**
@@ -440,7 +466,6 @@ export interface AlertRuleView {
    */
   threshold: null | number | string;
   isEnabled: boolean;
-  scope: AlertScope;
   channels: AlertChannelView[];
   limitedTo: AlertRuleLimitedTo[];
   quietHours: AlertRuleQuietHour[];
@@ -802,6 +827,10 @@ export interface CreateVolumeInput {
   driver: string;
   labels?: null | object;
   options?: null | object;
+}
+
+export interface DeleteAlertRulesInput {
+  ids: string[];
 }
 
 export interface DeleteContainersRequest {
@@ -3973,6 +4002,39 @@ export class Api<
      * No description
      *
      * @tags Alerters
+     * @name UpdateAlertRule
+     * @summary Update an alert rule
+     * @request PATCH:/api/v1/alerters/rules/{id}
+     * @secure
+     * @response `200` `AlertRuleView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateAlertRule: (
+      id: string,
+      data: AlertRuleInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AlertRuleView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/alerters/rules/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Alerters
      * @name ListAlertRules
      * @summary List alert rules
      * @request GET:/api/v1/alerters/rules
@@ -4009,6 +4071,63 @@ export class Api<
         query: query,
         secure: true,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Alerters
+     * @name CreateAlertRule
+     * @summary Create an alert rule
+     * @request POST:/api/v1/alerters/rules
+     * @secure
+     * @response `200` `AlertRuleView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createAlertRule: (data: AlertRuleInput, params: RequestParams = {}) =>
+      this.request<
+        AlertRuleView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/alerters/rules`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Alerters
+     * @name DeleteAlertRules
+     * @summary Delete alert rules
+     * @request DELETE:/api/v1/alerters/rules
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteAlertRules: (
+      data: DeleteAlertRulesInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/alerters/rules`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         ...params,
       }),
 

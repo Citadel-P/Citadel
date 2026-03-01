@@ -435,12 +435,6 @@ public enum AlertResourceType
     Stack
 }
 
-public enum AlertScope
-{
-    All,
-    Specific
-}
-
 public enum AlertDestination
 {
     Generic,

@@ -21,7 +21,6 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             r.Type, 
             r.CooldownSeconds, 
             r.IsEnabled, 
-            r.Scope, 
             r.Severity, 
             r.LimitedTo, 
             r.QuietHours, 
@@ -56,10 +55,10 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
     {
         const string ruleSql = @"
         INSERT INTO AlertRules (
-            Id, Type, CooldownSeconds, IsEnabled, Scope, Severity, LimitedTo, QuietHours, RequiredMatches, Threshold, CreatedByActorId, CreatedAt
+            Id, Type, CooldownSeconds, IsEnabled, Severity, LimitedTo, QuietHours, RequiredMatches, Threshold, CreatedByActorId, CreatedAt
         )
         VALUES (
-            @Id, @Type, @CooldownSeconds, @IsEnabled, @Scope, @Severity, @LimitedTo, @QuietHours, @RequiredMatches, @Threshold, @CreatedByActorId, @CreatedAt
+            @Id, @Type, @CooldownSeconds, @IsEnabled, @Severity, @LimitedTo, @QuietHours, @RequiredMatches, @Threshold, @CreatedByActorId, @CreatedAt
         )";
 
         var ruleId = alertRule.Id.Format();
@@ -71,7 +70,6 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             IsEnabled = alertRule.IsEnabled,
             RequiredMatches = alertRule.RequiredMatches,
             Threshold = alertRule.Threshold,
-            Scope = EnumFormatter<AlertScope>.GetValue(alertRule.Scope),
             Severity = EnumFormatter<AlertSeverity>.GetValue(alertRule.Severity),
             QuietHours = JsonSerializer.Serialize(alertRule.QuietHours, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleQuietHour),
             LimitedTo = JsonSerializer.Serialize(alertRule.LimitedTo, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleLimitedTo),
@@ -119,7 +117,6 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             r.Type, 
             r.CooldownSeconds, 
             r.IsEnabled, 
-            r.Scope, 
             r.Severity, 
             r.LimitedTo, 
             r.QuietHours, 
@@ -169,7 +166,6 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             r.Type, 
             r.CooldownSeconds, 
             r.IsEnabled, 
-            r.Scope, 
             r.Severity, 
             r.LimitedTo, 
             r.QuietHours, 
@@ -276,7 +272,6 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             Type = @Type,
             CooldownSeconds = @CooldownSeconds,
             IsEnabled = @IsEnabled,
-            Scope = @Scope,
             Severity = @Severity,
             LimitedTo = @LimitedTo,
             QuietHours = @QuietHours,
@@ -293,7 +288,6 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             Type = EnumFormatter<AlertType>.GetValue(alertRule.Type),
             CooldownSeconds = alertRule.CooldownSeconds,
             IsEnabled = alertRule.IsEnabled,
-            Scope = EnumFormatter<AlertScope>.GetValue(alertRule.Scope),
             Severity = EnumFormatter<AlertSeverity>.GetValue(alertRule.Severity),
             QuietHours = JsonSerializer.Serialize(alertRule.QuietHours, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleQuietHour),
             LimitedTo = JsonSerializer.Serialize(alertRule.LimitedTo, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleLimitedTo),
