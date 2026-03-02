@@ -360,7 +360,8 @@ public enum ActivityResourceType
     Platform,
     Registry,
     Deployment,
-    Stack
+    Stack,
+    Alerter
 }
 
 public enum ActivityEventType
@@ -390,6 +391,11 @@ public enum ActivityEventType
     RegistryDeleted,
     #endregion
 
+    #region Alerter
+    AlerterCreated,
+    AlerterUpdated,
+    AlerterDeleted,
+    #endregion
 }
 
 public enum AlertType

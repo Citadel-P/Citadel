@@ -31,7 +31,7 @@ internal static class AlerterMappers
             cooldownSeconds: dto.CooldownSeconds,
             isEnabled: dto.IsEnabled,
             severity: Enum.Parse<AlertSeverity>(dto.Severity),
-            channels: dto.Channels?.Select(c => c.ToDomain()),
+            channels: dto.ChannelIds,
             limitedTo: System.Text.Json.JsonSerializer.Deserialize(dto.LimitedTo, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleLimitedTo) ?? [],
             quietHours: System.Text.Json.JsonSerializer.Deserialize(dto.QuietHours, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleQuietHour) ?? [],
             requiredMatches: dto.RequiredMatches,

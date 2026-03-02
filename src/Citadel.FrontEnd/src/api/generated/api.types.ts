@@ -466,7 +466,7 @@ export interface AlertRuleView {
    */
   threshold: null | number | string;
   isEnabled: boolean;
-  channels: AlertChannelView[];
+  channels: string[];
   limitedTo: AlertRuleLimitedTo[];
   quietHours: AlertRuleQuietHour[];
   /** @format uuid */
@@ -827,6 +827,10 @@ export interface CreateVolumeInput {
   driver: string;
   labels?: null | object;
   options?: null | object;
+}
+
+export interface DeleteAlertChannelsInput {
+  ids: string[];
 }
 
 export interface DeleteAlertRulesInput {
@@ -4162,6 +4166,39 @@ export class Api<
      * No description
      *
      * @tags Alerters
+     * @name UpdateAlertChannel
+     * @summary Update an alert channel
+     * @request PATCH:/api/v1/alerters/channels/{id}
+     * @secure
+     * @response `200` `AlertChannelView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateAlertChannel: (
+      id: string,
+      data: AlertChannelInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AlertChannelView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/alerters/channels/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Alerters
      * @name ListAlertChannels
      * @summary List alert channels
      * @request GET:/api/v1/alerters/channels
@@ -4177,6 +4214,63 @@ export class Api<
         method: "GET",
         secure: true,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Alerters
+     * @name CreateAlertChannel
+     * @summary Create an alert channel
+     * @request POST:/api/v1/alerters/channels
+     * @secure
+     * @response `200` `AlertChannelView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createAlertChannel: (data: AlertChannelInput, params: RequestParams = {}) =>
+      this.request<
+        AlertChannelView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/alerters/channels`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Alerters
+     * @name DeleteAlertChannels
+     * @summary Delete alert channels
+     * @request DELETE:/api/v1/alerters/channels
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteAlertChannels: (
+      data: DeleteAlertChannelsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/alerters/channels`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         ...params,
       }),
   };

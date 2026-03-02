@@ -6,14 +6,7 @@
   cooldownSeconds: 120,
   isEnabled: true,
   channels: [
-    {
-      id: Guid_2,
-      alertDestination: Slack,
-      url: https://hooks.slack.com/services/test,
-      isActive: true,
-      createdByActorId: Guid_3,
-      createdAt: DateTimeOffset_1
-    }
+    Guid_2
   ],
   createdByActorId: Guid_3,
   createdAt: DateTimeOffset_1

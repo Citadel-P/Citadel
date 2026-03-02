@@ -174,10 +174,12 @@ public interface IAlertRuleRepository
     Task<AlertChannel?> GetChannelByIdAsync(Guid channelId, CancellationToken cancellationToken);
     Task<IEnumerable<AlertChannel>> GetAllChannelsAsync(CancellationToken cancellationToken);
     Task<int> AddAlertRuleAsync(AlertRule alertRule, CancellationToken cancellationToken);
+    Task<int> AddChannelAsync(AlertChannel alertChannel, CancellationToken cancellationToken);
     Task<int> UpdateAsync(AlertRule alertRule, CancellationToken cancellationToken);
     Task<int> UpsertAlertRuleStateAsync(AlertRuleState alertRuleState, CancellationToken cancellationToken);
     Task<int> UpdateChannelAsync(AlertChannel channel, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<int> RemoveChannelsRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
 }
 
 public interface IAlertEventRepository

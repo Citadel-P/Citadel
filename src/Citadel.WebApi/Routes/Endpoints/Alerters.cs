@@ -54,6 +54,29 @@ public static class Alerters
         return EndpointHandlers.HandleResult(result, AlertChannelView.Map);
     }
 
+    public static async Task<Results<Ok<AlertChannelView>, ProblemHttpResult>> CreateChannel(IMediator mediator, [FromBody] AlertChannelInput request, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(request.ToCommand(), cancellationToken);
+        return EndpointHandlers.HandleResult(result, AlertChannelView.Map);
+    }
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> DeleteChannels(IMediator mediator, [FromBody] DeleteAlertChannelsInput request, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(request.ToCommand(), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
+    }
+
+    public static async Task<Results<Ok<AlertChannelView>, ProblemHttpResult>> PatchChannel(
+        IMediator mediator,
+        [FromRoute][Description("Alert channel ID")] Guid id,
+        AlertChannelInputPatchDocument patchInput,
+        CancellationToken cancellationToken)
+    {
+        var mapped = patchInput.Map<AlertChannelInput, AlertChannel>();
+        var result = await mediator.Send(new PatchAlertChannel(id, mapped), cancellationToken);
+        return EndpointHandlers.HandleResult(result, AlertChannelView.Map);
+    }
+
     public static async Task<Results<Ok<AlertChannelsView>, ProblemHttpResult>> ListChannels(IMediator mediator, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAlertChannels(), cancellationToken);

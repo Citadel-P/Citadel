@@ -132,9 +132,10 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.DeploymentApplied, DeploymentApplied) => true,
             (ActivityEventType.DeploymentPaused, DeploymentPaused) => true,
             (ActivityEventType.DeploymentDegraded, DeploymentDegraded) => true,
+            (ActivityEventType.AlerterCreated, AlerterCreated) => true,
+            (ActivityEventType.AlerterUpdated, AlerterUpdated) => true,
+            (ActivityEventType.AlerterDeleted, AlerterDeleted) => true,
 
-
-            // Todo: Add mappings
             _ => false
         };
     }

@@ -1,8 +1,11 @@
 using Application.Services.Alerts;
+using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using FluentValidation;
+using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
@@ -18,15 +21,10 @@ public sealed record CreateAlertRule(
     bool IsEnabled,
     int? RequiredMatches = null,
     double? Threshold = null,
-    IEnumerable<CreateAlertRule.ChannelInput>? Channels = null,
+    IEnumerable<Guid>? Channels = null,
     IEnumerable<AlertRuleLimitedTo>? LimitedTo = null,
     IEnumerable<AlertRuleQuietHour>? QuietHours = null) : ICommand<Result<AlertRule>>
 {
-    public sealed record ChannelInput(
-        AlertDestination AlertDestination,
-        string Url,
-        bool IsActive);
-
     internal sealed class Validator : AbstractValidator<CreateAlertRule>
     {
         public Validator()
@@ -51,7 +49,11 @@ public sealed record CreateAlertRule(
     }
 }
 
-internal sealed class CreateAlertRuleHandler(IUnitOfWork unitOfWork, AlertRuleCache alertRuleCache, IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateAlertRule, Result<AlertRule>>
+internal sealed class CreateAlertRuleHandler(
+    IUnitOfWork unitOfWork, 
+    AlertRuleCache alertRuleCache,
+    IActivityStreamManager activityHub,
+    IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateAlertRule, Result<AlertRule>>
 {
     public async ValueTask<Result<AlertRule>> Handle(CreateAlertRule command, CancellationToken cancellationToken)
     {
@@ -59,7 +61,18 @@ internal sealed class CreateAlertRuleHandler(IUnitOfWork unitOfWork, AlertRuleCa
             ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
 
         var actorId = user.GetActorId();
-        var channels = command.Channels?.Select(c => new AlertChannel(c.AlertDestination, c.Url, c.IsActive, actorId)).ToList();
+
+        if (command.Channels is not null)
+        {
+            foreach (var channelId in command.Channels)
+            {
+                var channel = await unitOfWork.AlertRules.GetChannelByIdAsync(channelId, cancellationToken);
+                if (channel is null)
+                {
+                    return Result.Failure<AlertRule>(new NotFoundError($"Alert channel does not exist: {channelId}"));
+                }
+            }
+        }
 
         var alertRule = new AlertRule(
             type: command.Type,
@@ -69,15 +82,25 @@ internal sealed class CreateAlertRuleHandler(IUnitOfWork unitOfWork, AlertRuleCa
             createdByActorId: actorId,
             requiredMatches: command.RequiredMatches,
             threshold: command.Threshold,
-            channels: channels,
+            channels: command.Channels?.ToList(),
             limitedTo: command.LimitedTo?.ToList(),
             quietHours: command.QuietHours?.ToList());
 
+        var activity = new ActivityEvent(
+                        actorId: actorId,
+                        resourceId: alertRule.Id,
+                        platformId: null,
+                        resourceName: alertRule.Type.ToString(),
+                        status: ActivityStatus.Success,
+                        eventType: ActivityEventType.AlerterCreated,
+                        info: new AlerterCreated(alertRule)
+                        );
+
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.AlertRules.AddAlertRuleAsync(alertRule, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
-        // reload cache
-        await alertRuleCache.ReloadAsync(cancellationToken);
+        alertRuleCache.Upsert(alertRule);
 
         return alertRule;
     }

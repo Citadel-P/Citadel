@@ -33,10 +33,9 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         LIMIT 1
         """;
 
-        const string channelQuery = """
-        SELECT c.Id, c.AlertDestination, c.Url, c.IsActive, c.CreatedByActorId, c.CreatedAt
-        FROM AlertChannels c
-        INNER JOIN AlertRuleChannels arc ON c.Id = arc.AlertChannelId
+        const string channelIdsQuery = """
+        SELECT arc.AlertChannelId
+        FROM AlertRuleChannels arc
         WHERE arc.AlertRuleId = @Id
         """;
 
@@ -45,8 +44,8 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         if (result is null)
             return null;
 
-        var channels = await db.QueryAsync<AlertChannelDto>(channelQuery, new { Id = id }, transaction: tx());
-        result = result with { Channels = channels.ToList() };
+        var channelIds = await db.QueryAsync<Guid>(channelIdsQuery, new { Id = id }, transaction: tx());
+        result = result with { ChannelIds = channelIds.ToList() };
 
         return result.ToDomain();
     }
@@ -79,9 +78,30 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         transaction: tx());
 
         if (alertRule.Channels.Count > 0)
-            await UpsertChannelsAsync(ruleId, alertRule.Channels);
+            await LinkChannelsAsync(ruleId, alertRule.Channels);
 
         return rows;
+    }
+
+    public Task<int> AddChannelAsync(AlertChannel alertChannel, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+        INSERT INTO AlertChannels (
+            Id, AlertDestination, Url, IsActive, CreatedByActorId, CreatedAt
+        )
+        VALUES (
+            @Id, @AlertDestination, @Url, @IsActive, @CreatedByActorId, @CreatedAt
+        )";
+
+        return db.ExecuteAsync(sql, new
+        {
+            Id = alertChannel.Id.Format(),
+            AlertDestination = EnumFormatter<AlertDestination>.GetValue(alertChannel.AlertDestination),
+            Url = alertChannel.Url,
+            IsActive = alertChannel.IsActive,
+            CreatedByActorId = alertChannel.CreatedByActorId.Format(),
+            CreatedAt = alertChannel.CreatedAt,
+        }, transaction: tx());
     }
 
     public Task<int> UpsertAlertRuleStateAsync(AlertRuleState alertRuleState, CancellationToken cancellationToken)
@@ -132,25 +152,18 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         FROM AlertRuleChannels arc
         """;
 
-        const string channelQuery = """
-        SELECT c.Id, c.AlertDestination, c.Url, c.IsActive, c.CreatedByActorId, c.CreatedAt
-        FROM AlertChannels c
-        INNER JOIN AlertRuleChannels arc ON c.Id = arc.AlertChannelId
-        """;
-
         var rows = (await db.QueryAsync<AlertRuleDto>(ruleQuery, transaction: tx()))?.ToList();
         if (rows is null || rows.Count == 0)
             return [];
 
-        var allChannels = (await db.QueryAsync<AlertChannelDto>(channelQuery, transaction: tx())).ToDictionary(c => c.Id);
         var links = (await db.QueryAsync<AlertRuleChannelLinkDto>(linkQuery, transaction: tx()))
             .GroupBy(l => l.AlertRuleId)
-            .ToDictionary(g => g.Key, g => g.Select(l => allChannels.GetValueOrDefault(l.AlertChannelId)).Where(c => c is not null).ToList()!);
+            .ToDictionary(g => g.Key, g => g.Select(l => l.AlertChannelId).ToList());
 
         for (var i = 0; i < rows.Count; i++)
         {
             if (links.TryGetValue(rows[i].Id, out var ruleChannels))
-                rows[i] = rows[i] with { Channels = ruleChannels! };
+                rows[i] = rows[i] with { ChannelIds = ruleChannels! };
         }
 
         return rows.ToDomain();
@@ -185,29 +198,20 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         if (rows is null || rows.Count == 0)
             return new PagedResult<AlertRule>([], totalCount, page, pageSize);
 
-        const string channelQuery = @"
-        SELECT c.Id, c.AlertDestination, c.Url, c.IsActive, c.CreatedByActorId, c.CreatedAt
-        FROM AlertChannels c
-        WHERE c.Id IN (
-            SELECT arc.AlertChannelId FROM AlertRuleChannels arc
-            WHERE arc.AlertRuleId IN (SELECT value FROM json_each(@RuleIds))
-        )";
-
         const string linkQuery = @"
         SELECT arc.AlertRuleId, arc.AlertChannelId
         FROM AlertRuleChannels arc
         WHERE arc.AlertRuleId IN (SELECT value FROM json_each(@RuleIds))";
 
         var ruleIdsJson = JsonSerializer.Serialize([.. rows.Select(r => r.Id)], DeploymentJsonContext.Default.IEnumerableGuid);
-        var allChannels = (await db.QueryAsync<AlertChannelDto>(channelQuery, new { RuleIds = ruleIdsJson }, transaction: tx())).ToDictionary(c => c.Id);
         var links = (await db.QueryAsync<AlertRuleChannelLinkDto>(linkQuery, new { RuleIds = ruleIdsJson }, transaction: tx()))
             .GroupBy(l => l.AlertRuleId)
-            .ToDictionary(g => g.Key, g => g.Select(l => allChannels.GetValueOrDefault(l.AlertChannelId)).Where(c => c is not null).ToList()!);
+            .ToDictionary(g => g.Key, g => g.Select(l => l.AlertChannelId).ToList());
 
         for (var i = 0; i < rows.Count; i++)
         {
             if (links.TryGetValue(rows[i].Id, out var ruleChannels))
-                rows[i] = rows[i] with { Channels = ruleChannels! };
+                rows[i] = rows[i] with { ChannelIds = ruleChannels! };
         }
 
         return new PagedResult<AlertRule>(rows.ToDomain(), totalCount, page, pageSize);
@@ -299,7 +303,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         await db.ExecuteAsync(unlinkChannelsSql, new { AlertRuleId = ruleId }, transaction: tx());
 
         if (alertRule.Channels.Count > 0)
-            await UpsertChannelsAsync(ruleId, alertRule.Channels);
+            await LinkChannelsAsync(ruleId, alertRule.Channels);
 
         return rows;
     }
@@ -336,37 +340,24 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         return await db.ExecuteAsync(deleteSql, new { Ids = idsJson }, transaction: tx());
     }
 
-    private async Task UpsertChannelsAsync(string alertRuleId, IEnumerable<AlertChannel> channels)
+    public Task<int> RemoveChannelsRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        const string upsertChannelSql = @"
-        INSERT INTO AlertChannels (Id, AlertDestination, Url, IsActive, CreatedByActorId, CreatedAt)
-        VALUES (@Id, @AlertDestination, @Url, @IsActive, @CreatedByActorId, @CreatedAt)
-        ON CONFLICT(Id) DO UPDATE SET
-            AlertDestination = excluded.AlertDestination,
-            Url = excluded.Url,
-            IsActive = excluded.IsActive";
+        const string sql = @"DELETE FROM AlertChannels WHERE Id IN (SELECT value FROM json_each(@Ids))";
+        var idsJson = JsonSerializer.Serialize(ids.Select(id => id), DeploymentJsonContext.Default.IEnumerableGuid);
+        return db.ExecuteAsync(sql, new { Ids = idsJson }, transaction: tx());
+    }
 
+    private Task LinkChannelsAsync(string alertRuleId, IEnumerable<Guid> channelIds)
+    {
         const string linkSql = @"
         INSERT INTO AlertRuleChannels (AlertRuleId, AlertChannelId)
         VALUES (@AlertRuleId, @AlertChannelId)
         ON CONFLICT(AlertRuleId, AlertChannelId) DO NOTHING";
 
-        var channelList = channels.ToList();
-
-        await db.ExecuteAsync(upsertChannelSql, channelList.Select(c => new
-        {
-            Id = c.Id.Format(),
-            AlertDestination = EnumFormatter<AlertDestination>.GetValue(c.AlertDestination),
-            Url = c.Url,
-            IsActive = c.IsActive,
-            CreatedByActorId = c.CreatedByActorId.Format(),
-            CreatedAt = c.CreatedAt
-        }), transaction: tx());
-
-        await db.ExecuteAsync(linkSql, channelList.Select(c => new
+        return db.ExecuteAsync(linkSql, channelIds.Select(channelId => new
         {
             AlertRuleId = alertRuleId,
-            AlertChannelId = c.Id.Format()
+            AlertChannelId = channelId.Format()
         }), transaction: tx());
     }
 }

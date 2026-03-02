@@ -36,4 +36,19 @@ public class AlertChannel : IAuditedEntity
         bool isActive,
         Guid actorId)
     => new (alertDestination, url, isActive, actorId) { Id = id };
+
+    public void PartialUpdate(
+        AlertDestination? alertDestination = null,
+        string? url = null,
+        bool? isActive = null)
+    {
+        if (alertDestination is not null)
+            AlertDestination = alertDestination.Value;
+
+        if (url is not null)
+            Url = url;
+
+        if (isActive is not null)
+            IsActive = isActive.Value;
+    }
 }

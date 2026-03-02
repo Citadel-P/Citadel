@@ -5,7 +5,7 @@ namespace Domain.Entities.Alerts;
 
 public sealed class AlertRule : IAuditedEntity
 {
-    private readonly List<AlertChannel> _channels = [];
+    private readonly List<Guid> _channels = [];
     private readonly List<AlertRuleLimitedTo> _limitedTo = [];
     private readonly List<AlertRuleQuietHour> _quietHours = [];
 
@@ -27,7 +27,7 @@ public sealed class AlertRule : IAuditedEntity
     public double? Threshold { get; private set; }
     public bool IsEnabled { get; private set; }
 
-    public IReadOnlyCollection<AlertChannel> Channels => _channels;
+    public IReadOnlyCollection<Guid> Channels => _channels;
     public IReadOnlyCollection<AlertRuleLimitedTo> LimitedTo => _limitedTo;
     public IReadOnlyCollection<AlertRuleQuietHour> QuietHours => _quietHours;
 
@@ -45,7 +45,7 @@ public sealed class AlertRule : IAuditedEntity
         Guid createdByActorId,
         int? requiredMatches = null,
         double? threshold = null,
-        IReadOnlyCollection<AlertChannel>? channels = null,
+        IReadOnlyCollection<Guid>? channels = null,
         IReadOnlyCollection<AlertRuleLimitedTo>? limitedTo = null,
         IReadOnlyCollection<AlertRuleQuietHour>? quietHours = null)
     {
@@ -81,7 +81,7 @@ public sealed class AlertRule : IAuditedEntity
         DateTime createdAt,
         int? requiredMatches = null,
         double? threshold = null,
-        IEnumerable<AlertChannel>? channels = null,
+        IEnumerable<Guid>? channels = null,
         IEnumerable<AlertRuleLimitedTo>? limitedTo = null,
         IEnumerable<AlertRuleQuietHour>? quietHours = null)
     {
@@ -116,6 +116,7 @@ public sealed class AlertRule : IAuditedEntity
         AlertSeverity severity,
         int? cooldownSeconds,
         bool isEnabled,
+        IEnumerable<Guid>? channels = null,
         int? requiredMatches = null,
         double? threshold = null,
         IEnumerable<AlertRuleLimitedTo>? limitedTo = null,
@@ -125,6 +126,8 @@ public sealed class AlertRule : IAuditedEntity
         Severity = severity;
         CooldownSeconds = cooldownSeconds;
         IsEnabled = isEnabled;
+        _channels.Clear();
+        if (channels is not null) _channels.AddRange(channels);
         RequiredMatches = requiredMatches;
         Threshold = threshold;
         _limitedTo.Clear();

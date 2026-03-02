@@ -11,18 +11,21 @@ public sealed record AlertRuleInput(
     bool IsEnabled,
     int? RequiredMatches = null,
     double? Threshold = null,
-    IEnumerable<AlertChannelInput>? Channels = null,
+    IEnumerable<Guid>? Channels = null,
     IEnumerable<AlertRuleLimitedTo>? LimitedTo = null,
     IEnumerable<AlertRuleQuietHour>? QuietHours = null)
 {
     internal CreateAlertRule ToCommand() => new(
         Type, Severity, CooldownSeconds, IsEnabled,
         RequiredMatches, Threshold,
-        Channels?.Select(c => new CreateAlertRule.ChannelInput(c.AlertDestination, c.Url, c.IsActive)),
+        Channels,
         LimitedTo, QuietHours);
 }
 
 public sealed record AlertChannelInput(
     AlertDestination AlertDestination,
     string Url,
-    bool IsActive);
+    bool IsActive)
+{
+    internal CreateAlertChannel ToCommand() => new(AlertDestination, Url, IsActive);
+}

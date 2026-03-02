@@ -640,5 +640,30 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("listAlertChannels");
+
+        channels.MapPost("/", Alerters.CreateChannel)
+            .WithSummary("Create an alert channel")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("createAlertChannel");
+
+        channels.MapPatch("{id}", Alerters.PatchChannel)
+            .WithSummary("Update an alert channel")
+            .Accepts<AlertChannelInput>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("updateAlertChannel");
+
+        channels.MapDelete("/", Alerters.DeleteChannels)
+            .WithSummary("Delete alert channels")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("deleteAlertChannels");
     }
 }

@@ -17,7 +17,7 @@ internal record AlertRuleDto(
     DateTime CreatedAt
     )
 {
-    public ICollection<AlertChannelDto> Channels { get; init; } = [];
+    public ICollection<Guid> ChannelIds { get; init; } = [];
 }
 
 internal record AlertChannelDto(

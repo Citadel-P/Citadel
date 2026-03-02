@@ -1,0 +1,54 @@
+using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Entities.Alerts;
+using FluentValidation;
+using Hosting.Common.ErrorTypes;
+using Hosting.Common.MergePatch;
+using LightResults;
+using Mediator;
+
+namespace Application.Features.Alerters.Commands;
+
+public sealed record PatchAlertChannel(Guid Id, JsonMergePatchDocument<AlertChannel> Patch) : ICommand<Result<AlertChannel>>
+{
+    internal sealed class Validator : AbstractValidator<PatchAlertChannel>
+    {
+        public Validator()
+        {
+            RuleFor(x => x.Id).NotEmpty();
+            RuleFor(x => x.Patch).NotNull();
+        }
+    }
+}
+
+internal sealed class PatchAlertChannelHandler(IUnitOfWork unitOfWork) : ICommandHandler<PatchAlertChannel, Result<AlertChannel>>
+{
+    public async ValueTask<Result<AlertChannel>> Handle(PatchAlertChannel command, CancellationToken cancellationToken)
+    {
+        var channel = await unitOfWork.AlertRules.GetChannelByIdAsync(command.Id, cancellationToken);
+        if (channel is null)
+        {
+            return Result.Failure<AlertChannel>(new NotFoundError("The provided alert channel does not exist"));
+        }
+
+        AlertChannel patchedChannel;
+        try
+        {
+            patchedChannel = command.Patch.ApplyTo(channel, AlertRuleJsonContext.Default.AlertChannel);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            return Result.Failure<AlertChannel>(new BadRequestError(ex.Message));
+        }
+
+        channel.PartialUpdate(
+            alertDestination: patchedChannel.AlertDestination,
+            url: patchedChannel.Url,
+            isActive: patchedChannel.IsActive);
+
+        await unitOfWork.AlertRules.UpdateChannelAsync(channel, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+
+        return channel;
+    }
+}
