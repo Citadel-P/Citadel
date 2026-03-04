@@ -186,6 +186,7 @@ export const FieldInput = ({
   disabled,
   className,
   ref,
+  id,
 }: {
   value?: string | number;
   autoFocus?: boolean;
@@ -196,6 +197,7 @@ export const FieldInput = ({
   disabled?: boolean;
   className?: string;
   ref?: Ref<HTMLInputElement> | undefined;
+  id?: string;
 }) => (
   <Input
     disabled={disabled}
@@ -203,6 +205,7 @@ export const FieldInput = ({
     ref={ref}
     autoFocus={autoFocus}
     value={value ?? ''}
+    id={id}
     onKeyDown={onKeyDown}
     onChange={(e) => {
       const v = e.target.value;
@@ -407,11 +410,13 @@ export function ItemSelector({
   onChange,
   disabled,
   collection,
+  className,
 }: {
   value?: string;
   onChange: (v: any) => void;
   disabled?: boolean;
   collection: Record<string, ItemInfo>;
+  className?: string;
 }) {
   const normalized = Object.fromEntries(
     Object.entries(collection).map(([key, item]) => [key, typeof item === 'string' ? { label: item } : item]),
@@ -421,7 +426,7 @@ export function ItemSelector({
   const selected = normalized[finalValue];
   return (
     <Select value={finalValue} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger className="w-full max-w-[400px]">
+      <SelectTrigger className={cn('w-full max-w-[400px]', className)}>
         <SelectValue placeholder="Select a value...">
           {selected && (
             <div className="flex items-center gap-2">

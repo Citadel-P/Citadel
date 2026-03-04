@@ -4,6 +4,7 @@ using Domain.Entities.Alerts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 
 namespace Application.Services.Alerts;
 
@@ -12,31 +13,47 @@ public interface IAlertRuleProvider
     AlertRuleSnapshot Current { get; }
 }
 
-public sealed class AlertRuleSnapshot(Dictionary<AlertType, IReadOnlyList<AlertRule>> byResourceType)
+public sealed class AlertRuleSnapshot(
+    IReadOnlyDictionary<AlertType, IReadOnlyList<AlertRule>> byType,
+    IReadOnlyDictionary<Guid, AlertChannel> channels)
 {
-    public IReadOnlyDictionary<AlertType, IReadOnlyList<AlertRule>> ByResourceType { get; private set; } = byResourceType;
+    public IReadOnlyDictionary<AlertType, IReadOnlyList<AlertRule>> ByType { get; } = byType;
+    public IReadOnlyDictionary<Guid, AlertChannel> Channels { get; } = channels;
 
     public IReadOnlyList<AlertRule> Get(AlertType type)
-        => ByResourceType.TryGetValue(type, out var rules) ? rules : [];
+        => ByType.TryGetValue(type, out var rules) ? rules : [];
+
+    public bool TryGetChannel(Guid id, out AlertChannel channel)
+        => Channels.TryGetValue(id, out channel!);
+
+    public static AlertRuleSnapshot Empty { get; } =
+        new(ImmutableDictionary<AlertType, IReadOnlyList<AlertRule>>.Empty,
+            ImmutableDictionary<Guid, AlertChannel>.Empty);
 }
 
-public sealed class AlertRuleCache(IServiceScopeFactory scopeFactory, ILogger<AlertRuleCache> logger) : IAlertRuleProvider
+public sealed class AlertRuleCache(
+    IServiceScopeFactory scopeFactory,
+    ILogger<AlertRuleCache> logger) : IAlertRuleProvider
 {
     private readonly ConcurrentDictionary<AlertType, ConcurrentDictionary<Guid, AlertRule>> _rulesByType = new();
     private readonly ConcurrentDictionary<Guid, AlertType> _ruleTypeIndex = new();
-    private volatile AlertRuleSnapshot _snapshot = Empty();
+    private readonly ConcurrentDictionary<Guid, AlertChannel> _channels = new();
 
+    private AlertRuleSnapshot _snapshot = AlertRuleSnapshot.Empty;
     public AlertRuleSnapshot Current => _snapshot;
 
     public async Task ReloadAsync(CancellationToken ct = default)
     {
         try
         {
-            var rules = await GetRules(ct);
-            RebuildStore(rules);
+            var (rules, channels) = await LoadData(ct);
+            RebuildStore(rules, channels);
             PublishSnapshot();
 
-            logger.LogInformation("AlertRuleCache reloaded with {Count} rules", rules.Count());
+            logger.LogInformation(
+                "AlertRuleCache reloaded with {RuleCount} rules and {ChannelCount} channels",
+                rules.Count,
+                channels.Count);
         }
         catch (Exception ex)
         {
@@ -46,21 +63,17 @@ public sealed class AlertRuleCache(IServiceScopeFactory scopeFactory, ILogger<Al
 
     public void Upsert(AlertRule rule)
     {
-        if (_ruleTypeIndex.TryGetValue(rule.Id, out var previousType) && previousType != rule.Type)
+        if (_ruleTypeIndex.TryGetValue(rule.Id, out var previousType) &&
+            previousType != rule.Type &&
+            _rulesByType.TryGetValue(previousType, out var oldBucket))
         {
-            if (_rulesByType.TryGetValue(previousType, out var previousBucket))
-            {
-                previousBucket.TryRemove(rule.Id, out _);
-
-                if (previousBucket.IsEmpty)
-                {
-                    _rulesByType.TryRemove(previousType, out _);
-                }
-            }
+            oldBucket.TryRemove(rule.Id, out _);
+            if (oldBucket.IsEmpty)
+                _rulesByType.TryRemove(previousType, out _);
         }
 
-        var targetBucket = _rulesByType.GetOrAdd(rule.Type, _ => new ConcurrentDictionary<Guid, AlertRule>());
-        targetBucket[rule.Id] = rule;
+        var bucket = _rulesByType.GetOrAdd(rule.Type, _ => new());
+        bucket[rule.Id] = rule;
         _ruleTypeIndex[rule.Id] = rule.Type;
 
         PublishSnapshot();
@@ -68,73 +81,86 @@ public sealed class AlertRuleCache(IServiceScopeFactory scopeFactory, ILogger<Al
 
     public void Remove(IEnumerable<Guid> ids)
     {
-        var toRemove = ids as ICollection<Guid> ?? ids.ToList();
-        if (toRemove.Count == 0)
-        {
+        var list = ids as ICollection<Guid> ?? ids.ToList();
+        if (list.Count == 0)
             return;
-        }
 
-        foreach (var id in toRemove)
+        foreach (var id in list)
         {
             if (!_ruleTypeIndex.TryRemove(id, out var type))
-            {
                 continue;
-            }
 
             if (_rulesByType.TryGetValue(type, out var bucket))
             {
                 bucket.TryRemove(id, out _);
-
                 if (bucket.IsEmpty)
-                {
                     _rulesByType.TryRemove(type, out _);
-                }
             }
         }
 
         PublishSnapshot();
     }
 
-    private static AlertRuleSnapshot BuildSnapshot(IEnumerable<AlertRule> rules)
+    public void UpsertChannel(AlertChannel channel)
     {
-        var dict = rules
-            .GroupBy(r => r.Type)
-            .ToDictionary(
-                g => g.Key,
-                g => (IReadOnlyList<AlertRule>)[.. g]);
-
-        return new AlertRuleSnapshot(dict);
+        _channels[channel.Id] = channel;
+        PublishSnapshot();
     }
 
-    private void RebuildStore(IEnumerable<AlertRule> rules)
+    public void RemoveChannels(IEnumerable<Guid> ids)
+    {
+        var list = ids as ICollection<Guid> ?? ids.ToList();
+        if (list.Count == 0)
+            return;
+
+        foreach (var id in list)
+            _channels.TryRemove(id, out _);
+
+        PublishSnapshot();
+    }
+
+    private void RebuildStore(
+        IReadOnlyCollection<AlertRule> rules,
+        IReadOnlyCollection<AlertChannel> channels)
     {
         _rulesByType.Clear();
         _ruleTypeIndex.Clear();
+        _channels.Clear();
+
         foreach (var rule in rules)
         {
-            var bucket = _rulesByType.GetOrAdd(rule.Type, _ => new ConcurrentDictionary<Guid, AlertRule>());
+            var bucket = _rulesByType.GetOrAdd(rule.Type, _ => new());
             bucket[rule.Id] = rule;
             _ruleTypeIndex[rule.Id] = rule.Type;
         }
+
+        foreach (var channel in channels)
+            _channels[channel.Id] = channel;
     }
 
     private void PublishSnapshot()
     {
-        var snapshotRules = _rulesByType
-            .SelectMany(x => x.Value.Values)
-            .ToArray();
+        var rulesSnapshot = new Dictionary<AlertType, IReadOnlyList<AlertRule>>(
+            _rulesByType.Count);
 
-        _snapshot = BuildSnapshot(snapshotRules);
+        foreach (var (type, bucket) in _rulesByType)
+            rulesSnapshot[type] = bucket.Values.ToArray();
+
+        var channelsSnapshot = _channels.ToImmutableDictionary();
+
+        var snapshot = new AlertRuleSnapshot(rulesSnapshot, channelsSnapshot);
+        Interlocked.Exchange(ref _snapshot, snapshot);
     }
 
-    private async Task<IEnumerable<AlertRule>> GetRules(CancellationToken token)
+    private async Task<(IReadOnlyCollection<AlertRule> Rules, IReadOnlyCollection<AlertChannel> Channels)>
+        LoadData(CancellationToken ct)
     {
-        await using (var scope = scopeFactory.CreateAsyncScope())
-        {
-            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            return await uow.AlertRules.GetAllAsync(token);
-        }
-    }
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-    private static AlertRuleSnapshot Empty() => new([]);
+        var rules = await uow.AlertRules.GetAllAsync(ct);
+        var channels = await uow.AlertRules.GetAllChannelsAsync(ct);
+
+        return ([.. rules], [.. channels]);
+    }
 }

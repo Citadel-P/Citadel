@@ -60,6 +60,12 @@ public static class Alerters
         return EndpointHandlers.HandleResult(result, AlertChannelView.Map);
     }
 
+    public static async Task<Results<NoContent, ProblemHttpResult>> VerifyChannel(IMediator mediator, [FromBody] VerifyAlertChannelInput request, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(request.ToCommand(), cancellationToken);
+        return EndpointHandlers.HandleResultForNoContent(result);
+    }
+
     public static async Task<Results<NoContent, ProblemHttpResult>> DeleteChannels(IMediator mediator, [FromBody] DeleteAlertChannelsInput request, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);

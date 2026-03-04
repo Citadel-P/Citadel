@@ -5,9 +5,6 @@
   severity: Critical,
   cooldownSeconds: 120,
   isEnabled: true,
-  channels: [
-    Guid_2
-  ],
-  createdByActorId: Guid_3,
+  createdByActorId: Guid_2,
   createdAt: DateTimeOffset_1
 }

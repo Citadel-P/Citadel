@@ -627,6 +627,8 @@ internal static class Configuration
 
         alertChannel.Property<string>("AlertDestination").HasColumnType("TEXT").IsRequired();
         alertChannel.Property<string>("Url").HasColumnType("TEXT").IsRequired();
+        alertChannel.Property<string>("Name").HasColumnType("TEXT").IsRequired();
+
         alertChannel.Property<bool>("IsActive").HasColumnType("INTEGER").IsRequired().HasDefaultValue(true);
 
         alertChannel.AddAuditedMemebers();

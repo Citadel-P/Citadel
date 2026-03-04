@@ -22,6 +22,7 @@ internal record AlertRuleDto(
 
 internal record AlertChannelDto(
     Guid Id,
+    string Name,
     string AlertDestination,
     string Url,
     bool IsActive,
@@ -31,6 +32,7 @@ internal record AlertChannelDto(
 {
     internal AlertChannel ToDomain() => AlertChannel.FromPersistence(
         Id,
+        Name,
         Enum.Parse<AlertDestination>(AlertDestination),
         Url,
         IsActive,

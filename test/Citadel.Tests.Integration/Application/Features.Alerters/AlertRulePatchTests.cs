@@ -112,7 +112,7 @@ public class AlertRulePatchTests : IntegrationTestBase
         // Arrange - link first channel
         var linkChannelPatchJson = $$"""
         {
-          "channels": ["{{channelId}}"]
+          "channelIds": ["{{channelId}}"]
         }
         """;
         var linkContent = new StringContent(linkChannelPatchJson, Encoding.UTF8, "application/merge-patch+json");
@@ -128,14 +128,14 @@ public class AlertRulePatchTests : IntegrationTestBase
             var afterFirstPatch = await uow1.AlertRules.GetByIdAsync(ruleId, TestContext.Current.CancellationToken);
 
             Assert.NotNull(afterFirstPatch);
-            Assert.Contains(channelId, afterFirstPatch.Channels);
-            Assert.DoesNotContain(channelId2, afterFirstPatch.Channels);
+            Assert.Contains(channelId, afterFirstPatch.ChannelIds);
+            Assert.DoesNotContain(channelId2, afterFirstPatch.ChannelIds);
         }
 
         // Arrange - remove first channel and link second channel
         var switchChannelPatchJson = $$"""
         {
-          "channels": ["{{channelId2}}"]
+          "channelIds": ["{{channelId2}}"]
         }
         """;
         var switchContent = new StringContent(switchChannelPatchJson, Encoding.UTF8, "application/merge-patch+json");
@@ -152,10 +152,10 @@ public class AlertRulePatchTests : IntegrationTestBase
         var afterSecondPatch = await uow2.AlertRules.GetByIdAsync(ruleId, TestContext.Current.CancellationToken);
 
         Assert.NotNull(afterSecondPatch);
-        Assert.DoesNotContain(channelId, afterSecondPatch.Channels);
-        Assert.Contains(channelId2, afterSecondPatch.Channels);
-        Assert.Single(afterSecondPatch.Channels);
-        Assert.Contains(cache.Current.Get(AlertType.PlatformUnreachable), r => r.Id == ruleId && r.Channels.Contains(channelId2));
+        Assert.DoesNotContain(channelId, afterSecondPatch.ChannelIds);
+        Assert.Contains(channelId2, afterSecondPatch.ChannelIds);
+        Assert.Single(afterSecondPatch.ChannelIds);
+        Assert.Contains(cache.Current.Get(AlertType.PlatformUnreachable), r => r.Id == ruleId && r.ChannelIds.Contains(channelId2));
     }
 
     [Fact]
@@ -239,5 +239,5 @@ public class AlertRulePatchTests : IntegrationTestBase
     }
 
     private static int GetCachedRuleCount(IAlertRuleProvider cache)
-        => cache.Current.ByResourceType.SelectMany(x => x.Value).Count();
+        => cache.Current.ByType.SelectMany(x => x.Value).Count();
 }

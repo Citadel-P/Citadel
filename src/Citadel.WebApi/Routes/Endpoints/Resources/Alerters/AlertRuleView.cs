@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Domain;
 using Domain.Entities.Alerts;
 
@@ -13,14 +12,25 @@ public sealed partial record AlertRuleView(
     int? RequiredMatches,
     double? Threshold,
     bool IsEnabled,
-    IEnumerable<Guid> Channels,
+    IEnumerable<AlertChannelView> Channels,
     IEnumerable<AlertRuleLimitedTo> LimitedTo,
     IEnumerable<AlertRuleQuietHour> QuietHours,
     Guid CreatedByActorId,
     DateTime CreatedAt)
 {
     internal static AlertRuleView Map(AlertRule rule)
+        => Map(rule, new Dictionary<Guid, AlertChannel>());
+
+    internal static AlertRuleView Map((AlertRule Rule, IEnumerable<AlertChannel> Channels) data)
+        => Map(data.Rule, data.Channels.ToDictionary(c => c.Id));
+
+    internal static AlertRuleView Map(AlertRule rule, IReadOnlyDictionary<Guid, AlertChannel> channelsById)
     {
+        var channels = rule.ChannelIds
+            .Select(id => channelsById.GetValueOrDefault(id))
+            .Where(c => c is not null)
+            .Select(c => AlertChannelView.Map(c!));
+
         return new(
             rule.Id,
             SplitPascalCase(rule.Type.ToString()),
@@ -30,7 +40,7 @@ public sealed partial record AlertRuleView(
             rule.RequiredMatches,
             rule.Threshold,
             rule.IsEnabled,
-            rule.Channels,
+            channels,
             rule.LimitedTo,
             rule.QuietHours,
             rule.CreatedByActorId,
@@ -66,4 +76,5 @@ public sealed partial record AlertRuleView(
 
         return new string(buffer[..pos]);
     }
+
 }

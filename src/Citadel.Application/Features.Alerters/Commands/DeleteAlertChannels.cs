@@ -1,3 +1,4 @@
+using Application.Services.Alerts;
 using Domain.Contracts.Interfaces;
 using Hosting.Common.ErrorTypes;
 using LightResults;
@@ -7,12 +8,20 @@ namespace Application.Features.Alerters.Commands;
 
 public sealed record DeleteAlertChannels(IEnumerable<Guid> Ids) : ICommand<Result>;
 
-internal sealed class DeleteAlertChannelsHandler(IUnitOfWork unitOfWork) : ICommandHandler<DeleteAlertChannels, Result>
+internal sealed class DeleteAlertChannelsHandler(
+    IUnitOfWork unitOfWork,
+    AlertRuleCache alertRuleCache) : ICommandHandler<DeleteAlertChannels, Result>
 {
     public async ValueTask<Result> Handle(DeleteAlertChannels command, CancellationToken cancellationToken)
     {
-        var result = await unitOfWork.AlertRules.RemoveChannelsRangeAsync(command.Ids, cancellationToken);
+        var ids = command.Ids.Distinct().ToArray();
+        var result = await unitOfWork.AlertRules.RemoveChannelsRangeAsync(ids, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+
+        if (result > 0)
+        {
+            alertRuleCache.RemoveChannels(ids);
+        }
         
         return result > 0
             ? Result.Success()

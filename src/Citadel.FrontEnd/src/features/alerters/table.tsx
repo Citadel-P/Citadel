@@ -156,7 +156,7 @@ function RuleConditionCell({ rule }: { rule: AlertRuleView }) {
           <div className="flex items-center gap-2 ">
             <Activity className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="font-medium text-xs">
-              &gt; {rule.threshold}%<span className="text-muted-foreground font-normal mx-1">for</span>
+              &ge; {rule.threshold}%<span className="text-muted-foreground font-normal mx-1">for</span>
               {rule.requiredMatches}x
             </span>
           </div>

@@ -5,6 +5,7 @@ namespace WebApi.Routes.Endpoints.Resources.Alerters;
 
 public sealed record AlertChannelView(
     Guid Id,
+    string Name,
     AlertDestination AlertDestination,
     string Url,
     bool IsActive,
@@ -15,6 +16,7 @@ public sealed record AlertChannelView(
     {
         return new(
             channel.Id,
+            channel.Name,
             channel.AlertDestination,
             channel.Url,
             channel.IsActive,

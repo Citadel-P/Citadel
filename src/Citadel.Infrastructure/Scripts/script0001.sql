@@ -39,6 +39,7 @@ CREATE TABLE "AlertChannels" (
     "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     "CreatedByActorId" TEXT NOT NULL,
     "IsActive" INTEGER NOT NULL DEFAULT 1,
+    "Name" TEXT NOT NULL,
     "Url" TEXT NOT NULL,
     CONSTRAINT "FK_AlertChannels_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
 );
@@ -418,7 +419,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260228161201_migration0001', '10.0.3');
+VALUES ('20260304162246_migration0001', '10.0.3');
 
 COMMIT;
 

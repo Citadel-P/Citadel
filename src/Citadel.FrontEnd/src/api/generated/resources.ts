@@ -69,6 +69,7 @@ export const resources = {
   listAlertChannels: { method: "GET", key: "listAlertChannels", params: ["params"], requiredParams: [], queryParams: [] },
   createAlertChannel: { method: "POST", key: "createAlertChannel", params: ["data","params"], requiredParams: [], queryParams: [] },
   deleteAlertChannels: { method: "DELETE", key: "deleteAlertChannels", params: ["params"], requiredParams: [], queryParams: [] },
+  verifyAlertChannel: { method: "POST", key: "verifyAlertChannel", params: ["data","params"], requiredParams: [], queryParams: [] },
 } as const;
 
 export type ResourceName = keyof typeof resources;

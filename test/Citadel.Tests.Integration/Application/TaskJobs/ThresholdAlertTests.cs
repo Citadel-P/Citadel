@@ -324,11 +324,13 @@ public class ThresholdAlertTests: IntegrationTestBase
     {
         var uow = services.GetRequiredService<IUnitOfWork>();
         var evaluators = services.GetRequiredService<IEnumerable<IAlertEvaluator>>();
+        var notificationQueue = services.GetRequiredService<INotificationQueue>();
         var ruleProvider = services.GetRequiredService<IAlertRuleProvider>();
+        var notificationService = services.GetRequiredService<INotificationRepository>();
         var logger = services.GetRequiredService<ILogger<AlertService>>();
 
         var queue = new InlineDbWorkQueue(uow);
-        var alertService = new AlertService(evaluators, ruleProvider, queue, logger);
+        var alertService = new AlertService(queue, notificationQueue, ruleProvider, evaluators, notificationService, logger);
 
         await alertService.ProcessAsync(AlertType.PlatformCpuHigh, context, cancellationToken);
     }

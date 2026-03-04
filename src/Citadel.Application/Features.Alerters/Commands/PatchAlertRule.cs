@@ -52,7 +52,7 @@ internal sealed class PatchAlertRuleHandler(
             createdAt: rule.CreatedAt,
             requiredMatches: rule.RequiredMatches,
             threshold: rule.Threshold,
-            channels: rule.Channels,
+            channelIds: rule.ChannelIds,
             limitedTo: rule.LimitedTo,
             quietHours: rule.QuietHours);
 
@@ -66,9 +66,9 @@ internal sealed class PatchAlertRuleHandler(
             return Result.Failure<AlertRule>(new BadRequestError(ex.Message));
         }
 
-        if (patchedRule.Channels.Count > 0)
+        if (patchedRule.ChannelIds.Count > 0)
         {
-            foreach (var channelId in patchedRule.Channels)
+            foreach (var channelId in patchedRule.ChannelIds)
             {
                 var channel = await unitOfWork.AlertRules.GetChannelByIdAsync(channelId, cancellationToken);
                 if (channel is null)
@@ -83,7 +83,7 @@ internal sealed class PatchAlertRuleHandler(
             severity: patchedRule.Severity,
             cooldownSeconds: patchedRule.CooldownSeconds,
             isEnabled: patchedRule.IsEnabled,
-            channels: patchedRule.Channels,
+            channelIds: patchedRule.ChannelIds,
             requiredMatches: patchedRule.RequiredMatches,
             threshold: patchedRule.Threshold,
             limitedTo: patchedRule.LimitedTo,
@@ -99,7 +99,7 @@ internal sealed class PatchAlertRuleHandler(
             createdAt: rule.CreatedAt,
             requiredMatches: rule.RequiredMatches,
             threshold: rule.Threshold,
-            channels: rule.Channels,
+            channelIds: rule.ChannelIds,
             limitedTo: rule.LimitedTo,
             quietHours: rule.QuietHours);
 

@@ -179,5 +179,5 @@ public class AlertRuleDeleteTests : IntegrationTestBase
     }
 
     private static int GetCachedRuleCount(IAlertRuleProvider cache)
-        => cache.Current.ByResourceType.SelectMany(x => x.Value).Count();
+        => cache.Current.ByType.SelectMany(x => x.Value).Count();
 }

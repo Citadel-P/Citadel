@@ -2,6 +2,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
 using Microsoft.Extensions.Logging;
+using System.Data;
 
 namespace Application.Services.Alerts;
 
@@ -10,17 +11,24 @@ internal interface IAlertService
     Task ProcessAsync(AlertType type, AlertEvaluationContext context, CancellationToken ct);
 }
 
-public sealed class AlertService(IEnumerable<IAlertEvaluator> evaluators, IAlertRuleProvider alertRuleProvider, IDbWorkQueue dbQueue,
+public sealed class AlertService(
+    IDbWorkQueue dbQueue,
+    INotificationQueue notificationQueue,
+    IAlertRuleProvider alertRuleProvider, 
+    IEnumerable<IAlertEvaluator> evaluators, 
+    INotificationRepository notificationService,
     ILogger<AlertService> logger) : IAlertService
 {
     private readonly Dictionary<AlertType, IAlertEvaluator> _evaluators = evaluators.ToDictionary(x => x.Type);
 
     public async Task ProcessAsync(AlertType type, AlertEvaluationContext context, CancellationToken ct)
     {
+        var snapshot = alertRuleProvider.Current;
+
         // Most-severe-wins: per resource we keep only the highest-severity rule
         var candidates = new Dictionary<Guid, (AlertRule Rule, List<AlertMatch> Matches)>();
 
-        foreach (var rule in alertRuleProvider.Current.Get(type))
+        foreach (var rule in snapshot.Get(type))
         {
             if (!_evaluators.TryGetValue(rule.Type, out var evaluator))
                 throw new InvalidOperationException($"No evaluator registered for {rule.Type}");
@@ -52,6 +60,9 @@ public sealed class AlertService(IEnumerable<IAlertEvaluator> evaluators, IAlert
                     rule,
                     match,
                     context.UtcNow,
+                    snapshot,
+                    notificationQueue,
+                    notificationService,
                     logger);
 
                 await dbQueue.EnqueueAsync(workItem, ct);
@@ -72,7 +83,14 @@ public sealed class AlertService(IEnumerable<IAlertEvaluator> evaluators, IAlert
     }
 }
 
-internal sealed class AlertStateWorkItem(AlertRule rule, AlertMatch match, DateTime utcNow, ILogger logger) : IDbWorkItem
+internal sealed class AlertStateWorkItem(
+    AlertRule rule,
+    AlertMatch match,
+    DateTime utcNow,
+    AlertRuleSnapshot snapshot,
+    INotificationQueue notificationQueue,
+    INotificationRepository notificationService,
+    ILogger logger) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken token)
     {
@@ -134,13 +152,38 @@ internal sealed class AlertStateWorkItem(AlertRule rule, AlertMatch match, DateT
 
             await uow.AlertRules.UpsertAlertRuleStateAsync(state, token);
             await uow.AlertEvents.AddAsync(evt, token);
-            // TODO: send to client (Shoutrrr & signalr)
 
             await uow.CommitAsync(token);
+
+            if (rule.ChannelIds.Count > 0)
+            {
+                await notificationQueue.EnqueueAsync(new AlertNotificationWorkItem(rule, evt, snapshot, notificationService), token);
+            }
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Alert processing DB work failed.");
         }
+    }
+}
+
+internal class AlertNotificationWorkItem(
+    AlertRule rule,
+    AlertEvent evt,
+    AlertRuleSnapshot snapshot,
+    INotificationRepository notificationService) : INotificationWorkItem
+{
+    public async Task ExecuteAsync(CancellationToken cancellationToken)
+    {
+        var channels = new List<AlertChannel>();
+        foreach (var channelId in rule.ChannelIds)
+        {
+            if (snapshot.TryGetChannel(channelId, out var channel))
+            {
+                channels.Add(channel);
+            }
+        }
+
+        await notificationService.SendAlertAsync(evt, channels, cancellationToken);
     }
 }

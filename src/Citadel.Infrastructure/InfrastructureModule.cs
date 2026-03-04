@@ -64,6 +64,7 @@ public static class InfrastructureModule
     private static IServiceCollection AddServices(this IServiceCollection services)
         => services
             .AddSingleton<IGitHubCrRepository, GitHubCrRepository>()
+            .AddSingleton<INotificationRepository, ShoutrrrNotificationRepository>()
             .AddSingleton<IDockerHubRegistryRepository, DockerHubRegistryRepository>()
             .AddSingleton<IDbWorkQueue, DbWorkQueue>()
             .AddSingleton<INotificationQueue, NotificationQueue>()

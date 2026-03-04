@@ -6,9 +6,10 @@ import { SearchField } from '@/components/custom/search-field';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import NotFound from './not-found';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { ResourceComponents } from '@/features';
 import TaskSheet from '@/components/custom/task-sheet';
+import { useSelectedResources } from '@/lib/atoms';
 
 const ResourcePage = () => {
   const type = useResourceParamType()!;
@@ -35,6 +36,11 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
 
   const ActiveContent = Components.Content!;
   const Icon = Components.Icon;
+
+  const [_, setSelected] = useSelectedResources(type);
+  useEffect(() => {
+    return () => setSelected([]);
+  }, [type, setSelected]);
 
   return (
     <div className="flex-col justify-between relative">

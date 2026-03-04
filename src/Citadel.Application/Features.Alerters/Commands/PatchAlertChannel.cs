@@ -1,3 +1,4 @@
+using Application.Services.Alerts;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
@@ -21,7 +22,9 @@ public sealed record PatchAlertChannel(Guid Id, JsonMergePatchDocument<AlertChan
     }
 }
 
-internal sealed class PatchAlertChannelHandler(IUnitOfWork unitOfWork) : ICommandHandler<PatchAlertChannel, Result<AlertChannel>>
+internal sealed class PatchAlertChannelHandler(
+    IUnitOfWork unitOfWork,
+    AlertRuleCache alertRuleCache) : ICommandHandler<PatchAlertChannel, Result<AlertChannel>>
 {
     public async ValueTask<Result<AlertChannel>> Handle(PatchAlertChannel command, CancellationToken cancellationToken)
     {
@@ -42,12 +45,14 @@ internal sealed class PatchAlertChannelHandler(IUnitOfWork unitOfWork) : IComman
         }
 
         channel.PartialUpdate(
+            name: patchedChannel.Name,
             alertDestination: patchedChannel.AlertDestination,
             url: patchedChannel.Url,
             isActive: patchedChannel.IsActive);
 
         await unitOfWork.AlertRules.UpdateChannelAsync(channel, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
+        alertRuleCache.UpsertChannel(channel);
 
         return channel;
     }

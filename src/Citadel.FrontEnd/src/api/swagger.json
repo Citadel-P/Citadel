@@ -6078,6 +6078,75 @@
           }
         ]
       }
+    },
+    "/api/v1/alerters/channels/verify": {
+      "post": {
+        "tags": [
+          "Alerters"
+        ],
+        "summary": "Verify an alert channel URL",
+        "operationId": "verifyAlertChannel",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyAlertChannelInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -6125,6 +6194,15 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoDeploymentDegraded"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoAlerterCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoAlerterUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoAlerterDeleted"
           }
         ],
         "discriminator": {
@@ -6138,7 +6216,62 @@
             "DeploymentStopped": "#/components/schemas/ActivityEventInfoDeploymentStopped",
             "DeploymentPaused": "#/components/schemas/ActivityEventInfoDeploymentPaused",
             "DeploymentApplied": "#/components/schemas/ActivityEventInfoDeploymentApplied",
-            "DeploymentDegraded": "#/components/schemas/ActivityEventInfoDeploymentDegraded"
+            "DeploymentDegraded": "#/components/schemas/ActivityEventInfoDeploymentDegraded",
+            "AlerterCreated": "#/components/schemas/ActivityEventInfoAlerterCreated",
+            "AlerterUpdated": "#/components/schemas/ActivityEventInfoAlerterUpdated",
+            "AlerterDeleted": "#/components/schemas/ActivityEventInfoAlerterDeleted"
+          }
+        }
+      },
+      "ActivityEventInfoAlerterCreated": {
+        "required": [
+          "alertRule"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "AlerterCreated"
+            ],
+            "type": "string"
+          },
+          "alertRule": {
+            "$ref": "#/components/schemas/AlertRule"
+          }
+        }
+      },
+      "ActivityEventInfoAlerterDeleted": {
+        "required": [
+          "alertRule"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "AlerterDeleted"
+            ],
+            "type": "string"
+          },
+          "alertRule": {
+            "$ref": "#/components/schemas/AlertRule"
+          }
+        }
+      },
+      "ActivityEventInfoAlerterUpdated": {
+        "required": [
+          "oldRule",
+          "newRule"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "AlerterUpdated"
+            ],
+            "type": "string"
+          },
+          "oldRule": {
+            "$ref": "#/components/schemas/AlertRule"
+          },
+          "newRule": {
+            "$ref": "#/components/schemas/AlertRule"
           }
         }
       },
@@ -6344,7 +6477,10 @@
           "RegistryCreated",
           "RegistryRenamed",
           "RegistryUpdated",
-          "RegistryDeleted"
+          "RegistryDeleted",
+          "AlerterCreated",
+          "AlerterUpdated",
+          "AlerterDeleted"
         ]
       },
       "ActivityResourceType": {
@@ -6352,7 +6488,8 @@
           "Platform",
           "Registry",
           "Deployment",
-          "Stack"
+          "Stack",
+          "Alerter"
         ]
       },
       "ActivityStatus": {
@@ -6446,12 +6583,16 @@
       },
       "AlertChannelInput": {
         "required": [
+          "name",
           "alertDestination",
           "url",
           "isActive"
         ],
         "type": "object",
         "properties": {
+          "name": {
+            "type": "string"
+          },
           "alertDestination": {
             "$ref": "#/components/schemas/AlertDestination"
           },
@@ -6466,6 +6607,7 @@
       "AlertChannelView": {
         "required": [
           "id",
+          "name",
           "alertDestination",
           "url",
           "isActive",
@@ -6477,6 +6619,9 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "name": {
+            "type": "string"
           },
           "alertDestination": {
             "$ref": "#/components/schemas/AlertDestination"
@@ -6542,6 +6687,93 @@
           "Stack"
         ]
       },
+      "AlertRule": {
+        "required": [
+          "type",
+          "severity",
+          "cooldownSeconds",
+          "isEnabled",
+          "createdByActorId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AlertType"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AlertSeverity"
+          },
+          "cooldownSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "requiredMatches": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "threshold": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "channelIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "limitedTo": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AlertRuleLimitedTo"
+            }
+          },
+          "quietHours": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AlertRuleQuietHour"
+            }
+          },
+          "createdByActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "format": "date-time"
+          }
+        }
+      },
       "AlertRuleInput": {
         "required": [
           "type",
@@ -6587,7 +6819,7 @@
             ],
             "format": "double"
           },
-          "channels": {
+          "channelIds": {
             "type": [
               "null",
               "array"
@@ -6808,8 +7040,7 @@
           "channels": {
             "type": "array",
             "items": {
-              "type": "string",
-              "format": "uuid"
+              "$ref": "#/components/schemas/AlertChannelView"
             }
           },
           "limitedTo": {
@@ -12464,6 +12695,21 @@
           "Notify",
           "AutoDeploy"
         ]
+      },
+      "VerifyAlertChannelInput": {
+        "required": [
+          "alertDestination",
+          "url"
+        ],
+        "type": "object",
+        "properties": {
+          "alertDestination": {
+            "$ref": "#/components/schemas/AlertDestination"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
       },
       "VolumeAccessMode": {
         "required": [

@@ -649,6 +649,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("createAlertChannel");
 
+        channels.MapPost("/verify", Alerters.VerifyChannel)
+            .WithSummary("Verify an alert channel URL")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("verifyAlertChannel");
+
         channels.MapPatch("{id}", Alerters.PatchChannel)
             .WithSummary("Update an alert channel")
             .Accepts<AlertChannelInput>("application/merge-patch+json", "application/json")

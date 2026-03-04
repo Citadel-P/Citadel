@@ -77,8 +77,8 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         },
         transaction: tx());
 
-        if (alertRule.Channels.Count > 0)
-            await LinkChannelsAsync(ruleId, alertRule.Channels);
+        if (alertRule.ChannelIds.Count > 0)
+            await LinkChannelsAsync(ruleId, alertRule.ChannelIds);
 
         return rows;
     }
@@ -87,15 +87,16 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
     {
         const string sql = @"
         INSERT INTO AlertChannels (
-            Id, AlertDestination, Url, IsActive, CreatedByActorId, CreatedAt
+            Id, Name, AlertDestination, Url, IsActive, CreatedByActorId, CreatedAt
         )
         VALUES (
-            @Id, @AlertDestination, @Url, @IsActive, @CreatedByActorId, @CreatedAt
+            @Id, @Name, @AlertDestination, @Url, @IsActive, @CreatedByActorId, @CreatedAt
         )";
 
         return db.ExecuteAsync(sql, new
         {
             Id = alertChannel.Id.Format(),
+            Name = alertChannel.Name,
             AlertDestination = EnumFormatter<AlertDestination>.GetValue(alertChannel.AlertDestination),
             Url = alertChannel.Url,
             IsActive = alertChannel.IsActive,
@@ -220,7 +221,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
     public async Task<AlertChannel?> GetChannelByIdAsync(Guid channelId, CancellationToken cancellationToken)
     {
         const string sql = """
-        SELECT Id, AlertDestination, Url, IsActive, CreatedByActorId, CreatedAt
+        SELECT Id, Name, AlertDestination, Url, IsActive, CreatedByActorId, CreatedAt
         FROM AlertChannels
         WHERE Id = @Id
         LIMIT 1
@@ -233,7 +234,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
     public async Task<IEnumerable<AlertChannel>> GetAllChannelsAsync(CancellationToken cancellationToken)
     {
         const string sql = """
-        SELECT Id, AlertDestination, Url, IsActive, CreatedByActorId, CreatedAt
+        SELECT Id, Name, AlertDestination, Url, IsActive, CreatedByActorId, CreatedAt
         FROM AlertChannels
         """;
 
@@ -302,8 +303,8 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
 
         await db.ExecuteAsync(unlinkChannelsSql, new { AlertRuleId = ruleId }, transaction: tx());
 
-        if (alertRule.Channels.Count > 0)
-            await LinkChannelsAsync(ruleId, alertRule.Channels);
+        if (alertRule.ChannelIds.Count > 0)
+            await LinkChannelsAsync(ruleId, alertRule.ChannelIds);
 
         return rows;
     }
@@ -313,6 +314,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         const string sql = @"
         UPDATE AlertChannels
         SET
+            Name = @Name,
             AlertDestination = @AlertDestination,
             Url = @Url,
             IsActive = @IsActive
@@ -321,6 +323,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         return db.ExecuteAsync(sql, new
         {
             Id = channel.Id.Format(),
+            Name = channel.Name,
             AlertDestination = EnumFormatter<AlertDestination>.GetValue(channel.AlertDestination),
             Url = channel.Url,
             IsActive = channel.IsActive

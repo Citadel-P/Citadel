@@ -217,6 +217,7 @@ export enum ActivityResourceType {
   Registry = "Registry",
   Deployment = "Deployment",
   Stack = "Stack",
+  Alerter = "Alerter",
 }
 
 export enum ActivityEventType {
@@ -236,6 +237,9 @@ export enum ActivityEventType {
   RegistryRenamed = "RegistryRenamed",
   RegistryUpdated = "RegistryUpdated",
   RegistryDeleted = "RegistryDeleted",
+  AlerterCreated = "AlerterCreated",
+  AlerterUpdated = "AlerterUpdated",
+  AlerterDeleted = "AlerterDeleted",
 }
 
 export interface ActivitiesView {
@@ -280,7 +284,35 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         "DeploymentDegraded",
         ActivityEventInfoDeploymentDegraded
       >
+    | BaseActivityEventInfoTypeMapping<
+        "AlerterCreated",
+        ActivityEventInfoAlerterCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "AlerterUpdated",
+        ActivityEventInfoAlerterUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "AlerterDeleted",
+        ActivityEventInfoAlerterDeleted
+      >
   );
+
+export interface ActivityEventInfoAlerterCreated {
+  $type?: "AlerterCreated";
+  alertRule: AlertRule;
+}
+
+export interface ActivityEventInfoAlerterDeleted {
+  $type?: "AlerterDeleted";
+  alertRule: AlertRule;
+}
+
+export interface ActivityEventInfoAlerterUpdated {
+  $type?: "AlerterUpdated";
+  oldRule: AlertRule;
+  newRule: AlertRule;
+}
 
 export interface ActivityEventInfoDeploymentApplied {
   $type?: "DeploymentApplied";
@@ -354,6 +386,7 @@ export interface ActivityView {
 }
 
 export interface AlertChannelInput {
+  name: string;
   alertDestination: AlertDestination;
   url: string;
   isActive: boolean;
@@ -362,6 +395,7 @@ export interface AlertChannelInput {
 export interface AlertChannelView {
   /** @format uuid */
   id: string;
+  name: string;
   alertDestination: AlertDestination;
   url: string;
   isActive: boolean;
@@ -373,6 +407,36 @@ export interface AlertChannelView {
 
 export interface AlertChannelsView {
   channels: AlertChannelView[];
+}
+
+export interface AlertRule {
+  /** @format uuid */
+  id?: string;
+  type: AlertType;
+  severity: AlertSeverity;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  cooldownSeconds: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  requiredMatches?: null | number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  threshold?: null | number | string;
+  isEnabled: boolean;
+  channelIds?: null | any[];
+  limitedTo?: null | any[];
+  quietHours?: null | any[];
+  /** @format uuid */
+  createdByActorId: string;
+  /** @format date-time */
+  createdAt?: any;
 }
 
 export interface AlertRuleInput {
@@ -394,7 +458,7 @@ export interface AlertRuleInput {
    * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
    */
   threshold?: null | number | string;
-  channels?: null | any[];
+  channelIds?: null | any[];
   limitedTo?: null | any[];
   quietHours?: null | any[];
 }
@@ -466,7 +530,7 @@ export interface AlertRuleView {
    */
   threshold: null | number | string;
   isEnabled: boolean;
-  channels: string[];
+  channels: AlertChannelView[];
   limitedTo: AlertRuleLimitedTo[];
   quietHours: AlertRuleQuietHour[];
   /** @format uuid */
@@ -1988,6 +2052,11 @@ export interface Ulimit {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   hard: null | number | string;
+}
+
+export interface VerifyAlertChannelInput {
+  alertDestination: AlertDestination;
+  url: string;
 }
 
 export interface VolumeAccessMode {
@@ -4268,6 +4337,33 @@ export class Api<
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/alerters/channels`,
         method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Alerters
+     * @name VerifyAlertChannel
+     * @summary Verify an alert channel URL
+     * @request POST:/api/v1/alerters/channels/verify
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    verifyAlertChannel: (
+      data: VerifyAlertChannelInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/alerters/channels/verify`,
+        method: "POST",
         body: data,
         secure: true,
         type: ContentType.Json,

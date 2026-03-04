@@ -103,7 +103,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
           "severity": "Critical",
           "cooldownSeconds": 120,
           "isEnabled": true,
-          "channels": [
+          "channelIds": [
             "{{channelId}}"
           ]
         }
@@ -123,8 +123,8 @@ public class AlertRuleCreateTests : IntegrationTestBase
         var cache = scope.ServiceProvider.GetRequiredService<IAlertRuleProvider>();
 
         var rule = Assert.Single(rules, r => r.Type == AlertType.PlatformUnreachable && r.CooldownSeconds == 120);
-        Assert.Contains(channelId, rule.Channels);
-        Assert.Contains(cache.Current.Get(AlertType.PlatformUnreachable), r => r.Id == rule.Id && r.Channels.Contains(channelId));
+        Assert.Contains(channelId, rule.ChannelIds);
+        Assert.Contains(cache.Current.Get(AlertType.PlatformUnreachable), r => r.Id == rule.Id && r.ChannelIds.Contains(channelId));
         await VerifyJson(responseBody);
     }
 
@@ -262,5 +262,5 @@ public class AlertRuleCreateTests : IntegrationTestBase
     }
 
     private static int GetCachedRuleCount(IAlertRuleProvider cache)
-        => cache.Current.ByResourceType.SelectMany(x => x.Value).Count();
+        => cache.Current.ByType.SelectMany(x => x.Value).Count();
 }

@@ -82,7 +82,7 @@ internal sealed class CreateAlertRuleHandler(
             createdByActorId: actorId,
             requiredMatches: command.RequiredMatches,
             threshold: command.Threshold,
-            channels: command.Channels?.ToList(),
+            channelIds: command.Channels?.ToList(),
             limitedTo: command.LimitedTo?.ToList(),
             quietHours: command.QuietHours?.ToList());
 

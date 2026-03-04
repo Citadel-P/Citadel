@@ -7,7 +7,7 @@ using Mediator;
 
 namespace Application.Features.Alerters.Queries;
 
-public sealed record GetAlertRules(int Page = 1, int PageSize = 50) : IQuery<Result<PagedResult<AlertRule>>>
+public sealed record GetAlertRules(int Page = 1, int PageSize = 50) : IQuery<Result<(PagedResult<AlertRule> Rules, IEnumerable<AlertChannel> Channels)>>
 {
     internal class Validator : AbstractValidator<GetAlertRules>
     {
@@ -19,11 +19,12 @@ public sealed record GetAlertRules(int Page = 1, int PageSize = 50) : IQuery<Res
     }
 }
 
-internal sealed class GetAlertRulesHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetAlertRules, Result<PagedResult<AlertRule>>>
+internal sealed class GetAlertRulesHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetAlertRules, Result<(PagedResult<AlertRule> Rules, IEnumerable<AlertChannel> Channels)>>
 {
-    public async ValueTask<Result<PagedResult<AlertRule>>> Handle(GetAlertRules query, CancellationToken cancellationToken)
+    public async ValueTask<Result<(PagedResult<AlertRule> Rules, IEnumerable<AlertChannel> Channels)>> Handle(GetAlertRules query, CancellationToken cancellationToken)
     {
         var rules = await unitOfWork.AlertRules.GetPagedAsync(query.Page, query.PageSize, cancellationToken);
-        return Result.Success(rules);
+        var channels = await unitOfWork.AlertRules.GetAllChannelsAsync(cancellationToken);
+        return Result.Success((rules, channels));
     }
 }

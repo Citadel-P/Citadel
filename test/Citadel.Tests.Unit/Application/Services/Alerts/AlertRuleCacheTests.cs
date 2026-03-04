@@ -129,7 +129,7 @@ public class AlertRuleCacheTests
             createdAt: DateTime.UtcNow,
             requiredMatches: requiredMatches,
             threshold: threshold,
-            channels: [],
+            channelIds: [],
             limitedTo: [],
             quietHours: []);
     }
