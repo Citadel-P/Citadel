@@ -5231,10 +5231,10 @@
         ]
       }
     },
-    "/api/v1/alerters/rules/{id}": {
+    "/api/v1/alertRules/{id}": {
       "get": {
         "tags": [
-          "Alerters"
+          "AlertRules"
         ],
         "summary": "Get alert rule by id",
         "operationId": "getAlertRule",
@@ -5319,7 +5319,7 @@
       },
       "patch": {
         "tags": [
-          "Alerters"
+          "AlertRules"
         ],
         "summary": "Update an alert rule",
         "operationId": "updateAlertRule",
@@ -5419,10 +5419,97 @@
         ]
       }
     },
-    "/api/v1/alerters/rules": {
+    "/api/v1/alertRules/{id}/_cfg": {
       "get": {
         "tags": [
-          "Alerters"
+          "AlertRules"
+        ],
+        "summary": "Get alert rule configuration",
+        "operationId": "getAlertRuleConfig",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertRuleConfigView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alertRules": {
+      "get": {
+        "tags": [
+          "AlertRules"
         ],
         "summary": "List alert rules",
         "operationId": "listAlertRules",
@@ -5514,7 +5601,7 @@
       },
       "post": {
         "tags": [
-          "Alerters"
+          "AlertRules"
         ],
         "summary": "Create an alert rule",
         "operationId": "createAlertRule",
@@ -5598,7 +5685,7 @@
       },
       "delete": {
         "tags": [
-          "Alerters"
+          "AlertRules"
         ],
         "summary": "Delete alert rules",
         "operationId": "deleteAlertRules",
@@ -5674,10 +5761,10 @@
         ]
       }
     },
-    "/api/v1/alerters/channels/{id}": {
+    "/api/v1/alertRules/channels/{id}": {
       "get": {
         "tags": [
-          "Alerters"
+          "AlertRules"
         ],
         "summary": "Get alert channel by id",
         "operationId": "getAlertChannel",
@@ -5762,7 +5849,7 @@
       },
       "patch": {
         "tags": [
-          "Alerters"
+          "AlertRules"
         ],
         "summary": "Update an alert channel",
         "operationId": "updateAlertChannel",
@@ -5862,10 +5949,10 @@
         ]
       }
     },
-    "/api/v1/alerters/channels": {
+    "/api/v1/alertRules/channels": {
       "get": {
         "tags": [
-          "Alerters"
+          "AlertRules"
         ],
         "summary": "List alert channels",
         "operationId": "listAlertChannels",
@@ -5919,7 +6006,7 @@
       },
       "post": {
         "tags": [
-          "Alerters"
+          "AlertRules"
         ],
         "summary": "Create an alert channel",
         "operationId": "createAlertChannel",
@@ -6003,7 +6090,7 @@
       },
       "delete": {
         "tags": [
-          "Alerters"
+          "AlertRules"
         ],
         "summary": "Delete alert channels",
         "operationId": "deleteAlertChannels",
@@ -6079,10 +6166,10 @@
         ]
       }
     },
-    "/api/v1/alerters/channels/verify": {
+    "/api/v1/alertRules/channels/verify": {
       "post": {
         "tags": [
-          "Alerters"
+          "AlertRules"
         ],
         "summary": "Verify an alert channel URL",
         "operationId": "verifyAlertChannel",
@@ -6196,13 +6283,13 @@
             "$ref": "#/components/schemas/ActivityEventInfoDeploymentDegraded"
           },
           {
-            "$ref": "#/components/schemas/ActivityEventInfoAlerterCreated"
+            "$ref": "#/components/schemas/ActivityEventInfoAlertRuleCreated"
           },
           {
-            "$ref": "#/components/schemas/ActivityEventInfoAlerterUpdated"
+            "$ref": "#/components/schemas/ActivityEventInfoAlertRuleUpdated"
           },
           {
-            "$ref": "#/components/schemas/ActivityEventInfoAlerterDeleted"
+            "$ref": "#/components/schemas/ActivityEventInfoAlertRuleDeleted"
           }
         ],
         "discriminator": {
@@ -6217,45 +6304,45 @@
             "DeploymentPaused": "#/components/schemas/ActivityEventInfoDeploymentPaused",
             "DeploymentApplied": "#/components/schemas/ActivityEventInfoDeploymentApplied",
             "DeploymentDegraded": "#/components/schemas/ActivityEventInfoDeploymentDegraded",
-            "AlerterCreated": "#/components/schemas/ActivityEventInfoAlerterCreated",
-            "AlerterUpdated": "#/components/schemas/ActivityEventInfoAlerterUpdated",
-            "AlerterDeleted": "#/components/schemas/ActivityEventInfoAlerterDeleted"
+            "AlertRuleCreated": "#/components/schemas/ActivityEventInfoAlertRuleCreated",
+            "AlertRuleUpdated": "#/components/schemas/ActivityEventInfoAlertRuleUpdated",
+            "AlertRuleDeleted": "#/components/schemas/ActivityEventInfoAlertRuleDeleted"
           }
         }
       },
-      "ActivityEventInfoAlerterCreated": {
+      "ActivityEventInfoAlertRuleCreated": {
         "required": [
           "alertRule"
         ],
         "properties": {
           "$type": {
             "enum": [
-              "AlerterCreated"
+              "AlertRuleCreated"
             ],
             "type": "string"
           },
           "alertRule": {
-            "$ref": "#/components/schemas/AlertRule"
+            "$ref": "#/components/schemas/AlertRuleSnapshot"
           }
         }
       },
-      "ActivityEventInfoAlerterDeleted": {
+      "ActivityEventInfoAlertRuleDeleted": {
         "required": [
           "alertRule"
         ],
         "properties": {
           "$type": {
             "enum": [
-              "AlerterDeleted"
+              "AlertRuleDeleted"
             ],
             "type": "string"
           },
           "alertRule": {
-            "$ref": "#/components/schemas/AlertRule"
+            "$ref": "#/components/schemas/AlertRuleSnapshot"
           }
         }
       },
-      "ActivityEventInfoAlerterUpdated": {
+      "ActivityEventInfoAlertRuleUpdated": {
         "required": [
           "oldRule",
           "newRule"
@@ -6263,15 +6350,15 @@
         "properties": {
           "$type": {
             "enum": [
-              "AlerterUpdated"
+              "AlertRuleUpdated"
             ],
             "type": "string"
           },
           "oldRule": {
-            "$ref": "#/components/schemas/AlertRule"
+            "$ref": "#/components/schemas/AlertRuleSnapshot"
           },
           "newRule": {
-            "$ref": "#/components/schemas/AlertRule"
+            "$ref": "#/components/schemas/AlertRuleSnapshot"
           }
         }
       },
@@ -6478,9 +6565,9 @@
           "RegistryRenamed",
           "RegistryUpdated",
           "RegistryDeleted",
-          "AlerterCreated",
-          "AlerterUpdated",
-          "AlerterDeleted"
+          "AlertRuleCreated",
+          "AlertRuleUpdated",
+          "AlertRuleDeleted"
         ]
       },
       "ActivityResourceType": {
@@ -6489,7 +6576,7 @@
           "Registry",
           "Deployment",
           "Stack",
-          "Alerter"
+          "AlertRule"
         ]
       },
       "ActivityStatus": {
@@ -6687,19 +6774,23 @@
           "Stack"
         ]
       },
-      "AlertRule": {
+      "AlertRuleConfigView": {
         "required": [
+          "name",
           "type",
           "severity",
           "cooldownSeconds",
-          "isEnabled",
-          "createdByActorId"
+          "requiredMatches",
+          "threshold",
+          "status",
+          "channelIds",
+          "limitedTo",
+          "quietHours"
         ],
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
+          "name": {
+            "type": "string"
           },
           "type": {
             "$ref": "#/components/schemas/AlertType"
@@ -6734,43 +6825,27 @@
             ],
             "format": "double"
           },
-          "isEnabled": {
-            "type": "boolean"
+          "status": {
+            "$ref": "#/components/schemas/AlertRuleStatus"
           },
           "channelIds": {
-            "type": [
-              "null",
-              "array"
-            ],
+            "type": "array",
             "items": {
               "type": "string",
               "format": "uuid"
             }
           },
           "limitedTo": {
-            "type": [
-              "null",
-              "array"
-            ],
+            "type": "array",
             "items": {
               "$ref": "#/components/schemas/AlertRuleLimitedTo"
             }
           },
           "quietHours": {
-            "type": [
-              "null",
-              "array"
-            ],
+            "type": "array",
             "items": {
               "$ref": "#/components/schemas/AlertRuleQuietHour"
             }
-          },
-          "createdByActorId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "createdAt": {
-            "format": "date-time"
           }
         }
       },
@@ -6779,7 +6854,7 @@
           "type",
           "severity",
           "cooldownSeconds",
-          "isEnabled"
+          "status"
         ],
         "type": "object",
         "properties": {
@@ -6798,8 +6873,8 @@
             ],
             "format": "int32"
           },
-          "isEnabled": {
-            "type": "boolean"
+          "status": {
+            "$ref": "#/components/schemas/AlertRuleStatus"
           },
           "requiredMatches": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -6976,6 +7051,83 @@
           }
         }
       },
+      "AlertRuleSnapshot": {
+        "required": [
+          "type",
+          "severity",
+          "cooldownSeconds",
+          "requiredMatches",
+          "threshold",
+          "status",
+          "channelIds",
+          "limitedTo",
+          "quietHours"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/AlertType"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AlertSeverity"
+          },
+          "cooldownSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "requiredMatches": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "threshold": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AlertRuleStatus"
+          },
+          "channelIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "limitedTo": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlertRuleLimitedTo"
+            }
+          },
+          "quietHours": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlertRuleQuietHour"
+            }
+          }
+        }
+      },
+      "AlertRuleStatus": {
+        "enum": [
+          "Enabled",
+          "Disabled"
+        ]
+      },
       "AlertRuleView": {
         "required": [
           "id",
@@ -6985,12 +7137,10 @@
           "cooldownSeconds",
           "requiredMatches",
           "threshold",
-          "isEnabled",
+          "status",
           "channels",
           "limitedTo",
-          "quietHours",
-          "createdByActorId",
-          "createdAt"
+          "quietHours"
         ],
         "type": "object",
         "properties": {
@@ -7034,8 +7184,8 @@
             ],
             "format": "double"
           },
-          "isEnabled": {
-            "type": "boolean"
+          "status": {
+            "$ref": "#/components/schemas/AlertRuleStatus"
           },
           "channels": {
             "type": "array",
@@ -7054,13 +7204,6 @@
             "items": {
               "$ref": "#/components/schemas/AlertRuleQuietHour"
             }
-          },
-          "createdByActorId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "createdAt": {
-            "format": "date-time"
           }
         }
       },
@@ -12986,7 +13129,7 @@
       "name": "Activities"
     },
     {
-      "name": "Alerters"
+      "name": "AlertRules"
     }
   ]
 }

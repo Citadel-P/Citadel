@@ -21,7 +21,7 @@ export const { dropdown: AlertRuleDropdownActions, group: AlertRuleGroupActions 
           isPending: false,
           run: () => {
             if (!canExecute || !selected) return;
-            navigate(`/alerters/edit/${selected.id}/`);
+            navigate(`/alert-rules/edit/${selected.id}/`);
           },
         };
       },
@@ -36,7 +36,7 @@ export const { dropdown: AlertRuleDropdownActions, group: AlertRuleGroupActions 
       separatorBefore: true,
       confirm: true,
       destructive: true,
-      resourceType: 'Alerter',
+      resourceType: 'AlertRule',
       useVariables: (resources) => {
         const selected = Array.isArray(resources) ? resources : [resources];
         return {

@@ -2,6 +2,7 @@ using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Alerts;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using FluentValidation;
@@ -18,7 +19,7 @@ public sealed record CreateAlertRule(
     AlertType Type,
     AlertSeverity Severity,
     int? CooldownSeconds,
-    bool IsEnabled,
+    AlertRuleStatus Status,
     int? RequiredMatches = null,
     double? Threshold = null,
     IEnumerable<Guid>? Channels = null,
@@ -78,7 +79,7 @@ internal sealed class CreateAlertRuleHandler(
             type: command.Type,
             severity: command.Severity,
             cooldownSeconds: command.CooldownSeconds,
-            isEnabled: command.IsEnabled,
+            status: command.Status,
             createdByActorId: actorId,
             requiredMatches: command.RequiredMatches,
             threshold: command.Threshold,
@@ -92,8 +93,8 @@ internal sealed class CreateAlertRuleHandler(
                         platformId: null,
                         resourceName: alertRule.Type.ToString(),
                         status: ActivityStatus.Success,
-                        eventType: ActivityEventType.AlerterCreated,
-                        info: new AlerterCreated(alertRule)
+                        eventType: ActivityEventType.AlertRuleCreated,
+                        info: new AlertRuleCreated(alertRule.ToSnapshot())
                         );
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);

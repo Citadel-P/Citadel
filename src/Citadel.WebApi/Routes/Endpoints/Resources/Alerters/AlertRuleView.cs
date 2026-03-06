@@ -1,5 +1,6 @@
 using Domain;
 using Domain.Entities.Alerts;
+using System.Data;
 
 namespace WebApi.Routes.Endpoints.Resources.Alerters;
 
@@ -11,18 +12,13 @@ public sealed partial record AlertRuleView(
     int? CooldownSeconds,
     int? RequiredMatches,
     double? Threshold,
-    bool IsEnabled,
+    AlertRuleStatus Status,
     IEnumerable<AlertChannelView> Channels,
     IEnumerable<AlertRuleLimitedTo> LimitedTo,
-    IEnumerable<AlertRuleQuietHour> QuietHours,
-    Guid CreatedByActorId,
-    DateTime CreatedAt)
+    IEnumerable<AlertRuleQuietHour> QuietHours)
 {
     internal static AlertRuleView Map(AlertRule rule)
         => Map(rule, new Dictionary<Guid, AlertChannel>());
-
-    internal static AlertRuleView Map((AlertRule Rule, IEnumerable<AlertChannel> Channels) data)
-        => Map(data.Rule, data.Channels.ToDictionary(c => c.Id));
 
     internal static AlertRuleView Map(AlertRule rule, IReadOnlyDictionary<Guid, AlertChannel> channelsById)
     {
@@ -39,15 +35,13 @@ public sealed partial record AlertRuleView(
             rule.CooldownSeconds,
             rule.RequiredMatches,
             rule.Threshold,
-            rule.IsEnabled,
+            rule.Status,
             channels,
             rule.LimitedTo,
-            rule.QuietHours,
-            rule.CreatedByActorId,
-            rule.CreatedAt);
+            rule.QuietHours);
     }
 
-    public static string SplitPascalCase(string value)
+    internal static string SplitPascalCase(string value)
     {
         if (string.IsNullOrEmpty(value))
             return value;
@@ -77,4 +71,31 @@ public sealed partial record AlertRuleView(
         return new string(buffer[..pos]);
     }
 
+}
+
+
+public sealed record AlertRuleConfigView(
+    string Name,
+    AlertType Type,
+    AlertSeverity Severity,
+    int? CooldownSeconds,
+    int? RequiredMatches,
+    double? Threshold,
+    AlertRuleStatus Status,
+    IEnumerable<Guid> ChannelIds,
+    IEnumerable<AlertRuleLimitedTo> LimitedTo,
+    IEnumerable<AlertRuleQuietHour> QuietHours)
+{
+    internal static AlertRuleConfigView Map(AlertRule rule)
+        => new(
+            AlertRuleView.SplitPascalCase(rule.Type.ToString()),
+            rule.Type,
+            rule.Severity,
+            rule.CooldownSeconds,
+            rule.RequiredMatches,
+            rule.Threshold,
+            rule.Status,
+            rule.ChannelIds,
+            rule.LimitedTo,
+            rule.QuietHours);
 }

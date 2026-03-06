@@ -1,9 +1,23 @@
-import { Api, ContainerStateStatus, ContainerStatView, PlatformStatView, ResourceControlState } from './generated/api.types';
+import {
+  Api,
+  ContainerStateStatus,
+  ContainerStatView,
+  PlatformStatView,
+  ResourceControlState,
+} from './generated/api.types';
 import { ResourceName, resources } from '@/api/generated/resources';
 import { useApiClientContext } from '@/api/api-client-context';
 
 export type DockerResourceType = 'Network' | 'Volume' | 'Image' | 'Container';
-export type ResourceType = DockerResourceType | 'Registry' | 'Platform' | 'Deployment' | 'Activity' | 'Alerter';
+export type ResourceType =
+  | DockerResourceType
+  | 'Registry'
+  | 'Platform'
+  | 'Deployment'
+  | 'Activity'
+  | 'AlertRule'
+  | 'AlertChannel'
+  | 'Stack';
 export const PluralResourceMap = {
   Network: 'Networks',
   Volume: 'Volumes',
@@ -13,7 +27,9 @@ export const PluralResourceMap = {
   Platform: 'Platforms',
   Deployment: 'Deployments',
   Activity: 'Activities',
-  Alerter: 'Alerters',
+  AlertRule: 'AlertRules',
+  AlertChannel: 'AlertChannels',
+  Stack: 'Stacks',
 } as const satisfies Record<ResourceType, string>;
 
 export type AnyFn = (...args: any[]) => Promise<any>;

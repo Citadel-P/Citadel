@@ -15,49 +15,48 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
 {
     public async Task<AlertRule?> GetByIdAsync(Guid alertRuleId, CancellationToken cancellationToken)
     {
-        const string ruleQuery = """
-        SELECT 
-            r.Id, 
-            r.Type, 
-            r.CooldownSeconds, 
-            r.IsEnabled, 
-            r.Severity, 
-            r.LimitedTo, 
-            r.QuietHours, 
-            r.RequiredMatches,
-            r.Threshold, 
-            r.CreatedByActorId, 
-            r.CreatedAt
-        FROM AlertRules r
-        WHERE r.Id = @Id
-        LIMIT 1
-        """;
-
-        const string channelIdsQuery = """
-        SELECT arc.AlertChannelId
-        FROM AlertRuleChannels arc
-        WHERE arc.AlertRuleId = @Id
-        """;
+        const string sql = """
+            SELECT 
+                r.Id, 
+                r.Type, 
+                r.CooldownSeconds, 
+                r.Status, 
+                r.Severity, 
+                r.LimitedTo, 
+                r.QuietHours, 
+                r.RequiredMatches,
+                r.Threshold, 
+                r.CreatedByActorId, 
+                r.CreatedAt,
+                COALESCE(json_group_array(arc.AlertChannelId), '[]') AS ChannelIds
+            FROM AlertRules r
+            LEFT JOIN AlertRuleChannels arc ON arc.AlertRuleId = r.Id
+            WHERE r.Id = @Id
+            GROUP BY r.Id
+            LIMIT 1
+            """;
 
         var id = alertRuleId.Format();
-        var result = await db.QuerySingleOrDefaultAsync<AlertRuleDto>(ruleQuery, new { Id = id }, transaction: tx());
-        if (result is null)
+
+        var dto = await db.QuerySingleOrDefaultAsync<AlertRuleDto>(
+            sql,
+            new { Id = id },
+            transaction: tx());
+
+        if (dto is null)
             return null;
 
-        var channelIds = await db.QueryAsync<Guid>(channelIdsQuery, new { Id = id }, transaction: tx());
-        result = result with { ChannelIds = channelIds.ToList() };
-
-        return result.ToDomain();
+        return dto.ToDomain();
     }
 
     public async Task<int> AddAlertRuleAsync(AlertRule alertRule, CancellationToken cancellationToken)
     {
         const string ruleSql = @"
         INSERT INTO AlertRules (
-            Id, Type, CooldownSeconds, IsEnabled, Severity, LimitedTo, QuietHours, RequiredMatches, Threshold, CreatedByActorId, CreatedAt
+            Id, Type, CooldownSeconds, Status, Severity, LimitedTo, QuietHours, RequiredMatches, Threshold, CreatedByActorId, CreatedAt
         )
         VALUES (
-            @Id, @Type, @CooldownSeconds, @IsEnabled, @Severity, @LimitedTo, @QuietHours, @RequiredMatches, @Threshold, @CreatedByActorId, @CreatedAt
+            @Id, @Type, @CooldownSeconds, @Status, @Severity, @LimitedTo, @QuietHours, @RequiredMatches, @Threshold, @CreatedByActorId, @CreatedAt
         )";
 
         var ruleId = alertRule.Id.Format();
@@ -66,7 +65,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             Id = ruleId,
             Type = EnumFormatter<AlertType>.GetValue(alertRule.Type),
             CooldownSeconds = alertRule.CooldownSeconds,
-            IsEnabled = alertRule.IsEnabled,
+            Status = EnumFormatter<AlertRuleStatus>.GetValue(alertRule.Status),
             RequiredMatches = alertRule.RequiredMatches,
             Threshold = alertRule.Threshold,
             Severity = EnumFormatter<AlertSeverity>.GetValue(alertRule.Severity),
@@ -132,40 +131,31 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
 
     public async Task<IEnumerable<AlertRule>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        const string ruleQuery = """
-        SELECT 
-            r.Id, 
-            r.Type, 
-            r.CooldownSeconds, 
-            r.IsEnabled, 
-            r.Severity, 
-            r.LimitedTo, 
-            r.QuietHours, 
-            r.RequiredMatches,
-            r.Threshold, 
-            r.CreatedByActorId, 
-            r.CreatedAt
-        FROM AlertRules r
+        const string sql = """
+            SELECT 
+                r.Id, 
+                r.Type, 
+                r.CooldownSeconds, 
+                r.Status, 
+                r.Severity, 
+                r.LimitedTo, 
+                r.QuietHours, 
+                r.RequiredMatches,
+                r.Threshold, 
+                r.CreatedByActorId, 
+                r.CreatedAt,
+                COALESCE(json_group_array(arc.AlertChannelId), '[]') AS ChannelIds
+            FROM AlertRules r
+            LEFT JOIN AlertRuleChannels arc ON arc.AlertRuleId = r.Id
+            GROUP BY r.Id
         """;
 
-        const string linkQuery = """
-        SELECT arc.AlertRuleId, arc.AlertChannelId
-        FROM AlertRuleChannels arc
-        """;
+        var rows = await db.QueryAsync<AlertRuleDto>(
+            sql,
+            transaction: tx());
 
-        var rows = (await db.QueryAsync<AlertRuleDto>(ruleQuery, transaction: tx()))?.ToList();
-        if (rows is null || rows.Count == 0)
+        if (rows is null)
             return [];
-
-        var links = (await db.QueryAsync<AlertRuleChannelLinkDto>(linkQuery, transaction: tx()))
-            .GroupBy(l => l.AlertRuleId)
-            .ToDictionary(g => g.Key, g => g.Select(l => l.AlertChannelId).ToList());
-
-        for (var i = 0; i < rows.Count; i++)
-        {
-            if (links.TryGetValue(rows[i].Id, out var ruleChannels))
-                rows[i] = rows[i] with { ChannelIds = ruleChannels! };
-        }
 
         return rows.ToDomain();
     }
@@ -174,48 +164,50 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
     {
         const string countQuery = "SELECT COUNT(*) FROM AlertRules";
 
-        const string ruleQuery = """
-        SELECT 
-            r.Id, 
-            r.Type, 
-            r.CooldownSeconds, 
-            r.IsEnabled, 
-            r.Severity, 
-            r.LimitedTo, 
-            r.QuietHours, 
-            r.RequiredMatches,
-            r.Threshold, 
-            r.CreatedByActorId, 
-            r.CreatedAt
-        FROM AlertRules r
-        ORDER BY r.CreatedAt DESC, r.Type DESC
-        LIMIT @PageSize OFFSET @Offset
-        """;
+        const string sql = """
+            SELECT 
+                r.Id,
+                r.Type,
+                r.CooldownSeconds,
+                r.Status,
+                r.Severity,
+                r.LimitedTo,
+                r.QuietHours,
+                r.RequiredMatches,
+                r.Threshold,
+                r.CreatedByActorId,
+                r.CreatedAt,
+                COALESCE(json_group_array(arc.AlertChannelId), '[]') AS ChannelIds
+            FROM (
+                SELECT *
+                FROM AlertRules
+                ORDER BY CreatedAt DESC, Type DESC
+                LIMIT @PageSize OFFSET @Offset
+            ) r
+            LEFT JOIN AlertRuleChannels arc ON arc.AlertRuleId = r.Id
+            GROUP BY r.Id
+            ORDER BY r.CreatedAt DESC, r.Type DESC
+         """;
 
-        var totalCount = await db.ExecuteScalarAsync<int>(countQuery, transaction: tx());
+        var totalCount = await db.ExecuteScalarAsync<int>(
+            countQuery,
+            transaction: tx());
+
         var offset = (page - 1) * pageSize;
 
-        var rows = (await db.QueryAsync<AlertRuleDto>(ruleQuery, new { PageSize = pageSize, Offset = offset }, transaction: tx()))?.ToList();
-        if (rows is null || rows.Count == 0)
+        var rows = await db.QueryAsync<AlertRuleDto>(
+            sql,
+            new { PageSize = pageSize, Offset = offset },
+            transaction: tx());
+
+        if (rows is null)
             return new PagedResult<AlertRule>([], totalCount, page, pageSize);
 
-        const string linkQuery = @"
-        SELECT arc.AlertRuleId, arc.AlertChannelId
-        FROM AlertRuleChannels arc
-        WHERE arc.AlertRuleId IN (SELECT value FROM json_each(@RuleIds))";
-
-        var ruleIdsJson = JsonSerializer.Serialize([.. rows.Select(r => r.Id)], DeploymentJsonContext.Default.IEnumerableGuid);
-        var links = (await db.QueryAsync<AlertRuleChannelLinkDto>(linkQuery, new { RuleIds = ruleIdsJson }, transaction: tx()))
-            .GroupBy(l => l.AlertRuleId)
-            .ToDictionary(g => g.Key, g => g.Select(l => l.AlertChannelId).ToList());
-
-        for (var i = 0; i < rows.Count; i++)
-        {
-            if (links.TryGetValue(rows[i].Id, out var ruleChannels))
-                rows[i] = rows[i] with { ChannelIds = ruleChannels! };
-        }
-
-        return new PagedResult<AlertRule>(rows.ToDomain(), totalCount, page, pageSize);
+        return new PagedResult<AlertRule>(
+            rows.ToDomain(),
+            totalCount,
+            page,
+            pageSize);
     }
 
     public async Task<AlertChannel?> GetChannelByIdAsync(Guid channelId, CancellationToken cancellationToken)
@@ -276,7 +268,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         SET
             Type = @Type,
             CooldownSeconds = @CooldownSeconds,
-            IsEnabled = @IsEnabled,
+            Status = @Status,
             Severity = @Severity,
             LimitedTo = @LimitedTo,
             QuietHours = @QuietHours,
@@ -292,7 +284,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
             Id = ruleId,
             Type = EnumFormatter<AlertType>.GetValue(alertRule.Type),
             CooldownSeconds = alertRule.CooldownSeconds,
-            IsEnabled = alertRule.IsEnabled,
+            Status = EnumFormatter<AlertRuleStatus>.GetValue(alertRule.Status),
             Severity = EnumFormatter<AlertSeverity>.GetValue(alertRule.Severity),
             QuietHours = JsonSerializer.Serialize(alertRule.QuietHours, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleQuietHour),
             LimitedTo = JsonSerializer.Serialize(alertRule.LimitedTo, AlertRuleJsonContext.Default.IReadOnlyCollectionAlertRuleLimitedTo),
@@ -350,7 +342,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         return db.ExecuteAsync(sql, new { Ids = idsJson }, transaction: tx());
     }
 
-    private Task LinkChannelsAsync(string alertRuleId, IEnumerable<Guid> channelIds)
+    private Task<int> LinkChannelsAsync(string alertRuleId, IEnumerable<Guid> channelIds)
     {
         const string linkSql = @"
         INSERT INTO AlertRuleChannels (AlertRuleId, AlertChannelId)

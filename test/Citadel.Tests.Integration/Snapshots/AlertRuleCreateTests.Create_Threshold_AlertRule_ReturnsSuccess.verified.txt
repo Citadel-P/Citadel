@@ -6,7 +6,5 @@
   cooldownSeconds: 60,
   requiredMatches: 3,
   threshold: 85,
-  isEnabled: true,
-  createdByActorId: Guid_2,
-  createdAt: DateTimeOffset_1
+  status: Enabled
 }

@@ -8,7 +8,7 @@ public sealed record AlertRuleInput(
     AlertType Type,
     AlertSeverity Severity,
     int? CooldownSeconds,
-    bool IsEnabled,
+    AlertRuleStatus Status,
     int? RequiredMatches = null,
     double? Threshold = null,
     IEnumerable<Guid>? ChannelIds = null,
@@ -16,7 +16,7 @@ public sealed record AlertRuleInput(
     IEnumerable<AlertRuleQuietHour>? QuietHours = null)
 {
     internal CreateAlertRule ToCommand() => new(
-        Type, Severity, CooldownSeconds, IsEnabled,
+        Type, Severity, CooldownSeconds, Status,
         RequiredMatches, Threshold,
         ChannelIds,
         LimitedTo, QuietHours);

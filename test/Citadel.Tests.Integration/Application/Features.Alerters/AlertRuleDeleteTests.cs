@@ -19,7 +19,7 @@ public class AlertRuleDeleteTests : IntegrationTestBase
             type: AlertType.PlatformUnreachable,
             severity: AlertSeverity.Critical,
             cooldownSeconds: 300,
-            isEnabled: true,
+            status: AlertRuleStatus.Enabled,
             createdByActorId: Constants.SystemId);
 
         await uow.AlertRules.AddAlertRuleAsync(rule, TestContext.Current.CancellationToken);
@@ -56,7 +56,7 @@ public class AlertRuleDeleteTests : IntegrationTestBase
         """;
 
         // Act
-        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/alerters/rules")
+        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/alertRules")
         {
             Content = new StringContent(content, Encoding.UTF8, "application/json")
         };
@@ -97,7 +97,7 @@ public class AlertRuleDeleteTests : IntegrationTestBase
         """;
 
         // Act
-        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/alerters/rules")
+        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/alertRules")
         {
             Content = new StringContent(content, Encoding.UTF8, "application/json")
         };
@@ -127,7 +127,7 @@ public class AlertRuleDeleteTests : IntegrationTestBase
         """;
 
         // Act
-        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/alerters/channels")
+        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/alertRules/channels")
         {
             Content = new StringContent(content, Encoding.UTF8, "application/json")
         };
@@ -163,7 +163,7 @@ public class AlertRuleDeleteTests : IntegrationTestBase
         """;
 
         // Act
-        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/alerters/channels")
+        var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/alertRules/channels")
         {
             Content = new StringContent(content, Encoding.UTF8, "application/json")
         };

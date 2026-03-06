@@ -39,12 +39,17 @@ export interface RequiredComponents<T = any> {
  */
 export interface RequiredFormComponents<T = any> {
   AddForm: {
+    Header: {
+      title?: string;
+    };
     /** The component responsible for rendering the main Add form. */
     Content?: React.FC;
   };
 
   EditForm: {
     Header: {
+      canEditTitle?: boolean;
+      canEditDescription?: boolean;
       Indicator: React.FC<{ resource: T }>;
       ActionButtons: React.FC<{ resource: T }>;
     };

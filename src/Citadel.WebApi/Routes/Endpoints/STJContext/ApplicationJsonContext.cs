@@ -167,6 +167,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(AlertChannelInputPatchDocument))]
 [JsonSerializable(typeof(DeleteAlertRulesInput))]
 [JsonSerializable(typeof(DeleteAlertChannelsInput))]
+[JsonSerializable(typeof(AlertRuleConfigView))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {
 }

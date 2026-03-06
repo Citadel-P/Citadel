@@ -98,6 +98,9 @@ public partial class  DeploymentJsonContext: JsonSerializerContext
 [JsonSerializable(typeof(DeploymentPaused))]
 [JsonSerializable(typeof(DeploymentDegraded))]
 [JsonSerializable(typeof(DeploymentApplied))]
+[JsonSerializable(typeof(AlertRuleCreated))]
+[JsonSerializable(typeof(AlertRuleUpdated))]
+[JsonSerializable(typeof(AlertRuleDeleted))]
 public partial class  EventInfoJsonContext : JsonSerializerContext
 {
     
@@ -110,6 +113,7 @@ public partial class  EventInfoJsonContext : JsonSerializerContext
     {
     typeof(JsonStringEnumConverter<AlertType>),
     typeof(JsonStringEnumConverter<AlertSeverity>),
+    typeof(JsonStringEnumConverter<AlertRuleStatus>),
     typeof(JsonStringEnumConverter<AlertResourceType>),
     })]
 [JsonSerializable(typeof(AlertEventInfo))]
@@ -123,8 +127,10 @@ public partial class AlertEventJsonContext : JsonSerializerContext
     Converters = new[]
     {
     typeof(JsonStringEnumConverter<AlertType>),
+    typeof(JsonStringEnumConverter<DayOfWeek>),
     typeof(JsonStringEnumConverter<ScheduleType>),
     typeof(JsonStringEnumConverter<AlertSeverity>),
+    typeof(JsonStringEnumConverter<AlertRuleStatus>),
     typeof(JsonStringEnumConverter<AlertResourceType>),
     typeof(JsonStringEnumConverter<AlertDestination>),
     })]

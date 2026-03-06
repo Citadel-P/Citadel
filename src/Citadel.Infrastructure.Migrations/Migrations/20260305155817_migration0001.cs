@@ -94,11 +94,11 @@ namespace Infrastructure.Migrations.Migrations
                     CooldownSeconds = table.Column<int>(type: "INTEGER", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
-                    IsEnabled = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: true),
                     LimitedTo = table.Column<string>(type: "TEXT", nullable: false),
                     QuietHours = table.Column<string>(type: "TEXT", nullable: false),
                     RequiredMatches = table.Column<int>(type: "INTEGER", nullable: true),
                     Severity = table.Column<string>(type: "TEXT", nullable: false),
+                    Status = table.Column<string>(type: "TEXT", nullable: false, defaultValue: "Enabled"),
                     Threshold = table.Column<double>(type: "REAL", nullable: true),
                     Type = table.Column<string>(type: "TEXT", nullable: false)
                 },
@@ -556,22 +556,22 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.InsertData(
                 table: "AlertRules",
-                columns: new[] { "Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "IsEnabled", "LimitedTo", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type" },
+                columns: new[] { "Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type" },
                 values: new object[,]
                 {
-                    { "019d0000-0001-7000-8001-000000000001", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", 3, "Critical", 90.0, "PlatformCpuHigh" },
-                    { "019d0000-0001-7000-8001-000000000002", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", 3, "Critical", 90.0, "PlatformRamHigh" },
-                    { "019d0000-0001-7000-8001-000000000003", 600, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "Critical", null, "PlatformUnreachable" },
-                    { "019d0000-0001-7000-8001-000000000004", 3600, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "Warning", null, "PlatformVersionMismatch" },
-                    { "019d0000-0001-7000-8001-000000000005", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "Info", null, "UnmanagedContainerCreated" },
-                    { "019d0000-0001-7000-8001-000000000006", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "Info", null, "DeploymentImageUpdateAvailable" },
-                    { "019d0000-0001-7000-8001-000000000007", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "Critical", null, "DeploymentAutoDeployFailed" },
-                    { "019d0000-0001-7000-8001-000000000008", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "Info", null, "DeploymentAutoUpdated" },
-                    { "019d0000-0001-7000-8001-000000000009", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "Info", null, "StackImageUpdateAvailable" },
-                    { "019d0000-0001-7000-8001-00000000000a", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "Critical", null, "StackAutoDeployFailed" },
-                    { "019d0000-0001-7000-8001-00000000000b", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", null, "Info", null, "StackAutoUpdated" },
-                    { "019d0000-0001-7000-8001-000000000011", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", 3, "Warning", 80.0, "PlatformCpuHigh" },
-                    { "019d0000-0001-7000-8001-000000000022", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", true, "[]", "[]", 3, "Warning", 80.0, "PlatformRamHigh" }
+                    { "019d0000-0001-7000-8001-000000000001", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "[]", "[]", 3, "Critical", 90.0, "PlatformCpuHigh" },
+                    { "019d0000-0001-7000-8001-000000000002", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "[]", "[]", 3, "Critical", 90.0, "PlatformRamHigh" },
+                    { "019d0000-0001-7000-8001-000000000003", 600, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "[]", "[]", null, "Critical", null, "PlatformUnreachable" },
+                    { "019d0000-0001-7000-8001-000000000004", 3600, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "[]", "[]", null, "Warning", null, "PlatformVersionMismatch" },
+                    { "019d0000-0001-7000-8001-000000000005", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "[]", "[]", null, "Info", null, "UnmanagedContainerCreated" },
+                    { "019d0000-0001-7000-8001-000000000006", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "[]", "[]", null, "Info", null, "DeploymentImageUpdateAvailable" },
+                    { "019d0000-0001-7000-8001-000000000007", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "[]", "[]", null, "Critical", null, "DeploymentAutoDeployFailed" },
+                    { "019d0000-0001-7000-8001-000000000008", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "[]", "[]", null, "Info", null, "DeploymentAutoUpdated" },
+                    { "019d0000-0001-7000-8001-000000000009", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "[]", "[]", null, "Info", null, "StackImageUpdateAvailable" },
+                    { "019d0000-0001-7000-8001-00000000000a", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "[]", "[]", null, "Critical", null, "StackAutoDeployFailed" },
+                    { "019d0000-0001-7000-8001-00000000000b", null, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "[]", "[]", null, "Info", null, "StackAutoUpdated" },
+                    { "019d0000-0001-7000-8001-000000000011", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "[]", "[]", 3, "Warning", 80.0, "PlatformCpuHigh" },
+                    { "019d0000-0001-7000-8001-000000000022", 300, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "[]", "[]", 3, "Warning", 80.0, "PlatformRamHigh" }
                 });
 
             migrationBuilder.InsertData(

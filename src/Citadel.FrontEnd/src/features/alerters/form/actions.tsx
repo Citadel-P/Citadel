@@ -8,10 +8,10 @@ export const { info: AlertRuleActions } = createActionsBuilder<RegistryView>()
     key: 'delete',
     type: 'command',
     icon: Trash,
-    mutateKey: 'deleteRegistries',
+    mutateKey: 'deleteAlertRules',
     confirm: true,
     destructive: true,
-    resourceType: 'Registry',
+    resourceType: 'AlertRule',
     canExecute: () => true,
     useVariables: (resource) => {
       return {
@@ -21,7 +21,7 @@ export const { info: AlertRuleActions } = createActionsBuilder<RegistryView>()
     useSuccessHandler: () => {
       const navigate = useNavigate();
       return () => {
-        navigate(`/alerters`);
+        navigate(`/alert-rules`);
       };
     },
   })

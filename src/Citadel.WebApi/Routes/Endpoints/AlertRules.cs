@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Application.Features.Alerters.Commands;
 using Application.Features.Alerters.Queries;
 using Domain.Entities.Alerts;
@@ -7,16 +6,23 @@ using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 
 namespace WebApi.Routes.Endpoints;
 
-public static class Alerters
+public static class AlertRules
 {
     public static async Task<Results<Ok<AlertRuleView>, ProblemHttpResult>> GetRule(IMediator mediator, Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAlertRule(id), cancellationToken);
         return EndpointHandlers.HandleResult(result, AlertRuleView.Map);
+    }
+
+    public static async Task<Results<Ok<AlertRuleConfigView>, ProblemHttpResult>> GetConfig(IMediator mediator, Guid id, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetAlertRule(id), cancellationToken);
+        return EndpointHandlers.HandleResult(result, AlertRuleConfigView.Map);
     }
 
     public static async Task<Results<Ok<AlertRulesView>, ProblemHttpResult>> ListRules(IMediator mediator, [AsParameters] AlertRuleFilter filter, CancellationToken cancellationToken)

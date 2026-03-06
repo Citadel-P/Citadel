@@ -20,7 +20,7 @@ public class AlertRulePatchTests : IntegrationTestBase
             type: AlertType.PlatformUnreachable,
             severity: AlertSeverity.Warning,
             cooldownSeconds: 300,
-            isEnabled: true,
+            status: AlertRuleStatus.Enabled,
             createdByActorId: Constants.SystemId);
 
         await uow.AlertRules.AddAlertRuleAsync(rule, TestContext.Current.CancellationToken);
@@ -53,13 +53,13 @@ public class AlertRulePatchTests : IntegrationTestBase
         {
           "severity": "Critical",
           "cooldownSeconds": 600,
-          "isEnabled": false
+          "status": "Disabled"
         }
         """;
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
 
         // Act
-        var response = await Client.PatchAsync($"/api/v1/alerters/rules/{ruleId}", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PatchAsync($"/api/v1/alertRules/{ruleId}", content, cancellationToken: TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 
         // Assert
@@ -73,7 +73,7 @@ public class AlertRulePatchTests : IntegrationTestBase
         Assert.NotNull(updated);
         Assert.Equal(AlertSeverity.Critical, updated.Severity);
         Assert.Equal(600, updated.CooldownSeconds);
-        Assert.False(updated.IsEnabled);
+        Assert.Equal(AlertRuleStatus.Disabled, updated.Status);
         Assert.Contains(cache.Current.Get(AlertType.PlatformUnreachable), r => r.Id == ruleId && r.Severity == AlertSeverity.Critical);
         await VerifyJson(responseBody);
     }
@@ -94,7 +94,7 @@ public class AlertRulePatchTests : IntegrationTestBase
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
 
         // Act
-        var response = await Client.PatchAsync($"/api/v1/alerters/rules/{ruleId}", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PatchAsync($"/api/v1/alertRules/{ruleId}", content, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
@@ -118,7 +118,7 @@ public class AlertRulePatchTests : IntegrationTestBase
         var linkContent = new StringContent(linkChannelPatchJson, Encoding.UTF8, "application/merge-patch+json");
 
         // Act - link first channel
-        var linkResponse = await Client.PatchAsync($"/api/v1/alerters/rules/{ruleId}", linkContent, cancellationToken: TestContext.Current.CancellationToken);
+        var linkResponse = await Client.PatchAsync($"/api/v1/alertRules/{ruleId}", linkContent, cancellationToken: TestContext.Current.CancellationToken);
         var linkBody = await linkResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(linkResponse.IsSuccessStatusCode, linkBody);
 
@@ -141,7 +141,7 @@ public class AlertRulePatchTests : IntegrationTestBase
         var switchContent = new StringContent(switchChannelPatchJson, Encoding.UTF8, "application/merge-patch+json");
 
         // Act - switch channel link
-        var switchResponse = await Client.PatchAsync($"/api/v1/alerters/rules/{ruleId}", switchContent, cancellationToken: TestContext.Current.CancellationToken);
+        var switchResponse = await Client.PatchAsync($"/api/v1/alertRules/{ruleId}", switchContent, cancellationToken: TestContext.Current.CancellationToken);
         var switchBody = await switchResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(switchResponse.IsSuccessStatusCode, switchBody);
 
@@ -171,7 +171,7 @@ public class AlertRulePatchTests : IntegrationTestBase
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
 
         // Act
-        var response = await Client.PatchAsync($"/api/v1/alerters/rules/{nonExistentId}", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PatchAsync($"/api/v1/alertRules/{nonExistentId}", content, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
@@ -196,7 +196,7 @@ public class AlertRulePatchTests : IntegrationTestBase
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
 
         // Act
-        var response = await Client.PatchAsync($"/api/v1/alerters/channels/{channelId}", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PatchAsync($"/api/v1/alertRules/channels/{channelId}", content, cancellationToken: TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 
         // Assert
@@ -228,7 +228,7 @@ public class AlertRulePatchTests : IntegrationTestBase
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
 
         // Act
-        var response = await Client.PatchAsync($"/api/v1/alerters/channels/{nonExistentId}", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PatchAsync($"/api/v1/alertRules/channels/{nonExistentId}", content, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);

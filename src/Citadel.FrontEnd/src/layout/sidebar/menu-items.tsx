@@ -2,7 +2,6 @@ import {
   Layers,
   Users,
   Cable,
-  Bell,
   Rocket,
   Server,
   GitBranch,
@@ -88,14 +87,14 @@ const MenuItems: IMenuItem[] = [
             route: '/git-providers',
           },
           {
+            icon: <Megaphone className="w-3.5 h-3.5" />,
+            label: 'Alert Rules',
+            route: '/alert-rules',
+          },
+          {
             icon: <ChevronsLeftRightEllipsis className="w-3.5 h-3.5" />,
             label: 'Variables',
             route: '/variables',
-          },
-          {
-            icon: <Megaphone className="w-3.5 h-3.5" />,
-            label: 'Alerters',
-            route: '/alerters',
           },
           {
             icon: <Users className="w-3.5 h-3.5" />,

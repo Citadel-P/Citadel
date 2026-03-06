@@ -34,13 +34,13 @@ public class AlertRuleCreateTests : IntegrationTestBase
           "type": "PlatformUnreachable",
           "severity": "Critical",
           "cooldownSeconds": 300,
-          "isEnabled": true
+          "status": "Enabled"
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
 
         // Act
-        var response = await Client.PostAsync("/api/v1/alerters/rules", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PostAsync("/api/v1/alertRules", content, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         response.EnsureSuccessStatusCode();
@@ -55,7 +55,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
             r.Type == AlertType.PlatformUnreachable &&
             r.Severity == AlertSeverity.Critical &&
             r.CooldownSeconds == 300 &&
-            r.IsEnabled));
+            r.Status == AlertRuleStatus.Enabled));
         Assert.Contains(cache.Current.Get(AlertType.PlatformUnreachable), r => r.Id == rule.Id);
         await VerifyJson(responseBody);
     }
@@ -69,7 +69,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
           "type": "PlatformCpuHigh",
           "severity": "Warning",
           "cooldownSeconds": 60,
-          "isEnabled": true,
+          "status": "Enabled",
           "requiredMatches": 3,
           "threshold": 85.0
         }
@@ -77,7 +77,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
 
         // Act
-        var response = await Client.PostAsync("/api/v1/alerters/rules", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PostAsync("/api/v1/alertRules", content, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         response.EnsureSuccessStatusCode();
@@ -102,7 +102,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
           "type": "PlatformUnreachable",
           "severity": "Critical",
           "cooldownSeconds": 120,
-          "isEnabled": true,
+          "status": "Enabled",
           "channelIds": [
             "{{channelId}}"
           ]
@@ -111,7 +111,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
 
         // Act
-        var response = await Client.PostAsync("/api/v1/alerters/rules", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PostAsync("/api/v1/alertRules", content, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         response.EnsureSuccessStatusCode();
@@ -137,13 +137,13 @@ public class AlertRuleCreateTests : IntegrationTestBase
           "type": "PlatformUnreachable",
           "severity": "Warning",
           "cooldownSeconds": 5,
-          "isEnabled": true
+          "status": "Enabled"
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
 
         // Act
-        var response = await Client.PostAsync("/api/v1/alerters/rules", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PostAsync("/api/v1/alertRules", content, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
@@ -160,7 +160,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
           "type": "PlatformCpuHigh",
           "severity": "Warning",
           "cooldownSeconds": 60,
-          "isEnabled": true,
+          "status": "Enabled",
           "scope": "All",
           "threshold": 85.0
         }
@@ -168,7 +168,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
 
         // Act
-        var response = await Client.PostAsync("/api/v1/alerters/rules", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PostAsync("/api/v1/alertRules", content, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
@@ -186,7 +186,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
           "type": "PlatformUnreachable",
           "severity": "Warning",
           "cooldownSeconds": 60,
-          "isEnabled": true,
+          "status": "Enabled",
           "requiredMatches": 3,
           "threshold": 85.0
         }
@@ -194,7 +194,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
 
         // Act
-        var response = await Client.PostAsync("/api/v1/alerters/rules", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PostAsync("/api/v1/alertRules", content, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
@@ -220,7 +220,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
 
         // Act
-        var response = await Client.PostAsync("/api/v1/alerters/channels", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PostAsync("/api/v1/alertRules/channels", content, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         response.EnsureSuccessStatusCode();
@@ -251,7 +251,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
 
         // Act
-        var response = await Client.PostAsync("/api/v1/alerters/channels", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PostAsync("/api/v1/alertRules/channels", content, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);

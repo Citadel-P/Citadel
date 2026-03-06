@@ -168,6 +168,11 @@ export enum AlertSeverity {
   Critical = "Critical",
 }
 
+export enum AlertRuleStatus {
+  Enabled = "Enabled",
+  Disabled = "Disabled",
+}
+
 export enum AlertResourceType {
   Platform = "Platform",
   Deployment = "Deployment",
@@ -217,7 +222,7 @@ export enum ActivityResourceType {
   Registry = "Registry",
   Deployment = "Deployment",
   Stack = "Stack",
-  Alerter = "Alerter",
+  AlertRule = "AlertRule",
 }
 
 export enum ActivityEventType {
@@ -237,9 +242,9 @@ export enum ActivityEventType {
   RegistryRenamed = "RegistryRenamed",
   RegistryUpdated = "RegistryUpdated",
   RegistryDeleted = "RegistryDeleted",
-  AlerterCreated = "AlerterCreated",
-  AlerterUpdated = "AlerterUpdated",
-  AlerterDeleted = "AlerterDeleted",
+  AlertRuleCreated = "AlertRuleCreated",
+  AlertRuleUpdated = "AlertRuleUpdated",
+  AlertRuleDeleted = "AlertRuleDeleted",
 }
 
 export interface ActivitiesView {
@@ -285,33 +290,33 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         ActivityEventInfoDeploymentDegraded
       >
     | BaseActivityEventInfoTypeMapping<
-        "AlerterCreated",
-        ActivityEventInfoAlerterCreated
+        "AlertRuleCreated",
+        ActivityEventInfoAlertRuleCreated
       >
     | BaseActivityEventInfoTypeMapping<
-        "AlerterUpdated",
-        ActivityEventInfoAlerterUpdated
+        "AlertRuleUpdated",
+        ActivityEventInfoAlertRuleUpdated
       >
     | BaseActivityEventInfoTypeMapping<
-        "AlerterDeleted",
-        ActivityEventInfoAlerterDeleted
+        "AlertRuleDeleted",
+        ActivityEventInfoAlertRuleDeleted
       >
   );
 
-export interface ActivityEventInfoAlerterCreated {
-  $type?: "AlerterCreated";
-  alertRule: AlertRule;
+export interface ActivityEventInfoAlertRuleCreated {
+  $type?: "AlertRuleCreated";
+  alertRule: AlertRuleSnapshot;
 }
 
-export interface ActivityEventInfoAlerterDeleted {
-  $type?: "AlerterDeleted";
-  alertRule: AlertRule;
+export interface ActivityEventInfoAlertRuleDeleted {
+  $type?: "AlertRuleDeleted";
+  alertRule: AlertRuleSnapshot;
 }
 
-export interface ActivityEventInfoAlerterUpdated {
-  $type?: "AlerterUpdated";
-  oldRule: AlertRule;
-  newRule: AlertRule;
+export interface ActivityEventInfoAlertRuleUpdated {
+  $type?: "AlertRuleUpdated";
+  oldRule: AlertRuleSnapshot;
+  newRule: AlertRuleSnapshot;
 }
 
 export interface ActivityEventInfoDeploymentApplied {
@@ -409,9 +414,8 @@ export interface AlertChannelsView {
   channels: AlertChannelView[];
 }
 
-export interface AlertRule {
-  /** @format uuid */
-  id?: string;
+export interface AlertRuleConfigView {
+  name: string;
   type: AlertType;
   severity: AlertSeverity;
   /**
@@ -423,20 +427,16 @@ export interface AlertRule {
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
-  requiredMatches?: null | number | string;
+  requiredMatches: null | number | string;
   /**
    * @format double
    * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
    */
-  threshold?: null | number | string;
-  isEnabled: boolean;
-  channelIds?: null | any[];
-  limitedTo?: null | any[];
-  quietHours?: null | any[];
-  /** @format uuid */
-  createdByActorId: string;
-  /** @format date-time */
-  createdAt?: any;
+  threshold: null | number | string;
+  status: AlertRuleStatus;
+  channelIds: string[];
+  limitedTo: AlertRuleLimitedTo[];
+  quietHours: AlertRuleQuietHour[];
 }
 
 export interface AlertRuleInput {
@@ -447,7 +447,7 @@ export interface AlertRuleInput {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   cooldownSeconds: null | number | string;
-  isEnabled: boolean;
+  status: AlertRuleStatus;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -508,6 +508,30 @@ export interface AlertRuleQuietHourWeeklyQuietHour {
   timeZoneInfo?: TimeZoneInfo;
 }
 
+export interface AlertRuleSnapshot {
+  type: AlertType;
+  severity: AlertSeverity;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  cooldownSeconds: null | number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  requiredMatches: null | number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  threshold: null | number | string;
+  status: AlertRuleStatus;
+  channelIds: string[];
+  limitedTo: AlertRuleLimitedTo[];
+  quietHours: AlertRuleQuietHour[];
+}
+
 export interface AlertRuleView {
   /** @format uuid */
   id: string;
@@ -529,14 +553,10 @@ export interface AlertRuleView {
    * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
    */
   threshold: null | number | string;
-  isEnabled: boolean;
+  status: AlertRuleStatus;
   channels: AlertChannelView[];
   limitedTo: AlertRuleLimitedTo[];
   quietHours: AlertRuleQuietHour[];
-  /** @format uuid */
-  createdByActorId: string;
-  /** @format date-time */
-  createdAt: any;
 }
 
 export interface AlertRulesView {
@@ -4047,10 +4067,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Alerters
+     * @tags AlertRules
      * @name GetAlertRule
      * @summary Get alert rule by id
-     * @request GET:/api/v1/alerters/rules/{id}
+     * @request GET:/api/v1/alertRules/{id}
      * @secure
      * @response `200` `AlertRuleView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -4064,7 +4084,7 @@ export class Api<
         AlertRuleView,
         HttpValidationProblemDetails | ProblemDetails
       >({
-        path: `/api/v1/alerters/rules/${id}`,
+        path: `/api/v1/alertRules/${id}`,
         method: "GET",
         secure: true,
         format: "json",
@@ -4074,10 +4094,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Alerters
+     * @tags AlertRules
      * @name UpdateAlertRule
      * @summary Update an alert rule
-     * @request PATCH:/api/v1/alerters/rules/{id}
+     * @request PATCH:/api/v1/alertRules/{id}
      * @secure
      * @response `200` `AlertRuleView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -4095,7 +4115,7 @@ export class Api<
         AlertRuleView,
         HttpValidationProblemDetails | ProblemDetails
       >({
-        path: `/api/v1/alerters/rules/${id}`,
+        path: `/api/v1/alertRules/${id}`,
         method: "PATCH",
         body: data,
         secure: true,
@@ -4107,10 +4127,37 @@ export class Api<
     /**
      * No description
      *
-     * @tags Alerters
+     * @tags AlertRules
+     * @name GetAlertRuleConfig
+     * @summary Get alert rule configuration
+     * @request GET:/api/v1/alertRules/{id}/_cfg
+     * @secure
+     * @response `200` `AlertRuleConfigView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getAlertRuleConfig: (id: string, params: RequestParams = {}) =>
+      this.request<
+        AlertRuleConfigView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/alertRules/${id}/_cfg`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AlertRules
      * @name ListAlertRules
      * @summary List alert rules
-     * @request GET:/api/v1/alerters/rules
+     * @request GET:/api/v1/alertRules
      * @secure
      * @response `200` `AlertRulesView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -4139,7 +4186,7 @@ export class Api<
         AlertRulesView,
         HttpValidationProblemDetails | ProblemDetails
       >({
-        path: `/api/v1/alerters/rules`,
+        path: `/api/v1/alertRules`,
         method: "GET",
         query: query,
         secure: true,
@@ -4150,10 +4197,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Alerters
+     * @tags AlertRules
      * @name CreateAlertRule
      * @summary Create an alert rule
-     * @request POST:/api/v1/alerters/rules
+     * @request POST:/api/v1/alertRules
      * @secure
      * @response `200` `AlertRuleView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -4167,7 +4214,7 @@ export class Api<
         AlertRuleView,
         HttpValidationProblemDetails | ProblemDetails
       >({
-        path: `/api/v1/alerters/rules`,
+        path: `/api/v1/alertRules`,
         method: "POST",
         body: data,
         secure: true,
@@ -4179,10 +4226,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Alerters
+     * @tags AlertRules
      * @name DeleteAlertRules
      * @summary Delete alert rules
-     * @request DELETE:/api/v1/alerters/rules
+     * @request DELETE:/api/v1/alertRules
      * @secure
      * @response `204` `void` No Content
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -4196,7 +4243,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/alerters/rules`,
+        path: `/api/v1/alertRules`,
         method: "DELETE",
         body: data,
         secure: true,
@@ -4207,10 +4254,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Alerters
+     * @tags AlertRules
      * @name GetAlertChannel
      * @summary Get alert channel by id
-     * @request GET:/api/v1/alerters/channels/{id}
+     * @request GET:/api/v1/alertRules/channels/{id}
      * @secure
      * @response `200` `AlertChannelView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -4224,7 +4271,7 @@ export class Api<
         AlertChannelView,
         HttpValidationProblemDetails | ProblemDetails
       >({
-        path: `/api/v1/alerters/channels/${id}`,
+        path: `/api/v1/alertRules/channels/${id}`,
         method: "GET",
         secure: true,
         format: "json",
@@ -4234,10 +4281,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Alerters
+     * @tags AlertRules
      * @name UpdateAlertChannel
      * @summary Update an alert channel
-     * @request PATCH:/api/v1/alerters/channels/{id}
+     * @request PATCH:/api/v1/alertRules/channels/{id}
      * @secure
      * @response `200` `AlertChannelView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -4255,7 +4302,7 @@ export class Api<
         AlertChannelView,
         HttpValidationProblemDetails | ProblemDetails
       >({
-        path: `/api/v1/alerters/channels/${id}`,
+        path: `/api/v1/alertRules/channels/${id}`,
         method: "PATCH",
         body: data,
         secure: true,
@@ -4267,10 +4314,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Alerters
+     * @tags AlertRules
      * @name ListAlertChannels
      * @summary List alert channels
-     * @request GET:/api/v1/alerters/channels
+     * @request GET:/api/v1/alertRules/channels
      * @secure
      * @response `200` `AlertChannelsView` OK
      * @response `401` `ProblemDetails` Unauthorized
@@ -4279,7 +4326,7 @@ export class Api<
      */
     listAlertChannels: (params: RequestParams = {}) =>
       this.request<AlertChannelsView, ProblemDetails>({
-        path: `/api/v1/alerters/channels`,
+        path: `/api/v1/alertRules/channels`,
         method: "GET",
         secure: true,
         format: "json",
@@ -4289,10 +4336,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Alerters
+     * @tags AlertRules
      * @name CreateAlertChannel
      * @summary Create an alert channel
-     * @request POST:/api/v1/alerters/channels
+     * @request POST:/api/v1/alertRules/channels
      * @secure
      * @response `200` `AlertChannelView` OK
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -4306,7 +4353,7 @@ export class Api<
         AlertChannelView,
         HttpValidationProblemDetails | ProblemDetails
       >({
-        path: `/api/v1/alerters/channels`,
+        path: `/api/v1/alertRules/channels`,
         method: "POST",
         body: data,
         secure: true,
@@ -4318,10 +4365,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Alerters
+     * @tags AlertRules
      * @name DeleteAlertChannels
      * @summary Delete alert channels
-     * @request DELETE:/api/v1/alerters/channels
+     * @request DELETE:/api/v1/alertRules/channels
      * @secure
      * @response `204` `void` No Content
      * @response `400` `HttpValidationProblemDetails` Bad Request
@@ -4335,7 +4382,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/alerters/channels`,
+        path: `/api/v1/alertRules/channels`,
         method: "DELETE",
         body: data,
         secure: true,
@@ -4346,10 +4393,10 @@ export class Api<
     /**
      * No description
      *
-     * @tags Alerters
+     * @tags AlertRules
      * @name VerifyAlertChannel
      * @summary Verify an alert channel URL
-     * @request POST:/api/v1/alerters/channels/verify
+     * @request POST:/api/v1/alertRules/channels/verify
      * @secure
      * @response `204` `void` No Content
      * @response `400` `ProblemDetails` Bad Request
@@ -4362,7 +4409,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, ProblemDetails>({
-        path: `/api/v1/alerters/channels/verify`,
+        path: `/api/v1/alertRules/channels/verify`,
         method: "POST",
         body: data,
         secure: true,

@@ -34,7 +34,7 @@ const urlFormatHelper: Record<string, string> = {
   Bark: 'bark://devicekey@host',
   Discord: 'discord://token@id',
   Gotify: 'gotify://gotify-host/token',
-  Google_Chat: 'googlechat://chat.googleapis.com/v1/spaces/FOO/messages?key=bar&token=baz',
+  GoogleChat: 'googlechat://chat.googleapis.com/v1/spaces/FOO/messages?key=bar&token=baz',
   IFTTT: 'ifttt://key/?events=event1[,event2,...]&value1=value1&value2=value2&value3=value3',
   Join: 'join://shoutrrr:api-key@join/?devices=device1[,device2,...][&icon=icon]',
   Lark: 'lark://host/token?secret=secret',
@@ -50,7 +50,7 @@ const urlFormatHelper: Record<string, string> = {
   Teams: 'teams://group@tenant/altId/groupOwner/extraId?host=organization.webhook.office.com',
   Telegram: 'telegram://token@telegram?chats=@channel-1[,chat-id-1,...]',
   WeCom: 'wecom://key',
-  Zulip_Chat: 'zulip://bot-mail:bot-key@zulip-domain/?stream=name-or-id&topic=name',
+  ZulipChat: 'zulip://bot-mail:bot-key@zulip-domain/?stream=name-or-id&topic=name',
 };
 
 const getInitialInput = (c?: AlertChannelView): AlertChannelInput =>
@@ -104,7 +104,10 @@ function useAlertChannels() {
   };
 
   const verifyChannel = async (dest: AlertDestination, url: string) => {
-    if (!url) throw new Error('Channel URL is required to verify.');
+    if (!url) {
+      toast.error('Channel URL is required to verify.');
+      throw new Error('Channel URL is required to verify.');
+    }
     await verify({ data: { alertDestination: dest, url } });
   };
 
@@ -299,7 +302,7 @@ function AlertNotificationChannels() {
               </div>
             </div>
 
-            <div className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm border-border">
+            <div className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-xs border-border">
               <div className="space-y-0.5">
                 <Label htmlFor="is-active">Is Active</Label>
                 <div className="text-xs text-muted-foreground">
@@ -333,7 +336,7 @@ function AlertNotificationChannels() {
   );
 }
 
-export const AlerterComponents: RequiredComponents = {
+export const AlertRuleComponents: RequiredComponents = {
   Icon: <Megaphone className="h-4 w-4" />,
   Content: ({ items, actions, isLoading }) => (
     <div className="flex flex-col gap-6">
@@ -344,7 +347,7 @@ export const AlerterComponents: RequiredComponents = {
   ),
   DropdownActions: AlertRuleDropdownActions,
   GroupActions: ({ items }) => (
-    <ActionBar type="Alerter" items={items} actions={Object.values(AlertRuleGroupActions)} />
+    <ActionBar type="AlertRule" items={items} actions={Object.values(AlertRuleGroupActions)} />
   ),
   header: {
     title: 'Alert Rules',

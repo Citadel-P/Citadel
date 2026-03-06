@@ -1,6 +1,7 @@
 using Application.Services.Alerts;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Alerts;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using FluentValidation;
@@ -47,7 +48,7 @@ internal sealed class PatchAlertRuleHandler(
             type: rule.Type,
             severity: rule.Severity,
             cooldownSeconds: rule.CooldownSeconds,
-            isEnabled: rule.IsEnabled,
+            status: rule.Status,
             createdByActorId: rule.CreatedByActorId,
             createdAt: rule.CreatedAt,
             requiredMatches: rule.RequiredMatches,
@@ -82,7 +83,7 @@ internal sealed class PatchAlertRuleHandler(
             type: patchedRule.Type,
             severity: patchedRule.Severity,
             cooldownSeconds: patchedRule.CooldownSeconds,
-            isEnabled: patchedRule.IsEnabled,
+            status: patchedRule.Status,
             channelIds: patchedRule.ChannelIds,
             requiredMatches: patchedRule.RequiredMatches,
             threshold: patchedRule.Threshold,
@@ -94,7 +95,7 @@ internal sealed class PatchAlertRuleHandler(
             type: rule.Type,
             severity: rule.Severity,
             cooldownSeconds: rule.CooldownSeconds,
-            isEnabled: rule.IsEnabled,
+            status: rule.Status,
             createdByActorId: rule.CreatedByActorId,
             createdAt: rule.CreatedAt,
             requiredMatches: rule.RequiredMatches,
@@ -109,8 +110,8 @@ internal sealed class PatchAlertRuleHandler(
             platformId: null,
             resourceName: rule.Type.ToString(),
             status: ActivityStatus.Success,
-            eventType: ActivityEventType.AlerterUpdated,
-            info: new AlerterUpdated(oldRule, newRule)
+            eventType: ActivityEventType.AlertRuleUpdated,
+            info: new AlertRuleUpdated(oldRule.ToSnapshot(), newRule.ToSnapshot())
         );
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);

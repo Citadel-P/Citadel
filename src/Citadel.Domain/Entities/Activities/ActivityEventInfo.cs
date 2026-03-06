@@ -1,4 +1,4 @@
-﻿using Domain.Entities.Alerts;
+﻿using Domain.Contracts.Resources.Alerts;
 using Domain.Entities.Deployments;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
@@ -16,9 +16,9 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(DeploymentPaused), nameof(ActivityEventType.DeploymentPaused))]
 [JsonDerivedType(typeof(DeploymentApplied), nameof(ActivityEventType.DeploymentApplied))]
 [JsonDerivedType(typeof(DeploymentDegraded), nameof(ActivityEventType.DeploymentDegraded))]
-[JsonDerivedType(typeof(AlerterCreated), nameof(ActivityEventType.AlerterCreated))]
-[JsonDerivedType(typeof(AlerterUpdated), nameof(ActivityEventType.AlerterUpdated))]
-[JsonDerivedType(typeof(AlerterDeleted), nameof(ActivityEventType.AlerterDeleted))]
+[JsonDerivedType(typeof(AlertRuleCreated), nameof(ActivityEventType.AlertRuleCreated))]
+[JsonDerivedType(typeof(AlertRuleUpdated), nameof(ActivityEventType.AlertRuleUpdated))]
+[JsonDerivedType(typeof(AlertRuleDeleted), nameof(ActivityEventType.AlertRuleDeleted))]
 public abstract record ActivityEventInfo;
 
 public sealed record DeploymentCreated(DeploymentSpec Spec) : ActivityEventInfo;
@@ -30,8 +30,8 @@ public sealed record DeploymentStopped(IEnumerable<string> ContainerIds) : Activ
 public sealed record DeploymentPaused(IEnumerable<string> ContainerIds) : ActivityEventInfo;
 public sealed record DeploymentDegraded(string Reason) : ActivityEventInfo;
 public sealed record DeploymentApplied(DeploymentSpec? Spec, IEnumerable<string>? ContainerIds, string? Reason) : ActivityEventInfo;
-public sealed record AlerterCreated(AlertRule AlertRule) : ActivityEventInfo;
-public sealed record AlerterUpdated(AlertRule OldRule, AlertRule NewRule) : ActivityEventInfo;
-public sealed record AlerterDeleted(AlertRule AlertRule) : ActivityEventInfo;
+public sealed record AlertRuleCreated(AlertRuleSnapshot AlertRule) : ActivityEventInfo;
+public sealed record AlertRuleUpdated(AlertRuleSnapshot OldRule, AlertRuleSnapshot NewRule) : ActivityEventInfo;
+public sealed record AlertRuleDeleted(AlertRuleSnapshot AlertRule) : ActivityEventInfo;
 
 

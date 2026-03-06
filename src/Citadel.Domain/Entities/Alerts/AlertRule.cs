@@ -25,7 +25,7 @@ public sealed class AlertRule : IAuditedEntity
     /// Gets the threshold value used to determine whether a specific condition is met.
     /// </summary>
     public double? Threshold { get; private set; }
-    public bool IsEnabled { get; private set; }
+    public AlertRuleStatus Status { get; private set; }
 
     public IReadOnlyCollection<Guid> ChannelIds => _channelIds;
     public IReadOnlyCollection<AlertRuleLimitedTo> LimitedTo => _limitedTo;
@@ -41,7 +41,7 @@ public sealed class AlertRule : IAuditedEntity
         AlertType type,
         AlertSeverity severity,
         int? cooldownSeconds,
-        bool isEnabled,
+        AlertRuleStatus status,
         Guid createdByActorId,
         int? requiredMatches = null,
         double? threshold = null,
@@ -51,13 +51,13 @@ public sealed class AlertRule : IAuditedEntity
     {
         if (cooldownSeconds < 10 || cooldownSeconds > 86400)
             throw new ArgumentOutOfRangeException(nameof(cooldownSeconds), "Cooldown must be between 10s and 24h.");
-
+        
         Type = type;
         Severity = severity;
         CooldownSeconds = cooldownSeconds;
         RequiredMatches = requiredMatches;
         Threshold = threshold;
-        IsEnabled = isEnabled;
+        Status = status;
 
         _channelIds = channelIds?.ToList() ?? [];
         _limitedTo = limitedTo?.ToList() ?? [];
@@ -76,7 +76,7 @@ public sealed class AlertRule : IAuditedEntity
         AlertType type,
         AlertSeverity severity,
         int? cooldownSeconds,
-        bool isEnabled,
+        AlertRuleStatus status,
         Guid createdByActorId,
         DateTime createdAt,
         int? requiredMatches = null,
@@ -89,7 +89,7 @@ public sealed class AlertRule : IAuditedEntity
             type,
             severity,
             cooldownSeconds,
-            isEnabled,
+            status,
             createdByActorId,
             requiredMatches,
             threshold,
@@ -107,7 +107,7 @@ public sealed class AlertRule : IAuditedEntity
 
     public AlertRule Disable()
     {
-        IsEnabled = false; 
+        Status = AlertRuleStatus.Disabled;
         return this;
     }
 
@@ -115,7 +115,7 @@ public sealed class AlertRule : IAuditedEntity
         AlertType type,
         AlertSeverity severity,
         int? cooldownSeconds,
-        bool isEnabled,
+        AlertRuleStatus status,
         IEnumerable<Guid>? channelIds = null,
         int? requiredMatches = null,
         double? threshold = null,
@@ -125,7 +125,7 @@ public sealed class AlertRule : IAuditedEntity
         Type = type;
         Severity = severity;
         CooldownSeconds = cooldownSeconds;
-        IsEnabled = isEnabled;
+        Status = status;
         _channelIds.Clear();
         if (channelIds is not null) _channelIds.AddRange(channelIds);
         RequiredMatches = requiredMatches;
@@ -138,7 +138,7 @@ public sealed class AlertRule : IAuditedEntity
 
     public bool CanTrigger(DateTime utcNow, AlertRuleState? state)
     {
-        if (!IsEnabled)
+        if (Status is AlertRuleStatus.Disabled)
             return false;
 
         if (state is not null &&

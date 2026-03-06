@@ -9,6 +9,7 @@ import {
   DayOfWeek,
   ScheduleType,
   DeploymentView,
+  AlertRuleStatus,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -17,7 +18,6 @@ import {
   defineSection,
   FieldInput,
   FieldSlider,
-  FieldSwitch,
   ItemSelector,
 } from '@/components/custom/form-builder';
 import { useState, useMemo, useCallback, useEffect } from 'react';
@@ -42,6 +42,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { ContentCard } from '@/components/custom/content-card';
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
+import { useQueryClient } from '@tanstack/react-query';
 
 type LimitedToEntry = {
   resourceType: AlertResourceType;
@@ -51,28 +52,31 @@ type LimitedToEntry = {
 export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: AlertRuleInput }) => {
   const id = useParams().id;
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<AlertRuleInput>>({});
   const [isPending, setIsPending] = useState(false);
 
   const { mutateAsync: createAlertRule } = useMutate('createAlertRule');
   const { mutateAsync: updateAlertRule } = useMutate('updateAlertRule');
 
-  const original = useMemo(() => {
-    return {
-      isEnabled: true,
-      requiredMatches: 3,
-      ...(resource ?? {}),
-    } as AlertRuleInput;
-  }, [resource]);
+  const refreshData = useCallback(() => {
+    localStorage.removeItem(`AlertRule:${id ?? 'new'}`);
+    queryClient.invalidateQueries({ queryKey: ['getAlertRuleConfig', { id }] });
+  }, [id, queryClient]);
 
+  const original = useMemo(() => (resource ?? {}) as AlertRuleInput, [resource]);
   const handleSave = async (payload: AlertRuleInput) => {
     setIsPending(true);
     try {
-      if (mode === 'edit') await updateAlertRule({ id, data: payload });
-      else await createAlertRule({ data: payload });
+      if (mode === 'edit') {
+        await updateAlertRule({ id, data: payload });
+        refreshData();
+      } else {
+        await createAlertRule({ data: payload });
+        navigate('/alert-rules');
+      }
 
       toast.success(`Alert rule "${payload.type}" saved successfully`);
-      navigate('/alerters');
     } finally {
       setIsPending(false);
     }
@@ -118,6 +122,7 @@ export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resour
               <ItemSelector
                 collection={AlertType}
                 value={value}
+                disabled={mode === 'edit'}
                 onChange={(v: AlertType) =>
                   set({
                     type: v,
@@ -130,18 +135,14 @@ export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resour
             ),
           }),
           defineField({
-            label: 'Enabled',
-            key: 'isEnabled',
-            description: 'Enable this rule immediately.',
+            label: 'Status',
+            key: 'status',
+            description: 'Choose the current state of this rule.',
             render: (value, set) => (
-              <FieldSwitch
-                checked={value ?? false}
-                id="isEnabled"
-                onChange={(value) =>
-                  set(() => ({
-                    isEnabled: value,
-                  }))
-                }
+              <ItemSelector
+                collection={AlertRuleStatus}
+                value={value}
+                onChange={(v: AlertRuleStatus) => set({ status: v })}
               />
             ),
           }),
@@ -192,6 +193,7 @@ export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resour
                       label: 'Threshold',
                       required: true,
                       description: 'The percentage that must be exceeded to trigger the alert.',
+                      validate: (v) => (!v || v.length === 0 ? 'must be greater than 0' : null),
                       render: (val, set) => (
                         <FieldSlider
                           value={typeof val === 'number' ? val : Number(val) || 0}
@@ -208,10 +210,11 @@ export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resour
                       label: 'Required Matches',
                       required: true,
                       description: 'Number of consecutive matches before the alert fires.',
+                      validate: (v) => (!v || v.length === 0 ? 'must be greater than 0' : null),
                       render: (val, set) => (
                         <FieldSlider
-                          value={typeof val === 'number' ? val : Number(val) || 3}
-                          min={3}
+                          value={typeof val === 'number' ? val : Number(val) || 0}
+                          min={0}
                           max={100}
                           step={1}
                           unit=""
@@ -257,6 +260,30 @@ export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resour
           }),
 
           defineGroupField<AlertRuleInput>({
+            id: 'channels',
+            label: 'Channels',
+            items: [
+              defineField({
+                label: 'Notification Channels',
+                key: 'channelIds',
+                description: 'Select which notification channels will receive this alert.',
+                render: (value, set) => (
+                  <MultiResourceSelectorField
+                    type="AlertChannel"
+                    selected={(value as string[]) ?? []}
+                    onSelect={(v: any[] | undefined) =>
+                      set(() => ({
+                        channelIds: v?.map((c) => c.id) ?? [],
+                      }))
+                    }
+                    placeholder="Select channels"
+                  />
+                ),
+              }),
+            ],
+          }),
+
+          defineGroupField<AlertRuleInput>({
             id: 'quietHours',
             label: 'Quiet Hours',
             items: [
@@ -285,7 +312,7 @@ export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resour
       setUpdate={setUpdate}
       onSave={handleSave}
       pending={isPending}
-      draftKey={`alert-rule:${id ?? 'new'}`}
+      draftKey={`AlertRule:${id ?? 'new'}`}
       draftVersion={1}
     />
   );
@@ -474,6 +501,7 @@ const QuietHoursField = ({ quietHours, onChange }: QuietHoursFieldProps) => {
   };
 
   const handleEdit = (entry: AlertRuleQuietHour, index: number) => {
+    const normalizeTime = (t: string) => t.substring(0, 5);
     setFormState(
       entry.$type === 'Weekly'
         ? {
@@ -481,8 +509,8 @@ const QuietHoursField = ({ quietHours, onChange }: QuietHoursFieldProps) => {
             scheduleType: ScheduleType.Weekly,
             dayOfWeek: entry.dayOfWeek,
             name: entry.name,
-            startTime: entry.startTime,
-            endTime: entry.endTime,
+            startTime: normalizeTime(entry.startTime),
+            endTime: normalizeTime(entry.endTime),
             timezone: entry.timezone,
             description: entry.description,
           }
@@ -490,8 +518,8 @@ const QuietHoursField = ({ quietHours, onChange }: QuietHoursFieldProps) => {
             $type: 'Daily',
             scheduleType: ScheduleType.Daily,
             name: entry.name,
-            startTime: entry.startTime,
-            endTime: entry.endTime,
+            startTime: normalizeTime(entry.startTime),
+            endTime: normalizeTime(entry.endTime),
             timezone: entry.timezone,
             description: entry.description,
           },
@@ -507,7 +535,7 @@ const QuietHoursField = ({ quietHours, onChange }: QuietHoursFieldProps) => {
     if (startMinutes === endMinutes) return 'Start time must be different from end time.';
     if (startMinutes > endMinutes) return 'Start time must be earlier than end time.';
     return null;
-  }, [formState.startTime, formState.endTime]);
+  }, [formState]);
 
   const canSave = Boolean(formState.name.trim() && formState.timezone.trim() && !timeValidationError);
 
@@ -665,11 +693,11 @@ const QuietHoursTable = ({
       },
       {
         header: 'Start',
-        cell: ({ row }) => row.original.quietHour.startTime,
+        cell: ({ row }) => row.original.quietHour.startTime?.substring(0, 5),
       },
       {
         header: 'End',
-        cell: ({ row }) => row.original.quietHour.endTime,
+        cell: ({ row }) => row.original.quietHour.endTime?.substring(0, 5),
       },
       {
         header: 'Timezone',

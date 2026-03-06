@@ -1,9 +1,9 @@
 import { memo } from 'react';
-import { ContainerStateStatus, DeploymentStatus, RegistryStatus } from '@/api/generated/api.types';
+import { AlertRuleStatus, ContainerStateStatus, DeploymentStatus, RegistryStatus } from '@/api/generated/api.types';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { LoaderCircle } from 'lucide-react';
 
-type StateValue = boolean | ContainerStateStatus | RegistryStatus | DeploymentStatus;
+type StateValue = boolean | ContainerStateStatus | RegistryStatus | DeploymentStatus | AlertRuleStatus;
 
 const getStatusStyle = (value: StateValue, enableLabel?: boolean) => {
   // Boolean-based statuses
@@ -39,6 +39,11 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean) => {
     case DeploymentStatus.Applying:
     case DeploymentStatus.Pending:
       return { colorClass: 'bg-yellow-500', tooltip: 'Pending' };
+    // Alerters
+    case AlertRuleStatus.Enabled:
+      return { colorClass: 'bg-green-500', tooltip: 'Enabled' };
+    case AlertRuleStatus.Disabled:
+      return { colorClass: 'bg-gray-500', tooltip: 'Disabled' };
     // Containers
     case ContainerStateStatus.Created:
       return { colorClass: 'bg-blue-400', tooltip: 'Created' };

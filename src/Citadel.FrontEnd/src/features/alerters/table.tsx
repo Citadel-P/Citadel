@@ -52,7 +52,7 @@ export const AlertRulesTable = ({
     });
   };
 
-  const [_, setSelectedResources] = useSelectedResources<AlertRuleView>('Alerter');
+  const [_, setSelectedResources] = useSelectedResources<AlertRuleView>('AlertRule');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
   return (
@@ -179,12 +179,12 @@ function RuleConditionCell({ rule }: { rule: AlertRuleView }) {
 
 function ChannelsCell({ rule }: { rule: AlertRuleView }) {
   return (
-    <div className="flex -space-x-2 hover:space-x-1 transition-all duration-300">
+    <div className="flex -space-x-2">
       {rule.channels.map((c, i) => (
         <div
           key={i}
           className={cn(
-            'h-8 w-8 rounded-full border-2 border-white flex items-center justify-center text-white text-[10px] font-bold shadow-sm relative z-10 transition-transform hover:scale-110 hover:z-20 cursor-help',
+            'h-8 w-8 rounded-full border-2 border-background flex items-center justify-center text-white text-xs font-normal shadow-sm relative z-10 transition-transform hover:scale-110 hover:z-20 cursor-help',
             c.alertDestination === 'Slack'
               ? 'bg-[#4A154B]'
               : c.alertDestination === 'Discord'
@@ -193,7 +193,7 @@ function ChannelsCell({ rule }: { rule: AlertRuleView }) {
                   ? 'bg-blue-600'
                   : 'bg-zinc-900',
           )}
-          title={`${c.alertDestination}: ${c.url}`}>
+          title={`${c.alertDestination}: ${c.name}`}>
           {c.alertDestination[0]}
         </div>
       ))}
@@ -207,12 +207,12 @@ function ChannelsCell({ rule }: { rule: AlertRuleView }) {
 const RuleNameRow = ({ alertRule }: { alertRule: AlertRuleView }) => {
   const navigate = useNavigate();
   function onClick() {
-    navigate(`/alerters/edit/${alertRule.id}/`);
+    navigate(`/alert-rules/edit/${alertRule.id}/`);
   }
   return (
     <div className="flex items-center whitespace-nowrap">
       <div className="flex items-center">
-        <StateIndicator value={alertRule.isEnabled} enableLabel={true} />
+        <StateIndicator value={alertRule.status} />
       </div>
       <span
         className="cursor-pointer hover:underline"

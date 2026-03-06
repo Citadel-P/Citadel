@@ -7,18 +7,16 @@ internal record AlertRuleDto(
     Guid Id,
     string Type,
     int? CooldownSeconds,
-    bool IsEnabled,
+    string Status,
     string Severity,
     string LimitedTo,
     string QuietHours,
     int? RequiredMatches,
     double? Threshold,
     Guid CreatedByActorId,
-    DateTime CreatedAt
-    )
-{
-    public ICollection<Guid> ChannelIds { get; init; } = [];
-}
+    DateTime CreatedAt,
+    string ChannelIds
+    );
 
 internal record AlertChannelDto(
     Guid Id,

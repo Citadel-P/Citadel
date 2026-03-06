@@ -124,7 +124,7 @@ public class AlertRuleCacheTests
             type: type,
             severity: severity,
             cooldownSeconds: 300,
-            isEnabled: true,
+            status: AlertRuleStatus.Enabled,
             createdByActorId: Guid.NewGuid(),
             createdAt: DateTime.UtcNow,
             requiredMatches: requiredMatches,

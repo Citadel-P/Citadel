@@ -361,7 +361,7 @@ public enum ActivityResourceType
     Registry,
     Deployment,
     Stack,
-    Alerter
+    AlertRule,
 }
 
 public enum ActivityEventType
@@ -392,9 +392,9 @@ public enum ActivityEventType
     #endregion
 
     #region Alerter
-    AlerterCreated,
-    AlerterUpdated,
-    AlerterDeleted,
+    AlertRuleCreated,
+    AlertRuleUpdated,
+    AlertRuleDeleted,
     #endregion
 }
 
@@ -426,6 +426,12 @@ public enum AlertSeverity
     Info,
     Warning,
     Critical
+}
+
+public enum AlertRuleStatus
+{
+    Enabled,
+    Disabled
 }
 
 public enum ScheduleType

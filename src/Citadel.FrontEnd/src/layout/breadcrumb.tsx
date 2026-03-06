@@ -59,7 +59,7 @@ export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
 
       // Resource ID -> use resource name
       if (segment === resourceId || segment === id) {
-        const name = segmentTitle?.name.startsWith('/') ? segmentTitle?.name.slice(1) : (segmentTitle?.name ?? "");
+        const name = segmentTitle?.name.startsWith('/') ? segmentTitle?.name.slice(1) : (segmentTitle?.name ?? '');
         result.push({ title: truncate(name), link: pathAcc });
         continue;
       }
@@ -68,9 +68,14 @@ export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
       // /platforms/:id/:type/add
       // /:type/add or /:type/edit
       if (segment === 'add' || segment === 'edit') {
-        const resourceName = capitalize(type ?? 'Resource');
-        const resourceKey = resourceName as keyof typeof ReversePluralResourceMap;
-        const mapped = ReversePluralResourceMap[resourceKey] ?? resourceName;
+        const typeStr = type ?? 'Resource';
+        const formattedType = typeStr
+          .split('-')
+          .map((s) => capitalize(s))
+          .join('');
+        const resourceKey = formattedType as keyof typeof ReversePluralResourceMap;
+        let mapped = ReversePluralResourceMap[resourceKey] ?? formattedType;
+        mapped = mapped.replace(/([A-Z])/g, ' $1').trim() as any;
         result.push({ title: `${capitalize(segment)} ${mapped}`, link: pathAcc });
         continue;
       }
@@ -83,7 +88,11 @@ export default function BreadCrumb({ isSticky }: { isSticky: boolean }) {
 
       // Resource type (containers, networks, images, volumes…)
       if (segment === type) {
-        result.push({ title: capitalize(type), link: pathAcc });
+        const title = segment
+          .split('-')
+          .map((s) => capitalize(s))
+          .join(' ');
+        result.push({ title, link: pathAcc });
         continue;
       }
 

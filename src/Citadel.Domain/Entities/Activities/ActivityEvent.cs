@@ -132,9 +132,9 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.DeploymentApplied, DeploymentApplied) => true,
             (ActivityEventType.DeploymentPaused, DeploymentPaused) => true,
             (ActivityEventType.DeploymentDegraded, DeploymentDegraded) => true,
-            (ActivityEventType.AlerterCreated, AlerterCreated) => true,
-            (ActivityEventType.AlerterUpdated, AlerterUpdated) => true,
-            (ActivityEventType.AlerterDeleted, AlerterDeleted) => true,
+            (ActivityEventType.AlertRuleCreated, AlertRuleCreated) => true,
+            (ActivityEventType.AlertRuleUpdated, AlertRuleUpdated) => true,
+            (ActivityEventType.AlertRuleDeleted, AlertRuleDeleted) => true,
 
             _ => false
         };

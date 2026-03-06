@@ -1,6 +1,7 @@
 using Application.Services.Alerts;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Alerts;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using Hosting.Common.ErrorTypes;
@@ -48,8 +49,8 @@ internal sealed class DeleteAlertRulesHandler(
                 platformId: null,
                 resourceName: rule.Type.ToString(),
                 status: ActivityStatus.Success,
-                eventType: ActivityEventType.AlerterDeleted,
-                info: new AlerterDeleted(rule)
+                eventType: ActivityEventType.AlertRuleDeleted,
+                info: new AlertRuleDeleted(rule.ToSnapshot())
             );
 
             await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);

@@ -130,6 +130,8 @@ export const useResourceParamType = (): ResourceType => {
   const type = useParams().type;
   if (type === 'registries') return 'Registry';
   if (type === 'activities') return 'Activity';
+  if (type === 'alert-rules') return 'AlertRule';
+
   return type ? ((type[0].toUpperCase() + type.slice(1, -1)) as ResourceType) : 'Platform';
 };
 

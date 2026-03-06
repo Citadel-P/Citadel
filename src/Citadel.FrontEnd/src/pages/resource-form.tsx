@@ -33,7 +33,7 @@ const AddFormPage = ({ type }: { type: ResourceType }) => {
 
   return (
     <>
-      <AddHeader type={type} />
+      <AddHeader type={type} title={Components.Header?.title} />
       <Components.Content />
     </>
   );
@@ -82,13 +82,15 @@ const EditFormPage = ({ type }: { type: ResourceType }) => {
   return (
     <>
       <EditHeader
+        canEditTitle={Header.canEditTitle}
+        canEditDescription={Header.canEditDescription}
         item={resource}
         Indicator={Header.Indicator}
         Actions={Header.ActionButtons}
         onRename={(name) => updateField({ name })}
         onChangeDescription={(description) => updateField({ description })}
       />
-       {Components.SubHeader && <Components.SubHeader resource={resource} />}
+      {Components.SubHeader && <Components.SubHeader resource={resource} />}
       <ResourceTabs localKey={localKey} resource={resource} tabs={tabs} metadataChanged={metadatChanged} />
       <TaskSheet type={type} />
     </>
@@ -103,16 +105,18 @@ const PageShell = ({ mode, children }: { mode: 'add' | 'edit'; children: React.R
   </div>
 );
 
-const AddHeader = ({ type }: { type: string }) => (
+const AddHeader = ({ type, title }: { type: string; title?: string }) => (
   <div className="flex items-center gap-2">
     <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
       <Plus className="h-4 w-4" />
     </div>
-    <h1 className="text-md font-bold">Add {capitalize(type)}</h1>
+    <h1 className="text-md font-bold">Add {title ?? capitalize(type)}</h1>
   </div>
 );
 
 type EditHeaderProps<T> = {
+  canEditTitle?: boolean;
+  canEditDescription?: boolean;
   item: T;
   Indicator: React.ComponentType<{ resource: T }>;
   Actions: React.ComponentType<{ resource: T }>;
@@ -121,6 +125,8 @@ type EditHeaderProps<T> = {
 };
 
 const EditHeader = <T extends RequiredFormFields>({
+  canEditTitle = true,
+  canEditDescription = true,
   item,
   Indicator,
   Actions,
@@ -131,8 +137,12 @@ const EditHeader = <T extends RequiredFormFields>({
     <div className="flex items-center gap-2 flex-1 min-w-0 w-full">
       <Indicator resource={item} />
       <div className="flex flex-col flex-1 min-w-0">
-        <EditableTitle value={item.name} onSave={onRename} />
-        <EditableDescription value={item.description ?? ''} onSave={onChangeDescription} />
+        <EditableTitle value={item.name} readOnly={!canEditTitle} onSave={onRename} />
+        <EditableDescription
+          readOnly={!canEditDescription}
+          value={item.description ?? ''}
+          onSave={onChangeDescription}
+        />
       </div>
     </div>
     <div className="flex gap-4 items-center flex-wrap shrink-0">
@@ -164,16 +174,25 @@ const useInlineEdit = (initial: string) => {
   return { value, setValue, editing, isDirty, start, cancel, commit };
 };
 
-const EditableTitle = ({ value, onSave }: { value: string; onSave: (v: string) => void }) => {
+const EditableTitle = ({
+  value,
+  readOnly,
+  onSave,
+}: {
+  value: string;
+  readOnly?: boolean;
+  onSave: (v: string) => void;
+}) => {
   const edit = useInlineEdit(value);
 
   if (!edit.editing)
     return (
       <div className="group flex items-center gap-1 min-w-0">
         <div
-          className="text-md font-bold truncate cursor-text focus:outline-none"
-          onClick={edit.start}
+          className={`text-md font-bold truncate focus:outline-none ${readOnly ? '' : 'cursor-text'}`}
+          onClick={readOnly ? undefined : edit.start}
           onKeyDown={(e) => {
+            if (readOnly) return;
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               edit.start();
@@ -182,9 +201,11 @@ const EditableTitle = ({ value, onSave }: { value: string; onSave: (v: string) =
           {value}
         </div>
 
-        <GhostIconButton onClick={edit.start}>
-          <Pencil className="h-3.5 w-3.5" />
-        </GhostIconButton>
+        {!readOnly && (
+          <GhostIconButton onClick={edit.start}>
+            <Pencil className="h-3.5 w-3.5" />
+          </GhostIconButton>
+        )}
       </div>
     );
 
@@ -208,16 +229,25 @@ const EditableTitle = ({ value, onSave }: { value: string; onSave: (v: string) =
   );
 };
 
-const EditableDescription = ({ value = '', onSave }: { value?: string; onSave?: (v: string) => void }) => {
+const EditableDescription = ({
+  value = '',
+  readOnly,
+  onSave,
+}: {
+  value?: string;
+  readOnly: boolean;
+  onSave?: (v: string) => void;
+}) => {
   const edit = useInlineEdit(value);
 
   if (!edit.editing)
     return (
       <div className="group flex items-center gap-2 w-full min-w-0">
         <div
-          className="text-sm text-muted-foreground leading-relaxed truncate cursor-text focus:outline-none min-w-0"
-          onClick={edit.start}
+          className={`text-sm text-muted-foreground leading-relaxed truncate focus:outline-none min-w-0 ${readOnly ? '' : 'cursor-text'}`}
+          onClick={readOnly ? undefined : edit.start}
           onKeyDown={(e) => {
+            if (readOnly) return;
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               edit.start();
@@ -225,9 +255,11 @@ const EditableDescription = ({ value = '', onSave }: { value?: string; onSave?: 
           }}>
           {value || '--'}
         </div>
-        <GhostIconButton onClick={edit.start}>
-          <Pencil className="h-3.5 w-3.5" />
-        </GhostIconButton>
+        {!readOnly && (
+          <GhostIconButton onClick={edit.start}>
+            <Pencil className="h-3.5 w-3.5" />
+          </GhostIconButton>
+        )}
       </div>
     );
 

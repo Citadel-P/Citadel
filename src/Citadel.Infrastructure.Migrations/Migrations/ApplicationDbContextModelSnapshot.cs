@@ -217,11 +217,6 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsEnabled")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(true);
-
                     b.Property<string>("LimitedTo")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -236,6 +231,12 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<string>("Severity")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Enabled");
 
                     b.Property<double?>("Threshold")
                         .HasColumnType("REAL");
@@ -260,7 +261,6 @@ namespace Infrastructure.Migrations.Migrations
                             CooldownSeconds = 300,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
-                            IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             RequiredMatches = 3,
@@ -274,7 +274,6 @@ namespace Infrastructure.Migrations.Migrations
                             CooldownSeconds = 300,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
-                            IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             RequiredMatches = 3,
@@ -288,7 +287,6 @@ namespace Infrastructure.Migrations.Migrations
                             CooldownSeconds = 300,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
-                            IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             RequiredMatches = 3,
@@ -302,7 +300,6 @@ namespace Infrastructure.Migrations.Migrations
                             CooldownSeconds = 300,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
-                            IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             RequiredMatches = 3,
@@ -316,7 +313,6 @@ namespace Infrastructure.Migrations.Migrations
                             CooldownSeconds = 600,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
-                            IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             Severity = "Critical",
@@ -328,7 +324,6 @@ namespace Infrastructure.Migrations.Migrations
                             CooldownSeconds = 3600,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
-                            IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             Severity = "Warning",
@@ -339,7 +334,6 @@ namespace Infrastructure.Migrations.Migrations
                             Id = "019d0000-0001-7000-8001-000000000005",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
-                            IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             Severity = "Info",
@@ -350,7 +344,6 @@ namespace Infrastructure.Migrations.Migrations
                             Id = "019d0000-0001-7000-8001-000000000006",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
-                            IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             Severity = "Info",
@@ -361,7 +354,6 @@ namespace Infrastructure.Migrations.Migrations
                             Id = "019d0000-0001-7000-8001-000000000007",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
-                            IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             Severity = "Critical",
@@ -372,7 +364,6 @@ namespace Infrastructure.Migrations.Migrations
                             Id = "019d0000-0001-7000-8001-000000000008",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
-                            IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             Severity = "Info",
@@ -383,7 +374,6 @@ namespace Infrastructure.Migrations.Migrations
                             Id = "019d0000-0001-7000-8001-000000000009",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
-                            IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             Severity = "Info",
@@ -394,7 +384,6 @@ namespace Infrastructure.Migrations.Migrations
                             Id = "019d0000-0001-7000-8001-00000000000a",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
-                            IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             Severity = "Critical",
@@ -405,7 +394,6 @@ namespace Infrastructure.Migrations.Migrations
                             Id = "019d0000-0001-7000-8001-00000000000b",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
-                            IsEnabled = true,
                             LimitedTo = "[]",
                             QuietHours = "[]",
                             Severity = "Info",

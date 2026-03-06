@@ -166,6 +166,18 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   DeploymentStarted: (info) => <KeyValueBlock label="Container id" value={info.containerIds} />,
   DeploymentStopped: (info) => <KeyValueBlock label="Container id" value={info.containerIds} />,
   DeploymentPaused: (info) => <KeyValueBlock label="Container id" value={info.containerIds} />,
+
+  AlertRuleUpdated: (info) => (
+    <MonacoDiff original={info.oldRule} modified={info.newRule} format="json" title="Configuration changes" />
+  ),
+
+  AlertRuleCreated: (info, activity) => (
+    <SpecViewer spec={info.alertRule} resourceId={activity.resourceId} title="Initial configuration" />
+  ),
+
+  AlertRuleDeleted: (info, activity) => (
+    <SpecViewer spec={info.alertRule} resourceId={activity.resourceId} title="Deleted configuration" />
+  ),
 };
 
 function KeyValueBlock({ label, value }: { label: string; value: string | any[] }) {

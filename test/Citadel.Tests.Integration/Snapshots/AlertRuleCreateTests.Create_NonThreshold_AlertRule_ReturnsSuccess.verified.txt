@@ -4,7 +4,5 @@
   type: PlatformUnreachable,
   severity: Critical,
   cooldownSeconds: 300,
-  isEnabled: true,
-  createdByActorId: Guid_2,
-  createdAt: DateTimeOffset_1
+  status: Enabled
 }

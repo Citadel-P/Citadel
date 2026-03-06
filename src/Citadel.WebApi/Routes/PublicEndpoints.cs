@@ -19,7 +19,7 @@ public static class PublicEndpoints
     const string PlatformsName = nameof(Platforms);
     const string ContainersName = nameof(Containers);
     const string ActivitiesName = nameof(Activities);
-    const string AlertersName = nameof(Alerters);
+    const string AlertRulesName = nameof(AlertRules);
     const string RegistriesName = nameof(Registries);
     const string DeploymentsName = nameof(Deployments);
     const string AuthenticationName = nameof(Authentication);
@@ -68,9 +68,9 @@ public static class PublicEndpoints
             {
                 MapActivityEndpoints(activities);
             }
-            var alerters = group.MapGroup("/alerters").WithTags(AlertersName).RequireAuthorization();
+            var alertRules = group.MapGroup("/alertRules").WithTags(AlertRulesName).RequireAuthorization();
             {
-                MapAlerterEndpoints(alerters);
+                MapAlertRulesEndpoints(alertRules);
             }
         }
 
@@ -581,11 +581,11 @@ public static class PublicEndpoints
             .WithName("listActivities");
     }
 
-    private static void MapAlerterEndpoints(RouteGroupBuilder alerters)
+    private static void MapAlertRulesEndpoints(RouteGroupBuilder alertRules)
     {
-        var rules = alerters.MapGroup("/rules");
+        var rules = alertRules.MapGroup("/");
 
-        rules.MapGet("{id}", Alerters.GetRule)
+        rules.MapGet("{id}", AlertRules.GetRule)
             .WithSummary("Get alert rule by id")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -593,14 +593,22 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getAlertRule");
 
-        rules.MapGet("/", Alerters.ListRules)
+        rules.MapGet("{id}/_cfg", AlertRules.GetConfig)
+            .WithSummary("Get alert rule configuration")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getAlertRuleConfig");
+
+        rules.MapGet("/", AlertRules.ListRules)
             .WithSummary("List alert rules")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("listAlertRules");
 
-        rules.MapPost("/", Alerters.CreateRule)
+        rules.MapPost("/", AlertRules.CreateRule)
             .WithSummary("Create an alert rule")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -608,7 +616,7 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("createAlertRule");
 
-        rules.MapPatch("{id}", Alerters.PatchRule)
+        rules.MapPatch("{id}", AlertRules.PatchRule)
             .WithSummary("Update an alert rule")
             .Accepts<AlertRuleInput>("application/merge-patch+json", "application/json")
             .ProducesValidationProblem()
@@ -617,7 +625,7 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("updateAlertRule");
 
-        rules.MapDelete("/", Alerters.DeleteRules)
+        rules.MapDelete("/", AlertRules.DeleteRules)
             .WithSummary("Delete alert rules")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -625,9 +633,9 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("deleteAlertRules");
 
-        var channels = alerters.MapGroup("/channels");
+        var channels = alertRules.MapGroup("/channels");
 
-        channels.MapGet("{id}", Alerters.GetChannel)
+        channels.MapGet("{id}", AlertRules.GetChannel)
             .WithSummary("Get alert channel by id")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -635,13 +643,13 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getAlertChannel");
 
-        channels.MapGet("/", Alerters.ListChannels)
+        channels.MapGet("/", AlertRules.ListChannels)
             .WithSummary("List alert channels")
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("listAlertChannels");
 
-        channels.MapPost("/", Alerters.CreateChannel)
+        channels.MapPost("/", AlertRules.CreateChannel)
             .WithSummary("Create an alert channel")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -649,7 +657,7 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("createAlertChannel");
 
-        channels.MapPost("/verify", Alerters.VerifyChannel)
+        channels.MapPost("/verify", AlertRules.VerifyChannel)
             .WithSummary("Verify an alert channel URL")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status400BadRequest)
@@ -657,7 +665,7 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("verifyAlertChannel");
 
-        channels.MapPatch("{id}", Alerters.PatchChannel)
+        channels.MapPatch("{id}", AlertRules.PatchChannel)
             .WithSummary("Update an alert channel")
             .Accepts<AlertChannelInput>("application/merge-patch+json", "application/json")
             .ProducesValidationProblem()
@@ -666,7 +674,7 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("updateAlertChannel");
 
-        channels.MapDelete("/", Alerters.DeleteChannels)
+        channels.MapDelete("/", AlertRules.DeleteChannels)
             .WithSummary("Delete alert channels")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
