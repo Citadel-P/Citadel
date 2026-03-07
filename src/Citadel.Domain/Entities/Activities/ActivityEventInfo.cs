@@ -19,6 +19,7 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(AlertRuleCreated), nameof(ActivityEventType.AlertRuleCreated))]
 [JsonDerivedType(typeof(AlertRuleUpdated), nameof(ActivityEventType.AlertRuleUpdated))]
 [JsonDerivedType(typeof(AlertRuleDeleted), nameof(ActivityEventType.AlertRuleDeleted))]
+[JsonDerivedType(typeof(AlertRuleRenamed), nameof(ActivityEventType.AlertRuleRenamed))]
 public abstract record ActivityEventInfo;
 
 public sealed record DeploymentCreated(DeploymentSpec Spec) : ActivityEventInfo;
@@ -33,5 +34,7 @@ public sealed record DeploymentApplied(DeploymentSpec? Spec, IEnumerable<string>
 public sealed record AlertRuleCreated(AlertRuleSnapshot AlertRule) : ActivityEventInfo;
 public sealed record AlertRuleUpdated(AlertRuleSnapshot OldRule, AlertRuleSnapshot NewRule) : ActivityEventInfo;
 public sealed record AlertRuleDeleted(AlertRuleSnapshot AlertRule) : ActivityEventInfo;
+public sealed record AlertRuleRenamed(string OldName, string NewName) : ActivityEventInfo;
+
 
 

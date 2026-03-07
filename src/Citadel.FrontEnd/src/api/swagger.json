@@ -5513,34 +5513,6 @@
         ],
         "summary": "List alert rules",
         "operationId": "listAlertRules",
-        "parameters": [
-          {
-            "name": "Page",
-            "in": "query",
-            "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
-              "format": "int32",
-              "default": 1
-            }
-          },
-          {
-            "name": "PageSize",
-            "in": "query",
-            "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
-              "format": "int32",
-              "default": 50
-            }
-          }
-        ],
         "responses": {
           "500": {
             "description": "Internal Server Error",
@@ -6290,6 +6262,9 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoAlertRuleDeleted"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoAlertRuleRenamed"
           }
         ],
         "discriminator": {
@@ -6306,7 +6281,8 @@
             "DeploymentDegraded": "#/components/schemas/ActivityEventInfoDeploymentDegraded",
             "AlertRuleCreated": "#/components/schemas/ActivityEventInfoAlertRuleCreated",
             "AlertRuleUpdated": "#/components/schemas/ActivityEventInfoAlertRuleUpdated",
-            "AlertRuleDeleted": "#/components/schemas/ActivityEventInfoAlertRuleDeleted"
+            "AlertRuleDeleted": "#/components/schemas/ActivityEventInfoAlertRuleDeleted",
+            "AlertRuleRenamed": "#/components/schemas/ActivityEventInfoAlertRuleRenamed"
           }
         }
       },
@@ -6339,6 +6315,26 @@
           },
           "alertRule": {
             "$ref": "#/components/schemas/AlertRuleSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoAlertRuleRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "AlertRuleRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
           }
         }
       },
@@ -6567,7 +6563,8 @@
           "RegistryDeleted",
           "AlertRuleCreated",
           "AlertRuleUpdated",
-          "AlertRuleDeleted"
+          "AlertRuleDeleted",
+          "AlertRuleRenamed"
         ]
       },
       "ActivityResourceType": {
@@ -6851,6 +6848,7 @@
       },
       "AlertRuleInput": {
         "required": [
+          "name",
           "type",
           "severity",
           "cooldownSeconds",
@@ -6858,6 +6856,12 @@
         ],
         "type": "object",
         "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "type": {
             "$ref": "#/components/schemas/AlertType"
           },
@@ -7209,12 +7213,15 @@
       },
       "AlertRulesView": {
         "required": [
-          "pagedResult"
+          "alertRules"
         ],
         "type": "object",
         "properties": {
-          "pagedResult": {
-            "$ref": "#/components/schemas/PagedResultViewOfAlertRuleView"
+          "alertRules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlertRuleView"
+            }
           }
         }
       },
@@ -11577,47 +11584,6 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ActivityView"
-            }
-          },
-          "totalCount": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
-          "page": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
-          "pageSize": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          }
-        }
-      },
-      "PagedResultViewOfAlertRuleView": {
-        "required": [
-          "items",
-          "totalCount",
-          "page",
-          "pageSize"
-        ],
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AlertRuleView"
             }
           },
           "totalCount": {

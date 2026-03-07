@@ -3,6 +3,7 @@
 namespace Domain.Contracts.Resources.Alerts;
 
 public sealed record AlertRuleSnapshot(
+    Guid Id,
     AlertType Type,
     AlertSeverity Severity,
     int? CooldownSeconds,
@@ -15,8 +16,9 @@ public sealed record AlertRuleSnapshot(
 
 public static class AlertRuleSnapshotExtensions
 {
-    public static AlertRuleSnapshot ToSnapshot(this AlertRule alertRule)
+    public static AlertRuleSnapshot ToSnapshot(this AlertRule alertRule, Guid? id = null)
         => new (
+            Id: id ?? alertRule.Id,
             Type: alertRule.Type,
             Severity: alertRule.Severity,
             CooldownSeconds: alertRule.CooldownSeconds,

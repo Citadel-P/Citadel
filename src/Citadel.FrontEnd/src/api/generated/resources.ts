@@ -62,7 +62,7 @@ export const resources = {
   getAlertRule: { method: "GET", key: "getAlertRule", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   updateAlertRule: { method: "PATCH", key: "updateAlertRule", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
   getAlertRuleConfig: { method: "GET", key: "getAlertRuleConfig", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
-  listAlertRules: { method: "GET", key: "listAlertRules", params: ["query","params"], requiredParams: [], queryParams: ["Page","PageSize"] },
+  listAlertRules: { method: "GET", key: "listAlertRules", params: ["params"], requiredParams: [], queryParams: [] },
   createAlertRule: { method: "POST", key: "createAlertRule", params: ["data","params"], requiredParams: [], queryParams: [] },
   deleteAlertRules: { method: "DELETE", key: "deleteAlertRules", params: ["params"], requiredParams: [], queryParams: [] },
   getAlertChannel: { method: "GET", key: "getAlertChannel", params: ["id","params"], requiredParams: ["id"], queryParams: [] },

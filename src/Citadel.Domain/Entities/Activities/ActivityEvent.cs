@@ -135,6 +135,7 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.AlertRuleCreated, AlertRuleCreated) => true,
             (ActivityEventType.AlertRuleUpdated, AlertRuleUpdated) => true,
             (ActivityEventType.AlertRuleDeleted, AlertRuleDeleted) => true,
+            (ActivityEventType.AlertRuleRenamed, AlertRuleRenamed) => true,
 
             _ => false
         };

@@ -50,6 +50,7 @@ CREATE TABLE "AlertRules" (
     "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     "CreatedByActorId" TEXT NOT NULL,
     "LimitedTo" TEXT NOT NULL,
+    "Name" TEXT NOT NULL,
     "QuietHours" TEXT NOT NULL,
     "RequiredMatches" INTEGER NULL,
     "Severity" TEXT NOT NULL,
@@ -263,56 +264,56 @@ VALUES ('bdde9601-3b03-1275-a11b-98533d063a04', '2026-01-01 00:00:00', 'Admin', 
 SELECT changes();
 
 
-INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
-VALUES ('019d0000-0001-7000-8001-000000000001', 300, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', '[]', 3, 'Critical', 90.0, 'PlatformCpuHigh');
+INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "Name", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
+VALUES ('019d0000-0001-7000-8001-000000000001', 300, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', 'CPU > 90% – Platform', '[]', 3, 'Critical', 90.0, 'PlatformCpuHigh');
 SELECT changes();
 
-INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
-VALUES ('019d0000-0001-7000-8001-000000000002', 300, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', '[]', 3, 'Critical', 90.0, 'PlatformRamHigh');
+INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "Name", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
+VALUES ('019d0000-0001-7000-8001-000000000002', 300, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', 'RAM > 90% – Platform', '[]', 3, 'Critical', 90.0, 'PlatformRamHigh');
 SELECT changes();
 
-INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
-VALUES ('019d0000-0001-7000-8001-000000000003', 600, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', '[]', NULL, 'Critical', NULL, 'PlatformUnreachable');
+INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "Name", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
+VALUES ('019d0000-0001-7000-8001-000000000003', 600, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', 'Platform Unreachable', '[]', NULL, 'Critical', NULL, 'PlatformUnreachable');
 SELECT changes();
 
-INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
-VALUES ('019d0000-0001-7000-8001-000000000004', 3600, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', '[]', NULL, 'Warning', NULL, 'PlatformVersionMismatch');
+INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "Name", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
+VALUES ('019d0000-0001-7000-8001-000000000004', 3600, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', 'Platform Version Mismatch', '[]', NULL, 'Warning', NULL, 'PlatformVersionMismatch');
 SELECT changes();
 
-INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
-VALUES ('019d0000-0001-7000-8001-000000000005', NULL, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', '[]', NULL, 'Info', NULL, 'UnmanagedContainerCreated');
+INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "Name", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
+VALUES ('019d0000-0001-7000-8001-000000000005', NULL, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', 'Unmanaged Container Created', '[]', NULL, 'Info', NULL, 'UnmanagedContainerCreated');
 SELECT changes();
 
-INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
-VALUES ('019d0000-0001-7000-8001-000000000006', NULL, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', '[]', NULL, 'Info', NULL, 'DeploymentImageUpdateAvailable');
+INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "Name", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
+VALUES ('019d0000-0001-7000-8001-000000000006', NULL, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', 'Image Update Available – Deployment', '[]', NULL, 'Info', NULL, 'DeploymentImageUpdateAvailable');
 SELECT changes();
 
-INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
-VALUES ('019d0000-0001-7000-8001-000000000007', NULL, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', '[]', NULL, 'Critical', NULL, 'DeploymentAutoDeployFailed');
+INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "Name", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
+VALUES ('019d0000-0001-7000-8001-000000000007', NULL, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', 'Auto Deploy Failed – Deployment', '[]', NULL, 'Critical', NULL, 'DeploymentAutoDeployFailed');
 SELECT changes();
 
-INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
-VALUES ('019d0000-0001-7000-8001-000000000008', NULL, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', '[]', NULL, 'Info', NULL, 'DeploymentAutoUpdated');
+INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "Name", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
+VALUES ('019d0000-0001-7000-8001-000000000008', NULL, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', 'Deployment Auto Updated', '[]', NULL, 'Info', NULL, 'DeploymentAutoUpdated');
 SELECT changes();
 
-INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
-VALUES ('019d0000-0001-7000-8001-000000000009', NULL, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', '[]', NULL, 'Info', NULL, 'StackImageUpdateAvailable');
+INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "Name", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
+VALUES ('019d0000-0001-7000-8001-000000000009', NULL, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', 'Image Update Available – Stack', '[]', NULL, 'Info', NULL, 'StackImageUpdateAvailable');
 SELECT changes();
 
-INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
-VALUES ('019d0000-0001-7000-8001-00000000000a', NULL, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', '[]', NULL, 'Critical', NULL, 'StackAutoDeployFailed');
+INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "Name", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
+VALUES ('019d0000-0001-7000-8001-00000000000a', NULL, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', 'Auto Deploy Failed – Stack', '[]', NULL, 'Critical', NULL, 'StackAutoDeployFailed');
 SELECT changes();
 
-INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
-VALUES ('019d0000-0001-7000-8001-00000000000b', NULL, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', '[]', NULL, 'Info', NULL, 'StackAutoUpdated');
+INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "Name", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
+VALUES ('019d0000-0001-7000-8001-00000000000b', NULL, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', 'Stack Auto Updated', '[]', NULL, 'Info', NULL, 'StackAutoUpdated');
 SELECT changes();
 
-INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
-VALUES ('019d0000-0001-7000-8001-000000000011', 300, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', '[]', 3, 'Warning', 80.0, 'PlatformCpuHigh');
+INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "Name", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
+VALUES ('019d0000-0001-7000-8001-000000000011', 300, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', 'CPU > 80% – Platform', '[]', 3, 'Warning', 80.0, 'PlatformCpuHigh');
 SELECT changes();
 
-INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
-VALUES ('019d0000-0001-7000-8001-000000000022', 300, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', '[]', 3, 'Warning', 80.0, 'PlatformRamHigh');
+INSERT INTO "AlertRules" ("Id", "CooldownSeconds", "CreatedAt", "CreatedByActorId", "LimitedTo", "Name", "QuietHours", "RequiredMatches", "Severity", "Threshold", "Type")
+VALUES ('019d0000-0001-7000-8001-000000000022', 300, '2026-01-01 00:00:00', '00000000-0000-0000-0000-000000000001', '[]', 'RAM > 80% – Platform', '[]', 3, 'Warning', 80.0, 'PlatformRamHigh');
 SELECT changes();
 
 
@@ -419,7 +420,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260305155817_migration0001', '10.0.3');
+VALUES ('20260307101241_migration0001', '10.0.3');
 
 COMMIT;
 

@@ -203,6 +203,7 @@ public class ThresholdAlertTests: IntegrationTestBase
             var quietHour = new DailyQuietHour("quiet", TimeOnly.FromDateTime(now.AddHours(-1)), TimeOnly.FromDateTime(now.AddHours(1)), "UTC", null);
             return AlertRule.FromPersistence(
                 id: rule.Id,
+                name: rule.Name,
                 type: rule.Type,
                 severity: rule.Severity,
                 cooldownSeconds: rule.CooldownSeconds,
@@ -244,6 +245,7 @@ public class ThresholdAlertTests: IntegrationTestBase
             var limitedTo = new AlertRuleLimitedTo(AlertResourceType.Platform, Guid.NewGuid());
             return AlertRule.FromPersistence(
                 id: rule.Id,
+                name: rule.Name,
                 type: rule.Type,
                 severity: rule.Severity,
                 cooldownSeconds: rule.CooldownSeconds,
@@ -608,6 +610,7 @@ public class ThresholdAlertTests: IntegrationTestBase
 
         var rule = new AlertRule(
             type: AlertType.PlatformCpuHigh,
+            name: "CPU Usage Above " + threshold,
             severity: severity,
             cooldownSeconds: cooldownSeconds,
             status: AlertRuleStatus.Enabled,

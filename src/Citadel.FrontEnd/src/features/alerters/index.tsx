@@ -6,7 +6,7 @@ import { AlertRulesTable } from './table';
 import { useMutate, useRead } from '@/lib/hooks';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { AlertDestination, AlertChannelInput, AlertChannelView } from '@/api/generated/api.types';
+import { AlertDestination, AlertChannelInput, AlertChannelView, AlertRuleView } from '@/api/generated/api.types';
 import {
   Dialog,
   DialogContent,
@@ -340,7 +340,7 @@ export const AlertRuleComponents: RequiredComponents = {
   Icon: <Megaphone className="h-4 w-4" />,
   Content: ({ items, actions, isLoading }) => (
     <div className="flex flex-col gap-6">
-      <AlertRulesTable pagedResult={items as any} actions={actions} isLoading={isLoading} displayPagging />
+      <AlertRulesTable items={items} actions={actions} isLoading={isLoading} />
       <Separator className="border-b-1 border-dashed" />
       <AlertNotificationChannels />
     </div>
@@ -352,13 +352,13 @@ export const AlertRuleComponents: RequiredComponents = {
   header: {
     title: 'Alert Rules',
     subtitle: 'Manage conditions and thresholds.',
-    showSearch: false,
+    showSearch: true,
     showAdd: true,
     addButtonTitle: 'Add Rule',
   },
-  useData(): ResourceDataHookResult<any> {
+  useData(): ResourceDataHookResult<AlertRuleView> {
     const { data, isLoading } = useRead('listAlertRules');
-    return { items: data?.data.pagedResult as any, isLoading };
+    return { items: data?.data.alertRules ?? [], isLoading };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

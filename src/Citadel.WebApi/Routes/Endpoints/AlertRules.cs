@@ -25,9 +25,9 @@ public static class AlertRules
         return EndpointHandlers.HandleResult(result, AlertRuleConfigView.Map);
     }
 
-    public static async Task<Results<Ok<AlertRulesView>, ProblemHttpResult>> ListRules(IMediator mediator, [AsParameters] AlertRuleFilter filter, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<AlertRulesView>, ProblemHttpResult>> ListRules(IMediator mediator, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(filter.ToQuery(), cancellationToken);
+        var result = await mediator.Send(new GetAlertRules(), cancellationToken);
         return EndpointHandlers.HandleResult(result, AlertRulesView.Map);
     }
 

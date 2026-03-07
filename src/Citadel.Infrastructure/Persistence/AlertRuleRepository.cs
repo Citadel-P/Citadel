@@ -18,6 +18,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         const string sql = """
             SELECT 
                 r.Id, 
+                r.Name,
                 r.Type, 
                 r.CooldownSeconds, 
                 r.Status, 
@@ -53,16 +54,17 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
     {
         const string ruleSql = @"
         INSERT INTO AlertRules (
-            Id, Type, CooldownSeconds, Status, Severity, LimitedTo, QuietHours, RequiredMatches, Threshold, CreatedByActorId, CreatedAt
+            Id, Name, Type, CooldownSeconds, Status, Severity, LimitedTo, QuietHours, RequiredMatches, Threshold, CreatedByActorId, CreatedAt
         )
         VALUES (
-            @Id, @Type, @CooldownSeconds, @Status, @Severity, @LimitedTo, @QuietHours, @RequiredMatches, @Threshold, @CreatedByActorId, @CreatedAt
+            @Id, @Name, @Type, @CooldownSeconds, @Status, @Severity, @LimitedTo, @QuietHours, @RequiredMatches, @Threshold, @CreatedByActorId, @CreatedAt
         )";
 
         var ruleId = alertRule.Id.Format();
         var rows = await db.ExecuteAsync(ruleSql, new
         {
             Id = ruleId,
+            Name = alertRule.Name,
             Type = EnumFormatter<AlertType>.GetValue(alertRule.Type),
             CooldownSeconds = alertRule.CooldownSeconds,
             Status = EnumFormatter<AlertRuleStatus>.GetValue(alertRule.Status),
@@ -134,6 +136,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         const string sql = """
             SELECT 
                 r.Id, 
+                r.Name,
                 r.Type, 
                 r.CooldownSeconds, 
                 r.Status, 
@@ -167,6 +170,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         const string sql = """
             SELECT 
                 r.Id,
+                r.Name,
                 r.Type,
                 r.CooldownSeconds,
                 r.Status,
@@ -266,6 +270,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         const string ruleSql = @"
         UPDATE AlertRules
         SET
+            Name = @Name,
             Type = @Type,
             CooldownSeconds = @CooldownSeconds,
             Status = @Status,
@@ -282,6 +287,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         var rows = await db.ExecuteAsync(ruleSql, new
         {
             Id = ruleId,
+            Name = alertRule.Name,
             Type = EnumFormatter<AlertType>.GetValue(alertRule.Type),
             CooldownSeconds = alertRule.CooldownSeconds,
             Status = EnumFormatter<AlertRuleStatus>.GetValue(alertRule.Status),

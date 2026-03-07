@@ -22,7 +22,7 @@ export const useActivitiesGroup = (
       ResourceId: resourceId ?? query.resourceId,
     },
   });
-
+console.log(resourceId)
   const [pagedActivities, setPagedActivities] = useState<PagedResultViewOfActivityView | undefined>();
 
   useEffect(() => {

@@ -112,28 +112,53 @@ export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resour
       '': defineSection<AlertRuleInput>({
         title: '',
         items: [
-          defineField({
-            key: 'type',
+          defineGroupField<AlertRuleInput>({
+            id: 'type',
             label: 'Alert Type',
-            description: 'The type of event that triggers this alert.',
-            required: true,
-            disabled: mode === 'edit',
-            render: (value, set) => (
-              <ItemSelector
-                collection={AlertType}
-                value={value}
-                disabled={mode === 'edit'}
-                onChange={(v: AlertType) =>
-                  set({
-                    type: v,
-                    threshold: undefined,
-                    requiredMatches: undefined,
-                    cooldownSeconds: undefined,
-                  })
-                }
-              />
-            ),
+            items: [
+              defineField({
+                key: 'type',
+                label: 'Alert Type',
+                description: 'The type of event that triggers this alert.',
+                required: true,
+                disabled: mode === 'edit',
+                render: (value, set) => (
+                  <ItemSelector
+                    collection={AlertType}
+                    value={value}
+                    disabled={mode === 'edit'}
+                    onChange={(v: AlertType) =>
+                      set({
+                        type: v,
+                        threshold: undefined,
+                        requiredMatches: undefined,
+                        cooldownSeconds: undefined,
+                      })
+                    }
+                  />
+                ),
+              }),
+              ...(mode === 'add'
+                ? [
+                    defineField<AlertRuleInput, 'name'>({
+                      key: 'name',
+                      label: 'Name',
+                      required: true,
+                      description: 'A human-readable label for the alert rule.',
+                      validate: (v) => (!v ? 'Name is required' : null),
+                      render: (val, set) => (
+                        <FieldInput
+                          value={val}
+                          onChange={(v) => set({ name: v })}
+                          placeholder="e.g. CPU > 90% – Platform"
+                        />
+                      ),
+                    }),
+                  ]
+                : []),
+            ],
           }),
+
           defineField({
             label: 'Status',
             key: 'status',

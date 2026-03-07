@@ -395,6 +395,7 @@ public enum ActivityEventType
     AlertRuleCreated,
     AlertRuleUpdated,
     AlertRuleDeleted,
+    AlertRuleRenamed
     #endregion
 }
 

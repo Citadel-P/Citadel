@@ -1,11 +1,11 @@
 import { DataTable } from '@/components/ui/data-table';
-import { AlertRuleView, PagedResultViewOfAlertRuleView } from '@/api/generated/api.types';
+import { AlertRuleView } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
-import { useMemo, useRef } from 'react';
-import { useActivityQuery, useSelectedResources } from '@/lib/atoms';
+import { useMemo } from 'react';
+import { useSelectedResources } from '@/lib/atoms';
 import { ContentCard } from '@/components/custom/content-card';
-import { PaginationControls, SelectField, SeverityStatusCell, pageSizeOptions } from '@/components/custom/common';
+import { SeverityStatusCell } from '@/components/custom/common';
 import { Activity, Clock, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -18,74 +18,28 @@ const EMPTY_ROWS: AlertRuleView[] = [];
 
 export const AlertRulesTable = ({
   actions,
-  pagedResult,
+  items,
   isLoading,
-  displayPagging = false,
 }: {
-  pagedResult: PagedResultViewOfAlertRuleView;
+  items: AlertRuleView[];
   isLoading: boolean;
-  displayTarget?: boolean;
-  displayPagging?: boolean;
   actions: Record<
     string,
     React.FC<{ resource: AlertRuleView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
 }) => {
-  const [query, setQuery] = useActivityQuery();
-  const tableTopRef = useRef<HTMLDivElement | null>(null);
-
-  const totalCount = Number(pagedResult?.totalCount ?? 0);
-  const totalPages = Math.max(1, Math.ceil(totalCount / query.pageSize));
-
-  const goToPage = (page: number) => {
-    if (page < 1 || page > totalPages || page === query.page) return;
-    setQuery({ page });
-    requestAnimationFrame(() => {
-      tableTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  };
-
-  const handlePageSizeChange = (value: string) => {
-    setQuery({
-      ...query,
-      pageSize: Number(value),
-    });
-  };
-
   const [_, setSelectedResources] = useSelectedResources<AlertRuleView>('AlertRule');
   const cols = useMemo(() => columns(actions ?? {}), [actions]);
 
   return (
-    <div className="flex flex-col gap-4" ref={tableTopRef}>
-      <ContentCard>
-        <DataTable
-          columns={cols}
-          data={pagedResult?.items ?? EMPTY_ROWS}
-          isLoading={isLoading}
-          onSelectionChange={setSelectedResources}
-        />
-      </ContentCard>
-      {displayPagging && (
-        <div className="flex sm:flex-row flex-col gap-2 sm:items-center sm:justify-between">
-          <PaginationControls
-            currentPage={query.page}
-            totalPages={totalPages}
-            onPageChange={goToPage}
-            className="justify-start"
-          />
-          {totalPages > 1 && (
-            <SelectField
-              value={query.pageSize.toString()}
-              options={pageSizeOptions}
-              onChange={handlePageSizeChange}
-              placeholder="Page Size"
-              allLabel="Page Size"
-              selectableLabel={false}
-            />
-          )}
-        </div>
-      )}
-    </div>
+    <ContentCard>
+      <DataTable
+        columns={cols}
+        data={items ?? EMPTY_ROWS}
+        isLoading={isLoading}
+        onSelectionChange={setSelectedResources}
+      />
+    </ContentCard>
   );
 };
 

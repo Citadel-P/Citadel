@@ -1,4 +1,6 @@
+using Application.Features.Deployments.Notifications;
 using Application.Services.Alerts;
+using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Alerts;
@@ -30,6 +32,8 @@ public sealed record PatchAlertRule(Guid Id, JsonMergePatchDocument<AlertRule> P
 internal sealed class PatchAlertRuleHandler(
     IUnitOfWork unitOfWork,
     AlertRuleCache alertRuleCache,
+    IActivityStreamManager activityHub,
+    INotificationQueue notificationQueue,
     IHttpContextAccessor httpContextAccessor) : ICommandHandler<PatchAlertRule, Result<AlertRule>>
 {
     public async ValueTask<Result<AlertRule>> Handle(PatchAlertRule command, CancellationToken cancellationToken)
@@ -45,6 +49,7 @@ internal sealed class PatchAlertRuleHandler(
 
         var oldRule = AlertRule.FromPersistence(
             id: rule.Id,
+            name: rule.Name,
             type: rule.Type,
             severity: rule.Severity,
             cooldownSeconds: rule.CooldownSeconds,
@@ -79,7 +84,34 @@ internal sealed class PatchAlertRuleHandler(
             }
         }
 
+        ActivityEvent? activity = null;
+        if (!string.IsNullOrEmpty(patchedRule.Name) && string.Compare(rule.Name, patchedRule.Name, StringComparison.OrdinalIgnoreCase) != 0)
+        {
+            activity = new ActivityEvent(
+               actorId: actorId,
+               resourceId: rule.Id,
+               platformId: null,
+               resourceName: rule.Name,
+               status: ActivityStatus.Success,
+               eventType: ActivityEventType.AlertRuleRenamed,
+               info: new AlertRuleRenamed(rule.Name, patchedRule.Name)
+           );
+        }
+        else
+        {
+            activity = new ActivityEvent(
+                actorId: actorId,
+                resourceId: rule.Id,
+                platformId: null,
+                resourceName: rule.Name,
+                status: ActivityStatus.Success,
+                eventType: ActivityEventType.AlertRuleUpdated,
+                info: new AlertRuleUpdated(oldRule.ToSnapshot(command.Id), patchedRule.ToSnapshot(command.Id))
+            );
+        }
+
         rule.PartialUpdate(
+            name: patchedRule.Name,
             type: patchedRule.Type,
             severity: patchedRule.Severity,
             cooldownSeconds: patchedRule.CooldownSeconds,
@@ -90,35 +122,12 @@ internal sealed class PatchAlertRuleHandler(
             limitedTo: patchedRule.LimitedTo,
             quietHours: patchedRule.QuietHours);
 
-        var newRule = AlertRule.FromPersistence(
-            id: rule.Id,
-            type: rule.Type,
-            severity: rule.Severity,
-            cooldownSeconds: rule.CooldownSeconds,
-            status: rule.Status,
-            createdByActorId: rule.CreatedByActorId,
-            createdAt: rule.CreatedAt,
-            requiredMatches: rule.RequiredMatches,
-            threshold: rule.Threshold,
-            channelIds: rule.ChannelIds,
-            limitedTo: rule.LimitedTo,
-            quietHours: rule.QuietHours);
-
-        var activity = new ActivityEvent(
-            actorId: actorId,
-            resourceId: rule.Id,
-            platformId: null,
-            resourceName: rule.Type.ToString(),
-            status: ActivityStatus.Success,
-            eventType: ActivityEventType.AlertRuleUpdated,
-            info: new AlertRuleUpdated(oldRule.ToSnapshot(), newRule.ToSnapshot())
-        );
-
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.AlertRules.UpdateAsync(rule, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
         alertRuleCache.Upsert(rule);
+        await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
 
         return rule;
     }

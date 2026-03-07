@@ -122,6 +122,7 @@ public class AlertRuleCacheTests
         return AlertRule.FromPersistence(
             id: id,
             type: type,
+            name: $"{type} Rule",
             severity: severity,
             cooldownSeconds: 300,
             status: AlertRuleStatus.Enabled,

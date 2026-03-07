@@ -1,4 +1,6 @@
+using Application.Features.Deployments.Notifications;
 using Application.Services.Alerts;
+using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Alerts;
@@ -18,6 +20,8 @@ public sealed record DeleteAlertRules(IEnumerable<Guid> Ids) : ICommand<Result>;
 internal sealed class DeleteAlertRulesHandler(
     IUnitOfWork unitOfWork,
     AlertRuleCache alertRuleCache,
+    IActivityStreamManager activityHub,
+    INotificationQueue notificationQueue,
     IHttpContextAccessor httpContextAccessor) : ICommandHandler<DeleteAlertRules, Result>
 {
     public async ValueTask<Result> Handle(DeleteAlertRules command, CancellationToken cancellationToken)
@@ -54,6 +58,7 @@ internal sealed class DeleteAlertRulesHandler(
             );
 
             await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+            await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         }
 
         var result = await unitOfWork.AlertRules.RemoveRangeAsync(ids, cancellationToken);

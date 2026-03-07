@@ -159,6 +159,7 @@ public class EventAlertTests : IntegrationTestBase
         {
             return AlertRule.FromPersistence(
                 id: rule.Id,
+                name: rule.Name,
                 type: rule.Type,
                 severity: rule.Severity,
                 cooldownSeconds: 3600,
@@ -193,6 +194,7 @@ public class EventAlertTests : IntegrationTestBase
             var quietHour = new DailyQuietHour("quiet", TimeOnly.FromDateTime(now.AddHours(-1)), TimeOnly.FromDateTime(now.AddHours(1)), "UTC", null);
             return AlertRule.FromPersistence(
                 id: rule.Id,
+                name: rule.Name,
                 type: rule.Type,
                 severity: rule.Severity,
                 cooldownSeconds: rule.CooldownSeconds,
@@ -223,6 +225,7 @@ public class EventAlertTests : IntegrationTestBase
             var limitedTo = new AlertRuleLimitedTo(AlertResourceType.Deployment, Guid.NewGuid());
             return AlertRule.FromPersistence(
                 id: rule.Id,
+                name: rule.Name,
                 type: rule.Type,
                 severity: rule.Severity,
                 cooldownSeconds: rule.CooldownSeconds,

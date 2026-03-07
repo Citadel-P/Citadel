@@ -245,6 +245,7 @@ export enum ActivityEventType {
   AlertRuleCreated = "AlertRuleCreated",
   AlertRuleUpdated = "AlertRuleUpdated",
   AlertRuleDeleted = "AlertRuleDeleted",
+  AlertRuleRenamed = "AlertRuleRenamed",
 }
 
 export interface ActivitiesView {
@@ -301,6 +302,10 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         "AlertRuleDeleted",
         ActivityEventInfoAlertRuleDeleted
       >
+    | BaseActivityEventInfoTypeMapping<
+        "AlertRuleRenamed",
+        ActivityEventInfoAlertRuleRenamed
+      >
   );
 
 export interface ActivityEventInfoAlertRuleCreated {
@@ -311,6 +316,12 @@ export interface ActivityEventInfoAlertRuleCreated {
 export interface ActivityEventInfoAlertRuleDeleted {
   $type?: "AlertRuleDeleted";
   alertRule: AlertRuleSnapshot;
+}
+
+export interface ActivityEventInfoAlertRuleRenamed {
+  $type?: "AlertRuleRenamed";
+  oldName: string;
+  newName: string;
 }
 
 export interface ActivityEventInfoAlertRuleUpdated {
@@ -440,6 +451,7 @@ export interface AlertRuleConfigView {
 }
 
 export interface AlertRuleInput {
+  name: null | string;
   type: AlertType;
   severity: AlertSeverity;
   /**
@@ -560,7 +572,7 @@ export interface AlertRuleView {
 }
 
 export interface AlertRulesView {
-  pagedResult: PagedResultViewOfAlertRuleView;
+  alertRules: AlertRuleView[];
 }
 
 export interface ApplyDeploymentInput {
@@ -1651,25 +1663,6 @@ export interface NetworksView {
 
 export interface PagedResultViewOfActivityView {
   items: ActivityView[];
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  totalCount: number | string;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  page: number | string;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  pageSize: number | string;
-}
-
-export interface PagedResultViewOfAlertRuleView {
-  items: AlertRuleView[];
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -4165,30 +4158,13 @@ export class Api<
      * @response `403` `ProblemDetails` Forbidden
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    listAlertRules: (
-      query?: {
-        /**
-         * @format int32
-         * @default 1
-         * @pattern ^-?(?:0|[1-9]\d*)$
-         */
-        Page?: number | string;
-        /**
-         * @format int32
-         * @default 50
-         * @pattern ^-?(?:0|[1-9]\d*)$
-         */
-        PageSize?: number | string;
-      },
-      params: RequestParams = {},
-    ) =>
+    listAlertRules: (params: RequestParams = {}) =>
       this.request<
         AlertRulesView,
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/alertRules`,
         method: "GET",
-        query: query,
         secure: true,
         format: "json",
         ...params,

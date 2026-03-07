@@ -13,7 +13,7 @@ import {
 } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem, CommandEmpty } from '@/components/ui/command';
-import { Cable, Check, ChevronDown, Layers, LucideIcon, Rocket, Server, Settings, Tags, User } from 'lucide-react';
+import { Cable, Check, ChevronDown, Layers, LucideIcon, Megaphone, Rocket, Server, Settings, Tags, User } from 'lucide-react';
 import { cn, filterBySplit, toFixedNumber } from '@/lib/utils';
 import { PluralResourceMap, ResourceType } from '@/api/types';
 import { useMeasuredWidth, useRead, useLocalStorage } from '@/lib/hooks';
@@ -77,10 +77,9 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
 
   const read = useRead(`list${resourceName}`, { platformId });
   const items = (Object.values(read.data?.data ?? {}).at(0) as T[]) ?? [];
-
   const selectedItem =
-    filter?.item ?? (typeof selected === 'string' ? items.find((i) => i.id === selected) : selected) ?? undefined;
-
+  filter?.item ?? (typeof selected === 'string' ? items.find((i) => i.id === selected) : selected) ?? undefined;
+  
   const filtered = filterBySplit(items, search, (i) => i.name).sort((a, b) => a.name.localeCompare(b.name));
   useEffect(() => {
     setFilter(null);
@@ -561,6 +560,7 @@ export const TargetCell = ({
   resourceName: string | undefined;
 }) => {
   const resourceConfig: Partial<Record<ActivityResourceType, { Icon: any; path: string }>> = {
+    [ActivityResourceType.AlertRule]: { Icon: Megaphone, path: `/alert-rules/edit/${resourceId}` },
     [ActivityResourceType.Deployment]: { Icon: Rocket, path: `/deployments/edit/${resourceId}` },
     [ActivityResourceType.Registry]: { Icon: Cable, path: `/registries/edit/${resourceId}` },
     [ActivityResourceType.Platform]: { Icon: Server, path: `/platforms/edit/${resourceId}` },

@@ -5,6 +5,7 @@ using Domain.Entities.Alerts;
 namespace WebApi.Routes.Endpoints.Resources.Alerters;
 
 public sealed record AlertRuleInput(
+    string? Name,
     AlertType Type,
     AlertSeverity Severity,
     int? CooldownSeconds,
@@ -16,7 +17,7 @@ public sealed record AlertRuleInput(
     IEnumerable<AlertRuleQuietHour>? QuietHours = null)
 {
     internal CreateAlertRule ToCommand() => new(
-        Type, Severity, CooldownSeconds, Status,
+        Name, Type, Severity, CooldownSeconds, Status,
         RequiredMatches, Threshold,
         ChannelIds,
         LimitedTo, QuietHours);

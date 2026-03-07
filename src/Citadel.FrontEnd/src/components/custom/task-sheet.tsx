@@ -178,6 +178,12 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   AlertRuleDeleted: (info, activity) => (
     <SpecViewer spec={info.alertRule} resourceId={activity.resourceId} title="Deleted configuration" />
   ),
+
+  AlertRuleRenamed: (info) => (
+    <span className="text-sm text-muted-foreground">
+      Alert rule renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
+    </span>
+  ),
 };
 
 function KeyValueBlock({ label, value }: { label: string; value: string | any[] }) {

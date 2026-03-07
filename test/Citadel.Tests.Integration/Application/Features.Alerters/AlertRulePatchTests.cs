@@ -17,6 +17,7 @@ public class AlertRulePatchTests : IntegrationTestBase
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
         var rule = new AlertRule(
+            name: "Test Rule",
             type: AlertType.PlatformUnreachable,
             severity: AlertSeverity.Warning,
             cooldownSeconds: 300,

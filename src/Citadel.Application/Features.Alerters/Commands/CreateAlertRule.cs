@@ -1,3 +1,4 @@
+using Application.Features.Deployments.Notifications;
 using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Domain;
@@ -16,6 +17,7 @@ using System.Security.Claims;
 namespace Application.Features.Alerters.Commands;
 
 public sealed record CreateAlertRule(
+    string? Name,
     AlertType Type,
     AlertSeverity Severity,
     int? CooldownSeconds,
@@ -54,6 +56,7 @@ internal sealed class CreateAlertRuleHandler(
     IUnitOfWork unitOfWork, 
     AlertRuleCache alertRuleCache,
     IActivityStreamManager activityHub,
+    INotificationQueue notificationQueue,
     IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateAlertRule, Result<AlertRule>>
 {
     public async ValueTask<Result<AlertRule>> Handle(CreateAlertRule command, CancellationToken cancellationToken)
@@ -76,6 +79,7 @@ internal sealed class CreateAlertRuleHandler(
         }
 
         var alertRule = new AlertRule(
+            name: command.Name,
             type: command.Type,
             severity: command.Severity,
             cooldownSeconds: command.CooldownSeconds,
@@ -91,7 +95,7 @@ internal sealed class CreateAlertRuleHandler(
                         actorId: actorId,
                         resourceId: alertRule.Id,
                         platformId: null,
-                        resourceName: alertRule.Type.ToString(),
+                        resourceName: alertRule.Name,
                         status: ActivityStatus.Success,
                         eventType: ActivityEventType.AlertRuleCreated,
                         info: new AlertRuleCreated(alertRule.ToSnapshot())
@@ -102,6 +106,7 @@ internal sealed class CreateAlertRuleHandler(
         await unitOfWork.CommitAsync(cancellationToken);
 
         alertRuleCache.Upsert(alertRule);
+        await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
 
         return alertRule;
     }

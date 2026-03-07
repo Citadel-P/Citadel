@@ -221,6 +221,11 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("QuietHours")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -262,6 +267,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
+                            Name = "CPU > 90% – Platform",
                             QuietHours = "[]",
                             RequiredMatches = 3,
                             Severity = "Critical",
@@ -275,6 +281,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
+                            Name = "CPU > 80% – Platform",
                             QuietHours = "[]",
                             RequiredMatches = 3,
                             Severity = "Warning",
@@ -288,6 +295,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
+                            Name = "RAM > 90% – Platform",
                             QuietHours = "[]",
                             RequiredMatches = 3,
                             Severity = "Critical",
@@ -301,6 +309,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
+                            Name = "RAM > 80% – Platform",
                             QuietHours = "[]",
                             RequiredMatches = 3,
                             Severity = "Warning",
@@ -314,6 +323,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
+                            Name = "Platform Unreachable",
                             QuietHours = "[]",
                             Severity = "Critical",
                             Type = "PlatformUnreachable"
@@ -325,6 +335,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
+                            Name = "Platform Version Mismatch",
                             QuietHours = "[]",
                             Severity = "Warning",
                             Type = "PlatformVersionMismatch"
@@ -335,6 +346,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
+                            Name = "Unmanaged Container Created",
                             QuietHours = "[]",
                             Severity = "Info",
                             Type = "UnmanagedContainerCreated"
@@ -345,6 +357,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
+                            Name = "Image Update Available – Deployment",
                             QuietHours = "[]",
                             Severity = "Info",
                             Type = "DeploymentImageUpdateAvailable"
@@ -355,6 +368,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
+                            Name = "Auto Deploy Failed – Deployment",
                             QuietHours = "[]",
                             Severity = "Critical",
                             Type = "DeploymentAutoDeployFailed"
@@ -365,6 +379,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
+                            Name = "Deployment Auto Updated",
                             QuietHours = "[]",
                             Severity = "Info",
                             Type = "DeploymentAutoUpdated"
@@ -375,6 +390,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
+                            Name = "Image Update Available – Stack",
                             QuietHours = "[]",
                             Severity = "Info",
                             Type = "StackImageUpdateAvailable"
@@ -385,6 +401,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
+                            Name = "Auto Deploy Failed – Stack",
                             QuietHours = "[]",
                             Severity = "Critical",
                             Type = "StackAutoDeployFailed"
@@ -395,6 +412,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
+                            Name = "Stack Auto Updated",
                             QuietHours = "[]",
                             Severity = "Info",
                             Type = "StackAutoUpdated"

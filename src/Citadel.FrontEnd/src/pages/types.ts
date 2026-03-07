@@ -39,7 +39,7 @@ export interface RequiredComponents<T = any> {
  */
 export interface RequiredFormComponents<T = any> {
   AddForm: {
-    Header: {
+    Header?: {
       title?: string;
     };
     /** The component responsible for rendering the main Add form. */

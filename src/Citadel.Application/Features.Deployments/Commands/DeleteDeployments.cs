@@ -1,4 +1,6 @@
-﻿using Application.Services;
+﻿using Application.Features.Deployments.Notifications;
+using Application.Services;
+using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
@@ -19,6 +21,8 @@ internal sealed class DeleteDeploymentsHandler(
     IServiceScopeFactory scopeFactory,
     IDeploymentProcessingService deploymentProcessingService,
     IContainerProcessingService containerService,
+    IActivityStreamManager activityHub,
+    INotificationQueue notificationQueue,
     IHttpContextAccessor httpContextAccessor)
     : ICommandHandler<DeleteDeployments, Result>
 {
@@ -81,6 +85,7 @@ internal sealed class DeleteDeploymentsHandler(
                 );
 
             await uow.ActivityEventRepository.AddAsync(activity, ct);
+            await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, ct)), ct);
         }
 
         var deleted = await uow.Deployments.RemoveRangeAsync(ids, ct);

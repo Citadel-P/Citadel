@@ -1,6 +1,5 @@
 using Domain;
 using Domain.Entities.Alerts;
-using System.Data;
 
 namespace WebApi.Routes.Endpoints.Resources.Alerters;
 
@@ -29,7 +28,7 @@ public sealed partial record AlertRuleView(
 
         return new(
             rule.Id,
-            SplitPascalCase(rule.Type.ToString()),
+            rule.Name,
             rule.Type,
             rule.Severity,
             rule.CooldownSeconds,
@@ -41,40 +40,11 @@ public sealed partial record AlertRuleView(
             rule.QuietHours);
     }
 
-    internal static string SplitPascalCase(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-            return value;
-
-        ReadOnlySpan<char> span = value.AsSpan();
-        Span<char> buffer = stackalloc char[span.Length * 2]; 
-
-        int pos = 0;
-        bool firstWord = true;
-
-        for (int i = 0; i < span.Length; i++)
-        {
-            char c = span[i];
-
-            if (i > 0 && char.IsUpper(c))
-            {
-                buffer[pos++] = ' ';
-                firstWord = false;
-                buffer[pos++] = char.ToLowerInvariant(c);
-            }
-            else
-            {
-                buffer[pos++] = firstWord ? c : char.ToLowerInvariant(c);
-            }
-        }
-
-        return new string(buffer[..pos]);
-    }
-
 }
 
 
 public sealed record AlertRuleConfigView(
+    Guid Id,
     string Name,
     AlertType Type,
     AlertSeverity Severity,
@@ -88,7 +58,8 @@ public sealed record AlertRuleConfigView(
 {
     internal static AlertRuleConfigView Map(AlertRule rule)
         => new(
-            AlertRuleView.SplitPascalCase(rule.Type.ToString()),
+            rule.Id,
+            rule.Name,
             rule.Type,
             rule.Severity,
             rule.CooldownSeconds,

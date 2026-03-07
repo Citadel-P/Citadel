@@ -1,6 +1,6 @@
 {
   id: Guid_1,
-  name: Platform cpu high,
+  name: PlatformCpuHigh,
   type: PlatformCpuHigh,
   severity: Warning,
   cooldownSeconds: 60,
