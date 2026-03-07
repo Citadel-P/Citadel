@@ -6265,6 +6265,18 @@
           },
           {
             "$ref": "#/components/schemas/ActivityEventInfoAlertRuleRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoRegistryRenamed"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoRegistryCreated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoRegistryUpdated"
+          },
+          {
+            "$ref": "#/components/schemas/ActivityEventInfoRegistryDeleted"
           }
         ],
         "discriminator": {
@@ -6282,7 +6294,11 @@
             "AlertRuleCreated": "#/components/schemas/ActivityEventInfoAlertRuleCreated",
             "AlertRuleUpdated": "#/components/schemas/ActivityEventInfoAlertRuleUpdated",
             "AlertRuleDeleted": "#/components/schemas/ActivityEventInfoAlertRuleDeleted",
-            "AlertRuleRenamed": "#/components/schemas/ActivityEventInfoAlertRuleRenamed"
+            "AlertRuleRenamed": "#/components/schemas/ActivityEventInfoAlertRuleRenamed",
+            "RegistryRenamed": "#/components/schemas/ActivityEventInfoRegistryRenamed",
+            "RegistryCreated": "#/components/schemas/ActivityEventInfoRegistryCreated",
+            "RegistryUpdated": "#/components/schemas/ActivityEventInfoRegistryUpdated",
+            "RegistryDeleted": "#/components/schemas/ActivityEventInfoRegistryDeleted"
           }
         }
       },
@@ -6360,7 +6376,7 @@
       },
       "ActivityEventInfoDeploymentApplied": {
         "required": [
-          "spec",
+          "deployment",
           "containerIds",
           "reason"
         ],
@@ -6371,13 +6387,13 @@
             ],
             "type": "string"
           },
-          "spec": {
+          "deployment": {
             "oneOf": [
               {
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/DeploymentSpec"
+                "$ref": "#/components/schemas/DeploymentSnapshot"
               }
             ]
           },
@@ -6400,7 +6416,7 @@
       },
       "ActivityEventInfoDeploymentCreated": {
         "required": [
-          "spec"
+          "deployment"
         ],
         "properties": {
           "$type": {
@@ -6409,8 +6425,8 @@
             ],
             "type": "string"
           },
-          "spec": {
-            "$ref": "#/components/schemas/DeploymentSpec"
+          "deployment": {
+            "$ref": "#/components/schemas/DeploymentSnapshot"
           }
         }
       },
@@ -6432,7 +6448,7 @@
       },
       "ActivityEventInfoDeploymentDeleted": {
         "required": [
-          "spec"
+          "deployment"
         ],
         "properties": {
           "$type": {
@@ -6441,8 +6457,8 @@
             ],
             "type": "string"
           },
-          "spec": {
-            "$ref": "#/components/schemas/DeploymentSpec"
+          "deployment": {
+            "$ref": "#/components/schemas/DeploymentSnapshot"
           }
         }
       },
@@ -6525,8 +6541,8 @@
       },
       "ActivityEventInfoDeploymentUpdated": {
         "required": [
-          "oldSpec",
-          "newSpec"
+          "oldDeployment",
+          "newDeployment"
         ],
         "properties": {
           "$type": {
@@ -6535,11 +6551,83 @@
             ],
             "type": "string"
           },
-          "oldSpec": {
-            "$ref": "#/components/schemas/DeploymentSpec"
+          "oldDeployment": {
+            "$ref": "#/components/schemas/DeploymentSnapshot"
           },
-          "newSpec": {
-            "$ref": "#/components/schemas/DeploymentSpec"
+          "newDeployment": {
+            "$ref": "#/components/schemas/DeploymentSnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoRegistryCreated": {
+        "required": [
+          "registry"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "RegistryCreated"
+            ],
+            "type": "string"
+          },
+          "registry": {
+            "$ref": "#/components/schemas/RegistrySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoRegistryDeleted": {
+        "required": [
+          "registry"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "RegistryDeleted"
+            ],
+            "type": "string"
+          },
+          "registry": {
+            "$ref": "#/components/schemas/RegistrySnapshot"
+          }
+        }
+      },
+      "ActivityEventInfoRegistryRenamed": {
+        "required": [
+          "oldName",
+          "newName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "RegistryRenamed"
+            ],
+            "type": "string"
+          },
+          "oldName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEventInfoRegistryUpdated": {
+        "required": [
+          "oldRegistry",
+          "newRegistry"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "RegistryUpdated"
+            ],
+            "type": "string"
+          },
+          "oldRegistry": {
+            "$ref": "#/components/schemas/RegistrySnapshot"
+          },
+          "newRegistry": {
+            "$ref": "#/components/schemas/RegistrySnapshot"
           }
         }
       },
@@ -6773,6 +6861,7 @@
       },
       "AlertRuleConfigView": {
         "required": [
+          "id",
           "name",
           "type",
           "severity",
@@ -6786,6 +6875,10 @@
         ],
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "name": {
             "type": "string"
           },
@@ -7057,8 +7150,10 @@
       },
       "AlertRuleSnapshot": {
         "required": [
+          "id",
           "type",
           "severity",
+          "name",
           "cooldownSeconds",
           "requiredMatches",
           "threshold",
@@ -7069,11 +7164,18 @@
         ],
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "type": {
             "$ref": "#/components/schemas/AlertType"
           },
           "severity": {
             "$ref": "#/components/schemas/AlertSeverity"
+          },
+          "name": {
+            "type": "string"
           },
           "cooldownSeconds": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -9100,6 +9202,43 @@
           },
           "spec": {
             "$ref": "#/components/schemas/DeploymentSpec"
+          }
+        }
+      },
+      "DeploymentSnapshot": {
+        "required": [
+          "id",
+          "name",
+          "platformId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "spec": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DeploymentSpec"
+              }
+            ]
           }
         }
       },
@@ -12513,6 +12652,38 @@
           }
         }
       },
+      "RegistrySnapshot": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "registryHost",
+          "status",
+          "configuration"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "registryHost": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RegistryStatus"
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/RegistryConfiguration"
+          }
+        }
+      },
       "RegistryStatus": {
         "enum": [
           "Active",
@@ -12808,12 +12979,16 @@
       "VerifyAlertChannelInput": {
         "required": [
           "alertDestination",
+          "name",
           "url"
         ],
         "type": "object",
         "properties": {
           "alertDestination": {
             "$ref": "#/components/schemas/AlertDestination"
+          },
+          "name": {
+            "type": "string"
           },
           "url": {
             "type": "string"

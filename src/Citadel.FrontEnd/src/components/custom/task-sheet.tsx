@@ -132,22 +132,27 @@ type ActivityInfoRendererMap = {
 
 const activityInfoRenderers: ActivityInfoRendererMap = {
   DeploymentUpdated: (info) => (
-    <MonacoDiff original={info.oldSpec} modified={info.newSpec} format="yaml" title="Configuration changes" />
+    <MonacoDiff
+      original={info.oldDeployment}
+      modified={info.newDeployment}
+      format="yaml"
+      title="Configuration changes"
+    />
   ),
 
   DeploymentCreated: (info, activity) => (
-    <SpecViewer spec={info.spec} resourceId={activity.resourceId} title="Initial configuration" />
+    <SpecViewer spec={info.deployment} resourceId={activity.resourceId} title="Initial configuration" />
   ),
 
   DeploymentDeleted: (info, activity) => (
-    <SpecViewer spec={info.spec} resourceId={activity.resourceId} title="Deleted configuration" />
+    <SpecViewer spec={info.deployment} resourceId={activity.resourceId} title="Deleted configuration" />
   ),
 
   DeploymentApplied: (info, activity) => (
     <div className="flex flex-col gap-4 text-sm text-muted-foreground">
       {info.containerIds && (
         <>
-          <SpecViewer spec={info.spec} resourceId={activity.resourceId} title="Applied configuration" />
+          <SpecViewer spec={info.deployment} resourceId={activity.resourceId} title="Applied configuration" />
           <KeyValueBlock label="Container id" value={info.containerIds} />
         </>
       )}
@@ -182,6 +187,24 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   AlertRuleRenamed: (info) => (
     <span className="text-sm text-muted-foreground">
       Alert rule renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
+    </span>
+  ),
+
+  RegistryCreated: (info, activity) => (
+    <SpecViewer spec={info.registry} resourceId={activity.resourceId} title="Initial configuration" />
+  ),
+
+  RegistryUpdated: (info) => (
+    <MonacoDiff original={info.oldRegistry} modified={info.newRegistry} format="json" title="Configuration changes" />
+  ),
+
+  RegistryDeleted: (info, activity) => (
+    <SpecViewer spec={info.registry} resourceId={activity.resourceId} title="Deleted configuration" />
+  ),
+
+  RegistryRenamed: (info) => (
+    <span className="text-sm text-muted-foreground">
+      Registry renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
     </span>
   ),
 };

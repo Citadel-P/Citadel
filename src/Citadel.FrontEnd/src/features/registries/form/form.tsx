@@ -18,7 +18,7 @@ import {
   InputGroupField,
 } from '@/components/custom/form-builder';
 import { Constants } from '@/lib/constants';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useMutate } from '@/lib/hooks';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { useParams, useNavigate } from 'react-router';
 import { Globe, MoveUpRight } from 'lucide-react';
 import { DockerIcon, GitHubIcon } from '@/lib/icons';
+import { useQueryClient } from '@tanstack/react-query';
 
 const registryInfo = {
   DockerHub: {
@@ -106,6 +107,7 @@ const HelperLink = ({ href, info }: { href: string; info: string }) => (
 export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: RegistryInput }) => {
   const id = useParams().id;
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<RegistryInput>>({});
   const [isPending, setIsPending] = useState(false);
 
@@ -115,14 +117,23 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
   const original = resource ?? ({} as RegistryInput);
   const provider = update.configuration?.$type ?? resource?.configuration?.$type ?? RegistryType.DockerHub;
 
+  const refreshData = useCallback(() => {
+    localStorage.removeItem(`Registry:${id ?? 'new'}`);
+    queryClient.invalidateQueries({ queryKey: ['getRegistryConfig', { id }] });
+  }, [id, queryClient]);
+
   const handleSave = async (payload: RegistryInput) => {
     setIsPending(true);
     try {
-      if (mode === 'edit') await updateRegistry({ id, data: payload });
-      else await createRegistry({ data: payload });
+      if (mode === 'edit') {
+        await updateRegistry({ id, data: payload });
+        refreshData();
+      } else {
+        await createRegistry({ data: payload });
+        navigate('/registries');
+      }
 
       toast.success(`Registry "${payload.name}" saved successfully`);
-      navigate('/registries');
     } finally {
       setIsPending(false);
     }

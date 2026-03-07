@@ -3,7 +3,7 @@ using Application.Services;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities;
+using Domain.Contracts.Resources.Deployments;
 using Domain.Entities.Activities;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
@@ -81,7 +81,7 @@ internal sealed class DeleteDeploymentsHandler(
                 resourceName: deployment.Name,
                 status: ActivityStatus.Success,
                 eventType: ActivityEventType.DeploymentDeleted,
-                info: new DeploymentDeleted(deployment.Spec)
+                info: new DeploymentDeleted(deployment.ToSnapshot())
                 );
 
             await uow.ActivityEventRepository.AddAsync(activity, ct);

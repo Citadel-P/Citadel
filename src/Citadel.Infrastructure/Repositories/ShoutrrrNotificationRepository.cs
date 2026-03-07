@@ -11,15 +11,15 @@ internal class ShoutrrrNotificationRepository(IProcessService processService, IL
 {
     private readonly string shoutrrrCliPath = "shoutrrr";
 
-    public Task SendAlertAsync(AlertEvent alertEvent, IEnumerable<AlertChannel> channels, CancellationToken cancellationToken)
+    public Task SendAlertAsync(AlertEvent alertEvent, IEnumerable<AlertChannel> channels, string name, CancellationToken cancellationToken)
     {
-        var title = $"[{alertEvent.Severity}] {alertEvent.Type}";
+        var title = $"[{alertEvent.Severity}] {name}";
         var message = JsonSerializer.Serialize(alertEvent, AlertRuleJsonContext.Default.AlertRule);
         return SendToChannelsAsync(channels, title, message, cancellationToken);
     }
 
     public Task<NotificationResult> SendTestNotificationAsync(AlertChannel channel, CancellationToken cancellationToken)
-        => VerifyChannelsAsync(channel, cancellationToken);
+        => VerifyAndSendTestAsync(channel, cancellationToken);
 
     private async Task SendToChannelsAsync(
     IEnumerable<AlertChannel> channels,
@@ -70,6 +70,32 @@ internal class ShoutrrrNotificationRepository(IProcessService processService, IL
         {
             var error = string.IsNullOrEmpty(result.StandardError) ? result.StandardOutput : result.StandardError;
             return new NotificationResult(false, $"Verification failed for channel {channel.Id}. ExitCode={result.ExitCode}. Error={error}");
+        }
+
+        return new NotificationResult(true);
+    }
+
+    private async Task<NotificationResult> VerifyAndSendTestAsync(AlertChannel channel, CancellationToken cancellationToken)
+    {
+        var verifyResult = await VerifyChannelsAsync(channel, cancellationToken);
+        if (!verifyResult.IsSuccess)
+        {
+            return verifyResult;
+        }
+
+        var args = new[]
+        {
+            "send",
+            "--url", channel.Url,
+            "--title", "Citadel Notification Test",
+            "--message", $"Test notification for channel '{channel.Name}'"
+        };
+
+        var sendResult = await processService.ExecuteAsync(shoutrrrCliPath, args, cancellationToken);
+        if (!sendResult.IsSuccess)
+        {
+            var error = string.IsNullOrEmpty(sendResult.StandardError) ? sendResult.StandardOutput : sendResult.StandardError;
+            return new NotificationResult(false, $"Test send failed for channel {channel.Id}. ExitCode={sendResult.ExitCode}. Error={error}");
         }
 
         return new NotificationResult(true);

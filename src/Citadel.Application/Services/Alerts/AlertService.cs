@@ -184,6 +184,6 @@ internal class AlertNotificationWorkItem(
             }
         }
 
-        await notificationService.SendAlertAsync(evt, channels, cancellationToken);
+        await notificationService.SendAlertAsync(evt, channels, rule.Name, cancellationToken);
     }
 }

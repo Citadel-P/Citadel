@@ -4,6 +4,8 @@ import { RegistryActions } from './actions';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { useRead } from '@/lib/hooks';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
+import { RegistryView } from '@/api/generated/api.types';
+import { ActivitiesTab } from '@/features/activities';
 
 export const RegistryFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -25,6 +27,12 @@ export const RegistryFormComponents: RequiredFormComponents = {
         label: 'Config',
         Content: ({ resource }) => {
           return <RegistryForm mode="edit" resource={resource} />;
+        },
+      },
+      {
+        label: 'Activities',
+        Content: ({ resource }: { resource: RegistryView }) => {
+          return <ActivitiesTab resourceId={resource.id} resourceType="Registry" />;
         },
       },
     ],

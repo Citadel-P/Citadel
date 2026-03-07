@@ -1,12 +1,12 @@
-﻿using System.Data;
-using System.Text.Json;
-using Dapper;
+﻿using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Registries;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using Infrastructure.TypeHandlers;
+using System.Data;
+using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
 
 namespace Infrastructure.Persistence;
@@ -46,6 +46,21 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
         const string sql = "SELECT * FROM Registries WHERE Id = @Id LIMIT 1";
         var result = await db.QuerySingleOrDefaultAsync<RegistryDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
         return result?.ToDomain();
+    }
+
+    public async Task<IEnumerable<Registry>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
+    {
+        try
+        {
+
+            const string sql = "SELECT * FROM Registries r WHERE r.Id IN (SELECT value FROM json_each(@Ids))";
+            var result = await db.QueryAsync<RegistryDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
+            return result.ToDomain();
+        }
+        catch (Exception ex)
+        {
+            throw ex;
+        }
     }
 
     public async Task<Registry?> GetByNameAsync(string name, CancellationToken cancellationToken)

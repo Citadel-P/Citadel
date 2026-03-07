@@ -4,6 +4,7 @@ using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Deployments;
 using Domain.Entities.Activities;
 using Domain.Entities.Deployments;
 using FluentValidation;
@@ -108,7 +109,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
                 status: ActivityStatus.Success,
                 resourceName: patchedDeployment.Name,
                 eventType: ActivityEventType.DeploymentUpdated,
-                info: new DeploymentUpdated(deployment.Spec, patchedDeployment.Spec)
+                info: new DeploymentUpdated(deployment.ToSnapshot(), patchedDeployment.ToSnapshot(command.Id))
             );
         }
         

@@ -1,14 +1,21 @@
-﻿using Application.Services;
+﻿using Application.Features.Deployments.Notifications;
+using Application.Services;
+using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Registries;
+using Domain.Entities.Activities;
 using Domain.Entities.Registries;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
+using Hosting.Common.Extensions;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 namespace Application.Features.Registries.Commands;
 
 [RequirePermission(nameof(AppPermission.Registry_Update))]
@@ -125,10 +132,18 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
     }
 }
 
-internal class PatchRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorResolver registryResolver) : ICommandHandler<PatchRegistry, Result<Registry>>
+internal class PatchRegistryHandler(
+    IUnitOfWork unitOfWork,
+    IActivityStreamManager activityHub,
+    INotificationQueue notificationQueue,
+    IRegistryConnectorResolver registryResolver,
+    IHttpContextAccessor httpContextAccessor) : ICommandHandler<PatchRegistry, Result<Registry>>
 {
     public async ValueTask<Result<Registry>> Handle(PatchRegistry command, CancellationToken cancellationToken)
     {
+        var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
+           ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
+
         var registry = await unitOfWork.Registries.GetAsync(command.Id, cancellationToken);
         if (registry == null)
         {
@@ -157,11 +172,40 @@ internal class PatchRegistryHandler(IUnitOfWork unitOfWork, IRegistryConnectorRe
             return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
         }
 
+        ActivityEvent? activity = null;
+        if (!string.IsNullOrEmpty(patchedRegistry.Name) && string.Compare(registry.Name, patchedRegistry.Name, StringComparison.OrdinalIgnoreCase) != 0)
+        {
+            activity = new ActivityEvent(
+               actorId: actorId,
+               resourceId: registry.Id,
+               platformId: null,
+               resourceName: registry.Name,
+               status: ActivityStatus.Success,
+               eventType: ActivityEventType.RegistryRenamed,
+               info: new RegistryRenamed(registry.Name, patchedRegistry.Name)
+           );
+        }
+        else
+        {
+            activity = new ActivityEvent(
+               actorId: actorId,
+               resourceId: registry.Id,
+               platformId: null,
+               resourceName: registry.Name,
+               status: ActivityStatus.Success,
+               eventType: ActivityEventType.RegistryUpdated,
+               info: new RegistryUpdated(registry.ToSnapshot(command.Id), patchedRegistry.ToSnapshot(command.Id))
+           );
+        }
+
         registry.PartialUpdate(name: patchedRegistry.Name, registryHost: patchedRegistry.RegistryHost, status: patchedRegistry.Status, 
             description: patchedRegistry.Description, configuration: patchedRegistry.Configuration);
+
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.Registries.UpdateAsync(registry, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
+        await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return registry;
     }
 }

@@ -301,7 +301,7 @@ internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, Guid actorI
                         resourceName: deployment.Name,
                         status: ActivityStatus.Success,
                         eventType: ActivityEventType.DeploymentApplied,
-                        info: new DeploymentApplied(deployment.Spec, [containerId], null)
+                        info: new DeploymentApplied(deployment.ToSnapshot(), [containerId], null)
                         );
 
         await uow.ActivityEventRepository.AddAsync(activity, ct);

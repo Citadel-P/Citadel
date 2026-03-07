@@ -103,12 +103,12 @@ function useAlertChannels() {
     await refetch();
   };
 
-  const verifyChannel = async (dest: AlertDestination, url: string) => {
+  const verifyChannel = async (dest: AlertDestination, name: string, url: string) => {
     if (!url) {
       toast.error('Channel URL is required to verify.');
       throw new Error('Channel URL is required to verify.');
     }
-    await verify({ data: { alertDestination: dest, url } });
+    await verify({ data: { alertDestination: dest, name, url } });
   };
 
   return {
@@ -211,7 +211,7 @@ function AlertNotificationChannels() {
   };
 
   const handleVerify = async () => {
-    await verifyChannel(input.alertDestination, input.url);
+    await verifyChannel(input.alertDestination, input.name, input.url);
     toast.success('Channel verified successfully!');
   };
 
@@ -319,16 +319,18 @@ function AlertNotificationChannels() {
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving || verifying}>
-              Cancel
-            </Button>
+          <DialogFooter className="flex w-full justify-between items-center sm:justify-between">
             <Button variant="outline" onClick={handleVerify} disabled={verifying || saving}>
-              Verify {verifying && <LoaderCircle className="ml-1 h-3.5 w-3.5 animate-spin" />}
+              Send Test Notification {verifying && <LoaderCircle className="ml-1 h-3.5 w-3.5 animate-spin" />}
             </Button>
-            <Button onClick={handleSave} disabled={saving || verifying}>
-              Save {saving && <LoaderCircle className="ml-1 h-3.5 w-3.5 animate-spin" />}
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setOpen(false)} disabled={saving || verifying}>
+                Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={saving || verifying}>
+                Save {saving && <LoaderCircle className="ml-1 h-3.5 w-3.5 animate-spin" />}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

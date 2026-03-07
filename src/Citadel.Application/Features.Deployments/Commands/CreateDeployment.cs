@@ -3,6 +3,7 @@ using Application.Services;
 using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Deployments;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Deployments;
@@ -67,11 +68,11 @@ internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, INotificationQueu
 
         // Add deployment
         var deployment = new Deployment(
-            name : command.Name,
-            description : command.Description,
+            name: command.Name,
+            description: command.Description,
             createdByActorId: actorId,
-            platformId : command.PlatformId,
-            spec : command.Spec
+            platformId: command.PlatformId,
+            spec: command.Spec
             );
 
         var result = await unitOfWork.Deployments.AddAsync(deployment, cancellationToken);
@@ -84,7 +85,7 @@ internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, INotificationQueu
             resourceName: deployment.Name,
             eventType: ActivityEventType.DeploymentCreated,
             status: ActivityStatus.Information,
-            info: new DeploymentCreated(command.Spec)
+            info: new DeploymentCreated(deployment.ToSnapshot())
             );
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);

@@ -6,6 +6,7 @@ public sealed record AlertRuleSnapshot(
     Guid Id,
     AlertType Type,
     AlertSeverity Severity,
+    string Name,
     int? CooldownSeconds,
     int? RequiredMatches,
     double? Threshold,
@@ -19,6 +20,7 @@ public static class AlertRuleSnapshotExtensions
     public static AlertRuleSnapshot ToSnapshot(this AlertRule alertRule, Guid? id = null)
         => new (
             Id: id ?? alertRule.Id,
+            Name: alertRule.Name,
             Type: alertRule.Type,
             Severity: alertRule.Severity,
             CooldownSeconds: alertRule.CooldownSeconds,

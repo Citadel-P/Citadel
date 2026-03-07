@@ -29,29 +29,21 @@ internal sealed class DeleteAlertRulesHandler(
         var actorId = httpContextAccessor.HttpContext?.User?.GetActorId()
            ?? throw new ArgumentNullException($"{nameof(ClaimsPrincipal)} is missing");
 
-        var rulesToDelete = new List<AlertRule>();
-        var ids = command.Ids.Distinct().ToArray();
-        foreach (var id in ids)
-        {
-            var rule = await unitOfWork.AlertRules.GetByIdAsync(id, cancellationToken);
-            if (rule is not null)
-            {
-                rulesToDelete.Add(rule);
-            }
-        }
+        var rulesToDelete = await unitOfWork.AlertRules.GetAllAsync(command.Ids, cancellationToken);
 
-        if (rulesToDelete.Count == 0)
+        if (rulesToDelete == null || rulesToDelete.Any() == false)
         {
             return Result.Failure(new NotFoundError("No alert rules found matching the provided IDs for deletion."));
         }
 
+        var ids = rulesToDelete.Select(s => s.Id).ToList();
         foreach (var rule in rulesToDelete)
         {
             var activity = new ActivityEvent(
                 actorId: actorId,
                 resourceId: rule.Id,
                 platformId: null,
-                resourceName: rule.Type.ToString(),
+                resourceName: rule.Name,
                 status: ActivityStatus.Success,
                 eventType: ActivityEventType.AlertRuleDeleted,
                 info: new AlertRuleDeleted(rule.ToSnapshot())

@@ -50,6 +50,33 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         return dto.ToDomain();
     }
 
+    public async Task<IEnumerable<AlertRule>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
+    {
+        const string sql = """
+        SELECT
+            r.Id, 
+            r.Name,
+            r.Type, 
+            r.CooldownSeconds, 
+            r.Status, 
+            r.Severity, 
+            r.LimitedTo, 
+            r.QuietHours, 
+            r.RequiredMatches,
+            r.Threshold, 
+            r.CreatedByActorId, 
+            r.CreatedAt,
+            COALESCE(json_group_array(arc.AlertChannelId), '[]') AS ChannelIds
+        FROM AlertRules r
+        LEFT JOIN AlertRuleChannels arc ON arc.AlertRuleId = r.Id
+            WHERE r.Id IN (SELECT value FROM json_each(@Ids))
+            GROUP BY r.Id
+           
+    """;
+        var result = await db.QueryAsync<AlertRuleDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
+        return result.ToDomain();
+    }
+
     public async Task<int> AddAlertRuleAsync(AlertRule alertRule, CancellationToken cancellationToken)
     {
         const string ruleSql = @"

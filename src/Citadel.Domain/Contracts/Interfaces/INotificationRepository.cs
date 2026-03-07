@@ -4,7 +4,7 @@ namespace Domain.Contracts.Interfaces;
 
 public interface INotificationRepository
 {
-    Task SendAlertAsync(AlertEvent alertEvent, IEnumerable<AlertChannel> channels, CancellationToken cancellationToken);
+    Task SendAlertAsync(AlertEvent alertEvent, IEnumerable<AlertChannel> channels, string name, CancellationToken cancellationToken);
     Task<NotificationResult> SendTestNotificationAsync(AlertChannel channel, CancellationToken cancellationToken);
 }
 

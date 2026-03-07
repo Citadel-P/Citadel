@@ -391,7 +391,7 @@ public enum ActivityEventType
     RegistryDeleted,
     #endregion
 
-    #region Alerter
+    #region AlertRule Events
     AlertRuleCreated,
     AlertRuleUpdated,
     AlertRuleDeleted,

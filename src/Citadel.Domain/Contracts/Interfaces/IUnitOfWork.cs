@@ -47,6 +47,7 @@ public interface IRegistryRepository
     Task<Registry?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<Registry?> GetByNameAsync(string name, CancellationToken cancellationToken);
     Task<IEnumerable<Registry>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Registry>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
     Task<int> AddAsync(Registry registry, CancellationToken cancellationToken);
@@ -168,6 +169,7 @@ public interface IDeploymentRepository
 public interface IAlertRuleRepository
 {
     Task<AlertRule?> GetByIdAsync(Guid alertRuleId, CancellationToken cancellationToken);
+    Task<IEnumerable<AlertRule>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<AlertRuleState?> GetStateAsync(Guid alertRuleId, Guid resourceId, CancellationToken cancellationToken);
     Task<IEnumerable<AlertRule>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<PagedResult<AlertRule>> GetPagedAsync(int page, int pageSize, CancellationToken cancellationToken);

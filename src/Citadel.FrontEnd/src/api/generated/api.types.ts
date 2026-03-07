@@ -306,6 +306,22 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         "AlertRuleRenamed",
         ActivityEventInfoAlertRuleRenamed
       >
+    | BaseActivityEventInfoTypeMapping<
+        "RegistryRenamed",
+        ActivityEventInfoRegistryRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "RegistryCreated",
+        ActivityEventInfoRegistryCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "RegistryUpdated",
+        ActivityEventInfoRegistryUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "RegistryDeleted",
+        ActivityEventInfoRegistryDeleted
+      >
   );
 
 export interface ActivityEventInfoAlertRuleCreated {
@@ -332,14 +348,14 @@ export interface ActivityEventInfoAlertRuleUpdated {
 
 export interface ActivityEventInfoDeploymentApplied {
   $type?: "DeploymentApplied";
-  spec: null | DeploymentSpec;
+  deployment: null | DeploymentSnapshot;
   containerIds: null | any[];
   reason: null | string;
 }
 
 export interface ActivityEventInfoDeploymentCreated {
   $type?: "DeploymentCreated";
-  spec: DeploymentSpec;
+  deployment: DeploymentSnapshot;
 }
 
 export interface ActivityEventInfoDeploymentDegraded {
@@ -349,7 +365,7 @@ export interface ActivityEventInfoDeploymentDegraded {
 
 export interface ActivityEventInfoDeploymentDeleted {
   $type?: "DeploymentDeleted";
-  spec: DeploymentSpec;
+  deployment: DeploymentSnapshot;
 }
 
 export interface ActivityEventInfoDeploymentPaused {
@@ -375,8 +391,30 @@ export interface ActivityEventInfoDeploymentStopped {
 
 export interface ActivityEventInfoDeploymentUpdated {
   $type?: "DeploymentUpdated";
-  oldSpec: DeploymentSpec;
-  newSpec: DeploymentSpec;
+  oldDeployment: DeploymentSnapshot;
+  newDeployment: DeploymentSnapshot;
+}
+
+export interface ActivityEventInfoRegistryCreated {
+  $type?: "RegistryCreated";
+  registry: RegistrySnapshot;
+}
+
+export interface ActivityEventInfoRegistryDeleted {
+  $type?: "RegistryDeleted";
+  registry: RegistrySnapshot;
+}
+
+export interface ActivityEventInfoRegistryRenamed {
+  $type?: "RegistryRenamed";
+  oldName: string;
+  newName: string;
+}
+
+export interface ActivityEventInfoRegistryUpdated {
+  $type?: "RegistryUpdated";
+  oldRegistry: RegistrySnapshot;
+  newRegistry: RegistrySnapshot;
 }
 
 export interface ActivityView {
@@ -426,6 +464,8 @@ export interface AlertChannelsView {
 }
 
 export interface AlertRuleConfigView {
+  /** @format uuid */
+  id: string;
   name: string;
   type: AlertType;
   severity: AlertSeverity;
@@ -521,8 +561,11 @@ export interface AlertRuleQuietHourWeeklyQuietHour {
 }
 
 export interface AlertRuleSnapshot {
+  /** @format uuid */
+  id: string;
   type: AlertType;
   severity: AlertSeverity;
+  name: string;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -1028,6 +1071,16 @@ export interface DeploymentInput {
   platformId: string;
   description: null | string;
   spec: DeploymentSpec;
+}
+
+export interface DeploymentSnapshot {
+  /** @format uuid */
+  id: string;
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  description?: null | string;
+  spec?: null | DeploymentSpec;
 }
 
 export interface DeploymentSpec {
@@ -1987,6 +2040,16 @@ export interface RegistryInput {
   description?: null | string;
 }
 
+export interface RegistrySnapshot {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: string;
+  registryHost: string;
+  status: RegistryStatus;
+  configuration: RegistryConfiguration;
+}
+
 export interface RegistryView {
   /** @format uuid */
   id: string;
@@ -2069,6 +2132,7 @@ export interface Ulimit {
 
 export interface VerifyAlertChannelInput {
   alertDestination: AlertDestination;
+  name: string;
   url: string;
 }
 

@@ -1,6 +1,10 @@
-﻿using Application.Services;
+﻿using Application.Features.Deployments.Notifications;
+using Application.Services;
+using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Registries;
+using Domain.Entities.Activities;
 using Domain.Entities.Registries;
 using FluentValidation;
 using Hosting.Common;
@@ -123,7 +127,12 @@ public sealed record CreateRegistry(
     }
 }
 
-internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IHttpContextAccessor httpContextAccessor, IRegistryConnectorResolver registryResolver) : ICommandHandler<CreateRegistry, Result<Registry>>
+internal class CreateRegistryHandler(
+    IUnitOfWork unitOfWork, 
+    IActivityStreamManager activityHub,
+    INotificationQueue notificationQueue,
+    IHttpContextAccessor httpContextAccessor,
+    IRegistryConnectorResolver registryResolver) : ICommandHandler<CreateRegistry, Result<Registry>>
 {
     public async ValueTask<Result<Registry>> Handle(CreateRegistry command, CancellationToken cancellationToken)
     {
@@ -148,10 +157,31 @@ internal class CreateRegistryHandler(IUnitOfWork unitOfWork, IHttpContextAccesso
             return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
         }
 
-        var registry = new Registry(name: command.Name, registryHost: command.RegistryHost, status: command.Status, createdByActorId: user.GetActorId(), configuration: command.Configuration, description: command.Description);
+        var actorId = user.GetActorId();
+
+        var registry = new Registry(
+            name: command.Name,
+            registryHost: command.RegistryHost, 
+            status: command.Status, 
+            createdByActorId: actorId, 
+            configuration: command.Configuration, 
+            description: command.Description);
+
+        var activity = new ActivityEvent(
+                        actorId: actorId,
+                        resourceId: registry.Id,
+                        platformId: null,
+                        resourceName: registry.Name,
+                        status: ActivityStatus.Success,
+                        eventType: ActivityEventType.RegistryCreated,
+                        info: new RegistryCreated(registry.ToSnapshot())
+                        );
+
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.Registries.AddAsync(registry, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 
+        await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return registry;
     }
 }

@@ -1,5 +1,6 @@
 ﻿using Domain.Contracts.Resources.Alerts;
-using Domain.Entities.Deployments;
+using Domain.Contracts.Resources.Deployments;
+using Domain.Contracts.Resources.Registries;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
@@ -20,21 +21,29 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(AlertRuleUpdated), nameof(ActivityEventType.AlertRuleUpdated))]
 [JsonDerivedType(typeof(AlertRuleDeleted), nameof(ActivityEventType.AlertRuleDeleted))]
 [JsonDerivedType(typeof(AlertRuleRenamed), nameof(ActivityEventType.AlertRuleRenamed))]
+[JsonDerivedType(typeof(RegistryRenamed), nameof(ActivityEventType.RegistryRenamed))]
+[JsonDerivedType(typeof(RegistryCreated), nameof(ActivityEventType.RegistryCreated))]
+[JsonDerivedType(typeof(RegistryUpdated), nameof(ActivityEventType.RegistryUpdated))]
+[JsonDerivedType(typeof(RegistryDeleted), nameof(ActivityEventType.RegistryDeleted))]
 public abstract record ActivityEventInfo;
 
-public sealed record DeploymentCreated(DeploymentSpec Spec) : ActivityEventInfo;
-public sealed record DeploymentUpdated(DeploymentSpec OldSpec, DeploymentSpec NewSpec) : ActivityEventInfo;
+public sealed record DeploymentCreated(DeploymentSnapshot Deployment) : ActivityEventInfo;
+public sealed record DeploymentUpdated(DeploymentSnapshot OldDeployment, DeploymentSnapshot NewDeployment) : ActivityEventInfo;
 public sealed record DeploymentRenamed(string OldName, string NewName) : ActivityEventInfo;
-public sealed record DeploymentDeleted(DeploymentSpec Spec) : ActivityEventInfo;
+public sealed record DeploymentDeleted(DeploymentSnapshot Deployment) : ActivityEventInfo;
 public sealed record DeploymentStarted(IEnumerable<string> ContainerIds) : ActivityEventInfo;
 public sealed record DeploymentStopped(IEnumerable<string> ContainerIds) : ActivityEventInfo;
 public sealed record DeploymentPaused(IEnumerable<string> ContainerIds) : ActivityEventInfo;
 public sealed record DeploymentDegraded(string Reason) : ActivityEventInfo;
-public sealed record DeploymentApplied(DeploymentSpec? Spec, IEnumerable<string>? ContainerIds, string? Reason) : ActivityEventInfo;
+public sealed record DeploymentApplied(DeploymentSnapshot? Deployment, IEnumerable<string>? ContainerIds, string? Reason) : ActivityEventInfo;
 public sealed record AlertRuleCreated(AlertRuleSnapshot AlertRule) : ActivityEventInfo;
 public sealed record AlertRuleUpdated(AlertRuleSnapshot OldRule, AlertRuleSnapshot NewRule) : ActivityEventInfo;
 public sealed record AlertRuleDeleted(AlertRuleSnapshot AlertRule) : ActivityEventInfo;
 public sealed record AlertRuleRenamed(string OldName, string NewName) : ActivityEventInfo;
 
+public sealed record RegistryRenamed(string OldName, string NewName) : ActivityEventInfo;
+public sealed record RegistryDeleted(RegistrySnapshot Registry) : ActivityEventInfo;
+public sealed record RegistryUpdated(RegistrySnapshot OldRegistry, RegistrySnapshot NewRegistry) : ActivityEventInfo;
+public sealed record RegistryCreated(RegistrySnapshot Registry) : ActivityEventInfo;
 
 
