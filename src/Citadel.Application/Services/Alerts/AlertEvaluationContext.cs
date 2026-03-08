@@ -14,6 +14,6 @@ public sealed record AlertMatch(Guid ResourceId, string ResourceName, AlertResou
     public bool IsMatch => Info is not null;
 }
 
-public sealed record PlatformAlertSnapshot(Guid Id, string Name, double CpuUsage, double RamUsage, string Version);
+public sealed record PlatformAlertSnapshot(Guid Id, string Name, double CpuUsage, double RamUsage, string AgentVersion);
 public sealed record DeploymentAlertSnapshot(Guid Id, string Name, string CurrentImage, string PreviousImage, string LatestImage, bool Failed, string? Raison = null);
 public sealed record StackAlertSnapshot(Guid Id, string Name, string CurrentImage, string PreviousImage, string LatestImage, bool Failed, string? Raison = null);

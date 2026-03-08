@@ -1,9 +1,7 @@
-﻿using Domain;
-using Domain.Contracts.Interfaces;
+﻿using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
 using Hosting.DockerClient.Services;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace Infrastructure.Repositories;
 
@@ -14,7 +12,7 @@ internal class ShoutrrrNotificationRepository(IProcessService processService, IL
     public Task SendAlertAsync(AlertEvent alertEvent, IEnumerable<AlertChannel> channels, string name, CancellationToken cancellationToken)
     {
         var title = $"[{alertEvent.Severity}] {name}";
-        var message = JsonSerializer.Serialize(alertEvent, AlertRuleJsonContext.Default.AlertRule);
+        var message = alertEvent.Info.HumanMessage;
         return SendToChannelsAsync(channels, title, message, cancellationToken);
     }
 

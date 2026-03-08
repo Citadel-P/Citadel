@@ -391,7 +391,7 @@ public class ThresholdAlertTests: IntegrationTestBase
     private static PlatformStatsResult BuildStat(long time, int cpu)
     {
         return new PlatformStatsResult(
-            123456, 5, 2, 1,
+            123456, 5, 2, 1, "1.0",
             new DockerPlatformStat(
                 created: time,
                 memoryUsage: 500,
@@ -414,6 +414,7 @@ public class ThresholdAlertTests: IntegrationTestBase
                 ImageCount: 5,
                 VolumeCount: 2,
                 NetworkCount: 1,
+                AgentVersion: "1.0",
                 PlatformStat: new DockerPlatformStat
                 (
                     created: time,
@@ -438,6 +439,7 @@ public class ThresholdAlertTests: IntegrationTestBase
                 ImageCount: 6,
                 VolumeCount: 3,
                 NetworkCount: 10,
+                AgentVersion: "1.0",
                 PlatformStat: new DockerPlatformStat
                 (
                     created: time + (60 * 2),
@@ -461,6 +463,7 @@ public class ThresholdAlertTests: IntegrationTestBase
                 ImageCount: 6,
                 VolumeCount: 3,
                 NetworkCount: 10,
+                AgentVersion: "1.0",
                 PlatformStat: new DockerPlatformStat
                 (
                     created: time + (60 * 3),

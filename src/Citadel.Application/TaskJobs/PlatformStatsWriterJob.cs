@@ -117,7 +117,7 @@ internal sealed class PersistPlatformStatsWorkItem(
                    existing.Name,
                    CpuUsage: stat.PlatformStat.CpuUsage,
                    RamUsage: stat.PlatformStat.MemoryUsage,
-                   Version: ""));
+                   AgentVersion: stat.AgentVersion));
             }
 
             PlatformDescriptor? descriptor = existing.PlatformDescriptor switch
@@ -175,6 +175,11 @@ internal sealed class PersistPlatformStatsWorkItem(
 
             await alertService.ProcessAsync(
                 AlertType.PlatformRamHigh,
+                context,
+                cancellationToken);
+
+            await alertService.ProcessAsync(
+                AlertType.PlatformVersionMismatch,
                 context,
                 cancellationToken);
         }

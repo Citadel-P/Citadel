@@ -121,6 +121,7 @@ internal static class PlatformMappers
             ImageCount: source.ImageCount,
             VolumeCount: source.VolumeCount,
             NetworkCount: source.NetworkCount,
+            AgentVersion: source.AgentVersion,
             PlatformStat: platformStat);
     }
 
@@ -156,7 +157,8 @@ internal static class PlatformMappers
             MemTotal: source.MemoryTotal, 
             ImageCount: source.ImageCount, 
             VolumeCount: source.VolumeCount, 
-            NetworkCount: source.NetworkCount, 
+            NetworkCount: source.NetworkCount,
+            AgentVersion: string.Empty,
             PlatformStat: platformStat);
     }
 

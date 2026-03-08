@@ -1,6 +1,7 @@
 ﻿using Domain;
 using Domain.Entities;
 using Domain.Entities.Alerts;
+using Hosting.Common;
 
 namespace Application.Services.Alerts;
 
@@ -64,9 +65,35 @@ public sealed class PlatformRamHighEvaluator : IAlertEvaluator
         }
     }
 }
+
+[AlertEvaluator(AlertType.PlatformVersionMismatch)]
+public sealed class PlatformVersionMismatchEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.PlatformVersionMismatch;
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        foreach (var platform in context.Platforms)
+        {
+            if (IsCompatible(platform.AgentVersion))
+                continue;
+
+            yield return new AlertMatch(
+                platform.Id,
+                platform.Name,
+                AlertResourceType.Platform,
+                new PlatformVersionMismatchAlertInfo(platform.AgentVersion, Constants.CompatibilityVersion)
+            );
+        }
+    }
+
+    public static bool IsCompatible(string agentVersion) =>
+       string.Compare(agentVersion, Constants.CompatibilityVersion, StringComparison.Ordinal) == 0;
+}
+
+
 #endregion
 
-#region Deployment
+    #region Deployment
 
 [AlertEvaluator(AlertType.DeploymentAutoDeployFailed)]
 public sealed class DeploymentFailedEvaluator : IAlertEvaluator

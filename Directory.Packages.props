@@ -15,7 +15,7 @@
     <PackageVersion Include="Refit.HttpClientFactory" Version="10.0.1" />
     <PackageVersion Include="Grpc.AspNetCore" Version="2.76.0" />
     <!-- Db -->
-    <PackageVersion Include="Dapper" Version="2.1.66" />
+    <PackageVersion Include="Dapper" Version="2.1.72" />
     <PackageVersion Include="Dapper.AOT" Version="1.0.48" />
     <PackageVersion Include="dbup-sqlite" Version="6.0.4" />
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.2" />
@@ -24,7 +24,7 @@
     <PackageVersion Include="FluentMigrator.Runner.SQLite" Version="7.1.0" />
     <!--Test-->
     <PackageVersion Include="Bogus" Version="35.6.5" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
     <PackageVersion Include="Moq" Version="4.20.72" />
     <PackageVersion Include="Verify.XunitV3" Version="31.13.2" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />

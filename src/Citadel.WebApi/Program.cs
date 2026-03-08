@@ -30,6 +30,7 @@ void WithServices(WebApplicationBuilder builder)
 // Configures the HTTP request pipeline.
 void Configure(WebApplication app)
 {
+    // var pubKey = Helpers.GetOrCreatePublicKey();
     if (app.Configuration.GetValue<bool>("EnableSwagger"))
     {
         app.MapOpenApi();

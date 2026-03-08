@@ -116,6 +116,7 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
                 ImageCount: 5,
                 VolumeCount: 2,
                 NetworkCount: 1,
+                AgentVersion: "1.0",
                 PlatformStat: new DockerPlatformStat
                 (
                     created: time,
@@ -140,6 +141,7 @@ public class PlatformsStatsWriterJobTests : IntegrationTestBase
                 ImageCount: 6,
                 VolumeCount: 3,
                 NetworkCount: 10,
+                AgentVersion: "1.0",
                 PlatformStat: new DockerPlatformStat
                 (
                     created: time + (60 * 2),
