@@ -51,6 +51,7 @@ public static class ApplicationModule
             .AddAlertEvaluators()
             .AddSingleton<AlertRuleCache>()
             .AddSingleton<IAlertService, AlertService>()
+            .AddScoped<IApplyDeploymentService, ApplyDeploymentService>()
             .AddSingleton<IAlertRuleProvider>(sp => sp.GetRequiredService<AlertRuleCache>())
             .AddScoped<IContainerProcessingService, ContainerProcessingService>()
             .AddScoped<IDeploymentProcessingService, DeploymentProcessingService>()

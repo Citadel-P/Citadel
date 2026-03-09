@@ -94,7 +94,7 @@ public class EventAlertTests : IntegrationTestBase
             createdByActorId: Constants.SystemId,
             spec: new DeploymentSpec
             (
-                UpdateBehavior: UpdateBehavior.AutoDeploy,
+                UpdateBehavior: UpdateBehavior.Notify,
                 Image: new ExternalImage
                 (
                     RegistryId: Constants.DefaultRegistryId,

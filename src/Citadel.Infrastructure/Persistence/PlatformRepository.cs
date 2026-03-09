@@ -50,7 +50,7 @@ internal class PlatformRepository(IDbConnection db, Func<IDbTransaction> tx) : I
     public async Task<PlatformConnectionInfo?> GetInfoAsync(Guid platformId, CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT Id, Address, ConnectorType
+            SELECT Id, Name, Address, ConnectorType
             FROM Platforms
             WHERE Id = @PlatformId
             LIMIT 1

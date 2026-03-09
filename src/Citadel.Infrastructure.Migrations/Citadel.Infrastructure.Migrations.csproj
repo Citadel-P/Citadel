@@ -20,9 +20,4 @@
     <ProjectReference Include="..\Citadel.Infrastructure\Citadel.Infrastructure.csproj" />
   </ItemGroup>
 
-
-  <ItemGroup>
-    <Folder Include="Migrations\" />
-  </ItemGroup>
-
 </Project>

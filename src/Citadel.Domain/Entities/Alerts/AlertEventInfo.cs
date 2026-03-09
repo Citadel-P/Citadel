@@ -13,7 +13,7 @@ namespace Domain.Entities.Alerts;
 [JsonDerivedType(typeof(PlatformVersionMismatchAlertInfo), nameof(AlertType.PlatformVersionMismatch))]
 [JsonDerivedType(typeof(DeploymentImageUpdateAvailableAlertInfo), nameof(AlertType.DeploymentImageUpdateAvailable))]
 [JsonDerivedType(typeof(DeploymentAutoUpdatedAlertInfo), nameof(AlertType.DeploymentAutoUpdated))]
-[JsonDerivedType(typeof(DeploymentFailedAlertInfo), nameof(AlertType.DeploymentAutoDeployFailed))]
+[JsonDerivedType(typeof(DeploymentAutoDeployFailedAlertInfo), nameof(AlertType.DeploymentAutoDeployFailed))]
 [JsonDerivedType(typeof(StackImageUpdateAvailableAlertInfo), nameof(AlertType.StackImageUpdateAvailable))]
 [JsonDerivedType(typeof(StackAutoUpdatedAlertInfo), nameof(AlertType.StackAutoUpdated))]
 [JsonDerivedType(typeof(StackDeployFailedAlertInfo), nameof(AlertType.StackAutoDeployFailed))]
@@ -28,25 +28,25 @@ public abstract record AlertEventInfo
         JsonSerializer.Serialize(this, AlertEventJsonContext.Default.AlertEventInfo);
 }
 
-public record PlatformCpuHighAlertInfo(double CpuUsagePercent) : AlertEventInfo
+public record PlatformCpuHighAlertInfo(string PlatformName, double CpuUsagePercent) : AlertEventInfo
 {
-    public override string HumanMessage => $"CPU usage is high: {CpuUsagePercent:0.##}%";
+    public override string HumanMessage => $"'{PlatformName}' CPU usage is high: {CpuUsagePercent:0.##}%";
 }
 
-public record PlatformRamHighAlertInfo(double RamUsagePercent) : AlertEventInfo
+public record PlatformRamHighAlertInfo(string PlatformName, double RamUsagePercent) : AlertEventInfo
 {
-    public override string HumanMessage => $"RAM usage is high: {RamUsagePercent:0.##}%";
+    public override string HumanMessage => $"'{PlatformName}' RAM usage is high: {RamUsagePercent:0.##}%";
 }
 
-public record PlatformVersionMismatchAlertInfo(string CurrentAgentVersion, string ExpectedAgentVersion) : AlertEventInfo
+public record PlatformVersionMismatchAlertInfo(string PlatformName, string CurrentAgentVersion, string ExpectedAgentVersion) : AlertEventInfo
 {
     public override string HumanMessage =>
-        $"Agent version mismatch: current {CurrentAgentVersion}, expected {ExpectedAgentVersion}";
+        $"'{PlatformName}' Agent version mismatch: current {CurrentAgentVersion}, expected {ExpectedAgentVersion}";
 }
 
-public record PlatformUnreachableAlertInfo(string Name, string Address) : AlertEventInfo
+public record PlatformUnreachableAlertInfo(string PlatformName, Guid Id, string Address) : AlertEventInfo
 {
-    public override string HumanMessage => $"Platform '{Name}' at {Address} is unreachable";
+    public override string HumanMessage => $"Platform '{PlatformName}' with id '{Id}' at {Address} is unreachable";
 }
 
 public record UnmanagedContainerCreatedAlertInfo(string PlatformName, string PlatformAddress, string ContainerName) : AlertEventInfo
@@ -55,32 +55,32 @@ public record UnmanagedContainerCreatedAlertInfo(string PlatformName, string Pla
         $"Unmanaged container '{ContainerName}' was created on platform '{PlatformName}' ({PlatformAddress})";
 }
 
-public record DeploymentImageUpdateAvailableAlertInfo(string CurrentImage, string LatestImage) : AlertEventInfo
+public record DeploymentImageUpdateAvailableAlertInfo(string DeploymentName, string CurrentImage, string LatestImage) : AlertEventInfo
 {
-    public override string HumanMessage => $"New image available for deployment: {CurrentImage} → {LatestImage}";
+    public override string HumanMessage => $"New image available for deployment '{DeploymentName}': {CurrentImage} → {LatestImage}";
 }
 
-public record DeploymentAutoUpdatedAlertInfo(string PreviousImage, string UpdatedImage) : AlertEventInfo
+public record DeploymentAutoUpdatedAlertInfo(string DeploymentName, string PreviousImage, string UpdatedImage) : AlertEventInfo
 {
-    public override string HumanMessage => $"Deployment auto-updated: {PreviousImage} → {UpdatedImage}";
+    public override string HumanMessage => $"Deployment '{DeploymentName}' auto-updated: {PreviousImage} → {UpdatedImage}";
 }
 
-public record DeploymentFailedAlertInfo(string Reason) : AlertEventInfo
+public record DeploymentAutoDeployFailedAlertInfo(string DeploymentName, string Reason) : AlertEventInfo
 {
-    public override string HumanMessage => $"Deployment failed: {Reason}";
+    public override string HumanMessage => $"Deployment '{DeploymentName}' failed: {Reason}";
 }
 
-public record StackImageUpdateAvailableAlertInfo(string CurrentImage, string LatestImage) : AlertEventInfo
+public record StackImageUpdateAvailableAlertInfo(string StackName, string CurrentImage, string LatestImage) : AlertEventInfo
 {
-    public override string HumanMessage => $"New image available for stack: {CurrentImage} → {LatestImage}";
+    public override string HumanMessage => $"New image available for stack '{StackName}': {CurrentImage} → {LatestImage}";
 }
 
-public record StackAutoUpdatedAlertInfo(string PreviousImage, string UpdatedImage) : AlertEventInfo
+public record StackAutoUpdatedAlertInfo(string StackName, string PreviousImage, string UpdatedImage) : AlertEventInfo
 {
-    public override string HumanMessage => $"Stack auto-updated: {PreviousImage} → {UpdatedImage}";
+    public override string HumanMessage => $"Stack '{StackName}' auto-updated: {PreviousImage} → {UpdatedImage}";
 }
 
-public record StackDeployFailedAlertInfo(string Reason) : AlertEventInfo
+public record StackDeployFailedAlertInfo(string StackName, string Reason) : AlertEventInfo
 {
-    public override string HumanMessage => $"Stack deployment failed: {Reason}";
+    public override string HumanMessage => $"Stack '{StackName}' deployment failed: {Reason}";
 }

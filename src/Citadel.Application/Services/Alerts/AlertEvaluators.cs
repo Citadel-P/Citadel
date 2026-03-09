@@ -38,7 +38,7 @@ public sealed class PlatformCpuHighEvaluator : IAlertEvaluator
                 platform.Id,
                 platform.Name,
                 AlertResourceType.Platform,
-                new PlatformCpuHighAlertInfo(platform.CpuUsage)
+                new PlatformCpuHighAlertInfo(platform.Name, platform.CpuUsage)
             );
         }
     }
@@ -60,7 +60,7 @@ public sealed class PlatformRamHighEvaluator : IAlertEvaluator
                 platform.Id,
                 platform.Name,
                 AlertResourceType.Platform,
-                new PlatformRamHighAlertInfo(platform.RamUsage)
+                new PlatformRamHighAlertInfo(platform.Name, platform.RamUsage)
             );
         }
     }
@@ -81,7 +81,7 @@ public sealed class PlatformVersionMismatchEvaluator : IAlertEvaluator
                 platform.Id,
                 platform.Name,
                 AlertResourceType.Platform,
-                new PlatformVersionMismatchAlertInfo(platform.AgentVersion, Constants.CompatibilityVersion)
+                new PlatformVersionMismatchAlertInfo(platform.Name, platform.AgentVersion, Constants.CompatibilityVersion)
             );
         }
     }
@@ -90,10 +90,30 @@ public sealed class PlatformVersionMismatchEvaluator : IAlertEvaluator
        string.Compare(agentVersion, Constants.CompatibilityVersion, StringComparison.Ordinal) == 0;
 }
 
+[AlertEvaluator(AlertType.PlatformUnreachable)]
+public sealed class PlatformUnreachableEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.PlatformUnreachable;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        foreach (var platform in context.Platforms)
+        {
+            if (platform.IsOnline)
+                continue;
+
+            yield return new AlertMatch(
+                platform.Id,
+                platform.Name,
+                AlertResourceType.Platform,
+                new PlatformUnreachableAlertInfo(platform.Name, platform.Id, platform.Address));
+        }
+    }
+}
 
 #endregion
 
-    #region Deployment
+#region Deployment
 
 [AlertEvaluator(AlertType.DeploymentAutoDeployFailed)]
 public sealed class DeploymentFailedEvaluator : IAlertEvaluator
@@ -111,7 +131,7 @@ public sealed class DeploymentFailedEvaluator : IAlertEvaluator
                 deployment.Id,
                 deployment.Name,
                 AlertResourceType.Deployment,
-                new DeploymentFailedAlertInfo($"Deployment failed: {deployment.Raison}"));
+                new DeploymentAutoDeployFailedAlertInfo(deployment.Name, $"Deployment failed: {deployment.Raison}"));
         }
     }
 }
@@ -130,6 +150,7 @@ public sealed class DeploymentImageUpdateAvailableEvaluator : IAlertEvaluator
                 deployment.Name,
                 AlertResourceType.Deployment,
                 new DeploymentImageUpdateAvailableAlertInfo(
+                    deployment.Name,
                     deployment.PreviousImage,
                     deployment.LatestImage));
         }
@@ -150,6 +171,7 @@ public sealed class DeploymentAutoUpdatedEvaluator : IAlertEvaluator
                 deployment.Name,
                 AlertResourceType.Deployment,
                 new DeploymentAutoUpdatedAlertInfo(
+                    deployment.Name,
                     deployment.PreviousImage,
                     deployment.CurrentImage));
         }
@@ -175,7 +197,7 @@ public sealed class StackDeployFailedEvaluator : IAlertEvaluator
                 stack.Id,
                 stack.Name,
                 AlertResourceType.Stack,
-                new StackDeployFailedAlertInfo($"Stack deployment failed: {stack.Raison}"));
+                new StackDeployFailedAlertInfo(stack.Name, $"Stack deployment failed: {stack.Raison}"));
         }
     }
 }
@@ -194,6 +216,7 @@ public sealed class StackImageUpdateAvailableEvaluator : IAlertEvaluator
                 stack.Name,
                 AlertResourceType.Stack,
                 new StackImageUpdateAvailableAlertInfo(
+                    stack.Name,
                     stack.CurrentImage,
                     stack.LatestImage));
         }
@@ -214,6 +237,7 @@ public sealed class StackAutoUpdatedEvaluator : IAlertEvaluator
                 stack.Name,
                 AlertResourceType.Stack,
                 new StackAutoUpdatedAlertInfo(
+                    stack.Name,
                     stack.PreviousImage,
                     stack.CurrentImage));
         }

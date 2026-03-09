@@ -4,6 +4,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Images;
 using Domain.Entities.Deployments;
+using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -114,18 +115,85 @@ internal sealed class DeploymentAutoUpdateJob(
             );
         }
 
-        var context = new AlertEvaluationContext(
+        if (deployment.Spec?.UpdateBehavior == UpdateBehavior.Notify)
+        {
+            var context = new AlertEvaluationContext(
                 UtcNow: now,
                 Platforms: [],
-                Deployments: [
-                    new DeploymentAlertSnapshot(Id: deployment.Id, Name: deployment.Name, CurrentImage: currentDigest, PreviousImage: null, 
-                        LatestImage: remoteDigest, Failed: false)],
-                Stacks: []); 
+                Deployments:
+                [
+                    new DeploymentAlertSnapshot(
+                        Id: deployment.Id,
+                        Name: deployment.Name,
+                        CurrentImage: currentDigest,
+                        PreviousImage: null,
+                        LatestImage: remoteDigest,
+                        Failed: false)
+                ],
+                Stacks: []);
 
-        await alertService.ProcessAsync(
-               AlertType.DeploymentImageUpdateAvailable,
-               context,
-               cancellationToken);
+            await alertService.ProcessAsync(
+                AlertType.DeploymentImageUpdateAvailable,
+                context,
+                cancellationToken);
+        }
+        else
+        {
+            var autoDeployResult = await TryAutoDeploy(deployment.Id, cancellationToken);
+
+            if (!autoDeployResult.Success)
+            {
+                var reason = autoDeployResult.Error ?? "Auto-deploy failed.";
+
+                var failedContext = new AlertEvaluationContext(
+                    UtcNow: now,
+                    Platforms: [],
+                    Deployments:
+                    [
+                        new DeploymentAlertSnapshot(
+                            Id: deployment.Id,
+                            Name: deployment.Name,
+                            CurrentImage: currentDigest,
+                            PreviousImage: currentDigest,
+                            LatestImage: remoteDigest,
+                            Failed: true,
+                            Raison: reason)
+                    ],
+                    Stacks: []);
+
+                await alertService.ProcessAsync(
+                    AlertType.DeploymentAutoDeployFailed,
+                    failedContext,
+                    cancellationToken);
+
+                return new DeploymentAutoUpdateFailedWorkItem(deployment.Id, reason);
+            }
+
+            var updatedContext = new AlertEvaluationContext(
+                UtcNow: now,
+                Platforms: [],
+                Deployments:
+                [
+                    new DeploymentAlertSnapshot(
+                        Id: deployment.Id,
+                        Name: deployment.Name,
+                        CurrentImage: remoteDigest,
+                        PreviousImage: currentDigest,
+                        LatestImage: remoteDigest,
+                        Failed: false)
+                ],
+                Stacks: []);
+
+            await alertService.ProcessAsync(
+                AlertType.DeploymentAutoUpdated,
+                updatedContext,
+                cancellationToken);
+
+            return new DeploymentAutoUpdateStateWorkItem(
+                deployment.Id,
+                new AutoUpdateState(now, AutoUpdateStatus.UpToDate, remoteDigest, remoteDigest)
+            );
+        }
 
         logger.LogInformation(
             "Auto-update available for deployment {DeploymentId}: new digest detected.",
@@ -149,6 +217,33 @@ internal sealed class DeploymentAutoUpdateJob(
         repository = parts[0];
         tag = parts.Length > 1 ? parts[1] : "latest";
         return !string.IsNullOrWhiteSpace(repository);
+    }
+
+    private async Task<(bool Success, string? Error)> TryAutoDeploy(Guid deploymentId, CancellationToken cancellationToken)
+    {
+        string? error = null;
+
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var applyDeploymentService = scope.ServiceProvider.GetRequiredService<IApplyDeploymentService>();
+
+        await foreach (var item in applyDeploymentService.ApplyAsync(deploymentId, Constants.SystemId, recreate: true, cancellationToken))
+        {
+            if (!string.IsNullOrEmpty(item.ErrorMessage))
+            {
+                error = item.ErrorMessage;
+                break;
+            }
+
+            if (item.Error is not null)
+            {
+                error = item.Error.Message;
+                break;
+            }
+        }
+
+        return string.IsNullOrEmpty(error)
+            ? (true, null)
+            : (false, error);
     }
 }
 

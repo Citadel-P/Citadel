@@ -372,7 +372,7 @@ public static class AlertTypeMetadata
             (AlertType.UnmanagedContainerCreated, UnmanagedContainerCreatedAlertInfo) => true,
             (AlertType.DeploymentImageUpdateAvailable, DeploymentImageUpdateAvailableAlertInfo) => true,
             (AlertType.DeploymentAutoUpdated, DeploymentAutoUpdatedAlertInfo) => true,
-            (AlertType.DeploymentAutoDeployFailed, DeploymentFailedAlertInfo) => true,
+            (AlertType.DeploymentAutoDeployFailed, DeploymentAutoDeployFailedAlertInfo) => true,
             (AlertType.StackImageUpdateAvailable, StackImageUpdateAvailableAlertInfo) => true,
             (AlertType.StackAutoUpdated, StackAutoUpdatedAlertInfo) => true,
             (AlertType.StackAutoDeployFailed, StackDeployFailedAlertInfo) => true,

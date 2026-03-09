@@ -12,7 +12,7 @@ import {
 } from '@tanstack/react-table';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Loader from './loader';
 
 interface DataTableProps<TData, TValue> {
@@ -49,23 +49,12 @@ export function DataTable<TData extends Identifiable, TValue>({
     },
   });
 
-  const prevSelectionSig = useRef<string>('');
-
   useEffect(() => {
     if (onSelectionChange) {
       const selectedRows = table.getSelectedRowModel().rows.map((r) => r.original);
-      const selectionSig = selectedRows
-        .map((r) => r.id)
-        .filter(Boolean)
-        .sort()
-        .join(',');
-
-      if (selectionSig !== prevSelectionSig.current) {
-        prevSelectionSig.current = selectionSig;
-        onSelectionChange(selectedRows);
-      }
+      onSelectionChange(selectedRows);
     }
-  }, [rowSelection, data]);
+  }, [rowSelection, data, onSelectionChange, table]);
 
   return (
     <div className="rounded-none">
