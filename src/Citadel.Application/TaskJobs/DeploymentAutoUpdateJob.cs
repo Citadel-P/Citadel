@@ -2,7 +2,6 @@
 using Application.Services.Alerts;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Contracts.Resources.Images;
 using Domain.Entities.Deployments;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,13 +13,13 @@ namespace Application.TaskJobs;
 internal sealed class DeploymentAutoUpdateJob(
     IDbWorkQueue dbWorkQueue,
     IAlertService alertService,
+    IImageScanScheduler imageScanScheduler,
+    ImageDigestCache imageDigestCache,
     IServiceScopeFactory scopeFactory,
-    IPlatformContainerCache platformContainerCache,
     IDelayWithJitterService delayWithJitterService,
-    IConnectorFactory<IImageConnector> connectorFactory,
     ILogger<DeploymentAutoUpdateJob> logger) : BackgroundService
 {
-    private const int CheckIntervalInHours = 3;
+    private const int CheckIntervalInHours = 2;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
         => delayWithJitterService.DelayWithJitterForAsync(RunPeriodicAutoUpdate, cancellationToken: stoppingToken);
@@ -31,15 +30,20 @@ internal sealed class DeploymentAutoUpdateJob(
         {
             try
             {
-                var deployments = await GetDeploymentsAsync(cancellationToken);
-
-                foreach (var deployment in deployments)
+                var deploymentChecks = await imageScanScheduler.LoadDeploymentChecksAsync(cancellationToken);
+                foreach (var deploymentCheck in deploymentChecks)
                 {
-                    var result = await CheckDeploymentAsync(deployment, cancellationToken);
-
-                    if (result is not null)
+                    try
                     {
-                        await dbWorkQueue.EnqueueAsync(result, cancellationToken);
+                        var result = await CheckDeploymentAsync(deploymentCheck, cancellationToken);
+                        if (result is not null)
+                        {
+                            await dbWorkQueue.EnqueueAsync(result, cancellationToken);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Auto-update failed for deployment {DeploymentId}", deploymentCheck.Deployment.Id);
                     }
                 }
             }
@@ -52,58 +56,19 @@ internal sealed class DeploymentAutoUpdateJob(
         }
     }
 
-    private async Task<IEnumerable<Deployment>> GetDeploymentsAsync(CancellationToken cancellationToken)
+    private async Task<IDbWorkItem?> CheckDeploymentAsync(
+        DeploymentImageCheck deploymentCheck,
+        CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var deployment = deploymentCheck.Deployment;
+        var deployedImage = deploymentCheck.DeployedImage;
 
-        return await uow.Deployments.GetAllAsync(cancellationToken) ?? [];
-    }
-
-    private async Task<IDbWorkItem?> CheckDeploymentAsync(Deployment deployment, CancellationToken cancellationToken)
-    {
-        if (deployment.Spec?.UpdateBehavior == UpdateBehavior.Disabled)
+        if (!imageDigestCache.TryGet(deploymentCheck.Key, out var digestEntry))
             return null;
 
-        if (deployment.Spec?.Image is not ExternalImage external)
-            return null;
-
-        if (!TrySplitImageTag(external.ImageTag, out var repository, out _))
-        {
-            return new DeploymentAutoUpdateFailedWorkItem(deployment.Id, "Invalid image tag.");
-        }
-
-        if (!platformContainerCache.TryGetCacheEntry(deployment.PlatformId, out var platform, out _))
-        {
-            return new DeploymentAutoUpdateFailedWorkItem(deployment.Id, "Platform unavailable or disconnected.");
-        }
-
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-        var registry = await uow.Registries.GetAsync(external.RegistryId, cancellationToken);
-        if (registry == null || registry.Status != RegistryStatus.Active)
-        {
-            return new DeploymentAutoUpdateFailedWorkItem(deployment.Id, "Registry unavailable or inactive.");
-        }
-
-        string registryDomain = registry.RegistryHost.Replace("https://", "").ToLower();
-        string? auth = registry.Configuration.GetRegistryAuth(registryDomain);
-
-        var repositoryName = repository.Split('/', StringSplitOptions.RemoveEmptyEntries).Last();
-
-        var connector = connectorFactory.GetConnector(platform.ConnectorType);
-        var cmd = new DistributionInspectCommand(platform.Address, repositoryName, auth);
-
-        var inspectResult = await connector.DistributionInspectAsync(cmd, cancellationToken);
-        if (inspectResult.IsFailure(out var error, out var inspect))
-        {
-            return new DeploymentAutoUpdateFailedWorkItem(deployment.Id, error.Message);
-        }
-
-        var remoteDigest = inspect.Descriptor.Digest;
-        var currentDigest = deployment.Container?.DockerImageId;
-        var matchedTag = string.Compare(remoteDigest, currentDigest, StringComparison.OrdinalIgnoreCase) == 0;
+        var remoteDigest = digestEntry.Digest;
+        var currentDigest = deployedImage.ResolvedDigest;
+        var matchedTag = remoteDigest.Equals(currentDigest, StringComparison.OrdinalIgnoreCase);
 
         var now = DateTime.UtcNow;
 
@@ -136,14 +101,23 @@ internal sealed class DeploymentAutoUpdateJob(
                 AlertType.DeploymentImageUpdateAvailable,
                 context,
                 cancellationToken);
+
+            logger.LogInformation(
+                "Auto-update available for deployment {DeploymentId}: new digest detected.",
+                deployment.Id);
+
+            return new DeploymentAutoUpdateStateWorkItem(
+                deployment.Id,
+                new AutoUpdateState(now, AutoUpdateStatus.UpdateAvailable, currentDigest, remoteDigest)
+            );
         }
         else
         {
-            var autoDeployResult = await TryAutoDeploy(deployment.Id, cancellationToken);
+            var (Success, Error) = await TryAutoDeploy(deployment.Id, cancellationToken);
 
-            if (!autoDeployResult.Success)
+            if (!Success)
             {
-                var reason = autoDeployResult.Error ?? "Auto-deploy failed.";
+                var reason = Error ?? "Auto-deploy failed.";
 
                 var failedContext = new AlertEvaluationContext(
                     UtcNow: now,
@@ -194,29 +168,6 @@ internal sealed class DeploymentAutoUpdateJob(
                 new AutoUpdateState(now, AutoUpdateStatus.UpToDate, remoteDigest, remoteDigest)
             );
         }
-
-        logger.LogInformation(
-            "Auto-update available for deployment {DeploymentId}: new digest detected.",
-            deployment.Id);
-
-        return new DeploymentAutoUpdateStateWorkItem(
-            deployment.Id,
-            new AutoUpdateState(now, AutoUpdateStatus.UpdateAvailable, currentDigest, remoteDigest)
-        );
-    }
-
-    private static bool TrySplitImageTag(string imageTag, out string repository, out string tag)
-    {
-        repository = string.Empty;
-        tag = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(imageTag) || imageTag.Contains('@'))
-            return false;
-
-        var parts = imageTag.Split(':', 2, StringSplitOptions.RemoveEmptyEntries);
-        repository = parts[0];
-        tag = parts.Length > 1 ? parts[1] : "latest";
-        return !string.IsNullOrWhiteSpace(repository);
     }
 
     private async Task<(bool Success, string? Error)> TryAutoDeploy(Guid deploymentId, CancellationToken cancellationToken)
@@ -226,19 +177,26 @@ internal sealed class DeploymentAutoUpdateJob(
         await using var scope = scopeFactory.CreateAsyncScope();
         var applyDeploymentService = scope.ServiceProvider.GetRequiredService<IApplyDeploymentService>();
 
-        await foreach (var item in applyDeploymentService.ApplyAsync(deploymentId, Constants.SystemId, recreate: true, cancellationToken))
+        try
         {
-            if (!string.IsNullOrEmpty(item.ErrorMessage))
+            await foreach (var item in applyDeploymentService.ApplyAsync(deploymentId, Constants.SystemId, recreate: true, cancellationToken))
             {
-                error = item.ErrorMessage;
-                break;
-            }
+                if (!string.IsNullOrEmpty(item.ErrorMessage))
+                {
+                    error = item.ErrorMessage;
+                    break;
+                }
 
-            if (item.Error is not null)
-            {
-                error = item.Error.Message;
-                break;
+                if (item.Error is not null)
+                {
+                    error = item.Error.Message;
+                    break;
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
         }
 
         return string.IsNullOrEmpty(error)

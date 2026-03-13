@@ -32,6 +32,7 @@ public class EventAlertTests : IntegrationTestBase
     private readonly Mock<IDelayWithJitterService> _delayWithJitter = new();
     private readonly Mock<IPlatformContainerCache> _platformCach = new();
 
+    private Func<CancellationToken, Task>? _runImageScannerJob;
     private Func<CancellationToken, Task>? _runAutoUpdateJob;
 
     private Guid _platformId;
@@ -46,6 +47,7 @@ public class EventAlertTests : IntegrationTestBase
         services.RemoveAll<IPlatformContainerCache>();
 
         services
+            .AddHostedService<DeploymentImageScannerJob>()
             .AddHostedService<DeploymentAutoUpdateJob>()
             .AddHostedService<DbWriteWorker>()
             .AddHostedService<NotificationWorker>()
@@ -77,7 +79,14 @@ public class EventAlertTests : IntegrationTestBase
                                                  It.IsAny<CancellationToken>()))
            .Returns<Func<CancellationToken, Task>, TimeSpan, CancellationToken>((func, _, __) =>
            {
-               _runAutoUpdateJob = func;
+               if (_runImageScannerJob is null)
+               {
+                   _runImageScannerJob = func;
+               }
+               else
+               {
+                   _runAutoUpdateJob = func;
+               }
                return Task.CompletedTask;
            });
     }
@@ -269,15 +278,21 @@ public class EventAlertTests : IntegrationTestBase
 
     private async Task RunAutoUpdateJobOnceAsync(CancellationToken cancellationToken)
     {
-        if (_runAutoUpdateJob is null)
-            throw new InvalidOperationException("Deployment auto-update job was not initialized.");
+        if (_runImageScannerJob is null || _runAutoUpdateJob is null)
+            throw new InvalidOperationException("Deployment image scanner or auto-update job was not initialized.");
 
+        await RunScheduledJobOnceAsync(_runImageScannerJob, cancellationToken);
+        await RunScheduledJobOnceAsync(_runAutoUpdateJob, cancellationToken);
+    }
+
+    private static async Task RunScheduledJobOnceAsync(Func<CancellationToken, Task> job, CancellationToken cancellationToken)
+    {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(TimeSpan.FromSeconds(1));
 
         try
         {
-            await _runAutoUpdateJob(cts.Token);
+            await job(cts.Token);
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {

@@ -64,7 +64,8 @@ internal class PullImageService(
         }
 
         var imageEntity = image.Map(platform.Id, registry);
-        yield return new PullImageStreamItem(DockerImageId: imageEntity.DockerImageId);
+        var digest = image.RepoDigests?.Select(x => x.Split('@')[1]).FirstOrDefault();
+        yield return new PullImageStreamItem(DockerImageId: imageEntity.DockerImageId, Digest: digest);
 
         var workItem = new PersistPulledImageWorkItem(
             imageEntity,

@@ -23,8 +23,7 @@ public sealed record DeploymentSpec(
 public abstract record DeploymentImageInfo;
 
 public sealed record LocalImage(string ImageId) : DeploymentImageInfo;
-public sealed record ExternalImage(Guid RegistryId, string ImageTag) : DeploymentImageInfo;
-
+public sealed record ExternalImage(Guid RegistryId, string ImageTag, string? ResolvedDigest = null) : DeploymentImageInfo;
 public sealed record ResourceSpec(
     float? NanoCpus,
     float? MemoryLimit

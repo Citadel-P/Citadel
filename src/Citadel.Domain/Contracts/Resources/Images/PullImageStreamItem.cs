@@ -8,6 +8,7 @@ public record PullImageStreamItem(
     string? ErrorMessage = null,
     string? ProgressMessage = null,
     string? DockerImageId = null,
+    string? Digest = null,
     ImagePullProgress? Progress = null,
     ImagePullError? Error = null
 );

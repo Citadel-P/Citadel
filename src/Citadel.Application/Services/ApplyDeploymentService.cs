@@ -55,6 +55,7 @@ internal sealed class ApplyDeploymentService(
         await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Applying, null, ct);
 
         string? imageId = null;
+        string? digest = null;
 
         if (deployment.Spec.Image is LocalImage local)
         {
@@ -92,6 +93,7 @@ internal sealed class ApplyDeploymentService(
 
                 if (!string.IsNullOrEmpty(item.DockerImageId))
                 {
+                    digest = item.Digest;
                     imageId = item.DockerImageId;
                 }
             }
@@ -148,6 +150,7 @@ internal sealed class ApplyDeploymentService(
                 deployment.Id,
                 actorId,
                 deploymentResult.ContainerId,
+                digest ?? "",
                 deploymentHub,
                 activityHub,
                 notificationQueue),
@@ -274,7 +277,7 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid act
     }
 }
 
-internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, Guid actorId, string containerId,
+internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, Guid actorId, string containerId, string imageDigest,
     IDeploymentStreamManager deploymentHub, IActivityStreamManager activityHub, INotificationQueue notificationQueue) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
@@ -286,6 +289,15 @@ internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, Guid actorI
 
         container.PartialUpdate(deploymentId: deployment.Id);
         deployment.PartialUpdate(status: DeploymentStatus.Healthy, container: container);
+        // Update the deployed image with the resolved digest 
+        if (!string.IsNullOrEmpty(imageDigest) && deployment.Spec?.Image is ExternalImage extImage)
+        {
+            deployment.PartialUpdate(spec: deployment.Spec with { Image = new ExternalImage(
+                RegistryId: extImage.RegistryId,
+                ImageTag: extImage.ImageTag,
+                ResolvedDigest: imageDigest
+                ) });
+        }
 
         await uow.Containers.UpdateAsync(container, ct);
         await uow.Deployments.UpdateAsync(deployment, ct);

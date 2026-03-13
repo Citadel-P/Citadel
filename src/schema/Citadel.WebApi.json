@@ -9159,6 +9159,12 @@
           },
           "imageTag": {
             "type": "string"
+          },
+          "resolvedDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -12343,6 +12349,12 @@
             ]
           },
           "dockerImageId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "digest": {
             "type": [
               "null",
               "string"

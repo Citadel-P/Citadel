@@ -50,17 +50,9 @@ internal class RegistryRepository(IDbConnection db, Func<IDbTransaction> tx) : I
 
     public async Task<IEnumerable<Registry>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
-        try
-        {
-
-            const string sql = "SELECT * FROM Registries r WHERE r.Id IN (SELECT value FROM json_each(@Ids))";
-            var result = await db.QueryAsync<RegistryDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
-            return result.ToDomain();
-        }
-        catch (Exception ex)
-        {
-            throw ex;
-        }
+        const string sql = "SELECT * FROM Registries r WHERE r.Id IN (SELECT value FROM json_each(@Ids))";
+        var result = await db.QueryAsync<RegistryDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
+        return result.ToDomain();
     }
 
     public async Task<Registry?> GetByNameAsync(string name, CancellationToken cancellationToken)
