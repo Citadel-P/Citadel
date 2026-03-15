@@ -111,6 +111,27 @@ public sealed class PlatformUnreachableEvaluator : IAlertEvaluator
     }
 }
 
+[AlertEvaluator(AlertType.UnmanagedContainerCreated)]
+public sealed class UnmanagedContainerCreatedEvaluator : IAlertEvaluator
+{
+    public AlertType Type => AlertType.UnmanagedContainerCreated;
+
+    public IEnumerable<AlertMatch> Evaluate(AlertRule rule, AlertEvaluationContext context)
+    {
+        if (context.Containers is null)
+            yield break;
+
+        foreach (var container in context.Containers)
+        {
+            yield return new AlertMatch(
+                container.PlatformId,
+                container.PlatformName,
+                AlertResourceType.Platform,
+                new UnmanagedContainerCreatedAlertInfo(container.PlatformName, container.PlatformAddress, container.Name));
+        }
+    }
+}
+
 #endregion
 
 #region Deployment

@@ -6,6 +6,7 @@ using Domain.Contracts.Resources.Containers;
 using Domain.Entities;
 using Domain.Entities.Deployments;
 using Microsoft.Extensions.Logging;
+using System.Threading.Channels;
 
 namespace Application.TaskJobs.WorkItems;
 
@@ -13,6 +14,7 @@ internal sealed class ContainerCreatedWorkItem(
     DaemonContainerEventInfo eventInfo,
     Guid platformId,
     INotificationQueue notificationQueue,
+    ChannelWriter<UnmanagedContainerAlertRequest> unmanagedContainerAlertWriter,
     IDockerDaemonStreamManager dockerDaemonHub,
     IPlatformContainerCache platformContainerCache,
     IContainerEventBroadcaster containerEventBroadcaster,
@@ -71,6 +73,13 @@ internal sealed class ContainerCreatedWorkItem(
                 containerEventBroadcaster);
 
             await notificationQueue.EnqueueAsync(notificationItem, cancellationToken);
+
+            if (container.DeploymentId is null) // Todo: && container.StackId is null
+            {
+                await unmanagedContainerAlertWriter.WriteAsync(
+                    new UnmanagedContainerAlertRequest(platformId, container.DockerContainerId),
+                    cancellationToken);
+            }
 
         }
         catch (Exception ex)

@@ -21,6 +21,7 @@ internal sealed class DockerDaemonEventJob(
     IPlatformHealthBroadCaster platformHealthBroadCaster,
     IContainerEventBroadcaster containerEventBroadcaster,
     INotificationQueue notificationQueue,
+    ChannelWriter<UnmanagedContainerAlertRequest> unmanagedContainerAlertWriter,
     IImageStreamManager imageStream,
     IDeploymentStreamManager deploymentHub,
     IDbWorkQueue dbWorkQueue) : BackgroundService
@@ -139,6 +140,7 @@ internal sealed class DockerDaemonEventJob(
             eventInfo,
             platformId,
             notificationQueue,
+            unmanagedContainerAlertWriter,
             dockerDaemonHub,
             platformContainerCache,
             containerEventBroadcaster, logger);

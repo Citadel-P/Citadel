@@ -97,6 +97,7 @@ public static class ApplicationModule
             .AddHostedService<PlatformSyncJob>()
             .AddHostedService<PlatformStatsStreamerJob>()
             .AddHostedService<ContainerStatsStreamerJob>()
+            .AddHostedService<UnmanagedContainerAlertJob>()
             .AddHostedService<DeploymentImageScannerJob>()
             .AddHostedService<DeploymentAutoUpdateJob>()
             .AddHostedService<PlatformStatsWriterJob>()
@@ -112,6 +113,9 @@ public static class ApplicationModule
             .AddSingleton(Channel.CreateBounded<ContainersStatBatch>(Helpers.ChannelDefaultOptions()))
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader)
+            .AddSingleton(Channel.CreateBounded<UnmanagedContainerAlertRequest>(Helpers.ChannelDefaultOptions()))
+            .AddSingleton(s => s.GetRequiredService<Channel<UnmanagedContainerAlertRequest>>().Writer)
+            .AddSingleton(s => s.GetRequiredService<Channel<UnmanagedContainerAlertRequest>>().Reader)
             .AddSingleton(Channel.CreateBounded<(Guid Id, PlatformStatsResult Stats)>(Helpers.ChannelDefaultOptions()))
             .AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<(Guid Id, PlatformStatsResult Stats)>>().Reader);

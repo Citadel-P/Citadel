@@ -79,11 +79,11 @@ public class EventAlertTests : IntegrationTestBase
                                                  It.IsAny<CancellationToken>()))
            .Returns<Func<CancellationToken, Task>, TimeSpan, CancellationToken>((func, _, __) =>
            {
-               if (_runImageScannerJob is null)
+               if (func.Method.Name == "RunPeriodicScanAsync")
                {
                    _runImageScannerJob = func;
                }
-               else
+               else if (func.Method.Name == "RunPeriodicAutoUpdate")
                {
                    _runAutoUpdateJob = func;
                }
@@ -279,6 +279,12 @@ public class EventAlertTests : IntegrationTestBase
 
     private async Task RunAutoUpdateJobOnceAsync(CancellationToken cancellationToken)
     {
+        var start = DateTime.UtcNow;
+        while ((_runImageScannerJob is null || _runAutoUpdateJob is null) && DateTime.UtcNow - start < TimeSpan.FromSeconds(2))
+        {
+            await Task.Delay(50, cancellationToken);
+        }
+
         if (_runImageScannerJob is null || _runAutoUpdateJob is null)
             throw new InvalidOperationException("Deployment image scanner or auto-update job was not initialized.");
 
