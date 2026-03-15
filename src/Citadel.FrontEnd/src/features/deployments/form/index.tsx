@@ -2,25 +2,29 @@ import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
 import { DeploymentForm } from './form';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { DeploymentActions } from './actions';
+import { useState } from 'react';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { useDeploymentGroup } from './hooks/useDeploymentGroup';
 import {
+  AutoUpdateStatus,
   ContainerStateStatus,
   DeploymentStatus,
   DeploymentView,
   ResourceControlState,
+  UpdateBehavior,
 } from '@/api/generated/api.types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ContainerLogs } from '@/features/docker-resources/containers/container-info/container-logs';
 import { DockerContainerView } from '@/api/types';
 import ContainerInspect from '@/features/docker-resources/containers/container-info/container-inspect';
-import { normalizeDockerId } from '@/lib/utils';
+import { formatId, normalizeDockerId } from '@/lib/utils';
 import { ContainerInfoTable } from '@/features/docker-resources/containers/container-info/container-info-table';
 import { useContainerInfoGroup } from '@/features/docker-resources/containers/hooks/useContainerInfoGroup';
 import Loader from '@/components/ui/loader';
 import { ContainerExec } from '@/features/docker-resources/containers/container-info/container-exec';
 import { ContainerStats } from '@/features/docker-resources/containers/container-info/container-stats';
 import { ActivitiesTab } from '@/features/activities';
+import { ArrowRight, ArrowUpCircle, X } from 'lucide-react';
 
 export const DeploymentFormComponents: RequiredFormComponents = {
   AddForm: {
@@ -41,6 +45,9 @@ export const DeploymentFormComponents: RequiredFormComponents = {
       ActionButtons: ({ resource }) => {
         return <GenericActionBarButtons resource={resource} actions={Object.values(DeploymentActions)} />;
       },
+    },
+    SubHeader: ({ resource }: { resource: DeploymentView }) => {
+      return <DeploymentUpdateNotice deployment={resource} />;
     },
     Tabs: [
       {
@@ -69,6 +76,51 @@ export const DeploymentFormComponents: RequiredFormComponents = {
       return { item: deployment, isLoading };
     },
   },
+};
+
+const DeploymentUpdateNotice = ({ deployment }: { deployment: DeploymentView }) => {
+  const [dismissed, setDismissed] = useState(false);
+  if (
+    dismissed ||
+    deployment.spec?.updateBehavior === UpdateBehavior.Disabled ||
+    deployment.autoUpdateState.status !== AutoUpdateStatus.UpdateAvailable
+  ) {
+    return null;
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-md border border-amber-200 bg-amber-50/50 px-4 py-3 ">
+      <div className="flex items-center gap-3 overflow-hidden">
+        <ArrowUpCircle className="h-4 w-4 shrink-0 text-amber-500" />
+        <div className="flex items-center gap-2 truncate text-sm text-muted-foreground">
+          <span className="font-mono text-foreground/80 ">Update available: </span>
+          <span className="truncate ">
+            Click <span className="font-mono text-foreground/80">Redeploy</span> to apply the update to this deployment.
+          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span
+              className=" text-xs text-muted-foreground line-through"
+              title={deployment.autoUpdateState.currentDigest ?? deployment.name}>
+              {formatId(deployment.autoUpdateState.currentDigest ?? undefined)}
+            </span>
+            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+            <span
+              className="text-xs font-medium text-amber-700"
+              title={deployment.autoUpdateState.remoteDigest ?? deployment.name}>
+              {formatId(deployment.autoUpdateState.remoteDigest ?? undefined)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <button
+        onClick={() => setDismissed(true)}
+        className="shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-amber-100/50 hover:text-slate-600"
+        aria-label="Dismiss">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
 };
 
 const DeploymentRuntime = ({ deployment }: { deployment: DeploymentView }) => {

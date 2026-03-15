@@ -141,6 +141,10 @@ public sealed class AlertRule : IAuditedEntity
         if (limitedTo is not null) _limitedTo.AddRange(limitedTo);
         _quietHours.Clear();
         if (quietHours is not null) _quietHours.AddRange(quietHours);
+
+        ValidateThresholdConfiguration();
+        ValidateResourceCompatibility();
+        ValidateQuietHours();
     }
 
     public bool CanTrigger(DateTime utcNow, AlertRuleState? state)

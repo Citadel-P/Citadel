@@ -9490,6 +9490,12 @@
               "null",
               "string"
             ]
+          },
+          "dockerImageId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

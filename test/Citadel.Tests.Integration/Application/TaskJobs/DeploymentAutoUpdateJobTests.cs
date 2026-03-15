@@ -21,6 +21,7 @@ public class DeploymentAutoUpdateJobTests : IntegrationTestBase
 
     private Func<CancellationToken, Task>? _runAutoUpdateJob;
     private Guid _deploymentId;
+    private Guid _platformId;
 
     protected override void ConfigureTestServices(IServiceCollection services)
     {
@@ -56,6 +57,7 @@ public class DeploymentAutoUpdateJobTests : IntegrationTestBase
         await uow.CommitAsync(TestContext.Current.CancellationToken);
 
         _deploymentId = deployment.Id;
+        _platformId = platform.Id;
     }
 
     [Fact]
@@ -136,6 +138,8 @@ public class DeploymentAutoUpdateJobTests : IntegrationTestBase
     {
         if (_runAutoUpdateJob is null)
             throw new InvalidOperationException("Deployment auto-update job was not initialized.");
+
+        Services.GetRequiredService<ISyncBarrier>().MarkSynced<DeploymentImageScannerJob>(_platformId);
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(TimeSpan.FromSeconds(1));

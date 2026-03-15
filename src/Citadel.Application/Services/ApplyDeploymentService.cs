@@ -9,6 +9,7 @@ using Domain.Contracts.Resources.Deployments;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Deployments;
+using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Application.Services;
@@ -22,6 +23,7 @@ internal sealed class ApplyDeploymentService(
     IDbWorkQueue dbWorkQueue,
     IServiceScopeFactory scopeFactory,
     IPullImageService pullImageService,
+    ImageDigestCache imageDigestCache,
     INotificationQueue notificationQueue,
     IPlatformContainerCache platformCache,
     IDeploymentStreamManager deploymentHub,
@@ -47,12 +49,12 @@ internal sealed class ApplyDeploymentService(
         if (!platformCache.TryGetCacheEntry(deployment.PlatformId, out var platform, out _))
         {
             var message = "Platform not found or disconnected.";
-            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, message, ct);
+            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, message, ct: ct);
             yield return Error(404, message);
             yield break;
         }
 
-        await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Applying, null, ct);
+        await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Applying, null, ct: ct);
 
         string? imageId = null;
         string? digest = null;
@@ -87,7 +89,7 @@ internal sealed class ApplyDeploymentService(
 
                 if (!string.IsNullOrEmpty(item.ErrorMessage))
                 {
-                    await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, item.ErrorMessage, ct);
+                    await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, item.ErrorMessage, ct: ct);
                     yield break;
                 }
 
@@ -102,7 +104,7 @@ internal sealed class ApplyDeploymentService(
         if (string.IsNullOrEmpty(imageId))
         {
             var message = "Image ID could not be resolved.";
-            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, message, ct);
+            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, message, ct: ct);
             yield return Error(400, message);
             yield break;
         }
@@ -130,17 +132,19 @@ internal sealed class ApplyDeploymentService(
         var result = await connector.ApplyDeploymentAsync(commandToApply, ct);
         if (!result.IsSuccess(out var deploymentResult, out var error))
         {
-            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, error.Message, ct);
+            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, error.Message, ct: ct);
             yield return Error(500, error.Message);
             yield break;
         }
 
         yield return Info($"Container created: {deploymentResult.ContainerId}");
 
+        var autoUpdateState = ResolveAutoUpdateState(deployment, digest);
+
         if (deploymentResult.DeployedContainerState != DeployedContainerState.Running)
         {
             var message = $"Deployment failed: container did not start successfully - Container state: {deploymentResult.DeployedContainerState}";
-            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, message, ct);
+            await EnqueueStatus(deployment.Id, actorId, DeploymentStatus.Failed, message, deploymentResult.ContainerId, autoUpdateState, ct);
             yield return Error(422, message);
             yield break;
         }
@@ -151,6 +155,7 @@ internal sealed class ApplyDeploymentService(
                 actorId,
                 deploymentResult.ContainerId,
                 digest ?? "",
+                autoUpdateState,
                 deploymentHub,
                 activityHub,
                 notificationQueue),
@@ -184,21 +189,48 @@ internal sealed class ApplyDeploymentService(
     private static DeploymentStreamItem Error(int code, string message)
         => new(ErrorMessage: $"❌ {message}", Error: new DeploymentApplyError(code, $"❌ {message}"));
 
-    private async Task EnqueueStatus(Guid deploymentId, Guid actorId, DeploymentStatus status, string? message, CancellationToken ct, bool notifyClients = true)
+    private AutoUpdateState? ResolveAutoUpdateState(Deployment deployment, string? imageDigest)
     {
-        await dbWorkQueue.EnqueueAsync(
+        if (string.IsNullOrEmpty(imageDigest)
+            || deployment.Spec?.Image is not ExternalImage externalImage
+            || deployment.Spec.UpdateBehavior == UpdateBehavior.Disabled
+            || !Helpers.TrySplitImageTag(externalImage.ImageTag, out var repository, out var tag))
+        {
+            return null;
+        }
+
+        var remoteDigest = imageDigest;
+        var status = AutoUpdateStatus.UpToDate;
+
+        if (imageDigestCache.TryGet(new ImageKey(externalImage.RegistryId, repository, tag), out var digestEntry))
+        {
+            remoteDigest = digestEntry.Digest;
+            status = string.Equals(remoteDigest, imageDigest, StringComparison.OrdinalIgnoreCase)
+                ? AutoUpdateStatus.UpToDate
+                : AutoUpdateStatus.UpdateAvailable;
+        }
+
+        return new AutoUpdateState(
+            LastCheckedAt: DateTime.UtcNow,
+            Status: status,
+            CurrentDigest: imageDigest,
+            RemoteDigest: remoteDigest);
+    }
+
+    private ValueTask EnqueueStatus(Guid deploymentId, Guid actorId, DeploymentStatus status, string? message, string? containerId = null, AutoUpdateState? autoUpdateState = null, CancellationToken ct = default) 
+        => dbWorkQueue.EnqueueAsync(
             new UpdateDeploymentStatusWorkItem(
                 deploymentId,
                 actorId,
                 status,
                 message,
+                containerId,
+                autoUpdateState,
                 deploymentHub,
                 activityHub,
-                notificationQueue,
-                notifyClients),
+                notificationQueue),
             ct);
-    }
-
+    
     private async Task<Deployment?> LoadDeployment(Guid id, CancellationToken ct)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
@@ -231,17 +263,28 @@ internal sealed class ApplyDeploymentService(
     }
 }
 
-
-internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid actorId, DeploymentStatus status, string? message, IDeploymentStreamManager deploymentHub,
-    IActivityStreamManager activityHub, INotificationQueue notificationQueue, bool notifyClients = true) : IDbWorkItem
+internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid actorId, DeploymentStatus status, string? message, string? containerId, AutoUpdateState? autoUpdateState, IDeploymentStreamManager deploymentHub,
+    IActivityStreamManager activityHub, INotificationQueue notificationQueue) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
         var deployment = await uow.Deployments.GetAsync(deploymentId, ct);
         if (deployment is null) return;
 
-        deployment.PartialUpdate(status: status);
+        Container? container = null;
+        if (!string.IsNullOrEmpty(containerId))
+        {
+            container = await uow.Containers.GetByIdAsync(containerId, ct);
+            if (container is not null)
+            {
+                container.PartialUpdate(deploymentId: deployment.Id);
+                deployment.PartialUpdate(container: container);
+            }
+        }
+
+        deployment.PartialUpdate(status: status, autoUpdateState: autoUpdateState);
         await uow.Deployments.UpdateAsync(deployment, ct);
+        if (container != null) await uow.Containers.UpdateAsync(container, ct);
 
         // Add activity event
         ActivityEvent? activity = null;
@@ -263,13 +306,10 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid act
         await uow.CommitAsync(ct);
 
         // Push notifications
-        if (notifyClients)
-        {
-            var deploymentWorkItem = new DeploymentNotificationWorkItem(deploymentHub, deployment);
-            await notificationQueue.EnqueueAsync(deploymentWorkItem, ct);
-        }
+        var deploymentWorkItem = new DeploymentNotificationWorkItem(deploymentHub, deployment);
+        await notificationQueue.EnqueueAsync(deploymentWorkItem, ct);
 
-        if (activity is not null && notifyClients)
+        if (activity is not null)
         {
             var activityWorkItem = new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(uow, ct));
             await notificationQueue.EnqueueAsync(activityWorkItem, ct);
@@ -277,8 +317,10 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid act
     }
 }
 
-internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, Guid actorId, string containerId, string imageDigest,
-    IDeploymentStreamManager deploymentHub, IActivityStreamManager activityHub, INotificationQueue notificationQueue) : IDbWorkItem
+internal sealed class DeploymentSucceededWorkItem(
+    Guid deploymentId, Guid actorId, string containerId, string imageDigest, AutoUpdateState? autoUpdateState, 
+    IDeploymentStreamManager deploymentHub, IActivityStreamManager activityHub, 
+    INotificationQueue notificationQueue) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken ct)
     {
@@ -288,15 +330,16 @@ internal sealed class DeploymentSucceededWorkItem(Guid deploymentId, Guid actorI
         if (deployment is null || container is null) return;
 
         container.PartialUpdate(deploymentId: deployment.Id);
-        deployment.PartialUpdate(status: DeploymentStatus.Healthy, container: container);
-        // Update the deployed image with the resolved digest 
+        deployment.PartialUpdate(status: DeploymentStatus.Healthy, container: container, autoUpdateState: autoUpdateState);
+
         if (!string.IsNullOrEmpty(imageDigest) && deployment.Spec?.Image is ExternalImage extImage)
         {
-            deployment.PartialUpdate(spec: deployment.Spec with { Image = new ExternalImage(
-                RegistryId: extImage.RegistryId,
-                ImageTag: extImage.ImageTag,
-                ResolvedDigest: imageDigest
-                ) });
+            deployment.PartialUpdate(
+                spec: deployment.Spec with { Image = new ExternalImage(
+                    RegistryId: extImage.RegistryId,
+                    ImageTag: extImage.ImageTag,
+                    ResolvedDigest: imageDigest)
+                });
         }
 
         await uow.Containers.UpdateAsync(container, ct);

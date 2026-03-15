@@ -9159,6 +9159,12 @@
           },
           "imageTag": {
             "type": "string"
+          },
+          "resolvedDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -9480,6 +9486,12 @@
             "format": "uuid"
           },
           "dockerContainerId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dockerImageId": {
             "type": [
               "null",
               "string"
@@ -12343,6 +12355,12 @@
             ]
           },
           "dockerImageId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "digest": {
             "type": [
               "null",
               "string"

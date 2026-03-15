@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { DeploymentView, ResourceControlState } from '@/api/generated/api.types';
+import { AutoUpdateStatus, DeploymentView, ResourceControlState } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -13,6 +13,8 @@ import { ContentCard } from '@/components/custom/content-card';
 import { HardDrive } from 'lucide-react';
 import { formatId } from '@/lib/utils';
 import { PlatformStatusCell, UPDATE_STATUS_UI, UpdateStatusIcon } from '@/components/custom/common';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { fromNow } from '@/lib/dayjs.helper';
 
 export const DeploymentsTable = ({
   items,
@@ -76,7 +78,7 @@ const columns = (
         <div className="flex flex-row items-center gap-2">
           <HardDrive width={13} height={13} className="text-foreground/80" />
           <Link
-            to={`/platforms/${row.original.platformId}/images/${formatId(row.original.imageId ?? '')}`}
+            to={`/platforms/${row.original.platformId}/images/${formatId(row.original.dockerImageId ?? '')}`}
             className="table-link">
             {row.original.imageName}
           </Link>
@@ -88,17 +90,7 @@ const columns = (
   {
     accessorKey: 'updateStatus',
     header: ({ column }) => <SortableCell cellName="Update Status" column={column} />,
-    cell: ({ row }) => {
-      const status = row.original.autoUpdateState.status;
-      const { label } = UPDATE_STATUS_UI[status];
-
-      return (
-        <div className="flex items-center gap-2">
-          <UpdateStatusIcon updateStatus={status} />
-          <span>{label}</span>
-        </div>
-      );
-    },
+    cell: ({ row }) => <DeploymentUpdateStatusCell deployment={row.original} />,
     sortingFn: (rowA, rowB) => (rowA.original.autoUpdateState.status! < rowB.original.autoUpdateState.status! ? 1 : -1),
   },
   {
@@ -146,5 +138,58 @@ const DeploymentNameRow = ({ deployment }: { deployment: DeploymentView }) => {
         {deployment.name}
       </span>
     </div>
+  );
+};
+
+const DeploymentUpdateStatusCell = ({ deployment }: { deployment: DeploymentView }) => {
+  const status = deployment.autoUpdateState.status;
+  const { label } = UPDATE_STATUS_UI[status];
+  if (deployment.autoUpdateState.status === AutoUpdateStatus.Unknown) {
+    return <span className="text-muted-foreground text-sm">{'<none>'}</span>;
+  }
+  const trigger = (
+    <div className="flex items-center gap-2">
+      <UpdateStatusIcon updateStatus={status} />
+      <span>{label}</span>
+    </div>
+  );
+
+  const isUpdateAvailable = status === AutoUpdateStatus.UpdateAvailable;
+
+  return (
+    <HoverCard openDelay={150} closeDelay={150}>
+      <HoverCardTrigger asChild>
+        <div className="inline-flex cursor-default items-center">{trigger}</div>
+      </HoverCardTrigger>
+      <HoverCardContent align="start" className="w-72 p-4 shadow-lg border-border bg-background">
+        <div className="flex justify-between items-start mb-4">
+          <div className="space-y-1">
+            <h4 className="text-sm font-medium leading-none text-foreground">{deployment.imageName}</h4>
+            <p className="text-xs text-muted-foreground">Checked {fromNow(deployment.autoUpdateState.lastCheckedAt)}</p>
+          </div>
+          <UpdateStatusIcon updateStatus={status} />
+        </div>
+
+        <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-sm">
+          <span className="text-muted-foreground text-xs">Current</span>
+          <span
+            className="font-mono text-xs text-foreground/80 truncate"
+            title={deployment.autoUpdateState.currentDigest ?? undefined}>
+            {formatId(deployment.autoUpdateState.currentDigest ?? undefined)}
+          </span>
+
+          {isUpdateAvailable && (
+            <>
+              <span className="text-muted-foreground text-xs">Available</span>
+              <span
+                className="font-mono text-xs text-amber-600 dark:text-amber-500 truncate"
+                title={deployment.autoUpdateState.remoteDigest ?? undefined}>
+                {formatId(deployment.autoUpdateState.remoteDigest ?? undefined)}
+              </span>
+            </>
+          )}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
   );
 };

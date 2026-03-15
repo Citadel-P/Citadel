@@ -15,6 +15,7 @@ internal sealed class DeploymentAutoUpdateJob(
     IAlertService alertService,
     IImageScanScheduler imageScanScheduler,
     ImageDigestCache imageDigestCache,
+    ISyncBarrier syncBarrier,
     IServiceScopeFactory scopeFactory,
     IDelayWithJitterService delayWithJitterService,
     ILogger<DeploymentAutoUpdateJob> logger) : BackgroundService
@@ -35,6 +36,8 @@ internal sealed class DeploymentAutoUpdateJob(
                 {
                     try
                     {
+                        await syncBarrier.WaitForAsync<DeploymentImageScannerJob>(deploymentCheck.Deployment.PlatformId, cancellationToken);
+
                         var result = await CheckDeploymentAsync(deploymentCheck, cancellationToken);
                         if (result is not null)
                         {
@@ -64,6 +67,9 @@ internal sealed class DeploymentAutoUpdateJob(
         var deployedImage = deploymentCheck.DeployedImage;
 
         if (!imageDigestCache.TryGet(deploymentCheck.Key, out var digestEntry))
+            return null;
+
+        if (string.IsNullOrEmpty(deployedImage.ResolvedDigest))
             return null;
 
         var remoteDigest = digestEntry.Digest;

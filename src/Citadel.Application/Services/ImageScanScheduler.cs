@@ -2,6 +2,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Deployments;
 using Domain.Entities.Registries;
+using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Application.Services;
@@ -34,7 +35,7 @@ internal sealed class ImageScanScheduler(IServiceScopeFactory scopeFactory) : II
     public async Task<IReadOnlyCollection<DeploymentImageCheck>> LoadDeploymentChecksAsync(CancellationToken cancellationToken)
     {
         var deployments = await LoadDeploymentsAsync(cancellationToken);
-        var checks = new List<DeploymentImageCheck>(deployments.Count);
+        var checks = new List<DeploymentImageCheck>(deployments.Count());
 
         foreach (var deployment in deployments)
         {
@@ -47,11 +48,11 @@ internal sealed class ImageScanScheduler(IServiceScopeFactory scopeFactory) : II
         return checks;
     }
 
-    private async Task<IReadOnlyList<Deployment>> LoadDeploymentsAsync(CancellationToken cancellationToken)
+    private async Task<IEnumerable<Deployment>> LoadDeploymentsAsync(CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        return [.. (await uow.Deployments.GetAllAsync(cancellationToken) ?? [])];
+        return await uow.Deployments.GetAllAsync(cancellationToken) ?? [];
     }
 
     private async Task<IReadOnlyDictionary<Guid, Registry>> LoadRegistriesAsync(IReadOnlyCollection<DeploymentImageCheck> checks, CancellationToken cancellationToken)
@@ -80,7 +81,7 @@ internal sealed class ImageScanScheduler(IServiceScopeFactory scopeFactory) : II
         if (deployment.Spec?.Image is not ExternalImage deployedImage)
             return false;
 
-        if (!TrySplitImageTag(deployedImage.ImageTag, out var repository, out var tag))
+        if (!Helpers.TrySplitImageTag(deployedImage.ImageTag, out var repository, out var tag))
             return false;
 
         check = new DeploymentImageCheck(
@@ -89,31 +90,6 @@ internal sealed class ImageScanScheduler(IServiceScopeFactory scopeFactory) : II
             new ImageKey(deployedImage.RegistryId, repository, tag));
 
         return true;
-    }
-
-    private static bool TrySplitImageTag(string imageTag, out string repository, out string tag)
-    {
-        repository = string.Empty;
-        tag = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(imageTag) || imageTag.Contains('@'))
-            return false;
-
-        var lastSlashIndex = imageTag.LastIndexOf('/');
-        var lastColonIndex = imageTag.LastIndexOf(':');
-
-        if (lastColonIndex > lastSlashIndex)
-        {
-            repository = imageTag[..lastColonIndex];
-            tag = imageTag[(lastColonIndex + 1)..];
-        }
-        else
-        {
-            repository = imageTag;
-            tag = "latest";
-        }
-
-        return !string.IsNullOrWhiteSpace(repository) && !string.IsNullOrWhiteSpace(tag);
     }
 }
 

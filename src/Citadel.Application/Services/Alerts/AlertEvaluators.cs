@@ -87,7 +87,7 @@ public sealed class PlatformVersionMismatchEvaluator : IAlertEvaluator
     }
 
     public static bool IsCompatible(string agentVersion) =>
-       string.Compare(agentVersion, Constants.CompatibilityVersion, StringComparison.Ordinal) == 0;
+        agentVersion.Equals(Constants.CompatibilityVersion, StringComparison.Ordinal);
 }
 
 [AlertEvaluator(AlertType.PlatformUnreachable)]

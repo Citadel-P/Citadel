@@ -1058,6 +1058,7 @@ export interface DeploymentImageInfoExternalImage {
   /** @format uuid */
   registryId: string;
   imageTag: string;
+  resolvedDigest?: null | string;
 }
 
 export interface DeploymentImageInfoLocalImage {
@@ -1129,6 +1130,7 @@ export interface DeploymentView {
   /** @format uuid */
   containerId?: null | string;
   dockerContainerId?: null | string;
+  dockerImageId?: null | string;
 }
 
 export interface DeploymentsView {
@@ -1939,6 +1941,7 @@ export interface PullImageStreamItem {
   errorMessage?: null | string;
   progressMessage?: null | string;
   dockerImageId?: null | string;
+  digest?: null | string;
   progress?: null | ImagePullProgress;
   error?: null | ImagePullError;
 }

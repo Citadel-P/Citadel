@@ -13,7 +13,20 @@ import {
 } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem, CommandEmpty } from '@/components/ui/command';
-import { Cable, Check, ChevronDown, Layers, LucideIcon, Megaphone, Rocket, Server, Settings, Tags, User } from 'lucide-react';
+import {
+  Cable,
+  Check,
+  ChevronDown,
+  Info,
+  Layers,
+  LucideIcon,
+  Megaphone,
+  Rocket,
+  Server,
+  Settings,
+  Tags,
+  User,
+} from 'lucide-react';
 import { cn, filterBySplit, toFixedNumber } from '@/lib/utils';
 import { PluralResourceMap, ResourceType } from '@/api/types';
 import { useMeasuredWidth, useRead, useLocalStorage } from '@/lib/hooks';
@@ -78,8 +91,8 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   const read = useRead(`list${resourceName}`, { platformId });
   const items = (Object.values(read.data?.data ?? {}).at(0) as T[]) ?? [];
   const selectedItem =
-  filter?.item ?? (typeof selected === 'string' ? items.find((i) => i.id === selected) : selected) ?? undefined;
-  
+    filter?.item ?? (typeof selected === 'string' ? items.find((i) => i.id === selected) : selected) ?? undefined;
+
   const filtered = filterBySplit(items, search, (i) => i.name).sort((a, b) => a.name.localeCompare(b.name));
   useEffect(() => {
     setFilter(null);
@@ -325,11 +338,11 @@ export const UPDATE_STATUS_UI: Record<
   },
   [AutoUpdateStatus.UpdateAvailable]: {
     label: 'Update Available',
-    Icon: SquareArrowUp,
-    className: 'text-blue-400',
+    Icon: Info,
+    className: 'text-orange-500',
   },
   [AutoUpdateStatus.Updating]: {
-    label: 'Update Available',
+    label: 'Updating...',
     Icon: RefreshCcwDot,
     className: 'text-blue-400',
   },

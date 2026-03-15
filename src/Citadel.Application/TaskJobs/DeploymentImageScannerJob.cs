@@ -2,6 +2,7 @@ using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Images;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -9,6 +10,8 @@ namespace Application.TaskJobs;
 
 internal sealed class DeploymentImageScannerJob(
     IImageScanScheduler imageScanScheduler,
+    ISyncBarrier syncBarrier,
+    IServiceScopeFactory scopeFactory,
     IPlatformContainerCache platformContainerCache,
     IDelayWithJitterService delayWithJitterService,
     IConnectorFactory<IImageConnector> connectorFactory,
@@ -26,6 +29,7 @@ internal sealed class DeploymentImageScannerJob(
         {
             try
             {
+                var syncedPlatformIds = await LoadPlatformIdsAsync(cancellationToken);
                 var scanTasks = await imageScanScheduler.LoadScanTasksAsync(cancellationToken);
                 var connectorsByType = new Dictionary<PlatformConnectorType, IImageConnector>();
 
@@ -40,6 +44,11 @@ internal sealed class DeploymentImageScannerJob(
                         logger.LogError(ex, "Scan failed for image {ImageKey}", scanTask.Key);
                     }
                 }
+
+                foreach (var platformId in syncedPlatformIds)
+                {
+                    syncBarrier.MarkSynced<DeploymentImageScannerJob>(platformId);
+                }
             }
             catch (Exception ex)
             {
@@ -48,6 +57,16 @@ internal sealed class DeploymentImageScannerJob(
 
             await Task.Delay(TimeSpan.FromMinutes(CheckIntervalInMinutes), cancellationToken);
         }
+    }
+
+    private async Task<Guid[]> LoadPlatformIdsAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        return [.. (await uow.Platforms.GetPlatformsInfoAsync(cancellationToken))
+            .Select(x => x.Id)
+            .Distinct()];
     }
 
     private async Task ScanImageAsync(

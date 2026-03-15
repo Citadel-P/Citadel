@@ -87,10 +87,8 @@ export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resour
 
   const noCooldownTypes: AlertType[] = [
     AlertType.UnmanagedContainerCreated,
-    AlertType.StackImageUpdateAvailable,
     AlertType.StackAutoUpdated,
     AlertType.StackAutoDeployFailed,
-    AlertType.DeploymentImageUpdateAvailable,
     AlertType.DeploymentAutoUpdated,
     AlertType.DeploymentAutoDeployFailed,
   ];

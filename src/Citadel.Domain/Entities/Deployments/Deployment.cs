@@ -97,6 +97,7 @@ public sealed class Deployment(
         Guid? platformId = null,
         DeploymentStatus? status = null,
         ResourceControlState? resourceControlState = null,
+        AutoUpdateState? autoUpdateState = null,
         DeploymentSpec? spec = null,
         Container? container = null)
     {
@@ -107,6 +108,7 @@ public sealed class Deployment(
         if (spec != null) Spec = spec;
         if (container != null) Container = container;
         if (resourceControlState != null) ControlState = resourceControlState.Value;
+        if (autoUpdateState != null) AutoUpdateState = autoUpdateState;
     }
 
     public static DeploymentStatus ToDeploymentStatus(ContainerStateStatus status)

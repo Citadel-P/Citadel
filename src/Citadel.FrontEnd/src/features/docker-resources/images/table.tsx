@@ -128,7 +128,6 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
   function onNameClick() {
     navigate(`/platforms/${platformId}/images/${formatId(image.dockerImageId)}/`);
   }
-  //console.log(image.controlState)
   return (
     <div className="flex items-center whitespace-nowrap">
       <div className="flex items-center">

@@ -23,6 +23,12 @@ export const useDeploymentGroup = (deploymentId: string) => {
         dockerContainerId: deployment.dockerContainerId,
         containerId: deployment.containerId,
         controlState: deployment.controlState,
+        autoUpdateState: deployment.autoUpdateState,
+        platformStatus: deployment.platformStatus,
+        platformName: deployment.platformName,
+        imageName: deployment.imageName,
+        imageId: deployment.imageId,
+        dockerImageId: deployment.dockerImageId,
       };
     });
   }, []);

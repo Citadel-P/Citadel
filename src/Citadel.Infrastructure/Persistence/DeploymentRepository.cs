@@ -34,10 +34,15 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
         c.Id AS Container_ContainerId,
         c.DockerContainerId AS Container_DockerContainerId,
         p.Name AS Platform_Name,
-        p.Status AS Platform_Status
+        p.Status AS Platform_Status,
+        i.Name as Image_Name,
+        i.Id AS Image_Id,
+        i.DockerImageId AS Image_DockerImageId
     FROM Deployments d 
     LEFT JOIN Containers c
         ON d.Id = c.DeploymentId
+    LEFT JOIN Images i 
+        ON c.ImageId = i.Id
     LEFT JOIN Platforms p 
         ON d.PlatformId = p.Id
     """;
@@ -188,7 +193,8 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
                 p.Name AS Platform_Name,
                 p.Status AS Platform_Status,
                 i.Name as Image_Name,
-                i.Id AS Image_Id
+                i.Id AS Image_Id,
+                i.DockerImageId AS Image_DockerImageId
             FROM Deployments d 
             LEFT JOIN Platforms p 
                 ON d.PlatformId = p.Id

@@ -107,7 +107,8 @@ public class EventAlertTests : IntegrationTestBase
                 Image: new ExternalImage
                 (
                     RegistryId: Constants.DefaultRegistryId,
-                    ImageTag: "nginx:latest"
+                    ImageTag: "nginx:latest",
+                    ResolvedDigest: "sha256:old-digest"
                 ),
                 Ports: new List<string> { "80:80" },
                 EnvVars: new List<string> { "ENV=production" }

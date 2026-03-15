@@ -26,7 +26,8 @@ public sealed record DeploymentView(
     string? ImageName = null,
     Guid? ImageId = null,
     Guid? ContainerId = null,
-    string? DockerContainerId = null
+    string? DockerContainerId = null,
+    string? DockerImageId = null
     )
 {
     internal static DeploymentView Map(Deployment deployment) => new(
@@ -45,7 +46,8 @@ public sealed record DeploymentView(
         ImageName: deployment.Image?.Name,
         ImageId: deployment.Image?.Id,
         ContainerId: deployment.Container?.Id,
-        DockerContainerId: deployment.Container?.DockerContainerId
+        DockerContainerId: deployment.Container?.DockerContainerId,
+        DockerImageId: deployment.Container?.DockerImageId ?? deployment.Image?.DockerImageId
         );
 }
 
