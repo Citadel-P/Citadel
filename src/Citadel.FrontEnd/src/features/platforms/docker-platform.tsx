@@ -1,7 +1,12 @@
-import { PlatformDescriptorDockerPlatformDescriptor, PlatformStatus, PlatformView } from '@/api/generated/api.types';
+import {
+  PlatformConnectorType,
+  PlatformDescriptorDockerPlatformDescriptor,
+  PlatformStatus,
+  PlatformView,
+} from '@/api/generated/api.types';
 import DockerIcon from '@/assets/docker.svg';
 import { Link } from 'react-router';
-import { Power, PowerOff, CirclePause } from 'lucide-react';
+import { Power, PowerOff, CirclePause, PlugZap, Cpu, MemoryStick } from 'lucide-react';
 import { toFixedNumber } from '@/lib/utils';
 import { byteTransform } from '@/lib/bytes.helper';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -20,167 +25,178 @@ export const DockerPlatform = ({
     React.FC<{ resource: PlatformView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
 }) => {
-  const isPlatfomOnline = platform.status === PlatformStatus.Online;
-  const LastSnapshotTooltip = () => {
-    const lastSnapshot = platform.stats?.at(0)?.created
-      ? new Date(platform.stats[0].created! * 1000).getTime()
-      : new Date().getTime();
-    return (
-      <TooltipProvider delayDuration={200}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div
-              className={`absolute right-2 top-1.5 ${isPlatfomOnline ? 'bg-green-500' : 'bg-red-500'} h-3.5 w-3.5 rounded-full border-2`}></div>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{fromNow(lastSnapshot)} (Last snapshot)</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  };
-
-  const ContainersPaused = () => {
-    return (
-      <div className="flex items-center">
-        <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <CirclePause height={12} width={12} />
-            </TooltipTrigger>
-            <TooltipContent>Paused</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        <div className="ml-1">
-          {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containersPaused ?? '-'}
-        </div>
-      </div>
-    );
-  };
-
-  const ContainersStarted = () => {
-    return (
-      <div className="flex items-center">
-        <div className="text-green-500">
-          <TooltipProvider delayDuration={200}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Power height={12} width={12} />
-              </TooltipTrigger>
-              <TooltipContent>Started</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-        <div className="ml-1">
-          {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containersRunning ?? '-'}
-        </div>
-      </div>
-    );
-  };
-
-  const ContainersStopped = () => {
-    return (
-      <div className="flex items-center">
-        <div className="text-red-500">
-          <TooltipProvider delayDuration={200}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <PowerOff height={12} width={12} />
-              </TooltipTrigger>
-              <TooltipContent>Stopped</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-        <div className="ml-1">
-          {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containersStopped ?? '-'}
-        </div>
-      </div>
-    );
-  };
+  const descriptor = platform.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor;
+  const isOnline = platform.status === PlatformStatus.Online;
+  const lastSnapshot = platform.stats?.at(0)?.created
+    ? new Date(platform.stats[0].created! * 1000).getTime()
+    : undefined;
+  const cpuUsage = platform.stats && isOnline ? Number(toFixedNumber(platform.stats[0]?.cpuUsage)) || 0 : 0;
+  const memUsage = platform.stats && isOnline ? Number(toFixedNumber(platform.stats[0]?.memoryUsage)) || 0 : 0;
 
   return (
     <ContentCard>
-      <div className="flow-root gap-1">
-        <ul className="divide-y divide-foreground">
-          <li className="group/platform py-3 bg-card/40 hover:bg-card/90 sm:py-4">
-            <div className="flex flex-row flex-wrap items-center space-x-4">
-              <div className="relative shrink-0">
-                <div className="ml-1 w-20 h-20">
-                  <DockerIcon />
-                </div>
-                <LastSnapshotTooltip />
-              </div>
-
-              <div className="basis-5/12">
-                <div className="flex items-baseline gap-2">
-                  <div className="cursor-pointer truncate text-sm font-medium hover:underline text-foreground">
-                    <Link to={'/platforms/' + platform.id}>{platform.name}</Link>
-                  </div>
-                  <div className="truncate text-xs text-foreground">
-                    ({(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).operatingSystem} v
-                    {platform?.serverVersion})
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-x-3">
-                  <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                    <Link to={'/platforms/' + platform.id + '/containers'}>
-                      {(platform?.platformDescriptor as PlatformDescriptorDockerPlatformDescriptor).containerCount ??
-                        '-'}{' '}
-                      containers
-                    </Link>
-                  </div>
-                  <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                    <Link to={'/platforms/' + platform.id + '/images'}>{platform?.imageCount ?? '-'} images</Link>
-                  </div>
-                  <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                    <Link to={'/platforms/' + platform.id + '/volumes'}>{platform?.volumeCount ?? '-'} volumes</Link>
-                  </div>
-                  <div className="cursor-pointer truncate text-xs text-muted-foreground hover:underline">
-                    <Link to={'/platforms/' + platform.id + '/networks'}>{platform?.networkCount ?? '-'} networks</Link>
-                  </div>
-                  <div className="truncate text-xs text-muted-foreground">{platform?.cpuCount ?? '-'} CPU</div>
-                  <div className="truncate text-xs text-muted-foreground">{byteTransform(platform?.memTotal)} RAM</div>
-                </div>
-              </div>
-              <div className="flex flex-auto">
-                <div>
-                  <div className="truncate text-center text-xs font-medium text-foreground">Containers</div>
-                  <div className="grid grid-cols-3 gap-4 truncate text-center text-xs text-gray-500 dark:text-night-400">
-                    <ContainersStarted />
-                    <ContainersStopped />
-                    <ContainersPaused />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-auto">
-                <div>
-                  <div className="truncate text-xs font-medium text-foreground">Memory usage</div>
-                  <div className="truncate text-center text-xs text-muted-foreground">
-                    <span>
-                      {platform.stats && isPlatfomOnline ? toFixedNumber(platform.stats[0]?.memoryUsage) + ' %' : 'N/A'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-auto">
-                <div>
-                  <div className="truncate text-xs font-medium text-foreground">CPU usage</div>
-                  <div className="truncate text-center text-xs text-muted-foreground">
-                    <span>
-                      {platform.stats && isPlatfomOnline ? toFixedNumber(platform.stats[0]?.cpuUsage) + ' %' : 'N/A'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <RowActionMenu resource={platform} actions={actions} />
+      <TooltipProvider delayDuration={200}>
+        <div className="flex flex-row flex-wrap items-center gap-x-6 gap-y-3 px-4 py-4">
+          {/* Logo + status dot */}
+          <div className="relative shrink-0">
+            <div className="h-16 w-16 rounded-full border border-border/60">
+              <DockerIcon />
             </div>
-          </li>
-        </ul>
-      </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  className={`absolute top-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-card ${isOnline ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                />
+              </TooltipTrigger>
+              <TooltipContent>
+                {isOnline ? 'Online' : 'Offline'}
+                {lastSnapshot ? ` · ${fromNow(lastSnapshot)}` : ''}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+
+          {/* Identity + resource links */}
+          <div className="min-w-0 flex-1 basis-5/12 space-y-1.5">
+            <div className="flex items-baseline gap-2">
+              <Link
+                to={`/platforms/${platform.id}`}
+                className="truncate text-sm font-medium text-foreground hover:underline">
+                {platform.name}
+              </Link>
+              <span className="truncate text-xs text-muted-foreground">
+                {descriptor.operatingSystem} v{platform.serverVersion}
+              </span>
+              {platform.connectorType === PlatformConnectorType.Agent && (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground truncate">
+                  <PlugZap className="h-3.5 w-3.5" /> agent v{platform.agentVersion}
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+              <Link to={`/platforms/${platform.id}/containers`} className="hover:text-foreground hover:underline">
+                {descriptor.containerCount ?? '-'} containers
+              </Link>
+              <Link to={`/platforms/${platform.id}/images`} className="hover:text-foreground hover:underline">
+                {platform.imageCount ?? '-'} images
+              </Link>
+              <Link to={`/platforms/${platform.id}/volumes`} className="hover:text-foreground hover:underline">
+                {platform.volumeCount ?? '-'} volumes
+              </Link>
+              <Link to={`/platforms/${platform.id}/networks`} className="hover:text-foreground hover:underline">
+                {platform.networkCount ?? '-'} networks
+              </Link>
+            </div>
+          </div>
+
+          {/* Containers breakdown */}
+          <StatSection label="Containers">
+            <div className="flex items-center gap-3">
+              <ContainerStat
+                icon={Power}
+                value={descriptor.containersRunning}
+                tooltip="Running"
+                className="text-emerald-500"
+              />
+              <ContainerStat
+                icon={PowerOff}
+                value={descriptor.containersStopped}
+                tooltip="Stopped"
+                className="text-rose-500"
+              />
+              <ContainerStat
+                icon={CirclePause}
+                value={descriptor.containersPaused}
+                tooltip="Paused"
+                className="text-amber-500"
+              />
+            </div>
+          </StatSection>
+
+          {/* CPU + Memory */}
+          <div className="flex w-full flex-col gap-3 border-t border-border/60 pt-4 lg:w-[260px] lg:shrink-0 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
+            <UsageBar
+              icon={Cpu}
+              label="CPU"
+              value={cpuUsage}
+              online={isOnline}
+              detail={`${platform.cpuCount ?? '-'} cores`}
+            />
+            <UsageBar
+              icon={MemoryStick}
+              label="RAM"
+              value={memUsage}
+              online={isOnline}
+              detail={`${byteTransform(platform.memTotal)} total`}
+            />
+          </div>
+
+          <RowActionMenu resource={platform} actions={actions} />
+        </div>
+      </TooltipProvider>
     </ContentCard>
   );
 };
+
+const StatSection = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <div className="flex flex-auto flex-col items-center gap-0.5">
+    <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}</span>
+    <div className="text-sm text-foreground">{children}</div>
+  </div>
+);
+
+const UsageBar = ({
+  icon: Icon,
+  label,
+  value,
+  online,
+  detail,
+}: {
+  icon: React.FC<{ className?: string }>;
+  label: string;
+  value: number;
+  online: boolean;
+  detail?: string;
+}) => {
+  const barColor = value > 80 ? 'bg-rose-500' : value > 60 ? 'bg-amber-500' : 'bg-sky-500';
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <Icon className="h-3 w-3" /> {label}
+          {detail ? <span className="text-muted-foreground/60">({detail})</span> : null}
+        </span>
+        <span className="tabular-nums text-foreground">{online ? `${value} %` : 'N/A'}</span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+          style={{ width: `${online ? value : 0}%` }}
+        />
+      </div>
+    </div>
+  );
+};
+
+const ContainerStat = ({
+  icon: Icon,
+  value,
+  tooltip,
+  className,
+}: {
+  icon: React.FC<{ height?: number; width?: number; className?: string }>;
+  value?: string | number | null;
+  tooltip: string;
+  className?: string;
+}) => (
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <div className="flex items-center gap-1 cursor-default">
+        <Icon height={12} width={12} className={className} />
+        <span className="tabular-nums">{value ?? '-'}</span>
+      </div>
+    </TooltipTrigger>
+    <TooltipContent>{tooltip}</TooltipContent>
+  </Tooltip>
+);
