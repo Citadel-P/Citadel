@@ -448,6 +448,13 @@ public enum AlertResourceType
     Stack
 }
 
+public enum AlertEventStatus
+{
+    Active,
+    Acknowledged,
+    Resolved
+}
+
 public enum AlertDestination
 {
     Generic,

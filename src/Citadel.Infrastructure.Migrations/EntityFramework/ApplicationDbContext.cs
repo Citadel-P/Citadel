@@ -673,11 +673,20 @@ internal static class Configuration
 
         alertEvent.Property<Guid?>("ResourceId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
         alertEvent.Property<Guid>("AlertRuleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        alertEvent.Property<Guid>("CreatedByActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         alertEvent.Property<string>("Type").HasColumnType("TEXT").IsRequired();
         alertEvent.Property<string>("Severity").HasColumnType("TEXT").IsRequired();
         alertEvent.Property<string>("Info").HasColumnType("TEXT").IsRequired();
         alertEvent.Property<string>("ResourceType").HasColumnType("TEXT").IsRequired();
+        alertEvent.Property<string>("DeduplicationKey").HasColumnType("TEXT").IsRequired();
+        alertEvent.Property<string>("OpenIncidentKey").HasColumnType("TEXT").IsRequired(false);
+        alertEvent.Property<Guid?>("AcknowledgedByActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
+        alertEvent.Property<DateTime?>("AcknowledgedAt").HasColumnType("TEXT").IsRequired(false);
+        alertEvent.Property<Guid?>("ResolvedByActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
+        alertEvent.Property<DateTime?>("ResolvedAt").HasColumnType("TEXT").IsRequired(false);
+        alertEvent.Property<string>("ResolutionNote").HasColumnType("TEXT").IsRequired(false);
         alertEvent.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
+        alertEvent.Property<DateTime>("UpdatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
 
         alertEvent
             .HasOne("AlertRule")
@@ -685,9 +694,16 @@ internal static class Configuration
             .HasForeignKey("AlertRuleId")
             .OnDelete(DeleteBehavior.Cascade);
 
+        alertEvent
+            .HasOne("Actor")
+            .WithMany()
+            .HasForeignKey("CreatedByActorId")
+            .OnDelete(DeleteBehavior.Restrict);
+
         alertEvent.HasIndex("Type").HasDatabaseName($"IX_{tableName}_Type");
         alertEvent.HasIndex("ResourceId", "CreatedAt").HasDatabaseName($"IX_{tableName}_Resource_CreatedAt");
         alertEvent.HasIndex("ResourceType").HasDatabaseName($"IX_{tableName}_ResourceType");
+        alertEvent.HasIndex("OpenIncidentKey").IsUnique().HasDatabaseName($"IX_{tableName}_OpenIncidentKey");
 
         return builder;
     }

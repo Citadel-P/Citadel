@@ -23,6 +23,15 @@ internal static class AlertEventMappers
             info: info,
             resourceId: alertEventDto.ResourceId.Value,
             resourceType: Enum.Parse<AlertResourceType>(alertEventDto.ResourceType),
-            createdAt: alertEventDto.CreatedAt);
+            deduplicationKey: alertEventDto.DeduplicationKey,
+            openIncidentKey: alertEventDto.OpenIncidentKey,
+            acknowledgedByActorId: alertEventDto.AcknowledgedByActorId,
+            acknowledgedAt: alertEventDto.AcknowledgedAt,
+            resolvedByActorId: alertEventDto.ResolvedByActorId,
+            resolvedAt: alertEventDto.ResolvedAt,
+            resolutionNote: alertEventDto.ResolutionNote,
+            createdByActorId: alertEventDto.CreatedByActorId,
+            createdAt: alertEventDto.CreatedAt,
+            updatedAt: alertEventDto.UpdatedAt);
     }
 }

@@ -1,6 +1,7 @@
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
+using Hosting.Common;
 using Microsoft.Extensions.Logging;
 using System.Data;
 
@@ -138,12 +139,13 @@ internal sealed class AlertStateWorkItem(
             }
 
             var evt = new AlertEvent(
-                rule.Id,
-                rule.Type,
-                rule.Severity,
-                match.Info!,
-                match.ResourceId,
-                match.ResourceType);
+                alertRuleId: rule.Id,
+                type: rule.Type,
+                severity: rule.Severity,
+                info: match.Info!,
+                resourceId: match.ResourceId,
+                resourceType: match.ResourceType,
+                createdByActorId: Constants.SystemId);
 
             state.MarkTriggered(utcNow);
 

@@ -155,6 +155,12 @@ namespace Infrastructure.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("AcknowledgedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AcknowledgedByActorId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("AlertRuleId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -164,8 +170,28 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("TEXT")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<string>("CreatedByActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeduplicationKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Info")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OpenIncidentKey")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResolvedByActorId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ResourceId")
@@ -183,9 +209,20 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AlertRuleId");
+
+                    b.HasIndex("CreatedByActorId");
+
+                    b.HasIndex("OpenIncidentKey")
+                        .IsUnique()
+                        .HasDatabaseName("IX_AlertEvents_OpenIncidentKey");
 
                     b.HasIndex("ResourceType")
                         .HasDatabaseName("IX_AlertEvents_ResourceType");
@@ -267,7 +304,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
-                            Name = "CPU > 90% – Platform",
+                            Name = "CPU > 90% - Platform",
                             QuietHours = "[]",
                             RequiredMatches = 3,
                             Severity = "Critical",
@@ -281,7 +318,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
-                            Name = "CPU > 80% – Platform",
+                            Name = "CPU > 80% - Platform",
                             QuietHours = "[]",
                             RequiredMatches = 3,
                             Severity = "Warning",
@@ -295,7 +332,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
-                            Name = "RAM > 90% – Platform",
+                            Name = "RAM > 90% - Platform",
                             QuietHours = "[]",
                             RequiredMatches = 3,
                             Severity = "Critical",
@@ -309,7 +346,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
-                            Name = "RAM > 80% – Platform",
+                            Name = "RAM > 80% - Platform",
                             QuietHours = "[]",
                             RequiredMatches = 3,
                             Severity = "Warning",
@@ -354,10 +391,11 @@ namespace Infrastructure.Migrations.Migrations
                         new
                         {
                             Id = "019d0000-0001-7000-8001-000000000006",
+                            CooldownSeconds = 86400,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
-                            Name = "Image Update Available – Deployment",
+                            Name = "Image Update Available - Deployment",
                             QuietHours = "[]",
                             Severity = "Info",
                             Type = "DeploymentImageUpdateAvailable"
@@ -368,7 +406,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
-                            Name = "Auto Deploy Failed – Deployment",
+                            Name = "Auto Deploy Failed - Deployment",
                             QuietHours = "[]",
                             Severity = "Critical",
                             Type = "DeploymentAutoDeployFailed"
@@ -387,10 +425,11 @@ namespace Infrastructure.Migrations.Migrations
                         new
                         {
                             Id = "019d0000-0001-7000-8001-000000000009",
+                            CooldownSeconds = 86400,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
-                            Name = "Image Update Available – Stack",
+                            Name = "Image Update Available - Stack",
                             QuietHours = "[]",
                             Severity = "Info",
                             Type = "StackImageUpdateAvailable"
@@ -401,7 +440,7 @@ namespace Infrastructure.Migrations.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
                             LimitedTo = "[]",
-                            Name = "Auto Deploy Failed – Stack",
+                            Name = "Auto Deploy Failed - Stack",
                             QuietHours = "[]",
                             Severity = "Critical",
                             Type = "StackAutoDeployFailed"
@@ -1118,6 +1157,12 @@ namespace Infrastructure.Migrations.Migrations
                         .WithMany()
                         .HasForeignKey("AlertRuleId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

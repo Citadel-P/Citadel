@@ -19,6 +19,7 @@ public static class PublicEndpoints
     const string PlatformsName = nameof(Platforms);
     const string ContainersName = nameof(Containers);
     const string ActivitiesName = nameof(Activities);
+    const string AlertEventsName = nameof(AlertEvents);
     const string AlertRulesName = nameof(AlertRules);
     const string RegistriesName = nameof(Registries);
     const string DeploymentsName = nameof(Deployments);
@@ -67,6 +68,10 @@ public static class PublicEndpoints
             var activities = group.MapGroup("/activities").WithTags(ActivitiesName).RequireAuthorization();
             {
                 MapActivityEndpoints(activities);
+            }
+            var alertEvents = group.MapGroup("/alertEvents").WithTags(AlertEventsName).RequireAuthorization();
+            {
+                MapAlertEventsEndpoints(alertEvents);
             }
             var alertRules = group.MapGroup("/alertRules").WithTags(AlertRulesName).RequireAuthorization();
             {
@@ -681,5 +686,47 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("deleteAlertChannels");
+    }
+
+    private static void MapAlertEventsEndpoints(RouteGroupBuilder alertEvents)
+    {
+        alertEvents.MapGet("{id}", AlertEvents.Get)
+            .WithSummary("Get alert event by id")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getAlertEvent");
+
+        alertEvents.MapGet("/", AlertEvents.List)
+            .WithSummary("List alert events")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("listAlertEvents");
+
+        alertEvents.MapGet("/unresolved-count", AlertEvents.GetUnresolvedCount)
+            .WithSummary("Get unresolved alert event count")
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getUnresolvedAlertEventsCount");
+
+        alertEvents.MapPost("/acknowledge", AlertEvents.Acknowledge)
+            .WithSummary("Acknowledge alert events in bulk")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("acknowledgeAlertEvents");
+
+        alertEvents.MapPost("/resolve", AlertEvents.Resolve)
+            .WithSummary("Resolve alert events in bulk")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("resolveAlertEvents");
     }
 }
