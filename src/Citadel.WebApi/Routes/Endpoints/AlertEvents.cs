@@ -23,10 +23,10 @@ public static class AlertEvents
         return EndpointHandlers.HandleResult(result, AlertEventsView.Map);
     }
 
-    public static async Task<Results<Ok<UnresolvedAlertEventsCountView>, ProblemHttpResult>> GetUnresolvedCount(IMediator mediator, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<UnresolvedAlertsCountView>, ProblemHttpResult>> GetUnresolvedCount(IMediator mediator, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetUnresolvedAlertEventsCount(), cancellationToken);
-        return EndpointHandlers.HandleResult(result, UnresolvedAlertEventsCountView.Map);
+        return EndpointHandlers.HandleResult(result, UnresolvedAlertsCountView.Map);
     }
 
     public static async Task<Results<NoContent, ProblemHttpResult>> Acknowledge(

@@ -5,10 +5,12 @@ using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Domain.Entities.Activities;
+using Domain.Entities.Alerts;
 using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
 using Microsoft.AspNetCore.SignalR;
 using WebApi.Routes.Endpoints.Resources.Activities;
+using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.Images;
@@ -139,6 +141,31 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
         return hubContext.Clients
             .Group(WellKnownSignalRGroups.ActivityGroup(activity.ResourceId ?? Guid.Empty))
             .SendAsync("ActivityEventReceived", ActivityView.Map(activity));
+    }
+    #endregion
+
+    #region Alerts
+    public Task SendTriggeredAlertEvent(AlertEvent alertEvent)
+    {
+        return hubContext.Clients
+            .Group(WellKnownSignalRGroups.AlertEventsGroup)
+            .SendAsync("AlertEventReceived", AlertEventView.Map(alertEvent));
+    }
+
+    public Task SendUpdatedAlertEvents(IEnumerable<AlertEvent> alertEvents)
+    {
+        var mapped = alertEvents.Select(AlertEventView.Map).ToList();
+
+        return hubContext.Clients
+            .Group(WellKnownSignalRGroups.AlertEventsGroup)
+            .SendAsync("AlertEventsUpdated", mapped);
+    }
+
+    public Task SendUnresolvedAlertCount(int count)
+    {
+        return hubContext.Clients
+            .Group(WellKnownSignalRGroups.AlertEventsGroup)
+            .SendAsync("UnresolvedAlertCount", UnresolvedAlertsCountView.Map(count));
     }
     #endregion
 }

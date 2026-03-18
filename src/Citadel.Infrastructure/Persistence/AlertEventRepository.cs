@@ -86,7 +86,7 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return row?.ToDomain();
     }
 
-    public async Task<IEnumerable<AlertEvent>> GetByIdAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
+    public async Task<IReadOnlyCollection<AlertEvent>> GetByIdAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         const string sql = """
         SELECT
@@ -116,7 +116,14 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid) },
             transaction: tx());
 
-        return rows.Select(x => x.ToDomain());
+        var alertEvents = rows is ICollection<AlertEventDto> rowCollection
+            ? new List<AlertEvent>(rowCollection.Count)
+            : [];
+
+        foreach (var row in rows)
+            alertEvents.Add(row.ToDomain());
+
+        return alertEvents;
     }
 
     public async Task<PagedResult<AlertEvent>> GetPagedAsync(
@@ -209,7 +216,6 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             ResolvedByActorId = @ResolvedByActorId,
             ResolvedAt = @ResolvedAt,
             ResolutionNote = @ResolutionNote,
-            CreatedAt = @CreatedAt,
             UpdatedAt = @UpdatedAt
         WHERE Id = @Id";
 
@@ -230,7 +236,6 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             ResolvedByActorId = alertEvent.ResolvedByActorId?.Format(),
             alertEvent.ResolvedAt,
             alertEvent.ResolutionNote,
-            alertEvent.CreatedAt,
             alertEvent.UpdatedAt
         }, transaction: tx());
     }
@@ -254,7 +259,6 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             ResolvedByActorId = @ResolvedByActorId,
             ResolvedAt = @ResolvedAt,
             ResolutionNote = @ResolutionNote,
-            CreatedAt = @CreatedAt,
             UpdatedAt = @UpdatedAt
         WHERE Id = @Id";
 
@@ -275,7 +279,6 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             ResolvedByActorId = alertEvent.ResolvedByActorId?.Format(),
             alertEvent.ResolvedAt,
             alertEvent.ResolutionNote,
-            alertEvent.CreatedAt,
             alertEvent.UpdatedAt
         }), transaction: tx());
     }

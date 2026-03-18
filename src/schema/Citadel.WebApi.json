@@ -5464,7 +5464,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UnresolvedAlertEventsCountView"
+                  "$ref": "#/components/schemas/UnresolvedAlertsCountView"
                 }
               }
             }
@@ -13989,7 +13989,7 @@
           }
         }
       },
-      "UnresolvedAlertEventsCountView": {
+      "UnresolvedAlertsCountView": {
         "required": [
           "count"
         ],

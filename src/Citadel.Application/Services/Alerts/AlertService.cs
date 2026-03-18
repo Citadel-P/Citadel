@@ -1,6 +1,8 @@
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
+using Application.Features.Alerters.Notifications;
+using Application.Services.SignalR;
 using Hosting.Common;
 using Microsoft.Extensions.Logging;
 using System.Data;
@@ -18,6 +20,7 @@ public sealed class AlertService(
     IAlertRuleProvider alertRuleProvider, 
     IEnumerable<IAlertEvaluator> evaluators, 
     INotificationRepository notificationService,
+    IAlertEventStreamManager alertEventStreamManager,
     ILogger<AlertService> logger) : IAlertService
 {
     private readonly Dictionary<AlertType, IAlertEvaluator> _evaluators = evaluators.ToDictionary(x => x.Type);
@@ -62,6 +65,7 @@ public sealed class AlertService(
                     match,
                     context.UtcNow,
                     snapshot,
+                    alertEventStreamManager,
                     notificationQueue,
                     notificationService,
                     logger);
@@ -89,6 +93,7 @@ internal sealed class AlertStateWorkItem(
     AlertMatch match,
     DateTime utcNow,
     AlertRuleSnapshot snapshot,
+    IAlertEventStreamManager alertEventStreamManager,
     INotificationQueue notificationQueue,
     INotificationRepository notificationService,
     ILogger logger) : IDbWorkItem
@@ -156,6 +161,9 @@ internal sealed class AlertStateWorkItem(
             await uow.AlertEvents.AddAsync(evt, token);
 
             await uow.CommitAsync(token);
+            var unresolvedCount = await uow.AlertEvents.CountUnresolvedAsync(token);
+            await notificationQueue.EnqueueAsync(new TriggeredAlertEventNotificationWorkItem(evt, alertEventStreamManager), token);
+            await notificationQueue.EnqueueAsync(new UnresolvedAlertCountNotificationWorkItem(unresolvedCount, alertEventStreamManager), token);
 
             if (rule.ChannelIds.Count > 0)
             {

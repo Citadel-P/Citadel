@@ -1,6 +1,7 @@
 ﻿using Application.Configs;
 using Application.Services;
 using Application.Services.Alerts;
+using Application.Services.SignalR;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
@@ -31,6 +32,7 @@ public class EventAlertTests : IntegrationTestBase
     private readonly Mock<IPlatformConnector> _platformConnector = new();
     private readonly Mock<IDelayWithJitterService> _delayWithJitter = new();
     private readonly Mock<IPlatformContainerCache> _platformCach = new();
+    private readonly Mock<IAlertEventStreamManager> _alertEventStreamManager = new();
 
     private Func<CancellationToken, Task>? _runImageScannerJob;
     private Func<CancellationToken, Task>? _runAutoUpdateJob;
@@ -45,6 +47,7 @@ public class EventAlertTests : IntegrationTestBase
         services.RemoveAll<IOptions<JobConfiguration>>();
         services.RemoveAll<IDelayWithJitterService>();
         services.RemoveAll<IPlatformContainerCache>();
+        services.RemoveAll<IAlertEventStreamManager>();
 
         services
             .AddHostedService<DeploymentImageScannerJob>()
@@ -60,6 +63,7 @@ public class EventAlertTests : IntegrationTestBase
         services.AddSingleton(_ => _delayWithJitter.Object);
         services.AddSingleton(_ => _platformCach.Object);
         services.AddSingleton(_ => _imageConnectorMock.Object);
+        services.AddSingleton(_ => _alertEventStreamManager.Object);
 
         _configMock.Setup(x => x.Value).Returns(new JobConfiguration());
         var cacheEntry = new PlatformCacheEntry(_platformId, "localhost", PlatformConnectorType.Local, new Dictionary<string, Guid>().ToImmutableDictionary());
@@ -160,6 +164,9 @@ public class EventAlertTests : IntegrationTestBase
 
         Assert.Single(alertEvents.Items);
         Assert.Equal(AlertType.DeploymentImageUpdateAvailable, alertEvents.Items.ElementAt(0).Type);
+        await WaitForAlertStreamNotificationAsync(Times.Once(), TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.Is<AlertEvent>(a => a.Type == AlertType.DeploymentImageUpdateAvailable)), Times.Once);
+        _alertEventStreamManager.Verify(x => x.SendUnresolvedAlertCount(1), Times.Once);
     }
 
     [Fact]
@@ -184,6 +191,7 @@ public class EventAlertTests : IntegrationTestBase
 
         await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
         await WaitForAlertEventCountAsync(1, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        await WaitForAlertStreamNotificationAsync(Times.Once(), TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         await RunAutoUpdateJobOnceAsync(TestContext.Current.CancellationToken);
         await Task.Delay(500, TestContext.Current.CancellationToken);
@@ -193,6 +201,8 @@ public class EventAlertTests : IntegrationTestBase
         var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
 
         Assert.Single(alertEvents.Items);
+        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>()), Times.Once);
+        _alertEventStreamManager.Verify(x => x.SendUnresolvedAlertCount(1), Times.Once);
     }
 
     [Fact]
@@ -225,6 +235,7 @@ public class EventAlertTests : IntegrationTestBase
         var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
 
         Assert.Empty(alertEvents.Items);
+        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>()), Times.Never);
     }
 
     [Fact]
@@ -256,6 +267,7 @@ public class EventAlertTests : IntegrationTestBase
         var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
 
         Assert.Empty(alertEvents.Items);
+        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>()), Times.Never);
     }
 
     [Fact]
@@ -275,6 +287,7 @@ public class EventAlertTests : IntegrationTestBase
         var alertEvents = await db.AlertEvents.GetPagedAsync(null, null, null, 1, 50, TestContext.Current.CancellationToken);
 
         Assert.Empty(alertEvents.Items);
+        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>()), Times.Never);
     }
 
     private async Task RunAutoUpdateJobOnceAsync(CancellationToken cancellationToken)
@@ -325,6 +338,26 @@ public class EventAlertTests : IntegrationTestBase
         }
 
         return count;
+    }
+
+    private async Task WaitForAlertStreamNotificationAsync(Times times, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var start = DateTime.UtcNow;
+
+        while (DateTime.UtcNow - start < timeout)
+        {
+            try
+            {
+                _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>()), times);
+                return;
+            }
+            catch (MockException)
+            {
+                await Task.Delay(100, cancellationToken);
+            }
+        }
+
+        _alertEventStreamManager.Verify(x => x.SendTriggeredAlertEvent(It.IsAny<AlertEvent>()), times);
     }
 
     private async Task UpdateAlertRuleAsync(Func<AlertRule, AlertRule> update, CancellationToken cancellationToken)

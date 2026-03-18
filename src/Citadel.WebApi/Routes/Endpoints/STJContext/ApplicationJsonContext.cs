@@ -160,7 +160,7 @@ namespace Application.Models;
 [JsonSerializable(typeof(AlertEventFilter))]
 [JsonSerializable(typeof(AcknowledgeAlertEventsInput))]
 [JsonSerializable(typeof(ResolveAlertEventsInput))]
-[JsonSerializable(typeof(UnresolvedAlertEventsCountView))]
+[JsonSerializable(typeof(UnresolvedAlertsCountView))]
 [JsonSerializable(typeof(PagedResultView<AlertRuleView>))]
 [JsonSerializable(typeof(AlertRuleView))]
 [JsonSerializable(typeof(AlertRulesView))]

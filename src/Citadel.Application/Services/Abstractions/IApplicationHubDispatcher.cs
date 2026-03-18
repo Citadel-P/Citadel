@@ -4,6 +4,7 @@ using Domain.Contracts.Resources.Platforms;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Domain.Entities.Activities;
+using Domain.Entities.Alerts;
 using Domain.Entities.Deployments;
 using Domain.Entities.Platforms;
 
@@ -50,6 +51,12 @@ public interface IApplicationHubDispatcher
 
     #region Activities
     Task SendActivityInfo(ActivityEvent activity);
+    #endregion
+
+    #region Alerts
+    Task SendTriggeredAlertEvent(AlertEvent alertEvent);
+    Task SendUpdatedAlertEvents(IEnumerable<AlertEvent> alertEvents);
+    Task SendUnresolvedAlertCount(int count);
     #endregion
 
     #region Exec Sessions

@@ -1,4 +1,6 @@
-﻿using System.Security.Cryptography;
+﻿using Hosting.Common.ErrorTypes;
+using LightResults;
+using System.Security.Cryptography;
 
 namespace Domain.Entities.Alerts;
 
@@ -68,20 +70,22 @@ public sealed class AlertEvent : IAuditedEntity
         UpdatedAt = CreatedAt;
     }
 
-    public void Acknowledge(Guid actorId, DateTime utcNow)
+    public Result Acknowledge(Guid actorId, DateTime utcNow)
     {
         if (AcknowledgedAt is not null)
-            throw new InvalidOperationException("Alert already acknowledged.");
+            return Result.Failure(new BadRequestError("Alert already acknowledged."));
 
         AcknowledgedByActorId = actorId;
         AcknowledgedAt = utcNow;
         UpdatedAt = utcNow;
+
+        return Result.Success();
     }
 
-    public void Resolve(Guid actorId, DateTime utcNow, string? resolutionNote = null)
+    public Result Resolve(Guid actorId, DateTime utcNow, string? resolutionNote = null)
     {
         if (ResolvedAt is not null)
-            throw new InvalidOperationException("Alert already resolved.");
+            return Result.Failure(new BadRequestError("Alert already resolved."));
 
         if (AcknowledgedAt is null)
         {
@@ -94,6 +98,8 @@ public sealed class AlertEvent : IAuditedEntity
         ResolutionNote = resolutionNote;
         OpenIncidentKey = null;
         UpdatedAt = utcNow;
+
+        return Result.Success();
     }
 
     public static AlertEvent FromPersistence(

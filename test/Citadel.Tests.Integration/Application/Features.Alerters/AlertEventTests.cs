@@ -1,8 +1,11 @@
+using Application.Services.SignalR;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Moq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -10,8 +13,9 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Alerters;
 
-public sealed class AlertEventEndpointTests : IntegrationTestBase
+public sealed class AlertEventTests : IntegrationTestBase
 {
+    private readonly Mock<IAlertEventStreamManager> _alertEventStreamManager = new();
     private readonly Guid _resourceId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private readonly Guid _secondResourceId = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private readonly Guid _resolvedResourceId = Guid.Parse("22222222-2222-2222-2222-222222222222");
@@ -19,6 +23,12 @@ public sealed class AlertEventEndpointTests : IntegrationTestBase
     private readonly Guid _secondAlertId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
     private readonly Guid _resolvedAlertId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
     private Guid _alertRuleId;
+
+    protected override void ConfigureTestServices(IServiceCollection services)
+    {
+        services.RemoveAll<IAlertEventStreamManager>();
+        services.AddSingleton(_ => _alertEventStreamManager.Object);
+    }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
@@ -155,6 +165,13 @@ public sealed class AlertEventEndpointTests : IntegrationTestBase
         Assert.NotNull(secondPersisted);
         Assert.Equal(AlertEventStatus.Acknowledged, secondPersisted!.Status);
         Assert.Equal(Constants.SystemId, secondPersisted.AcknowledgedByActorId);
+
+        await WaitForAlertStreamVerificationAsync(
+            () => _alertEventStreamManager.Verify(
+                x => x.SendUpdatedAlertEvents(It.Is<IEnumerable<AlertEvent>>(events => events.Count() == 2)),
+                Times.Once),
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -181,6 +198,17 @@ public sealed class AlertEventEndpointTests : IntegrationTestBase
         Assert.Null(secondPersisted.OpenIncidentKey);
         Assert.Equal(Constants.SystemId, secondPersisted.ResolvedByActorId);
         Assert.Equal("resolved from endpoint", secondPersisted.ResolutionNote);
+
+        await WaitForAlertStreamVerificationAsync(
+            () =>
+            {
+                _alertEventStreamManager.Verify(
+                    x => x.SendUpdatedAlertEvents(It.Is<IEnumerable<AlertEvent>>(events => events.Count() == 2)),
+                    Times.Once);
+                _alertEventStreamManager.Verify(x => x.SendUnresolvedAlertCount(0), Times.Once);
+            },
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -204,5 +232,25 @@ public sealed class AlertEventEndpointTests : IntegrationTestBase
         }
 
         throw new InvalidOperationException($"Property '{propertyName}' was not found.");
+    }
+
+    private async Task WaitForAlertStreamVerificationAsync(Action verification, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var start = DateTime.UtcNow;
+
+        while (DateTime.UtcNow - start < timeout)
+        {
+            try
+            {
+                verification();
+                return;
+            }
+            catch (MockException)
+            {
+                await Task.Delay(100, cancellationToken);
+            }
+        }
+
+        verification();
     }
 }
