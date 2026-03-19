@@ -41,7 +41,7 @@ internal sealed class AcknowledgeAlertEventsHandler(
         }
 
         var alertEvents = await unitOfWork.AlertEvents.GetByIdAsync(ids, cancellationToken);
-        if (alertEvents.Count != idCount)
+        if (alertEvents.Count() != idCount)
             return Result.Failure(new NotFoundError("One or more alert events do not exist"));
 
         var utcNow = DateTime.UtcNow;

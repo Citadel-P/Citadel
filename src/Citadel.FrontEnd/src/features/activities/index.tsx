@@ -5,14 +5,14 @@ import { useActivitiesGroup } from './hooks/useActivitiesGroup';
 import { ActivitiesTable } from './table';
 import { ActivityEventType, ActivityResourceType } from '@/api/generated/api.types';
 import { useActivityQuery } from '@/lib/atoms';
-import { ResourceSelectorField, SelectField } from '@/components/custom/common';
+import { FilterBar, filterFieldClassName, ResourceSelectorField, SelectField } from '@/components/custom/common';
 import { ResourceType } from '@/api/types';
 import TaskSheet from '@/components/custom/task-sheet';
 import { Link } from 'react-router';
 
 export const ActivityComponents: RequiredComponents = {
   Icon: <Activity className="h-4 w-4" />,
-  Content: ({ items, actions, isLoading }) => {
+  Content: ({ items, isLoading }) => {
     return (
       <ActivitiesTable pagedResult={items as any} isLoading={isLoading} displayTarget={true} displayPagging={true} />
     );
@@ -20,6 +20,7 @@ export const ActivityComponents: RequiredComponents = {
   header: {
     showSearch: false,
     showAdd: false,
+    subtitle: 'View system activy logs across your resources.',
     Extra: SearchSection,
   },
   useData: function (): ResourceDataHookResult<any> {
@@ -75,22 +76,20 @@ function SearchSection() {
 
   const handleEventChange = (value: string) => {
     setQuery({
-      ...query,
       eventType: value as ActivityEventType | 'All',
       page: 1,
     });
   };
 
-  const handleResourceChange = (v: { id: string; name: string }) => {
+  const handleResourceChange = (value: { id: string; name: string } | undefined) => {
     setQuery({
-      ...query,
-      resourceId: v.id,
+      resourceId: value?.id,
       page: 1,
     });
   };
 
   return (
-    <div className="flex flex-col sm:flex-row sm:gap-4 gap-2">
+    <FilterBar>
       <SelectField
         value={query.resourceType}
         options={resourceOptions}
@@ -98,6 +97,7 @@ function SearchSection() {
         placeholder="All Resources"
         allLabel="All Resources"
         allIcon={SquareStack}
+        className={filterFieldClassName}
       />
       {query.resourceType != 'All' && (
         <ResourceSelectorField
@@ -105,7 +105,7 @@ function SearchSection() {
           onSelect={handleResourceChange as any}
           selected={query.resourceId}
           placeholder={'Select ' + query.resourceType}
-          className="w-[200px]"
+          className={filterFieldClassName}
         />
       )}
       <SelectField
@@ -114,8 +114,9 @@ function SearchSection() {
         onChange={handleEventChange}
         placeholder="All Events"
         allLabel="All Events"
+        className={filterFieldClassName}
       />
-    </div>
+    </FilterBar>
   );
 }
 

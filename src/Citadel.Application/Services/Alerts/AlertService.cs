@@ -149,8 +149,9 @@ internal sealed class AlertStateWorkItem(
                 severity: rule.Severity,
                 info: match.Info!,
                 resourceId: match.ResourceId,
+                resourceName: match.ResourceName,
                 resourceType: match.ResourceType,
-                createdByActorId: Constants.SystemId);
+                deduplicationComponent: match.DeduplicationComponent);
 
             state.MarkTriggered(utcNow);
 

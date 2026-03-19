@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260317195447_migration0001")]
+    [Migration("20260319161147_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -173,10 +173,6 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("TEXT")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("CreatedByActorId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("DeduplicationKey")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -200,6 +196,10 @@ namespace Infrastructure.Migrations.Migrations
                     b.Property<string>("ResourceId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ResourceName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ResourceType")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -220,8 +220,6 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AlertRuleId");
-
-                    b.HasIndex("CreatedByActorId");
 
                     b.HasIndex("OpenIncidentKey")
                         .IsUnique()
@@ -1160,12 +1158,6 @@ namespace Infrastructure.Migrations.Migrations
                         .WithMany()
                         .HasForeignKey("AlertRuleId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Actor", null)
-                        .WithMany()
-                        .HasForeignKey("CreatedByActorId")
-                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

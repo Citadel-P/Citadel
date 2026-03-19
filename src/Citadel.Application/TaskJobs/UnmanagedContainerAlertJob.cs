@@ -59,6 +59,7 @@ internal sealed class UnmanagedContainerAlertJob(
                 new ContainerAlertSnapshot(
                     Id: container.Id,
                     PlatformId: container.PlatformId,
+                    ContainerId: container.DockerContainerId,
                     Name: container.Name,
                     PlatformName: platform.Name,
                     PlatformAddress: platform.Address)

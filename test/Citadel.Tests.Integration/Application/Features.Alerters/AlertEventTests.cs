@@ -22,6 +22,7 @@ public sealed class AlertEventTests : IntegrationTestBase
     private readonly Guid _alertId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private readonly Guid _secondAlertId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
     private readonly Guid _resolvedAlertId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+    private string _resourceName = string.Empty;
     private Guid _alertRuleId;
 
     protected override void ConfigureTestServices(IServiceCollection services)
@@ -33,6 +34,7 @@ public sealed class AlertEventTests : IntegrationTestBase
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
         var platform = Fakes.GetDummyPlatform();
+        _resourceName = platform.Name;
         await uow.Platforms.AddAsync(platform, TestContext.Current.CancellationToken);
 
         _alertRuleId = (await uow.AlertRules.GetAllAsync(TestContext.Current.CancellationToken))
@@ -46,6 +48,7 @@ public sealed class AlertEventTests : IntegrationTestBase
             severity: AlertSeverity.Critical,
             info: new PlatformUnreachableAlertInfo(platform.Name, _resourceId, platform.Address),
             resourceId: _resourceId,
+            resourceName: platform.Name,
             resourceType: AlertResourceType.Platform,
             deduplicationKey: "DEDUP-ACTIVE",
             openIncidentKey: "DEDUP-ACTIVE",
@@ -54,7 +57,6 @@ public sealed class AlertEventTests : IntegrationTestBase
             resolvedByActorId: null,
             resolvedAt: null,
             resolutionNote: null,
-            createdByActorId: Constants.SystemId,
             createdAt: new DateTime(2026, 01, 01, 10, 00, 00, DateTimeKind.Utc),
             updatedAt: new DateTime(2026, 01, 01, 10, 00, 00, DateTimeKind.Utc));
 
@@ -65,6 +67,7 @@ public sealed class AlertEventTests : IntegrationTestBase
             severity: AlertSeverity.Warning,
             info: new PlatformUnreachableAlertInfo(platform.Name, _secondResourceId, platform.Address),
             resourceId: _secondResourceId,
+            resourceName: platform.Name,
             resourceType: AlertResourceType.Platform,
             deduplicationKey: "DEDUP-ACTIVE-2",
             openIncidentKey: "DEDUP-ACTIVE-2",
@@ -73,7 +76,6 @@ public sealed class AlertEventTests : IntegrationTestBase
             resolvedByActorId: null,
             resolvedAt: null,
             resolutionNote: null,
-            createdByActorId: Constants.SystemId,
             createdAt: new DateTime(2026, 01, 01, 10, 30, 00, DateTimeKind.Utc),
             updatedAt: new DateTime(2026, 01, 01, 10, 30, 00, DateTimeKind.Utc));
 
@@ -84,6 +86,7 @@ public sealed class AlertEventTests : IntegrationTestBase
             severity: AlertSeverity.Warning,
             info: new PlatformUnreachableAlertInfo(platform.Name, _resolvedResourceId, platform.Address),
             resourceId: _resolvedResourceId,
+            resourceName: platform.Name,
             resourceType: AlertResourceType.Platform,
             deduplicationKey: "DEDUP-RESOLVED",
             openIncidentKey: null,
@@ -92,7 +95,6 @@ public sealed class AlertEventTests : IntegrationTestBase
             resolvedByActorId: Constants.SystemId,
             resolvedAt: new DateTime(2026, 01, 01, 12, 00, 00, DateTimeKind.Utc),
             resolutionNote: "resolved during seed",
-            createdByActorId: Constants.SystemId,
             createdAt: new DateTime(2026, 01, 01, 09, 00, 00, DateTimeKind.Utc),
             updatedAt: new DateTime(2026, 01, 01, 12, 00, 00, DateTimeKind.Utc));
 
@@ -114,6 +116,7 @@ public sealed class AlertEventTests : IntegrationTestBase
         Assert.Equal(_alertId, GetProperty(root, "id").GetGuid());
         Assert.Equal(_alertRuleId, GetProperty(root, "alertRuleId").GetGuid());
         Assert.Equal(_resourceId, GetProperty(root, "resourceId").GetGuid());
+        Assert.Equal(_resourceName, GetProperty(root, "resourceName").GetString());
         Assert.Equal($"/platforms/{_resourceId}", GetProperty(root, "resourcePath").GetString());
     }
 

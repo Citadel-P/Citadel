@@ -49,7 +49,7 @@ public record PlatformUnreachableAlertInfo(string PlatformName, Guid Id, string 
     public override string HumanMessage => $"Platform '{PlatformName}' with id '{Id}' at {Address} is unreachable";
 }
 
-public record UnmanagedContainerCreatedAlertInfo(string PlatformName, string PlatformAddress, string ContainerName) : AlertEventInfo
+public record UnmanagedContainerCreatedAlertInfo(string PlatformName, string PlatformAddress, string ContainerName, string ContainerId) : AlertEventInfo
 {
     public override string HumanMessage =>
         $"Unmanaged container '{ContainerName}' was created on platform '{PlatformName}' ({PlatformAddress})";

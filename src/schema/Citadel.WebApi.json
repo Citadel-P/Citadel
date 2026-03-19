@@ -7647,7 +7647,8 @@
         "required": [
           "platformName",
           "platformAddress",
-          "containerName"
+          "containerName",
+          "containerId"
         ],
         "properties": {
           "$type": {
@@ -7663,6 +7664,9 @@
             "type": "string"
           },
           "containerName": {
+            "type": "string"
+          },
+          "containerId": {
             "type": "string"
           },
           "humanMessage": {
@@ -7690,9 +7694,9 @@
           "message",
           "info",
           "resourceId",
+          "resourceName",
           "resourceType",
           "resourcePath",
-          "createdByActorId",
           "acknowledgedByActorId",
           "acknowledgedAt",
           "resolvedByActorId",
@@ -7733,6 +7737,9 @@
             ],
             "format": "uuid"
           },
+          "resourceName": {
+            "type": "string"
+          },
           "resourceType": {
             "$ref": "#/components/schemas/AlertResourceType"
           },
@@ -7741,10 +7748,6 @@
               "null",
               "string"
             ]
-          },
-          "createdByActorId": {
-            "type": "string",
-            "format": "uuid"
           },
           "acknowledgedByActorId": {
             "type": [

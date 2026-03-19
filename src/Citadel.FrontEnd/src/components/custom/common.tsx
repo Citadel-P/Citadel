@@ -1,4 +1,5 @@
 import { useMemo, useState, useLayoutEffect, useRef, useCallback, useEffect } from 'react';
+import { ColumnDef } from '@tanstack/react-table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   ActorType,
@@ -10,9 +11,11 @@ import {
   UpdateBehavior,
   ActivityResourceType,
   AlertSeverity,
+  AlertResourceType,
 } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem, CommandEmpty } from '@/components/ui/command';
+import { DataTable } from '@/components/ui/data-table';
 import {
   Cable,
   Check,
@@ -33,6 +36,7 @@ import { useMeasuredWidth, useRead, useLocalStorage } from '@/lib/hooks';
 import { useResourceFilter } from '@/lib/atoms';
 import Convert from 'ansi-to-html';
 import { Badge } from '../ui/badge';
+import { ContentCard } from './content-card';
 import { MultiSelect, MultiSelectOption } from '../ui/multi-select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -53,7 +57,6 @@ import {
   RefreshCcw,
   RefreshCcwDot,
   RefreshCwOff,
-  SquareArrowUp,
   Timer,
   WrapText,
 } from 'lucide-react';
@@ -88,7 +91,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   const resourceName = PluralResourceMap[type];
   const [filter, setFilter] = useResourceFilter<{ item: T }>(type);
 
-  const read = useRead(`list${resourceName}`, { platformId });
+  const read = useRead(`list${resourceName}` as any, { platformId });
   const items = (Object.values(read.data?.data ?? {}).at(0) as T[]) ?? [];
   const selectedItem =
     filter?.item ?? (typeof selected === 'string' ? items.find((i) => i.id === selected) : selected) ?? undefined;
@@ -553,7 +556,7 @@ export const PlatformStatusCell = ({
   );
 };
 
-export const ActorCell = ({ type, id, name }: { type: ActorType; id: string; name: string | undefined }) => {
+export const ActorCell = ({ type, name }: { type: ActorType; name: string | undefined }) => {
   return (
     <div className="flex flex-row items-center gap-2">
       {type === ActorType.User && <User width={13} height={13} className="text-foreground/80" />}
@@ -568,7 +571,7 @@ export const TargetCell = ({
   resourceId,
   resourceName,
 }: {
-  resourceType: ActivityResourceType;
+  resourceType: ActivityResourceType | AlertResourceType;
   resourceId: string | undefined;
   resourceName: string | undefined;
 }) => {
@@ -712,6 +715,90 @@ const buildPageItems = (currentPage: number, totalPages: number) => {
   return items;
 };
 
+export const filterBarClassName =
+  'grid w-full grid-cols-1 gap-2 sm:ml-auto sm:w-fit sm:grid-cols-2 sm:justify-items-end xl:flex xl:flex-wrap xl:items-center xl:justify-end xl:gap-4';
+
+export const filterFieldClassName = 'w-full min-w-0 sm:w-[220px]';
+
+export const FilterBar = ({ children }: { children: React.ReactNode }) => {
+  return <div className={filterBarClassName}>{children}</div>;
+};
+
+type PagedDataTableProps<TData extends { id?: string | null }, TValue> = {
+  columns: ColumnDef<TData, TValue>[];
+  data: TData[];
+  isLoading: boolean;
+  query: { page: number; pageSize: number };
+  setQuery: (patch: Partial<{ page: number; pageSize: number }>) => void;
+  totalCount?: number | string | null;
+  showPagination?: boolean;
+  onSelectionChange?: (selectedRows: TData[]) => void;
+  getRowId?: (row: TData) => string;
+};
+
+export function PagedDataTable<TData extends { id?: string | null }, TValue>({
+  columns,
+  data,
+  isLoading,
+  query,
+  setQuery,
+  totalCount,
+  showPagination = true,
+  onSelectionChange,
+  getRowId,
+}: PagedDataTableProps<TData, TValue>) {
+  const tableTopRef = useRef<HTMLDivElement | null>(null);
+  const totalPages = Math.max(1, Math.ceil(Number(totalCount ?? 0) / query.pageSize));
+
+  const goToPage = (page: number) => {
+    if (page < 1 || page > totalPages || page === query.page) return;
+    setQuery({ page });
+    requestAnimationFrame(() => {
+      tableTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const handlePageSizeChange = (value: string) => {
+    setQuery({
+      pageSize: Number(value),
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-4" ref={tableTopRef}>
+      <ContentCard>
+        <DataTable
+          columns={columns}
+          data={data}
+          isLoading={isLoading}
+          onSelectionChange={onSelectionChange}
+          getRowId={getRowId}
+        />
+      </ContentCard>
+      {showPagination && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <PaginationControls
+            currentPage={query.page}
+            totalPages={totalPages}
+            onPageChange={goToPage}
+            className="justify-start"
+          />
+          {totalPages > 1 && (
+            <SelectField
+              value={query.pageSize.toString()}
+              options={pageSizeOptions}
+              onChange={handlePageSizeChange}
+              placeholder="Page Size"
+              allLabel="Page Size"
+              selectableLabel={false}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SelectField({
   value,
   onChange,
@@ -720,6 +807,7 @@ export function SelectField({
   allLabel,
   allIcon: AllIcon,
   selectableLabel = true,
+  className,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -728,9 +816,10 @@ export function SelectField({
   allLabel: string;
   allIcon?: React.ComponentType<{ className?: string }>;
   selectableLabel?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="min-w-[200px]">
+    <div className={cn('min-w-[200px]', className)}>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger className="w-full bg-background">
           <SelectValue placeholder={placeholder} />

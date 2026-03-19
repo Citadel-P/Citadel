@@ -74,7 +74,7 @@ public sealed class PlatformVersionMismatchEvaluator : IAlertEvaluator
     {
         foreach (var platform in context.Platforms)
         {
-            if (IsCompatible(platform.AgentVersion))
+            if (IsLocal(platform.AgentVersion) || IsCompatible(platform.AgentVersion))
                 continue;
 
             yield return new AlertMatch(
@@ -88,6 +88,8 @@ public sealed class PlatformVersionMismatchEvaluator : IAlertEvaluator
 
     public static bool IsCompatible(string agentVersion) =>
         agentVersion.Equals(Constants.CompatibilityVersion, StringComparison.Ordinal);
+
+    public static bool IsLocal(string agentVersion) => string.IsNullOrEmpty(agentVersion);
 }
 
 [AlertEvaluator(AlertType.PlatformUnreachable)]
@@ -127,7 +129,8 @@ public sealed class UnmanagedContainerCreatedEvaluator : IAlertEvaluator
                 container.PlatformId,
                 container.PlatformName,
                 AlertResourceType.Platform,
-                new UnmanagedContainerCreatedAlertInfo(container.PlatformName, container.PlatformAddress, container.Name));
+                new UnmanagedContainerCreatedAlertInfo(container.PlatformName, container.PlatformAddress, container.Name, container.ContainerId),
+                container.Name);
         }
     }
 }

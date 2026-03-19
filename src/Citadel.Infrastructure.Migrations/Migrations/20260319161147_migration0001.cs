@@ -314,7 +314,6 @@ namespace Infrastructure.Migrations.Migrations
                     AcknowledgedByActorId = table.Column<string>(type: "TEXT", nullable: true),
                     AlertRuleId = table.Column<string>(type: "TEXT", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
                     DeduplicationKey = table.Column<string>(type: "TEXT", nullable: false),
                     Info = table.Column<string>(type: "TEXT", nullable: false),
                     OpenIncidentKey = table.Column<string>(type: "TEXT", nullable: true),
@@ -322,6 +321,7 @@ namespace Infrastructure.Migrations.Migrations
                     ResolvedAt = table.Column<DateTime>(type: "TEXT", nullable: true),
                     ResolvedByActorId = table.Column<string>(type: "TEXT", nullable: true),
                     ResourceId = table.Column<string>(type: "TEXT", nullable: true),
+                    ResourceName = table.Column<string>(type: "TEXT", nullable: false),
                     ResourceType = table.Column<string>(type: "TEXT", nullable: false),
                     Severity = table.Column<string>(type: "TEXT", nullable: false),
                     Type = table.Column<string>(type: "TEXT", nullable: false),
@@ -330,12 +330,6 @@ namespace Infrastructure.Migrations.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AlertEvents", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AlertEvents_Actors_CreatedByActorId",
-                        column: x => x.CreatedByActorId,
-                        principalTable: "Actors",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_AlertEvents_AlertRules_AlertRuleId",
                         column: x => x.AlertRuleId,
@@ -644,11 +638,6 @@ namespace Infrastructure.Migrations.Migrations
                 name: "IX_AlertEvents_AlertRuleId",
                 table: "AlertEvents",
                 column: "AlertRuleId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AlertEvents_CreatedByActorId",
-                table: "AlertEvents",
-                column: "CreatedByActorId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AlertEvents_OpenIncidentKey",

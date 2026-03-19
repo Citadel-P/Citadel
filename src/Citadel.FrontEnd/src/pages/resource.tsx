@@ -55,7 +55,7 @@ const ResourceView = <T,>({ Components, type }: ResourceViewProps<T>) => {
               </div>
               <div className="flex flex-col">
                 <div className="text-md font-bold text-foreground">{headerCfg.title ?? PluralResourceMap[type]}</div>
-                <p className="text-xs text-muted-foreground">{headerCfg.subtitle}</p>
+                <p className="text-xs text-muted-foreground truncate">{headerCfg.subtitle}</p>
               </div>
             </div>
             <div className="flex gap-2">

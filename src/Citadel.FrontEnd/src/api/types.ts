@@ -17,6 +17,7 @@ export type ResourceType =
   | 'Activity'
   | 'AlertRule'
   | 'AlertChannel'
+  | 'Alert'
   | 'Stack';
 export const PluralResourceMap = {
   Network: 'Networks',
@@ -28,8 +29,9 @@ export const PluralResourceMap = {
   Deployment: 'Deployments',
   Activity: 'Activities',
   AlertRule: 'AlertRules',
-  AlertChannel: 'AlertChannels',
+  Alert: 'Alerts',
   Stack: 'Stacks',
+  AlertChannel: 'AlertChannels',
 } as const satisfies Record<ResourceType, string>;
 
 export type AnyFn = (...args: any[]) => Promise<any>;

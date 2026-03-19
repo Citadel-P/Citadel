@@ -4,11 +4,13 @@ import { AppContext } from './app-context';
 import { SignalRProvider } from './signalr-provider';
 import { useRead } from '../hooks';
 import { usePlatformsGroup } from '@/features/platforms/hooks/usePlatformsGroup';
+import { useAlertEventsGroup } from '@/features/alerters/alert-events/hooks/useAlertEventsGroup';
 
 const AppProviderContent: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const { platformId } = useParams();
   const { data: platformData, isLoading: platformIsLoading } = useRead('getPlatfom', { id: platformId });
   const { platformsMessage, isLoading: platformsIsLoading } = usePlatformsGroup();
+  const alertEventsGroup = useAlertEventsGroup();
 
   const currentPlatform = useMemo(() => {
     if (!platformId) return platformData?.data;
@@ -21,8 +23,9 @@ const AppProviderContent: React.FC<{ children?: React.ReactNode }> = ({ children
     () => ({
       isLoading: platformIsLoading || platformsIsLoading,
       currentPlatform,
+      ...alertEventsGroup,
     }),
-    [platformIsLoading, platformsIsLoading, currentPlatform],
+    [platformIsLoading, platformsIsLoading, currentPlatform, alertEventsGroup],
   );
   return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
 };

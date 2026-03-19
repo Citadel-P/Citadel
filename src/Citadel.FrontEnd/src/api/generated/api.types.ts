@@ -179,6 +179,12 @@ export enum AlertResourceType {
   Stack = "Stack",
 }
 
+export enum AlertEventStatus {
+  Active = "Active",
+  Acknowledged = "Acknowledged",
+  Resolved = "Resolved",
+}
+
 export enum AlertDestination {
   Generic = "Generic",
   Bark = "Bark",
@@ -246,6 +252,10 @@ export enum ActivityEventType {
   AlertRuleUpdated = "AlertRuleUpdated",
   AlertRuleDeleted = "AlertRuleDeleted",
   AlertRuleRenamed = "AlertRuleRenamed",
+}
+
+export interface AcknowledgeAlertEventsInput {
+  ids: string[];
 }
 
 export interface ActivitiesView {
@@ -461,6 +471,181 @@ export interface AlertChannelView {
 
 export interface AlertChannelsView {
   channels: AlertChannelView[];
+}
+
+export type AlertEventInfo = BaseAlertEventInfo &
+  (
+    | BaseAlertEventInfoTypeMapping<
+        "PlatformCpuHigh",
+        AlertEventInfoPlatformCpuHighAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "PlatformRamHigh",
+        AlertEventInfoPlatformRamHighAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "PlatformUnreachable",
+        AlertEventInfoPlatformUnreachableAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "UnmanagedContainerCreated",
+        AlertEventInfoUnmanagedContainerCreatedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "PlatformVersionMismatch",
+        AlertEventInfoPlatformVersionMismatchAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "DeploymentImageUpdateAvailable",
+        AlertEventInfoDeploymentImageUpdateAvailableAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "DeploymentAutoUpdated",
+        AlertEventInfoDeploymentAutoUpdatedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "DeploymentAutoDeployFailed",
+        AlertEventInfoDeploymentAutoDeployFailedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackImageUpdateAvailable",
+        AlertEventInfoStackImageUpdateAvailableAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackAutoUpdated",
+        AlertEventInfoStackAutoUpdatedAlertInfo
+      >
+    | BaseAlertEventInfoTypeMapping<
+        "StackAutoDeployFailed",
+        AlertEventInfoStackDeployFailedAlertInfo
+      >
+  );
+
+export interface AlertEventInfoDeploymentAutoDeployFailedAlertInfo {
+  $type?: "DeploymentAutoDeployFailed";
+  deploymentName: string;
+  reason: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoDeploymentAutoUpdatedAlertInfo {
+  $type?: "DeploymentAutoUpdated";
+  deploymentName: string;
+  previousImage: string;
+  updatedImage: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoDeploymentImageUpdateAvailableAlertInfo {
+  $type?: "DeploymentImageUpdateAvailable";
+  deploymentName: string;
+  currentImage: string;
+  latestImage: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoPlatformCpuHighAlertInfo {
+  $type?: "PlatformCpuHigh";
+  platformName: string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  cpuUsagePercent: number | string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoPlatformRamHighAlertInfo {
+  $type?: "PlatformRamHigh";
+  platformName: string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  ramUsagePercent: number | string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoPlatformUnreachableAlertInfo {
+  $type?: "PlatformUnreachable";
+  platformName: string;
+  /** @format uuid */
+  id: string;
+  address: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoPlatformVersionMismatchAlertInfo {
+  $type?: "PlatformVersionMismatch";
+  platformName: string;
+  currentAgentVersion: string;
+  expectedAgentVersion: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoStackAutoUpdatedAlertInfo {
+  $type?: "StackAutoUpdated";
+  stackName: string;
+  previousImage: string;
+  updatedImage: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoStackDeployFailedAlertInfo {
+  $type?: "StackAutoDeployFailed";
+  stackName: string;
+  reason: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoStackImageUpdateAvailableAlertInfo {
+  $type?: "StackImageUpdateAvailable";
+  stackName: string;
+  currentImage: string;
+  latestImage: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventInfoUnmanagedContainerCreatedAlertInfo {
+  $type?: "UnmanagedContainerCreated";
+  platformName: string;
+  platformAddress: string;
+  containerName: string;
+  humanMessage?: null | string;
+}
+
+export interface AlertEventView {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  alertRuleId: string;
+  type: AlertType;
+  severity: AlertSeverity;
+  status: AlertEventStatus;
+  message: string;
+  info: AlertEventInfo;
+  /** @format uuid */
+  resourceId: null | string;
+  resourceName: string;
+  resourceType: AlertResourceType;
+  resourcePath: null | string;
+  /** @format uuid */
+  acknowledgedByActorId: null | string;
+  /** @format date-time */
+  acknowledgedAt: any;
+  /** @format uuid */
+  resolvedByActorId: null | string;
+  /** @format date-time */
+  resolvedAt: any;
+  resolutionNote: null | string;
+  /** @format date-time */
+  createdAt: any;
+  /** @format date-time */
+  updatedAt: any;
+}
+
+export interface AlertEventsView {
+  pagedResult: PagedResultViewOfAlertEventView;
 }
 
 export interface AlertRuleConfigView {
@@ -1735,6 +1920,25 @@ export interface PagedResultViewOfActivityView {
   pageSize: number | string;
 }
 
+export interface PagedResultViewOfAlertEventView {
+  items: AlertEventView[];
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  totalCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  page: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  pageSize: number | string;
+}
+
 export type PlatformDescriptor = BasePlatformDescriptor &
   (
     | BasePlatformDescriptorTypeMapping<
@@ -2068,6 +2272,11 @@ export interface RegistryView {
   isDefault?: boolean;
 }
 
+export interface ResolveAlertEventsInput {
+  ids: string[];
+  resolutionNote: null | string;
+}
+
 export interface ResourceSpec {
   /**
    * @format float
@@ -2131,6 +2340,14 @@ export interface Ulimit {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   hard: null | number | string;
+}
+
+export interface UnresolvedAlertsCountView {
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  count: number | string;
 }
 
 export interface VerifyAlertChannelInput {
@@ -2211,6 +2428,12 @@ export interface VolumesView {
 type BaseActivityEventInfo = object;
 
 type BaseActivityEventInfoTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseAlertEventInfo = object;
+
+type BaseAlertEventInfoTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
@@ -4121,6 +4344,159 @@ export class Api<
         query: query,
         secure: true,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AlertEvents
+     * @name GetAlertEvent
+     * @summary Get alert event by id
+     * @request GET:/api/v1/alertEvents/{id}
+     * @secure
+     * @response `200` `AlertEventView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getAlertEvent: (id: string, params: RequestParams = {}) =>
+      this.request<
+        AlertEventView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/alertEvents/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AlertEvents
+     * @name ListAlertEvents
+     * @summary List alert events
+     * @request GET:/api/v1/alertEvents
+     * @secure
+     * @response `200` `AlertEventsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listAlertEvents: (
+      query?: {
+        /** @format uuid */
+        ResourceId?: string;
+        AlertType?: AlertType;
+        ResourceType?: AlertResourceType;
+        UnresolvedOnly?: boolean;
+        /**
+         * @format int32
+         * @default 1
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        Page?: number | string;
+        /**
+         * @format int32
+         * @default 50
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        PageSize?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AlertEventsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/alertEvents`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AlertEvents
+     * @name GetUnresolvedAlertEventsCount
+     * @summary Get unresolved alert event count
+     * @request GET:/api/v1/alertEvents/unresolved-count
+     * @secure
+     * @response `200` `UnresolvedAlertsCountView` OK
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getUnresolvedAlertEventsCount: (params: RequestParams = {}) =>
+      this.request<UnresolvedAlertsCountView, ProblemDetails>({
+        path: `/api/v1/alertEvents/unresolved-count`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AlertEvents
+     * @name AcknowledgeAlertEvents
+     * @summary Acknowledge alert events in bulk
+     * @request POST:/api/v1/alertEvents/acknowledge
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    acknowledgeAlertEvents: (
+      data: AcknowledgeAlertEventsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/alertEvents/acknowledge`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AlertEvents
+     * @name ResolveAlertEvents
+     * @summary Resolve alert events in bulk
+     * @request POST:/api/v1/alertEvents/resolve
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    resolveAlertEvents: (
+      data: ResolveAlertEventsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/alertEvents/resolve`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         ...params,
       }),
 

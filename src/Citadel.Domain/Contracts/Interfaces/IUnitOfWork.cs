@@ -188,7 +188,7 @@ public interface IAlertEventRepository
 {
     Task<int> AddAsync(AlertEvent alertEvent, CancellationToken cancellationToken);
     Task<AlertEvent?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
-    Task<IReadOnlyCollection<AlertEvent>> GetByIdAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<IEnumerable<AlertEvent>> GetByIdAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<PagedResult<AlertEvent>> GetPagedAsync(Guid? resourceId, AlertType? alertType, AlertResourceType? resourceType,
         int page, int pageSize, CancellationToken cancellationToken, bool? unresolvedOnly = null);
     Task<int> UpdateAsync(AlertEvent alertEvent, CancellationToken cancellationToken);

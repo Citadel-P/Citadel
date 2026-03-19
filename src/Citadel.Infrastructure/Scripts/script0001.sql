@@ -153,7 +153,6 @@ CREATE TABLE "AlertEvents" (
     "AcknowledgedByActorId" TEXT NULL,
     "AlertRuleId" TEXT NOT NULL,
     "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    "CreatedByActorId" TEXT NOT NULL,
     "DeduplicationKey" TEXT NOT NULL,
     "Info" TEXT NOT NULL,
     "OpenIncidentKey" TEXT NULL,
@@ -161,11 +160,11 @@ CREATE TABLE "AlertEvents" (
     "ResolvedAt" TEXT NULL,
     "ResolvedByActorId" TEXT NULL,
     "ResourceId" TEXT NULL,
+    "ResourceName" TEXT NOT NULL,
     "ResourceType" TEXT NOT NULL,
     "Severity" TEXT NOT NULL,
     "Type" TEXT NOT NULL,
     "UpdatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    CONSTRAINT "FK_AlertEvents_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_AlertEvents_AlertRules_AlertRuleId" FOREIGN KEY ("AlertRuleId") REFERENCES "AlertRules" ("Id") ON DELETE CASCADE
 );
 
@@ -361,8 +360,6 @@ CREATE INDEX "IX_AlertChannels_CreatedByActorId" ON "AlertChannels" ("CreatedByA
 
 CREATE INDEX "IX_AlertEvents_AlertRuleId" ON "AlertEvents" ("AlertRuleId");
 
-CREATE INDEX "IX_AlertEvents_CreatedByActorId" ON "AlertEvents" ("CreatedByActorId");
-
 CREATE UNIQUE INDEX "IX_AlertEvents_OpenIncidentKey" ON "AlertEvents" ("OpenIncidentKey");
 
 CREATE INDEX "IX_AlertEvents_ResourceType" ON "AlertEvents" ("ResourceType");
@@ -434,7 +431,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260317195447_migration0001', '10.0.3');
+VALUES ('20260319161147_migration0001', '10.0.3');
 
 COMMIT;
 

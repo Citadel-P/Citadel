@@ -10,12 +10,19 @@ public sealed class AlertEventRepositoryTests : IntegrationTestBase
 {
     private readonly Guid _firstResourceId = Guid.Parse("44444444-4444-4444-4444-444444444444");
     private readonly Guid _secondResourceId = Guid.Parse("55555555-5555-5555-5555-555555555555");
-    private Guid _alertRuleId;
+    private Guid _platformAlertRuleId;
+    private Guid _unmanagedContainerAlertRuleId;
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
-        _alertRuleId = (await uow.AlertRules.GetAllAsync(TestContext.Current.CancellationToken))
+        var alertRules = await uow.AlertRules.GetAllAsync(TestContext.Current.CancellationToken);
+
+        _platformAlertRuleId = alertRules
             .First(x => x.Type == AlertType.PlatformUnreachable)
+            .Id;
+
+        _unmanagedContainerAlertRuleId = alertRules
+            .First(x => x.Type == AlertType.UnmanagedContainerCreated)
             .Id;
     }
 
@@ -69,6 +76,27 @@ public sealed class AlertEventRepositoryTests : IntegrationTestBase
         Assert.Equal("resolved manually", persisted.ResolutionNote);
         Assert.Equal(now, persisted.UpdatedAt);
         Assert.Equal(0, unresolvedCount);
+    }
+
+    [Fact]
+    public async Task AddAsync_Should_Not_Deduplicate_Unmanaged_Containers_On_The_Same_Platform()
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var platformId = Guid.NewGuid();
+
+        var first = CreateUnmanagedContainerAlertEvent(platformId, "platform-7", "https://platform-7", "container-a", "aaaabbbdcdd");
+        var second = CreateUnmanagedContainerAlertEvent(platformId, "platform-7", "https://platform-7", "container-b", "aaaabbbdcde");
+
+        await uow.AlertEvents.AddAsync(first, TestContext.Current.CancellationToken);
+        await uow.AlertEvents.AddAsync(second, TestContext.Current.CancellationToken);
+        await uow.CommitAsync(TestContext.Current.CancellationToken);
+
+        var events = await uow.AlertEvents.GetPagedAsync(platformId, AlertType.UnmanagedContainerCreated, AlertResourceType.Platform, 1, 10, TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, events.Items.Count());
+        Assert.Contains(events.Items, x => x.Id == first.Id);
+        Assert.Contains(events.Items, x => x.Id == second.Id);
     }
 
     [Fact]
@@ -132,11 +160,22 @@ public sealed class AlertEventRepositoryTests : IntegrationTestBase
 
     private AlertEvent CreateAlertEvent(Guid resourceId, string platformName, string address)
         => new(
-            alertRuleId: _alertRuleId,
+            alertRuleId: _platformAlertRuleId,
             type: AlertType.PlatformUnreachable,
             severity: AlertSeverity.Critical,
             info: new PlatformUnreachableAlertInfo(platformName, resourceId, address),
             resourceId: resourceId,
+            resourceName: platformName,
+            resourceType: AlertResourceType.Platform);
+
+    private AlertEvent CreateUnmanagedContainerAlertEvent(Guid platformId, string platformName, string platformAddress, string containerName, string containerId)
+        => new(
+            alertRuleId: _unmanagedContainerAlertRuleId,
+            type: AlertType.UnmanagedContainerCreated,
+            severity: AlertSeverity.Warning,
+            info: new UnmanagedContainerCreatedAlertInfo(platformName, platformAddress, containerName, containerId),
+            resourceId: platformId,
+            resourceName: platformName,
             resourceType: AlertResourceType.Platform,
-            createdByActorId: Constants.SystemId);
+            deduplicationComponent: containerName);
 }

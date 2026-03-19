@@ -6,19 +6,24 @@ import { useResourceFilter, useTaskSheet } from '@/lib/atoms';
 import { ResourceComponents } from '@/features';
 import { useAppContext } from '@/lib/context/app-context';
 import { ActorCell, LogViewer, TargetCell } from '@/components/custom/common';
-import { useRead, useStreamProgress } from '@/lib/hooks';
+import { useMutate, useRead, useStreamProgress } from '@/lib/hooks';
 import {
   ActivityView,
+  AlertEventStatus,
+  AlertEventView,
   ApplyDeploymentInput,
+  AcknowledgeAlertEventsInput,
   DeploymentStreamItem,
   ActivityEventInfo,
   PullImageInput,
   PullImageStreamItem,
+  ResolveAlertEventsInput,
   RegistryView,
 } from '@/api/generated/api.types';
 import { formatActivityEvent, serializeData } from '@/lib/utils';
 import Loader from '../ui/loader';
 import { MonacoDiff, MonacoEditor } from '@/lib/monaco';
+import { Button } from '@/components/ui/button';
 
 interface PullImageParams {
   imageTag: string;
@@ -31,6 +36,7 @@ export type TaskSpec =
   | { kind: 'pull'; payload: PullImageParams }
   | { kind: 'deploy'; payload: DeployParams }
   | { kind: 'activity'; payload: ActivityView }
+  | { kind: 'alertEvent'; payload: AlertEventView }
   | { kind: 'build'; payload: Record<string, unknown> }
   | { kind: 'stack'; payload: Record<string, unknown> };
 
@@ -91,7 +97,7 @@ function TaskActivityLayout({ activityId }: { activityId: string }) {
         <SheetTitle>{formatActivityEvent(activity.eventType)}</SheetTitle>
         <SheetDescription asChild>
           <div className="flex flex-col gap-3">
-            <ActorCell type={activity.actorType} id={activity.actorId} name={activity.actorName} />
+            <ActorCell type={activity.actorType} name={activity.actorName} />
             <TargetCell
               resourceType={activity.resourceType}
               resourceId={activity.resourceId ?? ''}
@@ -105,6 +111,75 @@ function TaskActivityLayout({ activityId }: { activityId: string }) {
       <div className="p-4 pt-0 pb-2">
         <div className="rounded-lg border shadow-xs p-4">
           <ActivityInfo activity={activity} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TaskAlertEventLayout({ alertEventId }: { alertEventId: string }) {
+  const { data, isLoading } = useRead('getAlertEvent', { id: alertEventId });
+  const { liveAlertEvents } = useAppContext();
+  const { mutateAsync: acknowledgeAlertEvents, isPending: isAcknowledging } = useMutate('acknowledgeAlertEvents');
+  const { mutateAsync: resolveAlertEvents, isPending: isResolving } = useMutate('resolveAlertEvents');
+
+  if (isLoading) return <Loader />;
+
+  const event = data?.data ? (liveAlertEvents[data.data.id] ?? data.data) : undefined;
+  if (!event) {
+    return <div className="p-8 text-center text-muted-foreground">Alert event not found.</div>;
+  }
+
+  const canAcknowledge = event.status === AlertEventStatus.Active;
+  const canResolve = event.status !== AlertEventStatus.Resolved;
+
+  const handleAcknowledge = async () => {
+    const input: AcknowledgeAlertEventsInput = { ids: [event.id] };
+    await acknowledgeAlertEvents({ data: input });
+  };
+
+  const handleResolve = async () => {
+    const input: ResolveAlertEventsInput = { ids: [event.id], resolutionNote: null };
+    await resolveAlertEvents({ data: input });
+  };
+
+  return (
+    <div className="p-2">
+      <SheetHeader>
+        <SheetTitle>{event.type}</SheetTitle>
+        <SheetDescription asChild>
+          <div className="flex flex-col gap-3">
+            <TargetCell
+              resourceType={event.resourceType}
+              resourceId={event.resourceId ?? ''}
+              resourceName={event.resourceName}
+            />
+            <div className="text-sm text-muted-foreground">Status: {event.status}</div>
+            <RecordedAtCell createdAt={event.createdAt} />
+          </div>
+        </SheetDescription>
+      </SheetHeader>
+
+      <div className="p-4 pt-0 pb-2 flex flex-col gap-4">
+        <MonacoEditor
+          value={serializeData(data!.data.info)}
+          filename={`alert-event-info-${event.id}.json`}
+          className="my-0 mx-0 min-h-[220px]"
+          title="Info"
+          readOnly
+          folding
+        />
+
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            onClick={handleAcknowledge}
+            disabled={!canAcknowledge || isAcknowledging || isResolving}>
+            {isAcknowledging ? 'Acknowledging...' : 'Acknowledge'}
+          </Button>
+          <Button onClick={handleResolve} disabled={!canResolve || isResolving || isAcknowledging}>
+            {isResolving ? 'Resolving...' : 'Resolve'}
+          </Button>
         </div>
       </div>
     </div>
@@ -247,19 +322,24 @@ function ApplyDeployTaskRenderer({ payload, type }: { payload: DeployParams; typ
   return <TaskStreamLayout title="Deploy" refName={payload.name} type={type} state={state as any} />;
 }
 
-function ActivityTaskRenderer({ payload, type }: { payload: ActivityView; type: ResourceType }) {
+function ActivityTaskRenderer({ payload }: { payload: ActivityView; type: ResourceType }) {
   return <TaskActivityLayout activityId={payload.id} />;
+}
+
+function AlertEventTaskRenderer({ payload }: { payload: AlertEventView; type: ResourceType }) {
+  return <TaskAlertEventLayout alertEventId={payload.id} />;
 }
 
 const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }) => ReactNode> = {
   pull: PullImageTaskRenderer,
   deploy: ApplyDeployTaskRenderer,
   activity: ActivityTaskRenderer,
+  alertEvent: AlertEventTaskRenderer,
 };
 
 export function TaskSheet({ type }: { type: ResourceType }) {
   const { state, close } = useTaskSheet(type);
-  const side = type === 'Activity' ? 'top' : 'bottom';
+  const side = type === 'Activity' || 'AlertEvent' ? 'top' : 'bottom';
 
   if (!state.open || !state.task) return null;
 

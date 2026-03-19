@@ -17,31 +17,31 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
     {
         const string sql = @"
         INSERT INTO AlertEvents (
-            Id, AlertRuleId, CreatedByActorId, Type, Severity, Info, ResourceId, ResourceType, DeduplicationKey, OpenIncidentKey,
+            Id, AlertRuleId, Type, Severity, Info, ResourceId, ResourceName, ResourceType, DeduplicationKey, OpenIncidentKey,
             AcknowledgedByActorId, AcknowledgedAt, ResolvedByActorId, ResolvedAt, ResolutionNote, CreatedAt, UpdatedAt
         )
         VALUES (
-            @Id, @AlertRuleId, @CreatedByActorId, @Type, @Severity, @Info, @ResourceId, @ResourceType, @DeduplicationKey, @OpenIncidentKey,
+            @Id, @AlertRuleId, @Type, @Severity, @Info, @ResourceId, @ResourceName, @ResourceType, @DeduplicationKey, @OpenIncidentKey,
             @AcknowledgedByActorId, @AcknowledgedAt, @ResolvedByActorId, @ResolvedAt, @ResolutionNote, @CreatedAt, @UpdatedAt
         )
         ON CONFLICT(OpenIncidentKey) DO UPDATE SET
             AlertRuleId = excluded.AlertRuleId,
-            CreatedByActorId = excluded.CreatedByActorId,
             Type = excluded.Type,
             Severity = excluded.Severity,
             Info = excluded.Info,
             ResourceId = excluded.ResourceId,
+            ResourceName = excluded.ResourceName,
             ResourceType = excluded.ResourceType,
             UpdatedAt = excluded.UpdatedAt";
         return db.ExecuteAsync(sql, new
         {
             Id = alertEvent.Id.Format(),
             AlertRuleId = alertEvent.AlertRuleId.Format(),
-            CreatedByActorId = alertEvent.CreatedByActorId.Format(),
             Type = EnumFormatter<AlertType>.GetValue(alertEvent.Type),
             Severity = EnumFormatter<AlertSeverity>.GetValue(alertEvent.Severity),
             Info = JsonSerializer.Serialize(alertEvent.Info, AlertEventJsonContext.Default.AlertEventInfo),
             ResourceId = alertEvent.ResourceId?.Format(),
+            alertEvent.ResourceName,
             ResourceType = EnumFormatter<AlertResourceType>.GetValue(alertEvent.ResourceType),
             alertEvent.DeduplicationKey,
             alertEvent.OpenIncidentKey,
@@ -62,11 +62,11 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         SELECT
             a.Id,
             a.AlertRuleId,
-            a.CreatedByActorId,
             a.Type,
             a.Severity,
             a.Info,
             a.ResourceId,
+            a.ResourceName,
             a.ResourceType,
             a.DeduplicationKey,
             a.OpenIncidentKey,
@@ -86,17 +86,17 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         return row?.ToDomain();
     }
 
-    public async Task<IReadOnlyCollection<AlertEvent>> GetByIdAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
+    public async Task<IEnumerable<AlertEvent>> GetByIdAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         const string sql = """
         SELECT
             a.Id,
             a.AlertRuleId,
-            a.CreatedByActorId,
             a.Type,
             a.Severity,
             a.Info,
             a.ResourceId,
+            a.ResourceName,
             a.ResourceType,
             a.DeduplicationKey,
             a.OpenIncidentKey,
@@ -139,11 +139,11 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         SELECT
             a.Id,
             a.AlertRuleId,
-            a.CreatedByActorId,
             a.Type,
             a.Severity,
             a.Info,
             a.ResourceId,
+            a.ResourceName,
             a.ResourceType,
             a.DeduplicationKey,
             a.OpenIncidentKey,
@@ -203,11 +203,11 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         UPDATE AlertEvents
         SET
             AlertRuleId = @AlertRuleId,
-            CreatedByActorId = @CreatedByActorId,
             Type = @Type,
             Severity = @Severity,
             Info = @Info,
             ResourceId = @ResourceId,
+            ResourceName = @ResourceName,
             ResourceType = @ResourceType,
             DeduplicationKey = @DeduplicationKey,
             OpenIncidentKey = @OpenIncidentKey,
@@ -223,11 +223,11 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         {
             Id = alertEvent.Id.Format(),
             AlertRuleId = alertEvent.AlertRuleId.Format(),
-            CreatedByActorId = alertEvent.CreatedByActorId.Format(),
             Type = EnumFormatter<AlertType>.GetValue(alertEvent.Type),
             Severity = EnumFormatter<AlertSeverity>.GetValue(alertEvent.Severity),
             Info = JsonSerializer.Serialize(alertEvent.Info, AlertEventJsonContext.Default.AlertEventInfo),
             ResourceId = alertEvent.ResourceId?.Format(),
+            alertEvent.ResourceName,
             ResourceType = EnumFormatter<AlertResourceType>.GetValue(alertEvent.ResourceType),
             alertEvent.DeduplicationKey,
             alertEvent.OpenIncidentKey,
@@ -246,11 +246,11 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         UPDATE AlertEvents
         SET
             AlertRuleId = @AlertRuleId,
-            CreatedByActorId = @CreatedByActorId,
             Type = @Type,
             Severity = @Severity,
             Info = @Info,
             ResourceId = @ResourceId,
+            ResourceName = @ResourceName,
             ResourceType = @ResourceType,
             DeduplicationKey = @DeduplicationKey,
             OpenIncidentKey = @OpenIncidentKey,
@@ -266,11 +266,11 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         {
             Id = alertEvent.Id.Format(),
             AlertRuleId = alertEvent.AlertRuleId.Format(),
-            CreatedByActorId = alertEvent.CreatedByActorId.Format(),
             Type = EnumFormatter<AlertType>.GetValue(alertEvent.Type),
             Severity = EnumFormatter<AlertSeverity>.GetValue(alertEvent.Severity),
             Info = JsonSerializer.Serialize(alertEvent.Info, AlertEventJsonContext.Default.AlertEventInfo),
             ResourceId = alertEvent.ResourceId?.Format(),
+            alertEvent.ResourceName,
             ResourceType = EnumFormatter<AlertResourceType>.GetValue(alertEvent.ResourceType),
             alertEvent.DeduplicationKey,
             alertEvent.OpenIncidentKey,

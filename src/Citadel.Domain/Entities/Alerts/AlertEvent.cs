@@ -1,10 +1,13 @@
 ﻿using Hosting.Common.ErrorTypes;
 using LightResults;
+using System.Buffers;
+using System.Buffers.Binary;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace Domain.Entities.Alerts;
 
-public sealed class AlertEvent : IAuditedEntity
+public sealed class AlertEvent
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid AlertRuleId { get; private set; }
@@ -12,6 +15,7 @@ public sealed class AlertEvent : IAuditedEntity
     public AlertSeverity Severity { get; private set; }
     public AlertEventInfo Info { get; private set; }
     public Guid? ResourceId { get; private set; }
+    public string ResourceName { get; private set; }
     public AlertResourceType ResourceType { get; private set; }
     public string DeduplicationKey { get; private set; }
     public string? OpenIncidentKey { get; private set; }
@@ -21,10 +25,7 @@ public sealed class AlertEvent : IAuditedEntity
     public DateTime? ResolvedAt { get; private set; }
     public string? ResolutionNote { get; private set; }
 
-    #region IAuditedEntity
-    public Guid CreatedByActorId { get; private set; }
     public DateTime CreatedAt { get; private set; }
-    #endregion
 
     public DateTime UpdatedAt { get; private set; }
 
@@ -48,23 +49,24 @@ public sealed class AlertEvent : IAuditedEntity
         AlertSeverity severity,
         AlertEventInfo info,
         Guid resourceId,
+        string resourceName,
         AlertResourceType resourceType,
-        Guid createdByActorId)
+        string? deduplicationComponent = null)
     {
         if (!AlertTypeMetadata.IsValidInfo(type, info))
             throw new ArgumentException("AlertInfo does not match AlertType.");
 
-        if (createdByActorId == Guid.Empty)
-            throw new ArgumentException("CreatedByActorId is required.", nameof(createdByActorId));
+        if (string.IsNullOrWhiteSpace(resourceName))
+            throw new ArgumentException("ResourceName is required.", nameof(resourceName));
 
         AlertRuleId = alertRuleId;
         Type = type;
         Severity = severity;
         Info = info;
         ResourceId = resourceId;
+        ResourceName = resourceName;
         ResourceType = resourceType;
-        CreatedByActorId = createdByActorId;
-        DeduplicationKey = BuildDeduplicationKey(alertRuleId, resourceId, resourceType);
+        DeduplicationKey = BuildDeduplicationKey(alertRuleId, resourceId, resourceType, deduplicationComponent);
         OpenIncidentKey = DeduplicationKey;
         CreatedAt = DateTime.UtcNow;
         UpdatedAt = CreatedAt;
@@ -109,6 +111,7 @@ public sealed class AlertEvent : IAuditedEntity
         AlertSeverity severity,
         AlertEventInfo info,
         Guid resourceId,
+        string resourceName,
         AlertResourceType resourceType,
         string deduplicationKey,
         string? openIncidentKey,
@@ -117,7 +120,6 @@ public sealed class AlertEvent : IAuditedEntity
         Guid? resolvedByActorId,
         DateTime? resolvedAt,
         string? resolutionNote,
-        Guid createdByActorId,
         DateTime createdAt,
         DateTime updatedAt)
     {
@@ -130,8 +132,8 @@ public sealed class AlertEvent : IAuditedEntity
             severity: severity,
             info: info,
             resourceId: resourceId,
-            resourceType: resourceType,
-            createdByActorId: createdByActorId)
+            resourceName: resourceName,
+            resourceType: resourceType)
         {
             Id = id,
             DeduplicationKey = deduplicationKey,
@@ -145,7 +147,6 @@ public sealed class AlertEvent : IAuditedEntity
         };
 
         alertEvent.CreatedAt = createdAt;
-        alertEvent.CreatedByActorId = createdByActorId;
 
         return alertEvent;
     }
@@ -153,17 +154,43 @@ public sealed class AlertEvent : IAuditedEntity
     private static string BuildDeduplicationKey(
         Guid alertRuleId,
         Guid resourceId,
-        AlertResourceType resourceType)
+        AlertResourceType resourceType,
+        string? deduplicationComponent)
     {
         Span<byte> buffer = stackalloc byte[16 + 16 + 4];
 
         alertRuleId.TryWriteBytes(buffer);
         resourceId.TryWriteBytes(buffer[16..]);
-        BitConverter.TryWriteBytes(buffer[32..], (int)resourceType);
+        BinaryPrimitives.WriteInt32LittleEndian(buffer[32..], (int)resourceType);
 
-        Span<byte> hash = stackalloc byte[32];
-        SHA256.TryHashData(buffer, hash, out _);
+        if (string.IsNullOrEmpty(deduplicationComponent))
+        {
+            Span<byte> hash = stackalloc byte[32];
+            SHA256.TryHashData(buffer, hash, out _);
 
-        return Convert.ToHexString(hash);
+            return Convert.ToHexString(hash);
+        }
+
+        var componentByteCount = Encoding.UTF8.GetByteCount(deduplicationComponent);
+        byte[]? rentedBuffer = null;
+        Span<byte> componentBuffer = componentByteCount <= 256
+            ? stackalloc byte[componentByteCount]
+            : (rentedBuffer = ArrayPool<byte>.Shared.Rent(componentByteCount));
+
+        try
+        {
+            var written = Encoding.UTF8.GetBytes(deduplicationComponent, componentBuffer);
+
+            using var incrementalHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            incrementalHash.AppendData(buffer);
+            incrementalHash.AppendData(componentBuffer[..written]);
+
+            return Convert.ToHexString(incrementalHash.GetHashAndReset());
+        }
+        finally
+        {
+            if (rentedBuffer is not null)
+                ArrayPool<byte>.Shared.Return(rentedBuffer);
+        }
     }
 }

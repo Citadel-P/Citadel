@@ -5231,6 +5231,430 @@
         ]
       }
     },
+    "/api/v1/alertEvents/{id}": {
+      "get": {
+        "tags": [
+          "AlertEvents"
+        ],
+        "summary": "Get alert event by id",
+        "operationId": "getAlertEvent",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertEventView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alertEvents": {
+      "get": {
+        "tags": [
+          "AlertEvents"
+        ],
+        "summary": "List alert events",
+        "operationId": "listAlertEvents",
+        "parameters": [
+          {
+            "name": "ResourceId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "AlertType",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/AlertType"
+            }
+          },
+          {
+            "name": "ResourceType",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/AlertResourceType"
+            }
+          },
+          {
+            "name": "UnresolvedOnly",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "Page",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertEventsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alertEvents/unresolved-count": {
+      "get": {
+        "tags": [
+          "AlertEvents"
+        ],
+        "summary": "Get unresolved alert event count",
+        "operationId": "getUnresolvedAlertEventsCount",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnresolvedAlertsCountView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alertEvents/acknowledge": {
+      "post": {
+        "tags": [
+          "AlertEvents"
+        ],
+        "summary": "Acknowledge alert events in bulk",
+        "operationId": "acknowledgeAlertEvents",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcknowledgeAlertEventsInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alertEvents/resolve": {
+      "post": {
+        "tags": [
+          "AlertEvents"
+        ],
+        "summary": "Resolve alert events in bulk",
+        "operationId": "resolveAlertEvents",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveAlertEventsInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/alertRules/{id}": {
       "get": {
         "tags": [
@@ -6210,6 +6634,21 @@
   },
   "components": {
     "schemas": {
+      "AcknowledgeAlertEventsInput": {
+        "required": [
+          "ids"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
       "ActivitiesView": {
         "required": [
           "pagedResult"
@@ -6851,6 +7290,505 @@
           "WeCom",
           "Zulip_Chat"
         ]
+      },
+      "AlertEventInfo": {
+        "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/AlertEventInfoPlatformCpuHighAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoPlatformRamHighAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoPlatformUnreachableAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoUnmanagedContainerCreatedAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoPlatformVersionMismatchAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoDeploymentImageUpdateAvailableAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoDeploymentAutoUpdatedAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoDeploymentAutoDeployFailedAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoStackImageUpdateAvailableAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoStackAutoUpdatedAlertInfo"
+          },
+          {
+            "$ref": "#/components/schemas/AlertEventInfoStackDeployFailedAlertInfo"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "PlatformCpuHigh": "#/components/schemas/AlertEventInfoPlatformCpuHighAlertInfo",
+            "PlatformRamHigh": "#/components/schemas/AlertEventInfoPlatformRamHighAlertInfo",
+            "PlatformUnreachable": "#/components/schemas/AlertEventInfoPlatformUnreachableAlertInfo",
+            "UnmanagedContainerCreated": "#/components/schemas/AlertEventInfoUnmanagedContainerCreatedAlertInfo",
+            "PlatformVersionMismatch": "#/components/schemas/AlertEventInfoPlatformVersionMismatchAlertInfo",
+            "DeploymentImageUpdateAvailable": "#/components/schemas/AlertEventInfoDeploymentImageUpdateAvailableAlertInfo",
+            "DeploymentAutoUpdated": "#/components/schemas/AlertEventInfoDeploymentAutoUpdatedAlertInfo",
+            "DeploymentAutoDeployFailed": "#/components/schemas/AlertEventInfoDeploymentAutoDeployFailedAlertInfo",
+            "StackImageUpdateAvailable": "#/components/schemas/AlertEventInfoStackImageUpdateAvailableAlertInfo",
+            "StackAutoUpdated": "#/components/schemas/AlertEventInfoStackAutoUpdatedAlertInfo",
+            "StackAutoDeployFailed": "#/components/schemas/AlertEventInfoStackDeployFailedAlertInfo"
+          }
+        }
+      },
+      "AlertEventInfoDeploymentAutoDeployFailedAlertInfo": {
+        "required": [
+          "deploymentName",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentAutoDeployFailed"
+            ],
+            "type": "string"
+          },
+          "deploymentName": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoDeploymentAutoUpdatedAlertInfo": {
+        "required": [
+          "deploymentName",
+          "previousImage",
+          "updatedImage"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentAutoUpdated"
+            ],
+            "type": "string"
+          },
+          "deploymentName": {
+            "type": "string"
+          },
+          "previousImage": {
+            "type": "string"
+          },
+          "updatedImage": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoDeploymentImageUpdateAvailableAlertInfo": {
+        "required": [
+          "deploymentName",
+          "currentImage",
+          "latestImage"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "DeploymentImageUpdateAvailable"
+            ],
+            "type": "string"
+          },
+          "deploymentName": {
+            "type": "string"
+          },
+          "currentImage": {
+            "type": "string"
+          },
+          "latestImage": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoPlatformCpuHighAlertInfo": {
+        "required": [
+          "platformName",
+          "cpuUsagePercent"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "PlatformCpuHigh"
+            ],
+            "type": "string"
+          },
+          "platformName": {
+            "type": "string"
+          },
+          "cpuUsagePercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoPlatformRamHighAlertInfo": {
+        "required": [
+          "platformName",
+          "ramUsagePercent"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "PlatformRamHigh"
+            ],
+            "type": "string"
+          },
+          "platformName": {
+            "type": "string"
+          },
+          "ramUsagePercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoPlatformUnreachableAlertInfo": {
+        "required": [
+          "platformName",
+          "id",
+          "address"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "PlatformUnreachable"
+            ],
+            "type": "string"
+          },
+          "platformName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "address": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoPlatformVersionMismatchAlertInfo": {
+        "required": [
+          "platformName",
+          "currentAgentVersion",
+          "expectedAgentVersion"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "PlatformVersionMismatch"
+            ],
+            "type": "string"
+          },
+          "platformName": {
+            "type": "string"
+          },
+          "currentAgentVersion": {
+            "type": "string"
+          },
+          "expectedAgentVersion": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoStackAutoUpdatedAlertInfo": {
+        "required": [
+          "stackName",
+          "previousImage",
+          "updatedImage"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackAutoUpdated"
+            ],
+            "type": "string"
+          },
+          "stackName": {
+            "type": "string"
+          },
+          "previousImage": {
+            "type": "string"
+          },
+          "updatedImage": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoStackDeployFailedAlertInfo": {
+        "required": [
+          "stackName",
+          "reason"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackAutoDeployFailed"
+            ],
+            "type": "string"
+          },
+          "stackName": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoStackImageUpdateAvailableAlertInfo": {
+        "required": [
+          "stackName",
+          "currentImage",
+          "latestImage"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "StackImageUpdateAvailable"
+            ],
+            "type": "string"
+          },
+          "stackName": {
+            "type": "string"
+          },
+          "currentImage": {
+            "type": "string"
+          },
+          "latestImage": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventInfoUnmanagedContainerCreatedAlertInfo": {
+        "required": [
+          "platformName",
+          "platformAddress",
+          "containerName"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "UnmanagedContainerCreated"
+            ],
+            "type": "string"
+          },
+          "platformName": {
+            "type": "string"
+          },
+          "platformAddress": {
+            "type": "string"
+          },
+          "containerName": {
+            "type": "string"
+          },
+          "humanMessage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AlertEventStatus": {
+        "enum": [
+          "Active",
+          "Acknowledged",
+          "Resolved"
+        ]
+      },
+      "AlertEventView": {
+        "required": [
+          "id",
+          "alertRuleId",
+          "type",
+          "severity",
+          "status",
+          "message",
+          "info",
+          "resourceId",
+          "resourceName",
+          "resourceType",
+          "resourcePath",
+          "acknowledgedByActorId",
+          "acknowledgedAt",
+          "resolvedByActorId",
+          "resolvedAt",
+          "resolutionNote",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "alertRuleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AlertType"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AlertSeverity"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AlertEventStatus"
+          },
+          "message": {
+            "type": "string"
+          },
+          "info": {
+            "$ref": "#/components/schemas/AlertEventInfo"
+          },
+          "resourceId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "resourceName": {
+            "type": "string"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/AlertResourceType"
+          },
+          "resourcePath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "acknowledgedByActorId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "acknowledgedAt": {
+            "format": "date-time"
+          },
+          "resolvedByActorId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "resolvedAt": {
+            "format": "date-time"
+          },
+          "resolutionNote": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "createdAt": {
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "format": "date-time"
+          }
+        }
+      },
+      "AlertEventsView": {
+        "required": [
+          "pagedResult"
+        ],
+        "type": "object",
+        "properties": {
+          "pagedResult": {
+            "$ref": "#/components/schemas/PagedResultViewOfAlertEventView"
+          }
+        }
       },
       "AlertResourceType": {
         "enum": [
@@ -11763,6 +12701,47 @@
           }
         }
       },
+      "PagedResultViewOfAlertEventView": {
+        "required": [
+          "items",
+          "totalCount",
+          "page",
+          "pageSize"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlertEventView"
+            }
+          },
+          "totalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "page": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "PlatformConnectorType": {
         "enum": [
           "Unknown",
@@ -12766,6 +13745,28 @@
           }
         }
       },
+      "ResolveAlertEventsInput": {
+        "required": [
+          "ids",
+          "resolutionNote"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "resolutionNote": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "ResourceControlState": {
         "enum": [
           "Idle",
@@ -12984,6 +13985,22 @@
               "string"
             ],
             "format": "int64"
+          }
+        }
+      },
+      "UnresolvedAlertsCountView": {
+        "required": [
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "count": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -13286,6 +14303,9 @@
     },
     {
       "name": "Activities"
+    },
+    {
+      "name": "AlertEvents"
     },
     {
       "name": "AlertRules"

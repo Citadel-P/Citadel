@@ -14,8 +14,9 @@ import { DeploymentComponents } from './deployments';
 import { RegistryFormComponents } from './registries/form';
 import { DeploymentFormComponents } from './deployments/form';
 import { ActivityComponents } from './activities';
-import { AlertRuleComponents } from './alerters';
-import { AlertRuleFormComponents } from './alerters/form';
+import { AlertRuleComponents } from './alerters/alert-rules';
+import { AlertRuleFormComponents } from './alerters/alert-rules/form';
+import { AlertEventComponents } from './alerters/alert-events';
 
 export const ResourceComponents: {
   [key in ResourceType]: RequiredComponents;
@@ -30,6 +31,7 @@ export const ResourceComponents: {
   Deployment: DeploymentComponents,
   Activity: ActivityComponents,
   AlertRule: AlertRuleComponents,
+  Alert: AlertEventComponents,
 };
 
 export const ResourceFormComponents: {
@@ -45,6 +47,7 @@ export const ResourceFormComponents: {
   Deployment: DeploymentFormComponents,
   AlertRule: AlertRuleFormComponents,
   Activity: undefined,
+  Alert: undefined,
 };
 
 export const DockerResourceInfoComponents: {

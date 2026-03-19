@@ -10,7 +10,7 @@ import clsx from 'clsx';
 export const SidebarMenu = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentPlatform } = useAppContext();
+  const { currentPlatform, unresolvedAlertCount } = useAppContext();
   const { toggleSidebar, sidebarMinimized } = useLayoutContext();
 
   const [menuItems, setMenuItems] = useState<IMenuItem[]>(MenuItems);
@@ -119,7 +119,12 @@ export const SidebarMenu = () => {
           <ul className="flex flex-col space-y-1">
             {menu.items.map((item) => (
               <li key={item.label}>
-                <SidebarRow item={item} minimized={!!sidebarMinimized} onClick={() => toggleMenu(item)} />
+                <SidebarRow
+                  item={item}
+                  minimized={!!sidebarMinimized}
+                  onClick={() => toggleMenu(item)}
+                  badgeCount={item.route === '/alerts' ? unresolvedAlertCount : undefined}
+                />
                 {item.children && <SidebarSubMenu submenu={item} toggleMenu={toggleMenu} />}
               </li>
             ))}
@@ -136,7 +141,20 @@ export const SidebarMenu = () => {
   );
 };
 
-function SidebarRow({ item, minimized, onClick }: { item: ISubMenuItem; minimized: boolean; onClick: () => void }) {
+function SidebarRow({
+  item,
+  minimized,
+  onClick,
+  badgeCount,
+}: {
+  item: ISubMenuItem;
+  minimized: boolean;
+  onClick: () => void;
+  badgeCount?: number;
+}) {
+  const hasBadge = !!badgeCount;
+  const badgeLabel = badgeCount && badgeCount > 99 ? '99+' : badgeCount?.toString();
+
   return (
     <div
       className={clsx(
@@ -148,7 +166,12 @@ function SidebarRow({ item, minimized, onClick }: { item: ISubMenuItem; minimize
       onClick={onClick}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onClick()}>
       {/* Icon */}
-      <div className={item.active ? 'text-primary' : 'text-muted-foreground'}>{item.icon}</div>
+      <div className={clsx('relative', item.active ? 'text-primary' : 'text-muted-foreground')}>
+        {item.icon}
+        {hasBadge && (
+          <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-destructive ring-1 ring-background" />
+        )}
+      </div>
 
       {/* Label section (hidden when minimized) */}
       {!minimized && (
@@ -156,11 +179,18 @@ function SidebarRow({ item, minimized, onClick }: { item: ISubMenuItem; minimize
           {item.children ? (
             <ExpandableHead label={item.label} expanded={!!item.expanded} />
           ) : (
-            <Link
-              to={item.route ?? '/'}
-              className={clsx('truncate text-xs font-medium', item.active && 'text-primary ')}>
-              {item.label}
-            </Link>
+            <div className="flex w-full items-center justify-between gap-2">
+              <Link
+                to={item.route ?? '/'}
+                className={clsx('truncate text-xs font-medium', item.active && 'text-primary ')}>
+                {item.label}
+              </Link>
+              {hasBadge && (
+                <span className="text-[10px] font-medium tabular-nums leading-none text-muted-foreground/60">
+                  {badgeLabel}
+                </span>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -181,7 +211,14 @@ function SidebarRow({ item, minimized, onClick }: { item: ISubMenuItem; minimize
               pointer-events-auto
               z-50
             ">
-            {item.label}
+            <div className="flex items-center gap-2">
+              <span>{item.label}</span>
+              {hasBadge && (
+                <span className="text-[10px] font-medium tabular-nums leading-none text-muted-foreground/60">
+                  {badgeLabel}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}
