@@ -611,6 +611,7 @@ export interface AlertEventInfoUnmanagedContainerCreatedAlertInfo {
   platformName: string;
   platformAddress: string;
   containerName: string;
+  containerId: string;
   humanMessage?: null | string;
 }
 
@@ -637,6 +638,10 @@ export interface AlertEventView {
   resolvedByActorId: null | string;
   /** @format date-time */
   resolvedAt: any;
+  /** @format uuid */
+  actorId: null | string;
+  actorName: null | string;
+  actorType: null | ActorType;
   resolutionNote: null | string;
   /** @format date-time */
   createdAt: any;

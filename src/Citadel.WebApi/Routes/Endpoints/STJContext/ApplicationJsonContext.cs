@@ -1,5 +1,6 @@
 ﻿using Application.Features.Auth.Models;
 using Application.Features.Images.Queries;
+using Domain;
 using Domain.Contracts.Resources.Compose;
 using Domain.Contracts.Resources.Containers;
 using Domain.Contracts.Resources.Deployments;
@@ -30,9 +31,16 @@ using DeleteImageResponseItem = Domain.Contracts.Resources.Images.DeleteImageRes
 
 namespace Application.Models;
 
-[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default)]
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Default,
+    Converters = new[]
+    {
+        typeof(JsonStringEnumConverter<ActorType>)
+    })]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(Guid[]))]
+[JsonSerializable(typeof(ActorType))]
+[JsonSerializable(typeof(ActorType?))]
 [JsonSerializable(typeof(List<Platform>))]
 [JsonSerializable(typeof(List<PlatformStat>))]
 [JsonSerializable(typeof(SwarmPeer))]

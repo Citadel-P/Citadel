@@ -44,12 +44,16 @@ internal sealed class AcknowledgeAlertEventsHandler(
         if (alertEvents.Count() != idCount)
             return Result.Failure(new NotFoundError("One or more alert events do not exist"));
 
+        var actor = await unitOfWork.Actors.GetById(actorId, cancellationToken);
+
         var utcNow = DateTime.UtcNow;
         foreach (var alertEvent in alertEvents)
         {
             var acknowledgeResult = alertEvent.Acknowledge(actorId, utcNow);
             if (!acknowledgeResult.IsSuccess())
                 return acknowledgeResult;
+
+            alertEvent.AssignActor(actor);
         }
 
         await unitOfWork.AlertEvents.BulkUpdateAsync(alertEvents, cancellationToken);

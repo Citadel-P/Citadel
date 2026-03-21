@@ -7701,6 +7701,9 @@
           "acknowledgedAt",
           "resolvedByActorId",
           "resolvedAt",
+          "actorId",
+          "actorName",
+          "actorType",
           "resolutionNote",
           "createdAt",
           "updatedAt"
@@ -7768,6 +7771,29 @@
           },
           "resolvedAt": {
             "format": "date-time"
+          },
+          "actorId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "actorName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "actorType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActorType"
+              }
+            ]
           },
           "resolutionNote": {
             "type": [

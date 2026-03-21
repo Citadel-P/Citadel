@@ -12,6 +12,7 @@ import {
   ActivityResourceType,
   AlertSeverity,
   AlertResourceType,
+  AlertEventStatus,
 } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem, CommandEmpty } from '@/components/ui/command';
@@ -30,7 +31,7 @@ import {
   Tags,
   User,
 } from 'lucide-react';
-import { cn, filterBySplit, toFixedNumber } from '@/lib/utils';
+import { cn, filterBySplit, normalizeDockerId, toFixedNumber } from '@/lib/utils';
 import { PluralResourceMap, ResourceType } from '@/api/types';
 import { useMeasuredWidth, useRead, useLocalStorage } from '@/lib/hooks';
 import { useResourceFilter } from '@/lib/atoms';
@@ -53,7 +54,10 @@ import {
   CircleCheck,
   CircleQuestionMark,
   CircleX,
+  Database,
   Eraser,
+  HardDrive,
+  Network,
   RefreshCcw,
   RefreshCcwDot,
   RefreshCwOff,
@@ -63,6 +67,9 @@ import {
 import { byteTransform } from '@/lib/bytes.helper';
 import { Link } from 'react-router';
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { truncate } from '@/lib/truncate';
+import { formatId } from '@/lib/utils';
+import { StateIndicator } from './state-indicator';
 
 export function ResourceSelectorField<T extends { id: string; name: string }>({
   type,
@@ -291,6 +298,69 @@ export const Section = ({ Icon, title, children }: { Icon: LucideIcon; title: st
     </div>
   );
 };
+
+export const DockerContainerCell = ({
+  name,
+  id,
+  state,
+  platformId,
+}: {
+  name: string;
+  id: string;
+  state: ContainerStateStatus;
+  platformId: string;
+}) => (
+  <div className="flex flex-wrap gap-1 items-center">
+    <StateIndicator value={state ?? ContainerStateStatus.Exited} />
+    <Link to={`/platforms/${platformId}/containers/${normalizeDockerId(id)}`} className="table-link" title={name}>
+      {truncate(name?.slice(1), 24)}
+    </Link>
+  </div>
+);
+
+export const DockerImageCell = ({ children }: { children: React.ReactNode }) => (
+  <div className="flex flex-wrap gap-2 items-center text-foreground">
+    <HardDrive width={13} height={13} className="text-primary" />
+    {children}
+  </div>
+);
+
+export const DockerNetworksCell = ({
+  networks,
+  platformId,
+}: {
+  networks?: Record<string, string>;
+  platformId?: string;
+}) => {
+  if (!networks || Object.keys(networks).length === 0) return null;
+
+  return (
+    <div className="text-foreground gap-2 flex flex-wrap items-center">
+      <Network width={13} height={13} className="text-primary" />
+      {Object.entries(networks).map(([name, id]) => (
+        <Link to={`/platforms/${platformId}/networks/${formatId(id)}`} key={id} title={name} className="table-link">
+          {truncate(name, 24)}
+        </Link>
+      ))}
+    </div>
+  );
+};
+
+export const DockerVolumesCell = ({ volumes, platformId }: { volumes?: string[]; platformId?: string }) => {
+  if (!volumes || volumes.length === 0) return null;
+
+  return (
+    <div className="text-foreground gap-2 flex flex-wrap items-center">
+      <Database width={13} height={13} className="text-primary" />
+      {volumes.map((volume) => (
+        <Link to={`/platforms/${platformId}/volumes/${volume}`} title={volume} key={volume} className="table-link">
+          {truncate(volume, 12)}
+        </Link>
+      ))}
+    </div>
+  );
+};
+
 export const UPDATE_BEHAVIOR_UI: Record<
   UpdateBehavior,
   {
@@ -549,7 +619,7 @@ export const PlatformStatusCell = ({
   return (
     <div className="flex flex-row items-center gap-2">
       <Server width={13} height={13} className={status === PlatformStatus.Online ? 'text-green-500' : 'text-red-500'} />
-      <Link to={`/platforms/${id}`} className="table-link">
+      <Link to={`/platforms/${id}`} className="table-link" title={name}>
         {name}
       </Link>
     </div>
@@ -612,13 +682,13 @@ export const ActivityStatusCell = ({ status }: { status: ActivityStatus }) => {
 
 export const SeverityStatusCell = ({ severity }: { severity: AlertSeverity }) => {
   const severityConfig: Record<AlertSeverity, { className: string; label: string }> = {
-    [AlertSeverity.Info]: { className: 'bg-blue-200/25 text-blue-700 border-blue-500/20', label: 'Info' },
+    [AlertSeverity.Info]: { className: 'bg-blue-200/25 text-blue-700', label: 'Info' },
     [AlertSeverity.Warning]: {
-      className: 'bg-orange-200/25 text-orange-500 border-orange-500/20',
+      className: 'bg-orange-200/25 text-orange-500',
       label: 'Warning',
     },
     [AlertSeverity.Critical]: {
-      className: 'bg-red-200/25 text-red-700 border-red-500/20',
+      className: 'bg-red-200/25 text-red-700',
       label: 'Critical',
     },
   };
@@ -627,6 +697,23 @@ export const SeverityStatusCell = ({ severity }: { severity: AlertSeverity }) =>
 
   return <Badge className={className}>{label}</Badge>;
 };
+
+export function AlertEventStatusCell({ status }: { status: AlertEventStatus }) {
+  const config: Record<AlertEventStatus, { label: string; className: string }> = {
+    [AlertEventStatus.Active]: { label: 'Active', className: 'bg-red-200/25 text-red-700' },
+    [AlertEventStatus.Acknowledged]: {
+      label: 'Acknowledged',
+      className: 'bg-orange-200/25 text-orange-600',
+    },
+    [AlertEventStatus.Resolved]: {
+      label: 'Resolved',
+      className: 'bg-green-200/25 text-green-700',
+    },
+  };
+
+  const value = config[status];
+  return <Badge className={value.className}>{value.label}</Badge>;
+}
 
 type PaginationControlsProps = {
   currentPage: number;

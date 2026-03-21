@@ -12,6 +12,7 @@ import { useSelectedResources } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { ContentCard } from '@/components/custom/content-card';
+import { truncate } from '@/lib/truncate';
 
 export const VolumesTable = ({
   items,
@@ -114,6 +115,7 @@ const VolumeNameRow = ({ volume }: { volume: DockerVolumeResult }) => {
       <span
         className="cursor-pointer hover:underline"
         onClick={onClick}
+        title={volume.id}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             onClick();
@@ -122,7 +124,7 @@ const VolumeNameRow = ({ volume }: { volume: DockerVolumeResult }) => {
         tabIndex={0}
         role="button"
         aria-label="Show volume details">
-        {volume.id}
+        {truncate(volume.id ?? '', 32, 'right')}
       </span>
     </div>
   );

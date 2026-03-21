@@ -17,4 +17,7 @@ internal record AlertEventDto(
     DateTime? ResolvedAt,
     string? ResolutionNote,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    Guid? Actor_Id = null,
+    string? Actor_Name = null,
+    string? Actor_Type = null);

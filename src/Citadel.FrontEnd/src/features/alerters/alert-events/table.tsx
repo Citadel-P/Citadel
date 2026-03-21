@@ -1,11 +1,10 @@
 import { useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
 import SortableCell from '@/components/custom/sortable-cell';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
-import { PagedDataTable, SeverityStatusCell, TargetCell } from '@/components/custom/common';
-import { AlertEventStatus, AlertEventView, PagedResultViewOfAlertEventView } from '@/api/generated/api.types';
+import { AlertEventStatusCell, PagedDataTable, SeverityStatusCell, TargetCell } from '@/components/custom/common';
+import { AlertEventView, PagedResultViewOfAlertEventView } from '@/api/generated/api.types';
 import { useAlertEventQuery, useSelectedResources, useTaskSheet } from '@/lib/atoms';
 import { ActionData } from '@/pages/types';
 import { fromNow } from '@/lib/dayjs.helper';
@@ -119,21 +118,4 @@ function AlertTypeCell({ event }: { event: AlertEventView }) {
       <span>{event.type}</span>
     </button>
   );
-}
-
-function AlertEventStatusCell({ status }: { status: AlertEventStatus }) {
-  const config: Record<AlertEventStatus, { label: string; className: string }> = {
-    [AlertEventStatus.Active]: { label: 'Active', className: 'bg-red-200/25 text-red-700 border-red-500/20' },
-    [AlertEventStatus.Acknowledged]: {
-      label: 'Acknowledged',
-      className: 'bg-orange-200/25 text-orange-600 border-orange-500/20',
-    },
-    [AlertEventStatus.Resolved]: {
-      label: 'Resolved',
-      className: 'bg-green-200/25 text-green-700 border-green-500/20',
-    },
-  };
-
-  const value = config[status];
-  return <Badge className={value.className}>{value.label}</Badge>;
 }

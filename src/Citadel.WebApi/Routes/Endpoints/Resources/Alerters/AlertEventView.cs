@@ -19,6 +19,9 @@ public sealed record AlertEventView(
     DateTime? AcknowledgedAt,
     Guid? ResolvedByActorId,
     DateTime? ResolvedAt,
+    Guid? ActorId,
+    string? ActorName,
+    ActorType? ActorType,
     string? ResolutionNote,
     DateTime CreatedAt,
     DateTime UpdatedAt)
@@ -41,6 +44,9 @@ public sealed record AlertEventView(
             alertEvent.AcknowledgedAt,
             alertEvent.ResolvedByActorId,
             alertEvent.ResolvedAt,
+            alertEvent.Actor?.Id ?? alertEvent.ResolvedByActorId ?? alertEvent.AcknowledgedByActorId,
+            alertEvent.Actor?.Name,
+            alertEvent.Actor?.Type,
             alertEvent.ResolutionNote,
             alertEvent.CreatedAt,
             alertEvent.UpdatedAt);

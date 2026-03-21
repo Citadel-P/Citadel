@@ -1,4 +1,5 @@
-﻿using Hosting.Common.ErrorTypes;
+﻿using Domain.Entities.Identity;
+using Hosting.Common.ErrorTypes;
 using LightResults;
 using System.Buffers;
 using System.Buffers.Binary;
@@ -42,7 +43,7 @@ public sealed class AlertEvent
             return AlertEventStatus.Active;
         }
     }
-
+    public Actor? Actor { get; private set; }
     public AlertEvent(
         Guid alertRuleId,
         AlertType type,
@@ -121,7 +122,8 @@ public sealed class AlertEvent
         DateTime? resolvedAt,
         string? resolutionNote,
         DateTime createdAt,
-        DateTime updatedAt)
+        DateTime updatedAt,
+        Actor? actor = null)
     {
         if (!AlertTypeMetadata.IsValidInfo(type, info))
             throw new ArgumentException("AlertInfo does not match AlertType.");
@@ -143,12 +145,19 @@ public sealed class AlertEvent
             ResolvedByActorId = resolvedByActorId,
             ResolvedAt = resolvedAt,
             ResolutionNote = resolutionNote,
-            UpdatedAt = updatedAt
+            UpdatedAt = updatedAt,
+            Actor = actor
         };
 
         alertEvent.CreatedAt = createdAt;
 
         return alertEvent;
+    }
+
+    public AlertEvent AssignActor(Actor? actor)
+    {
+        Actor = actor;
+        return this;
     }
 
     private static string BuildDeduplicationKey(

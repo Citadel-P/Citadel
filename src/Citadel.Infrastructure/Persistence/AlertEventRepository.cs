@@ -76,8 +76,12 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             a.ResolvedAt,
             a.ResolutionNote,
             a.CreatedAt,
-            a.UpdatedAt
+            a.UpdatedAt,
+            ac.Id AS Actor_Id,
+            ac.Name AS Actor_Name,
+            ac.Type AS Actor_Type
         FROM AlertEvents a
+        LEFT JOIN Actors ac ON COALESCE(a.ResolvedByActorId, a.AcknowledgedByActorId) = ac.Id
         WHERE a.Id = @Id
         LIMIT 1;
         """;
@@ -106,8 +110,12 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             a.ResolvedAt,
             a.ResolutionNote,
             a.CreatedAt,
-            a.UpdatedAt
+            a.UpdatedAt,
+            ac.Id AS Actor_Id,
+            ac.Name AS Actor_Name,
+            ac.Type AS Actor_Type
         FROM AlertEvents a
+        LEFT JOIN Actors ac ON COALESCE(a.ResolvedByActorId, a.AcknowledgedByActorId) = ac.Id
         WHERE a.Id IN (SELECT value FROM json_each(@Ids));
         """;
 
@@ -153,8 +161,12 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             a.ResolvedAt,
             a.ResolutionNote,
             a.CreatedAt,
-            a.UpdatedAt
+            a.UpdatedAt,
+            ac.Id AS Actor_Id,
+            ac.Name AS Actor_Name,
+            ac.Type AS Actor_Type
         FROM AlertEvents a
+        LEFT JOIN Actors ac ON COALESCE(a.ResolvedByActorId, a.AcknowledgedByActorId) = ac.Id
         WHERE (@ResourceId IS NULL OR a.ResourceId = @ResourceId)
             AND (@AlertType IS NULL OR a.Type = @AlertType)
             AND (@ResourceType IS NULL OR a.ResourceType = @ResourceType)

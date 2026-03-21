@@ -76,8 +76,8 @@ const columns = (
     cell: ({ row }) => (
       <div className="flex flex-wrap gap-1">
         {row.original.tags.map((t) => (
-          <span key={t} className="px-2 py-0.5 bg-muted/25 rounded text-sm">
-            {truncate(t ?? '', 28)}
+          <span key={t} className="px-2 py-0.5 bg-muted/25 rounded text-sm" title={t}>
+            {truncate(t ?? '', 24)}
           </span>
         ))}
       </div>
@@ -136,6 +136,7 @@ const ImageNameRow = ({ image }: { image: ImageView }) => {
       <span
         className="cursor-pointer table-link"
         onClick={onNameClick}
+        title={image.name}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             onNameClick();

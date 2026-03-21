@@ -281,8 +281,9 @@ const EditableDescription = ({
 
 const GhostIconButton = ({ children, ...props }: React.ComponentProps<typeof Button>) => (
   <Button
+    size="icon-sm"
     variant="ghost"
-    className="opacity-0 group-hover:opacity-100 p-0 h-auto w-auto min-h-0 min-w-0 inline-flex hover:bg-transparent"
+    className="opacity-0 group-hover:opacity-100 inline-flex hover:bg-transparent"
     {...props}>
     {children}
   </Button>
@@ -301,8 +302,13 @@ const InlineEditActions = ({
 }) => (
   <div className="flex gap-2 w-full">
     {children}
-    <Button size="icon-sm" variant="ghost" onClick={dirty ? onSave : onCancel}>
-      {dirty ? <Save className="h-4 w-4" /> : <X className="h-4 w-4" />}
+    <Button
+      size="icon-sm"
+      className="h-7.25"
+      variant="outline"
+      onClick={dirty ? onSave : onCancel}
+      title={`${dirty ? 'Save' : 'Cancel'}`}>
+      {dirty ? <Save className="h-3.5 w-3.5" xlinkTitle="Save" /> : <X className="h-3.5 w-3.5" />}
     </Button>
   </div>
 );

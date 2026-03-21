@@ -1,5 +1,6 @@
 using Domain;
 using Domain.Entities.Alerts;
+using Domain.Entities.Identity;
 using Infrastructure.Persistence.Dtos;
 using System.Text.Json;
 
@@ -32,6 +33,12 @@ internal static class AlertEventMappers
             resolvedAt: alertEventDto.ResolvedAt,
             resolutionNote: alertEventDto.ResolutionNote,
             createdAt: alertEventDto.CreatedAt,
-            updatedAt: alertEventDto.UpdatedAt);
+            updatedAt: alertEventDto.UpdatedAt,
+            actor: alertEventDto.Actor_Name is null
+                ? null
+                : Actor.FromPersistence(
+                    id: alertEventDto.Actor_Id ?? alertEventDto.ResolvedByActorId ?? alertEventDto.AcknowledgedByActorId ?? Guid.Empty,
+                    type: alertEventDto.Actor_Type is null ? ActorType.User : Enum.Parse<ActorType>(alertEventDto.Actor_Type),
+                    name: alertEventDto.Actor_Name));
     }
 }

@@ -1,6 +1,7 @@
 import { DockerNetworkDetails, NetworkConnectedContainer } from '@/api/generated/api.types';
 import { DataTable } from '@/components/ui/data-table';
 import { useAppContext } from '@/lib/context/app-context';
+import { truncate } from '@/lib/truncate';
 import { formatId } from '@/lib/utils';
 import { ColumnDef } from '@tanstack/react-table';
 import { Box } from 'lucide-react';
@@ -14,8 +15,8 @@ const columns = (platformId: string | undefined): ColumnDef<NetworkConnectedCont
     cell: ({ row }) => (
       <div className="flex flex-wrap gap-2 text-sm items-center">
         <Box width={13} height={13} className="text-primary" />
-        <Link to={`/platforms/${platformId}/containers/${formatId(row.original.id)}`} className="table-link">
-          {row.original.name}
+        <Link to={`/platforms/${platformId}/containers/${formatId(row.original.id)}`} title={row.original.name} className="table-link">
+          {truncate(row.original.name, 24)}
         </Link>
       </div>
     ),

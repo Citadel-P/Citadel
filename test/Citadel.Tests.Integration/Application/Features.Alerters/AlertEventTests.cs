@@ -148,6 +148,25 @@ public sealed class AlertEventTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Get_ResolvedAlertEvent_ReturnsActor()
+    {
+        var response = await Client.GetAsync($"/api/v1/alertEvents/{_resolvedAlertId}", TestContext.Current.CancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, responseBody);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var actor = await uow.Actors.GetById(Constants.SystemId, TestContext.Current.CancellationToken);
+
+        using var document = await ReadJsonAsync(response);
+        var root = document.RootElement;
+
+        Assert.Equal(Constants.SystemId, GetProperty(root, "actorId").GetGuid());
+        Assert.Equal(actor?.Name, GetProperty(root, "actorName").GetString());
+        Assert.Equal(actor?.Type.ToString(), GetProperty(root, "actorType").GetString());
+    }
+
+    [Fact]
     public async Task Acknowledge_AlertEvents_UpdatesState()
     {
         var content = JsonContent.Create(new { ids = new[] { _alertId, _secondAlertId } });

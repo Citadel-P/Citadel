@@ -159,6 +159,7 @@ const NetworkNameRow = ({ network }: { network: DockerNetworkResult }) => {
       <span
         className="cursor-pointer hover:underline"
         onClick={onClick}
+        title={network.name}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             onClick();
@@ -167,7 +168,7 @@ const NetworkNameRow = ({ network }: { network: DockerNetworkResult }) => {
         tabIndex={0}
         role="button"
         aria-label="Show network details">
-        {truncate(network.name ?? '', 35, 'right')}
+        {truncate(network.name ?? '', 32, 'right')}
       </span>
     </div>
   );

@@ -15,6 +15,7 @@ import { formatId } from '@/lib/utils';
 import { PlatformStatusCell, UPDATE_STATUS_UI, UpdateStatusIcon } from '@/components/custom/common';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { fromNow } from '@/lib/dayjs.helper';
+import { truncate } from '@/lib/truncate';
 
 export const DeploymentsTable = ({
   items,
@@ -79,8 +80,9 @@ const columns = (
           <HardDrive width={13} height={13} className="text-foreground/80" />
           <Link
             to={`/platforms/${row.original.platformId}/images/${formatId(row.original.dockerImageId ?? '')}`}
+            title={row.original.imageName}
             className="table-link">
-            {row.original.imageName}
+            {truncate(row.original.imageName, 32)}
           </Link>
         </div>
       );
@@ -127,6 +129,7 @@ const DeploymentNameRow = ({ deployment }: { deployment: DeploymentView }) => {
       <span
         className="cursor-pointer hover:underline"
         onClick={onClick}
+        title={deployment.name}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             onClick();
@@ -135,7 +138,7 @@ const DeploymentNameRow = ({ deployment }: { deployment: DeploymentView }) => {
         tabIndex={0}
         role="button"
         aria-label="Show deployment details">
-        {deployment.name}
+        {truncate(deployment.name ?? '', 32, 'right')}
       </span>
     </div>
   );

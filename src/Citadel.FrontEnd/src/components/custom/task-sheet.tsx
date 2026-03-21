@@ -1,11 +1,11 @@
 import { ReactNode, useMemo } from 'react';
-import { Calendar, Clock, LoaderCircle } from 'lucide-react';
+import { Calendar, Check, CheckCheck, Clock, LoaderCircle, NotepadText } from 'lucide-react';
 import { ResourceType } from '@/api/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useResourceFilter, useTaskSheet } from '@/lib/atoms';
 import { ResourceComponents } from '@/features';
 import { useAppContext } from '@/lib/context/app-context';
-import { ActorCell, LogViewer, TargetCell } from '@/components/custom/common';
+import { ActorCell, AlertEventStatusCell, LogViewer, TargetCell } from '@/components/custom/common';
 import { useMutate, useRead, useStreamProgress } from '@/lib/hooks';
 import {
   ActivityView,
@@ -154,13 +154,26 @@ function TaskAlertEventLayout({ alertEventId }: { alertEventId: string }) {
               resourceId={event.resourceId ?? ''}
               resourceName={event.resourceName}
             />
-            <div className="text-sm text-muted-foreground">Status: {event.status}</div>
+            <div className="flex flex-row gap-4">
+              <AlertEventActions
+                status={event.status}
+                canAcknowledge={canAcknowledge}
+                canResolve={canResolve}
+                isAcknowledging={isAcknowledging}
+                isResolving={isResolving}
+                onAcknowledge={handleAcknowledge}
+                onResolve={handleResolve}
+              />
+
+              {event.actorType && event.actorName && <ActorCell type={event.actorType} name={event.actorName} />}
+            </div>
+
             <RecordedAtCell createdAt={event.createdAt} />
           </div>
         </SheetDescription>
       </SheetHeader>
 
-      <div className="p-4 pt-0 pb-2 flex flex-col gap-4">
+      <div className="p-4 pt-0 pb-2">
         <MonacoEditor
           value={serializeData(data!.data.info)}
           filename={`alert-event-info-${event.id}.json`}
@@ -169,18 +182,6 @@ function TaskAlertEventLayout({ alertEventId }: { alertEventId: string }) {
           readOnly
           folding
         />
-
-        <div className="flex items-center justify-end gap-2">
-          <Button
-            variant="outline"
-            onClick={handleAcknowledge}
-            disabled={!canAcknowledge || isAcknowledging || isResolving}>
-            {isAcknowledging ? 'Acknowledging...' : 'Acknowledge'}
-          </Button>
-          <Button onClick={handleResolve} disabled={!canResolve || isResolving || isAcknowledging}>
-            {isResolving ? 'Resolving...' : 'Resolve'}
-          </Button>
-        </div>
       </div>
     </div>
   );
@@ -308,6 +309,55 @@ function RecordedAtCell({ createdAt }: { createdAt: string }) {
     <div className="flex flex-row items-center gap-2">
       <Calendar className="size-3.5 text-foreground/80" />
       <span>{new Date(createdAt).toLocaleString()}</span>
+    </div>
+  );
+}
+
+interface AlertEventActionsProps {
+  status: AlertEventStatus;
+  canAcknowledge: boolean;
+  canResolve: boolean;
+  isAcknowledging: boolean;
+  isResolving: boolean;
+  onAcknowledge: () => void;
+  onResolve: () => void;
+}
+
+function AlertEventActions({
+  status,
+  canAcknowledge,
+  canResolve,
+  isAcknowledging,
+  isResolving,
+  onAcknowledge,
+  onResolve,
+}: AlertEventActionsProps) {
+  return (
+    <div className="flex flex-row items-center gap-2">
+      <NotepadText className="size-3.5 text-foreground/80" />
+      <AlertEventStatusCell status={status} />
+      {canAcknowledge && (
+        <Button
+          size="icon-xs"
+          variant="outline"
+          title="Acknowledge"
+          aria-label="Acknowledge"
+          disabled={isAcknowledging || isResolving}
+          onClick={onAcknowledge}>
+          {isAcknowledging ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+        </Button>
+      )}
+      {canResolve && (
+        <Button
+          size="icon-xs"
+          variant="outline"
+          title="Resolve"
+          aria-label="Resolve"
+          disabled={isResolving || isAcknowledging}
+          onClick={onResolve}>
+          {isResolving ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
+        </Button>
+      )}
     </div>
   );
 }

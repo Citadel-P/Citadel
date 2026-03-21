@@ -45,12 +45,16 @@ internal sealed class ResolveAlertEventsHandler(
         if (alertEvents.Count() != idCount)
             return Result.Failure(new NotFoundError("One or more alert events do not exist"));
 
+        var actor = await unitOfWork.Actors.GetById(actorId, cancellationToken);
+
         var utcNow = DateTime.UtcNow;
         foreach (var alertEvent in alertEvents)
         {
             var resolveResult = alertEvent.Resolve(actorId, utcNow, command.ResolutionNote);
             if (!resolveResult.IsSuccess())
                 return resolveResult;
+
+            alertEvent.AssignActor(actor);
         }
 
         await unitOfWork.AlertEvents.BulkUpdateAsync(alertEvents, cancellationToken);
