@@ -66,11 +66,15 @@ export const DockerPlatform = ({
               <span className="truncate text-xs text-muted-foreground">
                 {descriptor.operatingSystem} v{platform.serverVersion}
               </span>
-              {platform.connectorType === PlatformConnectorType.Agent && (
-                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground truncate">
-                  <PlugZap className="h-3.5 w-3.5" /> agent v{platform.agentVersion}
-                </span>
-              )}
+
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground truncate">
+                <PlugZap className="h-3.5 w-3.5" />{' '}
+                {platform.connectorType === PlatformConnectorType.Agent ? (
+                  <span>agent v{platform.agentVersion} </span>
+                ) : (
+                  'Local'
+                )}
+              </span>
             </div>
 
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
@@ -194,7 +198,7 @@ const ContainerStat = ({
     <TooltipTrigger asChild>
       <div className="flex items-center gap-1 cursor-default">
         <Icon height={12} width={12} className={className} />
-        <span className="tabular-nums">{value ?? '-'}</span>
+        <span className="tabular-nums text-[13px] text-muted-foreground">{value ?? '-'}</span>
       </div>
     </TooltipTrigger>
     <TooltipContent>{tooltip}</TooltipContent>
