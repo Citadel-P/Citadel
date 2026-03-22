@@ -6,6 +6,7 @@ using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
+using WebApi.Routes.Endpoints.Resources.GitRepositories;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 
@@ -23,6 +24,7 @@ public static class PublicEndpoints
     const string AlertEventsName = nameof(AlertEvents);
     const string AlertRulesName = nameof(AlertRules);
     const string GitAccountsName = nameof(GitAccounts);
+    const string GitRepositoriesName = nameof(GitRepositories);
     const string RegistriesName = nameof(Registries);
     const string DeploymentsName = nameof(Deployments);
     const string AuthenticationName = nameof(Authentication);
@@ -50,6 +52,10 @@ public static class PublicEndpoints
             var gitAccounts = group.MapGroup("/gitAccounts").WithTags(GitAccountsName).RequireAuthorization();
             {
                 MapGitAccountEndpoints(gitAccounts);
+            }
+            var gitRepositories = group.MapGroup("/gitRepositories").WithTags(GitRepositoriesName).RequireAuthorization();
+            {
+                MapGitRepositoryEndpoints(gitRepositories);
             }
             var images = group.MapGroup("/images").WithTags(ImagesName).RequireAuthorization();
             {
@@ -138,6 +144,51 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("deleteGitAccounts");
+    }
+
+    private static void MapGitRepositoryEndpoints(RouteGroupBuilder gitRepositories)
+    {
+        gitRepositories.MapGet("/", GitRepositories.List)
+            .WithSummary("Get all git repositories")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("listGitRepositories");
+
+        gitRepositories.MapGet("{id}", GitRepositories.Get)
+            .WithSummary("Get git repository by ID")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getGitRepository");
+
+        gitRepositories.MapPost("/", GitRepositories.Create)
+            .WithSummary("Create a git repository")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("createGitRepository");
+
+        gitRepositories.MapPatch("{id}", GitRepositories.Patch)
+            .WithSummary("Update a git repository")
+            .Accepts<GitRepositoryInput>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateGitRepository");
+
+        gitRepositories.MapDelete("/", GitRepositories.Delete)
+            .WithSummary("Delete git repositories")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("deleteGitRepositories");
     }
 
     private static void MapAuthEndpoints(RouteGroupBuilder auth)

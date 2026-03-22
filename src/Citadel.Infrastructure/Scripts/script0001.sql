@@ -60,6 +60,17 @@ CREATE TABLE "AlertRules" (
     CONSTRAINT "FK_AlertRules_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
 );
 
+CREATE TABLE "GitAccounts" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_GitAccounts" PRIMARY KEY,
+    "AuthType" TEXT NOT NULL,
+    "Configuration" TEXT NOT NULL,
+    "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    "CreatedByActorId" TEXT NOT NULL,
+    "Domain" TEXT NOT NULL,
+    "Name" TEXT NOT NULL,
+    CONSTRAINT "FK_GitAccounts_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
+);
+
 CREATE TABLE "Registries" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Registries" PRIMARY KEY,
     "Configuration" TEXT NOT NULL,
@@ -70,17 +81,6 @@ CREATE TABLE "Registries" (
     "RegistryHost" TEXT NOT NULL,
     "Status" TEXT NOT NULL,
     CONSTRAINT "FK_Registries_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
-);
-
-CREATE TABLE "GitAccounts" (
-    "Id" TEXT NOT NULL CONSTRAINT "PK_GitAccounts" PRIMARY KEY,
-    "AuthType" TEXT NOT NULL,
-    "Configuration" TEXT NOT NULL,
-    "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    "CreatedByActorId" TEXT NOT NULL,
-    "Domain" TEXT NOT NULL,
-    "Name" TEXT NOT NULL,
-    CONSTRAINT "FK_GitAccounts_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
 );
 
 CREATE TABLE "Users" (
@@ -197,6 +197,18 @@ CREATE TABLE "AlertRuleStates" (
     CONSTRAINT "PK_AlertRuleStates" PRIMARY KEY ("AlertRuleId", "ResourceId"),
     CONSTRAINT "FK_AlertRuleStates_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_AlertRuleStates_AlertRules_AlertRuleId" FOREIGN KEY ("AlertRuleId") REFERENCES "AlertRules" ("Id") ON DELETE CASCADE
+);
+
+CREATE TABLE "GitRepositories" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_GitRepositories" PRIMARY KEY,
+    "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    "CreatedByActorId" TEXT NOT NULL,
+    "DefaultBranch" TEXT NOT NULL,
+    "GitAccountId" TEXT NULL,
+    "Name" TEXT NOT NULL,
+    "Url" TEXT NOT NULL,
+    CONSTRAINT "FK_GitRepositories_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_GitRepositories_GitAccounts_GitAccountId" FOREIGN KEY ("GitAccountId") REFERENCES "GitAccounts" ("Id") ON DELETE SET NULL
 );
 
 CREATE TABLE "Images" (
@@ -409,6 +421,16 @@ CREATE UNIQUE INDEX "IX_Deployments_Name_PlatformId" ON "Deployments" ("Name", "
 
 CREATE INDEX "IX_Deployments_PlatformId" ON "Deployments" ("PlatformId");
 
+CREATE INDEX "IX_GitAccounts_CreatedByActorId" ON "GitAccounts" ("CreatedByActorId");
+
+CREATE UNIQUE INDEX "IX_GitAccounts_Name" ON "GitAccounts" ("Name");
+
+CREATE INDEX "IX_GitRepositories_CreatedByActorId" ON "GitRepositories" ("CreatedByActorId");
+
+CREATE INDEX "IX_GitRepositories_GitAccountId" ON "GitRepositories" ("GitAccountId");
+
+CREATE UNIQUE INDEX "IX_GitRepositories_Name" ON "GitRepositories" ("Name");
+
 CREATE INDEX "IX_Images_ControlTriggeredBy" ON "Images" ("ControlTriggeredBy");
 
 CREATE UNIQUE INDEX "IX_Images_DockerImageId_PlatformId" ON "Images" ("DockerImageId", "PlatformId");
@@ -416,10 +438,6 @@ CREATE UNIQUE INDEX "IX_Images_DockerImageId_PlatformId" ON "Images" ("DockerIma
 CREATE INDEX "IX_Images_PlatformId" ON "Images" ("PlatformId");
 
 CREATE INDEX "IX_Images_RegistryId" ON "Images" ("RegistryId");
-
-CREATE INDEX "IX_GitAccounts_CreatedByActorId" ON "GitAccounts" ("CreatedByActorId");
-
-CREATE UNIQUE INDEX "IX_GitAccounts_Name" ON "GitAccounts" ("Name");
 
 CREATE INDEX "IX_Permissions_RoleId" ON "Permissions" ("RoleId");
 
@@ -446,7 +464,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260319161147_migration0001', '10.0.3');
+VALUES ('20260322154958_migration0001', '10.0.5');
 
 COMMIT;
 

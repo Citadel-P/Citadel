@@ -21,6 +21,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IPlatformRepository Platforms { get; }
     IRegistryRepository Registries { get; }
     IGitAccountRepository GitAccounts { get; }
+    IGitRepositoryRepository GitRepositories { get; }
     IContainerRepository Containers { get; }
     IAlertRuleRepository AlertRules { get; }
     IAlertEventRepository AlertEvents { get; }
@@ -55,6 +56,19 @@ public interface IRegistryRepository
     Task<int> AddAsync(Registry registry, CancellationToken cancellationToken);
     Task<int> UpdateAsync(Registry registry, CancellationToken cancellationToken);
 
+    Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+}
+
+public interface IGitRepositoryRepository
+{
+    Task<GitRepository?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<GitRepository?> GetByNameAsync(string name, CancellationToken cancellationToken);
+    Task<IEnumerable<GitRepository>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<GitRepository>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
+    Task<int> AddAsync(GitRepository gitRepository, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(GitRepository gitRepository, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
 }
 

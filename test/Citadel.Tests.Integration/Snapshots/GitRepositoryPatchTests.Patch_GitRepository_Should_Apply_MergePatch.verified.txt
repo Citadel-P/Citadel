@@ -1,0 +1,9 @@
+﻿{
+  id: Guid_1,
+  createdByActorId: Guid_2,
+  name: UpdatedName,
+  url: https://github.com/citadel-p/citadel-api,
+  defaultBranch: develop,
+  gitAccountId: Guid_3,
+  createdAt: DateTimeOffset_1
+}

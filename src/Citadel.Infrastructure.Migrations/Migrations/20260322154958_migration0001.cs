@@ -115,6 +115,29 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "GitAccounts",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    AuthType = table.Column<string>(type: "TEXT", nullable: false),
+                    Configuration = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
+                    Domain = table.Column<string>(type: "TEXT", nullable: false),
+                    Name = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_GitAccounts", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_GitAccounts_Actors_CreatedByActorId",
+                        column: x => x.CreatedByActorId,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Registries",
                 columns: table => new
                 {
@@ -388,6 +411,35 @@ namespace Infrastructure.Migrations.Migrations
                         principalTable: "AlertRules",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "GitRepositories",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
+                    DefaultBranch = table.Column<string>(type: "TEXT", nullable: false),
+                    GitAccountId = table.Column<string>(type: "TEXT", nullable: true),
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    Url = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_GitRepositories", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_GitRepositories_Actors_CreatedByActorId",
+                        column: x => x.CreatedByActorId,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_GitRepositories_GitAccounts_GitAccountId",
+                        column: x => x.GitAccountId,
+                        principalTable: "GitAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
@@ -739,6 +791,33 @@ namespace Infrastructure.Migrations.Migrations
                 column: "PlatformId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_GitAccounts_CreatedByActorId",
+                table: "GitAccounts",
+                column: "CreatedByActorId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_GitAccounts_Name",
+                table: "GitAccounts",
+                column: "Name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_GitRepositories_CreatedByActorId",
+                table: "GitRepositories",
+                column: "CreatedByActorId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_GitRepositories_GitAccountId",
+                table: "GitRepositories",
+                column: "GitAccountId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_GitRepositories_Name",
+                table: "GitRepositories",
+                column: "Name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Images_ControlTriggeredBy",
                 table: "Images",
                 column: "ControlTriggeredBy");
@@ -844,6 +923,9 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ContainerStats");
 
             migrationBuilder.DropTable(
+                name: "GitRepositories");
+
+            migrationBuilder.DropTable(
                 name: "Permissions");
 
             migrationBuilder.DropTable(
@@ -863,6 +945,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "Containers");
+
+            migrationBuilder.DropTable(
+                name: "GitAccounts");
 
             migrationBuilder.DropTable(
                 name: "Teams");

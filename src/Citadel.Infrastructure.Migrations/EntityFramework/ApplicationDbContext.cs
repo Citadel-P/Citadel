@@ -20,6 +20,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .PlatformStatConfiguration()
             .RegistryConfiguration()
             .GitAccountConfiguration()
+            .GitRepositoryConfiguration()
             .RefreshTokenConfiguration()
             .ActorConfiguration()
             .UserConfiguration()
@@ -185,6 +186,36 @@ internal static class Configuration
         container.HasIndex("ImageId").HasDatabaseName($"IX_{tableName}_ImageId");
         container.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
         container.HasIndex("DockerImageId").HasDatabaseName($"IX_{tableName}_DockerImageId");
+
+        return builder;
+    }
+
+    public static ModelBuilder GitRepositoryConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "GitRepositories";
+        var gitRepository = builder.Entity("GitRepository");
+
+        gitRepository.ToTable(tableName);
+
+        gitRepository.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        gitRepository.HasKey("Id");
+
+        gitRepository.Property<string>("Name").HasColumnType("TEXT").IsRequired();
+        gitRepository.Property<string>("Url").HasColumnType("TEXT").IsRequired();
+        gitRepository.Property<string>("DefaultBranch").HasColumnType("TEXT").IsRequired();
+        gitRepository.Property<Guid?>("GitAccountId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
+
+        gitRepository.AddAuditedMemebers();
+
+        gitRepository
+            .HasOne("GitAccount")
+            .WithMany()
+            .IsRequired(false)
+            .HasForeignKey("GitAccountId")
+            .OnDelete(DeleteBehavior.SetNull);
+
+        gitRepository.HasIndex("Name").IsUnique().HasDatabaseName($"IX_{tableName}_Name");
+        gitRepository.HasIndex("GitAccountId").HasDatabaseName($"IX_{tableName}_GitAccountId");
 
         return builder;
     }

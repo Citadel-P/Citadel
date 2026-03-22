@@ -159,6 +159,7 @@ public partial class AlertRuleJsonContext : JsonSerializerContext { }
 [JsonSerializable(typeof(GitSshAccount))]
 [JsonSerializable(typeof(GitHttpAccount))]
 [JsonSerializable(typeof(GitAccountConfiguration))]
+[JsonSerializable(typeof(GitRepository))]
 public partial class GitJsonContext : JsonSerializerContext
 {
 }

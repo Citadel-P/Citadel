@@ -1,0 +1,9 @@
+﻿{
+  id: Guid_1,
+  createdByActorId: Guid_2,
+  name: GR-NEW,
+  url: https://github.com/citadel-p/citadel,
+  defaultBranch: main,
+  gitAccountId: Guid_3,
+  createdAt: DateTimeOffset_1
+}

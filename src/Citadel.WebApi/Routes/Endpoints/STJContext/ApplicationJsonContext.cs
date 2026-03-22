@@ -23,6 +23,7 @@ using WebApi.Routes.Endpoints.Resources.Compose;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
+using WebApi.Routes.Endpoints.Resources.GitRepositories;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Networks;
 using WebApi.Routes.Endpoints.Resources.Paging;
@@ -101,6 +102,12 @@ namespace Application.Models;
 [JsonSerializable(typeof(NoAuthAccount))]
 [JsonSerializable(typeof(GitSshAccount))]
 [JsonSerializable(typeof(GitHttpAccount))]
+[JsonSerializable(typeof(GitRepository))]
+[JsonSerializable(typeof(GitRepositoryInput))]
+[JsonSerializable(typeof(GitRepositoryInputPatchDocument))]
+[JsonSerializable(typeof(DeleteGitRepositoriesInput))]
+[JsonSerializable(typeof(GitRepositoriesView))]
+[JsonSerializable(typeof(GitRepositoryView))]
 [JsonSerializable(typeof(DeleteImagesRequest))]
 [JsonSerializable(typeof(DockerHubImageView))]
 [JsonSerializable(typeof(ImageView))]
