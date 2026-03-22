@@ -4,6 +4,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities.Git;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
+using Infrastructure.TypeHandlers;
 using System.Data;
 using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
@@ -22,17 +23,19 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
     {
         const string sql = """
             INSERT INTO GitRepositories (
-                Id, Name, Url, DefaultBranch, GitAccountId, CreatedAt, CreatedByActorId)
+                Id, Name, Description, Url, DefaultBranch, Status, GitAccountId, CreatedAt, CreatedByActorId)
             VALUES (
-                @Id, @Name, @Url, @DefaultBranch, @GitAccountId, @CreatedAt, @CreatedByActorId)
+                @Id, @Name, @Description, @Url, @DefaultBranch, @Status, @GitAccountId, @CreatedAt, @CreatedByActorId)
         """;
 
         return db.ExecuteAsync(sql, new
         {
             Id = gitRepository.Id.Format(),
             Name = gitRepository.Name,
+            Description = gitRepository.Description,
             Url = gitRepository.Url,
             DefaultBranch = gitRepository.DefaultBranch,
+            Status = EnumFormatter<GitReposStatus>.GetValue(gitRepository.Status),
             GitAccountId = gitRepository.GitAccountId?.Format(),
             CreatedAt = gitRepository.CreatedAt.ToString(),
             CreatedByActorId = gitRepository.CreatedByActorId.Format()
@@ -78,8 +81,10 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
         const string sql = """
             UPDATE GitRepositories
             SET Name = @Name,
+                Description = @Description,
                 Url = @Url,
                 DefaultBranch = @DefaultBranch,
+                Status = @Status,
                 GitAccountId = @GitAccountId
             WHERE Id = @Id
         """;
@@ -88,8 +93,10 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
         {
             Id = gitRepository.Id.Format(),
             Name = gitRepository.Name,
+            Description = gitRepository.Description,
             Url = gitRepository.Url,
             DefaultBranch = gitRepository.DefaultBranch,
+            Status = EnumFormatter<GitReposStatus>.GetValue(gitRepository.Status),
             GitAccountId = gitRepository.GitAccountId?.Format()
         }, transaction: tx());
     }

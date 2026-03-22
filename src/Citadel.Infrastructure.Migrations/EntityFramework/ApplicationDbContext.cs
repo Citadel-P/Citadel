@@ -201,8 +201,10 @@ internal static class Configuration
         gitRepository.HasKey("Id");
 
         gitRepository.Property<string>("Name").HasColumnType("TEXT").IsRequired();
+        gitRepository.Property<string>("Description").HasColumnType("TEXT").IsRequired(false).HasMaxLength(600);
         gitRepository.Property<string>("Url").HasColumnType("TEXT").IsRequired();
         gitRepository.Property<string>("DefaultBranch").HasColumnType("TEXT").IsRequired();
+        gitRepository.Property<string>("Status").HasColumnType("TEXT").IsRequired();
         gitRepository.Property<Guid?>("GitAccountId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
 
         gitRepository.AddAuditedMemebers();

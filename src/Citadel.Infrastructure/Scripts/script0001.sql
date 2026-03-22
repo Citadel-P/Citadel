@@ -204,8 +204,10 @@ CREATE TABLE "GitRepositories" (
     "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     "CreatedByActorId" TEXT NOT NULL,
     "DefaultBranch" TEXT NOT NULL,
+    "Description" TEXT NULL,
     "GitAccountId" TEXT NULL,
     "Name" TEXT NOT NULL,
+    "Status" TEXT NOT NULL,
     "Url" TEXT NOT NULL,
     CONSTRAINT "FK_GitRepositories_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_GitRepositories_GitAccounts_GitAccountId" FOREIGN KEY ("GitAccountId") REFERENCES "GitAccounts" ("Id") ON DELETE SET NULL
@@ -464,7 +466,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260322154958_migration0001', '10.0.5');
+VALUES ('20260322225133_migration0001', '10.0.5');
 
 COMMIT;
 

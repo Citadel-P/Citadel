@@ -2,6 +2,8 @@
   id: Guid_1,
   createdByActorId: Guid_2,
   name: OriginalName,
+  description: No linked account,
+  status: Unreachable,
   url: https://gitlab.com/citadel-p/citadel,
   defaultBranch: main,
   createdAt: DateTimeOffset_1

@@ -31,6 +31,7 @@ public sealed record PatchGitRepository(Guid Id, JsonMergePatchDocument<GitRepos
             RuleFor(x => x.Name).ValidNameIdentifier();
             RuleFor(x => x.Url).NotEmpty();
             RuleFor(x => x.DefaultBranch).NotEmpty();
+            RuleFor(x => x.Status).IsInEnum();
         }
     }
 }
@@ -55,7 +56,11 @@ internal sealed class PatchGitRepositoryHandler(IUnitOfWork unitOfWork) : IComma
         if (validation.IsFailure())
             return Result.Failure<GitRepository>(validation.Errors);
 
-        gitRepository.UpdateMetadata(patchedGitRepository.Name, patchedGitRepository.DefaultBranch!);
+        gitRepository.UpdateMetadata(
+            patchedGitRepository.Name,
+            patchedGitRepository.Description,
+            patchedGitRepository.DefaultBranch!,
+            patchedGitRepository.Status);
         gitRepository.UpdateSource(patchedGitRepository.Url, patchedGitRepository.GitAccountId);
 
         await unitOfWork.GitRepositories.UpdateAsync(gitRepository, cancellationToken);

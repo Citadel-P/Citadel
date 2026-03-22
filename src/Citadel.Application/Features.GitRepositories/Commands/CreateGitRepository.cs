@@ -1,3 +1,4 @@
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Git;
 using FluentValidation;
@@ -13,8 +14,10 @@ namespace Application.Features.GitRepositories.Commands;
 
 public sealed record CreateGitRepository(
     string Name,
+    string? Description,
     string Url,
     string DefaultBranch,
+    GitReposStatus Status,
     Guid? GitAccountId) : ICommand<Result<GitRepository>>
 {
     internal sealed class Validator : AbstractValidator<CreateGitRepository>
@@ -24,6 +27,7 @@ public sealed record CreateGitRepository(
             RuleFor(x => x.Name).ValidNameIdentifier();
             RuleFor(x => x.Url).NotEmpty();
             RuleFor(x => x.DefaultBranch).NotEmpty();
+            RuleFor(x => x.Status).IsInEnum();
         }
     }
 }
@@ -45,7 +49,7 @@ internal sealed class CreateGitRepositoryHandler(
         if (validation.IsFailure())
             return Result.Failure<GitRepository>(validation.Errors);
 
-        var gitRepository = new GitRepository(command.Name, command.Url, command.DefaultBranch, command.GitAccountId, actorId);
+        var gitRepository = new GitRepository(command.Name, command.Description, command.Url, command.DefaultBranch, command.Status, command.GitAccountId, actorId);
         await unitOfWork.GitRepositories.AddAsync(gitRepository, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 

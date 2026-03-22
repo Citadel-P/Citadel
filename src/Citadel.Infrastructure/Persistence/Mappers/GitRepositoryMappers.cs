@@ -1,3 +1,4 @@
+using Domain;
 using Domain.Entities.Git;
 using Infrastructure.Persistence.Dtos;
 
@@ -13,8 +14,10 @@ internal static class GitRepositoryMappers
         return GitRepository.FromPersistence(
             id: dto.Id,
             name: dto.Name,
+            description: dto.Description,
             url: dto.Url,
             defaultBranch: dto.DefaultBranch,
+            status: Enum.Parse<GitReposStatus>(dto.Status),
             gitAccountId: dto.GitAccountId,
             createdAt: dto.CreatedAt,
             createdByActorId: dto.CreatedByActorId);

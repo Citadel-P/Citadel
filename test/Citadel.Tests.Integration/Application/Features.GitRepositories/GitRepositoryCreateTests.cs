@@ -15,8 +15,10 @@ public class GitRepositoryCreateTests : IntegrationTestBase
         var createJson = """
         {
           "name": "GR-NEW",
+          "description": "A git repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
+          "status": "Valid",
           "gitAccountId": null
         }
         """;
@@ -31,7 +33,7 @@ public class GitRepositoryCreateTests : IntegrationTestBase
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var gitRepositories = await uow.GitRepositories.GetAllAsync(TestContext.Current.CancellationToken);
 
-        Assert.Contains(gitRepositories, x => x.Name == "GR-NEW" && x.DefaultBranch == "main");
+        Assert.Contains(gitRepositories, x => x.Name == "GR-NEW" && x.DefaultBranch == "main" && x.Status == GitReposStatus.Valid);
         await VerifyJson(responseBody);
     }
 
@@ -57,8 +59,10 @@ public class GitRepositoryCreateTests : IntegrationTestBase
         var createJson = $$"""
         {
           "name": "GR-NEW",
+          "description": "A linked repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
+          "status": "Valid",
           "gitAccountId": "{{gitAccountId}}"
         }
         """;
@@ -83,8 +87,10 @@ public class GitRepositoryCreateTests : IntegrationTestBase
         var createJson = """
         {
           "name": "",
+          "description": "A git repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
+          "status":  "Valid",
           "gitAccountId": null
         }
         """;
@@ -103,8 +109,10 @@ public class GitRepositoryCreateTests : IntegrationTestBase
         var createJson = """
         {
           "name": "GR-NEW",
+          "description": "A git repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "",
+          "status": "Valid",
           "gitAccountId": null
         }
         """;
@@ -125,8 +133,10 @@ public class GitRepositoryCreateTests : IntegrationTestBase
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             await uow.GitRepositories.AddAsync(new GitRepository(
                 name: "GR-NEW",
+                description: "Existing repository",
                 url: "https://github.com/citadel-p/citadel.git",
                 defaultBranch: "main",
+                status: GitReposStatus.Valid,
                 gitAccountId: null,
                 createdByActorId: Constants.SystemId
             ), TestContext.Current.CancellationToken);
@@ -136,8 +146,10 @@ public class GitRepositoryCreateTests : IntegrationTestBase
         var createJson = """
         {
           "name": "GR-NEW",
+          "description": "Another repository",
           "url": "https://github.com/citadel-p/other.git",
           "defaultBranch": "main",
+          "status": "Valid",
           "gitAccountId": null
         }
         """;
@@ -156,8 +168,10 @@ public class GitRepositoryCreateTests : IntegrationTestBase
         var createJson = $$"""
         {
           "name": "GR-NEW",
+          "description": "A git repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
+          "status": "Valid",
           "gitAccountId": "{{Guid.NewGuid()}}"
         }
         """;
@@ -192,8 +206,10 @@ public class GitRepositoryCreateTests : IntegrationTestBase
         var createJson = $$"""
         {
           "name": "GR-NEW",
+          "description": "A git repository",
           "url": "https://gitlab.com/citadel-p/citadel.git",
           "defaultBranch": "main",
+          "status": "Valid",
           "gitAccountId": "{{gitAccountId}}"
         }
         """;

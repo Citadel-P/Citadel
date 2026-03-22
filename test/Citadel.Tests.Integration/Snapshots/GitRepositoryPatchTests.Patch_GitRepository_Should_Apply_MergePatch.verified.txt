@@ -2,6 +2,8 @@
   id: Guid_1,
   createdByActorId: Guid_2,
   name: UpdatedName,
+  description: Updated description,
+  status: Valid,
   url: https://github.com/citadel-p/citadel-api,
   defaultBranch: develop,
   gitAccountId: Guid_3,

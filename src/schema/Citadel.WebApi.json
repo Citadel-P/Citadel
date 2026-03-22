@@ -12373,6 +12373,15 @@
           }
         }
       },
+      "GitReposStatus": {
+        "enum": [
+          "Unknown",
+          "Valid",
+          "Invalid",
+          "Unauthorized",
+          "Unreachable"
+        ]
+      },
       "GitRepositoriesView": {
         "required": [
           "gitRepositories"
@@ -12390,8 +12399,10 @@
       "GitRepositoryInput": {
         "required": [
           "name",
+          "description",
           "url",
           "defaultBranch",
+          "status",
           "gitAccountId"
         ],
         "type": "object",
@@ -12399,11 +12410,20 @@
           "name": {
             "type": "string"
           },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "url": {
             "type": "string"
           },
           "defaultBranch": {
             "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GitReposStatus"
           },
           "gitAccountId": {
             "type": [
@@ -12419,6 +12439,8 @@
           "id",
           "createdByActorId",
           "name",
+          "description",
+          "status",
           "url",
           "defaultBranch",
           "gitAccountId",
@@ -12436,6 +12458,15 @@
           },
           "name": {
             "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/GitReposStatus"
           },
           "url": {
             "type": "string"

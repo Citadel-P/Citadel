@@ -15,8 +15,10 @@ public class GitRepositoryDeleteTests : IntegrationTestBase
     {
         var gitRepository = new GitRepository(
             name: "delete-me",
+            description: "Delete me",
             url: "https://github.com/citadel-p/citadel.git",
             defaultBranch: "main",
+            status: GitReposStatus.Valid,
             gitAccountId: null,
             createdByActorId: Constants.SystemId);
 

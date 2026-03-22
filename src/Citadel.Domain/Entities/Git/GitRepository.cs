@@ -26,10 +26,12 @@ public class GitRepository(
     // Helper for the RepoCache path
     public string GetCachePath() => $"/data/repos/{Id}";
 
-    public void UpdateMetadata(string name, string defaultBranch)
+    public void UpdateMetadata(string name, string? description, string defaultBranch, GitReposStatus status)
     {
         Name = name;
+        Description = description;
         DefaultBranch = defaultBranch;
+        Status = status;
     }
 
     public void UpdateSource(string url, Guid? gitAccountId)

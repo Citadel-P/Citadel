@@ -2,6 +2,8 @@
   id: Guid_1,
   createdByActorId: Guid_2,
   name: GR-NEW,
+  description: A git repository,
+  status: Valid,
   url: https://github.com/citadel-p/citadel,
   defaultBranch: main,
   createdAt: DateTimeOffset_1

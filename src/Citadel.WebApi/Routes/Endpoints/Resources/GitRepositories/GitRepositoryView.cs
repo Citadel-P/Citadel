@@ -1,3 +1,4 @@
+using Domain;
 using Domain.Entities.Git;
 
 namespace WebApi.Routes.Endpoints.Resources.GitRepositories;
@@ -6,6 +7,8 @@ public sealed record GitRepositoryView(
     Guid Id,
     Guid CreatedByActorId,
     string Name,
+    string? Description,
+    GitReposStatus Status,
     string Url,
     string? DefaultBranch,
     Guid? GitAccountId,
@@ -15,6 +18,8 @@ public sealed record GitRepositoryView(
         gitRepository.Id,
         gitRepository.CreatedByActorId,
         gitRepository.Name,
+        gitRepository.Description,
+        gitRepository.Status,
         gitRepository.Url,
         gitRepository.DefaultBranch,
         gitRepository.GitAccountId,
