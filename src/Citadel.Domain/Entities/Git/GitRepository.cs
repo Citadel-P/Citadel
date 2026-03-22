@@ -2,13 +2,17 @@
 
 public class GitRepository(
     string name,
+    string? description,
     string url,
     string defaultBranch,
+    GitReposStatus status,
     Guid? gitAccountId,
     Guid createdByActorId) : IAuditedEntity
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public string Name { get; private set; } = name;
+    public string? Description { get; private set; } = description;
+    public GitReposStatus Status { get; private set; } = status;
     public string Url { get; private set; } = Normalize(url);
     public string? DefaultBranch { get; private set; } = defaultBranch;
     public Guid? GitAccountId { get; private set; } = gitAccountId;
@@ -37,14 +41,16 @@ public class GitRepository(
     public static GitRepository FromPersistence(
         Guid id,
         string name,
+        string? description,
         string url,
         string defaultBranch,
+        GitReposStatus status,
         Guid? gitAccountId,
         DateTime createdAt,
         Guid createdByActorId,
         GitAccount? gitAccount = null)
     {
-        return new GitRepository(name, url, defaultBranch, gitAccountId, createdByActorId)
+        return new GitRepository(name, description, url, defaultBranch, status, gitAccountId, createdByActorId)
         {
             Id = id,
             CreatedAt = createdAt,

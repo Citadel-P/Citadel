@@ -329,7 +329,7 @@ public class ThresholdAlertTests: IntegrationTestBase
         var notificationQueue = services.GetRequiredService<INotificationQueue>();
         var ruleProvider = services.GetRequiredService<IAlertRuleProvider>();
         var alertEventStreamManager = services.GetRequiredService<IAlertEventStreamManager>();
-        var notificationService = services.GetRequiredService<INotificationRepository>();
+        var notificationService = services.GetRequiredService<IShoutrrrCliRepository>();
         var logger = services.GetRequiredService<ILogger<AlertService>>();
 
         var queue = new InlineDbWorkQueue(uow);

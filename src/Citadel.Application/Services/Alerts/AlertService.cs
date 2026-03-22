@@ -19,7 +19,7 @@ public sealed class AlertService(
     INotificationQueue notificationQueue,
     IAlertRuleProvider alertRuleProvider, 
     IEnumerable<IAlertEvaluator> evaluators, 
-    INotificationRepository notificationService,
+    IShoutrrrCliRepository notificationService,
     IAlertEventStreamManager alertEventStreamManager,
     ILogger<AlertService> logger) : IAlertService
 {
@@ -95,7 +95,7 @@ internal sealed class AlertStateWorkItem(
     AlertRuleSnapshot snapshot,
     IAlertEventStreamManager alertEventStreamManager,
     INotificationQueue notificationQueue,
-    INotificationRepository notificationService,
+    IShoutrrrCliRepository notificationService,
     ILogger logger) : IDbWorkItem
 {
     public async Task ExecuteAsync(IUnitOfWork uow, CancellationToken token)
@@ -182,7 +182,7 @@ internal class AlertNotificationWorkItem(
     AlertRule rule,
     AlertEvent evt,
     AlertRuleSnapshot snapshot,
-    INotificationRepository notificationService) : INotificationWorkItem
+    IShoutrrrCliRepository notificationService) : INotificationWorkItem
 {
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {

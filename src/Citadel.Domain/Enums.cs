@@ -486,3 +486,12 @@ public enum GitAuthType
     Https,
     Ssh
 }
+
+public enum GitReposStatus
+{
+    Unknown,        
+    Valid,
+    Invalid,
+    Unauthorized,
+    Unreachable
+}

@@ -3,7 +3,6 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
 using FluentValidation;
 using Hosting.Common;
-using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
@@ -24,7 +23,7 @@ public sealed record VerifyAlertChannel(
     }
 }
 
-internal sealed class VerifyAlertChannelHandler(INotificationRepository notificationRepository) : ICommandHandler<VerifyAlertChannel, Result>
+internal sealed class VerifyAlertChannelHandler(IShoutrrrCliRepository notificationRepository) : ICommandHandler<VerifyAlertChannel, Result>
 {
     public async ValueTask<Result> Handle(VerifyAlertChannel command, CancellationToken cancellationToken)
     {
@@ -35,12 +34,6 @@ internal sealed class VerifyAlertChannelHandler(INotificationRepository notifica
             isActive: true,
             createdByActorId: Constants.SystemId);
 
-        var verifyResult = await notificationRepository.SendTestNotificationAsync(channel, cancellationToken);
-        if (!verifyResult.IsSuccess)
-        {
-            return Result.Failure(new BadRequestError(verifyResult.ErrorMessage ?? "Channel verification failed."));
-        }
-
-        return Result.Success();
+        return await notificationRepository.SendTestNotificationAsync(channel, cancellationToken);
     }
 }

@@ -10,7 +10,7 @@ using static Infrastructure.TypeHandlers.FormattingExtensions;
 
 namespace Infrastructure.Persistence;
 
-internal sealed class GitRepositoryRepository(IDbConnection db, Func<IDbTransaction> tx) : IGitRepositoryRepository
+internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> tx) : IGitReposRepository
 {
     public Task<bool> ExistsAsync(string name, CancellationToken cancellationToken)
     {

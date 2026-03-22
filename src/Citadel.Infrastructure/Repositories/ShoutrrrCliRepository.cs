@@ -1,11 +1,13 @@
 ﻿using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
 using Hosting.DockerClient.Services;
+using Infrastructure.Repositories.Mappers;
+using LightResults;
 using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.Repositories;
 
-internal class ShoutrrrNotificationRepository(IProcessService processService, ILogger<ShoutrrrNotificationRepository> logger) : INotificationRepository
+internal class ShoutrrrCliRepository(IProcessService processService, ILogger<ShoutrrrCliRepository> logger) : IShoutrrrCliRepository
 {
     private readonly string shoutrrrCliPath = "shoutrrr";
 
@@ -16,7 +18,7 @@ internal class ShoutrrrNotificationRepository(IProcessService processService, IL
         return SendToChannelsAsync(channels, title, message, cancellationToken);
     }
 
-    public Task<NotificationResult> SendTestNotificationAsync(AlertChannel channel, CancellationToken cancellationToken)
+    public Task<Result> SendTestNotificationAsync(AlertChannel channel, CancellationToken cancellationToken)
         => VerifyAndSendTestAsync(channel, cancellationToken);
 
     private async Task SendToChannelsAsync(
@@ -41,7 +43,7 @@ internal class ShoutrrrNotificationRepository(IProcessService processService, IL
                 "--message", message
             };
 
-            var result = await processService.ExecuteAsync(shoutrrrCliPath, args, ct);
+            var result = await processService.ExecuteAsync(shoutrrrCliPath, args, null, ct);
 
             if (!result.IsSuccess)
             {
@@ -54,7 +56,7 @@ internal class ShoutrrrNotificationRepository(IProcessService processService, IL
         });
     }
 
-    private async Task<NotificationResult> VerifyChannelsAsync(AlertChannel channel, CancellationToken cancellationToken)
+    private async Task<Result> VerifyChannelsAsync(AlertChannel channel, CancellationToken cancellationToken)
     {
         var args = new[]
             {
@@ -62,21 +64,15 @@ internal class ShoutrrrNotificationRepository(IProcessService processService, IL
                 "--url", channel.Url,
             };
 
-        var result = await processService.ExecuteAsync(shoutrrrCliPath, args, cancellationToken);
+        var result = await processService.ExecuteAsync(shoutrrrCliPath, args, null, cancellationToken);
 
-        if (!result.IsSuccess)
-        {
-            var error = string.IsNullOrEmpty(result.StandardError) ? result.StandardOutput : result.StandardError;
-            return new NotificationResult(false, $"Verification failed for channel {channel.Id}. ExitCode={result.ExitCode}. Error={error}");
-        }
-
-        return new NotificationResult(true);
+        return result.Map();
     }
 
-    private async Task<NotificationResult> VerifyAndSendTestAsync(AlertChannel channel, CancellationToken cancellationToken)
+    private async Task<Result> VerifyAndSendTestAsync(AlertChannel channel, CancellationToken cancellationToken)
     {
         var verifyResult = await VerifyChannelsAsync(channel, cancellationToken);
-        if (!verifyResult.IsSuccess)
+        if (!verifyResult.IsSuccess())
         {
             return verifyResult;
         }
@@ -89,13 +85,8 @@ internal class ShoutrrrNotificationRepository(IProcessService processService, IL
             "--message", $"Test notification for channel '{channel.Name}'"
         };
 
-        var sendResult = await processService.ExecuteAsync(shoutrrrCliPath, args, cancellationToken);
-        if (!sendResult.IsSuccess)
-        {
-            var error = string.IsNullOrEmpty(sendResult.StandardError) ? sendResult.StandardOutput : sendResult.StandardError;
-            return new NotificationResult(false, $"Test send failed for channel {channel.Id}. ExitCode={sendResult.ExitCode}. Error={error}");
-        }
-
-        return new NotificationResult(true);
+        var sendResult = await processService.ExecuteAsync(shoutrrrCliPath, args, null, cancellationToken);
+        
+        return sendResult.Map();
     }
 }

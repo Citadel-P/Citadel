@@ -32,7 +32,7 @@ internal class UnitOfWork : IUnitOfWork
         ContainerStats = new Lazy<IContainerStatRepository>(() => new ContainerStatRepository(connection, GetTransaction));
         ActivityEvents = new Lazy<IActivityEventRepository>(() => new ActivityEventRepository(connection, GetTransaction));
         GitAccounts = new Lazy<IGitAccountRepository>(() => new GitAccountRepository(connection, GetTransaction));
-        GitRepositories = new Lazy<IGitRepositoryRepository>(() => new GitRepositoryRepository(connection, GetTransaction));
+        GitRepositories = new Lazy<IGitReposRepository>(() => new GitReposRepository(connection, GetTransaction));
     }
 
     private Lazy<IUserRepository> Users { get; }
@@ -46,7 +46,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IDeploymentRepository> Deployments { get; }
     private Lazy<IAlertEventRepository> AlertEvents { get; }
     private Lazy<IGitAccountRepository> GitAccounts { get; }
-    private Lazy<IGitRepositoryRepository> GitRepositories { get; }
+    private Lazy<IGitReposRepository> GitRepositories { get; }
     private Lazy<IRefreshTokenRepository> RefreshTokens { get; }
     private Lazy<IPlatformStatRepository> PlatformStats { get; }
     private Lazy<IActivityEventRepository> ActivityEvents { get; }
@@ -65,7 +65,7 @@ internal class UnitOfWork : IUnitOfWork
     IPlatformStatRepository IUnitOfWork.PlatformStats => PlatformStats.Value;
     IRefreshTokenRepository IUnitOfWork.RefreshTokens => RefreshTokens.Value;
     IGitAccountRepository IUnitOfWork.GitAccounts => GitAccounts.Value;
-    IGitRepositoryRepository IUnitOfWork.GitRepositories => GitRepositories.Value;
+    IGitReposRepository IUnitOfWork.GitRepositories => GitRepositories.Value;
     IContainerStatRepository IUnitOfWork.ContainerStats => ContainerStats.Value;
     IActivityEventRepository IUnitOfWork.ActivityEventRepository => ActivityEvents.Value;
 
