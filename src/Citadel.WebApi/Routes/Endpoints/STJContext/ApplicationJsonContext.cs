@@ -10,6 +10,7 @@ using Domain.Contracts.Resources.Registries;
 using Domain.Contracts.Resources.Volumes;
 using Domain.Entities;
 using Domain.Entities.Deployments;
+using Domain.Entities.Git;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Microsoft.AspNetCore.Mvc;
@@ -21,6 +22,7 @@ using WebApi.Routes.Endpoints.Resources.Auth;
 using WebApi.Routes.Endpoints.Resources.Compose;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
+using WebApi.Routes.Endpoints.Resources.GitAccounts;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Networks;
 using WebApi.Routes.Endpoints.Resources.Paging;
@@ -88,6 +90,17 @@ namespace Application.Models;
 [JsonSerializable(typeof(RegistriesView))]
 [JsonSerializable(typeof(RegistryView))]
 [JsonSerializable(typeof(RegistryConfiguration))]
+[JsonSerializable(typeof(GitAccount))]
+[JsonSerializable(typeof(GitAccountInput))]
+[JsonSerializable(typeof(GitAccountInputPatchDocument))]
+[JsonSerializable(typeof(DeleteGitAccountsInput))]
+[JsonSerializable(typeof(GitAccountsView))]
+[JsonSerializable(typeof(GitAccountView))]
+[JsonSerializable(typeof(GitAccountConfigView))]
+[JsonSerializable(typeof(GitAccountConfiguration))]
+[JsonSerializable(typeof(NoAuthAccount))]
+[JsonSerializable(typeof(GitSshAccount))]
+[JsonSerializable(typeof(GitHttpAccount))]
 [JsonSerializable(typeof(DeleteImagesRequest))]
 [JsonSerializable(typeof(DockerHubImageView))]
 [JsonSerializable(typeof(ImageView))]

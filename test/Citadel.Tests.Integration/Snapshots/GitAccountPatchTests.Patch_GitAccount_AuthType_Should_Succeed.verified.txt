@@ -1,0 +1,8 @@
+﻿{
+  id: Guid_1,
+  createdByActorId: Guid_2,
+  name: OriginalName,
+  domain: gitlab.com,
+  authType: Ssh,
+  createdAt: DateTimeOffset_1
+}

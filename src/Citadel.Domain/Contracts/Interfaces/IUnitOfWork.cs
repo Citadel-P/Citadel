@@ -4,6 +4,7 @@ using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using Domain.Entities.Deployments;
+using Domain.Entities.Git;
 using Domain.Entities.Identity;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
@@ -19,6 +20,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IImageRepository Images { get; }
     IPlatformRepository Platforms { get; }
     IRegistryRepository Registries { get; }
+    IGitAccountRepository GitAccounts { get; }
     IContainerRepository Containers { get; }
     IAlertRuleRepository AlertRules { get; }
     IAlertEventRepository AlertEvents { get; }
@@ -53,6 +55,19 @@ public interface IRegistryRepository
     Task<int> AddAsync(Registry registry, CancellationToken cancellationToken);
     Task<int> UpdateAsync(Registry registry, CancellationToken cancellationToken);
 
+    Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+}
+
+public interface IGitAccountRepository
+{
+    Task<GitAccount?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<GitAccount?> GetByNameAsync(string name, CancellationToken cancellationToken);
+    Task<IEnumerable<GitAccount>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<GitAccount>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
+    Task<int> AddAsync(GitAccount gitAccount, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(GitAccount gitAccount, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
 }
 

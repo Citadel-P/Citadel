@@ -479,3 +479,10 @@ public enum AlertDestination
     WeCom,
     Zulip_Chat
 }
+
+public enum GitAuthType
+{
+    None,
+    Https,
+    Ssh
+}

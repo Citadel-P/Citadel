@@ -72,6 +72,17 @@ CREATE TABLE "Registries" (
     CONSTRAINT "FK_Registries_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
 );
 
+CREATE TABLE "GitAccounts" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_GitAccounts" PRIMARY KEY,
+    "AuthType" TEXT NOT NULL,
+    "Configuration" TEXT NOT NULL,
+    "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    "CreatedByActorId" TEXT NOT NULL,
+    "Domain" TEXT NOT NULL,
+    "Name" TEXT NOT NULL,
+    CONSTRAINT "FK_GitAccounts_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
+);
+
 CREATE TABLE "Users" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Users" PRIMARY KEY,
     "ActorId" TEXT NOT NULL,
@@ -405,6 +416,10 @@ CREATE UNIQUE INDEX "IX_Images_DockerImageId_PlatformId" ON "Images" ("DockerIma
 CREATE INDEX "IX_Images_PlatformId" ON "Images" ("PlatformId");
 
 CREATE INDEX "IX_Images_RegistryId" ON "Images" ("RegistryId");
+
+CREATE INDEX "IX_GitAccounts_CreatedByActorId" ON "GitAccounts" ("CreatedByActorId");
+
+CREATE UNIQUE INDEX "IX_GitAccounts_Name" ON "GitAccounts" ("Name");
 
 CREATE INDEX "IX_Permissions_RoleId" ON "Permissions" ("RoleId");
 

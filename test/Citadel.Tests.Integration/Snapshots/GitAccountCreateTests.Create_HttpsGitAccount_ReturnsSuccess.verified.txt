@@ -1,0 +1,8 @@
+﻿{
+  id: Guid_1,
+  createdByActorId: Guid_2,
+  name: GA-NEW,
+  domain: github.com,
+  authType: Https,
+  createdAt: DateTimeOffset_1
+}

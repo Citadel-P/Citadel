@@ -23,6 +23,7 @@ internal class UnitOfWork : IUnitOfWork
         Images = new Lazy<IImageRepository>(() => new ImageRepository(connection, GetTransaction));
         Platforms = new Lazy<IPlatformRepository>(() => new PlatformRepository(connection, GetTransaction));
         Registries = new Lazy<IRegistryRepository>(() => new RegistryRepository(connection, GetTransaction));
+        GitAccounts = new Lazy<IGitAccountRepository>(() => new GitAccountRepository(connection, GetTransaction));
         Containers = new Lazy<IContainerRepository>(() => new ContainerRepository(connection, GetTransaction));
         AlertRules = new Lazy<IAlertRuleRepository>(() => new AlertRuleRepository(connection, GetTransaction));
         AlertEvents = new Lazy<IAlertEventRepository>(() => new AlertEventRepository(connection, GetTransaction));
@@ -39,6 +40,7 @@ internal class UnitOfWork : IUnitOfWork
     private Lazy<IActorRepository> Actors { get; }
     private Lazy<IPlatformRepository> Platforms { get; }
     private Lazy<IRegistryRepository> Registries { get; }
+    private Lazy<IGitAccountRepository> GitAccounts { get; }
     private Lazy<IContainerRepository> Containers { get; }
     private Lazy<IDeploymentRepository> Deployments { get; }
     private Lazy<IAlertRuleRepository> AlertRules { get; }
@@ -54,6 +56,7 @@ internal class UnitOfWork : IUnitOfWork
     IActorRepository IUnitOfWork.Actors => Actors.Value;
     IPlatformRepository IUnitOfWork.Platforms => Platforms.Value;
     IRegistryRepository IUnitOfWork.Registries => Registries.Value;
+    IGitAccountRepository IUnitOfWork.GitAccounts => GitAccounts.Value;
     IContainerRepository IUnitOfWork.Containers => Containers.Value;
     IAlertRuleRepository IUnitOfWork.AlertRules => AlertRules.Value;
     IAlertEventRepository IUnitOfWork.AlertEvents => AlertEvents.Value;

@@ -1,4 +1,5 @@
 ﻿using Domain;
+using Domain.Entities.Git;
 using Hosting.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -18,6 +19,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .PlatformConfiguration()
             .PlatformStatConfiguration()
             .RegistryConfiguration()
+            .GitAccountConfiguration()
             .RefreshTokenConfiguration()
             .ActorConfiguration()
             .UserConfiguration()
@@ -183,6 +185,28 @@ internal static class Configuration
         container.HasIndex("ImageId").HasDatabaseName($"IX_{tableName}_ImageId");
         container.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
         container.HasIndex("DockerImageId").HasDatabaseName($"IX_{tableName}_DockerImageId");
+
+        return builder;
+    }
+
+    public static ModelBuilder GitAccountConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "GitAccounts";
+        var gitAccount = builder.Entity("GitAccount");
+
+        gitAccount.ToTable(tableName);
+
+        gitAccount.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        gitAccount.HasKey("Id");
+
+        gitAccount.Property<string>("Name").HasColumnType("TEXT").IsRequired();
+        gitAccount.Property<string>("Domain").HasColumnType("TEXT").IsRequired();
+        gitAccount.Property<string>("AuthType").HasColumnType("TEXT").IsRequired();
+        gitAccount.Property<string>("Configuration").HasColumnType("TEXT").IsRequired();
+
+        gitAccount.AddAuditedMemebers();
+
+        gitAccount.HasIndex("Name").IsUnique().HasDatabaseName($"IX_{tableName}_Name");
 
         return builder;
     }

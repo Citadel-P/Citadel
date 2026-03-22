@@ -1,0 +1,12 @@
+﻿{
+  type: https://tools.ietf.org/html/rfc9110#section-15.5.1,
+  title: One or more validation errors occurred.,
+  status: 400,
+  errors: {
+    Configuration: [
+      HTTP username is required when authentication is enabled.,
+      HTTP token is required when authentication is enabled.
+    ]
+  },
+  traceId: {Scrubbed}
+}

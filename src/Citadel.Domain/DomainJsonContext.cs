@@ -1,10 +1,11 @@
-﻿using System.Text.Json.Serialization;
-using Domain.Entities;
+﻿using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using Domain.Entities.Deployments;
+using Domain.Entities.Git;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
+using System.Text.Json.Serialization;
 
 namespace Domain;
 
@@ -145,3 +146,19 @@ public partial class AlertEventJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(IReadOnlyCollection<AlertRuleLimitedTo>))]
 [JsonSerializable(typeof(IReadOnlyCollection<AlertRuleQuietHour>))]
 public partial class AlertRuleJsonContext : JsonSerializerContext { }
+
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Default,
+    PropertyNameCaseInsensitive = true,
+    Converters = new[]
+    {
+        typeof(JsonStringEnumConverter<GitAuthType>)
+    })]
+[JsonSerializable(typeof(GitAccount))]
+[JsonSerializable(typeof(NoAuthAccount))]
+[JsonSerializable(typeof(GitSshAccount))]
+[JsonSerializable(typeof(GitHttpAccount))]
+[JsonSerializable(typeof(GitAccountConfiguration))]
+public partial class GitJsonContext : JsonSerializerContext
+{
+}
