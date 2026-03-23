@@ -51,6 +51,7 @@ public static class ApplicationModule
             .AddAlertEvaluators()
             .AddSingleton<AlertRuleCache>()
             .AddSingleton<IAlertService, AlertService>()
+            .AddSingleton<IRepoCacheManager, RepoCacheManager>()
             .AddSingleton<ImageDigestCache>()
             .AddSingleton<IImageScanScheduler, ImageScanScheduler>()
             .AddScoped<IApplyDeploymentService, ApplyDeploymentService>()
