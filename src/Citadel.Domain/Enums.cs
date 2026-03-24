@@ -235,6 +235,24 @@ public enum DeploymentStatus
     Stopped
 }
 
+public enum StackReleaseStatus
+{
+    Unknown = 0,
+    Created,
+    Applying,
+    Healthy,
+    Pending,
+    Degraded,
+    Failed,
+    Stopped
+}
+
+public enum StackSource
+{
+    Manual = 0,
+    Git
+}
+
 public enum DeploymentSource 
 {
     UI,
@@ -332,6 +350,26 @@ public enum UpdateBehavior
     /// Periodically check and automatically redeploy when a new image is found.
     /// </summary>
     AutoDeploy
+}
+
+public enum StackUpdateBehavior
+{
+    /// <summary>
+    /// Do not check for updates.
+    /// </summary>
+    Disabled,
+    /// <summary>
+    /// Periodically check for updates and alert me, but do not redeploy.
+    /// </summary>
+    Notify,
+    /// <summary>
+    /// Periodically check and automatically redeploy the service when a new image is found.
+    /// </summary>
+    ServiceAutoDeploy,
+    /// <summary>
+    /// Periodically check and automatically redeploy the entire stack instead of just specific services
+    /// </summary>
+    StackAutoDeploy
 }
 
 public enum DeployedContainerState
