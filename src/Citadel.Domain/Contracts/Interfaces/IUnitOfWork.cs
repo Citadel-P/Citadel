@@ -8,6 +8,7 @@ using Domain.Entities.Git;
 using Domain.Entities.Identity;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
+using Domain.Entities.Stacks;
 using Hosting.Common.Models;
 
 namespace Domain.Contracts.Interfaces;
@@ -26,6 +27,7 @@ public interface IUnitOfWork : IAsyncDisposable
     IAlertRuleRepository AlertRules { get; }
     IAlertEventRepository AlertEvents { get; }
     IDeploymentRepository Deployments { get; }
+    IStackRepository Stacks { get; }
     IRefreshTokenRepository RefreshTokens { get; }
     IPlatformStatRepository PlatformStats { get; }
     IContainerStatRepository ContainerStats { get; }
@@ -56,6 +58,21 @@ public interface IRegistryRepository
     Task<int> AddAsync(Registry registry, CancellationToken cancellationToken);
     Task<int> UpdateAsync(Registry registry, CancellationToken cancellationToken);
 
+    Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+}
+
+public interface IStackRepository
+{
+    Task<Stack?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<Stack?> GetInfoAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<Stack>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Stack>> GetInfoAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Stack>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<IEnumerable<StackRelease>> GetReleasesByStackIdAsync(Guid stackId, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
+    Task<int> AddAsync(Stack stack, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(Stack stack, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
 }
 

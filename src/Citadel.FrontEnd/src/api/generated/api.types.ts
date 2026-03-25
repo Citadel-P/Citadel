@@ -34,6 +34,29 @@ export enum StopSignal {
   SIGINT = "SIGINT",
 }
 
+export enum StackUpdateBehavior {
+  Disabled = "Disabled",
+  Notify = "Notify",
+  ServiceAutoDeploy = "ServiceAutoDeploy",
+  StackAutoDeploy = "StackAutoDeploy",
+}
+
+export enum StackSource {
+  Manual = "Manual",
+  Git = "Git",
+}
+
+export enum StackReleaseStatus {
+  Unknown = "Unknown",
+  Created = "Created",
+  Applying = "Applying",
+  Healthy = "Healthy",
+  Pending = "Pending",
+  Degraded = "Degraded",
+  Failed = "Failed",
+  Stopped = "Stopped",
+}
+
 export enum ScheduleType {
   Daily = "Daily",
   Weekly = "Weekly",
@@ -88,6 +111,20 @@ export enum LoggingDriverType {
   Splunk = "splunk",
   Etwlogs = "etwlogs",
   Gcplogs = "gcplogs",
+}
+
+export enum GitReposStatus {
+  Unknown = "Unknown",
+  Valid = "Valid",
+  Invalid = "Invalid",
+  Unauthorized = "Unauthorized",
+  Unreachable = "Unreachable",
+}
+
+export enum GitAuthType {
+  None = "None",
+  Https = "Https",
+  Ssh = "Ssh",
 }
 
 export enum DockerHubTagStatus {
@@ -1176,6 +1213,14 @@ export interface DeleteContainersRequest {
   link?: null | boolean;
 }
 
+export interface DeleteGitAccountsInput {
+  ids: string[];
+}
+
+export interface DeleteGitRepositoriesInput {
+  ids: string[];
+}
+
 export interface DeleteImageResponseItem {
   result: Record<string, string>;
 }
@@ -1475,6 +1520,73 @@ export interface ExposedPortsResult {
   ports: string[];
 }
 
+export interface GitAccountConfigView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  domain: string;
+  authType: GitAuthType;
+  configuration: null | GitAccountConfiguration;
+}
+
+export type GitAccountConfiguration = BaseGitAccountConfiguration &
+  (
+    | BaseGitAccountConfigurationTypeMapping<
+        "None",
+        GitAccountConfigurationNoAuthAccount
+      >
+    | BaseGitAccountConfigurationTypeMapping<
+        "Ssh",
+        GitAccountConfigurationGitSshAccount
+      >
+    | BaseGitAccountConfigurationTypeMapping<
+        "Https",
+        GitAccountConfigurationGitHttpAccount
+      >
+  );
+
+export interface GitAccountConfigurationGitHttpAccount {
+  $type?: "Https";
+  /** @default false */
+  authEnabled?: null | boolean;
+  username?: null | string;
+  token?: null | string;
+}
+
+export interface GitAccountConfigurationGitSshAccount {
+  $type?: "Ssh";
+  username: string;
+  privateKey: string;
+  passphrase?: null | string;
+}
+
+export interface GitAccountConfigurationNoAuthAccount {
+  $type?: "None";
+}
+
+export interface GitAccountInput {
+  name: string;
+  domain: string;
+  authType: GitAuthType;
+  configuration: GitAccountConfiguration;
+}
+
+export interface GitAccountView {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  createdByActorId: string;
+  name: string;
+  domain: string;
+  authType: GitAuthType;
+  /** @format date-time */
+  createdAt: any;
+}
+
+export interface GitAccountsView {
+  gitAccounts: GitAccountView[];
+}
+
 export interface GitHubCrPackageVersion {
   /**
    * @format int32
@@ -1496,6 +1608,36 @@ export interface GitHubCrPackageVersionContainerMetadata {
 
 export interface GitHubCrPackageVersionMetadata {
   container: null | GitHubCrPackageVersionContainerMetadata;
+}
+
+export interface GitRepositoriesView {
+  gitRepositories: GitRepositoryView[];
+}
+
+export interface GitRepositoryInput {
+  name: string;
+  description: null | string;
+  url: string;
+  defaultBranch: string;
+  status: GitReposStatus;
+  /** @format uuid */
+  gitAccountId: null | string;
+}
+
+export interface GitRepositoryView {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  createdByActorId: string;
+  name: string;
+  description: null | string;
+  status: GitReposStatus;
+  url: string;
+  defaultBranch: null | string;
+  /** @format uuid */
+  gitAccountId: null | string;
+  /** @format date-time */
+  createdAt: any;
 }
 
 export interface GraphDriverDataInfo {
@@ -1743,6 +1885,16 @@ export interface ImagePullProgress {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   start: null | number | string;
+}
+
+export interface ImageUpdateState {
+  serviceName: string;
+  imageName: string;
+  currentDigest: string;
+  remoteDigest: null | string;
+  /** @format date-time */
+  lastCheckedAt: any;
+  updateAvailable: boolean;
 }
 
 export interface ImageView {
@@ -2155,6 +2307,17 @@ export interface PullImageStreamItem {
   error?: null | ImagePullError;
 }
 
+export interface RecreateStackOnNewCommitState {
+  currentCommitSha: string;
+  remoteCommitSha: null | string;
+  /** @format date-time */
+  lastCheckedAt: any;
+}
+
+export interface RecreateStackOnNewImageState {
+  autoUpdateStates: ImageUpdateState[];
+}
+
 export interface RefreshTokenResponse {
   accessToken: string;
 }
@@ -2313,6 +2476,132 @@ export interface SecurityConfig {
   securityOpt?: null | any[];
 }
 
+export interface StackConfigView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  description: null | string;
+  stackSource: StackSource;
+  spec: StackSpec;
+  stackUpdateState: StackUpdateState;
+}
+
+export interface StackInput {
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  description: null | string;
+  stackSource: StackSource;
+  spec: StackSpec;
+}
+
+export interface StackReleaseView {
+  /** @format uuid */
+  id: string;
+  /** @format uuid */
+  stackId: string;
+  /** @format uuid */
+  platformId: string;
+  status: StackReleaseStatus;
+  version: string;
+  spec: StackSpec;
+  /** @format date-time */
+  createdAt: any;
+  /** @format uuid */
+  createdByActorId: string;
+  platformStatus?: PlatformStatus;
+  platformName?: null | string;
+}
+
+export interface StackReleasesView {
+  releases: StackReleaseView[];
+}
+
+export type StackSpec = BaseStackSpec &
+  (
+    | BaseStackSpecTypeMapping<"Manual", StackSpecManualStack>
+    | BaseStackSpecTypeMapping<"Git", StackSpecGitStack>
+  );
+
+export interface StackSpecGitStack {
+  $type?: "Git";
+  /** @format uuid */
+  gitRepoId: string;
+  commitSha: null | string;
+  imageUpdateBehavior: StackUpdateBehavior;
+  commitUpdateBehavior: StackUpdateBehavior;
+  composePaths?: null | any[];
+  additionalEnvFileFromRepo?: null | any[];
+  projectName?: null | string;
+  preDeploy?: null | any[];
+  postDeploy?: null | any[];
+  envVars?: null | any[];
+  envFilePath?: null | string;
+}
+
+export interface StackSpecManualStack {
+  $type?: "Manual";
+  composeFile: string;
+  updateBehavior: StackUpdateBehavior;
+  projectName?: null | string;
+  preDeploy?: null | any[];
+  postDeploy?: null | any[];
+  envVars?: null | any[];
+  envFilePath?: null | string;
+}
+
+export type StackUpdateState = BaseStackUpdateState &
+  (
+    | BaseStackUpdateStateTypeMapping<
+        "Git",
+        StackUpdateStateGitStackUpdateState
+      >
+    | BaseStackUpdateStateTypeMapping<
+        "Manual",
+        StackUpdateStateManualStackUpdateState
+      >
+  );
+
+export interface StackUpdateStateGitStackUpdateState {
+  $type?: "Git";
+  recreateStackOnNewImageState: RecreateStackOnNewImageState;
+  recreateStackOnNewCommitState: RecreateStackOnNewCommitState;
+}
+
+export interface StackUpdateStateManualStackUpdateState {
+  $type?: "Manual";
+  recreateStackOnNewImageState: RecreateStackOnNewImageState;
+}
+
+export interface StackView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: null | string;
+  stackSource: StackSource;
+  stackUpdateState: StackUpdateState;
+  /** @format date-time */
+  createdAt: any;
+  /** @format uuid */
+  createdByActorId: string;
+  controlState: ResourceControlState;
+  /** @format uuid */
+  currentStackReleaseId: string;
+  /** @format uuid */
+  platformId?: null | string;
+  status?: any;
+  version?: null | string;
+  spec?: null | StackSpec;
+  platformStatus?: PlatformStatus;
+  platformName?: null | string;
+}
+
+export interface StacksView {
+  stacks: StackView[];
+}
+
 export interface SwarmPeer {
   nodeID: null | string;
   addr: null | string;
@@ -2454,6 +2743,12 @@ type BaseDeploymentImageInfoTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
+type BaseGitAccountConfiguration = object;
+
+type BaseGitAccountConfigurationTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
 type BaseIImageRepository = object;
 
 type BaseIImageRepositoryTypeMapping<Key, Type> = {
@@ -2469,6 +2764,18 @@ type BasePlatformDescriptorTypeMapping<Key, Type> = {
 type BaseRegistryConfiguration = object;
 
 type BaseRegistryConfigurationTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseStackSpec = object;
+
+type BaseStackSpecTypeMapping<Key, Type> = {
+  $type: Key;
+} & Type;
+
+type BaseStackUpdateState = object;
+
+type BaseStackUpdateStateTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
@@ -3433,6 +3740,325 @@ export class Api<
     /**
      * No description
      *
+     * @tags GitAccounts
+     * @name ListGitAccounts
+     * @summary Get all git accounts
+     * @request GET:/api/v1/gitAccounts
+     * @secure
+     * @response `200` `GitAccountsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listGitAccounts: (params: RequestParams = {}) =>
+      this.request<
+        GitAccountsView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitAccounts`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitAccounts
+     * @name CreateGitAccount
+     * @summary Create a git account
+     * @request POST:/api/v1/gitAccounts
+     * @secure
+     * @response `200` `GitAccountView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createGitAccount: (data: GitAccountInput, params: RequestParams = {}) =>
+      this.request<
+        GitAccountView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitAccounts`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitAccounts
+     * @name DeleteGitAccounts
+     * @summary Delete git accounts
+     * @request DELETE:/api/v1/gitAccounts
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteGitAccounts: (
+      data: DeleteGitAccountsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/gitAccounts`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitAccounts
+     * @name GetGitAccount
+     * @summary Get git account by ID
+     * @request GET:/api/v1/gitAccounts/{id}
+     * @secure
+     * @response `200` `GitAccountView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getGitAccount: (id: string, params: RequestParams = {}) =>
+      this.request<
+        GitAccountView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitAccounts/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitAccounts
+     * @name UpdateGitAccount
+     * @summary Update a git account
+     * @request PATCH:/api/v1/gitAccounts/{id}
+     * @secure
+     * @response `200` `GitAccountView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateGitAccount: (
+      id: string,
+      data: GitAccountInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        GitAccountView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitAccounts/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitAccounts
+     * @name GetGitAccountConfig
+     * @summary Get git account with its configuration
+     * @request GET:/api/v1/gitAccounts/{id}/_cfg
+     * @secure
+     * @response `200` `GitAccountConfigView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getGitAccountConfig: (id: string, params: RequestParams = {}) =>
+      this.request<
+        GitAccountConfigView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitAccounts/${id}/_cfg`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name ListGitRepositories
+     * @summary Get all git repositories
+     * @request GET:/api/v1/gitRepositories
+     * @secure
+     * @response `200` `GitRepositoriesView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listGitRepositories: (params: RequestParams = {}) =>
+      this.request<
+        GitRepositoriesView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitRepositories`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name CreateGitRepository
+     * @summary Create a git repository
+     * @request POST:/api/v1/gitRepositories
+     * @secure
+     * @response `200` `GitRepositoryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createGitRepository: (
+      data: GitRepositoryInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        GitRepositoryView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitRepositories`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name DeleteGitRepositories
+     * @summary Delete git repositories
+     * @request DELETE:/api/v1/gitRepositories
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteGitRepositories: (
+      data: DeleteGitRepositoriesInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/gitRepositories`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name GetGitRepository
+     * @summary Get git repository by ID
+     * @request GET:/api/v1/gitRepositories/{id}
+     * @secure
+     * @response `200` `GitRepositoryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getGitRepository: (id: string, params: RequestParams = {}) =>
+      this.request<
+        GitRepositoryView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitRepositories/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name UpdateGitRepository
+     * @summary Update a git repository
+     * @request PATCH:/api/v1/gitRepositories/{id}
+     * @secure
+     * @response `200` `GitRepositoryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateGitRepository: (
+      id: string,
+      data: GitRepositoryInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        GitRepositoryView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitRepositories/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
      * @tags Images
      * @name ListImages
      * @summary Get all local images for the given platform
@@ -4277,6 +4903,187 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name ListStacks
+     * @summary List all stacks
+     * @request GET:/api/v1/stacks
+     * @secure
+     * @response `200` `StacksView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listStacks: (params: RequestParams = {}) =>
+      this.request<StacksView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/stacks`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name CreateStack
+     * @summary Create a stack
+     * @request POST:/api/v1/stacks
+     * @secure
+     * @response `200` `StackView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createStack: (data: StackInput, params: RequestParams = {}) =>
+      this.request<StackView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/stacks`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name DeleteStacks
+     * @summary Delete stacks
+     * @request DELETE:/api/v1/stacks
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteStacks: (data: string[], params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/stacks`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name GetStack
+     * @summary Get stack by Id
+     * @request GET:/api/v1/stacks/{stackId}
+     * @secure
+     * @response `200` `StackView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getStack: (stackId: string, params: RequestParams = {}) =>
+      this.request<StackView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/stacks/${stackId}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name GetStackConfig
+     * @summary Get stack configuration
+     * @request GET:/api/v1/stacks/{stackId}/_cfg
+     * @secure
+     * @response `200` `StackConfigView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getStackConfig: (stackId: string, params: RequestParams = {}) =>
+      this.request<
+        StackConfigView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/stacks/${stackId}/_cfg`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name ListStackReleases
+     * @summary List stack releases
+     * @request GET:/api/v1/stacks/{stackId}/releases
+     * @secure
+     * @response `200` `StackReleasesView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listStackReleases: (stackId: string, params: RequestParams = {}) =>
+      this.request<
+        StackReleasesView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/stacks/${stackId}/releases`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name UpdateStack
+     * @summary Update a stack
+     * @request PATCH:/api/v1/stacks/{id}
+     * @secure
+     * @response `200` `StackView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateStack: (id: string, data: StackInput, params: RequestParams = {}) =>
+      this.request<StackView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/stacks/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
         ...params,
       }),
 

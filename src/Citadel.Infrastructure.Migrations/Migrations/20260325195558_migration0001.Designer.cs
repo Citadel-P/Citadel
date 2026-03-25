@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260322225133_migration0001")]
+    [Migration("20260325195558_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -1111,6 +1111,116 @@ namespace Infrastructure.Migrations.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Stack", b =>
+                {
+                    b.Property<string>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ControlStartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ControlState")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Idle");
+
+                    b.Property<string>("ControlTriggeredBy")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CreatedByActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrentStackReleaseId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0L);
+
+                    b.Property<string>("StackSource")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StackUpdateState")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ControlTriggeredBy");
+
+                    b.HasIndex("CreatedByActorId");
+
+                    b.HasIndex("CurrentStackReleaseId")
+                        .HasDatabaseName("IX_Stacks_CurrentStackReleaseId");
+
+                    b.ToTable("Stacks", (string)null);
+                });
+
+            modelBuilder.Entity("StackRelease", b =>
+                {
+                    b.Property<string>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CreatedByActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PlatformId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Spec")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StackId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByActorId");
+
+                    b.HasIndex("PlatformId")
+                        .HasDatabaseName("IX_StackReleases_PlatformId");
+
+                    b.HasIndex("StackId")
+                        .HasDatabaseName("IX_StackReleases_StackId");
+
+                    b.ToTable("StackReleases", (string)null);
+                });
+
             modelBuilder.Entity("Team", b =>
                 {
                     b.Property<string>("Id")
@@ -1343,7 +1453,7 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasOne("Platform", null)
                         .WithMany()
                         .HasForeignKey("PlatformId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
@@ -1422,6 +1532,41 @@ namespace Infrastructure.Migrations.Migrations
                         .WithMany()
                         .HasForeignKey("CreatedByActorId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Stack", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("ControlTriggeredBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("StackRelease", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Platform", null)
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Stack", null)
+                        .WithMany()
+                        .HasForeignKey("StackId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

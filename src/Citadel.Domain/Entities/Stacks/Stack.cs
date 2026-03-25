@@ -7,10 +7,10 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid CurrentStackReleaseId { get; private set; }
-    public string Name { get; private set; }
+    public string Name { get; private set; } = string.Empty;
     public string? Description { get; private set; }
     public StackSource StackSource { get; private set; }
-    public StackUpdateState StackUpdateState { get; private set; }
+    public StackUpdateState StackUpdateState { get; private set; } = new ManualStackUpdateState(new RecreateStackOnNewImageState([]));
 
     #region IAuditedEntity Members
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
@@ -23,7 +23,8 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
     public long? ControlStartedAt { get; private set; }
     public long RowVersion { get; private set; }
     #endregion
-    public StackRelease? CurrentStackRelease { get; private set; } = null!;
+    
+    public StackRelease? CurrentStackRelease { get; private set; }
 
     public static Stack Create(
         string name,
@@ -39,6 +40,7 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
             Description = description,
             StackSource = StackSource,
             CreatedByActorId = createdByActorId,
+            StackUpdateState = CreateDefaultUpdateState(StackSource, spec),
         };
 
         stack.CurrentStackRelease = StackRelease.Create(
@@ -53,32 +55,90 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
         return stack;
     }
 
-    public void MarkProcessing(Guid controlTriggeredBy)
+    public static Stack FromPersistence(
+        Guid id,
+        Guid currentStackReleaseId,
+        string name,
+        string? description,
+        StackSource stackSource,
+        StackUpdateState stackUpdateState,
+        DateTime createdAt,
+        Guid createdByActorId,
+        ResourceControlState controlState,
+        Guid? controlTriggeredBy,
+        long? controlStartedAt,
+        long rowVersion,
+        StackRelease? currentStackRelease = null)
     {
-        if (ControlState == ResourceControlState.Processing) return;
-        
-        if (CurrentStackRelease is null)
+        return new Stack
         {
-            throw new InvalidOperationException("Cannot mark stack as processing without a current stack release.");
-        }
+            Id = id,
+            CurrentStackReleaseId = currentStackReleaseId,
+            Name = name,
+            Description = description,
+            StackSource = stackSource,
+            StackUpdateState = stackUpdateState,
+            CreatedAt = createdAt,
+            CreatedByActorId = createdByActorId,
+            ControlState = controlState,
+            ControlTriggeredBy = controlTriggeredBy,
+            ControlStartedAt = controlStartedAt,
+            RowVersion = rowVersion,
+            CurrentStackRelease = currentStackRelease
+        };
+    }
+
+    public bool MarkProcessing(Guid controlTriggeredBy)
+    {
+        if (ControlState == ResourceControlState.Processing || CurrentStackRelease is null) return false;
 
         CurrentStackRelease.UpdateStackStatus(StackReleaseStatus.Pending);
         ControlTriggeredBy = controlTriggeredBy;
         ControlState = ResourceControlState.Processing;
         ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        return true;
     }
 
-    public void ReleaseProcessing(StackReleaseStatus status)
+    public bool ReleaseProcessing(StackReleaseStatus status)
     {
-        if (CurrentStackRelease is null)
-        {
-            throw new InvalidOperationException("Cannot mark stack as processing without a current stack release.");
-        }
+        if (CurrentStackRelease is null) return false;
 
         CurrentStackRelease.UpdateStackStatus(status);
         ControlState = ResourceControlState.Idle;
         ControlStartedAt = null;
         ControlTriggeredBy = null;
+        return true;
+    }
+
+    public void UpdateDetails(
+        string? name = null,
+        string? description = null)
+    {
+        if (name != null) Name = name;
+        if(description != null) Description = description;
+    }
+
+    public void SetCurrentStackRelease(StackRelease stackRelease)
+    {
+        CurrentStackRelease = stackRelease;
+        CurrentStackReleaseId = stackRelease.Id;
+    }
+
+    private static StackUpdateState CreateDefaultUpdateState(StackSource stackSource, StackSpec spec)
+    {
+        var recreateOnNewImage = new RecreateStackOnNewImageState([]);
+
+        return stackSource switch
+        {
+            StackSource.Manual => new ManualStackUpdateState(recreateOnNewImage),
+            StackSource.Git => new GitStackUpdateState(
+                RecreateStackOnNewImageState: recreateOnNewImage,
+                RecreateStackOnNewCommitState: new RecreateStackOnNewCommitState(
+                    CurrentCommitSha: spec is GitStack gitSpec ? gitSpec.CommitSha ?? string.Empty : string.Empty,
+                    RemoteCommitSha: null,
+                    LastCheckedAt: DateTime.MinValue)),
+            _ => new ManualStackUpdateState(recreateOnNewImage)
+        };
     }
 }
 
@@ -89,12 +149,19 @@ public sealed class Stack : IAuditedEntity, IReconcilableResource
 public abstract record StackUpdateState;
 
 public sealed record ManualStackUpdateState(RecreateStackOnNewImageState RecreateStackOnNewImageState) : StackUpdateState;
-public abstract record GitStackUpdateState(
+public sealed record GitStackUpdateState(
     RecreateStackOnNewImageState RecreateStackOnNewImageState,
     RecreateStackOnNewCommitState RecreateStackOnNewCommitState
     ) : StackUpdateState;
 
-public sealed record RecreateStackOnNewImageState(StackUpdateBehavior UpdateBehavior, IReadOnlyList<ImageUpdateState> AutoUpdateStates);
-public sealed record RecreateStackOnNewCommitState(StackUpdateBehavior UpdateBehavior, string CurrentCommitSha, string? RemoteCommitSha, DateTime LastCheckedAt);
+public sealed record RecreateStackOnNewImageState(IReadOnlyList<ImageUpdateState> AutoUpdateStates);
+public sealed record RecreateStackOnNewCommitState(string CurrentCommitSha, string? RemoteCommitSha, DateTime LastCheckedAt);
+
+public sealed record StackPatchModel(
+    string? Name = null,
+    Guid? PlatformId = null,
+    string? Description = null,
+    StackSource? StackSource = null,
+    StackSpec? Spec = null);
 
 

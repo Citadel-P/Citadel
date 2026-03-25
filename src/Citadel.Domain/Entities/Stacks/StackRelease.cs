@@ -8,8 +8,8 @@ public sealed class StackRelease : IAuditedEntity
     public Guid StackId { get; private set; }
     public Guid PlatformId { get; private set; }
     public StackReleaseStatus Status { get; private set; } = StackReleaseStatus.Created;
-    public string Version { get; private set; }
-    public StackSpec Spec { get; private set; }
+    public string Version { get; private set; } = string.Empty;
+    public StackSpec Spec { get; private set; } = null!;
 
     #region IAuditedEntity Members
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
@@ -38,8 +38,47 @@ public sealed class StackRelease : IAuditedEntity
         };
     }
 
+    public static StackRelease FromPersistence(
+        Guid id,
+        Guid stackId,
+        Guid platformId,
+        StackReleaseStatus status,
+        string version,
+        StackSpec spec,
+        DateTime createdAt,
+        Guid createdByActorId,
+        Platform? platform = null,
+        IReadOnlyList<Image>? images = null,
+        IReadOnlyList<Container>? containers = null)
+    {
+        return new StackRelease
+        {
+            Id = id,
+            StackId = stackId,
+            PlatformId = platformId,
+            Status = status,
+            Version = version,
+            Spec = spec,
+            CreatedAt = createdAt,
+            CreatedByActorId = createdByActorId,
+            Platform = platform,
+            Images = images,
+            Containers = containers
+        };
+    }
+
     public void UpdateStackStatus(StackReleaseStatus status)
     {
         Status = status;
+    }
+
+    public static string GetNextVersion(string currentVersion)
+    {
+        if (int.TryParse(currentVersion, out var currentVersionNumber))
+        {
+            return (currentVersionNumber + 1).ToString();
+        }
+
+        return $"{currentVersion}.1";
     }
 }

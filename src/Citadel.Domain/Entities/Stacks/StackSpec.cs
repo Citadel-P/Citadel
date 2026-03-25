@@ -22,6 +22,7 @@ public abstract record StackSpec(
 
 public sealed record ManualStack(
     string ComposeFile,
+    StackUpdateBehavior UpdateBehavior,
     List<string>? EnvVars = null,
     string? EnvFilePath = null,
     string? ProjectName = null,
@@ -40,6 +41,8 @@ public sealed record ManualStack(
 public sealed record GitStack(
     Guid GitRepoId,
     string? CommitSha,
+    StackUpdateBehavior ImageUpdateBehavior,
+    StackUpdateBehavior CommitUpdateBehavior,
     string? ProjectName = null,
     List<string>? ComposePaths = null,
     List<string>? PreDeploy = null,

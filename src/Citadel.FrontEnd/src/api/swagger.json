@@ -2413,6 +2413,956 @@
         ]
       }
     },
+    "/api/v1/gitAccounts": {
+      "get": {
+        "tags": [
+          "GitAccounts"
+        ],
+        "summary": "Get all git accounts",
+        "operationId": "listGitAccounts",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitAccountsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "GitAccounts"
+        ],
+        "summary": "Create a git account",
+        "operationId": "createGitAccount",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitAccountInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitAccountView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "GitAccounts"
+        ],
+        "summary": "Delete git accounts",
+        "operationId": "deleteGitAccounts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteGitAccountsInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/gitAccounts/{id}": {
+      "get": {
+        "tags": [
+          "GitAccounts"
+        ],
+        "summary": "Get git account by ID",
+        "operationId": "getGitAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Git account id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitAccountView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "GitAccounts"
+        ],
+        "summary": "Update a git account",
+        "operationId": "updateGitAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Git account ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitAccountInput"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitAccountInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitAccountView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/gitAccounts/{id}/_cfg": {
+      "get": {
+        "tags": [
+          "GitAccounts"
+        ],
+        "summary": "Get git account with its configuration",
+        "operationId": "getGitAccountConfig",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Git account id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitAccountConfigView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/gitRepositories": {
+      "get": {
+        "tags": [
+          "GitRepositories"
+        ],
+        "summary": "Get all git repositories",
+        "operationId": "listGitRepositories",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitRepositoriesView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "GitRepositories"
+        ],
+        "summary": "Create a git repository",
+        "operationId": "createGitRepository",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitRepositoryInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitRepositoryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "GitRepositories"
+        ],
+        "summary": "Delete git repositories",
+        "operationId": "deleteGitRepositories",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteGitRepositoriesInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/gitRepositories/{id}": {
+      "get": {
+        "tags": [
+          "GitRepositories"
+        ],
+        "summary": "Get git repository by ID",
+        "operationId": "getGitRepository",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Git repository id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitRepositoryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "GitRepositories"
+        ],
+        "summary": "Update a git repository",
+        "operationId": "updateGitRepository",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Git repository ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitRepositoryInput"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitRepositoryInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitRepositoryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/images/{platformId}": {
       "get": {
         "tags": [
@@ -5022,6 +5972,634 @@
           },
           "401": {
             "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/stacks": {
+      "get": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "List all stacks",
+        "operationId": "listStacks",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StacksView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "Create a stack",
+        "operationId": "createStack",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StackInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "Delete stacks",
+        "operationId": "deleteStacks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/stacks/{stackId}": {
+      "get": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "Get stack by Id",
+        "operationId": "getStack",
+        "parameters": [
+          {
+            "name": "stackId",
+            "in": "path",
+            "description": "The stack id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/stacks/{stackId}/_cfg": {
+      "get": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "Get stack configuration",
+        "operationId": "getStackConfig",
+        "parameters": [
+          {
+            "name": "stackId",
+            "in": "path",
+            "description": "The stack id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackConfigView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/stacks/{stackId}/releases": {
+      "get": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "List stack releases",
+        "operationId": "listStackReleases",
+        "parameters": [
+          {
+            "name": "stackId",
+            "in": "path",
+            "description": "The stack id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackReleasesView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/stacks/{id}": {
+      "patch": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "Update a stack",
+        "operationId": "updateStack",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Stack ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/StackInput"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StackInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -9902,6 +11480,36 @@
           }
         }
       },
+      "DeleteGitAccountsInput": {
+        "required": [
+          "ids"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "DeleteGitRepositoriesInput": {
+        "required": [
+          "ids"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
       "DeleteImageResponseItem": {
         "required": [
           "result"
@@ -11093,6 +12701,208 @@
           }
         }
       },
+      "GitAccountConfigView": {
+        "required": [
+          "id",
+          "name",
+          "domain",
+          "authType",
+          "configuration"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "authType": {
+            "$ref": "#/components/schemas/GitAuthType"
+          },
+          "configuration": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GitAccountConfiguration"
+              }
+            ]
+          }
+        }
+      },
+      "GitAccountConfiguration": {
+        "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/GitAccountConfigurationNoAuthAccount"
+          },
+          {
+            "$ref": "#/components/schemas/GitAccountConfigurationGitSshAccount"
+          },
+          {
+            "$ref": "#/components/schemas/GitAccountConfigurationGitHttpAccount"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "None": "#/components/schemas/GitAccountConfigurationNoAuthAccount",
+            "Ssh": "#/components/schemas/GitAccountConfigurationGitSshAccount",
+            "Https": "#/components/schemas/GitAccountConfigurationGitHttpAccount"
+          }
+        }
+      },
+      "GitAccountConfigurationGitHttpAccount": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "Https"
+            ],
+            "type": "string"
+          },
+          "authEnabled": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "default": false
+          },
+          "username": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "token": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "GitAccountConfigurationGitSshAccount": {
+        "required": [
+          "username",
+          "privateKey"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Ssh"
+            ],
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "privateKey": {
+            "type": "string"
+          },
+          "passphrase": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "GitAccountConfigurationNoAuthAccount": {
+        "properties": {
+          "$type": {
+            "enum": [
+              "None"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "GitAccountInput": {
+        "required": [
+          "name",
+          "domain",
+          "authType",
+          "configuration"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "authType": {
+            "$ref": "#/components/schemas/GitAuthType"
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/GitAccountConfiguration"
+          }
+        }
+      },
+      "GitAccountView": {
+        "required": [
+          "id",
+          "createdByActorId",
+          "name",
+          "domain",
+          "authType",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdByActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "authType": {
+            "$ref": "#/components/schemas/GitAuthType"
+          },
+          "createdAt": {
+            "format": "date-time"
+          }
+        }
+      },
+      "GitAccountsView": {
+        "required": [
+          "gitAccounts"
+        ],
+        "type": "object",
+        "properties": {
+          "gitAccounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitAccountView"
+            }
+          }
+        }
+      },
+      "GitAuthType": {
+        "enum": [
+          "None",
+          "Https",
+          "Ssh"
+        ]
+      },
       "GitHubCrPackageVersion": {
         "required": [
           "id",
@@ -11188,6 +12998,122 @@
                 "$ref": "#/components/schemas/GitHubCrPackageVersionContainerMetadata"
               }
             ]
+          }
+        }
+      },
+      "GitReposStatus": {
+        "enum": [
+          "Unknown",
+          "Valid",
+          "Invalid",
+          "Unauthorized",
+          "Unreachable"
+        ]
+      },
+      "GitRepositoriesView": {
+        "required": [
+          "gitRepositories"
+        ],
+        "type": "object",
+        "properties": {
+          "gitRepositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitRepositoryView"
+            }
+          }
+        }
+      },
+      "GitRepositoryInput": {
+        "required": [
+          "name",
+          "description",
+          "url",
+          "defaultBranch",
+          "status",
+          "gitAccountId"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "url": {
+            "type": "string"
+          },
+          "defaultBranch": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GitReposStatus"
+          },
+          "gitAccountId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "GitRepositoryView": {
+        "required": [
+          "id",
+          "createdByActorId",
+          "name",
+          "description",
+          "status",
+          "url",
+          "defaultBranch",
+          "gitAccountId",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdByActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/GitReposStatus"
+          },
+          "url": {
+            "type": "string"
+          },
+          "defaultBranch": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "gitAccountId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "createdAt": {
+            "format": "date-time"
           }
         }
       },
@@ -12037,6 +13963,40 @@
               "string"
             ],
             "format": "int64"
+          }
+        }
+      },
+      "ImageUpdateState": {
+        "required": [
+          "serviceName",
+          "imageName",
+          "currentDigest",
+          "remoteDigest",
+          "lastCheckedAt",
+          "updateAvailable"
+        ],
+        "type": "object",
+        "properties": {
+          "serviceName": {
+            "type": "string"
+          },
+          "imageName": {
+            "type": "string"
+          },
+          "currentDigest": {
+            "type": "string"
+          },
+          "remoteDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastCheckedAt": {
+            "format": "date-time"
+          },
+          "updateAvailable": {
+            "type": "boolean"
           }
         }
       },
@@ -13397,6 +15357,42 @@
           }
         }
       },
+      "RecreateStackOnNewCommitState": {
+        "required": [
+          "currentCommitSha",
+          "remoteCommitSha",
+          "lastCheckedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "currentCommitSha": {
+            "type": "string"
+          },
+          "remoteCommitSha": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastCheckedAt": {
+            "format": "date-time"
+          }
+        }
+      },
+      "RecreateStackOnNewImageState": {
+        "required": [
+          "autoUpdateStates"
+        ],
+        "type": "object",
+        "properties": {
+          "autoUpdateStates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageUpdateState"
+            }
+          }
+        }
+      },
       "RefreshTokenResponse": {
         "required": [
           "accessToken"
@@ -13902,6 +15898,491 @@
           }
         }
       },
+      "StackConfigView": {
+        "required": [
+          "id",
+          "name",
+          "platformId",
+          "description",
+          "stackSource",
+          "spec",
+          "stackUpdateState"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "stackSource": {
+            "$ref": "#/components/schemas/StackSource"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/StackSpec"
+          },
+          "stackUpdateState": {
+            "$ref": "#/components/schemas/StackUpdateState"
+          }
+        }
+      },
+      "StackInput": {
+        "required": [
+          "name",
+          "platformId",
+          "description",
+          "stackSource",
+          "spec"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "stackSource": {
+            "$ref": "#/components/schemas/StackSource"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/StackSpec"
+          }
+        }
+      },
+      "StackReleaseStatus": {
+        "enum": [
+          "Unknown",
+          "Created",
+          "Applying",
+          "Healthy",
+          "Pending",
+          "Degraded",
+          "Failed",
+          "Stopped"
+        ]
+      },
+      "StackReleaseView": {
+        "required": [
+          "id",
+          "stackId",
+          "platformId",
+          "status",
+          "version",
+          "spec",
+          "createdAt",
+          "createdByActorId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "stackId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StackReleaseStatus"
+          },
+          "version": {
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/StackSpec"
+          },
+          "createdAt": {
+            "format": "date-time"
+          },
+          "createdByActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platformStatus": {
+            "$ref": "#/components/schemas/PlatformStatus"
+          },
+          "platformName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "StackReleasesView": {
+        "required": [
+          "releases"
+        ],
+        "type": "object",
+        "properties": {
+          "releases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StackReleaseView"
+            }
+          }
+        }
+      },
+      "StackSource": {
+        "enum": [
+          "Manual",
+          "Git"
+        ]
+      },
+      "StackSpec": {
+        "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/StackSpecManualStack"
+          },
+          {
+            "$ref": "#/components/schemas/StackSpecGitStack"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "Manual": "#/components/schemas/StackSpecManualStack",
+            "Git": "#/components/schemas/StackSpecGitStack"
+          }
+        }
+      },
+      "StackSpecGitStack": {
+        "required": [
+          "gitRepoId",
+          "commitSha",
+          "imageUpdateBehavior",
+          "commitUpdateBehavior"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Git"
+            ],
+            "type": "string"
+          },
+          "gitRepoId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "commitSha": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "imageUpdateBehavior": {
+            "$ref": "#/components/schemas/StackUpdateBehavior"
+          },
+          "commitUpdateBehavior": {
+            "$ref": "#/components/schemas/StackUpdateBehavior"
+          },
+          "composePaths": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "additionalEnvFileFromRepo": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "projectName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "preDeploy": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "postDeploy": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "envVars": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "envFilePath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "StackSpecManualStack": {
+        "required": [
+          "composeFile",
+          "updateBehavior"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Manual"
+            ],
+            "type": "string"
+          },
+          "composeFile": {
+            "type": "string"
+          },
+          "updateBehavior": {
+            "$ref": "#/components/schemas/StackUpdateBehavior"
+          },
+          "projectName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "preDeploy": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "postDeploy": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "envVars": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "envFilePath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "StackUpdateBehavior": {
+        "enum": [
+          "Disabled",
+          "Notify",
+          "ServiceAutoDeploy",
+          "StackAutoDeploy"
+        ]
+      },
+      "StackUpdateState": {
+        "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/StackUpdateStateGitStackUpdateState"
+          },
+          {
+            "$ref": "#/components/schemas/StackUpdateStateManualStackUpdateState"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "Git": "#/components/schemas/StackUpdateStateGitStackUpdateState",
+            "Manual": "#/components/schemas/StackUpdateStateManualStackUpdateState"
+          }
+        }
+      },
+      "StackUpdateStateGitStackUpdateState": {
+        "required": [
+          "recreateStackOnNewImageState",
+          "recreateStackOnNewCommitState"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Git"
+            ],
+            "type": "string"
+          },
+          "recreateStackOnNewImageState": {
+            "$ref": "#/components/schemas/RecreateStackOnNewImageState"
+          },
+          "recreateStackOnNewCommitState": {
+            "$ref": "#/components/schemas/RecreateStackOnNewCommitState"
+          }
+        }
+      },
+      "StackUpdateStateManualStackUpdateState": {
+        "required": [
+          "recreateStackOnNewImageState"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Manual"
+            ],
+            "type": "string"
+          },
+          "recreateStackOnNewImageState": {
+            "$ref": "#/components/schemas/RecreateStackOnNewImageState"
+          }
+        }
+      },
+      "StackView": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "stackSource",
+          "stackUpdateState",
+          "createdAt",
+          "createdByActorId",
+          "controlState",
+          "currentStackReleaseId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "stackSource": {
+            "$ref": "#/components/schemas/StackSource"
+          },
+          "stackUpdateState": {
+            "$ref": "#/components/schemas/StackUpdateState"
+          },
+          "createdAt": {
+            "format": "date-time"
+          },
+          "createdByActorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "controlState": {
+            "$ref": "#/components/schemas/ResourceControlState"
+          },
+          "currentStackReleaseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platformId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "status": { },
+          "version": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "spec": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StackSpec"
+              }
+            ]
+          },
+          "platformStatus": {
+            "$ref": "#/components/schemas/PlatformStatus"
+          },
+          "platformName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "StacksView": {
+        "required": [
+          "stacks"
+        ],
+        "type": "object",
+        "properties": {
+          "stacks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StackView"
+            }
+          }
+        }
+      },
       "StopSignal": {
         "enum": [
           "SIGTERM",
@@ -14317,6 +16798,12 @@
       "name": "Registries"
     },
     {
+      "name": "GitAccounts"
+    },
+    {
+      "name": "GitRepositories"
+    },
+    {
       "name": "Images"
     },
     {
@@ -14330,6 +16817,9 @@
     },
     {
       "name": "Deployments"
+    },
+    {
+      "name": "Stacks"
     },
     {
       "name": "Activities"

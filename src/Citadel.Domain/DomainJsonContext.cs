@@ -5,11 +5,12 @@ using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
+using Domain.Entities.Stacks;
 using System.Text.Json.Serialization;
 
 namespace Domain;
 
-[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default, PropertyNameCaseInsensitive = true, 
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Default, PropertyNameCaseInsensitive = true,
     Converters = new[]
     {
         typeof(JsonStringEnumConverter<PlatformType>),
@@ -29,7 +30,7 @@ public partial class PlatformJsonContext : JsonSerializerContext
 }
 
 [JsonSourceGenerationOptions(
-    GenerationMode = JsonSourceGenerationMode.Default, 
+    GenerationMode = JsonSourceGenerationMode.Default,
     PropertyNameCaseInsensitive = true,
     Converters = new[]
     {
@@ -77,17 +78,16 @@ public partial class ImagTagsContext : JsonSerializerContext
 [JsonSerializable(typeof(Deployment))]
 [JsonSerializable(typeof(DeploymentSpec))]
 [JsonSerializable(typeof(HealthCheckConfig))]
-public partial class  DeploymentJsonContext: JsonSerializerContext
-{ 
+public partial class DeploymentJsonContext : JsonSerializerContext
+{
 }
-
 
 [JsonSourceGenerationOptions(
     GenerationMode = JsonSourceGenerationMode.Default,
     PropertyNameCaseInsensitive = true,
     Converters = new[]
     {
-    typeof(JsonStringEnumConverter<ActivityEventType>),
+        typeof(JsonStringEnumConverter<ActivityEventType>),
     })]
 [JsonSerializable(typeof(ActivityEventInfo))]
 [JsonSerializable(typeof(DeploymentCreated))]
@@ -102,9 +102,8 @@ public partial class  DeploymentJsonContext: JsonSerializerContext
 [JsonSerializable(typeof(AlertRuleCreated))]
 [JsonSerializable(typeof(AlertRuleUpdated))]
 [JsonSerializable(typeof(AlertRuleDeleted))]
-public partial class  EventInfoJsonContext : JsonSerializerContext
+public partial class EventInfoJsonContext : JsonSerializerContext
 {
-    
 }
 
 [JsonSourceGenerationOptions(
@@ -112,10 +111,10 @@ public partial class  EventInfoJsonContext : JsonSerializerContext
     PropertyNameCaseInsensitive = true,
     Converters = new[]
     {
-    typeof(JsonStringEnumConverter<AlertType>),
-    typeof(JsonStringEnumConverter<AlertSeverity>),
-    typeof(JsonStringEnumConverter<AlertRuleStatus>),
-    typeof(JsonStringEnumConverter<AlertResourceType>),
+        typeof(JsonStringEnumConverter<AlertType>),
+        typeof(JsonStringEnumConverter<AlertSeverity>),
+        typeof(JsonStringEnumConverter<AlertRuleStatus>),
+        typeof(JsonStringEnumConverter<AlertResourceType>),
     })]
 [JsonSerializable(typeof(AlertEvent))]
 [JsonSerializable(typeof(AlertEventInfo))]
@@ -128,13 +127,13 @@ public partial class AlertEventJsonContext : JsonSerializerContext
     PropertyNameCaseInsensitive = true,
     Converters = new[]
     {
-    typeof(JsonStringEnumConverter<AlertType>),
-    typeof(JsonStringEnumConverter<DayOfWeek>),
-    typeof(JsonStringEnumConverter<ScheduleType>),
-    typeof(JsonStringEnumConverter<AlertSeverity>),
-    typeof(JsonStringEnumConverter<AlertRuleStatus>),
-    typeof(JsonStringEnumConverter<AlertResourceType>),
-    typeof(JsonStringEnumConverter<AlertDestination>),
+        typeof(JsonStringEnumConverter<AlertType>),
+        typeof(JsonStringEnumConverter<DayOfWeek>),
+        typeof(JsonStringEnumConverter<ScheduleType>),
+        typeof(JsonStringEnumConverter<AlertSeverity>),
+        typeof(JsonStringEnumConverter<AlertRuleStatus>),
+        typeof(JsonStringEnumConverter<AlertResourceType>),
+        typeof(JsonStringEnumConverter<AlertDestination>),
     })]
 [JsonSerializable(typeof(AlertRule))]
 [JsonSerializable(typeof(AlertEvent))]
@@ -145,7 +144,9 @@ public partial class AlertEventJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(IReadOnlyCollection<AlertRuleLimitedTo>))]
 [JsonSerializable(typeof(IReadOnlyCollection<AlertRuleLimitedTo>))]
 [JsonSerializable(typeof(IReadOnlyCollection<AlertRuleQuietHour>))]
-public partial class AlertRuleJsonContext : JsonSerializerContext { }
+public partial class AlertRuleJsonContext : JsonSerializerContext
+{
+}
 
 [JsonSourceGenerationOptions(
     GenerationMode = JsonSourceGenerationMode.Default,
@@ -162,5 +163,33 @@ public partial class AlertRuleJsonContext : JsonSerializerContext { }
 [JsonSerializable(typeof(GitAccountConfiguration))]
 [JsonSerializable(typeof(GitRepository))]
 public partial class GitJsonContext : JsonSerializerContext
+{
+}
+
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Default,
+    PropertyNameCaseInsensitive = true,
+    Converters = new[]
+    {
+        typeof(JsonStringEnumConverter<StackSource>),
+        typeof(JsonStringEnumConverter<StackReleaseStatus>),
+        typeof(JsonStringEnumConverter<StackUpdateBehavior>),
+        typeof(JsonStringEnumConverter<ResourceControlState>)
+    })]
+[JsonSerializable(typeof(IEnumerable<Guid>))]
+[JsonSerializable(typeof(Stack))]
+[JsonSerializable(typeof(StackPatchModel))]
+[JsonSerializable(typeof(StackRelease))]
+[JsonSerializable(typeof(StackSpec))]
+[JsonSerializable(typeof(ManualStack))]
+[JsonSerializable(typeof(GitStack))]
+[JsonSerializable(typeof(StackUpdateState))]
+[JsonSerializable(typeof(ManualStackUpdateState))]
+[JsonSerializable(typeof(GitStackUpdateState))]
+[JsonSerializable(typeof(RecreateStackOnNewImageState))]
+[JsonSerializable(typeof(RecreateStackOnNewCommitState))]
+[JsonSerializable(typeof(ImageUpdateState))]
+[JsonSerializable(typeof(IReadOnlyList<ImageUpdateState>))]
+public partial class StackJsonContext : JsonSerializerContext
 {
 }

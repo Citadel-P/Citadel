@@ -1,0 +1,94 @@
+using Domain;
+using Domain.Entities;
+using Domain.Entities.Platforms;
+using Domain.Entities.Stacks;
+using Infrastructure.Persistence.Dtos;
+using System.Text.Json;
+
+namespace Infrastructure.Persistence.Mappers;
+
+internal static class StackMappers
+{
+    internal static IEnumerable<Stack> ToDomain(this IEnumerable<StackDto> dtos)
+        => dtos.Select(ToDomain);
+
+    internal static Stack ToDomain(this StackDto dto)
+    {
+        var platform = dto.Platform_Name == null
+            ? null
+            : Platform.FromPersistence(
+                id: dto.CurrentRelease_PlatformId ?? Guid.Empty,
+                name: dto.Platform_Name,
+                address: string.Empty,
+                networkCount: 0,
+                volumeCount: 0,
+                imageCount: 0,
+                cpuCount: 0,
+                memTotal: 0,
+                status: dto.Platform_Status != null ? Enum.Parse<PlatformStatus>(dto.Platform_Status) : PlatformStatus.Offline,
+                connectorType: PlatformConnectorType.Unknown,
+                platformDescriptor: null);
+
+        var currentRelease = !dto.HasCurrentReleaseIdentity
+            ? null
+            : StackRelease.FromPersistence(
+                id: dto.CurrentRelease_Id!.Value,
+                stackId: dto.CurrentRelease_StackId ?? dto.Id,
+                platformId: dto.CurrentRelease_PlatformId!.Value,
+                status: Enum.Parse<StackReleaseStatus>(dto.CurrentRelease_Status!),
+                version: dto.CurrentRelease_Version!,
+                spec: dto.CurrentRelease_Spec == null
+                    ? new ManualStack(string.Empty, StackUpdateBehavior.Disabled)
+                    : JsonSerializer.Deserialize(dto.CurrentRelease_Spec, StackJsonContext.Default.StackSpec)!,
+                createdAt: dto.CurrentRelease_CreatedAt!.Value,
+                createdByActorId: dto.CurrentRelease_CreatedByActorId!.Value,
+                platform: platform);
+
+        return Stack.FromPersistence(
+            id: dto.Id,
+            currentStackReleaseId: dto.CurrentStackReleaseId,
+            name: dto.Name,
+            description: dto.Description,
+            stackSource: Enum.Parse<StackSource>(dto.StackSource),
+            stackUpdateState: JsonSerializer.Deserialize(dto.StackUpdateState, StackJsonContext.Default.StackUpdateState)!,
+            createdAt: dto.CreatedAt,
+            createdByActorId: dto.CreatedByActorId,
+            controlState: Enum.Parse<ResourceControlState>(dto.ControlState),
+            controlTriggeredBy: dto.ControlTriggeredBy,
+            controlStartedAt: dto.ControlStartedAt,
+            rowVersion: dto.RowVersion,
+            currentStackRelease: currentRelease);
+    }
+
+    internal static IEnumerable<StackRelease> ToDomain(this IEnumerable<StackReleaseDto> dtos)
+        => dtos.Select(ToDomain);
+
+    internal static StackRelease ToDomain(this StackReleaseDto dto)
+    {
+        var platform = dto.Platform_Name == null
+            ? null
+            : Platform.FromPersistence(
+                id: dto.PlatformId,
+                name: dto.Platform_Name,
+                address: string.Empty,
+                networkCount: 0,
+                volumeCount: 0,
+                imageCount: 0,
+                cpuCount: 0,
+                memTotal: 0,
+                status: dto.Platform_Status != null ? Enum.Parse<PlatformStatus>(dto.Platform_Status) : PlatformStatus.Offline,
+                connectorType: PlatformConnectorType.Unknown,
+                platformDescriptor: null);
+
+        return StackRelease.FromPersistence(
+            id: dto.Id,
+            stackId: dto.StackId,
+            platformId: dto.PlatformId,
+            status: Enum.Parse<StackReleaseStatus>(dto.Status),
+            version: dto.Version,
+            spec: JsonSerializer.Deserialize(dto.Spec, StackJsonContext.Default.StackSpec)!,
+            createdAt: dto.CreatedAt,
+            createdByActorId: dto.CreatedByActorId,
+            platform: platform);
+    }
+}

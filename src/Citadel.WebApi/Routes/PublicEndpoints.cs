@@ -9,6 +9,7 @@ using WebApi.Routes.Endpoints.Resources.GitAccounts;
 using WebApi.Routes.Endpoints.Resources.GitRepositories;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
+using WebApi.Routes.Endpoints.Resources.Stacks;
 
 namespace WebApi.Routes;
 
@@ -27,6 +28,7 @@ public static class PublicEndpoints
     const string GitRepositoriesName = nameof(GitRepositories);
     const string RegistriesName = nameof(Registries);
     const string DeploymentsName = nameof(Deployments);
+    const string StacksName = nameof(Stacks);
     const string AuthenticationName = nameof(Authentication);
 
     public static void MapPublicEndpoints(this WebApplication app)
@@ -76,6 +78,10 @@ public static class PublicEndpoints
             var deployments = group.MapGroup("/deployments").WithTags(DeploymentsName).RequireAuthorization();
             {
                 MapDeploymentEndpoints(deployments);
+            }
+            var stacks = group.MapGroup("/stacks").WithTags(StacksName).RequireAuthorization();
+            {
+                MapStackEndpoints(stacks);
             }
             var activities = group.MapGroup("/activities").WithTags(ActivitiesName).RequireAuthorization();
             {
@@ -676,6 +682,68 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("startDeployments");
+    }
+
+    private static void MapStackEndpoints(RouteGroupBuilder stacks)
+    {
+        stacks.MapGet("/", Stacks.List)
+            .WithSummary("List all stacks")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("listStacks");
+
+        stacks.MapGet("/{stackId}", Stacks.Get)
+            .WithSummary("Get stack by Id")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getStack");
+
+        stacks.MapGet("/{stackId}/_cfg", Stacks.GetConfig)
+            .WithSummary("Get stack configuration")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("getStackConfig");
+
+        stacks.MapGet("/{stackId}/releases", Stacks.ListReleases)
+            .WithSummary("List stack releases")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("listStackReleases");
+
+        stacks.MapPost("/", Stacks.Create)
+            .WithSummary("Create a stack")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("createStack");
+
+        stacks.MapPatch("{id}", Stacks.Patch)
+            .WithSummary("Update a stack")
+            .Accepts<StackInput>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateStack");
+
+        stacks.MapDelete("/", Stacks.Delete)
+            .WithSummary("Delete stacks")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("deleteStacks");
     }
 
     private static void MapActivityEndpoints(RouteGroupBuilder activities)

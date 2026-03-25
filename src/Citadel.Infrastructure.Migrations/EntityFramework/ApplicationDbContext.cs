@@ -1,5 +1,4 @@
 ﻿using Domain;
-using Domain.Entities.Git;
 using Hosting.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -35,6 +34,8 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .AddAlertEventConfiguration()
             .AddAlertRuleStateConfiguration()
             .AddAlertChannelConfiguration()
+            .AddStackConfiguration()
+            .AddStackReleaseConfiguration()
             .AddAlertRuleChannelConfiguration();
 
         SeedDb(modelBuilder);
@@ -544,7 +545,7 @@ internal static class Configuration
            .HasOne("Platform")
            .WithMany()
            .HasForeignKey("PlatformId")
-           .OnDelete(DeleteBehavior.Cascade);
+           .OnDelete(DeleteBehavior.Restrict);
 
         deployment.HasIndex("Name", "PlatformId").IsUnique().HasDatabaseName($"IX_{tableName}_Name_PlatformId");
 
@@ -689,6 +690,69 @@ internal static class Configuration
         alertChannel.Property<bool>("IsActive").HasColumnType("INTEGER").IsRequired().HasDefaultValue(true);
 
         alertChannel.AddAuditedMemebers();
+        return builder;
+    }
+
+    public static ModelBuilder AddStackConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "Stacks";
+        var stack = builder.Entity("Stack");
+
+        stack.ToTable(tableName);
+
+        stack.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        stack.HasKey("Id");
+
+        stack.Property<Guid?>("CurrentStackReleaseId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
+        stack.Property<string>("Name").HasColumnType("TEXT").IsRequired();
+        stack.Property<string>("Description").HasColumnType("TEXT").IsRequired(false);
+        stack.Property<string>("StackSource").HasColumnType("TEXT").IsRequired();
+        stack.Property<string>("StackUpdateState").HasColumnType("TEXT").IsRequired();
+
+        stack
+            .AddReconcilableMember()
+            .AddAuditedMemebers();
+
+        // Uniqueness will be enforced at the application level since stacks can be shared across platforms and may have the same name
+        // stack.HasIndex("Name", "PlatformId").IsUnique().HasDatabaseName($"IX_{tableName}_Name_PlatformId");
+        stack.HasIndex("CurrentStackReleaseId").HasDatabaseName($"IX_{tableName}_CurrentStackReleaseId");
+
+        return builder;
+    }
+
+    public static ModelBuilder AddStackReleaseConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "StackReleases";
+        var release = builder.Entity("StackRelease");
+
+        release.ToTable(tableName);
+
+        release.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        release.HasKey("Id");
+
+        release.Property<Guid>("StackId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        release.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        release.Property<string>("Status").HasColumnType("TEXT").IsRequired();
+        release.Property<string>("Version").HasColumnType("TEXT").IsRequired();
+        release.Property<string>("Spec").HasColumnType("TEXT").IsRequired();
+
+        release.AddAuditedMemebers();
+
+        release
+            .HasOne("Stack")
+            .WithMany()
+            .HasForeignKey("StackId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        release
+            .HasOne("Platform")
+            .WithMany()
+            .HasForeignKey("PlatformId")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        release.HasIndex("StackId").HasDatabaseName($"IX_{tableName}_StackId");
+        release.HasIndex("PlatformId").HasDatabaseName($"IX_{tableName}_PlatformId");
+
         return builder;
     }
 

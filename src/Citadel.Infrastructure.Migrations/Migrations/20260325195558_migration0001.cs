@@ -162,6 +162,40 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Stacks",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    ControlStartedAt = table.Column<long>(type: "INTEGER", nullable: true),
+                    ControlState = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true, defaultValue: "Idle"),
+                    ControlTriggeredBy = table.Column<string>(type: "TEXT", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
+                    CurrentStackReleaseId = table.Column<string>(type: "TEXT", nullable: true),
+                    Description = table.Column<string>(type: "TEXT", nullable: true),
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    RowVersion = table.Column<long>(type: "INTEGER", nullable: false, defaultValue: 0L),
+                    StackSource = table.Column<string>(type: "TEXT", nullable: false),
+                    StackUpdateState = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Stacks", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Stacks_Actors_ControlTriggeredBy",
+                        column: x => x.ControlTriggeredBy,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Stacks_Actors_CreatedByActorId",
+                        column: x => x.CreatedByActorId,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Users",
                 columns: table => new
                 {
@@ -264,7 +298,7 @@ namespace Infrastructure.Migrations.Migrations
                         column: x => x.PlatformId,
                         principalTable: "Platforms",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -484,6 +518,42 @@ namespace Infrastructure.Migrations.Migrations
                         principalTable: "Registries",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "StackReleases",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
+                    CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
+                    PlatformId = table.Column<string>(type: "TEXT", nullable: false),
+                    Spec = table.Column<string>(type: "TEXT", nullable: false),
+                    StackId = table.Column<string>(type: "TEXT", nullable: false),
+                    Status = table.Column<string>(type: "TEXT", nullable: false),
+                    Version = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_StackReleases", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_StackReleases_Actors_CreatedByActorId",
+                        column: x => x.CreatedByActorId,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_StackReleases_Platforms_PlatformId",
+                        column: x => x.PlatformId,
+                        principalTable: "Platforms",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_StackReleases_Stacks_StackId",
+                        column: x => x.StackId,
+                        principalTable: "Stacks",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -874,6 +944,36 @@ namespace Infrastructure.Migrations.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_StackReleases_CreatedByActorId",
+                table: "StackReleases",
+                column: "CreatedByActorId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_StackReleases_PlatformId",
+                table: "StackReleases",
+                column: "PlatformId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_StackReleases_StackId",
+                table: "StackReleases",
+                column: "StackId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Stacks_ControlTriggeredBy",
+                table: "Stacks",
+                column: "ControlTriggeredBy");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Stacks_CreatedByActorId",
+                table: "Stacks",
+                column: "CreatedByActorId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Stacks_CurrentStackReleaseId",
+                table: "Stacks",
+                column: "CurrentStackReleaseId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Teams_RoleId",
                 table: "Teams",
                 column: "RoleId");
@@ -937,6 +1037,9 @@ namespace Infrastructure.Migrations.Migrations
                 name: "RefreshTokens");
 
             migrationBuilder.DropTable(
+                name: "StackReleases");
+
+            migrationBuilder.DropTable(
                 name: "UsersTeams");
 
             migrationBuilder.DropTable(
@@ -950,6 +1053,9 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "GitAccounts");
+
+            migrationBuilder.DropTable(
+                name: "Stacks");
 
             migrationBuilder.DropTable(
                 name: "Teams");

@@ -83,6 +83,23 @@ CREATE TABLE "Registries" (
     CONSTRAINT "FK_Registries_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
 );
 
+CREATE TABLE "Stacks" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_Stacks" PRIMARY KEY,
+    "ControlStartedAt" INTEGER NULL,
+    "ControlState" TEXT NULL DEFAULT 'Idle',
+    "ControlTriggeredBy" TEXT NULL,
+    "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    "CreatedByActorId" TEXT NOT NULL,
+    "CurrentStackReleaseId" TEXT NULL,
+    "Description" TEXT NULL,
+    "Name" TEXT NOT NULL,
+    "RowVersion" INTEGER NOT NULL DEFAULT 0,
+    "StackSource" TEXT NOT NULL,
+    "StackUpdateState" TEXT NOT NULL,
+    CONSTRAINT "FK_Stacks_Actors_ControlTriggeredBy" FOREIGN KEY ("ControlTriggeredBy") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_Stacks_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
+);
+
 CREATE TABLE "Users" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Users" PRIMARY KEY,
     "ActorId" TEXT NOT NULL,
@@ -130,7 +147,7 @@ CREATE TABLE "Deployments" (
     "Status" TEXT NOT NULL,
     CONSTRAINT "FK_Deployments_Actors_ControlTriggeredBy" FOREIGN KEY ("ControlTriggeredBy") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_Deployments_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
-    CONSTRAINT "FK_Deployments_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE
+    CONSTRAINT "FK_Deployments_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE RESTRICT
 );
 
 CREATE TABLE "PlatformStats" (
@@ -231,6 +248,20 @@ CREATE TABLE "Images" (
     CONSTRAINT "FK_Images_Actors_ControlTriggeredBy" FOREIGN KEY ("ControlTriggeredBy") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_Images_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE CASCADE,
     CONSTRAINT "FK_Images_Registries_RegistryId" FOREIGN KEY ("RegistryId") REFERENCES "Registries" ("Id") ON DELETE SET NULL
+);
+
+CREATE TABLE "StackReleases" (
+    "Id" TEXT NOT NULL CONSTRAINT "PK_StackReleases" PRIMARY KEY,
+    "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    "CreatedByActorId" TEXT NOT NULL,
+    "PlatformId" TEXT NOT NULL,
+    "Spec" TEXT NOT NULL,
+    "StackId" TEXT NOT NULL,
+    "Status" TEXT NOT NULL,
+    "Version" TEXT NOT NULL,
+    CONSTRAINT "FK_StackReleases_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_StackReleases_Platforms_PlatformId" FOREIGN KEY ("PlatformId") REFERENCES "Platforms" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_StackReleases_Stacks_StackId" FOREIGN KEY ("StackId") REFERENCES "Stacks" ("Id") ON DELETE CASCADE
 );
 
 CREATE TABLE "RefreshTokens" (
@@ -453,6 +484,18 @@ CREATE INDEX "IX_Registries_CreatedByActorId" ON "Registries" ("CreatedByActorId
 
 CREATE UNIQUE INDEX "IX_Registries_Name" ON "Registries" ("Name");
 
+CREATE INDEX "IX_StackReleases_CreatedByActorId" ON "StackReleases" ("CreatedByActorId");
+
+CREATE INDEX "IX_StackReleases_PlatformId" ON "StackReleases" ("PlatformId");
+
+CREATE INDEX "IX_StackReleases_StackId" ON "StackReleases" ("StackId");
+
+CREATE INDEX "IX_Stacks_ControlTriggeredBy" ON "Stacks" ("ControlTriggeredBy");
+
+CREATE INDEX "IX_Stacks_CreatedByActorId" ON "Stacks" ("CreatedByActorId");
+
+CREATE INDEX "IX_Stacks_CurrentStackReleaseId" ON "Stacks" ("CurrentStackReleaseId");
+
 CREATE INDEX "IX_Teams_RoleId" ON "Teams" ("RoleId");
 
 CREATE UNIQUE INDEX "IX_Users_ActorId" ON "Users" ("ActorId");
@@ -466,7 +509,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260322225133_migration0001', '10.0.5');
+VALUES ('20260325195558_migration0001', '10.0.5');
 
 COMMIT;
 

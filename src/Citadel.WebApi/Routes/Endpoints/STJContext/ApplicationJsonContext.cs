@@ -13,6 +13,7 @@ using Domain.Entities.Deployments;
 using Domain.Entities.Git;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
+using Domain.Entities.Stacks;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json.Serialization;
 using WebApi.Routes.Endpoints.Resources;
@@ -29,6 +30,7 @@ using WebApi.Routes.Endpoints.Resources.Networks;
 using WebApi.Routes.Endpoints.Resources.Paging;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
+using WebApi.Routes.Endpoints.Resources.Stacks;
 using WebApi.Routes.Endpoints.Resources.Volumes;
 using DeleteImageResponseItem = Domain.Contracts.Resources.Images.DeleteImageResponseItem;
 
@@ -177,6 +179,23 @@ namespace Application.Models;
 [JsonSerializable(typeof(DeploymentConfigView))]
 [JsonSerializable(typeof(IAsyncEnumerable<DeploymentStreamItem>))]
 [JsonSerializable(typeof(ApplyDeploymentInput))]
+[JsonSerializable(typeof(StackInput))]
+[JsonSerializable(typeof(StackInputPatchDocument))]
+[JsonSerializable(typeof(StacksView))]
+[JsonSerializable(typeof(IEnumerable<StackView>))]
+[JsonSerializable(typeof(StackView))]
+[JsonSerializable(typeof(StackConfigView))]
+[JsonSerializable(typeof(StackReleasesView))]
+[JsonSerializable(typeof(IEnumerable<StackReleaseView>))]
+[JsonSerializable(typeof(StackReleaseView))]
+[JsonSerializable(typeof(StackSpec))]
+[JsonSerializable(typeof(ManualStack))]
+[JsonSerializable(typeof(GitStack))]
+[JsonSerializable(typeof(StackUpdateState))]
+[JsonSerializable(typeof(ManualStackUpdateState))]
+[JsonSerializable(typeof(GitStackUpdateState))]
+[JsonSerializable(typeof(RecreateStackOnNewImageState))]
+[JsonSerializable(typeof(RecreateStackOnNewCommitState))]
 [JsonSerializable(typeof(ActivitiesView))]
 [JsonSerializable(typeof(ActivityView))]
 [JsonSerializable(typeof(ActivityFilter))]

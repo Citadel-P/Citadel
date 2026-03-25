@@ -10,4 +10,5 @@
 - For domain and batch operations, prefer explicit result-based flow over exception-driven control flow. Do not use exceptions for expected domain validation branches such as state checks.
 - On hot paths, prefer allocation-aware handling over unconditional LINQ materialization; avoid patterns like unconditional `Distinct().ToArray()` when a small-count fast path can skip extra allocations.
 - User prefers keeping a single allocation in repository fetch paths; do not move handler-side list allocations into the repository with constructs like `[.. rows.Select(...)]`. Prefer returning `IEnumerable` when that preserves a single allocation.
-- Domain JSON source-generation contexts, should live in `DomainJsonContext.cs` rather than separate files.
+- Domain JSON source-generation contexts should live in `DomainJsonContext.cs` rather than separate files.
+- For Stack persistence, treat Stack as the aggregate root and do not expose a separate StackRelease repository; child StackRelease persistence should be handled through StackRepository.
