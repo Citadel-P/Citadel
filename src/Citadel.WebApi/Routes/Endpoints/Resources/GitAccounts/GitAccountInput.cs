@@ -7,8 +7,9 @@ namespace WebApi.Routes.Endpoints.Resources.GitAccounts;
 public sealed record GitAccountInput(
     string Name,
     string Domain,
+    GitTransport Transport,
     GitAuthType AuthType,
-    GitAccountConfiguration Configuration)
+    GitAuthConfiguration Configuration)
 {
-    internal CreateGitAccount ToCommand() => new(Name, Domain, AuthType, Configuration);
+    internal CreateGitAccount ToCommand() => new(Name, Domain, Transport, AuthType, Configuration);
 }

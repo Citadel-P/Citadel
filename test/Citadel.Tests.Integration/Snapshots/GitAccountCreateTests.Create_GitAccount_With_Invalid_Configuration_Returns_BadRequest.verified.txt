@@ -4,8 +4,7 @@
   status: 400,
   errors: {
     Configuration: [
-      HTTP username is required when authentication is enabled.,
-      HTTP token is required when authentication is enabled.
+      Token is required.
     ]
   },
   traceId: {Scrubbed}

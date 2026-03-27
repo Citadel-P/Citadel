@@ -18,7 +18,9 @@ export type ResourceType =
   | 'AlertRule'
   | 'AlertChannel'
   | 'Alert'
-  | 'Stack';
+  | 'Stack'
+  | 'GitRepository'
+  | 'GitAccount';
 export const PluralResourceMap = {
   Network: 'Networks',
   Volume: 'Volumes',
@@ -32,6 +34,8 @@ export const PluralResourceMap = {
   Alert: 'Alerts',
   Stack: 'Stacks',
   AlertChannel: 'AlertChannels',
+  GitRepository: 'Git Repos',
+  GitAccount: 'GitAccounts',
 } as const satisfies Record<ResourceType, string>;
 
 export type AnyFn = (...args: any[]) => Promise<any>;

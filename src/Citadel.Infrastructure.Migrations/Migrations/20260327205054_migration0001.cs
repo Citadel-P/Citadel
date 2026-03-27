@@ -124,7 +124,8 @@ namespace Infrastructure.Migrations.Migrations
                     CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
                     Domain = table.Column<string>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", nullable: false)
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    Transport = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {

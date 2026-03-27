@@ -16,9 +16,10 @@ public class GitAccountPatchTests : IntegrationTestBase
         var gitAccount = new GitAccount(
             name: "OriginalName",
             domain: "github.com",
-            authType: GitAuthType.Https,
+            transport: GitTransport.Https,
+            authType: GitAuthType.Token,
             createdByActorId: Constants.SystemId,
-            configuration: new GitHttpAccount(true, "original-user", "original-token"));
+            configuration: new TokenAuth("original-token"));
 
         await uow.GitAccounts.AddAsync(gitAccount, TestContext.Current.CancellationToken);
         await uow.CommitAsync(TestContext.Current.CancellationToken);
@@ -33,11 +34,10 @@ public class GitAccountPatchTests : IntegrationTestBase
         {
           "name": "UpdatedName",
           "domain": "github.com",
-          "authType": "Https",
+          "transport": "Https",
+          "authType": "Token",
           "configuration": {
-            "$type": "Https",
-            "authEnabled": true,
-            "username": "patched-user",
+            "$type": "Token",
             "token": "original-token"
           }
         }
@@ -59,15 +59,16 @@ public class GitAccountPatchTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Patch_GitAccount_AuthType_Should_Succeed()
+    public async Task Patch_GitAccount_Transport_And_AuthType_Should_Succeed()
     {
         var patchJson = """
         {
           "name": "OriginalName",
           "domain": "gitlab.com",
-          "authType": "Ssh",
+          "transport": "Ssh",
+          "authType": "SshKey",
           "configuration": {
-            "$type": "Ssh",
+            "$type": "SshKey",
             "username": "git",
             "privateKey": "-----BEGIN OPENSSH PRIVATE KEY-----patched"
           }
@@ -86,7 +87,8 @@ public class GitAccountPatchTests : IntegrationTestBase
 
         Assert.NotNull(gitAccount);
         Assert.Equal("gitlab.com", gitAccount.Domain);
-        Assert.Equal(GitAuthType.Ssh, gitAccount.AuthType);
+        Assert.Equal(GitTransport.Ssh, gitAccount.Transport);
+        Assert.Equal(GitAuthType.SshKey, gitAccount.AuthType);
         await VerifyJson(responseBody);
     }
 
@@ -97,11 +99,10 @@ public class GitAccountPatchTests : IntegrationTestBase
         {
           "name": "",
           "domain": "github.com",
-          "authType": "Https",
+          "transport": "Https",
+          "authType": "Token",
           "configuration": {
-            "$type": "Https",
-            "authEnabled": true,
-            "username": "original-user",
+            "$type": "Token",
             "token": "original-token"
           }
         }
@@ -121,9 +122,10 @@ public class GitAccountPatchTests : IntegrationTestBase
         {
           "name": "OriginalName",
           "domain": "github.com",
-          "authType": "None",
+          "transport": "Https",
+          "authType": "Basic",
           "configuration": {
-            "$type": "Ssh",
+            "$type": "SshKey",
             "username": "git",
             "privateKey": "-----BEGIN OPENSSH PRIVATE KEY-----patched"
           }
@@ -146,9 +148,10 @@ public class GitAccountPatchTests : IntegrationTestBase
             await uow.GitAccounts.AddAsync(new GitAccount(
                 name: "OtherName",
                 domain: "github.com",
-                authType: GitAuthType.None,
+                transport: GitTransport.Https,
+                authType: GitAuthType.Basic,
                 createdByActorId: Constants.SystemId,
-                configuration: new NoAuthAccount()
+                configuration: new BasicAuth("dummy-user", "dummy-password123")
             ), TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
@@ -157,11 +160,10 @@ public class GitAccountPatchTests : IntegrationTestBase
         {
           "name": "OtherName",
           "domain": "github.com",
-          "authType": "Https",
+          "transport": "Https",
+          "authType": "Token",
           "configuration": {
-            "$type": "Https",
-            "authEnabled": true,
-            "username": "original-user",
+            "$type": "Token",
             "token": "original-token"
           }
         }
@@ -182,9 +184,12 @@ public class GitAccountPatchTests : IntegrationTestBase
         {
           "name": "DoesNotExist",
           "domain": "github.com",
-          "authType": "None",
+          "transport": "Https",
+          "authType": "Basic",
           "configuration": {
-            "$type": "None"
+            "$type": "Basic",
+            "username": "dummy-user",
+            "password": "dummy-password123"
           }
         }
         """;

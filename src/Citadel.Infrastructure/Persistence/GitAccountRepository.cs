@@ -23,9 +23,9 @@ internal sealed class GitAccountRepository(IDbConnection db, Func<IDbTransaction
     {
         const string sql = """
             INSERT INTO GitAccounts (
-                Id, Name, Domain, AuthType, CreatedAt, CreatedByActorId, Configuration)
+                Id, Name, Domain, Transport, AuthType, CreatedAt, CreatedByActorId, Configuration)
             VALUES (
-                @Id, @Name, @Domain, @AuthType, @CreatedAt, @CreatedByActorId, @Configuration)
+                @Id, @Name, @Domain, @Transport, @AuthType, @CreatedAt, @CreatedByActorId, @Configuration)
         """;
 
         return db.ExecuteAsync(sql, new
@@ -33,10 +33,11 @@ internal sealed class GitAccountRepository(IDbConnection db, Func<IDbTransaction
             Id = gitAccount.Id.Format(),
             Name = gitAccount.Name,
             Domain = gitAccount.Domain,
+            Transport = EnumFormatter<GitTransport>.GetValue(gitAccount.Transport),
             AuthType = EnumFormatter<GitAuthType>.GetValue(gitAccount.AuthType),
             CreatedAt = gitAccount.CreatedAt.ToString(),
             CreatedByActorId = gitAccount.CreatedByActorId.Format(),
-            Configuration = JsonSerializer.Serialize(gitAccount.Configuration, GitJsonContext.Default.GitAccountConfiguration)
+            Configuration = JsonSerializer.Serialize(gitAccount.Configuration, typeof(GitAuthConfiguration), GitJsonContext.Default)
         }, transaction: tx());
     }
 
@@ -80,6 +81,7 @@ internal sealed class GitAccountRepository(IDbConnection db, Func<IDbTransaction
             UPDATE GitAccounts
             SET Name = @Name,
                 Domain = @Domain,
+                Transport = @Transport,
                 AuthType = @AuthType,
                 Configuration = @Configuration
             WHERE Id = @Id
@@ -90,8 +92,9 @@ internal sealed class GitAccountRepository(IDbConnection db, Func<IDbTransaction
             Id = gitAccount.Id.Format(),
             Name = gitAccount.Name,
             Domain = gitAccount.Domain,
+            Transport = EnumFormatter<GitTransport>.GetValue(gitAccount.Transport),
             AuthType = EnumFormatter<GitAuthType>.GetValue(gitAccount.AuthType),
-            Configuration = JsonSerializer.Serialize(gitAccount.Configuration, GitJsonContext.Default.GitAccountConfiguration)
+            Configuration = JsonSerializer.Serialize(gitAccount.Configuration, typeof(GitAuthConfiguration), GitJsonContext.Default)
         }, transaction: tx());
     }
 

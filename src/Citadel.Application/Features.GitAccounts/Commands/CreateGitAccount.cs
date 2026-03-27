@@ -15,8 +15,9 @@ namespace Application.Features.GitAccounts.Commands;
 public sealed record CreateGitAccount(
     string Name,
     string Domain,
+    GitTransport Transport,
     GitAuthType AuthType,
-    GitAccountConfiguration Configuration) : ICommand<Result<GitAccount>>
+    GitAuthConfiguration Configuration) : ICommand<Result<GitAccount>>
 {
     internal sealed class Validator : AbstractValidator<CreateGitAccount>
     {
@@ -26,14 +27,16 @@ public sealed record CreateGitAccount(
             RuleFor(x => x.Domain).NotEmpty()
                 .Matches(Validators.RegistryUrlRegex)
                 .WithMessage("Please provide a valid host name eg: github.com");
+            RuleFor(x => x.Transport).IsInEnum();
             RuleFor(x => x.AuthType).IsInEnum();
             RuleFor(x => x.Configuration).NotNull();
-            RuleFor(x => x).Custom((command, context) => ValidateConfiguration(command.AuthType, command.Configuration, context));
+            RuleFor(x => x).Custom((command, context) => ValidateConfiguration(command.Transport, command.AuthType, command.Configuration, context));
         }
 
         private static void ValidateConfiguration(
+            GitTransport transport,
             GitAuthType authType,
-            GitAccountConfiguration? configuration,
+            GitAuthConfiguration? configuration,
             ValidationContext<CreateGitAccount> context)
         {
             if (configuration is null)
@@ -42,24 +45,29 @@ public sealed record CreateGitAccount(
                 return;
             }
 
+            if (transport == GitTransport.Ssh && configuration is not SshKeyAuth)
+                context.AddFailure(nameof(CreateGitAccount.Configuration), "SSH requires SSH key authentication.");
+
+            if (transport != GitTransport.Ssh && configuration is SshKeyAuth)
+                context.AddFailure(nameof(CreateGitAccount.Configuration), "SSH auth cannot be used with HTTP/HTTPS.");
+
             switch (authType, configuration)
             {
-                case (GitAuthType.None, NoAuthAccount):
+                case (GitAuthType.Basic, BasicAuth basic):
+                    if (string.IsNullOrWhiteSpace(basic.Username))
+                        context.AddFailure(nameof(CreateGitAccount.Configuration), "Basic auth username is required.");
+                    if (string.IsNullOrWhiteSpace(basic.Password))
+                        context.AddFailure(nameof(CreateGitAccount.Configuration), "Basic auth password is required.");
                     return;
-                case (GitAuthType.Ssh, GitSshAccount ssh):
+                case (GitAuthType.Token, TokenAuth token):
+                    if (string.IsNullOrWhiteSpace(token.Token))
+                        context.AddFailure(nameof(CreateGitAccount.Configuration), "Token is required.");
+                    return;
+                case (GitAuthType.SshKey, SshKeyAuth ssh):
                     if (string.IsNullOrWhiteSpace(ssh.Username))
                         context.AddFailure(nameof(CreateGitAccount.Configuration), "SSH username is required.");
                     if (string.IsNullOrWhiteSpace(ssh.PrivateKey))
                         context.AddFailure(nameof(CreateGitAccount.Configuration), "SSH private key is required.");
-                    return;
-                case (GitAuthType.Https, GitHttpAccount http):
-                    if (http.AuthEnabled == true)
-                    {
-                        if (string.IsNullOrWhiteSpace(http.Username))
-                            context.AddFailure(nameof(CreateGitAccount.Configuration), "HTTP username is required when authentication is enabled.");
-                        if (string.IsNullOrWhiteSpace(http.Token))
-                            context.AddFailure(nameof(CreateGitAccount.Configuration), "HTTP token is required when authentication is enabled.");
-                    }
                     return;
                 default:
                     context.AddFailure(nameof(CreateGitAccount.Configuration), $"Configuration type '{configuration.GetType().Name}' does not match auth type '{authType}'.");
@@ -82,7 +90,7 @@ internal sealed class CreateGitAccountHandler(
         if (exists)
             return Result.Failure<GitAccount>(new ConflictError("Name already exists"));
 
-        var gitAccount = new GitAccount(command.Name, command.Domain, command.AuthType, actorId, command.Configuration);
+        var gitAccount = new GitAccount(command.Name, command.Domain, command.Transport, command.AuthType, actorId, command.Configuration);
         await unitOfWork.GitAccounts.AddAsync(gitAccount, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 

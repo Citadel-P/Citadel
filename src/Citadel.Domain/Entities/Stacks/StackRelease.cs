@@ -1,4 +1,6 @@
 ﻿using Domain.Entities.Platforms;
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 
 namespace Domain.Entities.Stacks;
 

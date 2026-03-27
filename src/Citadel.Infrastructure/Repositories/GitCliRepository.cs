@@ -1,4 +1,5 @@
 ﻿using Domain.Contracts.Interfaces;
+using Domain;
 using Domain.Entities.Git;
 using Hosting.DockerClient.Services;
 using Infrastructure.Repositories.Mappers;
@@ -104,15 +105,23 @@ internal class GitCliRepository(IProcessService processService) : IGitCliReposit
             "core.askPass=echo"
         };
 
-        if (account?.Configuration is GitHttpAccount http && !string.IsNullOrEmpty(http.Token))
+        if (account?.Configuration is TokenAuth token && account.Transport is GitTransport.Http or GitTransport.Https && !string.IsNullOrEmpty(token.Token))
         {
-            var helper = $"!f() {{ echo \"username={http.Username}\"; echo \"password={http.Token}\"; }}; f";
+            var helper = $"!f() {{ echo \"username=git\"; echo \"password={token.Token}\"; }}; f";
             args.Add("-c");
             args.Add($"credential.helper={helper}");
             return (args, GitEnv);
         }
 
-        if (account?.Configuration is GitSshAccount ssh)
+        if (account?.Configuration is BasicAuth basic && account.Transport is GitTransport.Http or GitTransport.Https)
+        {
+            var helper = $"!f() {{ echo \"username={basic.Username}\"; echo \"password={basic.Password}\"; }}; f";
+            args.Add("-c");
+            args.Add($"credential.helper={helper}");
+            return (args, GitEnv);
+        }
+
+        if (account?.Configuration is SshKeyAuth ssh && account.Transport == GitTransport.Ssh)
         {
             var keyFile = GetOrWriteSshKey(account.Id, ssh.PrivateKey);
             var sshCmd = $"ssh -i {keyFile} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o BatchMode=yes";

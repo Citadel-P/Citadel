@@ -10,6 +10,11 @@
  * ---------------------------------------------------------------
  */
 
+export enum WebHookAuthStyle {
+  Github = "Github",
+  Gitlab = "Gitlab",
+}
+
 export enum VolumeSharing {
   None = "None",
   ReadOnly = "ReadOnly",
@@ -20,6 +25,11 @@ export enum VolumeSharing {
 export enum VolumeScope {
   Single = "Single",
   Multi = "Multi",
+}
+
+export enum UpdateMechanism {
+  Poll = "Poll",
+  Webhook = "Webhook",
 }
 
 export enum UpdateBehavior {
@@ -113,6 +123,12 @@ export enum LoggingDriverType {
   Gcplogs = "gcplogs",
 }
 
+export enum GitTransport {
+  Http = "Http",
+  Https = "Https",
+  Ssh = "Ssh",
+}
+
 export enum GitReposStatus {
   Unknown = "Unknown",
   Valid = "Valid",
@@ -122,9 +138,9 @@ export enum GitReposStatus {
 }
 
 export enum GitAuthType {
-  None = "None",
-  Https = "Https",
-  Ssh = "Ssh",
+  Basic = "Basic",
+  Token = "Token",
+  SshKey = "SshKey",
 }
 
 export enum DockerHubTagStatus {
@@ -1525,50 +1541,17 @@ export interface GitAccountConfigView {
   id: string;
   name: string;
   domain: string;
+  transport: GitTransport;
   authType: GitAuthType;
-  configuration: null | GitAccountConfiguration;
-}
-
-export type GitAccountConfiguration = BaseGitAccountConfiguration &
-  (
-    | BaseGitAccountConfigurationTypeMapping<
-        "None",
-        GitAccountConfigurationNoAuthAccount
-      >
-    | BaseGitAccountConfigurationTypeMapping<
-        "Ssh",
-        GitAccountConfigurationGitSshAccount
-      >
-    | BaseGitAccountConfigurationTypeMapping<
-        "Https",
-        GitAccountConfigurationGitHttpAccount
-      >
-  );
-
-export interface GitAccountConfigurationGitHttpAccount {
-  $type?: "Https";
-  /** @default false */
-  authEnabled?: null | boolean;
-  username?: null | string;
-  token?: null | string;
-}
-
-export interface GitAccountConfigurationGitSshAccount {
-  $type?: "Ssh";
-  username: string;
-  privateKey: string;
-  passphrase?: null | string;
-}
-
-export interface GitAccountConfigurationNoAuthAccount {
-  $type?: "None";
+  configuration: null | GitAuthConfiguration;
 }
 
 export interface GitAccountInput {
   name: string;
   domain: string;
+  transport: GitTransport;
   authType: GitAuthType;
-  configuration: GitAccountConfiguration;
+  configuration: GitAuthConfiguration;
 }
 
 export interface GitAccountView {
@@ -1578,6 +1561,7 @@ export interface GitAccountView {
   createdByActorId: string;
   name: string;
   domain: string;
+  transport: GitTransport;
   authType: GitAuthType;
   /** @format date-time */
   createdAt: any;
@@ -1585,6 +1569,40 @@ export interface GitAccountView {
 
 export interface GitAccountsView {
   gitAccounts: GitAccountView[];
+}
+
+export type GitAuthConfiguration = BaseGitAuthConfiguration &
+  (
+    | BaseGitAuthConfigurationTypeMapping<
+        "Basic",
+        GitAuthConfigurationBasicAuth
+      >
+    | BaseGitAuthConfigurationTypeMapping<
+        "Token",
+        GitAuthConfigurationTokenAuth
+      >
+    | BaseGitAuthConfigurationTypeMapping<
+        "SshKey",
+        GitAuthConfigurationSshKeyAuth
+      >
+  );
+
+export interface GitAuthConfigurationBasicAuth {
+  $type?: "Basic";
+  username: string;
+  password: string;
+}
+
+export interface GitAuthConfigurationSshKeyAuth {
+  $type?: "SshKey";
+  username: string;
+  privateKey: string;
+  passphrase: null | string;
+}
+
+export interface GitAuthConfigurationTokenAuth {
+  $type?: "Token";
+  token: string;
 }
 
 export interface GitHubCrPackageVersion {
@@ -2530,8 +2548,10 @@ export interface StackSpecGitStack {
   /** @format uuid */
   gitRepoId: string;
   commitSha: null | string;
-  imageUpdateBehavior: StackUpdateBehavior;
-  commitUpdateBehavior: StackUpdateBehavior;
+  onImageChangeUpdateBehavior: StackUpdateBehavior;
+  onCodeChangeUpdateBehavior: StackUpdateBehavior;
+  updateMechanism: UpdateMechanism;
+  webHookConfig?: null | WebHookConfig;
   composePaths?: null | any[];
   additionalEnvFileFromRepo?: null | any[];
   projectName?: null | string;
@@ -2719,6 +2739,12 @@ export interface VolumesView {
   volumes: DockerVolumeResult[];
 }
 
+export interface WebHookConfig {
+  authStyle: WebHookAuthStyle;
+  url: string;
+  secret: string;
+}
+
 type BaseActivityEventInfo = object;
 
 type BaseActivityEventInfoTypeMapping<Key, Type> = {
@@ -2743,9 +2769,9 @@ type BaseDeploymentImageInfoTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 
-type BaseGitAccountConfiguration = object;
+type BaseGitAuthConfiguration = object;
 
-type BaseGitAccountConfigurationTypeMapping<Key, Type> = {
+type BaseGitAuthConfigurationTypeMapping<Key, Type> = {
   $type: Key;
 } & Type;
 

@@ -8,6 +8,7 @@ public sealed record GitAccountView(
     Guid CreatedByActorId,
     string Name,
     string Domain,
+    GitTransport Transport,
     GitAuthType AuthType,
     DateTime CreatedAt)
 {
@@ -16,6 +17,7 @@ public sealed record GitAccountView(
         gitAccount.CreatedByActorId,
         gitAccount.Name,
         gitAccount.Domain,
+        gitAccount.Transport,
         gitAccount.AuthType,
         gitAccount.CreatedAt);
 }

@@ -3,8 +3,8 @@
   title: One or more validation errors occurred.,
   status: 400,
   errors: {
-    Configuration: [
-      Configuration type 'GitSshAccount' does not match auth type 'None'.
+    Patch: [
+      Patch validation error: Configuration type 'SshKeyAuth' does not match auth type 'Basic'.
     ]
   },
   traceId: {Scrubbed}

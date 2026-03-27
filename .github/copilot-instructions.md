@@ -3,6 +3,7 @@
 ## Project Guidelines
 - User prefers explicit pushback on weak design proposals; when a proposal is weak, explicitly challenge it and explain why instead of affirming by default.
 - User prefers deterministic cross-platform hashing and centralized invariant enforcement for domain state transitions rather than relying on convention alone.
+- For Git accounts, enforce domain invariants centrally: SSH transport requires SSH key authentication, and SSH key authentication cannot be used with non-SSH transport.
 - In background jobs or long-running services, enqueue DB writes through `IDbWorkQueue` with a dedicated DB work item so SQLite locks are acquired and released quickly.
 - User prefers alert SignalR notifications to be enqueued through `INotificationQueue` after the DB commit instead of awaiting them inline in the DB work item, to release SQLite locks quickly.
 - When adding endpoints, include their request/response models in `src\Citadel.WebApi\Routes\Endpoints\STJContext\ApplicationJsonContext.cs` because the project uses source-generated JSON serialization. SignalR payloads must also be added to the configured SignalR serialization context.

@@ -1,7 +1,7 @@
 ﻿{
   id: Guid_1,
   createdByActorId: Guid_2,
-  name: UpdatedName,
+  name: GA-NEW,
   domain: github.com,
   transport: Https,
   authType: Token,

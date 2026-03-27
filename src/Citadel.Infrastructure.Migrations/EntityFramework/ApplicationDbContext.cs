@@ -235,6 +235,7 @@ internal static class Configuration
 
         gitAccount.Property<string>("Name").HasColumnType("TEXT").IsRequired();
         gitAccount.Property<string>("Domain").HasColumnType("TEXT").IsRequired();
+        gitAccount.Property<string>("Transport").HasColumnType("TEXT").IsRequired();
         gitAccount.Property<string>("AuthType").HasColumnType("TEXT").IsRequired();
         gitAccount.Property<string>("Configuration").HasColumnType("TEXT").IsRequired();
 

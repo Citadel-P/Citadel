@@ -10,15 +10,18 @@ namespace Tests.Integration.Application.Features.GitAccounts;
 public class GitAccountCreateTests : IntegrationTestBase
 {
     [Fact]
-    public async Task Create_NoAuthGitAccount_ReturnsSuccess()
+    public async Task Create_BasicGitAccount_ReturnsSuccess()
     {
         var createJson = """
         {
           "name": "GA-NEW",
           "domain": "github.com",
-          "authType": "None",
+          "transport": "Https",
+          "authType": "Basic",
           "configuration": {
-            "$type": "None"
+            "$type": "Basic",
+            "username": "dummy-user",
+            "password": "dummy-password123"
           }
         }
         """;
@@ -33,22 +36,21 @@ public class GitAccountCreateTests : IntegrationTestBase
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var gitAccounts = await uow.GitAccounts.GetAllAsync(TestContext.Current.CancellationToken);
 
-        Assert.Contains(gitAccounts, x => x.Name == "GA-NEW" && x.AuthType == GitAuthType.None);
+        Assert.Contains(gitAccounts, x => x.Name == "GA-NEW" && x.Transport == GitTransport.Https && x.AuthType == GitAuthType.Basic);
         await VerifyJson(responseBody);
     }
 
     [Fact]
-    public async Task Create_HttpsGitAccount_ReturnsSuccess()
+    public async Task Create_TokenGitAccount_ReturnsSuccess()
     {
         var createJson = """
         {
           "name": "GA-NEW",
           "domain": "github.com",
-          "authType": "Https",
+          "transport": "Https",
+          "authType": "Token",
           "configuration": {
-            "$type": "Https",
-            "authEnabled": true,
-            "username": "dummy-user",
+            "$type": "Token",
             "token": "dummy-token123"
           }
         }
@@ -64,20 +66,21 @@ public class GitAccountCreateTests : IntegrationTestBase
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var gitAccounts = await uow.GitAccounts.GetAllAsync(TestContext.Current.CancellationToken);
 
-        Assert.Contains(gitAccounts, x => x.Name == "GA-NEW" && x.AuthType == GitAuthType.Https);
+        Assert.Contains(gitAccounts, x => x.Name == "GA-NEW" && x.Transport == GitTransport.Https && x.AuthType == GitAuthType.Token);
         await VerifyJson(responseBody);
     }
 
     [Fact]
-    public async Task Create_SshGitAccount_ReturnsSuccess()
+    public async Task Create_SshKeyGitAccount_ReturnsSuccess()
     {
         var createJson = """
         {
           "name": "GA-NEW",
           "domain": "github.com",
-          "authType": "Ssh",
+          "transport": "Ssh",
+          "authType": "SshKey",
           "configuration": {
-            "$type": "Ssh",
+            "$type": "SshKey",
             "username": "git",
             "privateKey": "-----BEGIN OPENSSH PRIVATE KEY-----dummy"
           }
@@ -94,7 +97,7 @@ public class GitAccountCreateTests : IntegrationTestBase
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var gitAccounts = await uow.GitAccounts.GetAllAsync(TestContext.Current.CancellationToken);
 
-        Assert.Contains(gitAccounts, x => x.Name == "GA-NEW" && x.AuthType == GitAuthType.Ssh);
+        Assert.Contains(gitAccounts, x => x.Name == "GA-NEW" && x.Transport == GitTransport.Ssh && x.AuthType == GitAuthType.SshKey);
         await VerifyJson(responseBody);
     }
 
@@ -105,9 +108,12 @@ public class GitAccountCreateTests : IntegrationTestBase
         {
           "name": "",
           "domain": "github.com",
-          "authType": "None",
+          "transport": "Https",
+          "authType": "Basic",
           "configuration": {
-            "$type": "None"
+            "$type": "Basic",
+            "username": "dummy-user",
+            "password": "dummy-password123"
           }
         }
         """;
@@ -127,12 +133,11 @@ public class GitAccountCreateTests : IntegrationTestBase
         {
           "name": "GA-NEW",
           "domain": "github.com",
-          "authType": "Https",
+          "transport": "Https",
+          "authType": "Token",
           "configuration": {
-            "$type": "Https",
-            "authEnabled": true,
-            "username": "",
-            "token": null
+            "$type": "Token",
+            "token": ""
           }
         }
         """;
@@ -154,9 +159,10 @@ public class GitAccountCreateTests : IntegrationTestBase
             await uow.GitAccounts.AddAsync(new GitAccount(
                 name: "GA-NEW",
                 domain: "github.com",
-                authType: GitAuthType.None,
+                transport: GitTransport.Https,
+                authType: GitAuthType.Basic,
                 createdByActorId: Constants.SystemId,
-                configuration: new NoAuthAccount()
+                configuration: new BasicAuth("dummy-user", "dummy-password123")
             ), TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
@@ -165,9 +171,12 @@ public class GitAccountCreateTests : IntegrationTestBase
         {
           "name": "GA-NEW",
           "domain": "github.com",
-          "authType": "None",
+          "transport": "Https",
+          "authType": "Basic",
           "configuration": {
-            "$type": "None"
+            "$type": "Basic",
+            "username": "dummy-user",
+            "password": "dummy-password123"
           }
         }
         """;
@@ -187,9 +196,10 @@ public class GitAccountCreateTests : IntegrationTestBase
         {
           "name": "GA-NEW",
           "domain": "github.com",
-          "authType": "None",
+          "transport": "Https",
+          "authType": "Basic",
           "configuration": {
-            "$type": "Ssh",
+            "$type": "SshKey",
             "username": "git",
             "privateKey": "-----BEGIN OPENSSH PRIVATE KEY-----dummy"
           }

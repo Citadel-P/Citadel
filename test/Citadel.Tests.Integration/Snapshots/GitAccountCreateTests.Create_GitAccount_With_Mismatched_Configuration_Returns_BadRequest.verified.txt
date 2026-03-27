@@ -4,7 +4,8 @@
   status: 400,
   errors: {
     Configuration: [
-      Configuration type 'GitSshAccount' does not match auth type 'None'.
+      SSH auth cannot be used with HTTP/HTTPS.,
+      Configuration type 'SshKeyAuth' does not match auth type 'Basic'.
     ]
   },
   traceId: {Scrubbed}

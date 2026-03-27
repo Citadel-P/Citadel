@@ -83,8 +83,8 @@ const MenuItems: IMenuItem[] = [
           },
           {
             icon: <GitBranch className="w-3.5 h-3.5" />,
-            label: 'Git Providers',
-            route: '/git-providers',
+            label: 'Repositories',
+            route: '/git-repos',
           },
           {
             icon: <Megaphone className="w-3.5 h-3.5" />,

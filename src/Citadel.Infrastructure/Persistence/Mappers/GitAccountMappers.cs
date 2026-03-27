@@ -16,10 +16,11 @@ internal static class GitAccountMappers
             id: dto.Id,
             name: dto.Name,
             domain: dto.Domain,
+            transport: Enum.Parse<GitTransport>(dto.Transport),
             authType: Enum.Parse<GitAuthType>(dto.AuthType),
             createdAt: dto.CreatedAt,
             createdByActorId: dto.CreatedByActorId,
-            configuration: JsonSerializer.Deserialize(dto.Configuration, GitJsonContext.Default.GitAccountConfiguration)
-                ?? throw new NotImplementedException($"Git account configuration is missing for git account id {dto.Id}"));
+            configuration: (GitAuthConfiguration)(JsonSerializer.Deserialize(dto.Configuration, typeof(GitAuthConfiguration), GitJsonContext.Default)
+                ?? throw new NotImplementedException($"Git account configuration is missing for git account id {dto.Id}")));
     }
 }

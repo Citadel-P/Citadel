@@ -68,6 +68,7 @@ CREATE TABLE "GitAccounts" (
     "CreatedByActorId" TEXT NOT NULL,
     "Domain" TEXT NOT NULL,
     "Name" TEXT NOT NULL,
+    "Transport" TEXT NOT NULL,
     CONSTRAINT "FK_GitAccounts_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT
 );
 
@@ -509,7 +510,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260325195558_migration0001', '10.0.5');
+VALUES ('20260327205054_migration0001', '10.0.5');
 
 COMMIT;
 

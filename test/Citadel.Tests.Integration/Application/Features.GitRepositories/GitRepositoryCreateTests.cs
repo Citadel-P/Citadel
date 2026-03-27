@@ -47,9 +47,10 @@ public class GitRepositoryCreateTests : IntegrationTestBase
             var gitAccount = new GitAccount(
                 name: "GA-NEW",
                 domain: "github.com",
-                authType: GitAuthType.None,
+                transport: GitTransport.Https,
+                authType: GitAuthType.Basic,
                 createdByActorId: Constants.SystemId,
-                configuration: new NoAuthAccount());
+                configuration: new BasicAuth("dummy-user", "dummy-password123"));
 
             await uow.GitAccounts.AddAsync(gitAccount, TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
@@ -194,9 +195,10 @@ public class GitRepositoryCreateTests : IntegrationTestBase
             var gitAccount = new GitAccount(
                 name: "GA-NEW",
                 domain: "github.com",
-                authType: GitAuthType.None,
+                transport: GitTransport.Https,
+                authType: GitAuthType.Basic,
                 createdByActorId: Constants.SystemId,
-                configuration: new NoAuthAccount());
+                configuration: new BasicAuth("dummy-user", "dummy-password123"));
 
             await uow.GitAccounts.AddAsync(gitAccount, TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);

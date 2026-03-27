@@ -1,9 +1,15 @@
 import { memo } from 'react';
-import { AlertRuleStatus, ContainerStateStatus, DeploymentStatus, RegistryStatus } from '@/api/generated/api.types';
+import {
+  AlertRuleStatus,
+  ContainerStateStatus,
+  DeploymentStatus,
+  GitReposStatus,
+  RegistryStatus,
+} from '@/api/generated/api.types';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { LoaderCircle } from 'lucide-react';
 
-type StateValue = boolean | ContainerStateStatus | RegistryStatus | DeploymentStatus | AlertRuleStatus;
+type StateValue = boolean | ContainerStateStatus | RegistryStatus | DeploymentStatus | AlertRuleStatus | GitReposStatus;
 
 const getStatusStyle = (value: StateValue, enableLabel?: boolean) => {
   // Boolean-based statuses
@@ -44,6 +50,17 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean) => {
       return { colorClass: 'bg-green-500', tooltip: 'Enabled' };
     case AlertRuleStatus.Disabled:
       return { colorClass: 'bg-gray-500', tooltip: 'Disabled' };
+    // Git Repos
+    case GitReposStatus.Valid:
+      return { colorClass: 'bg-green-500', tooltip: 'Valid' };
+    case GitReposStatus.Invalid:
+      return { colorClass: 'bg-red-500', tooltip: 'Invalid' };
+    case GitReposStatus.Unauthorized:
+      return { colorClass: 'bg-orange-500', tooltip: 'Unauthorized' };
+    case GitReposStatus.Unreachable:
+      return { colorClass: 'bg-red-400', tooltip: 'Unreachable' };
+    case GitReposStatus.Unknown:
+      return { colorClass: 'bg-gray-400', tooltip: 'Unknown' };
     // Containers
     case ContainerStateStatus.Created:
       return { colorClass: 'bg-blue-400', tooltip: 'Created' };

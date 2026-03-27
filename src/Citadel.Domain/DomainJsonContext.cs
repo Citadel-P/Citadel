@@ -153,14 +153,15 @@ public partial class AlertRuleJsonContext : JsonSerializerContext
     PropertyNameCaseInsensitive = true,
     Converters = new[]
     {
+        typeof(JsonStringEnumConverter<GitTransport>),
         typeof(JsonStringEnumConverter<GitAuthType>),
         typeof(JsonStringEnumConverter<GitReposStatus>)
     })]
 [JsonSerializable(typeof(GitAccount))]
-[JsonSerializable(typeof(NoAuthAccount))]
-[JsonSerializable(typeof(GitSshAccount))]
-[JsonSerializable(typeof(GitHttpAccount))]
-[JsonSerializable(typeof(GitAccountConfiguration))]
+[JsonSerializable(typeof(BasicAuth))]
+[JsonSerializable(typeof(TokenAuth))]
+[JsonSerializable(typeof(SshKeyAuth))]
+[JsonSerializable(typeof(GitAuthConfiguration))]
 [JsonSerializable(typeof(GitRepository))]
 public partial class GitJsonContext : JsonSerializerContext
 {

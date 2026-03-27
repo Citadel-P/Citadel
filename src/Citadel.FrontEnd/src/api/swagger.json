@@ -12706,6 +12706,7 @@
           "id",
           "name",
           "domain",
+          "transport",
           "authType",
           "configuration"
         ],
@@ -12721,6 +12722,9 @@
           "domain": {
             "type": "string"
           },
+          "transport": {
+            "$ref": "#/components/schemas/GitTransport"
+          },
           "authType": {
             "$ref": "#/components/schemas/GitAuthType"
           },
@@ -12730,99 +12734,9 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/GitAccountConfiguration"
+                "$ref": "#/components/schemas/GitAuthConfiguration"
               }
             ]
-          }
-        }
-      },
-      "GitAccountConfiguration": {
-        "required": [
-          "$type"
-        ],
-        "type": "object",
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/GitAccountConfigurationNoAuthAccount"
-          },
-          {
-            "$ref": "#/components/schemas/GitAccountConfigurationGitSshAccount"
-          },
-          {
-            "$ref": "#/components/schemas/GitAccountConfigurationGitHttpAccount"
-          }
-        ],
-        "discriminator": {
-          "propertyName": "$type",
-          "mapping": {
-            "None": "#/components/schemas/GitAccountConfigurationNoAuthAccount",
-            "Ssh": "#/components/schemas/GitAccountConfigurationGitSshAccount",
-            "Https": "#/components/schemas/GitAccountConfigurationGitHttpAccount"
-          }
-        }
-      },
-      "GitAccountConfigurationGitHttpAccount": {
-        "properties": {
-          "$type": {
-            "enum": [
-              "Https"
-            ],
-            "type": "string"
-          },
-          "authEnabled": {
-            "type": [
-              "null",
-              "boolean"
-            ],
-            "default": false
-          },
-          "username": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "token": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      },
-      "GitAccountConfigurationGitSshAccount": {
-        "required": [
-          "username",
-          "privateKey"
-        ],
-        "properties": {
-          "$type": {
-            "enum": [
-              "Ssh"
-            ],
-            "type": "string"
-          },
-          "username": {
-            "type": "string"
-          },
-          "privateKey": {
-            "type": "string"
-          },
-          "passphrase": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      },
-      "GitAccountConfigurationNoAuthAccount": {
-        "properties": {
-          "$type": {
-            "enum": [
-              "None"
-            ],
-            "type": "string"
           }
         }
       },
@@ -12830,6 +12744,7 @@
         "required": [
           "name",
           "domain",
+          "transport",
           "authType",
           "configuration"
         ],
@@ -12841,11 +12756,14 @@
           "domain": {
             "type": "string"
           },
+          "transport": {
+            "$ref": "#/components/schemas/GitTransport"
+          },
           "authType": {
             "$ref": "#/components/schemas/GitAuthType"
           },
           "configuration": {
-            "$ref": "#/components/schemas/GitAccountConfiguration"
+            "$ref": "#/components/schemas/GitAuthConfiguration"
           }
         }
       },
@@ -12855,6 +12773,7 @@
           "createdByActorId",
           "name",
           "domain",
+          "transport",
           "authType",
           "createdAt"
         ],
@@ -12873,6 +12792,9 @@
           },
           "domain": {
             "type": "string"
+          },
+          "transport": {
+            "$ref": "#/components/schemas/GitTransport"
           },
           "authType": {
             "$ref": "#/components/schemas/GitAuthType"
@@ -12896,11 +12818,99 @@
           }
         }
       },
+      "GitAuthConfiguration": {
+        "required": [
+          "$type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/GitAuthConfigurationBasicAuth"
+          },
+          {
+            "$ref": "#/components/schemas/GitAuthConfigurationTokenAuth"
+          },
+          {
+            "$ref": "#/components/schemas/GitAuthConfigurationSshKeyAuth"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "$type",
+          "mapping": {
+            "Basic": "#/components/schemas/GitAuthConfigurationBasicAuth",
+            "Token": "#/components/schemas/GitAuthConfigurationTokenAuth",
+            "SshKey": "#/components/schemas/GitAuthConfigurationSshKeyAuth"
+          }
+        }
+      },
+      "GitAuthConfigurationBasicAuth": {
+        "required": [
+          "username",
+          "password"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Basic"
+            ],
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "GitAuthConfigurationSshKeyAuth": {
+        "required": [
+          "username",
+          "privateKey",
+          "passphrase"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "SshKey"
+            ],
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "privateKey": {
+            "type": "string"
+          },
+          "passphrase": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "GitAuthConfigurationTokenAuth": {
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "$type": {
+            "enum": [
+              "Token"
+            ],
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
       "GitAuthType": {
         "enum": [
-          "None",
-          "Https",
-          "Ssh"
+          "Basic",
+          "Token",
+          "SshKey"
         ]
       },
       "GitHubCrPackageVersion": {
@@ -13116,6 +13126,13 @@
             "format": "date-time"
           }
         }
+      },
+      "GitTransport": {
+        "enum": [
+          "Http",
+          "Https",
+          "Ssh"
+        ]
       },
       "GraphDriverDataInfo": {
         "required": [
@@ -16078,8 +16095,9 @@
         "required": [
           "gitRepoId",
           "commitSha",
-          "imageUpdateBehavior",
-          "commitUpdateBehavior"
+          "onImageChangeUpdateBehavior",
+          "onCodeChangeUpdateBehavior",
+          "updateMechanism"
         ],
         "properties": {
           "$type": {
@@ -16098,11 +16116,24 @@
               "string"
             ]
           },
-          "imageUpdateBehavior": {
+          "onImageChangeUpdateBehavior": {
             "$ref": "#/components/schemas/StackUpdateBehavior"
           },
-          "commitUpdateBehavior": {
+          "onCodeChangeUpdateBehavior": {
             "$ref": "#/components/schemas/StackUpdateBehavior"
+          },
+          "updateMechanism": {
+            "$ref": "#/components/schemas/UpdateMechanism"
+          },
+          "webHookConfig": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WebHookConfig"
+              }
+            ]
           },
           "composePaths": {
             "type": [
@@ -16522,6 +16553,12 @@
           "AutoDeploy"
         ]
       },
+      "UpdateMechanism": {
+        "enum": [
+          "Poll",
+          "Webhook"
+        ]
+      },
       "VerifyAlertChannelInput": {
         "required": [
           "alertDestination",
@@ -16772,6 +16809,31 @@
             "items": {
               "$ref": "#/components/schemas/DockerVolumeResult"
             }
+          }
+        }
+      },
+      "WebHookAuthStyle": {
+        "enum": [
+          "Github",
+          "Gitlab"
+        ]
+      },
+      "WebHookConfig": {
+        "required": [
+          "authStyle",
+          "url",
+          "secret"
+        ],
+        "type": "object",
+        "properties": {
+          "authStyle": {
+            "$ref": "#/components/schemas/WebHookAuthStyle"
+          },
+          "url": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string"
           }
         }
       }

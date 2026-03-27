@@ -3,6 +3,7 @@
   createdByActorId: Guid_2,
   name: GA-NEW,
   domain: github.com,
+  transport: Https,
   authType: None,
   createdAt: DateTimeOffset_1
 }

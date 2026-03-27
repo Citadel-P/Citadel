@@ -372,6 +372,18 @@ public enum StackUpdateBehavior
     StackAutoDeploy
 }
 
+public enum  UpdateMechanism
+{
+    Poll,
+    Webhook
+}
+
+public enum WebHookAuthStyle
+{
+    Github,
+    Gitlab
+}
+
 public enum DeployedContainerState
 {
     Running,
@@ -520,7 +532,14 @@ public enum AlertDestination
 
 public enum GitAuthType
 {
-    None,
+    Basic,
+    Token,
+    SshKey,
+}
+
+public enum GitTransport
+{
+    Http,
     Https,
     Ssh
 }
