@@ -39,18 +39,17 @@ public sealed record ManualStack(
 /// <param name="AdditionalEnvFileFromRepo">Additional env files selected from the Repo.</param>
 /// <param name="EnvFilePath"></param>
 /// <param name="CommitSha">Optionally specify a commit sha to deploy from. If not specified, will deploy from the default branch and track new commits based on the update behavior.</param>
-/// <param name="OnCodeChangeUpdateBehavior"> How to handle updates when a new commit is detected.</param>
-/// <param name="OnImageChangeUpdateBehavior"> How to handle updates when a new image digest is detected for the currently defined tags in the compose file.</param>
-/// <param name="UpdateMechanism">Whether to check for updates based on a polling mechanism or a WebHook mechanism. Only applicable if OnCodeChangeUpdateBehavior is enabled</param>
-/// <param name="WebHookConfig">Config to use when UpdateMechanism is set to Webhook</param>
+/// <param name="UpdateBehavior"> How to handle updates when a new image digest is detected for the currently defined tags in the compose file.</param>
+/// <param name="WebHookForceDeploy">Usually the Stack won't deploy unless there are changes to the files. Use this to force deploy.param>
+/// <param name="WebHookSecret">A secret token to validate incoming webhooks from the Git provider. Default to the linked repos.</param>
 public sealed record GitStack(
     Guid GitRepoId,
     string? CommitSha, 
-    StackUpdateBehavior OnImageChangeUpdateBehavior,
-    StackUpdateBehavior OnCodeChangeUpdateBehavior,
-    UpdateMechanism UpdateMechanism,
+    StackUpdateBehavior UpdateBehavior,
     string? ProjectName = null,
-    WebHookConfig? WebHookConfig = null,
+    bool? WebHookEnabled = true,
+    bool? WebHookForceDeploy = false,
+    string? WebHookSecret = null,
     List<string>? ComposePaths = null,
     List<string>? PreDeploy = null,
     List<string>? PostDeploy = null,
@@ -66,5 +65,3 @@ public sealed record ImageUpdateState(
     DateTime LastCheckedAt,
     bool UpdateAvailable
 );
-
-public sealed record WebHookConfig(WebHookAuthStyle AuthStyle, string Url, string Secret);

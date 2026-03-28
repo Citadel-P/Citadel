@@ -10,11 +10,6 @@
  * ---------------------------------------------------------------
  */
 
-export enum WebHookAuthStyle {
-  Github = "Github",
-  Gitlab = "Gitlab",
-}
-
 export enum VolumeSharing {
   None = "None",
   ReadOnly = "ReadOnly",
@@ -25,11 +20,6 @@ export enum VolumeSharing {
 export enum VolumeScope {
   Single = "Single",
   Multi = "Multi",
-}
-
-export enum UpdateMechanism {
-  Poll = "Poll",
-  Webhook = "Webhook",
 }
 
 export enum UpdateBehavior {
@@ -1640,6 +1630,10 @@ export interface GitRepositoryInput {
   status: GitReposStatus;
   /** @format uuid */
   gitAccountId: null | string;
+  webHookEnabled: boolean;
+  webHookSecret: null | string;
+  onClone: null | any[];
+  onPull: null | any[];
 }
 
 export interface GitRepositoryView {
@@ -1654,6 +1648,10 @@ export interface GitRepositoryView {
   defaultBranch: null | string;
   /** @format uuid */
   gitAccountId: null | string;
+  webHookEnabled: boolean;
+  webHookSecret: null | string;
+  onClone: RepoCommand[];
+  onPull: RepoCommand[];
   /** @format date-time */
   createdAt: any;
 }
@@ -2458,6 +2456,12 @@ export interface RegistryView {
   isDefault?: boolean;
 }
 
+export interface RepoCommand {
+  command: string;
+  /** @default "./" */
+  path?: string;
+}
+
 export interface ResolveAlertEventsInput {
   ids: string[];
   resolutionNote: null | string;
@@ -2548,10 +2552,12 @@ export interface StackSpecGitStack {
   /** @format uuid */
   gitRepoId: string;
   commitSha: null | string;
-  onImageChangeUpdateBehavior: StackUpdateBehavior;
-  onCodeChangeUpdateBehavior: StackUpdateBehavior;
-  updateMechanism: UpdateMechanism;
-  webHookConfig?: null | WebHookConfig;
+  updateBehavior: StackUpdateBehavior;
+  /** @default true */
+  webHookEnabled?: null | boolean;
+  /** @default false */
+  webHookForceDeploy?: null | boolean;
+  webHookSecret?: null | string;
   composePaths?: null | any[];
   additionalEnvFileFromRepo?: null | any[];
   projectName?: null | string;
@@ -2737,12 +2743,6 @@ export interface VolumeVersionInfo {
 
 export interface VolumesView {
   volumes: DockerVolumeResult[];
-}
-
-export interface WebHookConfig {
-  authStyle: WebHookAuthStyle;
-  url: string;
-  secret: string;
 }
 
 type BaseActivityEventInfo = object;

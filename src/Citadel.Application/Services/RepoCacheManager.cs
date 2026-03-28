@@ -9,23 +9,6 @@ namespace Application.Services;
 
 /// <summary>
 /// Manages the lifecycle and synchronization of locally cached Git repositories.
-///
-/// This component ensures that a repository is available locally as a valid,
-/// up-to-date bare repository and that a deterministic commit snapshot can be
-/// resolved for a given branch.
-///
-/// Responsibilities:
-/// - Maintain a local bare repository cache per Git repository
-/// - Synchronize the cache with the remote source (clone or fetch)
-/// - Recover automatically from corrupted or inconsistent repository states
-/// - Resolve a deterministic commit hash for a branch using snapshot semantics
-/// - Serialize access per repository to prevent concurrent mutations
-///
-/// Synchronization strategy:
-/// - If the repository does not exist or is invalid → full re-clone
-/// - If the repository exists → shallow fetch of the target branch
-/// - If fetch fails → fallback to full re-clone
-/// - If commit resolution fails → final fallback to full re-clone
 /// </summary>
 public interface IRepoCacheManager
 {
@@ -50,45 +33,34 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
             var targetPath = repo.GetCachePath();
             var url = GetRemoteUrl(repo, account);
             var branch = repo.DefaultBranch ?? "main";
+            bool isNewClone = false;
 
-            if (!await IsValidBareRepo(targetPath, branch, ct))
+            // Ensure Local Source Exists
+            if (!Directory.Exists(Path.Combine(targetPath, ".git")))
             {
                 await EnsureDeletedAsync(targetPath, ct);
+                var cloneResult = await gitCli.CloneAsync(url, targetPath, branch, account, ct);
 
-                var cloneResult = await gitCli.CloneBareAsync(url, targetPath, account, ct);
                 if (cloneResult.IsFailure(out var error))
                     return Result.Failure<string>(new InternalServerError(error.Message));
+
+                isNewClone = true;
             }
             else
             {
-                var fetchResult = await gitCli.FetchBranchSnapshotAsync(targetPath, branch, account, ct);
-
-                if (fetchResult.IsFailure(out var error))
-                {
-                    logger.LogWarning("Fetch failed for {RepoId}: {Error}. Re-cloning...", repo.Id, error.Message);
-                    await EnsureDeletedAsync(targetPath, ct);
-
-                    var recloneResult = await gitCli.CloneBareAsync(url, targetPath, account, ct);
-                    if (recloneResult.IsFailure(out var recloneError))
-                        return Result.Failure<string>(new InternalServerError(recloneError.Message));
-                }
+                // Pull latest changes
+                var pullResult = await gitCli.PullAsync(targetPath, branch, account, ct);
+                if (pullResult.IsFailure(out var error))
+                    return Result.Failure<string>(new InternalServerError(error.Message));
             }
 
-            var commitResult = await gitCli.ResolveSnapshotCommitAsync(targetPath, branch, ct);
+            // Execute System Hooks
+            var hookResult = await ExecuteHooksInternalAsync(repo, targetPath, isNewClone, ct);
+            if (hookResult.IsFailure(out var hookError))
+                return Result.Failure<string>(new InternalServerError(hookError.Message));
 
-            if (commitResult.IsFailure(out var resolveError))
-            {
-                logger.LogWarning("Resolve failed for {RepoId}: {Error}. Re-cloning...", repo.Id, resolveError.Message);
-                await EnsureDeletedAsync(targetPath, ct);
-
-                var lastResort = await gitCli.CloneBareAsync(url, targetPath, account, ct);
-                if (lastResort.IsFailure(out var lastResortError))
-                    return Result.Failure<string>(new InternalServerError(lastResortError.Message));
-
-                commitResult = await gitCli.ResolveSnapshotCommitAsync(targetPath, branch, ct);
-            }
-
-            return commitResult;
+            // Resolve the SHA for the state tracker
+            return await gitCli.ResolveSnapshotCommitAsync(targetPath, branch, ct);
         }
         finally
         {
@@ -96,12 +68,42 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
         }
     }
 
-    private async Task<bool> IsValidBareRepo(string path, string branch, CancellationToken ct)
+    private async Task<Result> ExecuteHooksInternalAsync(GitRepository repo, string repoRoot, bool isNewClone, CancellationToken ct)
     {
-        if (!Directory.Exists(path)) return false;
+        // Run OnClone hooks only if we just cloned
+        if (isNewClone && repo.OnClone.Count > 0)
+        {
+            logger.LogInformation("Executing OnClone hooks for {RepoName}", repo.Name);
+            var result = await RunCommandListAsync(repoRoot, repo.OnClone, ct);
+            if (result.IsFailure()) return result;
+        }
 
-        var result = await gitCli.ResolveSnapshotCommitAsync(path, branch, ct);
-        return result.IsSuccess();
+        // Run OnPull hooks every time (including after a fresh clone)
+        if (repo.OnPull.Count > 0)
+        {
+            logger.LogInformation("Executing OnPull hooks for {RepoName}", repo.Name);
+            var result = await RunCommandListAsync(repoRoot, repo.OnPull, ct);
+            if (result.IsFailure()) return result;
+        }
+
+        return Result.Success();
+    }
+
+    private async Task<Result> RunCommandListAsync(string repoRoot, IEnumerable<RepoCommand> hooks, CancellationToken ct)
+    {
+        foreach (var hook in hooks)
+        {
+            // Combine repo root with the command's relative path
+            var executionDir = Path.GetFullPath(Path.Combine(repoRoot, hook.Path));
+
+            // Security: Prevent Directory Traversal
+            if (!executionDir.StartsWith(repoRoot, StringComparison.OrdinalIgnoreCase))
+                return Result.Failure($"Security Violation: Hook path '{hook.Path}' is outside repo root.");
+
+            var result = await gitCli.ExecuteShellCommandAsync(executionDir, hook.Command, ct);
+            if (result.IsFailure()) return result;
+        }
+        return Result.Success();
     }
 
     private async Task EnsureDeletedAsync(string path, CancellationToken ct)

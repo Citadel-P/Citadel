@@ -13041,7 +13041,11 @@
           "url",
           "defaultBranch",
           "status",
-          "gitAccountId"
+          "gitAccountId",
+          "webHookEnabled",
+          "webHookSecret",
+          "onClone",
+          "onPull"
         ],
         "type": "object",
         "properties": {
@@ -13069,6 +13073,33 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "webHookEnabled": {
+            "type": "boolean"
+          },
+          "webHookSecret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "onClone": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/RepoCommand"
+            }
+          },
+          "onPull": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/RepoCommand"
+            }
           }
         }
       },
@@ -13082,6 +13113,10 @@
           "url",
           "defaultBranch",
           "gitAccountId",
+          "webHookEnabled",
+          "webHookSecret",
+          "onClone",
+          "onPull",
           "createdAt"
         ],
         "type": "object",
@@ -13121,6 +13156,27 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "webHookEnabled": {
+            "type": "boolean"
+          },
+          "webHookSecret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "onClone": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RepoCommand"
+            }
+          },
+          "onPull": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RepoCommand"
+            }
           },
           "createdAt": {
             "format": "date-time"
@@ -15788,6 +15844,21 @@
           }
         }
       },
+      "RepoCommand": {
+        "required": [
+          "command"
+        ],
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "default": "./"
+          }
+        }
+      },
       "ResolveAlertEventsInput": {
         "required": [
           "ids",
@@ -16095,9 +16166,7 @@
         "required": [
           "gitRepoId",
           "commitSha",
-          "onImageChangeUpdateBehavior",
-          "onCodeChangeUpdateBehavior",
-          "updateMechanism"
+          "updateBehavior"
         ],
         "properties": {
           "$type": {
@@ -16116,23 +16185,27 @@
               "string"
             ]
           },
-          "onImageChangeUpdateBehavior": {
+          "updateBehavior": {
             "$ref": "#/components/schemas/StackUpdateBehavior"
           },
-          "onCodeChangeUpdateBehavior": {
-            "$ref": "#/components/schemas/StackUpdateBehavior"
+          "webHookEnabled": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "default": true
           },
-          "updateMechanism": {
-            "$ref": "#/components/schemas/UpdateMechanism"
+          "webHookForceDeploy": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "default": false
           },
-          "webHookConfig": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/WebHookConfig"
-              }
+          "webHookSecret": {
+            "type": [
+              "null",
+              "string"
             ]
           },
           "composePaths": {
@@ -16553,12 +16626,6 @@
           "AutoDeploy"
         ]
       },
-      "UpdateMechanism": {
-        "enum": [
-          "Poll",
-          "Webhook"
-        ]
-      },
       "VerifyAlertChannelInput": {
         "required": [
           "alertDestination",
@@ -16809,31 +16876,6 @@
             "items": {
               "$ref": "#/components/schemas/DockerVolumeResult"
             }
-          }
-        }
-      },
-      "WebHookAuthStyle": {
-        "enum": [
-          "Github",
-          "Gitlab"
-        ]
-      },
-      "WebHookConfig": {
-        "required": [
-          "authStyle",
-          "url",
-          "secret"
-        ],
-        "type": "object",
-        "properties": {
-          "authStyle": {
-            "$ref": "#/components/schemas/WebHookAuthStyle"
-          },
-          "url": {
-            "type": "string"
-          },
-          "secret": {
-            "type": "string"
           }
         }
       }

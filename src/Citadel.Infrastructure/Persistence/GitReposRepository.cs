@@ -23,9 +23,9 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
     {
         const string sql = """
             INSERT INTO GitRepositories (
-                Id, Name, Description, Url, DefaultBranch, Status, GitAccountId, CreatedAt, CreatedByActorId)
+                Id, Name, Description, Url, DefaultBranch, Status, GitAccountId, CreatedAt, CreatedByActorId, WebHookEnabled, WebHookSecret, OnClone, OnPull)
             VALUES (
-                @Id, @Name, @Description, @Url, @DefaultBranch, @Status, @GitAccountId, @CreatedAt, @CreatedByActorId)
+                @Id, @Name, @Description, @Url, @DefaultBranch, @Status, @GitAccountId, @CreatedAt, @CreatedByActorId, @WebHookEnabled, @WebHookSecret, @OnClone, @OnPull)
         """;
 
         return db.ExecuteAsync(sql, new
@@ -38,7 +38,11 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
             Status = EnumFormatter<GitReposStatus>.GetValue(gitRepository.Status),
             GitAccountId = gitRepository.GitAccountId?.Format(),
             CreatedAt = gitRepository.CreatedAt.ToString(),
-            CreatedByActorId = gitRepository.CreatedByActorId.Format()
+            CreatedByActorId = gitRepository.CreatedByActorId.Format(),
+            WebHookEnabled = gitRepository.WebHookEnabled ? 1 : 0,
+            WebHookSecret = gitRepository.WebHookSecret,
+            OnClone = JsonSerializer.Serialize(gitRepository.OnClone, GitJsonContext.Default.ListRepoCommand),
+            OnPull = JsonSerializer.Serialize(gitRepository.OnPull, GitJsonContext.Default.ListRepoCommand)
         }, transaction: tx());
     }
 
@@ -85,7 +89,11 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
                 Url = @Url,
                 DefaultBranch = @DefaultBranch,
                 Status = @Status,
-                GitAccountId = @GitAccountId
+                GitAccountId = @GitAccountId,
+                WebHookEnabled = @WebHookEnabled,
+                WebHookSecret = @WebHookSecret,
+                OnClone = @OnClone,
+                OnPull = @OnPull
             WHERE Id = @Id
         """;
 
@@ -97,7 +105,11 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
             Url = gitRepository.Url,
             DefaultBranch = gitRepository.DefaultBranch,
             Status = EnumFormatter<GitReposStatus>.GetValue(gitRepository.Status),
-            GitAccountId = gitRepository.GitAccountId?.Format()
+            GitAccountId = gitRepository.GitAccountId?.Format(),
+            WebHookEnabled = gitRepository.WebHookEnabled ? 1 : 0,
+            WebHookSecret = gitRepository.WebHookSecret,
+            OnClone = JsonSerializer.Serialize(gitRepository.OnClone, GitJsonContext.Default.ListRepoCommand),
+            OnPull = JsonSerializer.Serialize(gitRepository.OnPull, GitJsonContext.Default.ListRepoCommand)
         }, transaction: tx());
     }
 

@@ -6,7 +6,6 @@ using Infrastructure.Repositories.Mappers;
 using LightResults;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
-using System.Formats.Tar;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Cryptography;
@@ -32,38 +31,11 @@ internal class GitCliRepository(IProcessService processService) : IGitCliReposit
     // accountId -> resolved key file path (content-addressed); rewrites only when the key changes
     private static readonly ConcurrentDictionary<Guid, string> SshKeyCache = new();
 
-    public async Task<Result> CloneBareAsync(string url, string targetPath, GitAccount? account, CancellationToken ct = default)
-    {
-        var (args, env) = PrepareRemoteCmd(account);
-        args.Add("clone");
-        args.Add("--bare");
-        args.Add(url);
-        args.Add(targetPath);
-
-        var result = await processService.ExecuteAsync(GitExecutable, args, env, ct);
-        return result.Map();
-    }
-
-    public async Task<Result> FetchBranchSnapshotAsync(string repoPath, string branch, GitAccount? account, CancellationToken ct = default)
-    {
-        var (args, env) = PrepareRemoteCmd(account);
-        args.Add("-C");
-        args.Add(repoPath);
-        args.Add("fetch");
-        args.Add("origin");
-        args.Add($"{branch}:{ToRefName(branch)}");
-        args.Add("--prune");
-        args.Add("--depth=1");
-
-        var result = await processService.ExecuteAsync(GitExecutable, args, env, ct);
-        return result.Map();
-    }
-
     public async Task<Result<string>> ResolveSnapshotCommitAsync(string repoPath, string branch, CancellationToken ct = default)
     {
         var refName = ToRefName(branch);
         var args = new[] { "-C", repoPath, "rev-parse", refName };
-        var result = await processService.ExecuteAsync(GitExecutable, args, GitEnv, ct);
+        var result = await processService.ExecuteAsync(GitExecutable, args, GitEnv, "", ct);
 
         if (!result.IsSuccess)
         {
@@ -73,28 +45,40 @@ internal class GitCliRepository(IProcessService processService) : IGitCliReposit
         return Result.Success(result.StandardOutput.Trim());
     }
 
-    public async Task<Result> MaterializeAsync(string repoPath, string commitHash, string targetPath, CancellationToken ct = default)
+    public async Task<Result> CloneAsync(string url, string targetPath, string branch, GitAccount? account, CancellationToken ct = default)
     {
-        Directory.CreateDirectory(targetPath);
+        var (args, env) = PrepareRemoteCmd(account);
+        args.AddRange(["clone", "-b", branch, "--single-branch", url, targetPath]);
 
-        var archiveDir = Path.Combine(CitadelTempDir, "archives");
-        Directory.CreateDirectory(archiveDir);
-        var tarFile = Path.Combine(archiveDir, $"{Guid.NewGuid():N}.tar");
-        try
+        var result = await processService.ExecuteAsync(GitExecutable, args, env, "", ct);
+        return result.Map();
+    }
+
+    public async Task<Result> PullAsync(string repoPath, string branch, GitAccount? account, CancellationToken ct = default)
+    {
+        var (args, env) = PrepareRemoteCmd(account);
+        args.AddRange(["-C", repoPath, "pull", "origin", branch]);
+
+        var result = await processService.ExecuteAsync(GitExecutable, args, env, "", ct);
+        return result.Map();
+    }
+
+    public async Task<Result> ExecuteShellCommandAsync(string workingDir, string command, CancellationToken ct = default)
+    {
+        // Detect OS to use correct shell wrapper
+        var isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        var fileName = isWindows ? "cmd.exe" : "/bin/sh";
+        var args = isWindows ? new[] { "/c", command } : new[] { "-c", command };
+
+        // Execute in the specific sub-path provided by RepoCommand
+        var result = await processService.ExecuteAsync(fileName, args, null, workingDir, ct);
+
+        if (!result.IsSuccess)
         {
-            var args = new[] { "--git-dir", repoPath, "archive", "--format=tar", $"--output={tarFile}", commitHash };
-            var result = await processService.ExecuteAsync(GitExecutable, args, GitEnv, ct);
-
-            if (!result.IsSuccess)
-                return result.Map();
-
-            await TarFile.ExtractToDirectoryAsync(tarFile, targetPath, overwriteFiles: true, ct);
-            return Result.Success();
+            return Result.Failure($"Command '{command}' failed in {workingDir}. Error: {result.StandardError}");
         }
-        finally
-        {
-            try { File.Delete(tarFile); } catch { /* best-effort cleanup */ }
-        }
+
+        return Result.Success();
     }
 
     private static (List<string> Args, IDictionary<string, string> Env) PrepareRemoteCmd(GitAccount? account)

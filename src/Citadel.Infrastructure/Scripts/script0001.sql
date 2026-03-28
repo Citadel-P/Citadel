@@ -226,6 +226,10 @@ CREATE TABLE "GitRepositories" (
     "GitAccountId" TEXT NULL,
     "Name" TEXT NOT NULL,
     "Status" TEXT NOT NULL,
+    "WebHookEnabled" INTEGER NOT NULL DEFAULT 0,
+    "WebHookSecret" TEXT NULL,
+    "OnClone" TEXT NULL,
+    "OnPull" TEXT NULL,
     "Url" TEXT NOT NULL,
     CONSTRAINT "FK_GitRepositories_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_GitRepositories_GitAccounts_GitAccountId" FOREIGN KEY ("GitAccountId") REFERENCES "GitAccounts" ("Id") ON DELETE SET NULL

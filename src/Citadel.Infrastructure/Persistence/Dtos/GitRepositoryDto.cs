@@ -9,4 +9,8 @@ internal sealed record GitRepositoryDto(
     string Status,
     Guid? GitAccountId,
     DateTime CreatedAt,
-    Guid CreatedByActorId);
+    Guid CreatedByActorId,
+    int WebHookEnabled,
+    string? WebHookSecret,
+    string? OnClone,
+    string? OnPull);

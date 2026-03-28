@@ -43,7 +43,7 @@ internal class ShoutrrrCliRepository(IProcessService processService, ILogger<Sho
                 "--message", message
             };
 
-            var result = await processService.ExecuteAsync(shoutrrrCliPath, args, null, ct);
+            var result = await processService.ExecuteAsync(shoutrrrCliPath, args, null, null, ct);
 
             if (!result.IsSuccess)
             {
@@ -64,7 +64,7 @@ internal class ShoutrrrCliRepository(IProcessService processService, ILogger<Sho
                 "--url", channel.Url,
             };
 
-        var result = await processService.ExecuteAsync(shoutrrrCliPath, args, null, cancellationToken);
+        var result = await processService.ExecuteAsync(shoutrrrCliPath, args, null, null, cancellationToken);
 
         return result.Map();
     }
@@ -85,7 +85,7 @@ internal class ShoutrrrCliRepository(IProcessService processService, ILogger<Sho
             "--message", $"Test notification for channel '{channel.Name}'"
         };
 
-        var sendResult = await processService.ExecuteAsync(shoutrrrCliPath, args, null, cancellationToken);
+        var sendResult = await processService.ExecuteAsync(shoutrrrCliPath, args, null, null, cancellationToken);
         
         return sendResult.Map();
     }

@@ -12,6 +12,10 @@ public sealed record GitRepositoryView(
     string Url,
     string? DefaultBranch,
     Guid? GitAccountId,
+    bool WebHookEnabled,
+    string? WebHookSecret,
+    IEnumerable<RepoCommand> OnClone,
+    IEnumerable<RepoCommand> OnPull,
     DateTime CreatedAt)
 {
     internal static GitRepositoryView Map(GitRepository gitRepository) => new(
@@ -23,5 +27,9 @@ public sealed record GitRepositoryView(
         gitRepository.Url,
         gitRepository.DefaultBranch,
         gitRepository.GitAccountId,
+        gitRepository.WebHookEnabled,
+        gitRepository.WebHookSecret,
+        gitRepository.OnClone,
+        gitRepository.OnPull,
         gitRepository.CreatedAt);
 }

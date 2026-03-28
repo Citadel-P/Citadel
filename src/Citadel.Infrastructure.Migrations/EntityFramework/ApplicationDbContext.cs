@@ -207,6 +207,10 @@ internal static class Configuration
         gitRepository.Property<string>("DefaultBranch").HasColumnType("TEXT").IsRequired();
         gitRepository.Property<string>("Status").HasColumnType("TEXT").IsRequired();
         gitRepository.Property<Guid?>("GitAccountId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
+        gitRepository.Property<bool>("WebHookEnabled").HasColumnType("INTEGER").IsRequired().HasDefaultValue(false);
+        gitRepository.Property<string>("WebHookSecret").HasColumnType("TEXT").IsRequired(false);
+        gitRepository.Property<string>("OnClone").HasColumnType("TEXT").IsRequired(false);
+        gitRepository.Property<string>("OnPull").HasColumnType("TEXT").IsRequired(false);
 
         gitRepository.AddAuditedMemebers();
 

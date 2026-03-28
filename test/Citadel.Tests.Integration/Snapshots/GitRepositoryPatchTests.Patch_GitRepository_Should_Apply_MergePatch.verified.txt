@@ -7,5 +7,7 @@
   url: https://github.com/citadel-p/citadel-api,
   defaultBranch: develop,
   gitAccountId: Guid_3,
+  webHookEnabled: false,
+  webHookSecret: ,
   createdAt: DateTimeOffset_1
 }

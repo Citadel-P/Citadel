@@ -372,7 +372,7 @@ public enum StackUpdateBehavior
     StackAutoDeploy
 }
 
-public enum  UpdateMechanism
+public enum  UpdateTrigger
 {
     Poll,
     Webhook

@@ -6,5 +6,7 @@
   status: Valid,
   url: https://github.com/citadel-p/citadel,
   defaultBranch: main,
+  webHookEnabled: false,
+  webHookSecret: ,
   createdAt: DateTimeOffset_1
 }

@@ -18,7 +18,11 @@ public sealed record CreateGitRepository(
     string Url,
     string DefaultBranch,
     GitReposStatus Status,
-    Guid? GitAccountId) : ICommand<Result<GitRepository>>
+    Guid? GitAccountId,
+    bool WebHookEnabled = false,
+    string? WebHookSecret = null,
+    IEnumerable<RepoCommand>? OnClone = null,
+    IEnumerable<RepoCommand>? OnPull = null) : ICommand<Result<GitRepository>>
 {
     internal sealed class Validator : AbstractValidator<CreateGitRepository>
     {
@@ -49,7 +53,18 @@ internal sealed class CreateGitRepositoryHandler(
         if (validation.IsFailure())
             return Result.Failure<GitRepository>(validation.Errors);
 
-        var gitRepository = new GitRepository(command.Name, command.Description, command.Url, command.DefaultBranch, command.Status, command.GitAccountId, actorId);
+        var gitRepository = new GitRepository(
+            command.Name,
+            command.Description,
+            command.Url,
+            command.DefaultBranch,
+            command.Status,
+            command.GitAccountId,
+            actorId,
+            command.WebHookEnabled,
+            command.WebHookSecret ?? string.Empty,
+            command.OnClone?.ToList(),
+            command.OnPull?.ToList());
         await unitOfWork.GitRepositories.AddAsync(gitRepository, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
 

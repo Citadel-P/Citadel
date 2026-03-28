@@ -163,6 +163,8 @@ public partial class AlertRuleJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(SshKeyAuth))]
 [JsonSerializable(typeof(GitAuthConfiguration))]
 [JsonSerializable(typeof(GitRepository))]
+[JsonSerializable(typeof(RepoCommand))]
+[JsonSerializable(typeof(List<RepoCommand>))]
 public partial class GitJsonContext : JsonSerializerContext
 {
 }

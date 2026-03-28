@@ -1,5 +1,9 @@
 ﻿namespace Domain.Entities.Git;
 
+/// <summary>
+/// Source of Truth for the entire GitOps pipeline
+/// It manages the connection and the "physical" files on the server, while other resources (like Stacks) consume those files to do their jobs
+/// </summary>
 public class GitRepository(
     string name,
     string? description,
@@ -7,7 +11,11 @@ public class GitRepository(
     string defaultBranch,
     GitReposStatus status,
     Guid? gitAccountId,
-    Guid createdByActorId) : IAuditedEntity
+    Guid createdByActorId,
+    bool webHookEnabled = false,
+    string webHookSecret = "",
+    List<RepoCommand>? onClone = null,
+    List<RepoCommand>? onPull = null) : IAuditedEntity
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public string Name { get; private set; } = name;
@@ -17,6 +25,10 @@ public class GitRepository(
     public string? DefaultBranch { get; private set; } = defaultBranch;
     public Guid? GitAccountId { get; private set; } = gitAccountId;
     public GitAccount? GitAccount { get; private set; } = null!;
+    public bool WebHookEnabled { get; private set; } = webHookEnabled;
+    public string WebHookSecret { get; private set; } = webHookSecret ?? string.Empty;
+    public List<RepoCommand> OnClone { get; private set; } = onClone ?? new List<RepoCommand>();
+    public List<RepoCommand> OnPull { get; private set; } = onPull ?? new List<RepoCommand>();
 
     #region IAuditedEntity Members
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
@@ -32,6 +44,25 @@ public class GitRepository(
         Description = description;
         DefaultBranch = defaultBranch;
         Status = status;
+    }
+
+    public void PartialUpdate(
+        bool? webHookEnabled = null,
+        string? webHookSecret = null,
+        List<RepoCommand>? onClone = null,
+        List<RepoCommand>? onPull = null)
+    {
+        if (webHookEnabled.HasValue)
+            WebHookEnabled = webHookEnabled.Value;
+
+        if (webHookSecret is not null)
+            WebHookSecret = webHookSecret;
+
+        if (onClone is not null)
+            OnClone = onClone;
+
+        if (onPull is not null)
+            OnPull = onPull;
     }
 
     public void UpdateSource(string url, Guid? gitAccountId)
@@ -50,13 +81,21 @@ public class GitRepository(
         Guid? gitAccountId,
         DateTime createdAt,
         Guid createdByActorId,
+        bool webHookEnabled = false,
+        string? webHookSecret = null,
+        List<RepoCommand>? onClone = null,
+        List<RepoCommand>? onPull = null,
         GitAccount? gitAccount = null)
     {
         return new GitRepository(name, description, url, defaultBranch, status, gitAccountId, createdByActorId)
         {
             Id = id,
             CreatedAt = createdAt,
-            GitAccount = gitAccount
+            GitAccount = gitAccount,
+            WebHookEnabled = webHookEnabled,
+            WebHookSecret = webHookSecret ?? string.Empty,
+            OnClone = onClone ?? new List<RepoCommand>(),
+            OnPull = onPull ?? new List<RepoCommand>()
         };
     }
 
@@ -71,3 +110,5 @@ public class GitRepository(
             : normalizedUrl;
     }
 }
+
+public record RepoCommand(string Command, string Path = "./");
