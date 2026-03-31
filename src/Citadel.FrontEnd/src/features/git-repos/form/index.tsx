@@ -6,6 +6,7 @@ import { useRead } from '@/lib/hooks';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { GitRepositoryView } from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
+import { useGitRepoGroup } from './hooks/useGitRepoGroup';
 
 const title = 'Repository';
 export const GitRepoFormComponents: RequiredFormComponents = {
@@ -29,8 +30,8 @@ export const GitRepoFormComponents: RequiredFormComponents = {
     Tabs: [
       {
         label: 'Config',
-        Content: ({ resource }) => {
-          return <GitRepoForm mode="edit" resource={resource} />;
+        Content: ({ metadataChanged }) => {
+          return <GitRepoForm mode="edit" metadataChanged={metadataChanged} />;
         },
       },
       {
@@ -41,8 +42,8 @@ export const GitRepoFormComponents: RequiredFormComponents = {
       },
     ],
     useData: function (id?: string): { item?: RequiredFormFields; isLoading: boolean } {
-      const { data, isLoading } = useRead('getGitRepository', { id });
-      return { item: data?.data as any, isLoading };
+      const { gitRepo, isLoading } = useGitRepoGroup(id);
+      return { item: gitRepo as any, isLoading };
     },
   },
 };

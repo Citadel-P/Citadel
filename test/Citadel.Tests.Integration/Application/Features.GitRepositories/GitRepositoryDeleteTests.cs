@@ -18,7 +18,6 @@ public class GitRepositoryDeleteTests : IntegrationTestBase
             description: "Delete me",
             url: "https://github.com/citadel-p/citadel.git",
             defaultBranch: "main",
-            status: GitReposStatus.Valid,
             gitAccountId: null,
             createdByActorId: Constants.SystemId);
 

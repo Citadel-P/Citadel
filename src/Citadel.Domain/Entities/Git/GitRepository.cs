@@ -9,30 +9,36 @@ public class GitRepository(
     string? description,
     string url,
     string defaultBranch,
-    GitReposStatus status,
     Guid? gitAccountId,
     Guid createdByActorId,
     bool webHookEnabled = false,
     string webHookSecret = "",
-    List<RepoCommand>? onClone = null,
-    List<RepoCommand>? onPull = null) : IAuditedEntity
+    RepoCommand? onClone = null,
+    RepoCommand? onPull = null) : IAuditedEntity, IReconcilableResource
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public string Name { get; private set; } = name;
     public string? Description { get; private set; } = description;
-    public GitReposStatus Status { get; private set; } = status;
+    public GitReposStatus Status { get; private set; } = GitReposStatus.Created;
     public string Url { get; private set; } = Normalize(url);
     public string? DefaultBranch { get; private set; } = defaultBranch;
     public Guid? GitAccountId { get; private set; } = gitAccountId;
     public GitAccount? GitAccount { get; private set; } = null!;
     public bool WebHookEnabled { get; private set; } = webHookEnabled;
     public string WebHookSecret { get; private set; } = webHookSecret ?? string.Empty;
-    public List<RepoCommand> OnClone { get; private set; } = onClone ?? new List<RepoCommand>();
-    public List<RepoCommand> OnPull { get; private set; } = onPull ?? new List<RepoCommand>();
+    public RepoCommand? OnClone { get; private set; } = onClone;
+    public RepoCommand? OnPull { get; private set; } = onPull;
 
     #region IAuditedEntity Members
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
     public Guid CreatedByActorId { get; private set; } = createdByActorId;
+    #endregion
+
+    #region IReconcilableResource Members
+    public ResourceControlState ControlState { get; private set; } = ResourceControlState.Idle;
+    public Guid? ControlTriggeredBy { get; private set; }
+    public long? ControlStartedAt { get; private set; }
+    public long RowVersion { get; private set; }
     #endregion
 
     // Helper for the RepoCache path
@@ -49,8 +55,12 @@ public class GitRepository(
     public void PartialUpdate(
         bool? webHookEnabled = null,
         string? webHookSecret = null,
-        List<RepoCommand>? onClone = null,
-        List<RepoCommand>? onPull = null)
+        RepoCommand? onClone = null,
+        RepoCommand? onPull = null,
+        ResourceControlState? resourceControlState = null,
+        long? controlStartedAt = null,
+        Guid? controlTriggeredBy = null,
+        long? rowVersion = null)
     {
         if (webHookEnabled.HasValue)
             WebHookEnabled = webHookEnabled.Value;
@@ -63,12 +73,40 @@ public class GitRepository(
 
         if (onPull is not null)
             OnPull = onPull;
+
+        if (resourceControlState is not null)
+            ControlState = resourceControlState.Value;
+
+        if (controlStartedAt is not null)
+            ControlStartedAt = controlStartedAt;
+
+        if (controlTriggeredBy is not null)
+            ControlTriggeredBy = controlTriggeredBy;
+
+        if (rowVersion is not null)
+            RowVersion = rowVersion.Value;
     }
 
     public void UpdateSource(string url, Guid? gitAccountId)
     {
         Url = Normalize(url);
         GitAccountId = gitAccountId;
+    }
+
+    public void MarkProcessing(Guid controlTriggeredBy)
+    {
+        Status = GitReposStatus.Processing;
+        ControlTriggeredBy = controlTriggeredBy;
+        ControlState = ResourceControlState.Processing;
+        ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    }
+
+    public void ReleaseProcessing(GitReposStatus status)
+    {
+        Status = status;
+        ControlState = ResourceControlState.Idle;
+        ControlStartedAt = null;
+        ControlTriggeredBy = null;
     }
 
     public static GitRepository FromPersistence(
@@ -83,26 +121,35 @@ public class GitRepository(
         Guid createdByActorId,
         bool webHookEnabled = false,
         string? webHookSecret = null,
-        List<RepoCommand>? onClone = null,
-        List<RepoCommand>? onPull = null,
+        RepoCommand? onClone = null,
+        RepoCommand? onPull = null,
+        ResourceControlState controlState = ResourceControlState.Idle,
+        long? controlStartedAt = null,
+        Guid? controlTriggeredBy = null,
+        long rowVersion = 0,
         GitAccount? gitAccount = null)
     {
-        return new GitRepository(name, description, url, defaultBranch, status, gitAccountId, createdByActorId)
+        return new GitRepository(name, description, url, defaultBranch, gitAccountId, createdByActorId)
         {
             Id = id,
             CreatedAt = createdAt,
             GitAccount = gitAccount,
             WebHookEnabled = webHookEnabled,
             WebHookSecret = webHookSecret ?? string.Empty,
-            OnClone = onClone ?? new List<RepoCommand>(),
-            OnPull = onPull ?? new List<RepoCommand>()
+            OnClone = onClone,
+            OnPull = onPull,
+            Status = status,
+            ControlState = controlState,
+            ControlStartedAt = controlStartedAt,
+            ControlTriggeredBy = controlTriggeredBy,
+            RowVersion = rowVersion
         };
     }
 
     private static string Normalize(string url)
     {
         if (string.IsNullOrWhiteSpace(url))
-            throw new ArgumentException("URL cannot be empty", nameof(url));
+            return url;
 
         var normalizedUrl = url.Trim().TrimEnd('/');
         return normalizedUrl.EndsWith(".git", StringComparison.OrdinalIgnoreCase)
@@ -111,4 +158,4 @@ public class GitRepository(
     }
 }
 
-public record RepoCommand(string Command, string Path = "./");
+public record RepoCommand(List<string> Commands, string Path = "./");

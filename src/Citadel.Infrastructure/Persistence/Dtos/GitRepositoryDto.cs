@@ -13,4 +13,14 @@ internal sealed record GitRepositoryDto(
     int WebHookEnabled,
     string? WebHookSecret,
     string? OnClone,
-    string? OnPull);
+    string? OnPull,
+    string? ControlState,
+    long? ControlStartedAt,
+    Guid? ControlTriggeredBy,
+    long RowVersion,
+    Guid GitAccount_Id,
+    string GitAccount_Name,
+    string GitAccount_Domain,
+    string GitAccount_Transport,
+    string GitAccount_AuthType,
+    string GitAccount_Configuration);

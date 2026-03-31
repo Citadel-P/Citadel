@@ -412,6 +412,7 @@ public enum ActivityResourceType
     Deployment,
     Stack,
     AlertRule,
+    GitRepo
 }
 
 public enum ActivityEventType
@@ -445,7 +446,16 @@ public enum ActivityEventType
     AlertRuleCreated,
     AlertRuleUpdated,
     AlertRuleDeleted,
-    AlertRuleRenamed
+    AlertRuleRenamed,
+    #endregion
+
+    #region GitRepository Events
+    GitRepoCreated,
+    GitRepoUpdated,
+    GitRepoDeleted,
+    GitRepoRenamed,
+    GitRepoPulled,
+    GitRepoCloned
     #endregion
 }
 
@@ -546,9 +556,16 @@ public enum GitTransport
 
 public enum GitReposStatus
 {
-    Unknown,        
-    Valid,
-    Invalid,
-    Unauthorized,
-    Unreachable
+    Unknown,
+    Processing,
+    Created,
+    Healthy,
+    Degraded
+}
+
+public enum GitOperation
+{ 
+    Authenticate = 0,
+    Clone,
+    Pull
 }

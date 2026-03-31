@@ -1,4 +1,5 @@
 ﻿using Domain.Entities.Registries;
+using Hosting.Common;
 
 namespace Domain.Contracts.Resources.Registries;
 
@@ -24,15 +25,12 @@ public static class RegistrySnapshotExtensions
     private static RegistryConfiguration MaskSensitive(this RegistryConfiguration configuration)
         => configuration switch
         {
-            GitlabRegistry g => g with { PAT = MaskValue(g.PAT) },
-            GitHubRegistry g => g with { PAT = MaskValue(g.PAT) },
-            DockerHubRegistry d => d with { PAT = MaskValue(d.PAT) },
-            CustomRegistry c => c with { Password = MaskValue(c.Password) },
-            AzureRegistry a => a with { Password = MaskValue(a.Password)! },
-            AWSRegistry a => a with { AccessKey = MaskValue(a.AccessKey)!, SecretAccessKey = MaskValue(a.SecretAccessKey)! },
+            GitlabRegistry g => g with { PAT = g.PAT != null ? g.PAT.MaskValue() : "" },
+            GitHubRegistry g => g with { PAT = g.PAT.MaskValue() },
+            DockerHubRegistry d => d with { PAT = d.PAT.MaskValue() },
+            CustomRegistry c => c with { Password = c.Password.MaskValue() },
+            AzureRegistry a => a with { Password = a.Password.MaskValue()! },
+            AWSRegistry a => a with { AccessKey = a.AccessKey.MaskValue()!, SecretAccessKey = a.SecretAccessKey.MaskValue()! },
             _ => configuration
         };
-
-    private static string? MaskValue(string? value)
-        => value is null ? null : new string('*', value.Length);
 }

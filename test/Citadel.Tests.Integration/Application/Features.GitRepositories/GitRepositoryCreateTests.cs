@@ -1,14 +1,27 @@
-using System.Text;
+using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Git;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using System.Text;
+using System.Threading.Channels;
 
 namespace Tests.Integration.Application.Features.GitRepositories;
 
 public class GitRepositoryCreateTests : IntegrationTestBase
 {
+    protected override void ConfigureTestServices(IServiceCollection services)
+    {
+        services.RemoveAll<IHostedService>();
+        services
+            .AddSingleton(Channel.CreateBounded<GitRepoSyncRequest>(Hosting.Common.Helpers.ChannelDefaultOptions()))
+            .AddSingleton(s => s.GetRequiredService<Channel<GitRepoSyncRequest>>().Writer)
+            .AddSingleton(s => s.GetRequiredService<Channel<GitRepoSyncRequest>>().Reader);
+    }
+     
     [Fact]
     public async Task Create_GitRepository_Without_GitAccount_ReturnsSuccess()
     {
@@ -18,7 +31,7 @@ public class GitRepositoryCreateTests : IntegrationTestBase
           "description": "A git repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "status": "Valid",
+          "webHookEnabled": true,
           "gitAccountId": null
         }
         """;
@@ -33,7 +46,7 @@ public class GitRepositoryCreateTests : IntegrationTestBase
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var gitRepositories = await uow.GitRepositories.GetAllAsync(TestContext.Current.CancellationToken);
 
-        Assert.Contains(gitRepositories, x => x.Name == "GR-NEW" && x.DefaultBranch == "main" && x.Status == GitReposStatus.Valid);
+        Assert.Contains(gitRepositories, x => x.Name == "GR-NEW" && x.DefaultBranch == "main" && x.Status == GitReposStatus.Processing);
         await VerifyJson(responseBody);
     }
 
@@ -63,7 +76,7 @@ public class GitRepositoryCreateTests : IntegrationTestBase
           "description": "A linked repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "status": "Valid",
+          "WebHookEnabled": true,
           "gitAccountId": "{{gitAccountId}}"
         }
         """;
@@ -91,7 +104,7 @@ public class GitRepositoryCreateTests : IntegrationTestBase
           "description": "A git repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "status":  "Valid",
+          "webHookEnabled": true,
           "gitAccountId": null
         }
         """;
@@ -113,7 +126,7 @@ public class GitRepositoryCreateTests : IntegrationTestBase
           "description": "A git repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "",
-          "status": "Valid",
+          "webHookEnabled": true,
           "gitAccountId": null
         }
         """;
@@ -137,7 +150,6 @@ public class GitRepositoryCreateTests : IntegrationTestBase
                 description: "Existing repository",
                 url: "https://github.com/citadel-p/citadel.git",
                 defaultBranch: "main",
-                status: GitReposStatus.Valid,
                 gitAccountId: null,
                 createdByActorId: Constants.SystemId
             ), TestContext.Current.CancellationToken);
@@ -151,6 +163,7 @@ public class GitRepositoryCreateTests : IntegrationTestBase
           "url": "https://github.com/citadel-p/other.git",
           "defaultBranch": "main",
           "status": "Valid",
+          "webHookEnabled": true,
           "gitAccountId": null
         }
         """;
@@ -172,7 +185,7 @@ public class GitRepositoryCreateTests : IntegrationTestBase
           "description": "A git repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "status": "Valid",
+          "webHookEnabled": true,
           "gitAccountId": "{{Guid.NewGuid()}}"
         }
         """;
@@ -211,7 +224,7 @@ public class GitRepositoryCreateTests : IntegrationTestBase
           "description": "A git repository",
           "url": "https://gitlab.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "status": "Valid",
+          "webHookEnabled": true,
           "gitAccountId": "{{gitAccountId}}"
         }
         """;

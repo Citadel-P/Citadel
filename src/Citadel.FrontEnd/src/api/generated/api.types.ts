@@ -121,10 +121,10 @@ export enum GitTransport {
 
 export enum GitReposStatus {
   Unknown = "Unknown",
-  Valid = "Valid",
-  Invalid = "Invalid",
-  Unauthorized = "Unauthorized",
-  Unreachable = "Unreachable",
+  Processing = "Processing",
+  Created = "Created",
+  Healthy = "Healthy",
+  Degraded = "Degraded",
 }
 
 export enum GitAuthType {
@@ -272,6 +272,7 @@ export enum ActivityResourceType {
   Deployment = "Deployment",
   Stack = "Stack",
   AlertRule = "AlertRule",
+  GitRepo = "GitRepo",
 }
 
 export enum ActivityEventType {
@@ -295,6 +296,12 @@ export enum ActivityEventType {
   AlertRuleUpdated = "AlertRuleUpdated",
   AlertRuleDeleted = "AlertRuleDeleted",
   AlertRuleRenamed = "AlertRuleRenamed",
+  GitRepoCreated = "GitRepoCreated",
+  GitRepoUpdated = "GitRepoUpdated",
+  GitRepoDeleted = "GitRepoDeleted",
+  GitRepoRenamed = "GitRepoRenamed",
+  GitRepoPulled = "GitRepoPulled",
+  GitRepoCloned = "GitRepoCloned",
 }
 
 export interface AcknowledgeAlertEventsInput {
@@ -375,6 +382,30 @@ export type ActivityEventInfo = BaseActivityEventInfo &
         "RegistryDeleted",
         ActivityEventInfoRegistryDeleted
       >
+    | BaseActivityEventInfoTypeMapping<
+        "GitRepoCreated",
+        ActivityEventInfoGitRepoCreated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "GitRepoUpdated",
+        ActivityEventInfoGitRepoUpdated
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "GitRepoRenamed",
+        ActivityEventInfoGitRepoRenamed
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "GitRepoDeleted",
+        ActivityEventInfoGitRepoDeleted
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "GitRepoCloned",
+        ActivityEventInfoGitRepoCloned
+      >
+    | BaseActivityEventInfoTypeMapping<
+        "GitRepoPulled",
+        ActivityEventInfoGitRepoPulled
+      >
   );
 
 export interface ActivityEventInfoAlertRuleCreated {
@@ -446,6 +477,40 @@ export interface ActivityEventInfoDeploymentUpdated {
   $type?: "DeploymentUpdated";
   oldDeployment: DeploymentSnapshot;
   newDeployment: DeploymentSnapshot;
+}
+
+export interface ActivityEventInfoGitRepoCloned {
+  $type?: "GitRepoCloned";
+  gitRepo: GitRepositorySnapshot;
+  reason: null | string;
+}
+
+export interface ActivityEventInfoGitRepoCreated {
+  $type?: "GitRepoCreated";
+  gitRepo: GitRepositorySnapshot;
+}
+
+export interface ActivityEventInfoGitRepoDeleted {
+  $type?: "GitRepoDeleted";
+  gitRepo: GitRepositorySnapshot;
+}
+
+export interface ActivityEventInfoGitRepoPulled {
+  $type?: "GitRepoPulled";
+  gitRepo: GitRepositorySnapshot;
+  reason: null | string;
+}
+
+export interface ActivityEventInfoGitRepoRenamed {
+  $type?: "GitRepoRenamed";
+  oldName: string;
+  newName: string;
+}
+
+export interface ActivityEventInfoGitRepoUpdated {
+  $type?: "GitRepoUpdated";
+  oldGitRepo: GitRepositorySnapshot;
+  newGitRepo: GitRepositorySnapshot;
 }
 
 export interface ActivityEventInfoRegistryCreated {
@@ -1622,18 +1687,47 @@ export interface GitRepositoriesView {
   gitRepositories: GitRepositoryView[];
 }
 
+export interface GitRepositoryConfigView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: null | string;
+  url: string;
+  defaultBranch: string;
+  /** @format uuid */
+  gitAccountId: null | string;
+  webHookEnabled: boolean;
+  webHookSecret: null | string;
+  onClone: null | RepoCommand;
+  onPull: null | RepoCommand;
+}
+
 export interface GitRepositoryInput {
   name: string;
   description: null | string;
   url: string;
   defaultBranch: string;
-  status: GitReposStatus;
   /** @format uuid */
   gitAccountId: null | string;
   webHookEnabled: boolean;
   webHookSecret: null | string;
-  onClone: null | any[];
-  onPull: null | any[];
+  onClone: null | RepoCommand;
+  onPull: null | RepoCommand;
+}
+
+export interface GitRepositorySnapshot {
+  /** @format uuid */
+  id: string;
+  name: string;
+  description: null | string;
+  url: string;
+  defaultBranch: string;
+  /** @format uuid */
+  gitAccountId: null | string;
+  webHookEnabled: boolean;
+  webHookSecret: null | string;
+  onClone: null | RepoCommand;
+  onPull: null | RepoCommand;
 }
 
 export interface GitRepositoryView {
@@ -1650,8 +1744,8 @@ export interface GitRepositoryView {
   gitAccountId: null | string;
   webHookEnabled: boolean;
   webHookSecret: null | string;
-  onClone: RepoCommand[];
-  onPull: RepoCommand[];
+  onClone: null | RepoCommand;
+  onPull: null | RepoCommand;
   /** @format date-time */
   createdAt: any;
 }
@@ -2457,7 +2551,7 @@ export interface RegistryView {
 }
 
 export interface RepoCommand {
-  command: string;
+  commands: string[];
   /** @default "./" */
   path?: string;
 }
@@ -3741,7 +3835,7 @@ export class Api<
      *
      * @tags Registries
      * @name GetRegistryConfig
-     * @summary Get registry with it's configuration
+     * @summary Get registry configuration
      * @request GET:/api/v1/registries/{id}/_cfg
      * @secure
      * @response `200` `RegistryConfigView` OK
@@ -3912,7 +4006,7 @@ export class Api<
      *
      * @tags GitAccounts
      * @name GetGitAccountConfig
-     * @summary Get git account with its configuration
+     * @summary Get git account configuration
      * @request GET:/api/v1/gitAccounts/{id}/_cfg
      * @secure
      * @response `200` `GitAccountConfigView` OK
@@ -4078,6 +4172,33 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name GetGitRepositoryConfig
+     * @summary Get Git repo configuration
+     * @request GET:/api/v1/gitRepositories/{id}/_cfg
+     * @secure
+     * @response `200` `GitRepositoryConfigView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getGitRepositoryConfig: (id: string, params: RequestParams = {}) =>
+      this.request<
+        GitRepositoryConfigView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitRepositories/${id}/_cfg`,
+        method: "GET",
+        secure: true,
         format: "json",
         ...params,
       }),
@@ -4723,7 +4844,7 @@ export class Api<
      *
      * @tags Deployments
      * @name GetDeploymentConfig
-     * @summary Get deployment by Id
+     * @summary Get deployment configuration
      * @request GET:/api/v1/deployments/{deploymentId}/_cfg
      * @secure
      * @response `200` `DeploymentConfigView` OK

@@ -1811,7 +1811,7 @@ namespace Infrastructure.DockerHub
         public string Token_label { get; set; }
 
         /// <summary>
-        /// Valid scopes: "repo:admin", "repo:write", "repo:read", "repo:public_read"
+        /// Healthy scopes: "repo:admin", "repo:write", "repo:read", "repo:public_read"
         /// <br/>
         /// </summary>
 

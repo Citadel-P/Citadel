@@ -3,10 +3,10 @@
   createdByActorId: Guid_2,
   name: GR-NEW,
   description: A git repository,
-  status: Valid,
+  status: Processing,
   url: https://github.com/citadel-p/citadel,
   defaultBranch: main,
-  webHookEnabled: false,
+  webHookEnabled: true,
   webHookSecret: ,
   createdAt: DateTimeOffset_1
 }

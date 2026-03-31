@@ -1,7 +1,6 @@
 ﻿using Application.Services.Abstractions;
 using Application.Services.SignalR.Context;
 using Domain.Entities.Deployments;
-using System;
 
 namespace Application.Services.SignalR;
 
@@ -22,4 +21,3 @@ internal class DeploymentStreamManager(IApplicationHubDispatcher dispatcher) : B
         return dispatcher.SendDeploymentInfo(deployment, action);
     }
 }
-

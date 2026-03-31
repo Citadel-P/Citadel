@@ -212,7 +212,9 @@ internal static class Configuration
         gitRepository.Property<string>("OnClone").HasColumnType("TEXT").IsRequired(false);
         gitRepository.Property<string>("OnPull").HasColumnType("TEXT").IsRequired(false);
 
-        gitRepository.AddAuditedMemebers();
+        gitRepository
+            .AddReconcilableMember()
+            .AddAuditedMemebers();
 
         gitRepository
             .HasOne("GitAccount")

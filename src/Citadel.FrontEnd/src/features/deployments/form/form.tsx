@@ -9,6 +9,7 @@ import {
   ResourceSpec,
   StopSignal,
   UpdateBehavior,
+  DeploymentConfigView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -145,9 +146,9 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
   const { mutateAsync: updateDeployment } = useMutate('updateDeployment');
   const { data: deploymentCfg } = useRead('getDeploymentConfig', { deploymentId: id });
 
-  const resource: DeploymentInput | undefined = deploymentCfg?.data;
+  const resource: DeploymentConfigView | undefined = deploymentCfg?.data;
 
-  const original = resource ?? ({} as DeploymentInput);
+  const original = resource ?? ({} as DeploymentConfigView);
 
   // Fallback Logic: Check `update` first, then `original`.
   const currentPlatformId = update.platformId ?? original.platformId;

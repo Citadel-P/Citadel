@@ -62,10 +62,16 @@ internal sealed class GitAccountRepository(IDbConnection db, Func<IDbTransaction
         return result?.ToDomain();
     }
 
-    public Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken)
+    public Task<bool> IsNameTakenAsync(Guid id, string name, CancellationToken cancellationToken)
     {
         const string sql = "SELECT EXISTS (SELECT 1 FROM GitAccounts WHERE Name = @Name AND Id != @Id)";
         return db.ExecuteScalarAsync<bool>(sql, new { Name = name, Id = id.Format(), cancellationToken }, transaction: tx());
+    }
+
+    public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT EXISTS (SELECT 1 FROM GitAccounts WHERE Id = @Id)";
+        return db.ExecuteScalarAsync<bool>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
     }
 
     public async Task<IEnumerable<GitAccount>> GetAllAsync(CancellationToken cancellationToken)

@@ -29,7 +29,6 @@ public class GitRepositoryPatchTests : IntegrationTestBase
             description: "Original description",
             url: "https://github.com/citadel-p/citadel.git",
             defaultBranch: "main",
-            status: GitReposStatus.Valid,
             gitAccountId: gitAccount.Id,
             createdByActorId: Constants.SystemId);
 
@@ -49,7 +48,7 @@ public class GitRepositoryPatchTests : IntegrationTestBase
           "description": "Updated description",
           "url": "https://github.com/citadel-p/citadel-api.git",
           "defaultBranch": "develop",
-          "status": "Valid",
+          "webHookEnabled": true,
           "gitAccountId": "{{gitAccountId}}"
         }
         """;
@@ -80,7 +79,7 @@ public class GitRepositoryPatchTests : IntegrationTestBase
           "description": "No linked account",
           "url": "https://gitlab.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "status": "Unreachable",
+          "webHookEnabled": true,
           "gitAccountId": null
         }
         """;
@@ -109,7 +108,7 @@ public class GitRepositoryPatchTests : IntegrationTestBase
           "description": "Original description",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "status": "Valid",
+          "webHookEnabled": true,
           "gitAccountId": "{{gitAccountId}}"
         }
         """;
@@ -130,7 +129,7 @@ public class GitRepositoryPatchTests : IntegrationTestBase
           "description": "Original description",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "status": "Valid",
+          "webHookEnabled": true,
           "gitAccountId": "{{Guid.NewGuid()}}"
         }
         """;
@@ -151,7 +150,7 @@ public class GitRepositoryPatchTests : IntegrationTestBase
           "description": "Original description",
           "url": "https://gitlab.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "status": "Valid",
+          "webHookEnabled": true,
           "gitAccountId": "{{gitAccountId}}"
         }
         """;
@@ -174,7 +173,6 @@ public class GitRepositoryPatchTests : IntegrationTestBase
                 description: "Other repository",
                 url: "https://github.com/citadel-p/other.git",
                 defaultBranch: "main",
-                status: GitReposStatus.Valid,
                 gitAccountId: null,
                 createdByActorId: Constants.SystemId
             ), TestContext.Current.CancellationToken);
@@ -187,7 +185,7 @@ public class GitRepositoryPatchTests : IntegrationTestBase
           "description": "Original description",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "status": "Valid",
+          "webHookEnabled": true,
           "gitAccountId": "{{gitAccountId}}"
         }
         """;
@@ -208,7 +206,7 @@ public class GitRepositoryPatchTests : IntegrationTestBase
           "description": "Unknown repository",
           "url": "https://github.com/citadel-p/citadel.git",
           "defaultBranch": "main",
-          "status": "Valid",
+          "webHookEnabled": true,
           "gitAccountId": null
         }
         """;

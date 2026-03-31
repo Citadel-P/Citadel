@@ -102,6 +102,17 @@ public partial class DeploymentJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(AlertRuleCreated))]
 [JsonSerializable(typeof(AlertRuleUpdated))]
 [JsonSerializable(typeof(AlertRuleDeleted))]
+[JsonSerializable(typeof(RegistryRenamed))]
+[JsonSerializable(typeof(RegistryDeleted))]
+[JsonSerializable(typeof(RegistryUpdated))]
+[JsonSerializable(typeof(RegistryCreated))]
+[JsonSerializable(typeof(GitRepoCreated))]
+[JsonSerializable(typeof(GitRepoUpdated))]
+[JsonSerializable(typeof(GitRepoRenamed))]
+[JsonSerializable(typeof(GitRepoDeleted))]
+[JsonSerializable(typeof(GitRepoCloned))]
+[JsonSerializable(typeof(GitRepoPulled))]
+
 public partial class EventInfoJsonContext : JsonSerializerContext
 {
 }
@@ -164,7 +175,6 @@ public partial class AlertRuleJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(GitAuthConfiguration))]
 [JsonSerializable(typeof(GitRepository))]
 [JsonSerializable(typeof(RepoCommand))]
-[JsonSerializable(typeof(List<RepoCommand>))]
 public partial class GitJsonContext : JsonSerializerContext
 {
 }

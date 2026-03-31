@@ -38,6 +38,7 @@ export const resources = {
   deleteGitRepositories: { method: "DELETE", key: "deleteGitRepositories", params: ["params"], requiredParams: [], queryParams: [] },
   getGitRepository: { method: "GET", key: "getGitRepository", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   updateGitRepository: { method: "PATCH", key: "updateGitRepository", params: ["id","data","params"], requiredParams: ["id"], queryParams: [] },
+  getGitRepositoryConfig: { method: "GET", key: "getGitRepositoryConfig", params: ["id","params"], requiredParams: ["id"], queryParams: [] },
   listImages: { method: "GET", key: "listImages", params: ["platformId","params"], requiredParams: ["platformId"], queryParams: [] },
   getExternalRepositories: { method: "GET", key: "getExternalRepositories", params: ["registryName","params"], requiredParams: ["registryName"], queryParams: [] },
   getGhcrPackageVersions: { method: "GET", key: "getGhcrPackageVersions", params: ["registryName","packageName","params"], requiredParams: ["registryName","packageName"], queryParams: [] },

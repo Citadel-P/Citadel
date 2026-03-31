@@ -14,8 +14,8 @@ public sealed record GitRepositoryView(
     Guid? GitAccountId,
     bool WebHookEnabled,
     string? WebHookSecret,
-    IEnumerable<RepoCommand> OnClone,
-    IEnumerable<RepoCommand> OnPull,
+    RepoCommand? OnClone,
+    RepoCommand? OnPull,
     DateTime CreatedAt)
 {
     internal static GitRepositoryView Map(GitRepository gitRepository) => new(
@@ -32,4 +32,30 @@ public sealed record GitRepositoryView(
         gitRepository.OnClone,
         gitRepository.OnPull,
         gitRepository.CreatedAt);
+}
+
+
+public sealed record GitRepositoryConfigView(
+    Guid Id,
+    string Name,
+    string? Description,
+    string Url,
+    string DefaultBranch,
+    Guid? GitAccountId,
+    bool WebHookEnabled,
+    string? WebHookSecret,
+    RepoCommand? OnClone,
+    RepoCommand? OnPull)
+{
+    internal static GitRepositoryConfigView Map(GitRepository gitRepository) => new(
+        gitRepository.Id,
+        gitRepository.Name,
+        gitRepository.Description,
+        gitRepository.Url,
+        gitRepository.DefaultBranch ?? "main",
+        gitRepository.GitAccountId,
+        gitRepository.WebHookEnabled,
+        gitRepository.WebHookSecret,
+        gitRepository.OnClone,
+        gitRepository.OnPull);
 }

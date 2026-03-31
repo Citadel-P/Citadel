@@ -81,6 +81,7 @@ public static class ApplicationModule
             .AddSingleton<PlatformStreamManager>()
             .AddSingleton<ContainerStreamManager>()
             .AddSingleton<DockerDaemonStreamManager>()
+            .AddSingleton<GitRepositoryStreamManager>()
             .AddSingleton<IImageStreamManager>(s => s.GetRequiredService<ImageStreamManager>())
             .AddSingleton<IExecSessionManager>(s => s.GetRequiredService<ExecSessionManager>())
             .AddSingleton<IActivityStreamManager>(s => s.GetRequiredService<ActivityStreamManager>())
@@ -88,7 +89,8 @@ public static class ApplicationModule
             .AddSingleton<IPlatformStreamManager>(s => s.GetRequiredService<PlatformStreamManager>())
             .AddSingleton<IContainerStreamManager>(s => s.GetRequiredService<ContainerStreamManager>())
             .AddSingleton<IDeploymentStreamManager>(s => s.GetRequiredService<DeploymentStreamManager>())
-            .AddSingleton<IDockerDaemonStreamManager>(s => s.GetRequiredService<DockerDaemonStreamManager>());
+            .AddSingleton<IDockerDaemonStreamManager>(s => s.GetRequiredService<DockerDaemonStreamManager>())
+            .AddSingleton<IGitRepositoryStreamManager>(s => s.GetRequiredService<GitRepositoryStreamManager>());
 
     private static IServiceCollection AddBackgroundTasks(this IServiceCollection services)
     {
@@ -110,12 +112,17 @@ public static class ApplicationModule
             .AddHostedService<ImageSyncJob>()
             .AddHostedService<AlertRuleCacheWarmup>()
             .AddHostedService<ReconcilableResourceJob>()
+            .AddHostedService<GitRepoSyncJob>()
             .AddHostedService(s => s.GetRequiredService<IPlatformHealthMonitorJob>());
         services
             .AddSingleton<IPlatformHealthMonitorJob, PlatformHealthMonitorJob>()
             .AddSingleton(Channel.CreateBounded<ContainersStatBatch>(Helpers.ChannelDefaultOptions()))
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<ContainersStatBatch>>().Reader)
+
+            .AddSingleton(Channel.CreateBounded<GitRepoSyncRequest>(Helpers.ChannelDefaultOptions()))
+            .AddSingleton(s => s.GetRequiredService<Channel<GitRepoSyncRequest>>().Writer)
+            .AddSingleton(s => s.GetRequiredService<Channel<GitRepoSyncRequest>>().Reader)
             .AddSingleton(Channel.CreateBounded<UnmanagedContainerAlertRequest>(Helpers.ChannelDefaultOptions()))
             .AddSingleton(s => s.GetRequiredService<Channel<UnmanagedContainerAlertRequest>>().Writer)
             .AddSingleton(s => s.GetRequiredService<Channel<UnmanagedContainerAlertRequest>>().Reader)

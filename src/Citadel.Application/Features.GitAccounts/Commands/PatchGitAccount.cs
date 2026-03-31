@@ -93,7 +93,7 @@ internal sealed class PatchGitAccountHandler(IUnitOfWork unitOfWork) : ICommandH
         var patchedGitAccount = command.Patch.ApplyTo(gitAccount, GitJsonContext.Default.GitAccount);
         if (!string.Equals(gitAccount.Name, patchedGitAccount.Name, StringComparison.OrdinalIgnoreCase))
         {
-            var conflict = await unitOfWork.GitAccounts.ExistsAsync(command.Id, patchedGitAccount.Name, cancellationToken);
+            var conflict = await unitOfWork.GitAccounts.IsNameTakenAsync(command.Id, patchedGitAccount.Name, cancellationToken);
             if (conflict)
                 return Result.Failure<GitAccount>(new ConflictError("Name already exists"));
         }

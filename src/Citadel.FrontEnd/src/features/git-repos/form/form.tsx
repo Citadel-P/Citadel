@@ -1,4 +1,4 @@
-import { GitRepositoryInput, GitAccountView, GitTransport } from '@/api/generated/api.types';
+import { GitRepositoryInput, GitAccountView, GitTransport, GitRepositoryConfigView } from '@/api/generated/api.types';
 import {
   FormShell,
   defineField,
@@ -7,12 +7,13 @@ import {
   FieldInput,
   FieldTextArea,
 } from '@/components/custom/form-builder';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useMutate, useRead } from '@/lib/hooks';
 import { toast } from 'sonner';
 import { useParams, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MonacoToArrayEditor } from '@/lib/monaco';
 
 const GitAccountSelector = ({
   value,
@@ -61,7 +62,7 @@ const GitAccountSelector = ({
   );
 };
 
-export const GitRepoForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: GitRepositoryInput }) => {
+export const GitRepoForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'; metadataChanged?: boolean }) => {
   const id = useParams().id;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -70,13 +71,21 @@ export const GitRepoForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource
 
   const { mutateAsync: createGitRepository } = useMutate('createGitRepository');
   const { mutateAsync: updateGitRepository } = useMutate('updateGitRepository');
+  const { data: gitRepoCfg } = useRead('getGitRepositoryConfig', { id });
 
-  const original = useMemo(() => (resource ?? {}) as GitRepositoryInput, [resource]);
+  const resource: GitRepositoryConfigView | undefined = gitRepoCfg?.data;
+
+  const original = resource ?? ({} as GitRepositoryConfigView);
 
   const refreshData = useCallback(() => {
     localStorage.removeItem(`GitRepo:${id ?? 'new'}`);
-    queryClient.invalidateQueries({ queryKey: ['getGitRepository', { id }] });
+    queryClient.invalidateQueries({ queryKey: ['getGitRepositoryConfig', { id }] });
   }, [id, queryClient]);
+
+  useEffect(() => {
+    if (!metadataChanged) return;
+    refreshData();
+  }, [metadataChanged, refreshData]);
 
   const handleSave = async (payload: GitRepositoryInput) => {
     setIsPending(true);
@@ -173,6 +182,99 @@ export const GitRepoForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource
                 label: 'Git Account',
                 description: 'Optionally link a Git account for authentication.',
                 render: (val, set) => <GitAccountSelector value={val} onChange={(v) => set({ gitAccountId: v })} />,
+              }),
+            ],
+          }),
+
+          defineGroupField<GitRepositoryInput>({
+            id: 'on_pull',
+            label: 'On Pull',
+            description: 'On Pull',
+            items: [
+              defineField({
+                key: 'onPull.path',
+                label: 'Path',
+                description: 'Execute a shell command after pulling the repo. The given Cwd is relative to repo root.',
+                render: (val, set) => (
+                  <FieldInput
+                    value={val}
+                    onChange={(v) =>
+                      set((prev) => ({
+                        onPull: {
+                          ...prev.onPull!,
+                          path: v,
+                        },
+                      }))
+                    }
+                    placeholder="Command working directory"
+                  />
+                ),
+              }),
+              defineField({
+                key: 'onPull.commands',
+                label: 'Commands',
+                required: false,
+                render: (value, set) => (
+                  <MonacoToArrayEditor
+                    value={value}
+                    helperText="# Add multiple commands on new lines"
+                    language="string_list"
+                    onChange={(v: string[] | undefined) =>
+                      set((prev) => ({
+                        onPull: {
+                          ...prev.onPull!,
+                          commands: v ?? [],
+                        },
+                      }))
+                    }
+                  />
+                ),
+              }),
+            ],
+          }),
+
+          defineGroupField<GitRepositoryInput>({
+            id: 'on_clone',
+            label: 'On Clone',
+            items: [
+              defineField({
+                key: 'onClone.path',
+                label: 'Path',
+                description: 'Execute a shell command after cloning the repo. The given Cwd is relative to repo root.',
+                render: (val, set) => (
+                  <FieldInput
+                    value={val}
+                    onChange={(v) =>
+                      set((prev) => ({
+                        onClone: {
+                          ...prev.onClone!,
+                          path: v,
+                        },
+                      }))
+                    }
+                    placeholder="Command working directory"
+                  />
+                ),
+              }),
+              defineField({
+                key: 'onClone.commands',
+                label: 'Commands',
+                required: false,
+                render: (value, set) => (
+                  <MonacoToArrayEditor
+                    value={value}
+                    helperText="# Add multiple commands on new lines"
+                    language="string_list"
+                    onChange={(v: string[] | undefined) =>
+                      set((prev) => ({
+                        onClone: {
+                          ...prev.onClone!,
+                          commands: v ?? [],
+                        },
+                      }))
+                    }
+                  />
+                ),
               }),
             ],
           }),

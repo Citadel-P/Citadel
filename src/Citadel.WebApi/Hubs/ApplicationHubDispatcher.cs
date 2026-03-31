@@ -7,12 +7,15 @@ using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using Domain.Entities.Deployments;
+using Domain.Entities.Git;
 using Domain.Entities.Platforms;
 using Microsoft.AspNetCore.SignalR;
+using WebApi.Routes.Endpoints;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
+using WebApi.Routes.Endpoints.Resources.GitRepositories;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using static Hosting.Common.Constants;
@@ -166,6 +169,15 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
         return hubContext.Clients
             .Group(WellKnownSignalRGroups.AlertEventsGroup)
             .SendAsync("UnresolvedAlertCount", UnresolvedAlertsCountView.Map(count));
+    }
+    #endregion
+
+    #region GitRepo
+    public Task SendGitRepoInfo(GitRepository repository, string action = "update")
+    {
+        return hubContext.Clients
+           .Group(WellKnownSignalRGroups.GitRepoGroup(repository.Id))
+           .SendAsync("GitRepositoryInfoUpdated", GitRepositoryView.Map(repository), action);
     }
     #endregion
 }

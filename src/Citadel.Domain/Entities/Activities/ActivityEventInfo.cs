@@ -1,5 +1,6 @@
 ﻿using Domain.Contracts.Resources.Alerts;
 using Domain.Contracts.Resources.Deployments;
+using Domain.Contracts.Resources.Git;
 using Domain.Contracts.Resources.Registries;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
@@ -25,6 +26,13 @@ namespace Domain.Entities.Activities;
 [JsonDerivedType(typeof(RegistryCreated), nameof(ActivityEventType.RegistryCreated))]
 [JsonDerivedType(typeof(RegistryUpdated), nameof(ActivityEventType.RegistryUpdated))]
 [JsonDerivedType(typeof(RegistryDeleted), nameof(ActivityEventType.RegistryDeleted))]
+[JsonDerivedType(typeof(GitRepoCreated), nameof(ActivityEventType.GitRepoCreated))]
+[JsonDerivedType(typeof(GitRepoUpdated), nameof(ActivityEventType.GitRepoUpdated))]
+[JsonDerivedType(typeof(GitRepoRenamed), nameof(ActivityEventType.GitRepoRenamed))]
+[JsonDerivedType(typeof(GitRepoDeleted), nameof(ActivityEventType.GitRepoDeleted))]
+[JsonDerivedType(typeof(GitRepoCloned), nameof(ActivityEventType.GitRepoCloned))]
+[JsonDerivedType(typeof(GitRepoPulled), nameof(ActivityEventType.GitRepoPulled))]
+
 public abstract record ActivityEventInfo;
 
 public sealed record DeploymentCreated(DeploymentSnapshot Deployment) : ActivityEventInfo;
@@ -45,5 +53,9 @@ public sealed record RegistryRenamed(string OldName, string NewName) : ActivityE
 public sealed record RegistryDeleted(RegistrySnapshot Registry) : ActivityEventInfo;
 public sealed record RegistryUpdated(RegistrySnapshot OldRegistry, RegistrySnapshot NewRegistry) : ActivityEventInfo;
 public sealed record RegistryCreated(RegistrySnapshot Registry) : ActivityEventInfo;
-
-
+public sealed record GitRepoCreated(GitRepositorySnapshot GitRepo) : ActivityEventInfo;
+public sealed record GitRepoUpdated(GitRepositorySnapshot OldGitRepo, GitRepositorySnapshot NewGitRepo) : ActivityEventInfo;
+public sealed record GitRepoRenamed(string OldName, string NewName) : ActivityEventInfo;
+public sealed record GitRepoDeleted(GitRepositorySnapshot GitRepo) : ActivityEventInfo;
+public sealed record GitRepoCloned(GitRepositorySnapshot GitRepo, string? Reason) : ActivityEventInfo;
+public sealed record GitRepoPulled(GitRepositorySnapshot GitRepo, string? Reason) : ActivityEventInfo;

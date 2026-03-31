@@ -18,6 +18,7 @@ namespace Domain.Contracts.Interfaces;
 /// </summary>
 public interface IGitCliRepository
 {
+    Task<Result> TestConnectionAsync(string url, GitAccount? account = null, CancellationToken ct = default);
     Task<Result<string>> ResolveSnapshotCommitAsync(string repoPath, string branch, CancellationToken ct = default);
     Task<Result> CloneAsync(string url, string targetPath, string branch, GitAccount? account, CancellationToken ct = default);
     Task<Result> PullAsync(string repoPath, string branch, GitAccount? account, CancellationToken ct = default);

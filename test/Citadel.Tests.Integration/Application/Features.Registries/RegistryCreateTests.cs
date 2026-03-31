@@ -176,7 +176,7 @@ public class RegistryCreateTests : IntegrationTestBase
     //      "name": "R-NEW",
     //      "registryHost": "registry123:9999",
     //      "configuration": {
-    //        "$type": "Invalid$type",
+    //        "$type": "Degraded$type",
     //        "userName": "dummy-user",
     //        "PAT": "dummy-pat123"
     //      }

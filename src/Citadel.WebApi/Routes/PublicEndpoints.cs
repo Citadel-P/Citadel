@@ -118,7 +118,7 @@ public static class PublicEndpoints
             .WithName("getGitAccount");
 
         gitAccounts.MapGet("{id}/_cfg", GitAccounts.GetConfig)
-            .WithSummary("Get git account with its configuration")
+            .WithSummary("Get git account configuration")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -168,6 +168,14 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("getGitRepository");
+
+        gitRepositories.MapGet("{id}/_cfg", GitRepositories.GetConfig)
+            .WithSummary("Get Git repo configuration")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getGitRepositoryConfig");
 
         gitRepositories.MapPost("/", GitRepositories.Create)
             .WithSummary("Create a git repository")
@@ -386,7 +394,7 @@ public static class PublicEndpoints
             .WithName("getRegistry");
 
         registries.MapGet("{id}/_cfg", Registries.GetConfig)
-            .WithSummary("Get registry with it's configuration")
+            .WithSummary("Get registry configuration")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -603,7 +611,7 @@ public static class PublicEndpoints
             .WithName("getDeployment");
 
         deployment.MapGet("/{deploymentId}/_cfg", Deployments.GetConfig)
-            .WithSummary("Get deployment by Id")
+            .WithSummary("Get deployment configuration")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)

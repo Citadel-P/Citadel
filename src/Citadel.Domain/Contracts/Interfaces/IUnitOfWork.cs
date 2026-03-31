@@ -79,6 +79,7 @@ public interface IStackRepository
 public interface IGitReposRepository
 {
     Task<GitRepository?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<GitRepository?> GetWithAccountAsync(Guid id, CancellationToken cancellationToken);
     Task<GitRepository?> GetByNameAsync(string name, CancellationToken cancellationToken);
     Task<IEnumerable<GitRepository>> GetAllAsync(CancellationToken cancellationToken);
     Task<IEnumerable<GitRepository>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
@@ -96,7 +97,8 @@ public interface IGitAccountRepository
     Task<IEnumerable<GitAccount>> GetAllAsync(CancellationToken cancellationToken);
     Task<IEnumerable<GitAccount>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
-    Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken);
+    Task<bool> IsNameTakenAsync(Guid id, string name, CancellationToken cancellationToken);
     Task<int> AddAsync(GitAccount gitAccount, CancellationToken cancellationToken);
     Task<int> UpdateAsync(GitAccount gitAccount, CancellationToken cancellationToken);
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);

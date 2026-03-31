@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260327205054_migration0001")]
+    [Migration("20260329085651_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -767,6 +767,18 @@ namespace Infrastructure.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("ControlStartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ControlState")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Idle");
+
+                    b.Property<string>("ControlTriggeredBy")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
@@ -791,6 +803,17 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("OnClone")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OnPull")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0L);
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -799,7 +822,17 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("WebHookEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("WebHookSecret")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("ControlTriggeredBy");
 
                     b.HasIndex("CreatedByActorId");
 
@@ -1472,6 +1505,11 @@ namespace Infrastructure.Migrations.Migrations
 
             modelBuilder.Entity("GitRepository", b =>
                 {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("ControlTriggeredBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Actor", null)
                         .WithMany()
                         .HasForeignKey("CreatedByActorId")

@@ -453,18 +453,32 @@ namespace Infrastructure.Migrations.Migrations
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
+                    ControlStartedAt = table.Column<long>(type: "INTEGER", nullable: true),
+                    ControlState = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true, defaultValue: "Idle"),
+                    ControlTriggeredBy = table.Column<string>(type: "TEXT", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     CreatedByActorId = table.Column<string>(type: "TEXT", nullable: false),
                     DefaultBranch = table.Column<string>(type: "TEXT", nullable: false),
                     Description = table.Column<string>(type: "TEXT", maxLength: 600, nullable: true),
                     GitAccountId = table.Column<string>(type: "TEXT", nullable: true),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
+                    OnClone = table.Column<string>(type: "TEXT", nullable: true),
+                    OnPull = table.Column<string>(type: "TEXT", nullable: true),
+                    RowVersion = table.Column<long>(type: "INTEGER", nullable: false, defaultValue: 0L),
                     Status = table.Column<string>(type: "TEXT", nullable: false),
-                    Url = table.Column<string>(type: "TEXT", nullable: false)
+                    Url = table.Column<string>(type: "TEXT", nullable: false),
+                    WebHookEnabled = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: false),
+                    WebHookSecret = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_GitRepositories", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_GitRepositories_Actors_ControlTriggeredBy",
+                        column: x => x.ControlTriggeredBy,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_GitRepositories_Actors_CreatedByActorId",
                         column: x => x.CreatedByActorId,
@@ -873,6 +887,11 @@ namespace Infrastructure.Migrations.Migrations
                 table: "GitAccounts",
                 column: "Name",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_GitRepositories_ControlTriggeredBy",
+                table: "GitRepositories",
+                column: "ControlTriggeredBy");
 
             migrationBuilder.CreateIndex(
                 name: "IX_GitRepositories_CreatedByActorId",

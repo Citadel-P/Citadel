@@ -143,6 +143,12 @@ public sealed class ActivityEvent : IAuditedEntity
             (ActivityEventType.RegistryCreated, RegistryCreated) => true,
             (ActivityEventType.RegistryUpdated, RegistryUpdated) => true,
 
+            (ActivityEventType.GitRepoCreated, GitRepoCreated) => true,
+            (ActivityEventType.GitRepoUpdated, GitRepoUpdated) => true,
+            (ActivityEventType.GitRepoRenamed, GitRepoRenamed) => true,
+            (ActivityEventType.GitRepoDeleted, GitRepoDeleted) => true,
+            (ActivityEventType.GitRepoCloned, GitRepoCloned) => true,
+            (ActivityEventType.GitRepoPulled, GitRepoPulled) => true,
 
             _ => false
         };

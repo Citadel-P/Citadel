@@ -6,6 +6,7 @@ using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using Domain.Entities.Deployments;
+using Domain.Entities.Git;
 using Domain.Entities.Platforms;
 
 namespace Application.Services.Abstractions;
@@ -61,5 +62,9 @@ public interface IApplicationHubDispatcher
 
     #region Exec Sessions
     Task SendExecOutput(string containerId, string sessionId, byte[] data);
+    #endregion
+
+    #region GitRepo
+    Task SendGitRepoInfo(GitRepository repository, string action = "update");
     #endregion
 }

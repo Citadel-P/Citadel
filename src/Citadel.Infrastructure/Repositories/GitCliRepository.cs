@@ -31,6 +31,22 @@ internal class GitCliRepository(IProcessService processService) : IGitCliReposit
     // accountId -> resolved key file path (content-addressed); rewrites only when the key changes
     private static readonly ConcurrentDictionary<Guid, string> SshKeyCache = new();
 
+    public async Task<Result> TestConnectionAsync(string url, GitAccount? account, CancellationToken ct = default)
+    {
+        var (args, env) = PrepareRemoteCmd(account);
+        // ls-remote only checks connectivity and refs, it doesn't download the repo
+        args.AddRange(["ls-remote", "-h", url]);
+
+        var result = await processService.ExecuteAsync(GitExecutable, args, env, null, ct);
+
+        if (!result.IsSuccess)
+        {
+            return Result.Failure($"Could not connect to repository. Check your URL and credentials. Error: {result.StandardError}");
+        }
+
+        return Result.Success();
+    }
+
     public async Task<Result<string>> ResolveSnapshotCommitAsync(string repoPath, string branch, CancellationToken ct = default)
     {
         var refName = ToRefName(branch);

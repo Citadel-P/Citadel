@@ -219,18 +219,23 @@ CREATE TABLE "AlertRuleStates" (
 
 CREATE TABLE "GitRepositories" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_GitRepositories" PRIMARY KEY,
+    "ControlStartedAt" INTEGER NULL,
+    "ControlState" TEXT NULL DEFAULT 'Idle',
+    "ControlTriggeredBy" TEXT NULL,
     "CreatedAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     "CreatedByActorId" TEXT NOT NULL,
     "DefaultBranch" TEXT NOT NULL,
     "Description" TEXT NULL,
     "GitAccountId" TEXT NULL,
     "Name" TEXT NOT NULL,
-    "Status" TEXT NOT NULL,
-    "WebHookEnabled" INTEGER NOT NULL DEFAULT 0,
-    "WebHookSecret" TEXT NULL,
     "OnClone" TEXT NULL,
     "OnPull" TEXT NULL,
+    "RowVersion" INTEGER NOT NULL DEFAULT 0,
+    "Status" TEXT NOT NULL,
     "Url" TEXT NOT NULL,
+    "WebHookEnabled" INTEGER NOT NULL DEFAULT 0,
+    "WebHookSecret" TEXT NULL,
+    CONSTRAINT "FK_GitRepositories_Actors_ControlTriggeredBy" FOREIGN KEY ("ControlTriggeredBy") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_GitRepositories_Actors_CreatedByActorId" FOREIGN KEY ("CreatedByActorId") REFERENCES "Actors" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_GitRepositories_GitAccounts_GitAccountId" FOREIGN KEY ("GitAccountId") REFERENCES "GitAccounts" ("Id") ON DELETE SET NULL
 );
@@ -463,6 +468,8 @@ CREATE INDEX "IX_GitAccounts_CreatedByActorId" ON "GitAccounts" ("CreatedByActor
 
 CREATE UNIQUE INDEX "IX_GitAccounts_Name" ON "GitAccounts" ("Name");
 
+CREATE INDEX "IX_GitRepositories_ControlTriggeredBy" ON "GitRepositories" ("ControlTriggeredBy");
+
 CREATE INDEX "IX_GitRepositories_CreatedByActorId" ON "GitRepositories" ("CreatedByActorId");
 
 CREATE INDEX "IX_GitRepositories_GitAccountId" ON "GitRepositories" ("GitAccountId");
@@ -514,7 +521,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260327205054_migration0001', '10.0.5');
+VALUES ('20260329085651_migration0001', '10.0.5');
 
 COMMIT;
 

@@ -9,13 +9,12 @@ public sealed record GitRepositoryInput(
     string? Description,
     string Url,
     string DefaultBranch,
-    GitReposStatus Status,
     Guid? GitAccountId,
     bool WebHookEnabled,
     string? WebHookSecret,
-    IEnumerable<RepoCommand>? OnClone,
-    IEnumerable<RepoCommand>? OnPull)
+    RepoCommand? OnClone,
+    RepoCommand? OnPull)
 {
-    internal CreateGitRepository ToCommand() => new(Name, Description, Url, DefaultBranch, Status, GitAccountId, WebHookEnabled, WebHookSecret, OnClone, OnPull);
+    internal CreateGitRepository ToCommand() => new(Name, Description, Url, DefaultBranch, GitAccountId, WebHookEnabled, WebHookSecret, OnClone, OnPull);
 
 }
