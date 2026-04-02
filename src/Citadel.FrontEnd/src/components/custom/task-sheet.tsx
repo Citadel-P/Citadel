@@ -283,6 +283,38 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
       Registry renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
     </span>
   ),
+
+  GitRepoCreated: (info, activity) => (
+    <SpecViewer spec={info.gitRepo} resourceId={activity.resourceId} title="Initial configuration" />
+  ),
+
+  GitRepoUpdated: (info) => (
+    <MonacoDiff original={info.oldGitRepo} modified={info.newGitRepo} format="json" title="Configuration changes" />
+  ),
+
+  GitRepoDeleted: (info, activity) => (
+    <SpecViewer spec={info.gitRepo} resourceId={activity.resourceId} title="Deleted configuration" />
+  ),
+
+  GitRepoRenamed: (info) => (
+    <span className="text-sm text-muted-foreground">
+      Repository renamed from <b>{info.oldName}</b> to <b>{info.newName}</b>.
+    </span>
+  ),
+
+  GitRepoCloned: (info, activity) => (
+    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+      <SpecViewer spec={info.gitRepo} resourceId={activity.resourceId} title="Cloned configuration" />
+      {info.reason && <span>{info.reason}</span>}
+    </div>
+  ),
+
+  GitRepoPulled: (info, activity) => (
+    <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+      <SpecViewer spec={info.gitRepo} resourceId={activity.resourceId} title="Pulled configuration" />
+      {info.reason && <span>{info.reason}</span>}
+    </div>
+  ),
 };
 
 function KeyValueBlock({ label, value }: { label: string; value: string | any[] }) {
@@ -300,6 +332,9 @@ function ActivityInfo({ activity }: { activity: ActivityView }) {
   const { info } = activity;
 
   const renderer = activityInfoRenderers[info.$type];
+  if (!renderer) {
+    return <SpecViewer spec={info} resourceId={activity.resourceId} title="Activity details" />;
+  }
 
   return renderer(info as never, activity);
 }
@@ -389,10 +424,10 @@ const taskRenderers: Record<string, (props: { payload: any; type: ResourceType }
 
 export function TaskSheet({ type }: { type: ResourceType }) {
   const { state, close } = useTaskSheet(type);
-  const side = type === 'Activity' || 'AlertEvent' ? 'top' : 'bottom';
 
   if (!state.open || !state.task) return null;
 
+  const side = state.task.kind === 'activity' || state.task.kind === 'alertEvent' ? 'top' : 'bottom';
   const Renderer = taskRenderers[state.task.kind];
 
   return (

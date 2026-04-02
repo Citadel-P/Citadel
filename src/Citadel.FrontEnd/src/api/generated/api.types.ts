@@ -272,7 +272,7 @@ export enum ActivityResourceType {
   Deployment = "Deployment",
   Stack = "Stack",
   AlertRule = "AlertRule",
-  GitRepo = "GitRepo",
+  GitRepository = "GitRepository",
 }
 
 export enum ActivityEventType {
@@ -1748,6 +1748,7 @@ export interface GitRepositoryView {
   onPull: null | RepoCommand;
   /** @format date-time */
   createdAt: any;
+  controlState: ResourceControlState;
 }
 
 export interface GraphDriverDataInfo {

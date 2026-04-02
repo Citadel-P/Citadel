@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/ui/data-table';
-import { GitRepositoryView, GitReposStatus } from '@/api/generated/api.types';
+import { GitRepositoryView, GitReposStatus, ResourceControlState } from '@/api/generated/api.types';
 import SortableCell from '@/components/custom/sortable-cell';
 import { ColumnDef } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -95,7 +95,7 @@ const RepoNameRow = ({ repo }: { repo: GitRepositoryView }) => {
 
   return (
     <div className="flex items-center gap-1">
-      <StateIndicator value={status} />
+      <StateIndicator value={status} isProcessing={repo.controlState === ResourceControlState.Processing} />
       <Link to={`../git-repos/edit/${repo.id}`} className="hover:underline">
         {repo.name}
       </Link>

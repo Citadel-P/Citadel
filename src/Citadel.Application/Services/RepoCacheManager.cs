@@ -17,6 +17,8 @@ internal interface IRepoCacheManager
     /// </summary>
     /// <returns>The resolved commit hash (SHA)</returns>
     Task<RepoSyncResult> SynchronizeAsync(GitRepository repo, GitAccount? account, CancellationToken ct = default);
+    Task DeleteCacheAsync(GitRepository repo, CancellationToken ct = default);
+    Task DeleteCacheAsync(string path, CancellationToken ct = default);
 }
 
 internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCacheManager> logger) : IRepoCacheManager
@@ -66,6 +68,24 @@ internal sealed class RepoCacheManager(IGitCliRepository gitCli, ILogger<RepoCac
                 return new RepoSyncResult(Operation: operation, Error: hashError.Message);
 
             return new RepoSyncResult(operation, hash, Success: true);
+        }
+        finally
+        {
+            semaphore.Release();
+        }
+    }
+
+    public Task DeleteCacheAsync(string path, CancellationToken ct = default)
+        => EnsureDeletedAsync(path, ct);
+
+    public async Task DeleteCacheAsync(GitRepository repo, CancellationToken ct = default)
+    {
+        var semaphore = _repoLocks.GetOrAdd(repo.Id, _ => new SemaphoreSlim(1, 1));
+        await semaphore.WaitAsync(ct);
+
+        try
+        {
+            await EnsureDeletedAsync(repo.GetCachePath(), ct);
         }
         finally
         {

@@ -93,5 +93,6 @@ internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, INotificationQueu
         // Notify
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return deployment;
+        // todo: send create notification
     }
 }

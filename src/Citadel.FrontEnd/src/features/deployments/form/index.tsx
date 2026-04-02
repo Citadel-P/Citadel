@@ -37,8 +37,8 @@ export const DeploymentFormComponents: RequiredFormComponents = {
       Indicator: ({ resource }: { resource: RequiredFormFields }) => {
         return (
           <StateIndicator
-            value={resource.status as any}
-            isProcessing={(resource as any).controlState === ResourceControlState.Processing}
+            value={(resource as DeploymentView).status}
+            isProcessing={(resource as DeploymentView).controlState === ResourceControlState.Processing}
           />
         );
       },

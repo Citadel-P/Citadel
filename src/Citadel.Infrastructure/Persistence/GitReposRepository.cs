@@ -63,16 +63,15 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
             
             SELECT 
                 r.*,
-                a.GitAccount_Id,
-                a.GitAccount_Name,
-                a.GitAccount_Domain,
-                a.GitAccount_Transport,
-                a.GitAccount_AuthType,
-                a.GitAccount_Configuration
+                a.Name AS GitAccount_Name,
+                a.Domain AS GitAccount_Domain,
+                a.Transport AS GitAccount_Transport,
+                a.AuthType AS GitAccount_AuthType,
+                a.Configuration AS GitAccount_Configuration
             FROM GitRepositories r 
             LEFT JOIN GitAccounts a
             ON r.GitAccountId = a.Id
-            WHERE Id = @Id LIMIT 1
+            WHERE r.Id = @Id LIMIT 1
             """;
             
         var result = await db.QuerySingleOrDefaultAsync<GitRepositoryDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());

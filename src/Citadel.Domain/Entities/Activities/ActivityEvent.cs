@@ -6,9 +6,6 @@ namespace Domain.Entities.Activities;
 
 public sealed class ActivityEvent : IAuditedEntity
 {
-    private static readonly ActivityResourceType[] _resourceTypes =
-        Enum.GetValues<ActivityResourceType>();
-
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid? PlatformId { get; private set; }
     public Guid? ResourceId { get; private set; }
@@ -64,16 +61,47 @@ public sealed class ActivityEvent : IAuditedEntity
 
     public static ActivityResourceType GetResourceType(ActivityEventType eventType)
     {
-        var name = eventType.ToString();
-
-        foreach (var resource in _resourceTypes)
+        return eventType switch
         {
-            if (name.StartsWith(resource.ToString(), StringComparison.Ordinal))
-                return resource;
-        }
+            ActivityEventType.DeploymentCreated
+            or ActivityEventType.DeploymentUpdated
+            or ActivityEventType.DeploymentRenamed
+            or ActivityEventType.DeploymentDeleted
+            or ActivityEventType.DeploymentStarted
+            or ActivityEventType.DeploymentStopped
+            or ActivityEventType.DeploymentPaused
+            or ActivityEventType.DeploymentApplied
+            or ActivityEventType.DeploymentDegraded
+                => ActivityResourceType.Deployment,
 
-        throw new InvalidOperationException(
-            $"EventType '{eventType}' does not map to a ResourceType.");
+            ActivityEventType.PlatformConnected
+            or ActivityEventType.PlatformDisconnected
+            or ActivityEventType.PlatformRenamed
+                => ActivityResourceType.Platform,
+
+            ActivityEventType.RegistryCreated
+            or ActivityEventType.RegistryRenamed
+            or ActivityEventType.RegistryUpdated
+            or ActivityEventType.RegistryDeleted
+                => ActivityResourceType.Registry,
+
+            ActivityEventType.AlertRuleCreated
+            or ActivityEventType.AlertRuleUpdated
+            or ActivityEventType.AlertRuleDeleted
+            or ActivityEventType.AlertRuleRenamed
+                => ActivityResourceType.AlertRule,
+
+            ActivityEventType.GitRepoCreated
+            or ActivityEventType.GitRepoUpdated
+            or ActivityEventType.GitRepoDeleted
+            or ActivityEventType.GitRepoRenamed
+            or ActivityEventType.GitRepoPulled
+            or ActivityEventType.GitRepoCloned
+                => ActivityResourceType.GitRepository,
+
+            _ => throw new InvalidOperationException(
+                $"EventType '{eventType}' does not map to a ResourceType.")
+        };
     }
 
     public static ActivityEvent FromPersistence(

@@ -1,16 +1,33 @@
 ﻿using System.Text;
+using Application.Services;
+using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Git;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using Moq;
+using System.Threading.Channels;
 
 namespace Tests.Integration.Application.Features.GitRepositories;
 
 public class GitRepositoryPatchTests : IntegrationTestBase
 {
+    private readonly Mock<IRepoCacheManager> _repoCacheManagerMock = new();
+    private readonly Channel<GitRepoSyncRequest> _gitSyncChannel = Channel.CreateUnbounded<GitRepoSyncRequest>();
     private Guid gitRepositoryId;
     private Guid gitAccountId;
+
+    protected override void ConfigureTestServices(IServiceCollection services)
+    {
+        services.RemoveAll<IHostedService>();
+        services.AddSingleton(_repoCacheManagerMock.Object);
+        services.AddSingleton(_gitSyncChannel);
+        services.AddSingleton(s => s.GetRequiredService<Channel<GitRepoSyncRequest>>().Reader);
+        services.AddSingleton(s => s.GetRequiredService<Channel<GitRepoSyncRequest>>().Writer);
+    }
 
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)
     {
@@ -67,7 +84,75 @@ public class GitRepositoryPatchTests : IntegrationTestBase
         Assert.Equal("UpdatedName", gitRepository.Name);
         Assert.Equal("Updated description", gitRepository.Description);
         Assert.Equal("develop", gitRepository.DefaultBranch);
+        Assert.Equal(ResourceControlState.Processing, gitRepository.ControlState);
         await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Patch_GitRepository_When_Url_Changes_Deletes_Previous_Cache_And_Records_Update_Activity()
+    {
+        var patchJson = $$"""
+        {
+          "name": "OriginalName",
+          "description": "Original description",
+          "url": "https://github.com/citadel-p/citadel-api.git",
+          "defaultBranch": "main",
+          "webHookEnabled": false,
+          "gitAccountId": "{{gitAccountId}}"
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync($"/api/v1/gitRepositories/{gitRepositoryId}", content, cancellationToken: TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        _repoCacheManagerMock.Verify(x => x.DeleteCacheAsync("/app/data/repos/citadel", It.IsAny<CancellationToken>()), Times.Once);
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var activities = await uow.ActivityEventRepository.GetPagedAsync(
+            gitRepositoryId,
+            ActivityResourceType.GitRepository,
+            ActivityEventType.GitRepoUpdated,
+            1,
+            10,
+            TestContext.Current.CancellationToken);
+
+        Assert.Single(activities.Items);
+        Assert.True(_gitSyncChannel.Reader.TryRead(out var syncRequest));
+        Assert.Equal(gitRepositoryId, syncRequest.RepoId);
+    }
+
+    [Fact]
+    public async Task Patch_GitRepository_When_Name_Changes_Records_Rename_Activity()
+    {
+        var patchJson = $$"""
+        {
+          "name": "RenamedRepo",
+          "description": "Original description",
+          "url": "https://github.com/citadel-p/citadel.git",
+          "defaultBranch": "main",
+          "webHookEnabled": false,
+          "gitAccountId": "{{gitAccountId}}"
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync($"/api/v1/gitRepositories/{gitRepositoryId}", content, cancellationToken: TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var activities = await uow.ActivityEventRepository.GetPagedAsync(
+            gitRepositoryId,
+            ActivityResourceType.GitRepository,
+            ActivityEventType.GitRepoRenamed,
+            1,
+            10,
+            TestContext.Current.CancellationToken);
+
+        Assert.Single(activities.Items);
+        Assert.False(_gitSyncChannel.Reader.TryRead(out _));
     }
 
     [Fact]

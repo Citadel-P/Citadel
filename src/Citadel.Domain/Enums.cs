@@ -412,7 +412,7 @@ public enum ActivityResourceType
     Deployment,
     Stack,
     AlertRule,
-    GitRepo
+    GitRepository
 }
 
 public enum ActivityEventType
@@ -557,7 +557,7 @@ public enum GitTransport
 public enum GitReposStatus
 {
     Unknown,
-    Processing,
+    Pending,
     Created,
     Healthy,
     Degraded

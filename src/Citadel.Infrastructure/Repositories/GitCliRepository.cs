@@ -49,16 +49,24 @@ internal class GitCliRepository(IProcessService processService) : IGitCliReposit
 
     public async Task<Result<string>> ResolveSnapshotCommitAsync(string repoPath, string branch, CancellationToken ct = default)
     {
-        var refName = ToRefName(branch);
-        var args = new[] { "-C", repoPath, "rev-parse", refName };
-        var result = await processService.ExecuteAsync(GitExecutable, args, GitEnv, "", ct);
-
-        if (!result.IsSuccess)
+        var candidates = new[]
         {
-            var error = $"Failed to resolve commit hash for repo at {repoPath} and branch {branch}. ExitCode={result.ExitCode}. Error={result.StandardError}";
-            return Result.Failure<string>(error);
+            $"refs/heads/{branch}",
+            $"refs/remotes/origin/{branch}",
+            "HEAD"
+        };
+
+        foreach (var candidate in candidates)
+        {
+            var args = new[] { "-C", repoPath, "rev-parse", candidate };
+            var result = await processService.ExecuteAsync(GitExecutable, args, GitEnv, "", ct);
+
+            if (result.IsSuccess)
+                return Result.Success(result.StandardOutput.Trim());
         }
-        return Result.Success(result.StandardOutput.Trim());
+
+        var error = $"Failed to resolve commit hash for repo at {repoPath} and branch {branch}. Tried refs/heads/{branch}, refs/remotes/origin/{branch}, and HEAD.";
+        return Result.Failure<string>(error);
     }
 
     public async Task<Result> CloneAsync(string url, string targetPath, string branch, GitAccount? account, CancellationToken ct = default)
@@ -156,25 +164,6 @@ internal class GitCliRepository(IProcessService processService) : IGitCliReposit
 
         return keyFile;
     }
-
-    private static string ToRefName(string branch)
-    {
-        var hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(branch)));
-        return $"refs/citadel/{SanitizeRef(branch)}_{hash[..8]}";
-    }
-
-    private static string SanitizeRef(string branch)
-    {
-        return string.Create(branch.Length, branch, static (span, src) =>
-        {
-            for (var i = 0; i < src.Length; i++)
-            {
-                var c = src[i];
-                span[i] = char.IsLetterOrDigit(c) || c is '-' or '_' or '/' ? c : '_';
-            }
-        });
-    }
-
     private static void SetKeyFilePermissions(string keyFile)
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))

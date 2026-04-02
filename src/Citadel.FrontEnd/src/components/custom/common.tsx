@@ -21,6 +21,7 @@ import {
   Cable,
   Check,
   ChevronDown,
+  GitBranch,
   Info,
   Layers,
   LucideIcon,
@@ -651,6 +652,7 @@ export const TargetCell = ({
     [ActivityResourceType.Registry]: { Icon: Cable, path: `/registries/edit/${resourceId}` },
     [ActivityResourceType.Platform]: { Icon: Server, path: `/platforms/edit/${resourceId}` },
     [ActivityResourceType.Stack]: { Icon: Layers, path: `/stacks/edit/${resourceId}` },
+    [ActivityResourceType.GitRepository]: { Icon: GitBranch, path: `/git-repos/edit/${resourceId}` },
   };
 
   const config = resourceConfig[resourceType];

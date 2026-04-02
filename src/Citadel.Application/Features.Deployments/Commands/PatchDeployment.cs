@@ -1,5 +1,4 @@
 ﻿using Application.Features.Deployments.Notifications;
-using Application.Services;
 using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
@@ -88,6 +87,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
 
         // Add activity
         ActivityEvent? activity = null;
+        bool descChanged = !string.IsNullOrEmpty(patchedDeployment.Description) && string.Compare(deployment.Description, patchedDeployment.Description, StringComparison.OrdinalIgnoreCase) != 0;
         if (!string.IsNullOrEmpty(patchedDeployment.Name) && string.Compare(deployment.Name, patchedDeployment.Name, StringComparison.OrdinalIgnoreCase) != 0)
         {
             activity = new ActivityEvent(
@@ -100,6 +100,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
                info: new DeploymentRenamed(deployment.Name, patchedDeployment.Name)
            );
         }
+        
         else if(deployment.Spec != null && patchedDeployment.Spec != null)
         {
             activity = new ActivityEvent(
@@ -112,9 +113,6 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
                 info: new DeploymentUpdated(deployment.ToSnapshot(), patchedDeployment.ToSnapshot(command.Id))
             );
         }
-        
-        if (activity != null)
-            await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
 
         deployment.PartialUpdate(
             name: patchedDeployment.Name, 
@@ -123,7 +121,9 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
             spec: patchedDeployment.Spec);
 
         await unitOfWork.Deployments.UpdateAsync(deployment, cancellationToken);
-        
+
+        if (activity != null)
+            await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
 
         await unitOfWork.CommitAsync(cancellationToken);
 
@@ -131,7 +131,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
         
         // Notify
         await notificationQueue.EnqueueAsync(workItem, cancellationToken);
-        if (activity != null)
+        if (activity != null && !descChanged)
             await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return deployment;
     }

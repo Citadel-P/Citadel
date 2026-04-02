@@ -1,4 +1,4 @@
-import { Activity, Cable, Layers, Megaphone, MoveUpRight, Rocket, Server, SquareStack } from 'lucide-react';
+import { Activity, Cable, GitBranch, Layers, Megaphone, MoveUpRight, Rocket, Server, SquareStack } from 'lucide-react';
 import { useMemo } from 'react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useActivitiesGroup } from './hooks/useActivitiesGroup';
@@ -49,6 +49,7 @@ function SearchSection() {
       [ActivityResourceType.Platform]: Server,
       [ActivityResourceType.Stack]: Layers,
       [ActivityResourceType.AlertRule]: Megaphone,
+      [ActivityResourceType.GitRepository]: GitBranch,
     };
 
     return Object.values(ActivityResourceType).map((t) => ({

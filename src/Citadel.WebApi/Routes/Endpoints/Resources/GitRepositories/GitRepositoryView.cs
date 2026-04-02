@@ -16,7 +16,8 @@ public sealed record GitRepositoryView(
     string? WebHookSecret,
     RepoCommand? OnClone,
     RepoCommand? OnPull,
-    DateTime CreatedAt)
+    DateTime CreatedAt,
+    ResourceControlState ControlState)
 {
     internal static GitRepositoryView Map(GitRepository gitRepository) => new(
         gitRepository.Id,
@@ -31,7 +32,8 @@ public sealed record GitRepositoryView(
         gitRepository.WebHookSecret,
         gitRepository.OnClone,
         gitRepository.OnPull,
-        gitRepository.CreatedAt);
+        gitRepository.CreatedAt,
+        gitRepository.ControlState);
 }
 
 

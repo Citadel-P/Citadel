@@ -18,9 +18,8 @@ internal sealed record GitRepositoryDto(
     long? ControlStartedAt,
     Guid? ControlTriggeredBy,
     long RowVersion,
-    Guid GitAccount_Id,
-    string GitAccount_Name,
-    string GitAccount_Domain,
-    string GitAccount_Transport,
-    string GitAccount_AuthType,
-    string GitAccount_Configuration);
+    string? GitAccount_Name,
+    string? GitAccount_Domain,
+    string? GitAccount_Transport,
+    string? GitAccount_AuthType,
+    string? GitAccount_Configuration);

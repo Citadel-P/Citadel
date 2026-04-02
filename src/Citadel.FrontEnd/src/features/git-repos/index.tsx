@@ -28,6 +28,7 @@ import { ActionBar } from '@/components/custom/action-bar';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { FieldInput, FieldTextArea, ItemSelector } from '@/components/custom/form-builder';
+import { useGitReposGroup } from './hooks/useGitReposGroup';
 
 const EMPTY_ACCOUNT: GitAccountInput = {
   name: '',
@@ -464,8 +465,8 @@ export const GitRepoComponents: RequiredComponents = {
     addButtonTitle: 'Add Repository',
   },
   useData(): ResourceDataHookResult<GitRepositoryView> {
-    const { data, isLoading } = useRead('listGitRepositories');
-    return { items: data?.data?.gitRepositories ?? [], isLoading };
+    const { gitRepos, isLoading } = useGitReposGroup();
+    return { items: gitRepos ?? [], isLoading };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

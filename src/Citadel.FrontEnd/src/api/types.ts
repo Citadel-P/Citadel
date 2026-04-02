@@ -34,7 +34,7 @@ export const PluralResourceMap = {
   Alert: 'Alerts',
   Stack: 'Stacks',
   AlertChannel: 'AlertChannels',
-  GitRepository: 'Git Repos',
+  GitRepository: 'GitRepositories',
   GitAccount: 'GitAccounts',
 } as const satisfies Record<ResourceType, string>;
 

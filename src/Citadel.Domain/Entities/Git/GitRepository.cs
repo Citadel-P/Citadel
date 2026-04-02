@@ -42,7 +42,18 @@ public class GitRepository(
     #endregion
 
     // Helper for the RepoCache path
-    public string GetCachePath() => $"/data/repos/{Id}";
+    public string GetCachePath()
+    {
+        var repositoryName = ExtractRepositoryName(Url);
+        if (!string.IsNullOrWhiteSpace(repositoryName))
+            return $"/app/data/repos/{repositoryName}";
+
+        var fallbackName = SanitizeDirectoryName(Name);
+        if (!string.IsNullOrWhiteSpace(fallbackName))
+            return $"/app/data/repos/{fallbackName}";
+
+        return $"/app/data/repos/{Id}";
+    }
 
     public void UpdateMetadata(string name, string? description, string defaultBranch, GitReposStatus status)
     {
@@ -95,7 +106,7 @@ public class GitRepository(
 
     public void MarkProcessing(Guid controlTriggeredBy)
     {
-        Status = GitReposStatus.Processing;
+        Status = GitReposStatus.Pending;
         ControlTriggeredBy = controlTriggeredBy;
         ControlState = ResourceControlState.Processing;
         ControlStartedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -155,6 +166,47 @@ public class GitRepository(
         return normalizedUrl.EndsWith(".git", StringComparison.OrdinalIgnoreCase)
             ? normalizedUrl[..^4]
             : normalizedUrl;
+    }
+
+    private static string ExtractRepositoryName(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return string.Empty;
+
+        string candidate;
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            candidate = uri.AbsolutePath.TrimEnd('/');
+            var separatorIndex = candidate.LastIndexOf('/');
+            candidate = separatorIndex >= 0 ? candidate[(separatorIndex + 1)..] : candidate;
+        }
+        else
+        {
+            var normalized = url.Trim().TrimEnd('/');
+            var separatorIndex = normalized.LastIndexOfAny(['/', ':']);
+            candidate = separatorIndex >= 0 ? normalized[(separatorIndex + 1)..] : normalized;
+        }
+
+        return SanitizeDirectoryName(candidate);
+    }
+
+    private static string SanitizeDirectoryName(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var result = string.Create(value.Length, value, static (span, source) =>
+        {
+            for (var i = 0; i < source.Length; i++)
+            {
+                var c = source[i];
+                span[i] = char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '-';
+            }
+        }).Trim('-');
+
+        return result.EndsWith(".git", StringComparison.OrdinalIgnoreCase)
+            ? result[..^4]
+            : result;
     }
 }
 

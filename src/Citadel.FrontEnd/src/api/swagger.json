@@ -8915,7 +8915,7 @@
           "Deployment",
           "Stack",
           "AlertRule",
-          "GitRepo"
+          "GitRepository"
         ]
       },
       "ActivityStatus": {
@@ -13496,7 +13496,8 @@
           "webHookSecret",
           "onClone",
           "onPull",
-          "createdAt"
+          "createdAt",
+          "controlState"
         ],
         "type": "object",
         "properties": {
@@ -13567,6 +13568,9 @@
           },
           "createdAt": {
             "format": "date-time"
+          },
+          "controlState": {
+            "$ref": "#/components/schemas/ResourceControlState"
           }
         }
       },

@@ -46,7 +46,7 @@ public class GitRepositoryCreateTests : IntegrationTestBase
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var gitRepositories = await uow.GitRepositories.GetAllAsync(TestContext.Current.CancellationToken);
 
-        Assert.Contains(gitRepositories, x => x.Name == "GR-NEW" && x.DefaultBranch == "main" && x.Status == GitReposStatus.Processing);
+        Assert.Contains(gitRepositories, x => x.Name == "GR-NEW" && x.DefaultBranch == "main" && x.Status == GitReposStatus.Pending);
         await VerifyJson(responseBody);
     }
 

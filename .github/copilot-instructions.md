@@ -13,3 +13,4 @@
 - User prefers keeping a single allocation in repository fetch paths; do not move handler-side list allocations into the repository with constructs like `[.. rows.Select(...)]`. Prefer returning `IEnumerable` when that preserves a single allocation.
 - Domain JSON source-generation contexts should live in `DomainJsonContext.cs` rather than separate files.
 - For Stack persistence, treat Stack as the aggregate root and do not expose a separate StackRelease repository; child StackRelease persistence should be handled through StackRepository.
+- Do not modify the validation pipeline when fixing tests in this codebase; prefer updating tests to match handler behavior instead.

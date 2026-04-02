@@ -12,6 +12,13 @@ internal static class GitRepositoryMappers
 
     internal static GitRepository ToDomain(this GitRepositoryDto dto)
     {
+        var hasLinkedAccount = dto.GitAccountId.HasValue
+            && !string.IsNullOrWhiteSpace(dto.GitAccount_Name)
+            && !string.IsNullOrWhiteSpace(dto.GitAccount_Domain)
+            && !string.IsNullOrWhiteSpace(dto.GitAccount_Transport)
+            && !string.IsNullOrWhiteSpace(dto.GitAccount_AuthType)
+            && !string.IsNullOrWhiteSpace(dto.GitAccount_Configuration);
+
         return GitRepository.FromPersistence(
             id: dto.Id,
             name: dto.Name,
@@ -30,14 +37,14 @@ internal static class GitRepositoryMappers
             controlStartedAt: dto.ControlStartedAt,
             controlTriggeredBy: dto.ControlTriggeredBy,
             rowVersion: dto.RowVersion,
-            gitAccount: dto.GitAccount_Name == null ? null : GitAccount.FromPersistence(
+            gitAccount: !hasLinkedAccount ? null : GitAccount.FromPersistence(
                 id: dto.GitAccountId.Value,
-                name: dto.GitAccount_Name,
-                domain: dto.GitAccount_Domain,
-                transport: Enum.Parse<GitTransport>(dto.GitAccount_Transport),
-                authType: Enum.Parse<GitAuthType>(dto.GitAccount_AuthType),
+                name: dto.GitAccount_Name!,
+                domain: dto.GitAccount_Domain!,
+                transport: Enum.Parse<GitTransport>(dto.GitAccount_Transport!),
+                authType: Enum.Parse<GitAuthType>(dto.GitAccount_AuthType!),
                 createdAt: DateTime.MinValue,
                 createdByActorId: Guid.Empty,
-                configuration: JsonSerializer.Deserialize(dto.GitAccount_Configuration, GitJsonContext.Default.GitAuthConfiguration)));
+                configuration: JsonSerializer.Deserialize(dto.GitAccount_Configuration!, GitJsonContext.Default.GitAuthConfiguration)));
     }
 }

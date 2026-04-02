@@ -17,9 +17,9 @@ public sealed record GitRepositorySnapshot(
 
 public static class GitRepositorySnapshotExtensions
 {
-    public static GitRepositorySnapshot ToSnapshot(this GitRepository repository) 
+    public static GitRepositorySnapshot ToSnapshot(this GitRepository repository, Guid? id = null) 
         => new (
-            repository.Id,
+            Id: id ?? repository.Id,
             repository.Name,
             repository.Description,
             repository.Url,

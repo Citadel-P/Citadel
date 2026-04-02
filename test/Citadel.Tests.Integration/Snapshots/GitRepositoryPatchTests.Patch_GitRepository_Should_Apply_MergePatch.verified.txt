@@ -3,11 +3,12 @@
   createdByActorId: Guid_2,
   name: UpdatedName,
   description: Updated description,
-  status: Created,
+  status: Processing,
   url: https://github.com/citadel-p/citadel-api,
   defaultBranch: develop,
   gitAccountId: Guid_3,
-  webHookEnabled: false,
+  webHookEnabled: true,
   webHookSecret: ,
-  createdAt: DateTimeOffset_1
+  createdAt: DateTimeOffset_1,
+  controlState: Processing
 }

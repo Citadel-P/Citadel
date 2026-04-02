@@ -93,8 +93,6 @@ internal class GitRepoSyncJob(
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         return await unitOfWork.GitRepositories.GetWithAccountAsync(repoId, stoppingToken);
     }
-
-    
 }
 
 internal sealed class GitRepoSyncSuccessWorkItem(

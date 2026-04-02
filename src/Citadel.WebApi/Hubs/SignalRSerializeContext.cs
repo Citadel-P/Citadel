@@ -10,6 +10,7 @@ using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
+using WebApi.Routes.Endpoints.Resources.GitRepositories;
 using WebApi.Routes.Endpoints.Resources.Images;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 
@@ -48,6 +49,7 @@ namespace WebApi.Hubs;
 [GenerateShapeFor<AlertEventView>]
 [GenerateShapeFor<List<AlertEventView>>]
 [GenerateShapeFor<UnresolvedAlertsCountView>]
+[GenerateShapeFor<GitRepositoryView>]
 partial class SignalRMessagePackContext;
 
 internal static class DerivedTypesMapping

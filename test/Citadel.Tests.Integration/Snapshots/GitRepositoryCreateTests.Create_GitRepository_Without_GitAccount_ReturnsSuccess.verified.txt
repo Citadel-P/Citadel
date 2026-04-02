@@ -8,5 +8,6 @@
   defaultBranch: main,
   webHookEnabled: true,
   webHookSecret: ,
-  createdAt: DateTimeOffset_1
+  createdAt: DateTimeOffset_1,
+  controlState: Processing
 }

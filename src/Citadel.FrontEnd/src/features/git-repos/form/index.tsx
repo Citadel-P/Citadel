@@ -2,9 +2,8 @@ import { GitRepoForm } from './form';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { GitRepoActions } from './actions';
 import { RequiredFormComponents, RequiredFormFields } from '@/pages/types';
-import { useRead } from '@/lib/hooks';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
-import { GitRepositoryView } from '@/api/generated/api.types';
+import { GitRepositoryView, ResourceControlState } from '@/api/generated/api.types';
 import { ActivitiesTab } from '@/features/activities';
 import { useGitRepoGroup } from './hooks/useGitRepoGroup';
 
@@ -21,7 +20,12 @@ export const GitRepoFormComponents: RequiredFormComponents = {
   EditForm: {
     Header: {
       Indicator: ({ resource }: { resource: RequiredFormFields }) => {
-        return <StateIndicator value={resource.status as any} />;
+        return (
+          <StateIndicator
+            value={(resource as GitRepositoryView).status}
+            isProcessing={(resource as GitRepositoryView).controlState === ResourceControlState.Processing}
+          />
+        );
       },
       ActionButtons: ({ resource }) => {
         return <GenericActionBarButtons resource={resource} actions={Object.values(GitRepoActions)} />;

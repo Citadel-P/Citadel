@@ -175,9 +175,15 @@ internal class ApplicationHubDispatcher(IHubContext<ApplicationHub> hubContext) 
     #region GitRepo
     public Task SendGitRepoInfo(GitRepository repository, string action = "update")
     {
-        return hubContext.Clients
+        hubContext.Clients
            .Group(WellKnownSignalRGroups.GitRepoGroup(repository.Id))
            .SendAsync("GitRepositoryInfoUpdated", GitRepositoryView.Map(repository), action);
+
+        hubContext.Clients
+            .Group(WellKnownSignalRGroups.GitRepositoriesGroup)
+            .SendAsync("GitRepositoryInfoUpdated", GitRepositoryView.Map(repository), action);
+
+        return Task.CompletedTask;
     }
     #endregion
 }
