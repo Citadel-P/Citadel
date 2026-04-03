@@ -12,18 +12,18 @@ export const useGitRepoGroup = (id: string | undefined) => {
     if (!data) return;
     setGitRepo(data.data);
   }, [data]);
-  const handleDeploymentInfoUpdated = useCallback((deployment: GitRepositoryView) => {
+  const handleDeploymentInfoUpdated = useCallback((repo: GitRepositoryView) => {
     setGitRepo((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
-        name: deployment.name,
-        status: deployment.status,
-        description: deployment.description,
-        url: deployment.url,
-        defaultBranch: deployment.defaultBranch,
-        webHookEnabled: deployment.webHookEnabled,
-        webHookSecret: deployment.webHookSecret,
+        name: repo.name,
+        status: repo.status,
+        description: repo.description,
+        url: repo.url,
+        defaultBranch: repo.defaultBranch,
+        webHookEnabled: repo.webHookEnabled,
+        webHookSecret: repo.webHookSecret,
       };
     });
   }, []);

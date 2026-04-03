@@ -1,9 +1,9 @@
 ﻿{
   id: Guid_1,
   createdByActorId: Guid_2,
-  name: UpdatedName,
-  status: Active,
-  registryHost: original.url,
+  name: OriginalName,
+  status: Disabled,
+  registryHost: updated.url,
   type: DockerHub,
   createdAt: DateTimeOffset_1,
   isDefault: true

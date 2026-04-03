@@ -1,10 +1,9 @@
 using Application.Features.Deployments.Commands;
-using Domain;
 using Domain.Entities.Deployments;
 
 namespace WebApi.Routes.Endpoints.Resources.Deployments;
 
-public sealed record DeploymentInput(
+public sealed record CreateDeploymentInput(
     string Name,
     Guid PlatformId,
     string? Description,
@@ -13,4 +12,3 @@ public sealed record DeploymentInput(
 {
     internal CreateDeployment ToCommand() => new(Name, PlatformId, Description, Spec);
 }
-

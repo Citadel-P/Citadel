@@ -31,6 +31,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
         // Arrange
         var createJson = """
         {
+          "description": "Test description",
           "type": "PlatformUnreachable",
           "severity": "Critical",
           "cooldownSeconds": 300,
@@ -56,6 +57,7 @@ public class AlertRuleCreateTests : IntegrationTestBase
             r.Severity == AlertSeverity.Critical &&
             r.CooldownSeconds == 300 &&
             r.Status == AlertRuleStatus.Enabled));
+        Assert.Equal("Test description", rule.Description);
         Assert.Contains(cache.Current.Get(AlertType.PlatformUnreachable), r => r.Id == rule.Id);
         await VerifyJson(responseBody);
     }

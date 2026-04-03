@@ -4,7 +4,7 @@ using Hosting.Common.MergePatch;
 
 namespace WebApi.Routes.Endpoints.Resources.GitRepositories;
 
-public sealed class GitRepositoryInputPatchDocument : JsonMergePatchDocument<GitRepositoryInput>
+public sealed class GitRepositoryInputPatchDocument : JsonMergePatchDocument<PatchGitRepositoryInput>
 {
     public static async ValueTask<GitRepositoryInputPatchDocument?> BindAsync(HttpContext context, ParameterInfo _)
     {

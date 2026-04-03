@@ -3,6 +3,7 @@ using Application.Services;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Entities.Activities;
 using Domain.Entities.Git;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -61,8 +62,6 @@ public class GitRepositoryPatchTests : IntegrationTestBase
     {
         var patchJson = $$"""
         {
-          "name": "UpdatedName",
-          "description": "Updated description",
           "url": "https://github.com/citadel-p/citadel-api.git",
           "defaultBranch": "develop",
           "webHookEnabled": true,
@@ -81,8 +80,8 @@ public class GitRepositoryPatchTests : IntegrationTestBase
         var gitRepository = await uow.GitRepositories.GetAsync(gitRepositoryId, TestContext.Current.CancellationToken);
 
         Assert.NotNull(gitRepository);
-        Assert.Equal("UpdatedName", gitRepository.Name);
-        Assert.Equal("Updated description", gitRepository.Description);
+        Assert.Equal("OriginalName", gitRepository.Name);
+        Assert.Equal("Original description", gitRepository.Description);
         Assert.Equal("develop", gitRepository.DefaultBranch);
         Assert.Equal(ResourceControlState.Processing, gitRepository.ControlState);
         await VerifyJson(responseBody);
@@ -106,8 +105,6 @@ public class GitRepositoryPatchTests : IntegrationTestBase
         var response = await Client.PatchAsync($"/api/v1/gitRepositories/{gitRepositoryId}", content, cancellationToken: TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 
-        _repoCacheManagerMock.Verify(x => x.DeleteCacheAsync("/app/data/repos/citadel", It.IsAny<CancellationToken>()), Times.Once);
-
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var activities = await uow.ActivityEventRepository.GetPagedAsync(
@@ -128,21 +125,18 @@ public class GitRepositoryPatchTests : IntegrationTestBase
     {
         var patchJson = $$"""
         {
-          "name": "RenamedRepo",
-          "description": "Original description",
-          "url": "https://github.com/citadel-p/citadel.git",
-          "defaultBranch": "main",
-          "webHookEnabled": false,
-          "gitAccountId": "{{gitAccountId}}"
+          "id": "{{gitRepositoryId}}",
+          "name": "RenamedRepo"
         }
         """;
-        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/json");
 
-        var response = await Client.PatchAsync($"/api/v1/gitRepositories/{gitRepositoryId}", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PostAsync("/api/v1/gitRepositories/rename", content, cancellationToken: TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var gitRepository = await uow.GitRepositories.GetAsync(gitRepositoryId, TestContext.Current.CancellationToken);
         var activities = await uow.ActivityEventRepository.GetPagedAsync(
             gitRepositoryId,
             ActivityResourceType.GitRepository,
@@ -151,7 +145,29 @@ public class GitRepositoryPatchTests : IntegrationTestBase
             10,
             TestContext.Current.CancellationToken);
 
+        Assert.Equal("RenamedRepo", gitRepository?.Name);
         Assert.Single(activities.Items);
+        Assert.False(_gitSyncChannel.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task Patch_GitRepository_Metadata_Should_Update_Description()
+    {
+        var patchJson = """
+        {
+          "description": "Metadata updated description"
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync($"/api/v1/gitRepositories/{gitRepositoryId}/_metadata", content, cancellationToken: TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var gitRepository = await uow.GitRepositories.GetAsync(gitRepositoryId, TestContext.Current.CancellationToken);
+
+        Assert.Equal("Metadata updated description", gitRepository?.Description);
         Assert.False(_gitSyncChannel.Reader.TryRead(out _));
     }
 
@@ -160,8 +176,6 @@ public class GitRepositoryPatchTests : IntegrationTestBase
     {
         var patchJson = """
         {
-          "name": "OriginalName",
-          "description": "No linked account",
           "url": "https://gitlab.com/citadel-p/citadel.git",
           "defaultBranch": "main",
           "webHookEnabled": true,
@@ -189,9 +203,7 @@ public class GitRepositoryPatchTests : IntegrationTestBase
     {
         var patchJson = $$"""
         {
-          "name": "",
-          "description": "Original description",
-          "url": "https://github.com/citadel-p/citadel.git",
+          "url": "",
           "defaultBranch": "main",
           "webHookEnabled": true,
           "gitAccountId": "{{gitAccountId}}"
@@ -266,38 +278,46 @@ public class GitRepositoryPatchTests : IntegrationTestBase
 
         var patchJson = $$"""
         {
-          "name": "OtherName",
-          "description": "Original description",
-          "url": "https://github.com/citadel-p/citadel.git",
-          "defaultBranch": "main",
-          "webHookEnabled": true,
-          "gitAccountId": "{{gitAccountId}}"
+          "id": "{{gitRepositoryId}}",
+          "name": "OtherName"
         }
         """;
-        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/json");
 
-        var response = await Client.PatchAsync($"/api/v1/gitRepositories/{gitRepositoryId}", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PostAsync("/api/v1/gitRepositories/rename", content, cancellationToken: TestContext.Current.CancellationToken);
 
         var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         await VerifyJson(responseBody);
     }
 
     [Fact]
-    public async Task Patch_NonExistent_GitRepository_Should_Return_NotFound()
+    public async Task Patch_GitRepository_Metadata_NonExistent_Should_Return_NotFound()
     {
         var patchJson = """
         {
-          "name": "DoesNotExist",
-          "description": "Unknown repository",
-          "url": "https://github.com/citadel-p/citadel.git",
-          "defaultBranch": "main",
-          "webHookEnabled": true,
-          "gitAccountId": null
+          "description": "Updated metadata"
         }
         """;
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
 
-        var response = await Client.PatchAsync($"/api/v1/gitRepositories/{Guid.NewGuid()}", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PatchAsync($"/api/v1/gitRepositories/{Guid.NewGuid()}/_metadata", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Rename_NonExistent_GitRepository_Should_Return_NotFound()
+    {
+        var patchJson = $$"""
+        {
+          "id": "{{Guid.NewGuid()}}",
+          "name": "DoesNotExist"
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/gitRepositories/rename", content, cancellationToken: TestContext.Current.CancellationToken);
 
         var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         await VerifyJson(responseBody);

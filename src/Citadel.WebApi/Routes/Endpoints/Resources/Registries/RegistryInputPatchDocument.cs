@@ -4,7 +4,7 @@ using Hosting.Common.MergePatch;
 
 namespace WebApi.Routes.Endpoints.Resources.Registries;
 
-public class RegistryInputPatchDocument : JsonMergePatchDocument<RegistryInput>
+public class RegistryInputPatchDocument : JsonMergePatchDocument<PatchRegistryInput>
 {
     public static async ValueTask<RegistryInputPatchDocument?> BindAsync(HttpContext context, ParameterInfo _)
     {

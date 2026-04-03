@@ -7,7 +7,6 @@ using Domain.Contracts.Resources.Deployments;
 using Domain.Entities.Activities;
 using Domain.Entities.Deployments;
 using FluentValidation;
-using Hosting.Common;
 using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
@@ -16,6 +15,7 @@ using LightResults;
 using Mediator;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
+using ActivityEvent = Domain.Entities.Activities.ActivityEvent;
 
 namespace Application.Features.Deployments.Commands;
 
@@ -39,8 +39,6 @@ public sealed record PatchDeployment(Guid Id, JsonMergePatchDocument<Deployment>
         {
 
             RuleFor(x => x.Id).NotEmpty().NotNull();
-            When(s => s.Name != null, () => RuleFor(x => x.Name).NotEmpty().ValidNameIdentifier());
-            When(s => s.Name != null, () => RuleFor(x => x.Description).MaximumLength(600));
         }
     }
 }
@@ -60,15 +58,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
         }
 
         var patchedDeployment = command.Patch.ApplyTo(deployment, DeploymentJsonContext.Default.Deployment);
-        if (patchedDeployment.Name != null)
-        {
-            var conflict = await unitOfWork.Deployments.ExistsAsync(command.Id, patchedDeployment.Name, patchedDeployment.PlatformId, cancellationToken);
-            if (conflict)
-            {
-                return Result.Failure<Deployment>(new ConflictError("Name already exists"));
-            }
-        }
-
+        
         if (patchedDeployment.Spec?.Image is not ExternalImage)
         {
             if (patchedDeployment.Spec?.UpdateBehavior != UpdateBehavior.Disabled)
@@ -86,44 +76,23 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
         }
 
         // Add activity
-        ActivityEvent? activity = null;
-        bool descChanged = !string.IsNullOrEmpty(patchedDeployment.Description) && string.Compare(deployment.Description, patchedDeployment.Description, StringComparison.OrdinalIgnoreCase) != 0;
-        if (!string.IsNullOrEmpty(patchedDeployment.Name) && string.Compare(deployment.Name, patchedDeployment.Name, StringComparison.OrdinalIgnoreCase) != 0)
-        {
-            activity = new ActivityEvent(
-               actorId: actorId,
-               resourceId: deployment.Id,
-               platformId: patchedDeployment.PlatformId,
-               resourceName: patchedDeployment.Name,
-               eventType: ActivityEventType.DeploymentRenamed,
-               status: ActivityStatus.Success,
-               info: new DeploymentRenamed(deployment.Name, patchedDeployment.Name)
-           );
-        }
-        
-        else if(deployment.Spec != null && patchedDeployment.Spec != null)
-        {
-            activity = new ActivityEvent(
+        var activity = new ActivityEvent(
                 actorId: actorId,
                 resourceId: deployment.Id,
-                platformId: patchedDeployment.PlatformId,
+                resourceName: deployment.Name,
                 status: ActivityStatus.Success,
-                resourceName: patchedDeployment.Name,
+                platformId: deployment.PlatformId,
                 eventType: ActivityEventType.DeploymentUpdated,
                 info: new DeploymentUpdated(deployment.ToSnapshot(), patchedDeployment.ToSnapshot(command.Id))
             );
-        }
 
         deployment.PartialUpdate(
-            name: patchedDeployment.Name, 
             platformId: patchedDeployment.PlatformId,
-            description: patchedDeployment.Description,
             spec: patchedDeployment.Spec);
 
         await unitOfWork.Deployments.UpdateAsync(deployment, cancellationToken);
 
-        if (activity != null)
-            await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
+        await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
 
         await unitOfWork.CommitAsync(cancellationToken);
 
@@ -131,8 +100,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
         
         // Notify
         await notificationQueue.EnqueueAsync(workItem, cancellationToken);
-        if (activity != null && !descChanged)
-            await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
+        await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return deployment;
     }
 }

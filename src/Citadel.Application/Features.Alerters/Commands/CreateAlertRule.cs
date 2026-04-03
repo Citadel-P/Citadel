@@ -18,6 +18,7 @@ namespace Application.Features.Alerters.Commands;
 
 public sealed record CreateAlertRule(
     string? Name,
+    string? Description,
     AlertType Type,
     AlertSeverity Severity,
     int? CooldownSeconds,
@@ -80,6 +81,7 @@ internal sealed class CreateAlertRuleHandler(
 
         var alertRule = new AlertRule(
             name: command.Name,
+            description: command.Description,
             type: command.Type,
             severity: command.Severity,
             cooldownSeconds: command.CooldownSeconds,

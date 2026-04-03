@@ -31,8 +31,4 @@
 		<ProjectReference Include="..\..\src\Citadel.WebApi\Citadel.WebApi.csproj" />
 	</ItemGroup>
 
-	<ItemGroup>
-	  <Folder Include="Snapshots\" />
-	</ItemGroup>
-
 </Project>

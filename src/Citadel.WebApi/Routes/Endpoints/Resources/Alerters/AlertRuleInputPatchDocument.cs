@@ -4,7 +4,7 @@ using Hosting.Common.MergePatch;
 
 namespace WebApi.Routes.Endpoints.Resources.Alerters;
 
-public class AlertRuleInputPatchDocument : JsonMergePatchDocument<AlertRuleInput>
+public class AlertRuleInputPatchDocument : JsonMergePatchDocument<PatchAlertRuleInput>
 {
     public static async ValueTask<AlertRuleInputPatchDocument?> BindAsync(HttpContext context, ParameterInfo _)
     {

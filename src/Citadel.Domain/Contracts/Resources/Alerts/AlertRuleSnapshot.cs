@@ -7,6 +7,7 @@ public sealed record AlertRuleSnapshot(
     AlertType Type,
     AlertSeverity Severity,
     string Name,
+    string? Description,
     int? CooldownSeconds,
     int? RequiredMatches,
     double? Threshold,
@@ -21,6 +22,7 @@ public static class AlertRuleSnapshotExtensions
         => new (
             Id: id ?? alertRule.Id,
             Name: alertRule.Name,
+            Description: alertRule.Description,
             Type: alertRule.Type,
             Severity: alertRule.Severity,
             CooldownSeconds: alertRule.CooldownSeconds,

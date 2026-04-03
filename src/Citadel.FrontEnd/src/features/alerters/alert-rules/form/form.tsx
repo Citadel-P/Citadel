@@ -1,5 +1,4 @@
 import {
-  AlertRuleInput,
   AlertResourceType,
   AlertRuleQuietHour,
   AlertRuleQuietHourDailyQuietHour,
@@ -10,6 +9,9 @@ import {
   ScheduleType,
   DeploymentView,
   AlertRuleStatus,
+  CreateAlertRuleInput,
+  PatchAlertRuleInput,
+  AlertRuleView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -49,6 +51,8 @@ type LimitedToEntry = {
   resourceId: string;
 };
 
+type AlertRuleInput = CreateAlertRuleInput | PatchAlertRuleInput;
+
 export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: AlertRuleInput }) => {
   const id = useParams().id;
   const navigate = useNavigate();
@@ -72,7 +76,7 @@ export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resour
         await updateAlertRule({ id, data: payload });
         refreshData();
       } else {
-        await createAlertRule({ data: payload });
+        await createAlertRule({ data: payload as AlertRuleView });
         navigate('/alert-rules');
       }
 

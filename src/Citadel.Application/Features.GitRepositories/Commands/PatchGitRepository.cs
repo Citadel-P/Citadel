@@ -8,7 +8,6 @@ using Domain.Contracts.Resources.Git;
 using Domain.Entities.Activities;
 using Domain.Entities.Git;
 using FluentValidation;
-using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using Hosting.Common.MergePatch;
@@ -38,9 +37,7 @@ public sealed record PatchGitRepository(Guid Id, JsonMergePatchDocument<GitRepos
         public GitRepositoryValidator()
         {
             RuleFor(x => x.Id).NotEmpty();
-            When(s => s.Name != null, () => RuleFor(x => x.Name).ValidNameIdentifier());
             When(s => s.Url != null, () => RuleFor(x => x.Url).NotEmpty());
-            When(s => s.DefaultBranch != null, () => RuleFor(x => x.DefaultBranch).NotEmpty());
         }
     }
 }
@@ -64,12 +61,7 @@ internal sealed class PatchGitRepositoryHandler(
             return Result.Failure<GitRepository>(new NotFoundError("The provided git repository does not exist"));
 
         var patchedGitRepository = command.Patch.ApplyTo(gitRepository, GitJsonContext.Default.GitRepository);
-        if (!string.Equals(gitRepository.Name, patchedGitRepository.Name, StringComparison.OrdinalIgnoreCase))
-        {
-            var conflict = await unitOfWork.GitRepositories.ExistsAsync(command.Id, patchedGitRepository.Name, cancellationToken);
-            if (conflict)
-                return Result.Failure<GitRepository>(new ConflictError("Name already exists"));
-        }
+        
 
         var validation = await GitRepositoryUrlValidation.ValidateAsync(unitOfWork, patchedGitRepository.GitAccountId, patchedGitRepository.Url, cancellationToken);
         if (validation.IsFailure())
@@ -86,44 +78,27 @@ internal sealed class PatchGitRepositoryHandler(
             || !string.Equals(gitRepository.DefaultBranch, patchedGitRepository.DefaultBranch, StringComparison.OrdinalIgnoreCase)
             || gitRepository.GitAccountId != patchedGitRepository.GitAccountId;
 
-        gitRepository.UpdateMetadata(
-            patchedGitRepository.Name,
-            patchedGitRepository.Description,
-            patchedGitRepository.DefaultBranch!,
-            sourceChanged ? GitReposStatus.Pending : gitRepository.Status);
-        gitRepository.UpdateSource(patchedGitRepository.Url, patchedGitRepository.GitAccountId);
 
         gitRepository.PartialUpdate(
+            defaultBranch: patchedGitRepository.DefaultBranch!,
+            status: sourceChanged ? GitReposStatus.Pending : gitRepository.Status,
             webHookEnabled: patchedGitRepository.WebHookEnabled,
             webHookSecret: patchedGitRepository.WebHookSecret,
             onClone: patchedGitRepository.OnClone,
             onPull: patchedGitRepository.OnPull);
 
-        ActivityEvent? activity = null;
-        bool descChanged = !string.IsNullOrEmpty(patchedGitRepository.Description) && string.Compare(gitRepository.Description, patchedGitRepository.Description, StringComparison.OrdinalIgnoreCase) != 0;
-        if (!string.Equals(gitRepository.Name, patchedGitRepository.Name, StringComparison.OrdinalIgnoreCase))
-        {
-            activity = new ActivityEvent(
-                actorId: actorId,
-                resourceId: gitRepository.Id,
-                platformId: null,
-                resourceName: gitRepository.Name,
-                eventType: ActivityEventType.GitRepoRenamed,
-                status: ActivityStatus.Success,
-                info: new GitRepoRenamed(gitRepository.Name, gitRepository.Name));
-        }
-        else
-        {
-            activity = new ActivityEvent(
-                actorId: actorId,
-                resourceId: gitRepository.Id,
-                platformId: null,
-                resourceName: gitRepository.Name,
-                eventType: ActivityEventType.GitRepoUpdated,
-                status: ActivityStatus.Success,
-                info: new GitRepoUpdated(gitRepository.ToSnapshot(), patchedGitRepository.ToSnapshot(command.Id)));
-        }
+        gitRepository.UpdateSource(patchedGitRepository.Url, patchedGitRepository.GitAccountId);
 
+        // Activity
+        ActivityEvent? activity = activity = new ActivityEvent(
+            actorId: actorId,
+            resourceId: gitRepository.Id,
+            platformId: null,
+            resourceName: gitRepository.Name,
+            eventType: ActivityEventType.GitRepoUpdated,
+            status: ActivityStatus.Success,
+            info: new GitRepoUpdated(gitRepository.ToSnapshot(), patchedGitRepository.ToSnapshot(command.Id)));
+        
         if (sourceChanged && !string.Equals(gitRepository.GetCachePath(), gitRepository.GetCachePath(), StringComparison.OrdinalIgnoreCase))
         {
             await repoCacheManager.DeleteCacheAsync(gitRepository.GetCachePath(), cancellationToken);
@@ -141,8 +116,8 @@ internal sealed class PatchGitRepositoryHandler(
         await unitOfWork.CommitAsync(cancellationToken);
 
         await notificationQueue.EnqueueAsync(new GitRepositoryNotificationWorkItem(gitRepositoryHub, gitRepository), cancellationToken);
-        if (!descChanged)
-            await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
+        
+        await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
 
         if (sourceChanged)
         {
@@ -152,7 +127,7 @@ internal sealed class PatchGitRepositoryHandler(
         return gitRepository;
     }
 
-    private sealed class GitRepositoryNotificationWorkItem(IGitRepositoryStreamManager gitRepositoryHub, GitRepository repository, string action = "update") : INotificationWorkItem
+    internal sealed class GitRepositoryNotificationWorkItem(IGitRepositoryStreamManager gitRepositoryHub, GitRepository repository, string action = "update") : INotificationWorkItem
     {
         public Task ExecuteAsync(CancellationToken cancellationToken)
             => gitRepositoryHub.SendGitRepoInfo(repository, action);

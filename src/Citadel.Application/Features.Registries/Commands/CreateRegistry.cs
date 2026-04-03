@@ -168,14 +168,14 @@ internal class CreateRegistryHandler(
             description: command.Description);
 
         var activity = new ActivityEvent(
-                        actorId: actorId,
-                        resourceId: registry.Id,
-                        platformId: null,
-                        resourceName: registry.Name,
-                        status: ActivityStatus.Success,
-                        eventType: ActivityEventType.RegistryCreated,
-                        info: new RegistryCreated(registry.ToSnapshot())
-                        );
+            actorId: actorId,
+            resourceId: registry.Id,
+            platformId: null,
+            resourceName: registry.Name,
+            status: ActivityStatus.Success,
+            eventType: ActivityEventType.RegistryCreated,
+            info: new RegistryCreated(registry.ToSnapshot())
+            );
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.Registries.AddAsync(registry, cancellationToken);

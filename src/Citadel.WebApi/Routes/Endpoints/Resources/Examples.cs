@@ -4,7 +4,6 @@ using System.Text.Json.Serialization;
 using Application.Models;
 using Domain;
 using Domain.Entities.Registries;
-using Domain.Entities.Registries;
 using Microsoft.OpenApi;
 using WebApi.Routes.Endpoints.Resources.Registries;
 

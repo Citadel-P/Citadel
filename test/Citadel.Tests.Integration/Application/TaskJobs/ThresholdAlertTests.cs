@@ -204,6 +204,7 @@ public class ThresholdAlertTests: IntegrationTestBase
             return AlertRule.FromPersistence(
                 id: rule.Id,
                 name: rule.Name,
+                description: rule.Description,
                 type: rule.Type,
                 severity: rule.Severity,
                 cooldownSeconds: rule.CooldownSeconds,
@@ -246,6 +247,7 @@ public class ThresholdAlertTests: IntegrationTestBase
             return AlertRule.FromPersistence(
                 id: rule.Id,
                 name: rule.Name,
+                description: rule.Description,
                 type: rule.Type,
                 severity: rule.Severity,
                 cooldownSeconds: rule.CooldownSeconds,
@@ -615,6 +617,7 @@ public class ThresholdAlertTests: IntegrationTestBase
         var rule = new AlertRule(
             type: AlertType.PlatformCpuHigh,
             name: "CPU Usage Above " + threshold,
+            description: $"Alert when CPU usage exceeds {threshold}%",
             severity: severity,
             cooldownSeconds: cooldownSeconds,
             status: AlertRuleStatus.Enabled,

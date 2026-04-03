@@ -18,6 +18,7 @@ public class AlertRulePatchTests : IntegrationTestBase
     {
         var rule = new AlertRule(
             name: "Test Rule",
+            description: "Original description",
             type: AlertType.PlatformUnreachable,
             severity: AlertSeverity.Warning,
             cooldownSeconds: 300,
@@ -75,8 +76,57 @@ public class AlertRulePatchTests : IntegrationTestBase
         Assert.Equal(AlertSeverity.Critical, updated.Severity);
         Assert.Equal(600, updated.CooldownSeconds);
         Assert.Equal(AlertRuleStatus.Disabled, updated.Status);
+        Assert.Equal("Original description", updated.Description);
         Assert.Contains(cache.Current.Get(AlertType.PlatformUnreachable), r => r.Id == ruleId && r.Severity == AlertSeverity.Critical);
         await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Patch_AlertRule_Metadata_Should_Update_Description()
+    {
+        var patchJson = """
+        {
+          "description": "Updated description"
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync($"/api/v1/alertRules/{ruleId}/_metadata", content, cancellationToken: TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var cache = scope.ServiceProvider.GetRequiredService<IAlertRuleProvider>();
+        var updated = await uow.AlertRules.GetByIdAsync(ruleId, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(updated);
+        Assert.Equal("Updated description", updated.Description);
+        Assert.Contains(cache.Current.Get(AlertType.PlatformUnreachable), r => r.Id == ruleId && r.Description == "Updated description");
+    }
+
+    [Fact]
+    public async Task Rename_AlertRule_Should_Update_Name()
+    {
+        var renameJson = $$"""
+        {
+          "id": "{{ruleId}}",
+          "name": "RenamedRule"
+        }
+        """;
+        var content = new StringContent(renameJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/alertRules/rename", content, TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var cache = scope.ServiceProvider.GetRequiredService<IAlertRuleProvider>();
+        var updated = await uow.AlertRules.GetByIdAsync(ruleId, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(updated);
+        Assert.Equal("RenamedRule", updated.Name);
+        Assert.Equal("Original description", updated.Description);
+        Assert.Contains(cache.Current.Get(AlertType.PlatformUnreachable), r => r.Id == ruleId && r.Name == "RenamedRule");
     }
 
     [Fact]
@@ -175,6 +225,24 @@ public class AlertRulePatchTests : IntegrationTestBase
         var response = await Client.PatchAsync($"/api/v1/alertRules/{nonExistentId}", content, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Rename_NonExistent_AlertRule_Should_Return_NotFound()
+    {
+        var renameJson = $$"""
+        {
+          "id": "{{Guid.NewGuid()}}",
+          "name": "DoesNotExist"
+        }
+        """;
+        var content = new StringContent(renameJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/alertRules/rename", content, TestContext.Current.CancellationToken);
+
         Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
         var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         await VerifyJson(responseBody);

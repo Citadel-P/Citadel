@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace WebApi.Routes.Endpoints.Resources.Stacks;
 
-public sealed class StackInputPatchDocument : JsonMergePatchDocument<StackInput>
+public sealed class StackInputPatchDocument : JsonMergePatchDocument<PatchStackInput>
 {
     public static async ValueTask<StackInputPatchDocument?> BindAsync(HttpContext context, ParameterInfo _)
     {

@@ -28,6 +28,7 @@ internal static class AlerterMappers
         return AlertRule.FromPersistence(
             id: dto.Id,
             name: dto.Name,
+            description: dto.Description,
             type: Enum.Parse<AlertType>(dto.Type),
             cooldownSeconds: dto.CooldownSeconds,
             status: Enum.Parse<AlertRuleStatus>(dto.Status),

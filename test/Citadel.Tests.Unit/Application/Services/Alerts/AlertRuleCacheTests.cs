@@ -123,6 +123,7 @@ public class AlertRuleCacheTests
             id: id,
             type: type,
             name: $"{type} Rule",
+            description: $"This is a rule for {type}.",
             severity: severity,
             cooldownSeconds: 300,
             status: AlertRuleStatus.Enabled,

@@ -1736,7 +1736,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RegistryInput"
+                "$ref": "#/components/schemas/CreateRegistryInput"
               },
               "examples": {
                 "Azure": {
@@ -2077,7 +2077,7 @@
           "content": {
             "application/merge-patch+json": {
               "schema": {
-                "$ref": "#/components/schemas/RegistryInput"
+                "$ref": "#/components/schemas/PatchRegistryInput"
               },
               "examples": {
                 "Azure": {
@@ -2161,7 +2161,7 @@
             },
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RegistryInput"
+                "$ref": "#/components/schemas/PatchRegistryInput"
               },
               "examples": {
                 "Azure": {
@@ -2397,6 +2397,215 @@
           },
           "401": {
             "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/registries/{id}/_metadata": {
+      "patch": {
+        "tags": [
+          "Registries"
+        ],
+        "summary": "Update registry metadata",
+        "operationId": "updateRegistryMetadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Registry ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/registries/rename": {
+      "post": {
+        "tags": [
+          "Registries"
+        ],
+        "summary": "Rename registry",
+        "operationId": "renameRegistry",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameResource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3002,7 +3211,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/GitRepositoryInput"
+                "$ref": "#/components/schemas/CreateGitRepositoryInput"
               }
             }
           },
@@ -3273,12 +3482,12 @@
           "content": {
             "application/merge-patch+json": {
               "schema": {
-                "$ref": "#/components/schemas/GitRepositoryInput"
+                "$ref": "#/components/schemas/PatchGitRepositoryInput"
               }
             },
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/GitRepositoryInput"
+                "$ref": "#/components/schemas/PatchGitRepositoryInput"
               }
             }
           },
@@ -3435,6 +3644,205 @@
           },
           "401": {
             "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/gitRepositories/{id}/_metadata": {
+      "patch": {
+        "tags": [
+          "GitRepositories"
+        ],
+        "summary": "Update git repository metadata",
+        "operationId": "updateGitRepositoryMetadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Git repository ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitRepositoryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/gitRepositories/rename": {
+      "post": {
+        "tags": [
+          "GitRepositories"
+        ],
+        "summary": "Rename a git repository",
+        "operationId": "renameGitRepository",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameResource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitRepositoryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5137,7 +5545,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DeploymentInput"
+                "$ref": "#/components/schemas/CreateDeploymentInput"
               }
             }
           },
@@ -5469,6 +5877,92 @@
         ]
       }
     },
+    "/api/v1/deployments/rename": {
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Rename deployment",
+        "operationId": "renameDeployment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameResource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/deployments/{id}": {
       "patch": {
         "tags": [
@@ -5492,12 +5986,125 @@
           "content": {
             "application/merge-patch+json": {
               "schema": {
-                "$ref": "#/components/schemas/DeploymentInput"
+                "$ref": "#/components/schemas/PatchDeploymentInput"
               }
             },
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DeploymentInput"
+                "$ref": "#/components/schemas/PatchDeploymentInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/deployments/{id}/_metadata": {
+      "patch": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Update deployment metadata",
+        "operationId": "updateDeploymentMetadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
               }
             }
           },
@@ -6161,7 +6768,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/StackInput"
+                "$ref": "#/components/schemas/CreateStackInput"
               }
             }
           },
@@ -6591,6 +7198,102 @@
         ]
       }
     },
+    "/api/v1/stacks/rename": {
+      "post": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "Rename a stack",
+        "operationId": "renameStack",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameResource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/stacks/{id}": {
       "patch": {
         "tags": [
@@ -6614,12 +7317,125 @@
           "content": {
             "application/merge-patch+json": {
               "schema": {
-                "$ref": "#/components/schemas/StackInput"
+                "$ref": "#/components/schemas/PatchStackInput"
               }
             },
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/StackInput"
+                "$ref": "#/components/schemas/PatchStackInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StackView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/stacks/{id}/_metadata": {
+      "patch": {
+        "tags": [
+          "Stacks"
+        ],
+        "summary": "Update stack metadata",
+        "operationId": "updateStackMetadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Stack ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
               }
             }
           },
@@ -7429,12 +8245,12 @@
           "content": {
             "application/merge-patch+json": {
               "schema": {
-                "$ref": "#/components/schemas/AlertRuleInput"
+                "$ref": "#/components/schemas/PatchAlertRuleInput"
               }
             },
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AlertRuleInput"
+                "$ref": "#/components/schemas/PatchAlertRuleInput"
               }
             }
           },
@@ -7671,7 +8487,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AlertRuleInput"
+                "$ref": "#/components/schemas/CreateAlertRuleInput"
               }
             }
           },
@@ -7774,6 +8590,195 @@
           },
           "204": {
             "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alertRules/rename": {
+      "post": {
+        "tags": [
+          "AlertRules"
+        ],
+        "summary": "Rename an alert rule",
+        "operationId": "renameAlertRule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameResource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertRuleView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/alertRules/{id}/_metadata": {
+      "patch": {
+        "tags": [
+          "AlertRules"
+        ],
+        "summary": "Update alert rule metadata",
+        "operationId": "updateAlertRuleMetadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Alert rule ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchResourceMetadata"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertRuleView"
+                }
+              }
+            }
           },
           "400": {
             "description": "Bad Request",
@@ -9646,6 +10651,7 @@
         "required": [
           "id",
           "name",
+          "description",
           "type",
           "severity",
           "cooldownSeconds",
@@ -9665,74 +10671,7 @@
           "name": {
             "type": "string"
           },
-          "type": {
-            "$ref": "#/components/schemas/AlertType"
-          },
-          "severity": {
-            "$ref": "#/components/schemas/AlertSeverity"
-          },
-          "cooldownSeconds": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
-          "requiredMatches": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
-          "threshold": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
-            "format": "double"
-          },
-          "status": {
-            "$ref": "#/components/schemas/AlertRuleStatus"
-          },
-          "channelIds": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          "limitedTo": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AlertRuleLimitedTo"
-            }
-          },
-          "quietHours": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AlertRuleQuietHour"
-            }
-          }
-        }
-      },
-      "AlertRuleInput": {
-        "required": [
-          "name",
-          "type",
-          "severity",
-          "cooldownSeconds",
-          "status"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
+          "description": {
             "type": [
               "null",
               "string"
@@ -9753,9 +10692,6 @@
             ],
             "format": "int32"
           },
-          "status": {
-            "$ref": "#/components/schemas/AlertRuleStatus"
-          },
           "requiredMatches": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
@@ -9774,30 +10710,24 @@
             ],
             "format": "double"
           },
+          "status": {
+            "$ref": "#/components/schemas/AlertRuleStatus"
+          },
           "channelIds": {
-            "type": [
-              "null",
-              "array"
-            ],
+            "type": "array",
             "items": {
               "type": "string",
               "format": "uuid"
             }
           },
           "limitedTo": {
-            "type": [
-              "null",
-              "array"
-            ],
+            "type": "array",
             "items": {
               "$ref": "#/components/schemas/AlertRuleLimitedTo"
             }
           },
           "quietHours": {
-            "type": [
-              "null",
-              "array"
-            ],
+            "type": "array",
             "items": {
               "$ref": "#/components/schemas/AlertRuleQuietHour"
             }
@@ -9937,6 +10867,7 @@
           "type",
           "severity",
           "name",
+          "description",
           "cooldownSeconds",
           "requiredMatches",
           "threshold",
@@ -9959,6 +10890,12 @@
           },
           "name": {
             "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "cooldownSeconds": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -10021,6 +10958,7 @@
         "required": [
           "id",
           "name",
+          "description",
           "type",
           "severity",
           "cooldownSeconds",
@@ -10039,6 +10977,12 @@
           },
           "name": {
             "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "type": {
             "$ref": "#/components/schemas/AlertType"
@@ -11274,6 +12218,95 @@
           }
         }
       },
+      "CreateAlertRuleInput": {
+        "required": [
+          "name",
+          "description",
+          "type",
+          "severity",
+          "cooldownSeconds",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/AlertType"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AlertSeverity"
+          },
+          "cooldownSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AlertRuleStatus"
+          },
+          "requiredMatches": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "threshold": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "channelIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "limitedTo": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AlertRuleLimitedTo"
+            }
+          },
+          "quietHours": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AlertRuleQuietHour"
+            }
+          }
+        }
+      },
       "CreateContainerInput": {
         "required": [
           "platformId",
@@ -11488,6 +12521,100 @@
           }
         }
       },
+      "CreateDeploymentInput": {
+        "required": [
+          "name",
+          "platformId",
+          "description",
+          "spec"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "spec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          }
+        }
+      },
+      "CreateGitRepositoryInput": {
+        "required": [
+          "name",
+          "description",
+          "url",
+          "defaultBranch",
+          "gitAccountId",
+          "webHookEnabled",
+          "webHookSecret",
+          "onClone",
+          "onPull"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "url": {
+            "type": "string"
+          },
+          "defaultBranch": {
+            "type": "string"
+          },
+          "gitAccountId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "webHookEnabled": {
+            "type": "boolean"
+          },
+          "webHookSecret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "onClone": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RepoCommand"
+              }
+            ]
+          },
+          "onPull": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RepoCommand"
+              }
+            ]
+          }
+        }
+      },
       "CreateNetworkInput": {
         "required": [
           "platformId",
@@ -11600,6 +12727,66 @@
         "properties": {
           "id": {
             "type": "string"
+          }
+        }
+      },
+      "CreateRegistryInput": {
+        "required": [
+          "name",
+          "registryHost",
+          "status",
+          "configuration"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "registryHost": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RegistryStatus"
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/RegistryConfiguration"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "CreateStackInput": {
+        "required": [
+          "name",
+          "platformId",
+          "description",
+          "stackSource",
+          "spec"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "stackSource": {
+            "$ref": "#/components/schemas/StackSource"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/StackSpec"
           }
         }
       },
@@ -11994,33 +13181,6 @@
           },
           "imageId": {
             "type": "string"
-          }
-        }
-      },
-      "DeploymentInput": {
-        "required": [
-          "name",
-          "platformId",
-          "description",
-          "spec"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "platformId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "description": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "spec": {
-            "$ref": "#/components/schemas/DeploymentSpec"
           }
         }
       },
@@ -13290,73 +14450,6 @@
             "type": "string",
             "format": "uuid"
           },
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "url": {
-            "type": "string"
-          },
-          "defaultBranch": {
-            "type": "string"
-          },
-          "gitAccountId": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "format": "uuid"
-          },
-          "webHookEnabled": {
-            "type": "boolean"
-          },
-          "webHookSecret": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "onClone": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RepoCommand"
-              }
-            ]
-          },
-          "onPull": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RepoCommand"
-              }
-            ]
-          }
-        }
-      },
-      "GitRepositoryInput": {
-        "required": [
-          "name",
-          "description",
-          "url",
-          "defaultBranch",
-          "gitAccountId",
-          "webHookEnabled",
-          "webHookSecret",
-          "onClone",
-          "onPull"
-        ],
-        "type": "object",
-        "properties": {
           "name": {
             "type": "string"
           },
@@ -15196,6 +16289,213 @@
           }
         }
       },
+      "PatchAlertRuleInput": {
+        "required": [
+          "description",
+          "type",
+          "severity",
+          "cooldownSeconds",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/AlertType"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AlertSeverity"
+          },
+          "cooldownSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AlertRuleStatus"
+          },
+          "requiredMatches": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "threshold": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "channelIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "limitedTo": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AlertRuleLimitedTo"
+            }
+          },
+          "quietHours": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AlertRuleQuietHour"
+            }
+          }
+        }
+      },
+      "PatchDeploymentInput": {
+        "required": [
+          "platformId",
+          "spec"
+        ],
+        "type": "object",
+        "properties": {
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/DeploymentSpec"
+          }
+        }
+      },
+      "PatchGitRepositoryInput": {
+        "required": [
+          "url",
+          "defaultBranch",
+          "gitAccountId",
+          "webHookEnabled",
+          "webHookSecret",
+          "onClone",
+          "onPull"
+        ],
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "defaultBranch": {
+            "type": "string"
+          },
+          "gitAccountId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "webHookEnabled": {
+            "type": "boolean"
+          },
+          "webHookSecret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "onClone": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RepoCommand"
+              }
+            ]
+          },
+          "onPull": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RepoCommand"
+              }
+            ]
+          }
+        }
+      },
+      "PatchRegistryInput": {
+        "required": [
+          "registryHost",
+          "status",
+          "configuration"
+        ],
+        "type": "object",
+        "properties": {
+          "registryHost": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RegistryStatus"
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/RegistryConfiguration"
+          }
+        }
+      },
+      "PatchResourceMetadata": {
+        "required": [
+          "description",
+          "tags"
+        ],
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PatchStackInput": {
+        "required": [
+          "platformId",
+          "spec"
+        ],
+        "type": "object",
+        "properties": {
+          "platformId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/StackSpec"
+          }
+        }
+      },
       "PlatformConnectorType": {
         "enum": [
           "Unknown",
@@ -16110,35 +17410,6 @@
           }
         }
       },
-      "RegistryInput": {
-        "required": [
-          "name",
-          "registryHost",
-          "status",
-          "configuration"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "registryHost": {
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/RegistryStatus"
-          },
-          "configuration": {
-            "$ref": "#/components/schemas/RegistryConfiguration"
-          },
-          "description": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      },
       "RegistrySnapshot": {
         "required": [
           "id",
@@ -16232,6 +17503,22 @@
           },
           "isDefault": {
             "type": "boolean"
+          }
+        }
+      },
+      "RenameResource": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
           }
         }
       },
@@ -16417,37 +17704,6 @@
           },
           "stackUpdateState": {
             "$ref": "#/components/schemas/StackUpdateState"
-          }
-        }
-      },
-      "StackInput": {
-        "required": [
-          "name",
-          "platformId",
-          "description",
-          "stackSource",
-          "spec"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "platformId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "description": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "stackSource": {
-            "$ref": "#/components/schemas/StackSource"
-          },
-          "spec": {
-            "$ref": "#/components/schemas/StackSpec"
           }
         }
       },

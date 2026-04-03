@@ -11,6 +11,7 @@ public sealed class AlertRule : IAuditedEntity
 
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public string Name { get; private set; }
+    public string? Description { get; private set; }
     public AlertType Type { get; private set; }
     public AlertSeverity Severity { get; private set; }
     /// <summary>
@@ -40,6 +41,7 @@ public sealed class AlertRule : IAuditedEntity
     [JsonConstructor]
     public AlertRule(
         string? name,
+        string? description,
         AlertType type,
         AlertSeverity severity,
         int? cooldownSeconds,
@@ -55,6 +57,7 @@ public sealed class AlertRule : IAuditedEntity
             throw new ArgumentOutOfRangeException(nameof(cooldownSeconds), "Cooldown must be between 10s and 24h.");
 
         Name = string.IsNullOrWhiteSpace(name) ? type.ToString() : name;
+        Description = description;
         Type = type;
         Severity = severity;
         CooldownSeconds = cooldownSeconds;
@@ -77,6 +80,7 @@ public sealed class AlertRule : IAuditedEntity
     public static AlertRule FromPersistence(
         Guid id,
         string? name,
+        string? description,
         AlertType type,
         AlertSeverity severity,
         int? cooldownSeconds,
@@ -91,6 +95,7 @@ public sealed class AlertRule : IAuditedEntity
     {
         var rule = new AlertRule(
             name,
+            description,
             type,
             severity,
             cooldownSeconds,
@@ -117,22 +122,25 @@ public sealed class AlertRule : IAuditedEntity
     }
 
     public void PartialUpdate(
-        string name,
-        AlertType type,
-        AlertSeverity severity,
-        int? cooldownSeconds,
-        AlertRuleStatus status,
+        string? name = null,
+        string? description = null,
+        AlertType? type = null,
+        AlertSeverity? severity = null,
+        int? cooldownSeconds = null,
+        AlertRuleStatus? status = null,
         IEnumerable<Guid>? channelIds = null,
         int? requiredMatches = null,
         double? threshold = null,
         IEnumerable<AlertRuleLimitedTo>? limitedTo = null,
         IEnumerable<AlertRuleQuietHour>? quietHours = null)
     {
-        Name = name;
-        Type = type;
-        Severity = severity;
-        CooldownSeconds = cooldownSeconds;
-        Status = status;
+        if (name is not null) Name = name;
+        if (description is not null) Description = description;
+        if (type is not null) Type = type.Value;
+        if (severity is not null) Severity = severity.Value;
+        if (cooldownSeconds is not null) CooldownSeconds = cooldownSeconds;
+        if (status is not null) Status = status.Value;
+
         _channelIds.Clear();
         if (channelIds is not null) _channelIds.AddRange(channelIds);
         RequiredMatches = requiredMatches;

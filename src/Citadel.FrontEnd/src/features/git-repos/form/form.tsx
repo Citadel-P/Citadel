@@ -1,4 +1,11 @@
-import { GitRepositoryInput, GitAccountView, GitTransport, GitRepositoryConfigView } from '@/api/generated/api.types';
+import {
+  GitAccountView,
+  GitTransport,
+  GitRepositoryConfigView,
+  CreateGitRepositoryInput,
+  PatchGitRepositoryInput,
+  GitRepositoryView,
+} from '@/api/generated/api.types';
 import {
   FormShell,
   defineField,
@@ -61,6 +68,7 @@ const GitAccountSelector = ({
     </Select>
   );
 };
+type GitRepositoryInput = CreateGitRepositoryInput | PatchGitRepositoryInput;
 
 export const GitRepoForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'; metadataChanged?: boolean }) => {
   const id = useParams().id;
@@ -94,11 +102,11 @@ export const GitRepoForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'; m
         await updateGitRepository({ id, data: payload });
         refreshData();
       } else {
-        await createGitRepository({ data: payload });
+        await createGitRepository({ data: payload as CreateGitRepositoryInput });
         navigate('/git-repos');
       }
 
-      toast.success(`Repository "${payload.name}" saved successfully`);
+      toast.success(`Repository "${(payload as GitRepositoryView).name}" saved successfully`);
     } finally {
       setIsPending(false);
     }

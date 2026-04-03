@@ -16,6 +16,7 @@ import { ResourceType } from '@/api/types';
 import Loader from '@/components/ui/loader';
 import { ResourceTabs } from '@/components/custom/resource-tabs';
 import TaskSheet from '@/components/custom/task-sheet';
+import { PatchResourceMetadata } from '@/api/generated/api.types';
 
 export const ResourceForm = ({ mode }: { mode: 'add' | 'edit' }) => {
   const type = useResourceParamType();
@@ -41,7 +42,8 @@ const AddFormPage = ({ type }: { type: ResourceType }) => {
 
 const EditFormPage = ({ type }: { type: ResourceType }) => {
   const { id } = useParams();
-  const { mutateAsync: updateResource } = useMutate(`update${type}` as any);
+  const { mutateAsync: updateMetadata } = useMutate(`update${type}Metadata` as any);
+  const { mutateAsync: renameResource } = useMutate(`rename${type}` as any);
   const [resource, setResource] = useState<RequiredFormFields | null>(null);
   const [metadatChanged, setMetaDataChanged] = useState(false);
 
@@ -65,12 +67,24 @@ const EditFormPage = ({ type }: { type: ResourceType }) => {
   if (!tabs.length) return <NotFound />;
   if (!Header) return <span>Workload header is required</span>;
 
-  const updateField = async (patch: Partial<RequiredFormFields>) => {
+  const handleUpdateMetadata = async (patch: Partial<PatchResourceMetadata>) => {
     if (!resource) return;
     const previous = resource;
     setResource({ ...resource, ...patch });
     try {
-      await updateResource({ id, data: patch });
+      await updateMetadata({ id, data: patch });
+      setMetaDataChanged(true);
+    } catch {
+      setResource(previous);
+    }
+  };
+
+  const handleRenameResource = async (name: string) => {
+    if (!resource) return;
+    const previous = resource;
+    setResource({ ...resource, ...{ name } });
+    try {
+      await renameResource({ id, name });
       setMetaDataChanged(true);
     } catch {
       setResource(previous);
@@ -87,8 +101,8 @@ const EditFormPage = ({ type }: { type: ResourceType }) => {
         item={resource}
         Indicator={Header.Indicator}
         Actions={Header.ActionButtons}
-        onRename={(name) => updateField({ name })}
-        onChangeDescription={(description) => updateField({ description })}
+        onRename={(name) => handleRenameResource(name)}
+        onChangeDescription={(description) => handleUpdateMetadata({ description })}
       />
       {Components.SubHeader && <Components.SubHeader resource={resource} />}
       <ResourceTabs localKey={localKey} resource={resource} tabs={tabs} metadataChanged={metadatChanged} />

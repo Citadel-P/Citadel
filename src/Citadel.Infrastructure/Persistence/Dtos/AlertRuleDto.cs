@@ -6,6 +6,7 @@ namespace Infrastructure.Persistence.Dtos;
 internal record AlertRuleDto(
     Guid Id,
     string Name,
+    string? Description,
     string Type,
     int? CooldownSeconds,
     string Status,

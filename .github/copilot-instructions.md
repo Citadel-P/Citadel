@@ -14,3 +14,4 @@
 - Domain JSON source-generation contexts should live in `DomainJsonContext.cs` rather than separate files.
 - For Stack persistence, treat Stack as the aggregate root and do not expose a separate StackRelease repository; child StackRelease persistence should be handled through StackRepository.
 - Do not modify the validation pipeline when fixing tests in this codebase; prefer updating tests to match handler behavior instead.
+- Follow the established resource update pattern by splitting updates into Patch, PatchMetadata, and Rename operations, and mirror that pattern consistently in tests.

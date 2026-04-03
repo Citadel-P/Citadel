@@ -50,7 +50,8 @@ public class RegistryPatchTests : IntegrationTestBase
 
         var patchJson = """
         {
-          "name": "UpdatedName",
+          "registryHost": "updated.url",
+          "status": "Disabled",
           "configuration": {
             "$type": "DockerHub",
             "userName": "patched-user"
@@ -80,9 +81,8 @@ public class RegistryPatchTests : IntegrationTestBase
 
         var patchJson = """
         {
-          "name": "UpdatedName",
-          "description": "Disabled for test purposes",
           "status": "Disabled",
+          "registryHost": "disabled.url",
           "configuration": {
             "$type": "DockerHub",
             "userName": "patched-user"
@@ -106,7 +106,7 @@ public class RegistryPatchTests : IntegrationTestBase
         // Arrange
         var patchJson = """
         {
-          "name": ""
+          "registryHost": ""
         }
         """;
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
@@ -126,7 +126,12 @@ public class RegistryPatchTests : IntegrationTestBase
         var nonExistentId = Guid.NewGuid();
         var patchJson = """
         {
-          "name": "DoesNotExist"
+          "registryHost": "does-not-exist.url",
+          "status": "Active",
+          "configuration": {
+            "$type": "DockerHub",
+            "userName": "patched-user"
+          }
         }
         """;
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
@@ -151,7 +156,8 @@ public class RegistryPatchTests : IntegrationTestBase
 
         var patchJson = """
         {
-          "name": "UpdatedName",
+          "registryHost": "patched.url",
+          "status": "Active",
           "configuration": {
             "$type": "DockerHub",
             "userName": "patched-user"
@@ -168,5 +174,46 @@ public class RegistryPatchTests : IntegrationTestBase
         // Assert
         var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Patch_Registry_Metadata_Should_Update_Description()
+    {
+        var patchJson = """
+        {
+          "description": "Updated registry metadata"
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync($"/api/v1/registries/{registryId}/_metadata", content, cancellationToken: TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var registry = await uow.Registries.GetAsync(registryId, TestContext.Current.CancellationToken);
+
+        Assert.Equal("Updated registry metadata", registry?.Description);
+    }
+
+    [Fact]
+    public async Task Rename_Registry_Should_Update_Name()
+    {
+        var renameJson = $$"""
+        {
+          "id": "{{registryId}}",
+          "name": "RenamedRegistry"
+        }
+        """;
+        var content = new StringContent(renameJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/registries/rename", content, TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var registry = await uow.Registries.GetAsync(registryId, TestContext.Current.CancellationToken);
+
+        Assert.Equal("RenamedRegistry", registry?.Name);
     }
 }

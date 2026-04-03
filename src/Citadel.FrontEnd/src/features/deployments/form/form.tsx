@@ -1,5 +1,5 @@
 import {
-  DeploymentInput,
+  CreateDeploymentInput,
   PlatformView,
   ImageView,
   DeploymentImageInfoExternalImage,
@@ -10,6 +10,8 @@ import {
   StopSignal,
   UpdateBehavior,
   DeploymentConfigView,
+  PatchDeploymentInput,
+  DeploymentView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -135,6 +137,8 @@ const stop_signals = {
   },
 };
 
+type DeploymentInput = CreateDeploymentInput | PatchDeploymentInput;
+
 export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'; metadataChanged?: boolean }) => {
   const id = useParams().id;
   const navigate = useNavigate();
@@ -204,15 +208,16 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
     setIsPending(true);
 
     try {
+      let response;
       if (mode === 'edit') {
-        await updateDeployment({ id, data: payload });
+        response = await updateDeployment({ id, data: payload });
         refreshData();
       } else {
-        await createDeployment({ data: payload });
+        response = await createDeployment({ data: payload as CreateDeploymentInput });
         navigate('/deployments');
       }
 
-      toast.success(`Deployment "${payload.name}" saved successfully`);
+      toast.success(`Deployment "${(response.data as DeploymentView).name}" saved successfully`);
     } finally {
       setIsPending(false);
     }

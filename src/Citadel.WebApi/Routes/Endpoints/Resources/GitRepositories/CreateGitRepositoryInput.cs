@@ -1,10 +1,9 @@
 using Application.Features.GitRepositories.Commands;
-using Domain;
 using Domain.Entities.Git;
 
 namespace WebApi.Routes.Endpoints.Resources.GitRepositories;
 
-public sealed record GitRepositoryInput(
+public sealed record CreateGitRepositoryInput(
     string Name,
     string? Description,
     string Url,

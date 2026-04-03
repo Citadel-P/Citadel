@@ -51,8 +51,6 @@ public class DeploymentPatchTests : IntegrationTestBase
         // Arrange
         var patchJson = $$"""
         {
-          "name":"Updated-Deployment-Name",
-          "description":"Updated description for testing",
           "platformId":"{{_platformId}}",
           "spec": 
           {
@@ -102,8 +100,8 @@ public class DeploymentPatchTests : IntegrationTestBase
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var deployment = await uow.Deployments.GetAsync(_deploymentId, TestContext.Current.CancellationToken);
 
-        Assert.Equal("Updated-Deployment-Name", deployment?.Name);
-        Assert.Equal("Updated description for testing", deployment?.Description);
+        Assert.Equal("Test Deployment", deployment?.Name);
+        Assert.Equal("A deployment for testing", deployment?.Description);
         Assert.Contains("ENV=staging", deployment?.Spec?.EnvVars ?? []);
         Assert.Contains("DEBUG=true", deployment?.Spec?.EnvVars ?? []);
         Assert.Contains("key1", deployment?.Spec?.Labels?? []);
@@ -179,5 +177,48 @@ public class DeploymentPatchTests : IntegrationTestBase
         var response = await Client.PatchAsync($"/api/v1/deployments/{_deploymentId}", content, cancellationToken: TestContext.Current.CancellationToken);
         // Assert
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Patch_Deployment_Metadata_Should_Update_Description()
+    {
+        var patchJson = """
+        {
+          "description": "Updated metadata description"
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync($"/api/v1/deployments/{_deploymentId}/_metadata", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var deployment = await uow.Deployments.GetAsync(_deploymentId, TestContext.Current.CancellationToken);
+
+        Assert.Equal("Updated metadata description", deployment?.Description);
+    }
+
+    [Fact]
+    public async Task Rename_Deployment_Should_Update_Name()
+    {
+        var renameJson = $$"""
+        {
+          "id": "{{_deploymentId}}",
+          "name": "RenamedDeployment"
+        }
+        """;
+        var content = new StringContent(renameJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/deployments/rename", content, TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var deployment = await uow.Deployments.GetAsync(_deploymentId, TestContext.Current.CancellationToken);
+
+        Assert.Equal("RenamedDeployment", deployment?.Name);
     }
 }

@@ -3,10 +3,8 @@
   title: One or more validation errors occurred.,
   status: 400,
   errors: {
-    Name: [
-      'Name' must not be empty.,
-      'Name' must be between 3 and 64 characters. You entered 0 characters.,
-      Must be a valid name, no whitespace or special chars are allowed.
+    RegistryHost: [
+      Please provide a valid host name eg: ghcr.io
     ]
   },
   traceId: {Scrubbed}

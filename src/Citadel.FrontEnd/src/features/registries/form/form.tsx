@@ -1,10 +1,12 @@
 import {
   RegistryType,
-  RegistryInput,
   RegistryConfigurationGitHubRegistry,
   RegistryConfigurationCustomRegistry,
   RegistryConfigurationDockerHubRegistry,
   RegistryStatus,
+  CreateRegistryInput,
+  PatchRegistryInput,
+  RegistryView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -103,6 +105,7 @@ const HelperLink = ({ href, info }: { href: string; info: string }) => (
     </span>
   </a>
 );
+type RegistryInput = CreateRegistryInput | PatchRegistryInput;
 
 export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: RegistryInput }) => {
   const id = useParams().id;
@@ -125,15 +128,16 @@ export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resourc
   const handleSave = async (payload: RegistryInput) => {
     setIsPending(true);
     try {
+      let response;
       if (mode === 'edit') {
-        await updateRegistry({ id, data: payload });
+        response = await updateRegistry({ id, data: payload });
         refreshData();
       } else {
-        await createRegistry({ data: payload });
+        response = await createRegistry({ data: payload as CreateRegistryInput });
         navigate('/registries');
       }
 
-      toast.success(`Registry "${payload.name}" saved successfully`);
+      toast.success(`Registry "${(response.data as RegistryView).name}" saved successfully`);
     } finally {
       setIsPending(false);
     }

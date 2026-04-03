@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 
 namespace WebApi.Routes.Endpoints;
@@ -34,7 +35,7 @@ public static class Deployments
         return EndpointHandlers.HandleResult(result, DeploymentsView.Map);
     }
 
-    public static async Task<Results<Ok<DeploymentView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] DeploymentInput request, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<DeploymentView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreateDeploymentInput request, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResult(result, DeploymentView.Map);
@@ -52,8 +53,25 @@ public static class Deployments
         DeploymentInputPatchDocument patchInput,
         CancellationToken cancellationToken)
     {
-        var mapped = patchInput.Map<DeploymentInput, Deployment>();
+        var mapped = patchInput.Map<PatchDeploymentInput, Deployment>();
         var result = await mediator.Send(new PatchDeployment(id, mapped), cancellationToken);
+        return EndpointHandlers.HandleResult(result, DeploymentView.Map);
+    }
+
+    public static async Task<Results<Ok<DeploymentView>, ProblemHttpResult>> PatchMetadata(
+        IMediator mediator,
+        [FromRoute][Description("Deployment ID")] Guid id,
+        PatchResourceMetadataDocument patchInput,
+        CancellationToken cancellationToken)
+    {
+        var mapped = patchInput.Map<PatchResourceMetadata, Deployment>();
+        var result = await mediator.Send(new PatchDeploymentMetadata(id, mapped), cancellationToken);
+        return EndpointHandlers.HandleResult(result, DeploymentView.Map);
+    }
+
+    public static async Task<Results<Ok<DeploymentView>, ProblemHttpResult>> Rename(IMediator mediator, [FromBody] RenameResource renameResource, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new RenameDeployment(renameResource.Id, renameResource.Name), cancellationToken);
         return EndpointHandlers.HandleResult(result, DeploymentView.Map);
     }
 

@@ -29,8 +29,6 @@ public sealed record PatchStack(Guid Id, JsonMergePatchDocument<StackPatchModel>
     {
         public StackPatchModelValidator()
         {
-            When(x => x.Name != null, () => RuleFor(x => x.Name).NotEmpty().ValidNameIdentifier());
-            When(x => x.Description != null, () => RuleFor(x => x.Description).MaximumLength(600));
         }
     }
 }
@@ -57,11 +55,6 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IHttpContextAcce
 
         var patched = command.Patch.ApplyTo(current, StackJsonContext.Default.StackPatchModel);
 
-        if (string.IsNullOrWhiteSpace(patched.Name))
-        {
-            return Result.Failure<Stack>(new BadRequestError("Name is required."));
-        }
-
         if (patched.PlatformId == null || patched.PlatformId == Guid.Empty)
         {
             return Result.Failure<Stack>(new BadRequestError("PlatformId is required."));
@@ -81,12 +74,6 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IHttpContextAcce
         if (!IsCompatible(stackSource, patched.Spec))
         {
             return Result.Failure<Stack>(new BadRequestError("StackSource does not match the provided StackSpec."));
-        }
-
-        if (!string.Equals(stack.Name, patched.Name, StringComparison.OrdinalIgnoreCase)
-            && await unitOfWork.Stacks.ExistsAsync(command.Id, patched.Name, cancellationToken))
-        {
-            return Result.Failure<Stack>(new ConflictError("Name already exists"));
         }
 
         var platform = await unitOfWork.Platforms.GetByIdAsync(patched.PlatformId.Value, cancellationToken);
@@ -118,10 +105,6 @@ internal sealed class PatchStackHandler(IUnitOfWork unitOfWork, IHttpContextAcce
 
             stack.SetCurrentStackRelease(nextRelease);
         }
-
-        stack.UpdateDetails(
-            name: patched.Name,
-            description: patched.Description);
 
         await unitOfWork.Stacks.UpdateAsync(stack, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);

@@ -188,13 +188,31 @@ public static class PublicEndpoints
 
         gitRepositories.MapPatch("{id}", GitRepositories.Patch)
             .WithSummary("Update a git repository")
-            .Accepts<GitRepositoryInput>("application/merge-patch+json", "application/json")
+            .Accepts<PatchGitRepositoryInput>("application/merge-patch+json", "application/json")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("updateGitRepository");
+
+        gitRepositories.MapPatch("{id}/_metadata", GitRepositories.PatchMetadata)
+            .WithSummary("Update git repository metadata")
+            .Accepts<PatchResourceMetadata>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("updateGitRepositoryMetadata");
+
+        gitRepositories.MapPost("/rename", GitRepositories.Rename)
+            .WithSummary("Rename a git repository")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("renameGitRepository");
 
         gitRepositories.MapDelete("/", GitRepositories.Delete)
             .WithSummary("Delete git repositories")
@@ -419,7 +437,7 @@ public static class PublicEndpoints
         registries.MapPatch("{id}", Registries.Patch)
             .WithSummary("Update a registry")
             .WithDescription($"A discriminator should be provided in the request, this discriminator is based on {nameof(RegistryType)} enum")
-            .Accepts<RegistryInput>("application/merge-patch+json", "application/json")
+            .Accepts<PatchRegistryInput>("application/merge-patch+json", "application/json")
             .WithExample(RegistryType.Azure.ToString(), Examples.Registries.Update.UpdateAzureRegistryExample())
             .WithExample(RegistryType.AWS.ToString(), Examples.Registries.Update.UpdateAwsRegistryExample())
             .WithExample(RegistryType.Gitlab.ToString(), Examples.Registries.Update.UpdateGitlabRegistryExample())
@@ -432,6 +450,25 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("updateRegistry");
+
+        registries.MapPatch("{id}/_metadata", Registries.PatchMetadata)
+            .WithSummary("Update registry metadata")
+            .Accepts<PatchResourceMetadata>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateRegistryMetadata");
+
+        registries.MapPost("/rename", Registries.Rename)
+            .WithSummary("Rename registry")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("renameRegistry");
 
         registries.MapDelete("/", Registries.Delete)
             .WithSummary("Delete registries")
@@ -626,15 +663,33 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("createDeployment");
 
+        deployment.MapPost("/rename", Deployments.Rename)
+            .WithSummary("Rename deployment")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("renameDeployment");
+
         deployment.MapPatch("{id}", Deployments.Patch)
             .WithSummary("Update a deployment")
-            .Accepts<DeploymentInput>("application/merge-patch+json", "application/json")
+            .Accepts<PatchDeploymentInput>("application/merge-patch+json", "application/json")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("updateDeployment");
+
+        deployment.MapPatch("{id}/_metadata", Deployments.PatchMetadata)
+            .WithSummary("Update deployment metadata")
+            .Accepts<PatchResourceMetadata>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateDeploymentMetadata");
 
         deployment.MapDelete("/", Deployments.Delete)
             .WithSummary("Delete deployments")
@@ -735,15 +790,34 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("createStack");
 
+        stacks.MapPost("/rename", Stacks.Rename)
+            .WithSummary("Rename a stack")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("renameStack");
+
         stacks.MapPatch("{id}", Stacks.Patch)
             .WithSummary("Update a stack")
-            .Accepts<StackInput>("application/merge-patch+json", "application/json")
+            .Accepts<PatchStackInput>("application/merge-patch+json", "application/json")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("updateStack");
+
+        stacks.MapPatch("{id}/_metadata", Stacks.PatchMetadata)
+            .WithSummary("Update stack metadata")
+            .Accepts<PatchResourceMetadata>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateStackMetadata");
 
         stacks.MapDelete("/", Stacks.Delete)
             .WithSummary("Delete stacks")
@@ -806,14 +880,31 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("createAlertRule");
 
+        rules.MapPost("/rename", AlertRules.RenameRule)
+            .WithSummary("Rename an alert rule")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("renameAlertRule");
+
         rules.MapPatch("{id}", AlertRules.PatchRule)
             .WithSummary("Update an alert rule")
-            .Accepts<AlertRuleInput>("application/merge-patch+json", "application/json")
+            .Accepts<PatchAlertRuleInput>("application/merge-patch+json", "application/json")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("updateAlertRule");
+
+        rules.MapPatch("{id}/_metadata", AlertRules.PatchRuleMetadata)
+            .WithSummary("Update alert rule metadata")
+            .Accepts<PatchResourceMetadata>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("updateAlertRuleMetadata");
 
         rules.MapDelete("/", AlertRules.DeleteRules)
             .WithSummary("Delete alert rules")

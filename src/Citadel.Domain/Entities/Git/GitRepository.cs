@@ -55,24 +55,30 @@ public class GitRepository(
         return $"/app/data/repos/{Id}";
     }
 
-    public void UpdateMetadata(string name, string? description, string defaultBranch, GitReposStatus status)
-    {
-        Name = name;
-        Description = description;
-        DefaultBranch = defaultBranch;
-        Status = status;
-    }
 
     public void PartialUpdate(
+        string? name = null, 
+        string? description = null, 
+        string? defaultBranch = null,
         bool? webHookEnabled = null,
         string? webHookSecret = null,
         RepoCommand? onClone = null,
         RepoCommand? onPull = null,
+        GitReposStatus? status = null,
         ResourceControlState? resourceControlState = null,
         long? controlStartedAt = null,
         Guid? controlTriggeredBy = null,
         long? rowVersion = null)
     {
+        if (name is not null) 
+            Name = name;
+
+        if (description is not null) 
+            Description = description;
+
+        if (defaultBranch is not null) 
+            DefaultBranch = defaultBranch;
+
         if (webHookEnabled.HasValue)
             WebHookEnabled = webHookEnabled.Value;
 
@@ -96,6 +102,9 @@ public class GitRepository(
 
         if (rowVersion is not null)
             RowVersion = rowVersion.Value;
+
+        if (status is not null)
+            Status = status.Value;
     }
 
     public void UpdateSource(string url, Guid? gitAccountId)

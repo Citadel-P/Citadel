@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260329085651_migration0001")]
+    [Migration("20260403140847_migration0001")]
     partial class migration0001
     {
         /// <inheritdoc />
@@ -253,6 +253,10 @@ namespace Infrastructure.Migrations.Migrations
 
                     b.Property<string>("CreatedByActorId")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(600)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("LimitedTo")
@@ -677,6 +681,7 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
+                        .HasMaxLength(600)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
@@ -1179,6 +1184,7 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
+                        .HasMaxLength(600)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")

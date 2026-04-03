@@ -121,7 +121,7 @@ export enum GitTransport {
 
 export enum GitReposStatus {
   Unknown = "Unknown",
-  Processing = "Processing",
+  Pending = "Pending",
   Created = "Created",
   Healthy = "Healthy",
   Degraded = "Degraded",
@@ -765,6 +765,7 @@ export interface AlertRuleConfigView {
   /** @format uuid */
   id: string;
   name: string;
+  description: null | string;
   type: AlertType;
   severity: AlertSeverity;
   /**
@@ -786,31 +787,6 @@ export interface AlertRuleConfigView {
   channelIds: string[];
   limitedTo: AlertRuleLimitedTo[];
   quietHours: AlertRuleQuietHour[];
-}
-
-export interface AlertRuleInput {
-  name: null | string;
-  type: AlertType;
-  severity: AlertSeverity;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  cooldownSeconds: null | number | string;
-  status: AlertRuleStatus;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  requiredMatches?: null | number | string;
-  /**
-   * @format double
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  threshold?: null | number | string;
-  channelIds?: null | any[];
-  limitedTo?: null | any[];
-  quietHours?: null | any[];
 }
 
 export interface AlertRuleLimitedTo {
@@ -864,6 +840,7 @@ export interface AlertRuleSnapshot {
   type: AlertType;
   severity: AlertSeverity;
   name: string;
+  description: null | string;
   /**
    * @format int32
    * @pattern ^-?(?:0|[1-9]\d*)$
@@ -889,6 +866,7 @@ export interface AlertRuleView {
   /** @format uuid */
   id: string;
   name: string;
+  description: null | string;
   type: AlertType;
   severity: AlertSeverity;
   /**
@@ -1188,6 +1166,32 @@ export interface ContainersView {
   containers: ContainerView[];
 }
 
+export interface CreateAlertRuleInput {
+  name: null | string;
+  description: null | string;
+  type: AlertType;
+  severity: AlertSeverity;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  cooldownSeconds: null | number | string;
+  status: AlertRuleStatus;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  requiredMatches?: null | number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  threshold?: null | number | string;
+  channelIds?: null | any[];
+  limitedTo?: null | any[];
+  quietHours?: null | any[];
+}
+
 export interface CreateContainerInput {
   /** @format uuid */
   platformId: string;
@@ -1235,6 +1239,27 @@ export interface CreateContainerView {
   id: string;
 }
 
+export interface CreateDeploymentInput {
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  description: null | string;
+  spec: DeploymentSpec;
+}
+
+export interface CreateGitRepositoryInput {
+  name: string;
+  description: null | string;
+  url: string;
+  defaultBranch: string;
+  /** @format uuid */
+  gitAccountId: null | string;
+  webHookEnabled: boolean;
+  webHookSecret: null | string;
+  onClone: null | RepoCommand;
+  onPull: null | RepoCommand;
+}
+
 export interface CreateNetworkInput {
   /** @format uuid */
   platformId: string;
@@ -1255,6 +1280,23 @@ export interface CreateNetworkInput {
 
 export interface CreateNetworkView {
   id: string;
+}
+
+export interface CreateRegistryInput {
+  name: string;
+  registryHost: string;
+  status: RegistryStatus;
+  configuration: RegistryConfiguration;
+  description?: null | string;
+}
+
+export interface CreateStackInput {
+  name: string;
+  /** @format uuid */
+  platformId: string;
+  description: null | string;
+  stackSource: StackSource;
+  spec: StackSpec;
 }
 
 export interface CreateVolumeInput {
@@ -1370,14 +1412,6 @@ export interface DeploymentImageInfoExternalImage {
 export interface DeploymentImageInfoLocalImage {
   $type?: "Local";
   imageId: string;
-}
-
-export interface DeploymentInput {
-  name: string;
-  /** @format uuid */
-  platformId: string;
-  description: null | string;
-  spec: DeploymentSpec;
 }
 
 export interface DeploymentSnapshot {
@@ -1690,19 +1724,6 @@ export interface GitRepositoriesView {
 export interface GitRepositoryConfigView {
   /** @format uuid */
   id: string;
-  name: string;
-  description: null | string;
-  url: string;
-  defaultBranch: string;
-  /** @format uuid */
-  gitAccountId: null | string;
-  webHookEnabled: boolean;
-  webHookSecret: null | string;
-  onClone: null | RepoCommand;
-  onPull: null | RepoCommand;
-}
-
-export interface GitRepositoryInput {
   name: string;
   description: null | string;
   url: string;
@@ -2207,6 +2228,65 @@ export interface PagedResultViewOfAlertEventView {
   pageSize: number | string;
 }
 
+export interface PatchAlertRuleInput {
+  description: null | string;
+  type: AlertType;
+  severity: AlertSeverity;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  cooldownSeconds: null | number | string;
+  status: AlertRuleStatus;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  requiredMatches?: null | number | string;
+  /**
+   * @format double
+   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+   */
+  threshold?: null | number | string;
+  channelIds?: null | any[];
+  limitedTo?: null | any[];
+  quietHours?: null | any[];
+}
+
+export interface PatchDeploymentInput {
+  /** @format uuid */
+  platformId: string;
+  spec: DeploymentSpec;
+}
+
+export interface PatchGitRepositoryInput {
+  url: string;
+  defaultBranch: string;
+  /** @format uuid */
+  gitAccountId: null | string;
+  webHookEnabled: boolean;
+  webHookSecret: null | string;
+  onClone: null | RepoCommand;
+  onPull: null | RepoCommand;
+}
+
+export interface PatchRegistryInput {
+  registryHost: string;
+  status: RegistryStatus;
+  configuration: RegistryConfiguration;
+}
+
+export interface PatchResourceMetadata {
+  description: string;
+  tags: string[];
+}
+
+export interface PatchStackInput {
+  /** @format uuid */
+  platformId: string;
+  spec: StackSpec;
+}
+
 export type PlatformDescriptor = BasePlatformDescriptor &
   (
     | BasePlatformDescriptorTypeMapping<
@@ -2518,14 +2598,6 @@ export interface RegistryConfigurationGitlabRegistry {
   instanceUrl: string;
 }
 
-export interface RegistryInput {
-  name: string;
-  registryHost: string;
-  status: RegistryStatus;
-  configuration: RegistryConfiguration;
-  description?: null | string;
-}
-
 export interface RegistrySnapshot {
   /** @format uuid */
   id: string;
@@ -2549,6 +2621,12 @@ export interface RegistryView {
   /** @format date-time */
   createdAt: any;
   isDefault?: boolean;
+}
+
+export interface RenameResource {
+  /** @format uuid */
+  id: string;
+  name: string;
 }
 
 export interface RepoCommand {
@@ -2603,15 +2681,6 @@ export interface StackConfigView {
   stackSource: StackSource;
   spec: StackSpec;
   stackUpdateState: StackUpdateState;
-}
-
-export interface StackInput {
-  name: string;
-  /** @format uuid */
-  platformId: string;
-  description: null | string;
-  stackSource: StackSource;
-  spec: StackSpec;
 }
 
 export interface StackReleaseView {
@@ -3731,7 +3800,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    createRegistry: (data: RegistryInput, params: RequestParams = {}) =>
+    createRegistry: (data: CreateRegistryInput, params: RequestParams = {}) =>
       this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>(
         {
           path: `/api/v1/registries`,
@@ -3816,7 +3885,7 @@ export class Api<
      */
     updateRegistry: (
       id: string,
-      data: RegistryInput,
+      data: PatchRegistryInput,
       params: RequestParams = {},
     ) =>
       this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>(
@@ -3857,6 +3926,68 @@ export class Api<
         format: "json",
         ...params,
       }),
+
+    /**
+     * No description
+     *
+     * @tags Registries
+     * @name UpdateRegistryMetadata
+     * @summary Update registry metadata
+     * @request PATCH:/api/v1/registries/{id}/_metadata
+     * @secure
+     * @response `200` `RegistryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateRegistryMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/registries/${id}/_metadata`,
+          method: "PATCH",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Registries
+     * @name RenameRegistry
+     * @summary Rename registry
+     * @request POST:/api/v1/registries/rename
+     * @secure
+     * @response `200` `RegistryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renameRegistry: (data: RenameResource, params: RequestParams = {}) =>
+      this.request<RegistryView, HttpValidationProblemDetails | ProblemDetails>(
+        {
+          path: `/api/v1/registries/rename`,
+          method: "POST",
+          body: data,
+          secure: true,
+          type: ContentType.Json,
+          format: "json",
+          ...params,
+        },
+      ),
 
     /**
      * No description
@@ -4072,7 +4203,7 @@ export class Api<
      * @response `500` `ProblemDetails` Internal Server Error
      */
     createGitRepository: (
-      data: GitRepositoryInput,
+      data: CreateGitRepositoryInput,
       params: RequestParams = {},
     ) =>
       this.request<
@@ -4161,7 +4292,7 @@ export class Api<
      */
     updateGitRepository: (
       id: string,
-      data: GitRepositoryInput,
+      data: PatchGitRepositoryInput,
       params: RequestParams = {},
     ) =>
       this.request<
@@ -4200,6 +4331,69 @@ export class Api<
         path: `/api/v1/gitRepositories/${id}/_cfg`,
         method: "GET",
         secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name UpdateGitRepositoryMetadata
+     * @summary Update git repository metadata
+     * @request PATCH:/api/v1/gitRepositories/{id}/_metadata
+     * @secure
+     * @response `200` `GitRepositoryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateGitRepositoryMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        GitRepositoryView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitRepositories/${id}/_metadata`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags GitRepositories
+     * @name RenameGitRepository
+     * @summary Rename a git repository
+     * @request POST:/api/v1/gitRepositories/rename
+     * @secure
+     * @response `200` `GitRepositoryView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renameGitRepository: (data: RenameResource, params: RequestParams = {}) =>
+      this.request<
+        GitRepositoryView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/gitRepositories/rename`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),
@@ -4774,7 +4968,10 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    createDeployment: (data: DeploymentInput, params: RequestParams = {}) =>
+    createDeployment: (
+      data: CreateDeploymentInput,
+      params: RequestParams = {},
+    ) =>
       this.request<
         DeploymentView,
         HttpValidationProblemDetails | ProblemDetails
@@ -4871,6 +5068,35 @@ export class Api<
      * No description
      *
      * @tags Deployments
+     * @name RenameDeployment
+     * @summary Rename deployment
+     * @request POST:/api/v1/deployments/rename
+     * @secure
+     * @response `200` `DeploymentView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renameDeployment: (data: RenameResource, params: RequestParams = {}) =>
+      this.request<
+        DeploymentView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/deployments/rename`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
      * @name UpdateDeployment
      * @summary Update a deployment
      * @request PATCH:/api/v1/deployments/{id}
@@ -4885,7 +5111,7 @@ export class Api<
      */
     updateDeployment: (
       id: string,
-      data: DeploymentInput,
+      data: PatchDeploymentInput,
       params: RequestParams = {},
     ) =>
       this.request<
@@ -4893,6 +5119,40 @@ export class Api<
         HttpValidationProblemDetails | ProblemDetails
       >({
         path: `/api/v1/deployments/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Deployments
+     * @name UpdateDeploymentMetadata
+     * @summary Update deployment metadata
+     * @request PATCH:/api/v1/deployments/{id}/_metadata
+     * @secure
+     * @response `200` `DeploymentView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateDeploymentMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        DeploymentView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/deployments/${id}/_metadata`,
         method: "PATCH",
         body: data,
         secure: true,
@@ -5094,7 +5354,7 @@ export class Api<
      * @response `409` `ProblemDetails` Conflict
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    createStack: (data: StackInput, params: RequestParams = {}) =>
+    createStack: (data: CreateStackInput, params: RequestParams = {}) =>
       this.request<StackView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks`,
         method: "POST",
@@ -5212,6 +5472,33 @@ export class Api<
      * No description
      *
      * @tags Stacks
+     * @name RenameStack
+     * @summary Rename a stack
+     * @request POST:/api/v1/stacks/rename
+     * @secure
+     * @response `200` `StackView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renameStack: (data: RenameResource, params: RequestParams = {}) =>
+      this.request<StackView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/stacks/rename`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
      * @name UpdateStack
      * @summary Update a stack
      * @request PATCH:/api/v1/stacks/{id}
@@ -5224,9 +5511,44 @@ export class Api<
      * @response `409` `ProblemDetails` Conflict
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    updateStack: (id: string, data: StackInput, params: RequestParams = {}) =>
+    updateStack: (
+      id: string,
+      data: PatchStackInput,
+      params: RequestParams = {},
+    ) =>
       this.request<StackView, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/stacks/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Stacks
+     * @name UpdateStackMetadata
+     * @summary Update stack metadata
+     * @request PATCH:/api/v1/stacks/{id}/_metadata
+     * @secure
+     * @response `200` `StackView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateStackMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<StackView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/stacks/${id}/_metadata`,
         method: "PATCH",
         body: data,
         secure: true,
@@ -5504,7 +5826,7 @@ export class Api<
      */
     updateAlertRule: (
       id: string,
-      data: AlertRuleInput,
+      data: PatchAlertRuleInput,
       params: RequestParams = {},
     ) =>
       this.request<
@@ -5588,7 +5910,7 @@ export class Api<
      * @response `404` `ProblemDetails` Not Found
      * @response `500` `ProblemDetails` Internal Server Error
      */
-    createAlertRule: (data: AlertRuleInput, params: RequestParams = {}) =>
+    createAlertRule: (data: CreateAlertRuleInput, params: RequestParams = {}) =>
       this.request<
         AlertRuleView,
         HttpValidationProblemDetails | ProblemDetails
@@ -5627,6 +5949,68 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AlertRules
+     * @name RenameAlertRule
+     * @summary Rename an alert rule
+     * @request POST:/api/v1/alertRules/rename
+     * @secure
+     * @response `200` `AlertRuleView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renameAlertRule: (data: RenameResource, params: RequestParams = {}) =>
+      this.request<
+        AlertRuleView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/alertRules/rename`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags AlertRules
+     * @name UpdateAlertRuleMetadata
+     * @summary Update alert rule metadata
+     * @request PATCH:/api/v1/alertRules/{id}/_metadata
+     * @secure
+     * @response `200` `AlertRuleView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateAlertRuleMetadata: (
+      id: string,
+      data: PatchResourceMetadata,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        AlertRuleView,
+        HttpValidationProblemDetails | ProblemDetails
+      >({
+        path: `/api/v1/alertRules/${id}/_metadata`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
         ...params,
       }),
 

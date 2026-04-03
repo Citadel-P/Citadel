@@ -4,7 +4,7 @@ using Hosting.Common.MergePatch;
 
 namespace WebApi.Routes.Endpoints.Resources.Deployments;
 
-public class DeploymentInputPatchDocument : JsonMergePatchDocument<DeploymentInput>
+public class DeploymentInputPatchDocument : JsonMergePatchDocument<PatchDeploymentInput>
 {
     public static async ValueTask<DeploymentInputPatchDocument?> BindAsync(HttpContext context, ParameterInfo _)
     {

@@ -62,8 +62,6 @@ public class StackPatchTests : IntegrationTestBase
     {
         var patchJson = $$"""
         {
-          "name": "stack-1-updated",
-          "description": "updated-description",
           "platformId": "{{otherPlatformId}}",
           "spec": {
             "$type": "Manual",
@@ -83,8 +81,8 @@ public class StackPatchTests : IntegrationTestBase
         var releases = (await uow.Stacks.GetReleasesByStackIdAsync(stackId, TestContext.Current.CancellationToken)).ToList();
 
         Assert.NotNull(stack);
-        Assert.Equal("stack-1-updated", stack.Name);
-        Assert.Equal("updated-description", stack.Description);
+        Assert.Equal("stack-1", stack.Name);
+        Assert.Equal("original-description", stack.Description);
         Assert.Equal(2, releases.Count);
         Assert.Equal("2", stack.CurrentStackRelease!.Version);
         Assert.Equal(otherPlatformId, stack.CurrentStackRelease.PlatformId);
@@ -96,7 +94,7 @@ public class StackPatchTests : IntegrationTestBase
     {
         var patchJson = """
         {
-          "name": ""
+          "platformId": "00000000-0000-0000-0000-000000000000"
         }
         """;
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
@@ -111,7 +109,6 @@ public class StackPatchTests : IntegrationTestBase
     {
         var patchJson = $$"""
         {
-          "name": "missing-stack",
           "platformId": "{{platformId}}",
           "spec": {
             "$type": "Manual",
@@ -143,20 +140,75 @@ public class StackPatchTests : IntegrationTestBase
             await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
 
-        var patchJson = $$"""
+        var renameJson = $$"""
         {
-          "name": "other-stack",
-          "platformId": "{{platformId}}",
-          "spec": {
-            "$type": "Manual",
-            "composeFile": "docker-compose.yml"
-          }
+          "id": "{{stackId}}",
+          "name": "other-stack"
+        }
+        """;
+        var content = new StringContent(renameJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/stacks/rename", content, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Patch_Stack_Metadata_Should_Update_Description()
+    {
+        var patchJson = """
+        {
+          "description": "updated-description"
         }
         """;
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
 
-        var response = await Client.PatchAsync($"/api/v1/stacks/{stackId}", content, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await Client.PatchAsync($"/api/v1/stacks/{stackId}/_metadata", content, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stack = await uow.Stacks.GetAsync(stackId, TestContext.Current.CancellationToken);
+
+        Assert.Equal("updated-description", stack?.Description);
+    }
+
+    [Fact]
+    public async Task Rename_Stack_Should_Update_Name()
+    {
+        var renameJson = $$"""
+        {
+          "id": "{{stackId}}",
+          "name": "stack-1-updated"
+        }
+        """;
+        var content = new StringContent(renameJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/stacks/rename", content, TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var stack = await uow.Stacks.GetAsync(stackId, TestContext.Current.CancellationToken);
+
+        Assert.Equal("stack-1-updated", stack?.Name);
+    }
+
+    [Fact]
+    public async Task Rename_NonExistent_Stack_Should_Return_NotFound()
+    {
+        var renameJson = $$"""
+        {
+          "id": "{{Guid.NewGuid()}}",
+          "name": "missing-stack"
+        }
+        """;
+        var content = new StringContent(renameJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/stacks/rename", content, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 }

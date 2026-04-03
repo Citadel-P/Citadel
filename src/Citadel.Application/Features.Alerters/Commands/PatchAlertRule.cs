@@ -50,6 +50,7 @@ internal sealed class PatchAlertRuleHandler(
         var oldRule = AlertRule.FromPersistence(
             id: rule.Id,
             name: rule.Name,
+            description: rule.Description,
             type: rule.Type,
             severity: rule.Severity,
             cooldownSeconds: rule.CooldownSeconds,
@@ -84,34 +85,19 @@ internal sealed class PatchAlertRuleHandler(
             }
         }
 
-        ActivityEvent? activity = null;
-        if (!string.IsNullOrEmpty(patchedRule.Name) && string.Compare(rule.Name, patchedRule.Name, StringComparison.OrdinalIgnoreCase) != 0)
-        {
-            activity = new ActivityEvent(
-               actorId: actorId,
-               resourceId: rule.Id,
-               platformId: null,
-               resourceName: rule.Name,
-               status: ActivityStatus.Success,
-               eventType: ActivityEventType.AlertRuleRenamed,
-               info: new AlertRuleRenamed(rule.Name, patchedRule.Name)
-           );
-        }
-        else
-        {
-            activity = new ActivityEvent(
-                actorId: actorId,
-                resourceId: rule.Id,
-                platformId: null,
-                resourceName: rule.Name,
-                status: ActivityStatus.Success,
-                eventType: ActivityEventType.AlertRuleUpdated,
-                info: new AlertRuleUpdated(oldRule.ToSnapshot(command.Id), patchedRule.ToSnapshot(command.Id))
-            );
-        }
+        var activity = new ActivityEvent(
+            actorId: actorId,
+            resourceId: rule.Id,
+            platformId: null,
+            resourceName: rule.Name,
+            status: ActivityStatus.Success,
+            eventType: ActivityEventType.AlertRuleUpdated,
+            info: new AlertRuleUpdated(oldRule.ToSnapshot(command.Id), patchedRule.ToSnapshot(command.Id))
+        );
 
         rule.PartialUpdate(
-            name: patchedRule.Name,
+            name: rule.Name,
+            description: rule.Description,
             type: patchedRule.Type,
             severity: patchedRule.Severity,
             cooldownSeconds: patchedRule.CooldownSeconds,

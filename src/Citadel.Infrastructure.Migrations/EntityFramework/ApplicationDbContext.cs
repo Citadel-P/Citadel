@@ -533,7 +533,7 @@ internal static class Configuration
         deployment.HasKey("Id");
 
         deployment.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        deployment.Property<string>("Description").HasColumnType("TEXT").IsRequired(false);
+        deployment.Property<string>("Description").HasColumnType("TEXT").HasMaxLength(600).IsRequired(false);
         deployment.Property<string>("Status").HasColumnType("TEXT").IsRequired();
         deployment.Property<string>("Spec").HasColumnType("TEXT").IsRequired();
         deployment.Property<Guid>("PlatformId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
@@ -643,6 +643,7 @@ internal static class Configuration
 
         alertRule.Property<string>("Type").HasColumnType("TEXT").IsRequired();
         alertRule.Property<string>("Name").HasColumnType("TEXT").HasMaxLength(120).IsRequired();
+        alertRule.Property<string>("Description").HasColumnType("TEXT").HasMaxLength(600).IsRequired(false);
         alertRule.Property<int?>("CooldownSeconds").HasColumnType("INTEGER").IsRequired(false);
         alertRule.Property<string>("Status").HasColumnType("TEXT").IsRequired().HasDefaultValue("Enabled");
         alertRule.Property<string>("LimitedTo").HasColumnType("TEXT").IsRequired();
@@ -712,7 +713,7 @@ internal static class Configuration
 
         stack.Property<Guid?>("CurrentStackReleaseId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired(false);
         stack.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        stack.Property<string>("Description").HasColumnType("TEXT").IsRequired(false);
+        stack.Property<string>("Description").HasColumnType("TEXT").HasMaxLength(600).IsRequired(false);
         stack.Property<string>("StackSource").HasColumnType("TEXT").IsRequired();
         stack.Property<string>("StackUpdateState").HasColumnType("TEXT").IsRequired();
 

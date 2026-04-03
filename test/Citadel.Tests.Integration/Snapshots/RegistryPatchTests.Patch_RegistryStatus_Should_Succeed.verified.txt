@@ -1,10 +1,9 @@
 ﻿{
   id: Guid_1,
   createdByActorId: Guid_2,
-  name: UpdatedName,
+  name: OriginalName,
   status: Disabled,
-  description: Disabled for test purposes,
-  registryHost: original.url,
+  registryHost: disabled.url,
   type: DockerHub,
   createdAt: DateTimeOffset_1,
   isDefault: true

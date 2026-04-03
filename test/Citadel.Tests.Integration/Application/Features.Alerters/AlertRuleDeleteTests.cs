@@ -17,6 +17,7 @@ public class AlertRuleDeleteTests : IntegrationTestBase
     {
         var rule = new AlertRule(
             name: "Test Rule",
+            description: "This is a test alert rule.",
             type: AlertType.PlatformUnreachable,
             severity: AlertSeverity.Critical,
             cooldownSeconds: 300,

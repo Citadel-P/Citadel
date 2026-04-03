@@ -6,6 +6,7 @@ namespace WebApi.Routes.Endpoints.Resources.Alerters;
 public sealed partial record AlertRuleView(
     Guid Id,
     string Name,
+    string? Description,
     AlertType Type,
     AlertSeverity Severity,
     int? CooldownSeconds,
@@ -29,6 +30,7 @@ public sealed partial record AlertRuleView(
         return new(
             rule.Id,
             rule.Name,
+            rule.Description,
             rule.Type,
             rule.Severity,
             rule.CooldownSeconds,
@@ -46,6 +48,7 @@ public sealed partial record AlertRuleView(
 public sealed record AlertRuleConfigView(
     Guid Id,
     string Name,
+    string? Description,
     AlertType Type,
     AlertSeverity Severity,
     int? CooldownSeconds,
@@ -60,6 +63,7 @@ public sealed record AlertRuleConfigView(
         => new(
             rule.Id,
             rule.Name,
+            rule.Description,
             rule.Type,
             rule.Severity,
             rule.CooldownSeconds,

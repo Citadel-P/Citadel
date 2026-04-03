@@ -36,10 +36,7 @@ public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Pat
         public RegistryValidator()
         {
             RuleFor(x => x.Id).NotEmpty().NotNull();
-            When(s => s.Name != null, () => RuleFor(x => x.Name).ValidNameIdentifier());
-            When(s => s.Name != null, () => RuleFor(x => x.Description).MaximumLength(600));
-
-            When(s => s.Name != null, () => RuleFor(x => x.RegistryHost).Matches(Validators.RegistryUrlRegex).WithMessage("Please provide a valid host name eg: ghcr.io"));
+            When(s => s.RegistryHost != null, () => RuleFor(x => x.RegistryHost).Matches(Validators.RegistryUrlRegex).WithMessage("Please provide a valid host name eg: ghcr.io"));
 
             When(x => x.Configuration is DockerHubRegistry, () =>
             {
@@ -151,14 +148,6 @@ internal class PatchRegistryHandler(
         }
 
         var patchedRegistry = command.Patch.ApplyTo(registry, RegistryJsonContext.Default.Registry);
-        if (patchedRegistry.Name != null) 
-        {
-            var conflict = await unitOfWork.Registries.ExistsAsync(command.Id, patchedRegistry.Name, cancellationToken);
-            if (conflict) 
-            {
-                return Result.Failure<Registry>(new ConflictError("Name already exists"));
-            }
-        }
 
         var strategy = registryResolver.Resolve(patchedRegistry.Configuration);
         if (strategy is null)
@@ -172,34 +161,18 @@ internal class PatchRegistryHandler(
             return Result.Failure<Registry>(new BadRequestError(errorMessage ?? ""));
         }
 
-        ActivityEvent? activity = null;
-        if (!string.IsNullOrEmpty(patchedRegistry.Name) && string.Compare(registry.Name, patchedRegistry.Name, StringComparison.OrdinalIgnoreCase) != 0)
-        {
-            activity = new ActivityEvent(
-               actorId: actorId,
-               resourceId: registry.Id,
-               platformId: null,
-               resourceName: registry.Name,
-               status: ActivityStatus.Success,
-               eventType: ActivityEventType.RegistryRenamed,
-               info: new RegistryRenamed(registry.Name, patchedRegistry.Name)
-           );
-        }
-        else
-        {
-            activity = new ActivityEvent(
-               actorId: actorId,
-               resourceId: registry.Id,
-               platformId: null,
-               resourceName: registry.Name,
-               status: ActivityStatus.Success,
-               eventType: ActivityEventType.RegistryUpdated,
-               info: new RegistryUpdated(registry.ToSnapshot(command.Id), patchedRegistry.ToSnapshot(command.Id))
-           );
-        }
+        var activity = new ActivityEvent(
+           actorId: actorId,
+           resourceId: registry.Id,
+           platformId: null,
+           resourceName: registry.Name,
+           status: ActivityStatus.Success,
+           eventType: ActivityEventType.RegistryUpdated,
+           info: new RegistryUpdated(registry.ToSnapshot(command.Id), patchedRegistry.ToSnapshot(command.Id))
+       );
 
-        registry.PartialUpdate(name: patchedRegistry.Name, registryHost: patchedRegistry.RegistryHost, status: patchedRegistry.Status, 
-            description: patchedRegistry.Description, configuration: patchedRegistry.Configuration);
+        registry.PartialUpdate(registryHost: patchedRegistry.RegistryHost, status: patchedRegistry.Status,
+            configuration: patchedRegistry.Configuration);
 
         await unitOfWork.ActivityEventRepository.AddAsync(activity, cancellationToken);
         await unitOfWork.Registries.UpdateAsync(registry, cancellationToken);

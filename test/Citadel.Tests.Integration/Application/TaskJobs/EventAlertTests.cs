@@ -177,6 +177,7 @@ public class EventAlertTests : IntegrationTestBase
             return AlertRule.FromPersistence(
                 id: rule.Id,
                 name: rule.Name,
+                description: rule.Description,
                 type: rule.Type,
                 severity: rule.Severity,
                 cooldownSeconds: 3600,
@@ -215,6 +216,7 @@ public class EventAlertTests : IntegrationTestBase
             return AlertRule.FromPersistence(
                 id: rule.Id,
                 name: rule.Name,
+                description: rule.Description,
                 type: rule.Type,
                 severity: rule.Severity,
                 cooldownSeconds: rule.CooldownSeconds,
@@ -247,6 +249,7 @@ public class EventAlertTests : IntegrationTestBase
             return AlertRule.FromPersistence(
                 id: rule.Id,
                 name: rule.Name,
+                description: rule.Description,
                 type: rule.Type,
                 severity: rule.Severity,
                 cooldownSeconds: rule.CooldownSeconds,

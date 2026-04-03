@@ -7,6 +7,7 @@ using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
+using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 
 namespace WebApi.Routes.Endpoints;
@@ -31,7 +32,7 @@ public static class AlertRules
         return EndpointHandlers.HandleResult(result, AlertRulesView.Map);
     }
 
-    public static async Task<Results<Ok<AlertRuleView>, ProblemHttpResult>> CreateRule(IMediator mediator, [FromBody] AlertRuleInput request, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<AlertRuleView>, ProblemHttpResult>> CreateRule(IMediator mediator, [FromBody] CreateAlertRuleInput request, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResult(result, AlertRuleView.Map);
@@ -49,8 +50,28 @@ public static class AlertRules
         AlertRuleInputPatchDocument patchInput,
         CancellationToken cancellationToken)
     {
-        var mapped = patchInput.Map<AlertRuleInput, AlertRule>();
+        var mapped = patchInput.Map<PatchAlertRuleInput, AlertRule>();
         var result = await mediator.Send(new PatchAlertRule(id, mapped), cancellationToken);
+        return EndpointHandlers.HandleResult(result, AlertRuleView.Map);
+    }
+
+    public static async Task<Results<Ok<AlertRuleView>, ProblemHttpResult>> PatchRuleMetadata(
+        IMediator mediator,
+        [FromRoute][Description("Alert rule ID")] Guid id,
+        PatchResourceMetadataDocument patchInput,
+        CancellationToken cancellationToken)
+    {
+        var mapped = patchInput.Map<PatchResourceMetadata, AlertRule>();
+        var result = await mediator.Send(new PatchAlertRuleMetadata(id, mapped), cancellationToken);
+        return EndpointHandlers.HandleResult(result, AlertRuleView.Map);
+    }
+
+    public static async Task<Results<Ok<AlertRuleView>, ProblemHttpResult>> RenameRule(
+        IMediator mediator,
+        [FromBody] RenameResource renameResource,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new RenameAlertRule(renameResource.Id, renameResource.Name), cancellationToken);
         return EndpointHandlers.HandleResult(result, AlertRuleView.Map);
     }
 

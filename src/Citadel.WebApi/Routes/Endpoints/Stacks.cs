@@ -7,6 +7,7 @@ using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
+using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Stacks;
 
 namespace WebApi.Routes.Endpoints;
@@ -37,7 +38,7 @@ public static class Stacks
         return EndpointHandlers.HandleResult(result, StackReleasesView.Map);
     }
 
-    public static async Task<Results<Ok<StackView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] StackInput request, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<StackView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreateStackInput request, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResult(result, StackView.Map);
@@ -55,8 +56,28 @@ public static class Stacks
         StackInputPatchDocument patchInput,
         CancellationToken cancellationToken)
     {
-        JsonMergePatchDocument<StackPatchModel> mapped = patchInput.Map<StackInput, StackPatchModel>();
+        JsonMergePatchDocument<StackPatchModel> mapped = patchInput.Map<PatchStackInput, StackPatchModel>();
         var result = await mediator.Send(new PatchStack(id, mapped), cancellationToken);
+        return EndpointHandlers.HandleResult(result, StackView.Map);
+    }
+
+    public static async Task<Results<Ok<StackView>, ProblemHttpResult>> PatchMetadata(
+        IMediator mediator,
+        [FromRoute][Description("Stack ID")] Guid id,
+        PatchResourceMetadataDocument patchInput,
+        CancellationToken cancellationToken)
+    {
+        JsonMergePatchDocument<StackPatchModel> mapped = patchInput.Map<PatchResourceMetadata, StackPatchModel>();
+        var result = await mediator.Send(new PatchStackMetadata(id, mapped), cancellationToken);
+        return EndpointHandlers.HandleResult(result, StackView.Map);
+    }
+
+    public static async Task<Results<Ok<StackView>, ProblemHttpResult>> Rename(
+        IMediator mediator,
+        [FromBody] RenameResource renameResource,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new RenameStack(renameResource.Id, renameResource.Name), cancellationToken);
         return EndpointHandlers.HandleResult(result, StackView.Map);
     }
 }

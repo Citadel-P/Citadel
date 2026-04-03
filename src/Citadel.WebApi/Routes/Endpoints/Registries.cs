@@ -8,12 +8,13 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using Domain.Entities.Registries;
+using WebApi.Routes.Endpoints.Resources;
 
 namespace WebApi.Routes.Endpoints;
 
 public static class Registries
 {
-    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] RegistryInput request, CancellationToken cancellationToken)
+    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Create(IMediator mediator, [FromBody] CreateRegistryInput request, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(request.ToCommand(), cancellationToken);
         return EndpointHandlers.HandleResult(result, RegistryView.Map);
@@ -49,8 +50,28 @@ public static class Registries
         RegistryInputPatchDocument patchInput, 
         CancellationToken cancellationToken)
     {
-        var mapped = patchInput.Map<RegistryInput, Registry>();
+        var mapped = patchInput.Map<PatchRegistryInput, Registry>();
         var result = await mediator.Send(new PatchRegistry(id, mapped), cancellationToken);
+        return EndpointHandlers.HandleResult(result, RegistryView.Map);
+    }
+
+    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> PatchMetadata(
+        IMediator mediator,
+        [FromRoute][Description("Registry ID")] Guid id,
+        PatchResourceMetadataDocument patchInput,
+        CancellationToken cancellationToken)
+    {
+        var mapped = patchInput.Map<PatchResourceMetadata, Registry>();
+        var result = await mediator.Send(new PatchRegistryMetadata(id, mapped), cancellationToken);
+        return EndpointHandlers.HandleResult(result, RegistryView.Map);
+    }
+
+    public static async Task<Results<Ok<RegistryView>, ProblemHttpResult>> Rename(
+        IMediator mediator,
+        [FromBody] RenameResource renameResource,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new RenameRegistry(renameResource.Id, renameResource.Name), cancellationToken);
         return EndpointHandlers.HandleResult(result, RegistryView.Map);
     }
 }

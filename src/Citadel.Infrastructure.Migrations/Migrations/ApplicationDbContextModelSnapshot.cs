@@ -252,6 +252,10 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(600)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("LimitedTo")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -674,6 +678,7 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
+                        .HasMaxLength(600)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
@@ -1176,6 +1181,7 @@ namespace Infrastructure.Migrations.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
+                        .HasMaxLength(600)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
