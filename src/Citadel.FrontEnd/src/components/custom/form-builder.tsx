@@ -49,6 +49,7 @@ export interface GroupFieldConfig<T> {
   kind: 'group';
   id: string;
   label: string;
+  title?: string;
   description?: React.ReactElement | string;
   items: Array<FieldItemConfig<T> | RowFieldConfig<T>>;
   direction?: 'vertical' | 'horizontal';
@@ -118,6 +119,7 @@ export function defineRowField<T>(config: {
 export function defineGroupField<T>(config: {
   id: string;
   label: string;
+  title?: string;
   description?: React.ReactElement | string;
   items: Array<FieldItemConfig<T> | RowFieldConfig<T>>;
   direction?: 'vertical' | 'horizontal';
@@ -126,6 +128,7 @@ export function defineGroupField<T>(config: {
     kind: 'group',
     id: config.id,
     label: config.label,
+    title: config.title,
     description: config.description,
     items: config.items,
     direction: config.direction ?? 'vertical',
@@ -931,7 +934,7 @@ export function FormShell<T>({
                         id={key}
                         key={key}
                         disabled={fieldDisabled}
-                        className="relative border rounded-md p-6 scroll-mt-22 xl:scroll-mt-20">
+                        className="relative border rounded-sm p-6 scroll-mt-22 xl:scroll-mt-20 shadow-xs">
                         <SmartField
                           render={f.render}
                           value={value}
@@ -989,8 +992,20 @@ export function FormShell<T>({
                     <section
                       id={group.id}
                       key={group.id}
-                      className={`relative border rounded-md p-6 flex gap-4 ${group.direction === 'horizontal' ? 'flex-row' : 'flex-col'} scroll-mt-22 xl:scroll-mt-20`}>
+                      className={`relative rounded-sm border border-border/70 bg-background p-6 shadow-xs ${group.direction === 'horizontal' ? 'flex-row' : 'flex-col'} scroll-mt-22 xl:scroll-mt-20`}>
                       <div className="flex flex-col gap-4 w-full">
+                        {(group.title || group.description) && (
+                          <div className="flex flex-col gap-1.5 border-b border-dashed border-border/70 pb-4">
+                            {group.title && (
+                              <h3 className="text-sm font-semibold tracking-tight text-foreground/90">{group.title}</h3>
+                            )}
+                            {typeof group.description === 'string' ? (
+                              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{group.description}</p>
+                            ) : (
+                              group.description
+                            )}
+                          </div>
+                        )}
                         {group.items.map((sub) => {
                           if (sub.kind === 'field') {
                             const f = sub.field;

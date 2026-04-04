@@ -17,6 +17,9 @@ export const useGitReposGroup = () => {
     setGitRepos((prev) => {
       if (!prev) return prev;
 
+      if (action === 'create') {
+        return [...prev, repo];
+      }
       if (action === 'delete') {
         return prev.filter((d) => d.id !== repo.id);
       }

@@ -11,7 +11,6 @@ import {
   UpdateBehavior,
   DeploymentConfigView,
   PatchDeploymentInput,
-  DeploymentView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -26,9 +25,8 @@ import {
 } from '@/components/custom/form-builder';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useMutate, useRead } from '@/lib/hooks';
-import { toast } from 'sonner';
-import { useParams, useNavigate } from 'react-router';
+import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
+import { useParams } from 'react-router';
 import { MultiResourceSelectorField, ResourceSelectorField } from '@/components/custom/common';
 import { MonacoToArrayEditor, MonacoToDictionaryEditor } from '@/lib/monaco';
 import { AlertMessage } from '@/components/custom/alert-message';
@@ -141,9 +139,7 @@ type DeploymentInput = CreateDeploymentInput | PatchDeploymentInput;
 
 export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'; metadataChanged?: boolean }) => {
   const id = useParams().id;
-  const navigate = useNavigate();
   const [update, setUpdate] = useState<Partial<DeploymentInput>>({});
-  const [isPending, setIsPending] = useState(false);
   const queryClient = useQueryClient();
 
   const { mutateAsync: createDeployment } = useMutate('createDeployment');
@@ -204,24 +200,14 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
     refreshData();
   }, [metadataChanged, refreshData]);
 
-  const handleSave = async (payload: DeploymentInput) => {
-    setIsPending(true);
-
-    try {
-      let response;
-      if (mode === 'edit') {
-        response = await updateDeployment({ id, data: payload });
-        refreshData();
-      } else {
-        response = await createDeployment({ data: payload as CreateDeploymentInput });
-        navigate('/deployments');
-      }
-
-      toast.success(`Deployment "${(response.data as DeploymentView).name}" saved successfully`);
-    } finally {
-      setIsPending(false);
-    }
-  };
+  const { save: handleSave, isPending } = useSaveResource<DeploymentInput, any>({
+    mode,
+    basePath: 'deployments',
+    entityName: 'Deployment',
+    onCreate: (payload) => createDeployment({ data: payload as CreateDeploymentInput }),
+    onUpdate: (payload) => updateDeployment({ id, data: payload }),
+    onRefresh: refreshData,
+  });
 
   const schema = useMemo(
     () => ({
@@ -585,6 +571,8 @@ export const DeploymentForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'
           defineGroupField({
             id: 'lifecycle',
             label: 'Lifecycle',
+            title: 'Lifecycle',
+            description: 'Manage container reliability and shutdown behavior.',
             items: [
               defineField({
                 key: 'spec.lifeCycleSpec.restartPolicy',

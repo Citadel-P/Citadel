@@ -24,7 +24,7 @@ import {
 } from '@/api/types';
 import { useGetValidationErrors, getValidationErrors } from '@/hooks/useGetValidationErrors';
 import { toast } from 'sonner';
-import { useParams } from 'react-router';
+import { useParams, useNavigate } from 'react-router';
 import { ApplyDeploymentInput, ProblemDetails, PullImageInput } from '@/api/generated/api.types';
 import { useAuthContext } from '@/features/auth/auth-context';
 
@@ -607,4 +607,63 @@ export function useStreamProgress<TRequest extends PulledStreamProps, TItem>({
     elapsedMs,
     elapsedLabel,
   };
+}
+
+export function useSaveResource<TInput = any, TResponse = unknown>({
+  mode,
+  basePath,
+  onCreate,
+  onUpdate,
+  onRefresh,
+  entityName = 'Resource',
+  extractName,
+}: {
+  mode: 'add' | 'edit';
+  basePath: string;
+  onCreate: (payload: TInput) => Promise<TResponse>;
+  onUpdate: (payload: TInput) => Promise<unknown>;
+  onRefresh?: () => void;
+  entityName?: string;
+  extractName?: (payload: TInput, response?: TResponse) => string;
+}) {
+  const [isPending, setIsPending] = useState(false);
+  const navigate = useNavigate();
+
+  const save = async (payload: TInput) => {
+    setIsPending(true);
+    try {
+      const getName = (res?: unknown) => {
+        if (extractName) return extractName(payload, res as any);
+        const data = (res as any)?.data ?? res ?? payload;
+        return data?.name ?? data?.type ?? 'Unknown';
+      };
+
+      let savedName = getName();
+
+      if (mode === 'edit') {
+        await onUpdate(payload);
+        onRefresh?.();
+      } else {
+        const response = await onCreate(payload);
+        const resourceId = (response as any)?.id ?? (response as any)?.data?.id;
+        savedName = getName(response);
+
+        if (resourceId) {
+          navigate(`/${basePath}/edit/${resourceId}`);
+        }
+      }
+
+      toast.success(`${entityName} "${savedName}" saved successfully`);
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  return { save, isPending };
+}
+
+export function useScrollToTop() {
+  return useCallback(() => {
+    document.getElementById('main-scroll-container')?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 }

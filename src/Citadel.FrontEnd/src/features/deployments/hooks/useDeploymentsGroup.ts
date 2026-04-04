@@ -17,6 +17,9 @@ export const useDeploymentsGroup = () => {
     setDeployments((prev) => {
       if (!prev) return prev;
 
+      if (action === 'create') {
+        return [...prev, deployment];
+      }
       if (action === 'delete') {
         return prev.filter((d) => d.id !== deployment.id);
       }

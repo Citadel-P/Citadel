@@ -58,6 +58,22 @@ const MenuItems: IMenuItem[] = [
     ],
   },
   {
+    group: 'Providers',
+    separator: false,
+    items: [
+      {
+        icon: <Cable className="w-3.5 h-3.5" />,
+        label: 'Registries',
+        route: '/registries',
+      },
+      {
+        icon: <GitBranch className="w-3.5 h-3.5" />,
+        label: 'Repositories',
+        route: '/git-repos',
+      },
+    ],
+  },
+  {
     group: 'System',
     separator: false,
     items: [
@@ -76,16 +92,6 @@ const MenuItems: IMenuItem[] = [
         label: 'Settings',
         route: '/settings',
         children: [
-          {
-            icon: <Cable className="w-3.5 h-3.5" />,
-            label: 'Registries',
-            route: '/registries',
-          },
-          {
-            icon: <GitBranch className="w-3.5 h-3.5" />,
-            label: 'Repositories',
-            route: '/git-repos',
-          },
           {
             icon: <Megaphone className="w-3.5 h-3.5" />,
             label: 'Alert Rules',

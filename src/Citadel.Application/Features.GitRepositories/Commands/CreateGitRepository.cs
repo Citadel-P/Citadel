@@ -101,7 +101,7 @@ internal sealed class CreateGitRepositoryHandler(
         await unitOfWork.CommitAsync(cancellationToken);
 
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
-        await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(streamManager, gitRepository), cancellationToken);
+        await notificationQueue.EnqueueAsync(new GitRepoNotificationWorkItem(streamManager, gitRepository, "create"), cancellationToken);
 
         // Clone the repo.
         await gitSyncWriter.WriteAsync(new GitRepoSyncRequest(gitRepository.Id), CancellationToken.None);

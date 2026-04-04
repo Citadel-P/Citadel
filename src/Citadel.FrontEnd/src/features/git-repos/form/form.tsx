@@ -4,7 +4,6 @@ import {
   GitRepositoryConfigView,
   CreateGitRepositoryInput,
   PatchGitRepositoryInput,
-  GitRepositoryView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -15,9 +14,8 @@ import {
   FieldTextArea,
 } from '@/components/custom/form-builder';
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useMutate, useRead } from '@/lib/hooks';
-import { toast } from 'sonner';
-import { useParams, useNavigate } from 'react-router';
+import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
+import { useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MonacoToArrayEditor } from '@/lib/monaco';
@@ -72,10 +70,8 @@ type GitRepositoryInput = CreateGitRepositoryInput | PatchGitRepositoryInput;
 
 export const GitRepoForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'; metadataChanged?: boolean }) => {
   const id = useParams().id;
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<GitRepositoryInput>>({});
-  const [isPending, setIsPending] = useState(false);
 
   const { mutateAsync: createGitRepository } = useMutate('createGitRepository');
   const { mutateAsync: updateGitRepository } = useMutate('updateGitRepository');
@@ -95,22 +91,14 @@ export const GitRepoForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'; m
     refreshData();
   }, [metadataChanged, refreshData]);
 
-  const handleSave = async (payload: GitRepositoryInput) => {
-    setIsPending(true);
-    try {
-      if (mode === 'edit') {
-        await updateGitRepository({ id, data: payload });
-        refreshData();
-      } else {
-        await createGitRepository({ data: payload as CreateGitRepositoryInput });
-        navigate('/git-repos');
-      }
-
-      toast.success(`Repository "${(payload as GitRepositoryView).name}" saved successfully`);
-    } finally {
-      setIsPending(false);
-    }
-  };
+  const { save: handleSave, isPending } = useSaveResource<GitRepositoryInput, any>({
+    mode,
+    basePath: 'git-repos',
+    entityName: 'Repository',
+    onCreate: (payload) => createGitRepository({ data: payload as CreateGitRepositoryInput }),
+    onUpdate: (payload) => updateGitRepository({ id, data: payload }),
+    onRefresh: refreshData,
+  });
 
   const schema = useMemo(
     () => ({
@@ -197,12 +185,12 @@ export const GitRepoForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'; m
           defineGroupField<GitRepositoryInput>({
             id: 'on_pull',
             label: 'On Pull',
-            description: 'On Pull',
+            title: 'On Pull',
+            description: 'Execute a shell command after pulling the repo. The given Cwd is relative to repo root.',
             items: [
               defineField({
                 key: 'onPull.path',
                 label: 'Path',
-                description: 'Execute a shell command after pulling the repo. The given Cwd is relative to repo root.',
                 render: (val, set) => (
                   <FieldInput
                     value={val}
@@ -244,11 +232,12 @@ export const GitRepoForm = ({ mode, metadataChanged }: { mode: 'add' | 'edit'; m
           defineGroupField<GitRepositoryInput>({
             id: 'on_clone',
             label: 'On Clone',
+            title: 'On Clone',
+            description: 'Execute a shell command after cloning the repo. The given Cwd is relative to repo root.',
             items: [
               defineField({
                 key: 'onClone.path',
                 label: 'Path',
-                description: 'Execute a shell command after cloning the repo. The given Cwd is relative to repo root.',
                 render: (val, set) => (
                   <FieldInput
                     value={val}

@@ -44,14 +44,15 @@ const EditFormPage = ({ type }: { type: ResourceType }) => {
   const { id } = useParams();
   const { mutateAsync: updateMetadata } = useMutate(`update${type}Metadata` as any);
   const { mutateAsync: renameResource } = useMutate(`rename${type}` as any);
-  const [resource, setResource] = useState<RequiredFormFields | null>(null);
-  const [metadatChanged, setMetaDataChanged] = useState(false);
 
   const Components = ResourceFormComponents[type]?.EditForm;
   const formData = Components?.useData?.(id!);
 
   const item = formData?.item;
   const isLoading = formData?.isLoading;
+
+  const [resource, setResource] = useState<RequiredFormFields | null>(() => item || null);
+  const [metadatChanged, setMetaDataChanged] = useState(false);
 
   const tabs = Components?.Tabs ?? [];
   const Header = Components?.Header;

@@ -1,5 +1,6 @@
 ﻿using Application.Features.Deployments.Notifications;
 using Application.Services.SignalR;
+using Application.TaskJobs.WorkItems;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Deployments;
@@ -35,7 +36,12 @@ public sealed record CreateDeployment(
     }
 }
 
-internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, INotificationQueue notificationQueue, IActivityStreamManager activityHub, IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateDeployment, Result<Deployment>>
+internal class CreateDeploymentHandler(
+    IUnitOfWork unitOfWork,
+    IDeploymentStreamManager deploymentHub,
+    INotificationQueue notificationQueue, 
+    IActivityStreamManager activityHub, 
+    IHttpContextAccessor httpContextAccessor) : ICommandHandler<CreateDeployment, Result<Deployment>>
 {
     public async ValueTask<Result<Deployment>> Handle(CreateDeployment command, CancellationToken cancellationToken)
     {
@@ -91,8 +97,10 @@ internal class CreateDeploymentHandler(IUnitOfWork unitOfWork, INotificationQueu
         await unitOfWork.CommitAsync(cancellationToken);
 
         // Notify
+        var workItem = new DeploymentNotificationWorkItem(deploymentHub, deployment, "create");
+
+        await notificationQueue.EnqueueAsync(workItem, cancellationToken);
         await notificationQueue.EnqueueAsync(new ActivityNotificationWorkItem(activityHub, await activity.AssignActor(unitOfWork, cancellationToken)), cancellationToken);
         return deployment;
-        // todo: send create notification
     }
 }

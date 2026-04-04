@@ -6,7 +6,7 @@ import { useRead } from '@/lib/hooks';
 
 export const useGitRepoGroup = (id: string | undefined) => {
   const { data, isLoading } = useRead('getGitRepository', { id });
-  const [gitRepo, setGitRepo] = useState<GitRepositoryView | undefined>();
+  const [gitRepo, setGitRepo] = useState<GitRepositoryView | undefined>(data?.data);
 
   useEffect(() => {
     if (!data) return;

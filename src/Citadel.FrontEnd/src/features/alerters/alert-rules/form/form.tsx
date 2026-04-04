@@ -11,7 +11,6 @@ import {
   AlertRuleStatus,
   CreateAlertRuleInput,
   PatchAlertRuleInput,
-  AlertRuleView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -23,9 +22,8 @@ import {
   ItemSelector,
 } from '@/components/custom/form-builder';
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useMutate } from '@/lib/hooks';
-import { toast } from 'sonner';
-import { useParams, useNavigate } from 'react-router';
+import { useMutate, useSaveResource } from '@/lib/hooks';
+import { useParams } from 'react-router';
 import { MultiResourceSelectorField, SelectField } from '@/components/custom/common';
 import { ResourceType } from '@/api/types';
 import { Button } from '@/components/ui/button';
@@ -55,36 +53,25 @@ type AlertRuleInput = CreateAlertRuleInput | PatchAlertRuleInput;
 
 export const AlertRuleForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: AlertRuleInput }) => {
   const id = useParams().id;
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<AlertRuleInput>>({});
-  const [isPending, setIsPending] = useState(false);
 
   const { mutateAsync: createAlertRule } = useMutate('createAlertRule');
   const { mutateAsync: updateAlertRule } = useMutate('updateAlertRule');
 
-  const refreshData = useCallback(() => {
-    localStorage.removeItem(`AlertRule:${id ?? 'new'}`);
-    queryClient.invalidateQueries({ queryKey: ['getAlertRuleConfig', { id }] });
-  }, [id, queryClient]);
+  const { save: handleSave, isPending } = useSaveResource<AlertRuleInput, any>({
+    mode,
+    basePath: 'alert-rules',
+    entityName: 'Alert rule',
+    onCreate: (payload) => createAlertRule({ data: payload as CreateAlertRuleInput }),
+    onUpdate: (payload) => updateAlertRule({ id: id!, data: payload as PatchAlertRuleInput }),
+    onRefresh: () => {
+      localStorage.removeItem(`AlertRule:${id ?? 'new'}`);
+      queryClient.invalidateQueries({ queryKey: ['getAlertRuleConfig', { id }] });
+    },
+  });
 
   const original = useMemo(() => (resource ?? {}) as AlertRuleInput, [resource]);
-  const handleSave = async (payload: AlertRuleInput) => {
-    setIsPending(true);
-    try {
-      if (mode === 'edit') {
-        await updateAlertRule({ id, data: payload });
-        refreshData();
-      } else {
-        await createAlertRule({ data: payload as AlertRuleView });
-        navigate('/alert-rules');
-      }
-
-      toast.success(`Alert rule "${payload.type}" saved successfully`);
-    } finally {
-      setIsPending(false);
-    }
-  };
 
   const merged = useMemo(() => ({ ...original, ...update }), [original, update]);
   const showThresholdFields = merged.type === AlertType.PlatformCpuHigh || merged.type === AlertType.PlatformRamHigh;

@@ -6,7 +6,6 @@ import {
   RegistryStatus,
   CreateRegistryInput,
   PatchRegistryInput,
-  RegistryView,
 } from '@/api/generated/api.types';
 import {
   FormShell,
@@ -20,12 +19,11 @@ import {
   InputGroupField,
 } from '@/components/custom/form-builder';
 import { Constants } from '@/lib/constants';
-import { useState, useMemo, useCallback } from 'react';
-import { useMutate } from '@/lib/hooks';
-import { toast } from 'sonner';
+import { useState, useMemo } from 'react';
+import { useMutate, useSaveResource } from '@/lib/hooks';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { useParams, useNavigate } from 'react-router';
+import { useParams } from 'react-router';
 import { Globe, MoveUpRight } from 'lucide-react';
 import { DockerIcon, GitHubIcon } from '@/lib/icons';
 import { useQueryClient } from '@tanstack/react-query';
@@ -109,39 +107,26 @@ type RegistryInput = CreateRegistryInput | PatchRegistryInput;
 
 export const RegistryForm = ({ mode, resource }: { mode: 'add' | 'edit'; resource?: RegistryInput }) => {
   const id = useParams().id;
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<RegistryInput>>({});
-  const [isPending, setIsPending] = useState(false);
 
   const { mutateAsync: createRegistry } = useMutate('createRegistry');
   const { mutateAsync: updateRegistry } = useMutate('updateRegistry');
 
+  const { save: handleSave, isPending } = useSaveResource<RegistryInput, any>({
+    mode,
+    basePath: 'registries',
+    entityName: 'Registry',
+    onCreate: (payload) => createRegistry({ data: payload as CreateRegistryInput }),
+    onUpdate: (payload) => updateRegistry({ id: id!, data: payload as PatchRegistryInput }),
+    onRefresh: () => {
+      localStorage.removeItem(`Registry:${id ?? 'new'}`);
+      queryClient.invalidateQueries({ queryKey: ['getRegistryConfig', { id }] });
+    },
+  });
+
   const original = resource ?? ({} as RegistryInput);
   const provider = update.configuration?.$type ?? resource?.configuration?.$type ?? RegistryType.DockerHub;
-
-  const refreshData = useCallback(() => {
-    localStorage.removeItem(`Registry:${id ?? 'new'}`);
-    queryClient.invalidateQueries({ queryKey: ['getRegistryConfig', { id }] });
-  }, [id, queryClient]);
-
-  const handleSave = async (payload: RegistryInput) => {
-    setIsPending(true);
-    try {
-      let response;
-      if (mode === 'edit') {
-        response = await updateRegistry({ id, data: payload });
-        refreshData();
-      } else {
-        response = await createRegistry({ data: payload as CreateRegistryInput });
-        navigate('/registries');
-      }
-
-      toast.success(`Registry "${(response.data as RegistryView).name}" saved successfully`);
-    } finally {
-      setIsPending(false);
-    }
-  };
   const isCustomAuthEnabled =
     ((update.configuration as RegistryConfigurationCustomRegistry)?.authEnabled ??
       (original.configuration as RegistryConfigurationCustomRegistry)?.authEnabled) === true;
