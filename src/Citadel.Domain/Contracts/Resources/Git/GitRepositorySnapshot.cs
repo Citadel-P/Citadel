@@ -30,3 +30,5 @@ public static class GitRepositorySnapshotExtensions
             repository.OnClone,
             repository.OnPull);
 }
+
+public sealed record RepoSyncResultSnapshot(string? CommitSha = null, string? Message = null);

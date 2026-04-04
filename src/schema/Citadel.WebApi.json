@@ -9511,8 +9511,7 @@
       "ActivityEventInfoDeploymentApplied": {
         "required": [
           "deployment",
-          "containerIds",
-          "reason"
+          "result"
         ],
         "properties": {
           "$type": {
@@ -9531,20 +9530,8 @@
               }
             ]
           },
-          "containerIds": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "reason": {
-            "type": [
-              "null",
-              "string"
-            ]
+          "result": {
+            "$ref": "#/components/schemas/DeploymentResultSnapshot"
           }
         }
       },
@@ -9696,7 +9683,7 @@
       "ActivityEventInfoGitRepoCloned": {
         "required": [
           "gitRepo",
-          "reason"
+          "result"
         ],
         "properties": {
           "$type": {
@@ -9708,11 +9695,8 @@
           "gitRepo": {
             "$ref": "#/components/schemas/GitRepositorySnapshot"
           },
-          "reason": {
-            "type": [
-              "null",
-              "string"
-            ]
+          "result": {
+            "$ref": "#/components/schemas/RepoSyncResultSnapshot"
           }
         }
       },
@@ -9751,7 +9735,7 @@
       "ActivityEventInfoGitRepoPulled": {
         "required": [
           "gitRepo",
-          "reason"
+          "result"
         ],
         "properties": {
           "$type": {
@@ -9763,11 +9747,8 @@
           "gitRepo": {
             "$ref": "#/components/schemas/GitRepositorySnapshot"
           },
-          "reason": {
-            "type": [
-              "null",
-              "string"
-            ]
+          "result": {
+            "$ref": "#/components/schemas/RepoSyncResultSnapshot"
           }
         }
       },
@@ -13181,6 +13162,26 @@
           },
           "imageId": {
             "type": "string"
+          }
+        }
+      },
+      "DeploymentResultSnapshot": {
+        "type": "object",
+        "properties": {
+          "containerIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -17537,6 +17538,23 @@
           "path": {
             "type": "string",
             "default": "./"
+          }
+        }
+      },
+      "RepoSyncResultSnapshot": {
+        "type": "object",
+        "properties": {
+          "commitSha": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

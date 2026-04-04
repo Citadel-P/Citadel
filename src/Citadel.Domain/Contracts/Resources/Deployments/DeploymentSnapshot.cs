@@ -19,3 +19,5 @@ public static class DeploymentSnapshotExtensions
             Description: deployment.Description,
             Spec: deployment.Spec);
 }
+
+public sealed record DeploymentResultSnapshot(IEnumerable<string>? ContainerIds = null, string? Message = null);

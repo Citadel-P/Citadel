@@ -19,8 +19,6 @@ export const AlertRuleFormComponents: RequiredFormComponents = {
   },
   EditForm: {
     Header: {
-      canEditTitle: true,
-      canEditDescription: false,
       Indicator: ({ resource }: { resource: RequiredFormFields }) => {
         return <StateIndicator value={resource.status as any} />;
       },

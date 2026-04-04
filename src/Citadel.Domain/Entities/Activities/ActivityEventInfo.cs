@@ -43,7 +43,7 @@ public sealed record DeploymentStarted(IEnumerable<string> ContainerIds) : Activ
 public sealed record DeploymentStopped(IEnumerable<string> ContainerIds) : ActivityEventInfo;
 public sealed record DeploymentPaused(IEnumerable<string> ContainerIds) : ActivityEventInfo;
 public sealed record DeploymentDegraded(string Reason) : ActivityEventInfo;
-public sealed record DeploymentApplied(DeploymentSnapshot? Deployment, IEnumerable<string>? ContainerIds, string? Reason) : ActivityEventInfo;
+public sealed record DeploymentApplied(DeploymentSnapshot? Deployment, DeploymentResultSnapshot Result) : ActivityEventInfo;
 public sealed record AlertRuleCreated(AlertRuleSnapshot AlertRule) : ActivityEventInfo;
 public sealed record AlertRuleUpdated(AlertRuleSnapshot OldRule, AlertRuleSnapshot NewRule) : ActivityEventInfo;
 public sealed record AlertRuleDeleted(AlertRuleSnapshot AlertRule) : ActivityEventInfo;
@@ -57,5 +57,5 @@ public sealed record GitRepoCreated(GitRepositorySnapshot GitRepo) : ActivityEve
 public sealed record GitRepoUpdated(GitRepositorySnapshot OldGitRepo, GitRepositorySnapshot NewGitRepo) : ActivityEventInfo;
 public sealed record GitRepoRenamed(string OldName, string NewName) : ActivityEventInfo;
 public sealed record GitRepoDeleted(GitRepositorySnapshot GitRepo) : ActivityEventInfo;
-public sealed record GitRepoCloned(GitRepositorySnapshot GitRepo, string? Reason) : ActivityEventInfo;
-public sealed record GitRepoPulled(GitRepositorySnapshot GitRepo, string? Reason) : ActivityEventInfo;
+public sealed record GitRepoCloned(GitRepositorySnapshot GitRepo, RepoSyncResultSnapshot Result) : ActivityEventInfo;
+public sealed record GitRepoPulled(GitRepositorySnapshot GitRepo, RepoSyncResultSnapshot Result) : ActivityEventInfo;

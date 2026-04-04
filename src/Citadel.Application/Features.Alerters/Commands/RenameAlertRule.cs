@@ -6,7 +6,6 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using FluentValidation;
-using Hosting.Common;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
@@ -23,7 +22,7 @@ public sealed record RenameAlertRule(Guid Id, string Name) : ICommand<Result<Ale
         public Validator()
         {
             RuleFor(x => x.Id).NotEmpty();
-            RuleFor(x => x.Name).NotEmpty().ValidNameIdentifier();
+            RuleFor(x => x.Name).NotEmpty().MaximumLength(120);
         }
     }
 }

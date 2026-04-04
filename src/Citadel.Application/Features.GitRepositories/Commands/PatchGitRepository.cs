@@ -79,6 +79,17 @@ internal sealed class PatchGitRepositoryHandler(
             || gitRepository.GitAccountId != patchedGitRepository.GitAccountId;
 
 
+        // Add Activity
+        ActivityEvent? activity = activity = new ActivityEvent(
+            actorId: actorId,
+            resourceId: gitRepository.Id,
+            platformId: null,
+            resourceName: gitRepository.Name,
+            eventType: ActivityEventType.GitRepoUpdated,
+            status: ActivityStatus.Success,
+            info: new GitRepoUpdated(gitRepository.ToSnapshot(), patchedGitRepository.ToSnapshot(command.Id)));
+
+        // Patch Repo
         gitRepository.PartialUpdate(
             defaultBranch: patchedGitRepository.DefaultBranch!,
             status: sourceChanged ? GitReposStatus.Pending : gitRepository.Status,
@@ -89,16 +100,6 @@ internal sealed class PatchGitRepositoryHandler(
 
         gitRepository.UpdateSource(patchedGitRepository.Url, patchedGitRepository.GitAccountId);
 
-        // Activity
-        ActivityEvent? activity = activity = new ActivityEvent(
-            actorId: actorId,
-            resourceId: gitRepository.Id,
-            platformId: null,
-            resourceName: gitRepository.Name,
-            eventType: ActivityEventType.GitRepoUpdated,
-            status: ActivityStatus.Success,
-            info: new GitRepoUpdated(gitRepository.ToSnapshot(), patchedGitRepository.ToSnapshot(command.Id)));
-        
         if (sourceChanged && !string.Equals(gitRepository.GetCachePath(), gitRepository.GetCachePath(), StringComparison.OrdinalIgnoreCase))
         {
             await repoCacheManager.DeleteCacheAsync(gitRepository.GetCachePath(), cancellationToken);

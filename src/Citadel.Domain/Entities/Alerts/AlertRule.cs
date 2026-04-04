@@ -143,8 +143,8 @@ public sealed class AlertRule : IAuditedEntity
 
         _channelIds.Clear();
         if (channelIds is not null) _channelIds.AddRange(channelIds);
-        RequiredMatches = requiredMatches;
-        Threshold = threshold;
+        if (requiredMatches is not null) RequiredMatches = requiredMatches;
+        if (threshold is not null) Threshold = threshold;
         _limitedTo.Clear();
         if (limitedTo is not null) _limitedTo.AddRange(limitedTo);
         _quietHours.Clear();

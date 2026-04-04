@@ -19,11 +19,16 @@ import {
   PullImageStreamItem,
   ResolveAlertEventsInput,
   RegistryView,
+  ActivityStatus,
+  ActivityEventInfoGitRepoPulled,
+  ActivityEventInfoGitRepoCloned,
+  ActivityEventInfoDeploymentApplied,
 } from '@/api/generated/api.types';
 import { formatActivityEvent, serializeData } from '@/lib/utils';
 import Loader from '../ui/loader';
 import { MonacoDiff, MonacoEditor } from '@/lib/monaco';
 import { Button } from '@/components/ui/button';
+import { AlertMessage } from './alert-message';
 
 interface PullImageParams {
   imageTag: string;
@@ -226,13 +231,11 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
 
   DeploymentApplied: (info, activity) => (
     <div className="flex flex-col gap-4 text-sm text-muted-foreground">
-      {info.containerIds && (
-        <>
-          <SpecViewer spec={info.deployment} resourceId={activity.resourceId} title="Applied configuration" />
-          <KeyValueBlock label="Container id" value={info.containerIds} />
-        </>
+      <SpecViewer spec={info.deployment} resourceId={activity.resourceId} title="Applied configuration" />
+      {activity.status === ActivityStatus.Success && (
+        <KeyValueBlock label="Container id" value={info.result.containerIds ?? []} />
       )}
-      {info.reason && <span>{info.reason}</span>}
+      <ActivityAlertZone info={info} activity={activity} />
     </div>
   ),
 
@@ -305,17 +308,33 @@ const activityInfoRenderers: ActivityInfoRendererMap = {
   GitRepoCloned: (info, activity) => (
     <div className="flex flex-col gap-4 text-sm text-muted-foreground">
       <SpecViewer spec={info.gitRepo} resourceId={activity.resourceId} title="Cloned configuration" />
-      {info.reason && <span>{info.reason}</span>}
+      <ActivityAlertZone info={info} activity={activity} />
     </div>
   ),
 
   GitRepoPulled: (info, activity) => (
     <div className="flex flex-col gap-4 text-sm text-muted-foreground">
       <SpecViewer spec={info.gitRepo} resourceId={activity.resourceId} title="Pulled configuration" />
-      {info.reason && <span>{info.reason}</span>}
+      <ActivityAlertZone info={info} activity={activity} />
     </div>
   ),
 };
+
+function ActivityAlertZone({
+  info,
+  activity,
+}: {
+  info: ActivityEventInfoGitRepoPulled | ActivityEventInfoGitRepoCloned | ActivityEventInfoDeploymentApplied;
+  activity: ActivityView;
+}) {
+  if (!(activity.status === ActivityStatus.Failure || activity.status === ActivityStatus.Warning)) return;
+  return (
+    <AlertMessage
+      type={activity.status === ActivityStatus.Failure ? 'error' : 'warning'}
+      children={info.result.message}
+    />
+  );
+}
 
 function KeyValueBlock({ label, value }: { label: string; value: string | any[] }) {
   return (

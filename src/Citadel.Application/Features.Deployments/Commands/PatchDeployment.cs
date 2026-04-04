@@ -86,6 +86,7 @@ internal sealed class PatchDeploymentHandler(IUnitOfWork unitOfWork, IDeployment
                 info: new DeploymentUpdated(deployment.ToSnapshot(), patchedDeployment.ToSnapshot(command.Id))
             );
 
+        // Update deployment
         deployment.PartialUpdate(
             platformId: patchedDeployment.PlatformId,
             spec: patchedDeployment.Spec);

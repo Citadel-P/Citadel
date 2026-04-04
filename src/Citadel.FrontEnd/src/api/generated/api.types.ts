@@ -433,8 +433,7 @@ export interface ActivityEventInfoAlertRuleUpdated {
 export interface ActivityEventInfoDeploymentApplied {
   $type?: "DeploymentApplied";
   deployment: null | DeploymentSnapshot;
-  containerIds: null | any[];
-  reason: null | string;
+  result: DeploymentResultSnapshot;
 }
 
 export interface ActivityEventInfoDeploymentCreated {
@@ -482,7 +481,7 @@ export interface ActivityEventInfoDeploymentUpdated {
 export interface ActivityEventInfoGitRepoCloned {
   $type?: "GitRepoCloned";
   gitRepo: GitRepositorySnapshot;
-  reason: null | string;
+  result: RepoSyncResultSnapshot;
 }
 
 export interface ActivityEventInfoGitRepoCreated {
@@ -498,7 +497,7 @@ export interface ActivityEventInfoGitRepoDeleted {
 export interface ActivityEventInfoGitRepoPulled {
   $type?: "GitRepoPulled";
   gitRepo: GitRepositorySnapshot;
-  reason: null | string;
+  result: RepoSyncResultSnapshot;
 }
 
 export interface ActivityEventInfoGitRepoRenamed {
@@ -1412,6 +1411,11 @@ export interface DeploymentImageInfoExternalImage {
 export interface DeploymentImageInfoLocalImage {
   $type?: "Local";
   imageId: string;
+}
+
+export interface DeploymentResultSnapshot {
+  containerIds?: null | any[];
+  message?: null | string;
 }
 
 export interface DeploymentSnapshot {
@@ -2633,6 +2637,11 @@ export interface RepoCommand {
   commands: string[];
   /** @default "./" */
   path?: string;
+}
+
+export interface RepoSyncResultSnapshot {
+  commitSha?: null | string;
+  message?: null | string;
 }
 
 export interface ResolveAlertEventsInput {

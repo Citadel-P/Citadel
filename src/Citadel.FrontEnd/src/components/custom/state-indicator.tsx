@@ -51,14 +51,6 @@ const getStatusStyle = (value: StateValue, enableLabel?: boolean) => {
     case AlertRuleStatus.Disabled:
       return { colorClass: 'bg-gray-500', tooltip: 'Disabled' };
     // Git Repos
-    case GitReposStatus.Valid:
-      return { colorClass: 'bg-green-500', tooltip: 'Valid' };
-    case GitReposStatus.Invalid:
-      return { colorClass: 'bg-red-500', tooltip: 'Invalid' };
-    case GitReposStatus.Unauthorized:
-      return { colorClass: 'bg-orange-500', tooltip: 'Unauthorized' };
-    case GitReposStatus.Unreachable:
-      return { colorClass: 'bg-red-400', tooltip: 'Unreachable' };
     case GitReposStatus.Unknown:
       return { colorClass: 'bg-gray-400', tooltip: 'Unknown' };
     // Containers

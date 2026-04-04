@@ -24,6 +24,7 @@ export const useGitRepoGroup = (id: string | undefined) => {
         defaultBranch: repo.defaultBranch,
         webHookEnabled: repo.webHookEnabled,
         webHookSecret: repo.webHookSecret,
+        controlState: repo.controlState
       };
     });
   }, []);

@@ -297,7 +297,7 @@ internal sealed class UpdateDeploymentStatusWorkItem(Guid deploymentId, Guid act
                             resourceName: deployment.Name,
                             status: ActivityStatus.Failure,
                             eventType: ActivityEventType.DeploymentApplied,
-                            info: new DeploymentApplied(null, null, message)
+                            info: new DeploymentApplied(deployment.ToSnapshot(), new DeploymentResultSnapshot(null, message))
                             );
 
             await uow.ActivityEventRepository.AddAsync(activity, ct);
@@ -353,7 +353,7 @@ internal sealed class DeploymentSucceededWorkItem(
                         resourceName: deployment.Name,
                         status: ActivityStatus.Success,
                         eventType: ActivityEventType.DeploymentApplied,
-                        info: new DeploymentApplied(deployment.ToSnapshot(), [containerId], null)
+                        info: new DeploymentApplied(deployment.ToSnapshot(), new DeploymentResultSnapshot([containerId]))
                         );
 
         await uow.ActivityEventRepository.AddAsync(activity, ct);

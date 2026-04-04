@@ -163,6 +163,7 @@ export const ContainerInfoTable = ({
   const tableData: ContainerInfoRow[] = [
     {
       ...containerInfo,
+      name: container.name,
       id: containerInfo.containerId,
       containerStat: container.containerStat,
       state: container.state,
