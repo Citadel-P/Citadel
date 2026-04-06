@@ -7,16 +7,19 @@ using Domain.Contracts.Resources.Alerts;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using FluentValidation;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
+using Hosting.Common;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 
 namespace Application.Features.Alerters.Commands;
 
+[RequirePermission(ResourceType.Alert, ResourceAction.Update)]
 public sealed record PatchAlertRule(Guid Id, JsonMergePatchDocument<AlertRule> Patch) : ICommand<Result<AlertRule>>
 {
     internal sealed class Validator : AbstractValidator<PatchAlertRule>

@@ -2,6 +2,7 @@
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
+using Hosting.Common;
 using Hosting.Common.Models;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
@@ -78,10 +79,12 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             a.CreatedAt,
             a.UpdatedAt,
             ac.Id AS Actor_Id,
-            ac.Name AS Actor_Name,
+            COALESCE(au.Name, at.Name, CASE WHEN ac.Type = 'System' THEN 'System' END) AS Actor_Name,
             ac.Type AS Actor_Type
         FROM AlertEvents a
         LEFT JOIN Actors ac ON COALESCE(a.ResolvedByActorId, a.AcknowledgedByActorId) = ac.Id
+        LEFT JOIN Users au ON au.ActorId = ac.Id
+        LEFT JOIN Teams at ON at.ActorId = ac.Id
         WHERE a.Id = @Id
         LIMIT 1;
         """;
@@ -112,10 +115,12 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             a.CreatedAt,
             a.UpdatedAt,
             ac.Id AS Actor_Id,
-            ac.Name AS Actor_Name,
+            COALESCE(au.Name, at.Name, CASE WHEN ac.Type = 'System' THEN 'System' END) AS Actor_Name,
             ac.Type AS Actor_Type
         FROM AlertEvents a
         LEFT JOIN Actors ac ON COALESCE(a.ResolvedByActorId, a.AcknowledgedByActorId) = ac.Id
+        LEFT JOIN Users au ON au.ActorId = ac.Id
+        LEFT JOIN Teams at ON at.ActorId = ac.Id
         WHERE a.Id IN (SELECT value FROM json_each(@Ids));
         """;
 
@@ -163,7 +168,6 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             a.CreatedAt,
             a.UpdatedAt,
             ac.Id AS Actor_Id,
-            ac.Name AS Actor_Name,
             ac.Type AS Actor_Type
         FROM AlertEvents a
         LEFT JOIN Actors ac ON COALESCE(a.ResolvedByActorId, a.AcknowledgedByActorId) = ac.Id
@@ -201,6 +205,145 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
 
         var rows = await db.QueryAsync<AlertEventDto>(
             SelectAlerts, p, transaction: tx());
+
+        return new PagedResult<AlertEvent>(
+            [.. rows.Select(x => x.ToDomain())],
+            totalCount,
+            page,
+            pageSize);
+    }
+
+    public async Task<PagedResult<AlertEvent>> GetAuthorizedPagedAsync(
+        Guid userId,
+        ResourceType permissionResourceType,
+        ResourceAction action,
+        Guid? resourceId,
+        AlertType? alertType,
+        AlertResourceType? resourceType,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken,
+        bool? unresolvedOnly = null)
+    {
+        const string SelectAlerts = """
+        WITH ActorScope AS (
+            SELECT ActorId
+            FROM Users
+            WHERE Id = @UserId
+
+            UNION
+
+            SELECT t.ActorId
+            FROM Teams t
+            JOIN UsersTeams ut ON ut.TeamId = t.Id
+            WHERE ut.UserId = @UserId
+        )
+        SELECT
+            a.Id,
+            a.AlertRuleId,
+            a.Type,
+            a.Severity,
+            a.Info,
+            a.ResourceId,
+            a.ResourceName,
+            a.ResourceType,
+            a.DeduplicationKey,
+            a.OpenIncidentKey,
+            a.AcknowledgedByActorId,
+            a.AcknowledgedAt,
+            a.ResolvedByActorId,
+            a.ResolvedAt,
+            a.ResolutionNote,
+            a.CreatedAt,
+            a.UpdatedAt,
+            ac.Id AS Actor_Id,
+            ac.Type AS Actor_Type
+        FROM AlertEvents a
+        LEFT JOIN Actors ac ON COALESCE(a.ResolvedByActorId, a.AcknowledgedByActorId) = ac.Id
+        WHERE (@ResourceId IS NULL OR a.ResourceId = @ResourceId)
+            AND (@AlertType IS NULL OR a.Type = @AlertType)
+            AND (@ResourceType IS NULL OR a.ResourceType = @ResourceType)
+            AND (@UnresolvedOnly IS NULL OR @UnresolvedOnly = 0 OR a.ResolvedAt IS NULL)
+            AND (
+                EXISTS (
+                    SELECT 1
+                    FROM ActorRoles ar
+                    JOIN Permissions p ON p.RoleId = ar.RoleId
+                    WHERE ar.ActorId IN (SELECT ActorId FROM ActorScope)
+                      AND p.ResourceType = @PermissionResourceType
+                      AND p.ResourceAction = @Action
+                )
+
+                OR EXISTS (
+                    SELECT 1
+                    FROM ResourceAccesses ra
+                    WHERE ra.ActorId IN (SELECT ActorId FROM ActorScope)
+                      AND ra.ResourceType = @PermissionResourceType
+                      AND ra.ResourceId = a.Id
+                      AND ra.Action = @Action
+                )
+            )
+        ORDER BY a.UpdatedAt DESC, a.CreatedAt DESC
+        LIMIT @PageSize OFFSET @Offset;
+        """;
+
+        const string CountAlerts = """
+        WITH ActorScope AS (
+            SELECT ActorId
+            FROM Users
+            WHERE Id = @UserId
+
+            UNION
+
+            SELECT t.ActorId
+            FROM Teams t
+            JOIN UsersTeams ut ON ut.TeamId = t.Id
+            WHERE ut.UserId = @UserId
+        )
+        SELECT COUNT(*)
+        FROM AlertEvents a
+        WHERE (@ResourceId IS NULL OR a.ResourceId = @ResourceId)
+            AND (@AlertType IS NULL OR a.Type = @AlertType)
+            AND (@ResourceType IS NULL OR a.ResourceType = @ResourceType)
+            AND (@UnresolvedOnly IS NULL OR @UnresolvedOnly = 0 OR a.ResolvedAt IS NULL)
+            AND (
+                EXISTS (
+                    SELECT 1
+                    FROM ActorRoles ar
+                    JOIN Permissions p ON p.RoleId = ar.RoleId
+                    WHERE ar.ActorId IN (SELECT ActorId FROM ActorScope)
+                      AND p.ResourceType = @PermissionResourceType
+                      AND p.ResourceAction = @Action
+                )
+
+                OR EXISTS (
+                    SELECT 1
+                    FROM ResourceAccesses ra
+                    WHERE ra.ActorId IN (SELECT ActorId FROM ActorScope)
+                      AND ra.ResourceType = @PermissionResourceType
+                      AND ra.ResourceId = a.Id
+                      AND ra.Action = @Action
+                )
+            );
+        """;
+
+        var offset = (page - 1) * pageSize;
+
+        var p = new
+        {
+            UserId = userId.Format(),
+            PermissionResourceType = EnumFormatter<ResourceType>.GetValue(permissionResourceType),
+            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            ResourceId = resourceId?.Format(),
+            AlertType = alertType is null ? null : EnumFormatter<AlertType>.GetValue(alertType.Value),
+            ResourceType = resourceType is null ? null : EnumFormatter<AlertResourceType>.GetValue(resourceType.Value),
+            UnresolvedOnly = unresolvedOnly,
+            PageSize = pageSize,
+            Offset = offset,
+        };
+
+        var totalCount = await db.QuerySingleAsync<int>(CountAlerts, p, transaction: tx());
+        var rows = await db.QueryAsync<AlertEventDto>(SelectAlerts, p, transaction: tx());
 
         return new PagedResult<AlertEvent>(
             [.. rows.Select(x => x.ToDomain())],

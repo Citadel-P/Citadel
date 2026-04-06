@@ -3,6 +3,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities.Git;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
 using LightResults;
@@ -10,6 +11,7 @@ using Mediator;
 
 namespace Application.Features.GitAccounts.Commands;
 
+[RequirePermission(ResourceType.GitAccount, ResourceAction.Update)]
 public sealed record PatchGitAccount(Guid Id, JsonMergePatchDocument<GitAccount> Patch) : ICommand<Result<GitAccount>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchGitAccount, GitAccount>

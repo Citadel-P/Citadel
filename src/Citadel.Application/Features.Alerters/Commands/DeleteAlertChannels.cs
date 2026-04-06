@@ -1,11 +1,14 @@
 using Application.Services.Alerts;
+using Hosting.Common;
 using Domain.Contracts.Interfaces;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Alerters.Commands;
 
+[RequirePermission(ResourceType.AlertChannel, ResourceAction.Delete)]
 public sealed record DeleteAlertChannels(IEnumerable<Guid> Ids) : ICommand<Result>;
 
 internal sealed class DeleteAlertChannelsHandler(

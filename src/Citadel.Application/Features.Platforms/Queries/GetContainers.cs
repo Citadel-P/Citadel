@@ -1,14 +1,14 @@
 ﻿using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using FluentValidation;
+using Hosting.Common.Attributes;
 using LightResults;
 using Mediator;
+using Hosting.Common;
 
 namespace Application.Features.Platforms.Queries;
 
-/// <summary>
-/// Retrieves all containers from remote agents
-/// </summary>
+[RequirePermission(ResourceType.Platform, ResourceAction.View)]
 public sealed record class GetContainers(Guid PlatformId) : IQuery<Result<IEnumerable<Container>>>
 {
     internal class Validator : AbstractValidator<GetContainers>

@@ -38,8 +38,7 @@ public static class ApplicationModule
             })
             .AddPermissions()
             .AddSingleton<IErrorFactoryProvider, ErrorFactoryProvider>()
-            .AddSingleton<IValidatorMetadataProvider, ValidatorMetadataProvider>()
-            .AddSingleton<IPermissionMetadataProvider, PermissionMetadataProvider>();
+            .AddSingleton<IValidatorMetadataProvider, ValidatorMetadataProvider>();
 
         return services;
     }
@@ -66,7 +65,8 @@ public static class ApplicationModule
             .AddScoped<CustomRegistryConnectorStrategy>()
             .AddScoped<IPullImageService, PullImageService>()
             .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>()
-            .AddSingleton<IDelayWithJitterService, DelayWithJitterService>();
+            .AddSingleton<IDelayWithJitterService, DelayWithJitterService>()
+            .AddScoped<IPermissionService, PermissionService>();
 
     private static IServiceCollection AddSignalRServices(this IServiceCollection services) =>
         services

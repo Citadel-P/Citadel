@@ -83,6 +83,7 @@ public enum AppPermission
     Volume_Delete,
     // Images
     Image_View,
+    Image_Pull,
     Image_Create,
     Image_Delete,
     // Registries
@@ -90,12 +91,43 @@ public enum AppPermission
     Registry_Create,
     Registry_Update,
     Registry_Delete,
+    // Alerts
+    Alert_View,
+    Alert_Create,
+    Alert_Update,
+    Alert_Delete,
+    // Alert Channel
+    AlertChannel_View,
+    AlertChannel_Create,
+    AlertChannel_Update,
+    AlertChannel_Delete,
+    // Git Account
+    GitAccount_View,
+    GitAccount_Create,
+    GitAccount_Update,
+    GitAccount_Delete,
+    // Git Repository
+    GitRepository_View,
+    GitRepository_Create,
+    GitRepository_Update,
+    GitRepository_Delete,
+    // Activity
+    Activity_View,
     // Deployments
+    Deployment_Apply,
     Deployment_View,
-    Deploymen_Create,
-    Deploymen_Update,
-    Deploymen_Delete,
+    Deployment_Create,
+    Deployment_Update,
+    Deployment_Delete,
+    // Stacks
+    Stack_Apply,
+    Stack_View,
+    Stack_Create,
+    Stack_Update,
+    Stack_Delete,
 }
+
+
 
 public enum DockerHubTagStatus
 {

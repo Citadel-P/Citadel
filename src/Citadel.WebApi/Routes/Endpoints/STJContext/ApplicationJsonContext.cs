@@ -20,7 +20,6 @@ using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Auth;
-using WebApi.Routes.Endpoints.Resources.Compose;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
@@ -162,10 +161,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(IEnumerable<DockerHubImageResult>))]
 [JsonSerializable(typeof(ContainerInfoView))]
 [JsonSerializable(typeof(ExposedPortsResult))]
-[JsonSerializable(typeof(CreateContainerInput))]
 [JsonSerializable(typeof(CreateContainerView))]
 [JsonSerializable(typeof(IAsyncEnumerable<ComposeDeploymentEvent>))]
-[JsonSerializable(typeof(ComposeUpRequest))]
 [JsonSerializable(typeof(RegistryConfigView))]
 [JsonSerializable(typeof(IEnumerable<ContainerVolumeResult>))]
 [JsonSerializable(typeof(InspectImageView))]

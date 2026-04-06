@@ -34,11 +34,11 @@ internal static class AlertEventMappers
             resolutionNote: alertEventDto.ResolutionNote,
             createdAt: alertEventDto.CreatedAt,
             updatedAt: alertEventDto.UpdatedAt,
-            actor: alertEventDto.Actor_Name is null
+            actor: alertEventDto.Actor_Id is null
                 ? null
                 : Actor.FromPersistence(
                     id: alertEventDto.Actor_Id ?? alertEventDto.ResolvedByActorId ?? alertEventDto.AcknowledgedByActorId ?? Guid.Empty,
-                    type: alertEventDto.Actor_Type is null ? ActorType.User : Enum.Parse<ActorType>(alertEventDto.Actor_Type),
-                    name: alertEventDto.Actor_Name));
+                    type: alertEventDto.Actor_Type is null ? ActorType.System : Enum.Parse<ActorType>(alertEventDto.Actor_Type),
+                    actorMetadata: new ActorMetadata(alertEventDto.Actor_Name ?? "System")));
     }
 }

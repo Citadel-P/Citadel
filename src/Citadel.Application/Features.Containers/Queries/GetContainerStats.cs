@@ -1,12 +1,15 @@
-﻿using Domain.Contracts.Interfaces;
+﻿using Domain;
+using Domain.Contracts.Interfaces;
 using Domain.Entities;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Containers.Queries;
 
+[RequirePermission(ResourceType.Platform, ResourceAction.View)]
 public sealed record GetContainerStats(string ContainerId) : IQuery<Result<IEnumerable<ContainerStat>>>
 {
     internal class Validator : AbstractValidator<GetContainerById>

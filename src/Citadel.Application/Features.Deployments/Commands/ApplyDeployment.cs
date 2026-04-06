@@ -1,5 +1,7 @@
 ﻿using Application.Services;
+using Hosting.Common;
 using Domain.Contracts.Resources.Deployments;
+using Hosting.Common.Attributes;
 using Hosting.Common.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http;
@@ -8,6 +10,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Deployments.Commands;
 
+[RequirePermission(ResourceType.Deployment, ResourceAction.Apply)]
 public sealed record ApplyDeployment(Guid Id, bool? Recreate = false) : IStreamCommand<DeploymentStreamItem>;
 
 internal sealed class ApplyDeploymentHandler(IApplyDeploymentService deploymentApplyService, IHttpContextAccessor httpContextAccessor)

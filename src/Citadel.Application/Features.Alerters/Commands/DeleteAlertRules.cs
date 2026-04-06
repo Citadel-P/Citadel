@@ -5,18 +5,20 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Alerts;
 using Domain.Entities.Activities;
-using Domain.Entities.Alerts;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
+using Hosting.Common;
 
 namespace Application.Features.Alerters.Commands;
 
 public sealed record DeleteAlertRules(IEnumerable<Guid> Ids) : ICommand<Result>;
 
+[RequirePermission(ResourceType.Alert, ResourceAction.Delete)]
 internal sealed class DeleteAlertRulesHandler(
     IUnitOfWork unitOfWork,
     AlertRuleCache alertRuleCache,

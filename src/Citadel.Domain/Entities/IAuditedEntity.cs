@@ -1,6 +1,6 @@
 ﻿namespace Domain.Entities;
 
-public interface IAuditedEntity
+internal interface IAuditedEntity
 {
     DateTime CreatedAt { get;  }
     Guid CreatedByActorId { get; }

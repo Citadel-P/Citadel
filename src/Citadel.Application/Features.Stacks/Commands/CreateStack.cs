@@ -3,6 +3,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Entities.Stacks;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
@@ -12,6 +13,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Stacks.Commands;
 
+[RequirePermission(ResourceType.Stack, ResourceAction.Create)]
 public sealed record CreateStack(
     string Name,
     Guid PlatformId,

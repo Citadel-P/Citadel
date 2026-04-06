@@ -18,7 +18,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Deployments.Commands;
 
-[RequirePermission(nameof(AppPermission.Deploymen_Create))]
+[RequirePermission(ResourceType.Deployment, ResourceAction.Create)]
 public sealed record CreateDeployment(
     string Name,
     Guid PlatformId,

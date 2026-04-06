@@ -3,14 +3,17 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Git;
 using FluentValidation;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
+using Hosting.Common;
 using static Application.Features.GitRepositories.Commands.PatchGitRepositoryHandler;
 
 namespace Application.Features.GitRepositories.Commands;
 
+[RequirePermission(ResourceType.GitRepository, ResourceAction.Update)]
 public sealed record PatchGitRepositoryMetadata(Guid Id, JsonMergePatchDocument<GitRepository> Patch) : ICommand<Result<GitRepository>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchGitRepositoryMetadata, GitRepository>

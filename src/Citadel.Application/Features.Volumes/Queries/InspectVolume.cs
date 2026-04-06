@@ -1,11 +1,14 @@
-﻿using Domain.Contracts.Interfaces;
+﻿using Hosting.Common;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Volumes;
 using FluentValidation;
+using Hosting.Common.Attributes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Volumes.Queries;
 
+[RequirePermission(ResourceType.Platform, ResourceAction.View)]
 public sealed record InspectVolume (Guid PlatformId, string Name) : IQuery<Result<DockerVolumeResult>>
 {
     internal class Validator : AbstractValidator<InspectVolume>

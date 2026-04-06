@@ -8,17 +8,20 @@ using Domain.Contracts.Resources.Git;
 using Domain.Entities.Activities;
 using Domain.Entities.Git;
 using FluentValidation;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
+using Hosting.Common;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 using System.Threading.Channels;
 
 namespace Application.Features.GitRepositories.Commands;
 
+[RequirePermission(ResourceType.GitRepository, ResourceAction.Update)]
 public sealed record PatchGitRepository(Guid Id, JsonMergePatchDocument<GitRepository> Patch) : ICommand<Result<GitRepository>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchGitRepository, GitRepository>

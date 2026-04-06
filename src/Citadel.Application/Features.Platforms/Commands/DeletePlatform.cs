@@ -2,13 +2,16 @@
 using Application.TaskJobs;
 using Domain.Contracts.Interfaces;
 using FluentValidation;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 using Microsoft.Extensions.Logging;
+using Hosting.Common;
 
 namespace Application.Features.Platforms.Commands;
 
+[RequirePermission(ResourceType.Platform, ResourceAction.Delete)]
 public sealed record DeletePlatforms(IEnumerable<Guid> Ids) : ICommand<Result>
 {
     internal sealed class Validator : AbstractValidator<DeletePlatforms>

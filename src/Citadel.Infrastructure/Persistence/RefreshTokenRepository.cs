@@ -35,21 +35,40 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
             """
             WITH Token AS (
                 SELECT UserId FROM RefreshTokens WHERE Id = @Id LIMIT 1
+            ),
+            TargetUser AS (
+                SELECT Users.Id, Users.Name, Users.Email, Users.ActorId
+                FROM Token
+                JOIN Users ON Users.Id = Token.UserId
+            ),
+            ActorScope AS (
+                SELECT TargetUser.ActorId
+                FROM TargetUser
+
+                UNION
+
+                SELECT Teams.ActorId
+                FROM TargetUser
+                JOIN UsersTeams ON TargetUser.Id = UsersTeams.UserId
+                JOIN Teams ON Teams.Id = UsersTeams.TeamId
             )
             SELECT 
-                Users.Id, 
-                Users.Name, 
-                Users.Email,
-                Users.ActorId,
+                TargetUser.Id, 
+                TargetUser.Name, 
+                TargetUser.Email,
+                TargetUser.ActorId,
+                '' AS Password,
                 Roles.Name as RoleName, 
-                Permissions.PermissionCode
-            FROM Token
-            JOIN Users ON Users.Id = Token.UserId
-            LEFT JOIN UsersTeams ON Users.Id = UsersTeams.UserId
-            LEFT JOIN Teams ON Teams.Id = UsersTeams.TeamId
-            LEFT JOIN Roles ON Teams.RoleId = Roles.Id
+                CASE
+                    WHEN Permissions.ResourceType IS NOT NULL AND Permissions.ResourceAction IS NOT NULL
+                    THEN Permissions.ResourceType || '_' || Permissions.ResourceAction
+                    ELSE NULL
+                END AS PermissionName
+            FROM TargetUser
+            LEFT JOIN ActorScope ON 1 = 1
+            LEFT JOIN ActorRoles ON ActorRoles.ActorId = ActorScope.ActorId
+            LEFT JOIN Roles ON Roles.Id = ActorRoles.RoleId
             LEFT JOIN Permissions ON Roles.Id = Permissions.RoleId
-            LEFT JOIN Actors ON Actors.Id = Users.Id;
             """;
 
         var result = await db.QueryAsync<UserAuthInfoDto>(sql,
@@ -67,8 +86,12 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
                 [.. g.Where(r => !string.IsNullOrWhiteSpace(r.RoleName))
                     .Select(r => r.RoleName!)
                     .Distinct()],
-                [.. g.Where(r => r.PermissionCode.HasValue)
-                    .Select(r => (AppPermission)r.PermissionCode!.Value)
+                [.. g.Where(r => !string.IsNullOrWhiteSpace(r.PermissionName))
+                    .Select(r => Enum.TryParse<AppPermission>(r.PermissionName, out var permission)
+                        ? permission
+                        : (AppPermission?)null)
+                    .Where(permission => permission.HasValue)
+                    .Select(permission => permission!.Value)
                     .Distinct()]
             )).FirstOrDefault();
     }

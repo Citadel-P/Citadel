@@ -1,10 +1,14 @@
+using Domain;
 using Domain.Contracts.Interfaces;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
+using Hosting.Common;
 
 namespace Application.Features.Stacks.Commands;
 
+[RequirePermission(ResourceType.Stack, ResourceAction.Delete)]
 public sealed record DeleteStacks(IEnumerable<Guid> Ids) : ICommand<Result>;
 
 internal sealed class DeleteStacksHandler(IUnitOfWork unitOfWork) : ICommandHandler<DeleteStacks, Result>

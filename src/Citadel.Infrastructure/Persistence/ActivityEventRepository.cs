@@ -44,11 +44,12 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
         var sql = """
             SELECT 
                 a.*,
+                u.Name AS Actor_Name,
                 p.Name AS Platform_Name,
                 p.Status AS Platform_Status,
-                ac.Name AS Actor_Name,
                 ac.Type AS Actor_Type
             FROM ActivityEvents a
+            LEFT JOIN Users u ON a.CreatedByActorId = u.ActorId
             LEFT JOIN Actors ac ON a.CreatedByActorId = ac.Id
             LEFT JOIN Platforms p ON a.PlatformId = p.Id
             WHERE a.Id = @Id
@@ -59,12 +60,12 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
     }
 
     public async Task<PagedResult<ActivityEvent>> GetPagedAsync(
-     Guid? resourceId,
-     ActivityResourceType? resourceType,
-     ActivityEventType? eventType,
-     int page,
-     int pageSize,
-     CancellationToken cancellationToken)
+        Guid? resourceId,
+        ActivityResourceType? resourceType,
+        ActivityEventType? eventType,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
     {
         const string SelectActivities = """
         SELECT 
@@ -79,10 +80,11 @@ internal class ActivityEventRepository(IDbConnection db, Func<IDbTransaction> tx
             a.Status,
             p.Name AS Platform_Name,
             p.Status AS Platform_Status,
-            ac.Name AS Actor_Name,
+            u.Name AS Actor_Name,
             ac.Type AS Actor_Type
         FROM ActivityEvents a
         LEFT JOIN Actors ac ON a.CreatedByActorId = ac.Id
+        LEFT JOIN Users u ON a.CreatedByActorId = u.ActorId
         LEFT JOIN Platforms p ON a.PlatformId = p.Id
         WHERE (@ResourceId IS NULL OR a.ResourceId = @ResourceId)
             AND (@ResourceType IS NULL OR a.ResourceType = @ResourceType)

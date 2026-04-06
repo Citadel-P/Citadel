@@ -12,7 +12,17 @@ internal sealed class ActorRepository(IDbConnection db, Func<IDbTransaction> tx)
 {
     public async Task<Actor?> GetById(Guid id, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT * FROM Actors WHERE Id = @Id LIMIT 1";
+        const string sql = """
+            SELECT
+                Actors.Id,
+                Actors.Type,
+                COALESCE(Users.Name, Teams.Name, CASE WHEN Actors.Type = 'System' THEN 'System' END) AS Name
+            FROM Actors
+            LEFT JOIN Users ON Users.ActorId = Actors.Id
+            LEFT JOIN Teams ON Teams.ActorId = Actors.Id
+            WHERE Actors.Id = @Id
+            LIMIT 1
+            """;
         var result = await db.QuerySingleOrDefaultAsync<ActorDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
         return result?.ToDomain();
     }

@@ -2,6 +2,7 @@
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
+using Hosting.Common;
 using Hosting.Common.Models;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
@@ -194,6 +195,69 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         return rows.ToDomain();
     }
 
+    public async Task<IEnumerable<AlertRule>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            WITH ActorScope AS (
+                SELECT ActorId
+                FROM Users
+                WHERE Id = @UserId
+
+                UNION
+
+                SELECT t.ActorId
+                FROM Teams t
+                JOIN UsersTeams ut ON ut.TeamId = t.Id
+                WHERE ut.UserId = @UserId
+            )
+            SELECT 
+                r.Id, 
+                r.Name,
+                r.Description,
+                r.Type, 
+                r.CooldownSeconds, 
+                r.Status, 
+                r.Severity, 
+                r.LimitedTo, 
+                r.QuietHours, 
+                r.RequiredMatches,
+                r.Threshold, 
+                r.CreatedByActorId, 
+                r.CreatedAt,
+                COALESCE(json_group_array(arc.AlertChannelId), '[]') AS ChannelIds
+            FROM AlertRules r
+            LEFT JOIN AlertRuleChannels arc ON arc.AlertRuleId = r.Id
+            WHERE EXISTS (
+                SELECT 1
+                FROM ActorRoles ar
+                JOIN Permissions p ON p.RoleId = ar.RoleId
+                WHERE ar.ActorId IN (SELECT ActorId FROM ActorScope)
+                  AND p.ResourceType = @ResourceType
+                  AND p.ResourceAction = @Action
+            )
+
+            OR EXISTS (
+                SELECT 1
+                FROM ResourceAccesses ra
+                WHERE ra.ActorId IN (SELECT ActorId FROM ActorScope)
+                  AND ra.ResourceType = @ResourceType
+                  AND ra.ResourceId = r.Id
+                  AND ra.Action = @Action
+            )
+            GROUP BY r.Id
+            """;
+
+        var rows = await db.QueryAsync<AlertRuleDto>(sql, new
+        {
+            UserId = userId.Format(),
+            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
+            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            cancellationToken
+        }, transaction: tx());
+
+        return rows?.ToDomain() ?? [];
+    }
+
     public async Task<PagedResult<AlertRule>> GetPagedAsync(int page, int pageSize, CancellationToken cancellationToken)
     {
         const string countQuery = "SELECT COUNT(*) FROM AlertRules";
@@ -267,6 +331,53 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
         """;
 
         var rows = await db.QueryAsync<AlertChannelDto>(sql, transaction: tx());
+        return rows?.Select(r => r.ToDomain()) ?? [];
+    }
+
+    public async Task<IEnumerable<AlertChannel>> GetAuthorizedChannelsAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            WITH ActorScope AS (
+                SELECT ActorId
+                FROM Users
+                WHERE Id = @UserId
+
+                UNION
+
+                SELECT t.ActorId
+                FROM Teams t
+                JOIN UsersTeams ut ON ut.TeamId = t.Id
+                WHERE ut.UserId = @UserId
+            )
+            SELECT Id, Name, AlertDestination, Url, IsActive, CreatedByActorId, CreatedAt
+            FROM AlertChannels channel
+            WHERE EXISTS (
+                SELECT 1
+                FROM ActorRoles ar
+                JOIN Permissions p ON p.RoleId = ar.RoleId
+                WHERE ar.ActorId IN (SELECT ActorId FROM ActorScope)
+                  AND p.ResourceType = @ResourceType
+                  AND p.ResourceAction = @Action
+            )
+
+            OR EXISTS (
+                SELECT 1
+                FROM ResourceAccesses ra
+                WHERE ra.ActorId IN (SELECT ActorId FROM ActorScope)
+                  AND ra.ResourceType = @ResourceType
+                  AND ra.ResourceId = channel.Id
+                  AND ra.Action = @Action
+            )
+            """;
+
+        var rows = await db.QueryAsync<AlertChannelDto>(sql, new
+        {
+            UserId = userId.Format(),
+            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
+            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            cancellationToken
+        }, transaction: tx());
+
         return rows?.Select(r => r.ToDomain()) ?? [];
     }
 

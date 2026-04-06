@@ -1,16 +1,16 @@
 ﻿using Domain.Contracts.Interfaces;
 using Domain.Entities.Platforms;
 using FluentValidation;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
+using Hosting.Common;
 
 namespace Application.Features.Platforms.Queries;
 
-/// <summary>
-/// Gets platform by id
-/// </summary>
-/// <param name="Id">The ID of the platform</param>
+
+[RequirePermission(ResourceType.Platform, ResourceAction.View)]
 public sealed record GetPlatformById(Guid Id) : IQuery<Result<Platform>>
 {
     internal class Validator : AbstractValidator<GetPlatformById>

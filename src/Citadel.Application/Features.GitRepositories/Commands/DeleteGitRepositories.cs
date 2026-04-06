@@ -2,10 +2,12 @@ using Application.Features.Deployments.Notifications;
 using Application.Services;
 using Application.Services.SignalR;
 using Application.TaskJobs;
+using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Git;
 using Domain.Entities.Activities;
 using Domain.Entities.Git;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
@@ -16,6 +18,7 @@ using System.Security.Claims;
 
 namespace Application.Features.GitRepositories.Commands;
 
+[RequirePermission(ResourceType.GitRepository, ResourceAction.Delete)]
 public sealed record DeleteGitRepositories(IEnumerable<Guid> Ids) : ICommand<Result>;
 
 internal sealed class DeleteGitRepositoriesHandler(

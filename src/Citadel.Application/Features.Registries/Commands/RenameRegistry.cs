@@ -16,7 +16,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Registries.Commands;
 
-[RequirePermission(nameof(AppPermission.Registry_Update))]
+[RequirePermission(ResourceType.Registry, ResourceAction.Update)]
 public sealed record RenameRegistry(Guid Id, string Name) : ICommand<Result<Registry>>
 {
     internal sealed class Validator : AbstractValidator<RenameRegistry>

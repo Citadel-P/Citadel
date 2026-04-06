@@ -6,6 +6,7 @@ using Domain.Entities.Activities;
 using Domain.Entities.Git;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
@@ -16,6 +17,7 @@ using static Application.Features.GitRepositories.Commands.PatchGitRepositoryHan
 
 namespace Application.Features.GitRepositories.Commands;
 
+[RequirePermission(ResourceType.GitRepository, ResourceAction.Update)]
 public sealed record RenameGitRepository(Guid Id, string Name) : ICommand<Result<GitRepository>>
 {
     internal sealed class Validator : AbstractValidator<RenameGitRepository>

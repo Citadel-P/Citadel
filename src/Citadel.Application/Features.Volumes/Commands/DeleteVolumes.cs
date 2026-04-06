@@ -1,12 +1,15 @@
-﻿using Domain.Contracts.Interfaces;
+﻿using Domain;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Volumes;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Volumes.Commands;
 
+[RequirePermission(ResourceType.Platform, ResourceAction.Delete)]
 public sealed record DeleteVolumes(Guid PlatformId, string[] Names, bool? Force = false) : ICommand<Result>
 {
     internal class Validator : AbstractValidator<DeleteVolumes>

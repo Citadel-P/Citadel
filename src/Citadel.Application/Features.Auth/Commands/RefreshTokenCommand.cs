@@ -26,7 +26,7 @@ internal sealed class RefreshTokenCommandHandler(IUnitOfWork unitOfWork, IJwtSer
 
         var existing = await unitOfWork.RefreshTokens.GetUserAuthInfoByRefreshTokenIdAsync(tokenId, cancellationToken);
         if (existing == null)
-            return Result.Failure<string>(new UnauthorizedError("Refresh token does not exist."));
+            return Result.Failure<string>(new UnauthorizedError("Invalid refresh token."));
 
         var accessToken = jwtService.CreateAccessToken(User.GetJwtClaims(existing));
         

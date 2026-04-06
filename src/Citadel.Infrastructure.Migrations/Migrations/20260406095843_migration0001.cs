@@ -18,7 +18,6 @@ namespace Infrastructure.Migrations.Migrations
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", nullable: false),
                     Type = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
@@ -50,13 +49,26 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "ResourceAccesses",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    Action = table.Column<string>(type: "TEXT", nullable: false),
+                    ActorId = table.Column<string>(type: "TEXT", nullable: false),
+                    ResourceId = table.Column<string>(type: "TEXT", nullable: false),
+                    ResourceType = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ResourceAccesses", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Roles",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValue: new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)),
-                    Name = table.Column<string>(type: "TEXT", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: false, defaultValue: new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified))
+                    Name = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -198,6 +210,25 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Teams",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    ActorId = table.Column<string>(type: "TEXT", nullable: false),
+                    Name = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Teams", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Teams_Actors_ActorId",
+                        column: x => x.ActorId,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Users",
                 columns: table => new
                 {
@@ -327,18 +358,23 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Permissions",
+                name: "ActorRoles",
                 columns: table => new
                 {
-                    Id = table.Column<string>(type: "TEXT", nullable: false),
-                    PermissionCode = table.Column<string>(type: "TEXT", nullable: false),
+                    ActorId = table.Column<string>(type: "TEXT", nullable: false),
                     RoleId = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Permissions", x => x.Id);
+                    table.PrimaryKey("PK_ActorRoles", x => new { x.ActorId, x.RoleId });
                     table.ForeignKey(
-                        name: "FK_Permissions_Roles_RoleId",
+                        name: "FK_ActorRoles_Actors_ActorId",
+                        column: x => x.ActorId,
+                        principalTable: "Actors",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_ActorRoles_Roles_RoleId",
                         column: x => x.RoleId,
                         principalTable: "Roles",
                         principalColumn: "Id",
@@ -346,18 +382,19 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Teams",
+                name: "Permissions",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    ResourceAction = table.Column<string>(type: "TEXT", nullable: false),
+                    ResourceType = table.Column<string>(type: "TEXT", nullable: false),
                     RoleId = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Teams", x => x.Id);
+                    table.PrimaryKey("PK_Permissions", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Teams_Roles_RoleId",
+                        name: "FK_Permissions_Roles_RoleId",
                         column: x => x.RoleId,
                         principalTable: "Roles",
                         principalColumn: "Id",
@@ -692,17 +729,32 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.InsertData(
                 table: "Actors",
-                columns: new[] { "Id", "Name", "Type" },
+                columns: new[] { "Id", "Type" },
                 values: new object[,]
                 {
-                    { "00000000-0000-0000-0000-000000000001", "System", "System" },
-                    { "00000000-0000-0000-0000-000000000002", "Admin", "User" }
+                    { "00000000-0000-0000-0000-000000000001", "System" },
+                    { "00000000-0000-0000-0000-000000000002", "User" },
+                    { "00000000-0000-0000-0000-000000000003", "Team" }
                 });
 
             migrationBuilder.InsertData(
                 table: "Roles",
-                columns: new[] { "Id", "CreatedAt", "Name", "UpdatedAt" },
-                values: new object[] { "bdde9601-3b03-1275-a11b-98533d063a04", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "Admin", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified) });
+                columns: new[] { "Id", "Name" },
+                values: new object[,]
+                {
+                    { "30000000-0000-0000-0000-000000000001", "Admin" },
+                    { "30000000-0000-0000-0000-000000000002", "Operator" },
+                    { "30000000-0000-0000-0000-000000000003", "Viewer" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "ActorRoles",
+                columns: new[] { "ActorId", "RoleId" },
+                values: new object[,]
+                {
+                    { "00000000-0000-0000-0000-000000000002", "30000000-0000-0000-0000-000000000001" },
+                    { "00000000-0000-0000-0000-000000000003", "30000000-0000-0000-0000-000000000002" }
+                });
 
             migrationBuilder.InsertData(
                 table: "AlertRules",
@@ -725,24 +777,122 @@ namespace Infrastructure.Migrations.Migrations
                 });
 
             migrationBuilder.InsertData(
+                table: "Permissions",
+                columns: new[] { "Id", "ResourceAction", "ResourceType", "RoleId" },
+                values: new object[,]
+                {
+                    { "017b5a65-e312-8a67-b7fd-6124f6ddeeee", "View", "GitRepository", "30000000-0000-0000-0000-000000000001" },
+                    { "052e45fb-cb15-9380-6a33-c233fde703a6", "Update", "GitAccount", "30000000-0000-0000-0000-000000000001" },
+                    { "0dd6ded1-5ef7-c1b5-a36a-d0de73459d8a", "Apply", "Registry", "30000000-0000-0000-0000-000000000002" },
+                    { "0eda225f-cb5b-1bb0-9525-be92b14fc322", "Apply", "GitRepository", "30000000-0000-0000-0000-000000000001" },
+                    { "0f030749-53d1-bade-8ef3-30112991786d", "Create", "Stack", "30000000-0000-0000-0000-000000000002" },
+                    { "117176b6-ca23-e53d-d996-83affab7ed48", "View", "Stack", "30000000-0000-0000-0000-000000000001" },
+                    { "12bbcf07-7237-3afb-65f7-1fc8e2de4939", "Apply", "Registry", "30000000-0000-0000-0000-000000000001" },
+                    { "18255099-e963-802b-21a3-d115440e9322", "Pull", "Deployment", "30000000-0000-0000-0000-000000000002" },
+                    { "18b8b740-528c-6366-9902-ebf6a025d063", "Apply", "Alert", "30000000-0000-0000-0000-000000000002" },
+                    { "19357866-b0f7-4c0b-fb01-c3a6556d1e5f", "Apply", "AlertChannel", "30000000-0000-0000-0000-000000000001" },
+                    { "1a0b6504-d508-0f6d-4513-12b80c3ab4d8", "Update", "Platform", "30000000-0000-0000-0000-000000000002" },
+                    { "1f00afd4-a4d1-94cd-3a94-44d420eef066", "Apply", "GitRepository", "30000000-0000-0000-0000-000000000002" },
+                    { "21d8c7f7-5480-5509-e2ab-e3c8fdbb5ab8", "Update", "AlertChannel", "30000000-0000-0000-0000-000000000001" },
+                    { "2548763c-c9b7-5359-a80a-5ce706c5c42c", "Update", "Alert", "30000000-0000-0000-0000-000000000001" },
+                    { "258c5870-adb0-f28f-bed2-5c993e5d11da", "Pull", "GitRepository", "30000000-0000-0000-0000-000000000002" },
+                    { "26bb8bc9-e526-dfd5-c3cc-2ebc0fb9837b", "Apply", "Alert", "30000000-0000-0000-0000-000000000001" },
+                    { "2e0582c8-9569-22cd-c777-69f03893b8ec", "Delete", "GitRepository", "30000000-0000-0000-0000-000000000001" },
+                    { "30f18293-2d41-2525-3210-e0f83bafa13d", "Update", "Stack", "30000000-0000-0000-0000-000000000001" },
+                    { "3a8c08b1-d033-1580-65f9-a1cb3ed3fc6a", "Create", "Registry", "30000000-0000-0000-0000-000000000002" },
+                    { "3d84b4f0-2433-c34e-45e1-84d18b6c155d", "Pull", "Platform", "30000000-0000-0000-0000-000000000002" },
+                    { "3e5365c6-7759-a0ad-e7fa-32263d00682c", "View", "GitAccount", "30000000-0000-0000-0000-000000000003" },
+                    { "40aadb71-124b-7c1b-44b9-f507a69ade11", "Pull", "Stack", "30000000-0000-0000-0000-000000000001" },
+                    { "4711987b-af34-12f7-4cf4-795f51049571", "Pull", "Platform", "30000000-0000-0000-0000-000000000001" },
+                    { "47c763f4-71e9-2992-3223-8ab97876b727", "Apply", "Platform", "30000000-0000-0000-0000-000000000001" },
+                    { "4aedeb0a-de43-b841-5970-9743bcde952b", "Create", "Stack", "30000000-0000-0000-0000-000000000001" },
+                    { "4b68a9cf-0af5-b0d6-8c05-e8b7e98b3919", "View", "Stack", "30000000-0000-0000-0000-000000000002" },
+                    { "4cfe0dcb-ce92-0500-981f-7d79b3782877", "Create", "Alert", "30000000-0000-0000-0000-000000000002" },
+                    { "4fa196f3-a9e5-7716-b1dd-aa574061e1f7", "Pull", "GitAccount", "30000000-0000-0000-0000-000000000002" },
+                    { "55228106-7ae9-6748-5a33-73e253ad940d", "Apply", "AlertChannel", "30000000-0000-0000-0000-000000000002" },
+                    { "58e018b1-ba4c-56bb-c56c-b9473688127b", "Pull", "GitRepository", "30000000-0000-0000-0000-000000000001" },
+                    { "5e8afc50-270c-4413-c5f1-bd25dac435d9", "Apply", "Stack", "30000000-0000-0000-0000-000000000002" },
+                    { "5ede29a8-8e33-2d7c-48c3-1e5d733edd73", "View", "AlertChannel", "30000000-0000-0000-0000-000000000003" },
+                    { "613e9000-da2c-b4e7-9e02-b4bef349f0f7", "Pull", "AlertChannel", "30000000-0000-0000-0000-000000000001" },
+                    { "62e8e1fe-c911-e1b9-cc70-7efff6e08327", "Pull", "Deployment", "30000000-0000-0000-0000-000000000001" },
+                    { "6395043d-510b-dc85-f19d-2a57463f4e8f", "Pull", "GitAccount", "30000000-0000-0000-0000-000000000001" },
+                    { "65cb87df-133d-b577-21f6-2f20190ce45f", "View", "Registry", "30000000-0000-0000-0000-000000000003" },
+                    { "6deaa9b4-66e6-22bb-3f49-62584ccd9e1f", "View", "Platform", "30000000-0000-0000-0000-000000000001" },
+                    { "6e332b06-35e2-fbbd-e12c-bb7f02ab2474", "Create", "Alert", "30000000-0000-0000-0000-000000000001" },
+                    { "6ed1c4e3-9d28-23d8-2939-6a414aa0f53d", "Apply", "Platform", "30000000-0000-0000-0000-000000000002" },
+                    { "6f3a7126-e96a-d249-5e58-108bd0bd1f0f", "View", "AlertChannel", "30000000-0000-0000-0000-000000000002" },
+                    { "7238045c-c070-0ba5-b133-6083ea208d1b", "Apply", "Stack", "30000000-0000-0000-0000-000000000001" },
+                    { "73174250-b459-3def-d4e6-82d09d07ece9", "Update", "GitRepository", "30000000-0000-0000-0000-000000000002" },
+                    { "75575fd4-2d45-4302-12ba-1ebf9e9ea17f", "Create", "GitRepository", "30000000-0000-0000-0000-000000000002" },
+                    { "780d5066-5b19-668e-9f2f-0103f6cb23be", "View", "Deployment", "30000000-0000-0000-0000-000000000002" },
+                    { "783ca30a-d153-8f1b-27db-c3e722f7f34d", "Apply", "GitAccount", "30000000-0000-0000-0000-000000000002" },
+                    { "7ad3c461-3f87-fe3c-a1e7-4a490906600e", "Delete", "Platform", "30000000-0000-0000-0000-000000000001" },
+                    { "7ba78b50-a388-1606-e334-30c69758e60f", "View", "Deployment", "30000000-0000-0000-0000-000000000003" },
+                    { "7ccb3b9e-a09a-d3c9-82ed-3f71646d2576", "View", "GitAccount", "30000000-0000-0000-0000-000000000001" },
+                    { "7fddc3c2-6d6e-cb92-a7a3-59a7a18b7c08", "View", "GitRepository", "30000000-0000-0000-0000-000000000003" },
+                    { "83ac5b37-8bd4-e093-3cdd-7e9f61300108", "View", "Alert", "30000000-0000-0000-0000-000000000002" },
+                    { "8658afec-8be0-2f4b-7b1e-478ac44341ec", "Create", "Registry", "30000000-0000-0000-0000-000000000001" },
+                    { "88dc9733-349d-635c-7ef6-829065f4f87b", "Create", "AlertChannel", "30000000-0000-0000-0000-000000000002" },
+                    { "8b1633bc-d6ba-a419-38ea-e4d7e4b48cbe", "Create", "Deployment", "30000000-0000-0000-0000-000000000001" },
+                    { "8ce09606-e435-8a9b-2dab-8d1dfc91a198", "Delete", "Alert", "30000000-0000-0000-0000-000000000001" },
+                    { "8de4cd72-b2ce-4e18-f148-b93892845825", "View", "Alert", "30000000-0000-0000-0000-000000000003" },
+                    { "9365df99-cab8-01da-f3c7-dc17a54e8801", "Delete", "GitAccount", "30000000-0000-0000-0000-000000000001" },
+                    { "961c1641-93aa-54ca-9b00-6608da3ae4c8", "Pull", "Registry", "30000000-0000-0000-0000-000000000001" },
+                    { "969a37a2-af1e-fa24-35b8-4857f802e001", "Apply", "Deployment", "30000000-0000-0000-0000-000000000002" },
+                    { "99a0ba24-900d-448e-70f0-6e5eda10f8fc", "Apply", "Deployment", "30000000-0000-0000-0000-000000000001" },
+                    { "99b23eff-a5c8-0cbe-6383-b99e43a43b23", "Create", "AlertChannel", "30000000-0000-0000-0000-000000000001" },
+                    { "9e087c4f-e933-37c9-3941-b1803f83ede3", "Create", "Platform", "30000000-0000-0000-0000-000000000001" },
+                    { "9f3d1be4-d19e-9453-86aa-2ae06eae6d18", "Delete", "AlertChannel", "30000000-0000-0000-0000-000000000001" },
+                    { "9fd296b8-cb43-5a62-9672-cf562aa6efd1", "Update", "GitRepository", "30000000-0000-0000-0000-000000000001" },
+                    { "a178007d-0c14-258e-bb6a-8828a5c28db7", "Update", "Deployment", "30000000-0000-0000-0000-000000000001" },
+                    { "a1a791a5-9c37-88ad-c0e2-9a6717191298", "Update", "Stack", "30000000-0000-0000-0000-000000000002" },
+                    { "acab0152-cf67-d16c-fe1e-c579972ad2df", "Pull", "Registry", "30000000-0000-0000-0000-000000000002" },
+                    { "acece9ff-20d1-f3d5-c304-3a07adb9a03b", "Update", "Alert", "30000000-0000-0000-0000-000000000002" },
+                    { "b678aa42-8c01-b706-1332-b85adb4e3096", "Delete", "Registry", "30000000-0000-0000-0000-000000000001" },
+                    { "bf01fa5c-a0a9-749e-b6c9-2d04af953b2b", "Create", "GitRepository", "30000000-0000-0000-0000-000000000001" },
+                    { "c1184544-a092-3f80-c4d6-6f778db56b26", "Update", "GitAccount", "30000000-0000-0000-0000-000000000002" },
+                    { "c12c9075-9343-73ec-322a-cc41a23230db", "Delete", "Deployment", "30000000-0000-0000-0000-000000000001" },
+                    { "c3e7230a-af2b-ba29-57ae-3c4043b66d61", "View", "Deployment", "30000000-0000-0000-0000-000000000001" },
+                    { "c71643e0-9549-edeb-c7ff-496efa58260c", "Create", "Platform", "30000000-0000-0000-0000-000000000002" },
+                    { "c717528a-5a83-69a2-6893-4ab5fbc14d1b", "View", "Platform", "30000000-0000-0000-0000-000000000002" },
+                    { "cdd4e750-840f-2a08-7a9a-3bd65a4360e9", "Delete", "Stack", "30000000-0000-0000-0000-000000000001" },
+                    { "ce566660-f041-32b6-0942-2f8abb92b17d", "View", "Registry", "30000000-0000-0000-0000-000000000002" },
+                    { "d23893f2-7f44-a593-83de-22ca4a8c80a1", "Update", "Registry", "30000000-0000-0000-0000-000000000002" },
+                    { "d5ba4edc-5278-a21e-613d-91350e52bce7", "Apply", "GitAccount", "30000000-0000-0000-0000-000000000001" },
+                    { "d868c269-b60f-2be0-2451-9b81b3c95674", "View", "AlertChannel", "30000000-0000-0000-0000-000000000001" },
+                    { "d990b800-123d-a0ec-9b6a-239915235880", "Create", "GitAccount", "30000000-0000-0000-0000-000000000002" },
+                    { "df77eb4e-7860-5319-431e-481bfe08baeb", "Pull", "AlertChannel", "30000000-0000-0000-0000-000000000002" },
+                    { "e08e5c0a-2e94-f112-22dd-e06d44dd2d9b", "View", "Stack", "30000000-0000-0000-0000-000000000003" },
+                    { "e13e141d-8322-f5f5-0488-cf961e919143", "Update", "Deployment", "30000000-0000-0000-0000-000000000002" },
+                    { "e3b44e1b-f776-b5ce-509d-2b529768a528", "View", "Registry", "30000000-0000-0000-0000-000000000001" },
+                    { "e6a62042-68c0-d60f-2888-f685176a8f4f", "Create", "Deployment", "30000000-0000-0000-0000-000000000002" },
+                    { "e92ef59e-f1ab-51fc-abc8-4d90c98e5bf9", "Update", "Platform", "30000000-0000-0000-0000-000000000001" },
+                    { "ea5f48d2-2719-0a78-dcb4-2efd447e674f", "Pull", "Alert", "30000000-0000-0000-0000-000000000001" },
+                    { "ec427e29-a8ed-8604-59cc-7eda3268fc30", "View", "Alert", "30000000-0000-0000-0000-000000000001" },
+                    { "f12e902b-29c0-d404-41ef-6c7731211a70", "Pull", "Stack", "30000000-0000-0000-0000-000000000002" },
+                    { "f1782e79-808e-d628-a83a-10b4639b9a68", "View", "GitRepository", "30000000-0000-0000-0000-000000000002" },
+                    { "f30ff44f-86d5-8215-2c0f-60ed6ebd6234", "Update", "Registry", "30000000-0000-0000-0000-000000000001" },
+                    { "f4595acc-f991-34d8-834c-4a1136010e17", "View", "Platform", "30000000-0000-0000-0000-000000000003" },
+                    { "f7be80a4-dffa-1049-994a-5314ee03efaf", "Create", "GitAccount", "30000000-0000-0000-0000-000000000001" },
+                    { "f9af8f42-cf9c-21a8-43ba-793b4dd1bd3f", "Pull", "Alert", "30000000-0000-0000-0000-000000000002" },
+                    { "fc6bc1bc-bb69-098b-b09e-07a96444f57e", "Update", "AlertChannel", "30000000-0000-0000-0000-000000000002" },
+                    { "ff6e9bea-dbf2-e811-d4ba-6702a55c3f92", "View", "GitAccount", "30000000-0000-0000-0000-000000000002" }
+                });
+
+            migrationBuilder.InsertData(
                 table: "Registries",
                 columns: new[] { "Id", "Configuration", "CreatedAt", "CreatedByActorId", "Description", "Name", "RegistryHost", "Status" },
                 values: new object[] { "00000000-0000-0000-0000-000000000100", "{\r\n    \"$type\": \"DockerHub\"\r\n}", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "Public Docker Hub Registry", "Docker Hub", "hub.docker.com", "Active" });
 
             migrationBuilder.InsertData(
                 table: "Teams",
-                columns: new[] { "Id", "Name", "RoleId" },
-                values: new object[] { "cede9601-67e9-507d-832c-0ca0155465a1", "Admins", "bdde9601-3b03-1275-a11b-98533d063a04" });
+                columns: new[] { "Id", "ActorId", "Name" },
+                values: new object[] { "20000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000003", "Default Team" });
 
             migrationBuilder.InsertData(
                 table: "Users",
                 columns: new[] { "Id", "ActorId", "CreatedAt", "CreatedByActorId", "Email", "Name", "Password" },
-                values: new object[] { "d1de9601-f113-ce77-884e-3cb636ec09a8", "00000000-0000-0000-0000-000000000002", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "admin@admin.com", "admin", "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1" });
-
-            migrationBuilder.InsertData(
-                table: "UsersTeams",
-                columns: new[] { "TeamId", "UserId" },
-                values: new object[] { "cede9601-67e9-507d-832c-0ca0155465a1", "d1de9601-f113-ce77-884e-3cb636ec09a8" });
+                values: new object[] { "10000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "00000000-0000-0000-0000-000000000001", "admin@citadel.local", "Admin", "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_ActivityEvents_CreatedByActorId",
@@ -768,6 +918,16 @@ namespace Infrastructure.Migrations.Migrations
                 name: "IX_ActivityEvents_Status",
                 table: "ActivityEvents",
                 column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ActorRoles_ActorId",
+                table: "ActorRoles",
+                column: "ActorId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ActorRoles_RoleId",
+                table: "ActorRoles",
+                column: "RoleId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AlertChannels_CreatedByActorId",
@@ -965,6 +1125,22 @@ namespace Infrastructure.Migrations.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_ResourceAccesses_Actor",
+                table: "ResourceAccesses",
+                column: "ActorId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ResourceAccesses_ResourceType_ResourceId_ActorId",
+                table: "ResourceAccesses",
+                columns: new[] { "ResourceType", "ResourceId", "ActorId" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ResourceAccesses_ResourceType_ResourceId_ActorId_Action",
+                table: "ResourceAccesses",
+                columns: new[] { "ResourceType", "ResourceId", "ActorId", "Action" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_StackReleases_CreatedByActorId",
                 table: "StackReleases",
                 column: "CreatedByActorId");
@@ -995,9 +1171,10 @@ namespace Infrastructure.Migrations.Migrations
                 column: "CurrentStackReleaseId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Teams_RoleId",
+                name: "IX_Teams_ActorId",
                 table: "Teams",
-                column: "RoleId");
+                column: "ActorId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_ActorId",
@@ -1034,6 +1211,9 @@ namespace Infrastructure.Migrations.Migrations
                 name: "ActivityEvents");
 
             migrationBuilder.DropTable(
+                name: "ActorRoles");
+
+            migrationBuilder.DropTable(
                 name: "AlertEvents");
 
             migrationBuilder.DropTable(
@@ -1058,6 +1238,9 @@ namespace Infrastructure.Migrations.Migrations
                 name: "RefreshTokens");
 
             migrationBuilder.DropTable(
+                name: "ResourceAccesses");
+
+            migrationBuilder.DropTable(
                 name: "StackReleases");
 
             migrationBuilder.DropTable(
@@ -1076,6 +1259,9 @@ namespace Infrastructure.Migrations.Migrations
                 name: "GitAccounts");
 
             migrationBuilder.DropTable(
+                name: "Roles");
+
+            migrationBuilder.DropTable(
                 name: "Stacks");
 
             migrationBuilder.DropTable(
@@ -1089,9 +1275,6 @@ namespace Infrastructure.Migrations.Migrations
 
             migrationBuilder.DropTable(
                 name: "Images");
-
-            migrationBuilder.DropTable(
-                name: "Roles");
 
             migrationBuilder.DropTable(
                 name: "Platforms");

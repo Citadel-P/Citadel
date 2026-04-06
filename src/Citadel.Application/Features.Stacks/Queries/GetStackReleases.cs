@@ -1,11 +1,14 @@
+using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Stacks;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Stacks.Queries;
 
+[RequirePermission(ResourceType.Stack, ResourceAction.View)]
 public sealed record GetStackReleases(Guid StackId) : IQuery<Result<IEnumerable<StackRelease>>>;
 
 internal sealed class GetStackReleasesHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetStackReleases, Result<IEnumerable<StackRelease>>>

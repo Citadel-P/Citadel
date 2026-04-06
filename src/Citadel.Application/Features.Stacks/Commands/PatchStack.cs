@@ -2,7 +2,7 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Stacks;
 using FluentValidation;
-using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using Hosting.Common.MergePatch;
@@ -10,9 +10,11 @@ using LightResults;
 using Mediator;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
+using Hosting.Common;
 
 namespace Application.Features.Stacks.Commands;
 
+[RequirePermission(ResourceType.Stack, ResourceAction.Update)]
 public sealed record PatchStack(Guid Id, JsonMergePatchDocument<StackPatchModel> Patch) : ICommand<Result<Stack>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchStack, StackPatchModel>

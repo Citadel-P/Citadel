@@ -1,6 +1,8 @@
 ﻿using Application.Services;
+using Domain;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
@@ -9,6 +11,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Containers.Commands;
 
+[RequirePermission(ResourceType.Platform, ResourceAction.Delete)]
 public sealed record DeleteContainers(string[] ContainerIds, bool? V = false, bool? Force = false, bool? Link = false) : ICommand<Result>
 {
     internal class Validator : AbstractValidator<DeleteContainers>

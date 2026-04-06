@@ -5,6 +5,7 @@ using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
@@ -14,6 +15,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Containers.Commands;
 
+[RequirePermission(ResourceType.Platform, ResourceAction.Update)]
 public sealed record PatchContainer(string[] ContainerIds, ContainerAction Action) : ICommand<Result>
 {
     internal class Validator : AbstractValidator<PatchContainer>

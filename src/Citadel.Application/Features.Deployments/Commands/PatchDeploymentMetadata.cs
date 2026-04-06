@@ -1,6 +1,7 @@
 ﻿using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
+using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Deployments;
 using FluentValidation;
@@ -12,7 +13,7 @@ using Mediator;
 
 namespace Application.Features.Deployments.Commands;
 
-[RequirePermission(nameof(AppPermission.Deploymen_Update))]
+[RequirePermission(ResourceType.Deployment, ResourceAction.Update)]
 public sealed record PatchDeploymentMetadata(Guid Id, JsonMergePatchDocument<Deployment> Patch) : ICommand<Result<Deployment>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchDeploymentMetadata, Deployment>

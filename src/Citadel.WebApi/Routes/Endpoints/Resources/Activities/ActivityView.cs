@@ -35,7 +35,7 @@ public sealed record ActivityView(
             activity.CreatedAt,
             activity.Info,
             activity.CreatedByActorId,
-            ActorName: activity.Actor?.Name ?? "Unknown",
+            ActorName: activity.Actor?.ActorMetadata?.Name ?? "Unknown",
             ActorType: activity.Actor?.Type ?? ActorType.User
             );
     }

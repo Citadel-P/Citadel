@@ -1,13 +1,13 @@
 ﻿using Domain.Contracts.Interfaces;
 using Domain.Entities.Platforms;
+using Hosting.Common.Attributes;
 using LightResults;
 using Mediator;
+using Hosting.Common;
 
 namespace Application.Features.Platforms.Queries;
 
-/// <summary>
-/// Gets all platforms
-/// </summary>
+[RequirePermission(ResourceType.Platform, ResourceAction.View)]
 public sealed record GetPlatforms() : IQuery<Result<IEnumerable<Platform>>>;
 
 internal class GetPlatformsHandler(IUnitOfWork unitOfWork): IQueryHandler<GetPlatforms, Result<IEnumerable<Platform>>>

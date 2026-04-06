@@ -45,7 +45,7 @@ public sealed record AlertEventView(
             alertEvent.ResolvedByActorId,
             alertEvent.ResolvedAt,
             alertEvent.Actor?.Id ?? alertEvent.ResolvedByActorId ?? alertEvent.AcknowledgedByActorId,
-            alertEvent.Actor?.Name,
+            alertEvent.Actor?.ActorMetadata?.Name,
             alertEvent.Actor?.Type,
             alertEvent.ResolutionNote,
             alertEvent.CreatedAt,

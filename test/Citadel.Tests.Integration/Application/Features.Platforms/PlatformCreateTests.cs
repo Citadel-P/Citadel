@@ -230,7 +230,8 @@ public class PlatformCreateTests : IntegrationTestBase
         }
         """;
         var content = new StringContent(createJson, Encoding.UTF8, "application/json");
-        var token = CreateJwtToken([]); // No permissions
+        var subject = await CreateAuthorizationSubjectAsync();
+        var token = CreateJwtToken(subject.UserId, subject.ActorId);
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
         // Act

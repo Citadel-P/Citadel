@@ -1,11 +1,14 @@
+using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Stacks;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Stacks.Queries;
 
+[RequirePermission(ResourceType.Stack, ResourceAction.View)]
 public sealed record GetStack(Guid Id) : IQuery<Result<Stack>>;
 
 internal sealed class GetStackHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetStack, Result<Stack>>

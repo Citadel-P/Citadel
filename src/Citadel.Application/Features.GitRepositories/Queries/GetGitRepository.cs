@@ -1,11 +1,14 @@
+using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Git;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.GitRepositories.Queries;
 
+[RequirePermission(ResourceType.GitRepository, ResourceAction.View)]
 public sealed record GetGitRepository(Guid Id) : IQuery<Result<GitRepository>>;
 
 internal sealed class GetGitRepositoryHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetGitRepository, Result<GitRepository>>

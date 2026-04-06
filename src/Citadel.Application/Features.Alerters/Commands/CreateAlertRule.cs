@@ -7,15 +7,18 @@ using Domain.Contracts.Resources.Alerts;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using FluentValidation;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
 using Mediator;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
+using Hosting.Common;
 
 namespace Application.Features.Alerters.Commands;
 
+[RequirePermission(ResourceType.Alert, ResourceAction.Create)]
 public sealed record CreateAlertRule(
     string? Name,
     string? Description,

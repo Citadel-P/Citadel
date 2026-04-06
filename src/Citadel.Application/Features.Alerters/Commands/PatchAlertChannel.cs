@@ -3,13 +3,16 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
 using FluentValidation;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
+using Hosting.Common;
 
 namespace Application.Features.Alerters.Commands;
 
+[RequirePermission(ResourceType.AlertChannel, ResourceAction.Update)]
 public sealed record PatchAlertChannel(Guid Id, JsonMergePatchDocument<AlertChannel> Patch) : ICommand<Result<AlertChannel>>
 {
     internal sealed class Validator : AbstractValidator<PatchAlertChannel>

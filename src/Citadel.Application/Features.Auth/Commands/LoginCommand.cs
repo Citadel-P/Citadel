@@ -29,7 +29,7 @@ internal sealed class LoginCommandHandler(IUnitOfWork unitOfWork, IJwtService jw
         var userAuthInfo = await unitOfWork.Users.GetUserAuthInfoByEmailAsync(query.Email, cancellationToken);
         if (userAuthInfo is null)
         {
-            return Result.Failure<LoginResponse>(new NotFoundError("User does not exist"));
+            return Result.Failure<LoginResponse>(new NotFoundError("Invalid credentials"));
         }
 
         if (!User.IsValidPassword(query.Password, userAuthInfo.Password ?? string.Empty))

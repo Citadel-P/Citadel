@@ -5,6 +5,7 @@ using Domain.Contracts.Resources.Images;
 using Domain.Entities;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
@@ -12,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Application.Features.Images.Commands;
 
+[RequirePermission(ResourceType.Platform, ResourceAction.Delete)]
 public sealed record DeleteImages(Guid PlatformId, string[] Ids, bool Force = false, bool NoPrune = false) : ICommand<Result<DeleteImageResult>>
 {
     internal class Validator : AbstractValidator<DeleteImages>

@@ -9,7 +9,7 @@ public class LoginCommandTests : IntegrationTestBase
     {
         var userAuth = """
         {
-          "email": "admin@admin.com",
+          "email": "admin@citadel.local",
           "password": "admin123"
         }
         """;
@@ -48,7 +48,7 @@ public class LoginCommandTests : IntegrationTestBase
     {
         var userAuth = """
         {
-          "email": "admin@admin.com",
+          "email": "admin@citadel.local",
           "password": "invalid@Password"
         }
         """;

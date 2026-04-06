@@ -1,11 +1,13 @@
-﻿using Domain.Contracts.Interfaces;
+﻿using Hosting.Common;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Volumes;
-using Hosting.Common.ErrorTypes;
+using Hosting.Common.Attributes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Volumes.Queries;
 
+[RequirePermission(ResourceType.Platform, ResourceAction.View)]
 public sealed record ListVolumes(Guid PlatformId, bool? Dangling = null, string? Driver = null, string? Name = null) 
     : IQuery<Result<IEnumerable<DockerVolumeResult>>>;
 

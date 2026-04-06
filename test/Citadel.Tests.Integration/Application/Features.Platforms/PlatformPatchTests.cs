@@ -107,7 +107,8 @@ public class PlatformPatchTests : IntegrationTestBase
         """;
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
 
-        var token = CreateJwtToken([]);
+        var subject = await CreateAuthorizationSubjectAsync();
+        var token = CreateJwtToken(subject.UserId, subject.ActorId);
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
         // Act

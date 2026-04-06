@@ -2,10 +2,12 @@ using Application.Features.Deployments.Notifications;
 using Application.Services.Alerts;
 using Application.Services.SignalR;
 using Domain;
+using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using FluentValidation;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
@@ -15,6 +17,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Alerters.Commands;
 
+[RequirePermission(ResourceType.Alert, ResourceAction.Update)]
 public sealed record RenameAlertRule(Guid Id, string Name) : ICommand<Result<AlertRule>>
 {
     internal sealed class Validator : AbstractValidator<RenameAlertRule>

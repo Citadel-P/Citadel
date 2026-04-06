@@ -1,5 +1,6 @@
 using Application.Features.Deployments.Notifications;
 using Application.Services.SignalR;
+using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Git;
@@ -7,6 +8,7 @@ using Domain.Entities.Activities;
 using Domain.Entities.Git;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
@@ -14,10 +16,10 @@ using Mediator;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 using System.Threading.Channels;
-using Application.TaskJobs;
 
 namespace Application.Features.GitRepositories.Commands;
 
+[RequirePermission(ResourceType.GitRepository, ResourceAction.Create)]
 public sealed record CreateGitRepository(
     string Name,
     string? Description,

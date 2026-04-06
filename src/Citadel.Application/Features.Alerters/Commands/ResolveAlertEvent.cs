@@ -1,7 +1,9 @@
-using Domain.Contracts.Interfaces;
-using FluentValidation;
 using Application.Features.Alerters.Notifications;
 using Application.Services.SignalR;
+using Hosting.Common;
+using Domain.Contracts.Interfaces;
+using FluentValidation;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
@@ -11,6 +13,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Alerters.Commands;
 
+[RequirePermission(ResourceType.Alert, ResourceAction.Update)]
 public sealed record ResolveAlertEvents(IEnumerable<Guid> Ids, string? ResolutionNote = null) : ICommand<Result>
 {
     internal sealed class Validator : AbstractValidator<ResolveAlertEvents>

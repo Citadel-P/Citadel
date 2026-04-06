@@ -6,5 +6,5 @@ internal sealed record UserAuthInfoDto(
     string Name, 
     string Email,
     string Password, 
-    string RoleName, 
-    int? PermissionCode);
+    string? RoleName,
+    string? PermissionName);

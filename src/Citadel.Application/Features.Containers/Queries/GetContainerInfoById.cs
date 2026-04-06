@@ -11,7 +11,7 @@ using Mediator;
 
 namespace Application.Features.Containers.Queries;
 
-[RequirePermission(nameof(AppPermission.Container_View))]
+[RequirePermission(ResourceType.Platform, ResourceAction.View)]
 public sealed record GetContainerInfoById(string ContainerId) : IQuery<Result<ContainerInfo>>
 {
     internal class Validator : AbstractValidator<GetContainerById>

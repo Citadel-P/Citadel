@@ -1,13 +1,16 @@
-﻿using Domain.Contracts.Interfaces;
+﻿using Domain;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Containers;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Containers.Queries;
 
+[RequirePermission(ResourceType.Platform, ResourceAction.View)]
 public sealed record InspectContainer(string ContainerId) : IQuery<Result<ContainerInspectionInfo>>
 {
     internal sealed class Validator : AbstractValidator<InspectContainer>

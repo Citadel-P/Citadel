@@ -1,6 +1,8 @@
 ﻿using Application.Services;
+using Hosting.Common;
 using Domain.Contracts.Resources.Images;
 using FluentValidation;
+using Hosting.Common.Attributes;
 using Mediator;
 using System.Runtime.CompilerServices;
 
@@ -9,6 +11,7 @@ namespace Application.Features.Images.Commands;
 /// <summary>
 /// Command to pull an image from a registry.
 /// </summary>
+[RequirePermission(ResourceType.Platform, ResourceAction.Pull)]
 public sealed record PullImage(Guid PlatformId, Guid RegistryId, string ImageTag) : IStreamCommand<PullImageStreamItem>
 {
     internal class Validator : AbstractValidator<PullImage>

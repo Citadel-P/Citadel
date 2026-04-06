@@ -52,7 +52,7 @@ public class RefreshTokenCommandTests : IntegrationTestBase
     {
         var userAuth = """
         {
-          "email": "admin@admin.com",
+          "email": "admin@citadel.local",
           "password": "admin123"
         }
         """;

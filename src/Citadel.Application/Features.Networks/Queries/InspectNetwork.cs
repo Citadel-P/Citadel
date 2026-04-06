@@ -1,12 +1,15 @@
-﻿using Domain.Contracts.Interfaces;
+﻿using Domain;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Networks;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Networks.Queries;
 
+[RequirePermission(ResourceType.Platform, ResourceAction.View)]
 public sealed record InspectNetwork(Guid PlatformId, string NetworkId): IQuery<Result<DockerNetworkDetails>>
 {
     internal class Validator : AbstractValidator<InspectNetwork>

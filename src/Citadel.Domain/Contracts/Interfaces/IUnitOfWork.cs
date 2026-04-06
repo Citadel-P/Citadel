@@ -9,6 +9,7 @@ using Domain.Entities.Identity;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
+using Hosting.Common;
 using Hosting.Common.Models;
 
 namespace Domain.Contracts.Interfaces;
@@ -44,6 +45,7 @@ public interface IActorRepository
 
 public interface IUserRepository 
 {
+    Task<bool> HasPermissionAsync(Guid userId, ResourceType resourceType, ResourceAction action, Guid? resourceId, CancellationToken ct);
     Task<UserAuthInfo?> GetUserAuthInfoByEmailAsync(string email, CancellationToken cancellationToken);
 }
 
@@ -52,6 +54,7 @@ public interface IRegistryRepository
     Task<Registry?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<Registry?> GetByNameAsync(string name, CancellationToken cancellationToken);
     Task<IEnumerable<Registry>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Registry>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken);
     Task<IEnumerable<Registry>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
@@ -67,6 +70,7 @@ public interface IStackRepository
     Task<Stack?> GetInfoAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetAllAsync(CancellationToken cancellationToken);
     Task<IEnumerable<Stack>> GetInfoAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken);
     Task<IEnumerable<Stack>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<IEnumerable<StackRelease>> GetReleasesByStackIdAsync(Guid stackId, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
@@ -82,6 +86,7 @@ public interface IGitReposRepository
     Task<GitRepository?> GetWithAccountAsync(Guid id, CancellationToken cancellationToken);
     Task<GitRepository?> GetByNameAsync(string name, CancellationToken cancellationToken);
     Task<IEnumerable<GitRepository>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<GitRepository>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken);
     Task<IEnumerable<GitRepository>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, string name, CancellationToken cancellationToken);
@@ -95,6 +100,7 @@ public interface IGitAccountRepository
     Task<GitAccount?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<GitAccount?> GetByNameAsync(string name, CancellationToken cancellationToken);
     Task<IEnumerable<GitAccount>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<GitAccount>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken);
     Task<IEnumerable<GitAccount>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken);
@@ -201,6 +207,7 @@ public interface IDeploymentRepository
     Task<Deployment?> GetInfoAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetAllAsync(CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetInfoAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Deployment>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetByPlatformIdAsync(Guid platformId, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<IEnumerable<Deployment>> GetStuckDeploymentsAsync(int timeout_s = 60, CancellationToken cancellationToken = default);
@@ -218,11 +225,13 @@ public interface IAlertRuleRepository
 {
     Task<AlertRule?> GetByIdAsync(Guid alertRuleId, CancellationToken cancellationToken);
     Task<IEnumerable<AlertRule>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<IEnumerable<AlertRule>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken);
     Task<AlertRuleState?> GetStateAsync(Guid alertRuleId, Guid resourceId, CancellationToken cancellationToken);
     Task<IEnumerable<AlertRule>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<PagedResult<AlertRule>> GetPagedAsync(int page, int pageSize, CancellationToken cancellationToken);
     Task<AlertChannel?> GetChannelByIdAsync(Guid channelId, CancellationToken cancellationToken);
     Task<IEnumerable<AlertChannel>> GetAllChannelsAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<AlertChannel>> GetAuthorizedChannelsAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken);
     Task<int> AddAlertRuleAsync(AlertRule alertRule, CancellationToken cancellationToken);
     Task<int> AddChannelAsync(AlertChannel alertChannel, CancellationToken cancellationToken);
     Task<int> UpdateAsync(AlertRule alertRule, CancellationToken cancellationToken);
@@ -237,6 +246,8 @@ public interface IAlertEventRepository
     Task<int> AddAsync(AlertEvent alertEvent, CancellationToken cancellationToken);
     Task<AlertEvent?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<AlertEvent>> GetByIdAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<PagedResult<AlertEvent>> GetAuthorizedPagedAsync(Guid userId, ResourceType permissionResourceType, ResourceAction action, Guid? resourceId, AlertType? alertType, AlertResourceType? resourceType,
+        int page, int pageSize, CancellationToken cancellationToken, bool? unresolvedOnly = null);
     Task<PagedResult<AlertEvent>> GetPagedAsync(Guid? resourceId, AlertType? alertType, AlertResourceType? resourceType,
         int page, int pageSize, CancellationToken cancellationToken, bool? unresolvedOnly = null);
     Task<int> UpdateAsync(AlertEvent alertEvent, CancellationToken cancellationToken);

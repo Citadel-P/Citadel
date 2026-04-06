@@ -7,10 +7,11 @@ using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
+using Hosting.Common;
 
 namespace Application.Features.Registries.Commands;
 
-[RequirePermission(nameof(AppPermission.Registry_Update))]
+[RequirePermission(ResourceType.Registry, ResourceAction.Update)]
 public sealed record PatchRegistryMetadata(Guid Id, JsonMergePatchDocument<Registry> Patch) : ICommand<Result<Registry>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchRegistryMetadata, Registry>

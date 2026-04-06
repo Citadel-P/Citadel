@@ -1,10 +1,13 @@
+using Hosting.Common;
 using Domain.Contracts.Interfaces;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.GitAccounts.Commands;
 
+[RequirePermission(ResourceType.GitAccount, ResourceAction.Delete)]
 public sealed record DeleteGitAccounts(IEnumerable<Guid> Ids) : ICommand<Result>;
 
 internal sealed class DeleteGitAccountsHandler(IUnitOfWork unitOfWork) : ICommandHandler<DeleteGitAccounts, Result>

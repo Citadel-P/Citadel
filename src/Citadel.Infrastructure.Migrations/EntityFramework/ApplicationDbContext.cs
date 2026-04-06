@@ -3,6 +3,8 @@ using Hosting.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Infrastructure.Migrations.EntityFramework;
 
@@ -24,19 +26,21 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             .ActorConfiguration()
             .UserConfiguration()
             .TeamConfiguration()
-            .PermissionConfiguration()
-            .RoleConfiguration()
             .UserTeamConfiguration()
+            .PermissionConfiguration()
+            .ResourceAccessConfiguration()
+            .RoleConfiguration()
+            .ActorRoleConfiguration()
             .DeploymentConfiguration()
             .ImageConfiguration()
             .ActivityEventConfiguration()
-            .AddAlertRuleConfiguration()
-            .AddAlertEventConfiguration()
-            .AddAlertRuleStateConfiguration()
-            .AddAlertChannelConfiguration()
-            .AddStackConfiguration()
-            .AddStackReleaseConfiguration()
-            .AddAlertRuleChannelConfiguration();
+            .AlertRuleConfiguration()
+            .AlertEventConfiguration()
+            .AlertRuleStateConfiguration()
+            .AlertChannelConfiguration()
+            .StackConfiguration()
+            .StackReleaseConfiguration()
+            .AlertRuleChannelConfiguration();
 
         SeedDb(modelBuilder);
     }
@@ -44,55 +48,106 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
     private static void SeedDb(ModelBuilder modelBuilder)
     {
         var seedDate = DateTime.Parse("2026-01-01");
-        modelBuilder.Entity("Role").HasData(new
-        {
-            Id = Guid.Parse("bdde9601-3b03-1275-a11b-98533d063a04"),
-            Name = "Admin",
-            CreatedAt = seedDate,
-            UpdatedAt = seedDate
-        });
+        // Actors
+        var systemActorId = Constants.SystemId;
+        var adminActorId = Constants.DefaultAdminId;
+        var teamActorId = Constants.TeamActorId;
 
-        // --- Actors ---
-        modelBuilder.Entity("Actor").HasData(new
-        {
-            Id = Constants.DefaultAdminId,
-            Type = ActorType.User.ToString(),
-            Name = "Admin"
-        }, new 
-        {
-            Id = Constants.SystemId,
-            Type = ActorType.System.ToString(),
-            Name = "System"
-        });
+        // Users / Teams
+        var adminUserId = Guid.Parse("10000000-0000-0000-0000-000000000001");
+        var teamId = Guid.Parse("20000000-0000-0000-0000-000000000001");
 
-        // --- Users ---
+        // Roles
+        var adminRoleId = Guid.Parse("30000000-0000-0000-0000-000000000001");
+        var operatorRoleId = Guid.Parse("30000000-0000-0000-0000-000000000002");
+        var viewerRoleId = Guid.Parse("30000000-0000-0000-0000-000000000003");
+
+        // Actors
+        modelBuilder.Entity("Actor").HasData(
+            new { Id = systemActorId, Type = "System" },
+            new { Id = adminActorId, Type = "User" },
+            new { Id = teamActorId, Type = "Team" }
+        );
+
+        // User
         modelBuilder.Entity("User").HasData(new
         {
-            Id = Guid.Parse("d1de9601-f113-ce77-884e-3cb636ec09a8"),
-            ActorId = Constants.DefaultAdminId,
-            Name = "admin",
-            Email = "admin@admin.com",
+            Id = adminUserId,
+            Name = "Admin",
+            Email = "admin@citadel.local",
             Password = "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1",
+            ActorId = adminActorId,
             CreatedAt = seedDate,
-            CreatedByActorId = Constants.SystemId
+            CreatedByActorId = systemActorId
         });
 
-        // --- Teams ---
+        // Team
         modelBuilder.Entity("Team").HasData(new
         {
-            Id = Guid.Parse("cede9601-67e9-507d-832c-0ca0155465a1"),
-            Name = "Admins",
-            RoleId = Guid.Parse("bdde9601-3b03-1275-a11b-98533d063a04")
+            Id = teamId,
+            Name = "Default Team",
+            ActorId = teamActorId
         });
 
-        // --- UsersTeams ---
-        modelBuilder.Entity("UserTeam").HasData(
-            new
-            {
-                UserId = Guid.Parse("d1de9601-f113-ce77-884e-3cb636ec09a8"),
-                TeamId = Guid.Parse("cede9601-67e9-507d-832c-0ca0155465a1")
-            }
+        // Roles
+        modelBuilder.Entity("Role").HasData(
+            new { Id = adminRoleId, Name = "Admin" },
+            new { Id = operatorRoleId, Name = "Operator" },
+            new { Id = viewerRoleId, Name = "Viewer" }
         );
+
+        // ActorRoles
+        modelBuilder.Entity("ActorRole").HasData(
+            // Admin user -> Admin role
+            new { ActorId = adminActorId, RoleId = adminRoleId },
+
+            // Team -> Operator role
+            new { ActorId = teamActorId, RoleId = operatorRoleId }
+        );
+
+        // Permissions
+        var permissions = new List<object>();
+
+        foreach (var resource in Enum.GetValues<ResourceType>())
+        {
+            foreach (var action in Enum.GetValues<ResourceAction>())
+            {
+                // Admin -> everything
+                permissions.Add(new
+                {
+                    Id = CreatePermissionSeedId(adminRoleId, resource, action),
+                    RoleId = adminRoleId,
+                    ResourceType = resource.ToString(),
+                    ResourceAction = action.ToString()
+                });
+
+                // Viewer -> only View
+                if (action == ResourceAction.View)
+                {
+                    permissions.Add(new
+                    {
+                        Id = CreatePermissionSeedId(viewerRoleId, resource, action),
+                        RoleId = viewerRoleId,
+                        ResourceType = resource.ToString(),
+                        ResourceAction = action.ToString()
+                    });
+                }
+
+                // Operator -> most except Delete (example policy)
+                if (action != ResourceAction.Delete)
+                {
+                    permissions.Add(new
+                    {
+                        Id = CreatePermissionSeedId(operatorRoleId, resource, action),
+                        RoleId = operatorRoleId,
+                        ResourceType = resource.ToString(),
+                        ResourceAction = action.ToString()
+                    });
+                }
+            }
+        }
+
+        modelBuilder.Entity("Permission").HasData(permissions);
 
         // --- Alert Rules ---
         modelBuilder.Entity("AlertRule").HasData(
@@ -134,6 +189,17 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
             }
             """
         });
+    }
+
+    private static Guid CreatePermissionSeedId(Guid roleId, ResourceType resourceType, ResourceAction resourceAction)
+    {
+        var input = $"permission:{roleId:D}:{resourceType}:{resourceAction}";
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+        var hex = Convert.ToHexString(hash);
+
+        return Guid.ParseExact(
+            $"{hex[..8]}-{hex[8..12]}-{hex[12..16]}-{hex[16..20]}-{hex[20..32]}",
+            "D");
     }
 }
 
@@ -398,7 +464,6 @@ internal static class Configuration
         actor.HasKey("Id");
 
         actor.Property<string>("Type").IsRequired();
-        actor.Property<string>("Name").HasColumnType("TEXT").IsRequired();
 
         return builder;
     }
@@ -440,58 +505,17 @@ internal static class Configuration
         team.ToTable(tableName);
 
         team.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        team.Property<Guid>("ActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+
         team.HasKey("Id");
 
-        team.Property<Guid>("RoleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
         team.Property<string>("Name").HasColumnType("TEXT").IsRequired();
+
         team
-            .HasOne("Role")
-            .WithMany()
-            .HasForeignKey("RoleId")
-            .OnDelete(DeleteBehavior.Cascade);
-
-        team.HasIndex("RoleId").HasDatabaseName($"IX_{tableName}_RoleId");
-
-        return builder;
-    }
-
-    public static ModelBuilder PermissionConfiguration(this ModelBuilder builder)
-    {
-        var tableName = "Permissions";
-        var permission = builder.Entity("Permission");
-
-        permission.ToTable(tableName);
-        
-        permission.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        permission.HasKey("Id");
-        
-        permission.Property<Guid>("RoleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        permission.Property<string>("PermissionCode").HasColumnType("TEXT").IsRequired();
-
-        permission
-            .HasOne("Role")
-            .WithMany()
-            .HasForeignKey("RoleId")
-            .OnDelete(DeleteBehavior.Cascade);
-
-        permission.HasIndex("RoleId").HasDatabaseName($"IX_{tableName}_RoleId");
-
-        return builder;
-    }
-
-    public static ModelBuilder RoleConfiguration(this ModelBuilder builder)
-    {
-        var tableName = "Roles";
-        var role = builder.Entity("Role");
-
-        role.ToTable(tableName);
-        
-        role.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
-        role.HasKey("Id");
-
-        role.Property<string>("Name").HasColumnType("TEXT").IsRequired();
-        role.Property<DateTime>("CreatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValue("2000-01-01 00:00:00");
-        role.Property<DateTime>("UpdatedAt").HasColumnType("TEXT").IsRequired().HasDefaultValue("2000-01-01 00:00:00");
+           .HasOne("Actor")
+           .WithOne()
+           .HasForeignKey("Team", "ActorId")
+           .OnDelete(DeleteBehavior.Restrict);
 
         return builder;
     }
@@ -518,6 +542,106 @@ internal static class Configuration
             .OnDelete(DeleteBehavior.Cascade);
         userTeam.HasIndex("TeamId").HasDatabaseName($"IX_{tableName}_TeamId");
         userTeam.HasIndex("UserId").HasDatabaseName($"IX_{tableName}_UserId");
+
+        return builder;
+    }
+
+    public static ModelBuilder PermissionConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "Permissions";
+        var permission = builder.Entity("Permission");
+
+        permission.ToTable(tableName);
+        
+        permission.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        permission.HasKey("Id");
+        
+        permission.Property<Guid>("RoleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        permission.Property<string>("ResourceType").HasColumnType("TEXT").IsRequired();
+        permission.Property<string>("ResourceAction").HasColumnType("TEXT").IsRequired();
+
+        permission
+            .HasOne("Role")
+            .WithMany()
+            .HasForeignKey("RoleId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        permission.HasIndex("RoleId").HasDatabaseName($"IX_{tableName}_RoleId");
+
+        return builder;
+    }
+
+    public static ModelBuilder ResourceAccessConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "ResourceAccesses";
+        var resourceAccess = builder.Entity("ResourceAccess");
+
+        resourceAccess.ToTable(tableName);
+
+        resourceAccess.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        resourceAccess.HasKey("Id");
+
+        resourceAccess.Property<Guid>("ResourceId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        resourceAccess.Property<Guid>("ActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        resourceAccess.Property<string>("ResourceType").HasColumnType("TEXT").IsRequired();
+        resourceAccess.Property<string>("Action").HasColumnType("TEXT").IsRequired();
+
+        resourceAccess.HasIndex(
+            "ResourceType",
+            "ResourceId",
+            "ActorId",
+            "Action")
+        .IsUnique();
+
+        resourceAccess.HasIndex(
+            "ResourceType",
+            "ResourceId",
+            "ActorId");
+
+        resourceAccess.HasIndex("ActorId").HasDatabaseName($"IX_{tableName}_Actor"); ;
+
+        return builder;
+    }
+
+    public static ModelBuilder RoleConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "Roles";
+        var role = builder.Entity("Role");
+
+        role.ToTable(tableName);
+
+        role.Property<Guid>("Id").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        role.HasKey("Id");
+
+        role.Property<string>("Name").HasColumnType("TEXT").IsRequired();
+
+        return builder;
+    }
+
+    public static ModelBuilder ActorRoleConfiguration(this ModelBuilder builder)
+    {
+        var tableName = "ActorRoles";
+        var actorRole = builder.Entity("ActorRole");
+
+        actorRole.ToTable(tableName);
+
+        actorRole.Property<Guid>("ActorId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        actorRole.Property<Guid>("RoleId").HasColumnType("TEXT").HasConversion(GuidConverter).IsRequired();
+        actorRole.HasKey("ActorId", "RoleId");
+
+        actorRole
+            .HasOne("Actor")
+            .WithMany()
+            .HasForeignKey("ActorId")
+            .OnDelete(DeleteBehavior.Cascade);
+        actorRole
+            .HasOne("Role")
+            .WithMany()
+            .HasForeignKey("RoleId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        actorRole.HasIndex("RoleId").HasDatabaseName($"IX_{tableName}_RoleId");
+        actorRole.HasIndex("ActorId").HasDatabaseName($"IX_{tableName}_ActorId");
 
         return builder;
     }
@@ -632,7 +756,7 @@ internal static class Configuration
         return builder;
     }
 
-    public static ModelBuilder AddAlertRuleConfiguration(this ModelBuilder builder)
+    public static ModelBuilder AlertRuleConfiguration(this ModelBuilder builder)
     {
         var tableName = "AlertRules";
         var alertRule = builder.Entity("AlertRule");
@@ -659,7 +783,7 @@ internal static class Configuration
         return builder;
     }
 
-    public static ModelBuilder AddAlertRuleStateConfiguration(this ModelBuilder builder)
+    public static ModelBuilder AlertRuleStateConfiguration(this ModelBuilder builder)
     {
         var tableName = "AlertRuleStates";
         var alertRuleState = builder.Entity("AlertRuleState");
@@ -682,7 +806,7 @@ internal static class Configuration
         return builder;
     }
 
-    public static ModelBuilder AddAlertChannelConfiguration(this ModelBuilder builder)
+    public static ModelBuilder AlertChannelConfiguration(this ModelBuilder builder)
     {
         var tableName = "AlertChannels";
         var alertChannel = builder.Entity("AlertChannel");
@@ -701,7 +825,7 @@ internal static class Configuration
         return builder;
     }
 
-    public static ModelBuilder AddStackConfiguration(this ModelBuilder builder)
+    public static ModelBuilder StackConfiguration(this ModelBuilder builder)
     {
         var tableName = "Stacks";
         var stack = builder.Entity("Stack");
@@ -728,7 +852,7 @@ internal static class Configuration
         return builder;
     }
 
-    public static ModelBuilder AddStackReleaseConfiguration(this ModelBuilder builder)
+    public static ModelBuilder StackReleaseConfiguration(this ModelBuilder builder)
     {
         var tableName = "StackReleases";
         var release = builder.Entity("StackRelease");
@@ -764,7 +888,7 @@ internal static class Configuration
         return builder;
     }
 
-    public static ModelBuilder AddAlertRuleChannelConfiguration(this ModelBuilder builder)
+    public static ModelBuilder AlertRuleChannelConfiguration(this ModelBuilder builder)
     {
         var tableName = "AlertRuleChannels";
         var alertRuleChannel = builder.Entity("AlertRuleChannel");
@@ -791,7 +915,7 @@ internal static class Configuration
         return builder;
     }
 
-    public static ModelBuilder AddAlertEventConfiguration(this ModelBuilder builder)
+    public static ModelBuilder AlertEventConfiguration(this ModelBuilder builder)
     {
         var tableName = "AlertEvents";
         var alertEvent = builder.Entity("AlertEvent");

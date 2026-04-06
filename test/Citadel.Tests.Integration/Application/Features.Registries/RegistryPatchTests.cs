@@ -165,7 +165,8 @@ public class RegistryPatchTests : IntegrationTestBase
         }
         """;
         var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
-        var token = CreateJwtToken([]);
+        var subject = await CreateAuthorizationSubjectAsync();
+        var token = CreateJwtToken(subject.UserId, subject.ActorId);
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
         // Act
@@ -174,6 +175,100 @@ public class RegistryPatchTests : IntegrationTestBase
         // Assert
         var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Patch_Registry_Should_Succeed_When_User_Has_Registry_Resource_Access()
+    {
+        registryConnectorResolverMock.Setup(x => x.Resolve(It.IsAny<RegistryConfiguration>()))
+            .Returns(registryConnectorMock.Object);
+
+        registryConnectorMock.Setup(x => x.CanConnectAsync(It.IsAny<RegistryConfiguration>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult<(bool, string?)>((true, null)));
+
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants: [new ResourceGrant(ResourceType.Registry, registryId, ResourceAction.Update)]);
+
+        Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var patchJson = """
+        {
+          "registryHost": "acl.updated.url",
+          "status": "Disabled",
+          "configuration": {
+            "$type": "DockerHub",
+            "userName": "patched-user"
+          }
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync($"/api/v1/registries/{registryId}", content, cancellationToken: TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var registry = await uow.Registries.GetAsync(registryId, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(registry);
+        Assert.Equal("acl.updated.url", registry.RegistryHost);
+        Assert.Equal(RegistryStatus.Disabled, registry.Status);
+    }
+
+    [Fact]
+    public async Task Patch_Registry_Metadata_Should_Succeed_When_User_Has_Registry_Resource_Access()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants: [new ResourceGrant(ResourceType.Registry, registryId, ResourceAction.Update)]);
+
+        Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var patchJson = """
+        {
+          "description": "ACL metadata update"
+        }
+        """;
+        var content = new StringContent(patchJson, Encoding.UTF8, "application/merge-patch+json");
+
+        var response = await Client.PatchAsync($"/api/v1/registries/{registryId}/_metadata", content, cancellationToken: TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var registry = await uow.Registries.GetAsync(registryId, TestContext.Current.CancellationToken);
+
+        Assert.Equal("ACL metadata update", registry?.Description);
+    }
+
+    [Fact]
+    public async Task Rename_Registry_Should_Succeed_When_User_Inherits_Update_Permission_From_Team_Role()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(teamRoleId: OperatorRoleId);
+
+        Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var renameJson = $$"""
+        {
+          "id": "{{registryId}}",
+          "name": "TeamGrantedRegistry"
+        }
+        """;
+        var content = new StringContent(renameJson, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/registries/rename", content, TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var scope = Services.CreateAsyncScope();
+        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var registry = await uow.Registries.GetAsync(registryId, TestContext.Current.CancellationToken);
+
+        Assert.Equal("TeamGrantedRegistry", registry?.Name);
     }
 
     [Fact]

@@ -1,13 +1,16 @@
-using Hosting.Common;
+using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Stacks;
 using FluentValidation;
+using Hosting.Common;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Stacks.Commands;
 
+[RequirePermission(ResourceType.Stack, ResourceAction.Update)]
 public sealed record RenameStack(Guid Id, string Name) : ICommand<Result<Stack>>
 {
     internal sealed class Validator : AbstractValidator<RenameStack>

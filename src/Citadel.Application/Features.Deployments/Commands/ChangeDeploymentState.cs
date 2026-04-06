@@ -1,8 +1,10 @@
 ﻿using Application.Services;
 using Domain;
+using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources;
 using Domain.Contracts.Resources.Containers;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
@@ -12,6 +14,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Deployments.Commands;
 
+[RequirePermission(ResourceType.Deployment, ResourceAction.Update)]
 public sealed record ChangeDeploymentState(IEnumerable<Guid> DeploymentIds, DeploymentAction Action) : ICommand<Result>;
 
 internal sealed class ChangeDeploymentStateHandler(

@@ -2,6 +2,7 @@
 using Application.Services.SignalR;
 using Application.TaskJobs.WorkItems;
 using Domain;
+using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities.Activities;
@@ -19,7 +20,7 @@ using ActivityEvent = Domain.Entities.Activities.ActivityEvent;
 
 namespace Application.Features.Deployments.Commands;
 
-[RequirePermission(nameof(AppPermission.Deploymen_Update))]
+[RequirePermission(ResourceType.Deployment, ResourceAction.Update)]
 public sealed record PatchDeployment(Guid Id, JsonMergePatchDocument<Deployment> Patch) : ICommand<Result<Deployment>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchDeployment, Deployment>

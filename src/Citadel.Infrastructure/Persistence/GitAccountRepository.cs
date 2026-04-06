@@ -2,6 +2,7 @@ using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Git;
+using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using Infrastructure.TypeHandlers;
@@ -78,6 +79,53 @@ internal sealed class GitAccountRepository(IDbConnection db, Func<IDbTransaction
     {
         const string sql = "SELECT * FROM GitAccounts";
         var result = await db.QueryAsync<GitAccountDto>(sql, transaction: tx());
+        return result.ToDomain();
+    }
+
+    public async Task<IEnumerable<GitAccount>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            WITH ActorScope AS (
+                SELECT ActorId
+                FROM Users
+                WHERE Id = @UserId
+
+                UNION
+
+                SELECT t.ActorId
+                FROM Teams t
+                JOIN UsersTeams ut ON ut.TeamId = t.Id
+                WHERE ut.UserId = @UserId
+            )
+            SELECT *
+            FROM GitAccounts ga
+            WHERE EXISTS (
+                SELECT 1
+                FROM ActorRoles ar
+                JOIN Permissions p ON p.RoleId = ar.RoleId
+                WHERE ar.ActorId IN (SELECT ActorId FROM ActorScope)
+                  AND p.ResourceType = @ResourceType
+                  AND p.ResourceAction = @Action
+            )
+            OR EXISTS (
+                SELECT 1
+                FROM ResourceAccesses ra
+                WHERE ra.ActorId IN (SELECT ActorId FROM ActorScope)
+                  AND ra.ResourceType = @ResourceType
+                  AND ra.ResourceId = ga.Id
+                  AND ra.Action = @Action
+            )
+            ORDER BY ga.CreatedAt DESC;
+            """;
+
+        var result = await db.QueryAsync<GitAccountDto>(sql, new
+        {
+            UserId = userId.Format(),
+            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
+            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            cancellationToken
+        }, transaction: tx());
+
         return result.ToDomain();
     }
 

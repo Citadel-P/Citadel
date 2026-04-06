@@ -1,12 +1,15 @@
-﻿using Domain.Contracts.Interfaces;
+﻿using Domain;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Images;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Images.Queries;
 
+[RequirePermission(ResourceType.Platform, ResourceAction.View)]
 public sealed record InspectImage(Guid PlatformId, string ImageId) : IQuery<Result<InspectImageResult>>
 {
     internal class Validator : AbstractValidator<InspectImage>

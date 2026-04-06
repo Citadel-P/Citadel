@@ -2,9 +2,11 @@
 using Application.Services;
 using Application.Services.SignalR;
 using Domain;
+using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Deployments;
 using Domain.Entities.Activities;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.Extensions;
 using LightResults;
@@ -15,6 +17,7 @@ using System.Security.Claims;
 
 namespace Application.Features.Deployments.Commands;
 
+[RequirePermission(ResourceType.Deployment, ResourceAction.Delete)]
 public sealed record DeleteDeployments(IEnumerable<Guid> Ids) : ICommand<Result>;
 
 internal sealed class DeleteDeploymentsHandler(

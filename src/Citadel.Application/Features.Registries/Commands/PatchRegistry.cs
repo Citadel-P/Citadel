@@ -18,7 +18,7 @@ using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 namespace Application.Features.Registries.Commands;
 
-[RequirePermission(nameof(AppPermission.Registry_Update))]
+[RequirePermission(ResourceType.Registry, ResourceAction.Update)]
 public sealed record PatchRegistry(Guid Id, JsonMergePatchDocument<Registry> Patch) : ICommand<Result<Registry>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchRegistry, Registry>

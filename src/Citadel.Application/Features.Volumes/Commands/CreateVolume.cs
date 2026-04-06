@@ -1,7 +1,9 @@
-﻿using Domain.Contracts.Interfaces;
+﻿using Hosting.Common;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Volumes;
 using FluentValidation;
 using Grpc.Core;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
@@ -9,6 +11,7 @@ using static Hosting.Common.Validators;
 
 namespace Application.Features.Volumes.Commands;
 
+[RequirePermission(ResourceType.Platform, ResourceAction.Create)]
 public sealed record CreateVolume(
     Guid PlatformId,
     string Name,

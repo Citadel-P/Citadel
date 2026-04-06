@@ -2,13 +2,16 @@ using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Stacks;
 using FluentValidation;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using Hosting.Common.MergePatch;
 using LightResults;
 using Mediator;
+using Hosting.Common;
 
 namespace Application.Features.Stacks.Commands;
 
+[RequirePermission(ResourceType.Stack, ResourceAction.Update)]
 public sealed record PatchStackMetadata(Guid Id, JsonMergePatchDocument<StackPatchModel> Patch) : ICommand<Result<Stack>>
 {
     internal sealed class Validator : PatchCommandValidator<PatchStackMetadata, StackPatchModel>

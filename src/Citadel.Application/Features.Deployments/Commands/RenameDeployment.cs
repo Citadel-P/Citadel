@@ -18,7 +18,7 @@ using ActivityEvent = Domain.Entities.Activities.ActivityEvent;
 
 namespace Application.Features.Deployments.Commands;
 
-[RequirePermission(nameof(AppPermission.Deploymen_Update))]
+[RequirePermission(ResourceType.Deployment, ResourceAction.Update)]
 public sealed record RenameDeployment(Guid Id, string Name) : ICommand<Result<Deployment>>
 {
     internal sealed class Validator : AbstractValidator<RenameDeployment>

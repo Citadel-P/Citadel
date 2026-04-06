@@ -1,11 +1,14 @@
+using Hosting.Common;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Alerts;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Alerters.Queries;
 
+[RequirePermission(ResourceType.Alert, ResourceAction.View)]
 public sealed record GetAlertEvent(Guid Id) : IQuery<Result<AlertEvent>>;
 
 internal sealed class GetAlertEventHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetAlertEvent, Result<AlertEvent>>

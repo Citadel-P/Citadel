@@ -83,10 +83,6 @@ namespace Infrastructure.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -98,15 +94,49 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasData(
                         new
                         {
+                            Id = "00000000-0000-0000-0000-000000000001",
+                            Type = "System"
+                        },
+                        new
+                        {
                             Id = "00000000-0000-0000-0000-000000000002",
-                            Name = "Admin",
                             Type = "User"
                         },
                         new
                         {
-                            Id = "00000000-0000-0000-0000-000000000001",
-                            Name = "System",
-                            Type = "System"
+                            Id = "00000000-0000-0000-0000-000000000003",
+                            Type = "Team"
+                        });
+                });
+
+            modelBuilder.Entity("ActorRole", b =>
+                {
+                    b.Property<string>("ActorId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RoleId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ActorId", "RoleId");
+
+                    b.HasIndex("ActorId")
+                        .HasDatabaseName("IX_ActorRoles_ActorId");
+
+                    b.HasIndex("RoleId")
+                        .HasDatabaseName("IX_ActorRoles_RoleId");
+
+                    b.ToTable("ActorRoles", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            ActorId = "00000000-0000-0000-0000-000000000002",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            ActorId = "00000000-0000-0000-0000-000000000003",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
                         });
                 });
 
@@ -929,7 +959,11 @@ namespace Infrastructure.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("PermissionCode")
+                    b.Property<string>("ResourceAction")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResourceType")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -943,6 +977,680 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("IX_Permissions_RoleId");
 
                     b.ToTable("Permissions", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = "6deaa9b4-66e6-22bb-3f49-62584ccd9e1f",
+                            ResourceAction = "View",
+                            ResourceType = "Platform",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "f4595acc-f991-34d8-834c-4a1136010e17",
+                            ResourceAction = "View",
+                            ResourceType = "Platform",
+                            RoleId = "30000000-0000-0000-0000-000000000003"
+                        },
+                        new
+                        {
+                            Id = "c717528a-5a83-69a2-6893-4ab5fbc14d1b",
+                            ResourceAction = "View",
+                            ResourceType = "Platform",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "9e087c4f-e933-37c9-3941-b1803f83ede3",
+                            ResourceAction = "Create",
+                            ResourceType = "Platform",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "c71643e0-9549-edeb-c7ff-496efa58260c",
+                            ResourceAction = "Create",
+                            ResourceType = "Platform",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "e92ef59e-f1ab-51fc-abc8-4d90c98e5bf9",
+                            ResourceAction = "Update",
+                            ResourceType = "Platform",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "1a0b6504-d508-0f6d-4513-12b80c3ab4d8",
+                            ResourceAction = "Update",
+                            ResourceType = "Platform",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "7ad3c461-3f87-fe3c-a1e7-4a490906600e",
+                            ResourceAction = "Delete",
+                            ResourceType = "Platform",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "47c763f4-71e9-2992-3223-8ab97876b727",
+                            ResourceAction = "Apply",
+                            ResourceType = "Platform",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "6ed1c4e3-9d28-23d8-2939-6a414aa0f53d",
+                            ResourceAction = "Apply",
+                            ResourceType = "Platform",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "4711987b-af34-12f7-4cf4-795f51049571",
+                            ResourceAction = "Pull",
+                            ResourceType = "Platform",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "3d84b4f0-2433-c34e-45e1-84d18b6c155d",
+                            ResourceAction = "Pull",
+                            ResourceType = "Platform",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "c3e7230a-af2b-ba29-57ae-3c4043b66d61",
+                            ResourceAction = "View",
+                            ResourceType = "Deployment",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "7ba78b50-a388-1606-e334-30c69758e60f",
+                            ResourceAction = "View",
+                            ResourceType = "Deployment",
+                            RoleId = "30000000-0000-0000-0000-000000000003"
+                        },
+                        new
+                        {
+                            Id = "780d5066-5b19-668e-9f2f-0103f6cb23be",
+                            ResourceAction = "View",
+                            ResourceType = "Deployment",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "8b1633bc-d6ba-a419-38ea-e4d7e4b48cbe",
+                            ResourceAction = "Create",
+                            ResourceType = "Deployment",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "e6a62042-68c0-d60f-2888-f685176a8f4f",
+                            ResourceAction = "Create",
+                            ResourceType = "Deployment",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "a178007d-0c14-258e-bb6a-8828a5c28db7",
+                            ResourceAction = "Update",
+                            ResourceType = "Deployment",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "e13e141d-8322-f5f5-0488-cf961e919143",
+                            ResourceAction = "Update",
+                            ResourceType = "Deployment",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "c12c9075-9343-73ec-322a-cc41a23230db",
+                            ResourceAction = "Delete",
+                            ResourceType = "Deployment",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "99a0ba24-900d-448e-70f0-6e5eda10f8fc",
+                            ResourceAction = "Apply",
+                            ResourceType = "Deployment",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "969a37a2-af1e-fa24-35b8-4857f802e001",
+                            ResourceAction = "Apply",
+                            ResourceType = "Deployment",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "62e8e1fe-c911-e1b9-cc70-7efff6e08327",
+                            ResourceAction = "Pull",
+                            ResourceType = "Deployment",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "18255099-e963-802b-21a3-d115440e9322",
+                            ResourceAction = "Pull",
+                            ResourceType = "Deployment",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "117176b6-ca23-e53d-d996-83affab7ed48",
+                            ResourceAction = "View",
+                            ResourceType = "Stack",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "e08e5c0a-2e94-f112-22dd-e06d44dd2d9b",
+                            ResourceAction = "View",
+                            ResourceType = "Stack",
+                            RoleId = "30000000-0000-0000-0000-000000000003"
+                        },
+                        new
+                        {
+                            Id = "4b68a9cf-0af5-b0d6-8c05-e8b7e98b3919",
+                            ResourceAction = "View",
+                            ResourceType = "Stack",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "4aedeb0a-de43-b841-5970-9743bcde952b",
+                            ResourceAction = "Create",
+                            ResourceType = "Stack",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "0f030749-53d1-bade-8ef3-30112991786d",
+                            ResourceAction = "Create",
+                            ResourceType = "Stack",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "30f18293-2d41-2525-3210-e0f83bafa13d",
+                            ResourceAction = "Update",
+                            ResourceType = "Stack",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "a1a791a5-9c37-88ad-c0e2-9a6717191298",
+                            ResourceAction = "Update",
+                            ResourceType = "Stack",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "cdd4e750-840f-2a08-7a9a-3bd65a4360e9",
+                            ResourceAction = "Delete",
+                            ResourceType = "Stack",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "7238045c-c070-0ba5-b133-6083ea208d1b",
+                            ResourceAction = "Apply",
+                            ResourceType = "Stack",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "5e8afc50-270c-4413-c5f1-bd25dac435d9",
+                            ResourceAction = "Apply",
+                            ResourceType = "Stack",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "40aadb71-124b-7c1b-44b9-f507a69ade11",
+                            ResourceAction = "Pull",
+                            ResourceType = "Stack",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "f12e902b-29c0-d404-41ef-6c7731211a70",
+                            ResourceAction = "Pull",
+                            ResourceType = "Stack",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "017b5a65-e312-8a67-b7fd-6124f6ddeeee",
+                            ResourceAction = "View",
+                            ResourceType = "GitRepository",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "7fddc3c2-6d6e-cb92-a7a3-59a7a18b7c08",
+                            ResourceAction = "View",
+                            ResourceType = "GitRepository",
+                            RoleId = "30000000-0000-0000-0000-000000000003"
+                        },
+                        new
+                        {
+                            Id = "f1782e79-808e-d628-a83a-10b4639b9a68",
+                            ResourceAction = "View",
+                            ResourceType = "GitRepository",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "bf01fa5c-a0a9-749e-b6c9-2d04af953b2b",
+                            ResourceAction = "Create",
+                            ResourceType = "GitRepository",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "75575fd4-2d45-4302-12ba-1ebf9e9ea17f",
+                            ResourceAction = "Create",
+                            ResourceType = "GitRepository",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "9fd296b8-cb43-5a62-9672-cf562aa6efd1",
+                            ResourceAction = "Update",
+                            ResourceType = "GitRepository",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "73174250-b459-3def-d4e6-82d09d07ece9",
+                            ResourceAction = "Update",
+                            ResourceType = "GitRepository",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "2e0582c8-9569-22cd-c777-69f03893b8ec",
+                            ResourceAction = "Delete",
+                            ResourceType = "GitRepository",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "0eda225f-cb5b-1bb0-9525-be92b14fc322",
+                            ResourceAction = "Apply",
+                            ResourceType = "GitRepository",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "1f00afd4-a4d1-94cd-3a94-44d420eef066",
+                            ResourceAction = "Apply",
+                            ResourceType = "GitRepository",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "58e018b1-ba4c-56bb-c56c-b9473688127b",
+                            ResourceAction = "Pull",
+                            ResourceType = "GitRepository",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "258c5870-adb0-f28f-bed2-5c993e5d11da",
+                            ResourceAction = "Pull",
+                            ResourceType = "GitRepository",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "7ccb3b9e-a09a-d3c9-82ed-3f71646d2576",
+                            ResourceAction = "View",
+                            ResourceType = "GitAccount",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "3e5365c6-7759-a0ad-e7fa-32263d00682c",
+                            ResourceAction = "View",
+                            ResourceType = "GitAccount",
+                            RoleId = "30000000-0000-0000-0000-000000000003"
+                        },
+                        new
+                        {
+                            Id = "ff6e9bea-dbf2-e811-d4ba-6702a55c3f92",
+                            ResourceAction = "View",
+                            ResourceType = "GitAccount",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "f7be80a4-dffa-1049-994a-5314ee03efaf",
+                            ResourceAction = "Create",
+                            ResourceType = "GitAccount",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "d990b800-123d-a0ec-9b6a-239915235880",
+                            ResourceAction = "Create",
+                            ResourceType = "GitAccount",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "052e45fb-cb15-9380-6a33-c233fde703a6",
+                            ResourceAction = "Update",
+                            ResourceType = "GitAccount",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "c1184544-a092-3f80-c4d6-6f778db56b26",
+                            ResourceAction = "Update",
+                            ResourceType = "GitAccount",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "9365df99-cab8-01da-f3c7-dc17a54e8801",
+                            ResourceAction = "Delete",
+                            ResourceType = "GitAccount",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "d5ba4edc-5278-a21e-613d-91350e52bce7",
+                            ResourceAction = "Apply",
+                            ResourceType = "GitAccount",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "783ca30a-d153-8f1b-27db-c3e722f7f34d",
+                            ResourceAction = "Apply",
+                            ResourceType = "GitAccount",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "6395043d-510b-dc85-f19d-2a57463f4e8f",
+                            ResourceAction = "Pull",
+                            ResourceType = "GitAccount",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "4fa196f3-a9e5-7716-b1dd-aa574061e1f7",
+                            ResourceAction = "Pull",
+                            ResourceType = "GitAccount",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "e3b44e1b-f776-b5ce-509d-2b529768a528",
+                            ResourceAction = "View",
+                            ResourceType = "Registry",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "65cb87df-133d-b577-21f6-2f20190ce45f",
+                            ResourceAction = "View",
+                            ResourceType = "Registry",
+                            RoleId = "30000000-0000-0000-0000-000000000003"
+                        },
+                        new
+                        {
+                            Id = "ce566660-f041-32b6-0942-2f8abb92b17d",
+                            ResourceAction = "View",
+                            ResourceType = "Registry",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "8658afec-8be0-2f4b-7b1e-478ac44341ec",
+                            ResourceAction = "Create",
+                            ResourceType = "Registry",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "3a8c08b1-d033-1580-65f9-a1cb3ed3fc6a",
+                            ResourceAction = "Create",
+                            ResourceType = "Registry",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "f30ff44f-86d5-8215-2c0f-60ed6ebd6234",
+                            ResourceAction = "Update",
+                            ResourceType = "Registry",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "d23893f2-7f44-a593-83de-22ca4a8c80a1",
+                            ResourceAction = "Update",
+                            ResourceType = "Registry",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "b678aa42-8c01-b706-1332-b85adb4e3096",
+                            ResourceAction = "Delete",
+                            ResourceType = "Registry",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "12bbcf07-7237-3afb-65f7-1fc8e2de4939",
+                            ResourceAction = "Apply",
+                            ResourceType = "Registry",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "0dd6ded1-5ef7-c1b5-a36a-d0de73459d8a",
+                            ResourceAction = "Apply",
+                            ResourceType = "Registry",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "961c1641-93aa-54ca-9b00-6608da3ae4c8",
+                            ResourceAction = "Pull",
+                            ResourceType = "Registry",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "acab0152-cf67-d16c-fe1e-c579972ad2df",
+                            ResourceAction = "Pull",
+                            ResourceType = "Registry",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "ec427e29-a8ed-8604-59cc-7eda3268fc30",
+                            ResourceAction = "View",
+                            ResourceType = "Alert",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "8de4cd72-b2ce-4e18-f148-b93892845825",
+                            ResourceAction = "View",
+                            ResourceType = "Alert",
+                            RoleId = "30000000-0000-0000-0000-000000000003"
+                        },
+                        new
+                        {
+                            Id = "83ac5b37-8bd4-e093-3cdd-7e9f61300108",
+                            ResourceAction = "View",
+                            ResourceType = "Alert",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "6e332b06-35e2-fbbd-e12c-bb7f02ab2474",
+                            ResourceAction = "Create",
+                            ResourceType = "Alert",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "4cfe0dcb-ce92-0500-981f-7d79b3782877",
+                            ResourceAction = "Create",
+                            ResourceType = "Alert",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "2548763c-c9b7-5359-a80a-5ce706c5c42c",
+                            ResourceAction = "Update",
+                            ResourceType = "Alert",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "acece9ff-20d1-f3d5-c304-3a07adb9a03b",
+                            ResourceAction = "Update",
+                            ResourceType = "Alert",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "8ce09606-e435-8a9b-2dab-8d1dfc91a198",
+                            ResourceAction = "Delete",
+                            ResourceType = "Alert",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "26bb8bc9-e526-dfd5-c3cc-2ebc0fb9837b",
+                            ResourceAction = "Apply",
+                            ResourceType = "Alert",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "18b8b740-528c-6366-9902-ebf6a025d063",
+                            ResourceAction = "Apply",
+                            ResourceType = "Alert",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "ea5f48d2-2719-0a78-dcb4-2efd447e674f",
+                            ResourceAction = "Pull",
+                            ResourceType = "Alert",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "f9af8f42-cf9c-21a8-43ba-793b4dd1bd3f",
+                            ResourceAction = "Pull",
+                            ResourceType = "Alert",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "d868c269-b60f-2be0-2451-9b81b3c95674",
+                            ResourceAction = "View",
+                            ResourceType = "AlertChannel",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "5ede29a8-8e33-2d7c-48c3-1e5d733edd73",
+                            ResourceAction = "View",
+                            ResourceType = "AlertChannel",
+                            RoleId = "30000000-0000-0000-0000-000000000003"
+                        },
+                        new
+                        {
+                            Id = "6f3a7126-e96a-d249-5e58-108bd0bd1f0f",
+                            ResourceAction = "View",
+                            ResourceType = "AlertChannel",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "99b23eff-a5c8-0cbe-6383-b99e43a43b23",
+                            ResourceAction = "Create",
+                            ResourceType = "AlertChannel",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "88dc9733-349d-635c-7ef6-829065f4f87b",
+                            ResourceAction = "Create",
+                            ResourceType = "AlertChannel",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "21d8c7f7-5480-5509-e2ab-e3c8fdbb5ab8",
+                            ResourceAction = "Update",
+                            ResourceType = "AlertChannel",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "fc6bc1bc-bb69-098b-b09e-07a96444f57e",
+                            ResourceAction = "Update",
+                            ResourceType = "AlertChannel",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "9f3d1be4-d19e-9453-86aa-2ae06eae6d18",
+                            ResourceAction = "Delete",
+                            ResourceType = "AlertChannel",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "19357866-b0f7-4c0b-fb01-c3a6556d1e5f",
+                            ResourceAction = "Apply",
+                            ResourceType = "AlertChannel",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "55228106-7ae9-6748-5a33-73e253ad940d",
+                            ResourceAction = "Apply",
+                            ResourceType = "AlertChannel",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "613e9000-da2c-b4e7-9e02-b4bef349f0f7",
+                            ResourceAction = "Pull",
+                            ResourceType = "AlertChannel",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "df77eb4e-7860-5319-431e-481bfe08baeb",
+                            ResourceAction = "Pull",
+                            ResourceType = "AlertChannel",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        });
                 });
 
             modelBuilder.Entity("Platform", b =>
@@ -1116,25 +1824,50 @@ namespace Infrastructure.Migrations.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ResourceAccess", b =>
+                {
+                    b.Property<string>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResourceId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResourceType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId")
+                        .HasDatabaseName("IX_ResourceAccesses_Actor");
+
+                    b.HasIndex("ResourceType", "ResourceId", "ActorId");
+
+                    b.HasIndex("ResourceType", "ResourceId", "ActorId", "Action")
+                        .IsUnique();
+
+                    b.ToTable("ResourceAccesses", (string)null);
+                });
+
             modelBuilder.Entity("Role", b =>
                 {
                     b.Property<string>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValue(new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValue(new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
 
                     b.HasKey("Id");
 
@@ -1143,10 +1876,18 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasData(
                         new
                         {
-                            Id = "bdde9601-3b03-1275-a11b-98533d063a04",
-                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
-                            Name = "Admin",
-                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified)
+                            Id = "30000000-0000-0000-0000-000000000001",
+                            Name = "Admin"
+                        },
+                        new
+                        {
+                            Id = "30000000-0000-0000-0000-000000000002",
+                            Name = "Operator"
+                        },
+                        new
+                        {
+                            Id = "30000000-0000-0000-0000-000000000003",
+                            Name = "Viewer"
                         });
                 });
 
@@ -1267,27 +2008,27 @@ namespace Infrastructure.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Name")
+                    b.Property<string>("ActorId")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("RoleId")
+                    b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RoleId")
-                        .HasDatabaseName("IX_Teams_RoleId");
+                    b.HasIndex("ActorId")
+                        .IsUnique();
 
                     b.ToTable("Teams", (string)null);
 
                     b.HasData(
                         new
                         {
-                            Id = "cede9601-67e9-507d-832c-0ca0155465a1",
-                            Name = "Admins",
-                            RoleId = "bdde9601-3b03-1275-a11b-98533d063a04"
+                            Id = "20000000-0000-0000-0000-000000000001",
+                            ActorId = "00000000-0000-0000-0000-000000000003",
+                            Name = "Default Team"
                         });
                 });
 
@@ -1337,12 +2078,12 @@ namespace Infrastructure.Migrations.Migrations
                     b.HasData(
                         new
                         {
-                            Id = "d1de9601-f113-ce77-884e-3cb636ec09a8",
+                            Id = "10000000-0000-0000-0000-000000000001",
                             ActorId = "00000000-0000-0000-0000-000000000002",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             CreatedByActorId = "00000000-0000-0000-0000-000000000001",
-                            Email = "admin@admin.com",
-                            Name = "admin",
+                            Email = "admin@citadel.local",
+                            Name = "Admin",
                             Password = "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1"
                         });
                 });
@@ -1364,13 +2105,6 @@ namespace Infrastructure.Migrations.Migrations
                         .HasDatabaseName("IX_UsersTeams_UserId");
 
                     b.ToTable("UsersTeams", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            UserId = "d1de9601-f113-ce77-884e-3cb636ec09a8",
-                            TeamId = "cede9601-67e9-507d-832c-0ca0155465a1"
-                        });
                 });
 
             modelBuilder.Entity("ActivityEvent", b =>
@@ -1385,6 +2119,21 @@ namespace Infrastructure.Migrations.Migrations
                         .WithMany()
                         .HasForeignKey("PlatformId")
                         .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("ActorRole", b =>
+                {
+                    b.HasOne("Actor", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Role", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("AlertChannel", b =>
@@ -1617,10 +2366,10 @@ namespace Infrastructure.Migrations.Migrations
 
             modelBuilder.Entity("Team", b =>
                 {
-                    b.HasOne("Role", null)
-                        .WithMany()
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                    b.HasOne("Actor", null)
+                        .WithOne()
+                        .HasForeignKey("Team", "ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

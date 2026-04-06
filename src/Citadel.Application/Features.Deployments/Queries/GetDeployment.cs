@@ -1,11 +1,14 @@
-﻿using Domain.Contracts.Interfaces;
+﻿using Hosting.Common;
+using Domain.Contracts.Interfaces;
 using Domain.Entities.Deployments;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Deployments.Queries;
 
+[RequirePermission(ResourceType.Deployment, ResourceAction.View)]
 public sealed record GetDeployment(Guid Id) : IQuery<Result<Deployment>>;
 
 internal sealed class GetDeploymentHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetDeployment, Result<Deployment>>

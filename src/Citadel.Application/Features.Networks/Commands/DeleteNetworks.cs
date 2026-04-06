@@ -1,12 +1,15 @@
-﻿using Domain.Contracts.Interfaces;
+﻿using Domain;
+using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Networks;
 using FluentValidation;
 using Hosting.Common;
+using Hosting.Common.Attributes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Networks.Commands;
 
+[RequirePermission(ResourceType.Platform, ResourceAction.Delete)]
 public sealed record class DeleteNetworks(Guid PlatformId, string[] Ids) : ICommand<Result>
 {
     internal class Validator : AbstractValidator<DeleteNetworks>

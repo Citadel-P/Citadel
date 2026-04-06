@@ -138,6 +138,27 @@ public sealed class AlertEventTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task List_AlertEvents_Should_Return_Only_Alerts_User_Is_Permitted_To_View()
+    {
+        var subject = await CreateAuthorizationSubjectAsync(
+            resourceGrants: [new ResourceGrant(ResourceType.Alert, _alertId, ResourceAction.View)]);
+
+        Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            CreateJwtToken(subject.UserId, subject.ActorId));
+
+        var response = await Client.GetAsync("/api/v1/alertEvents?page=1&pageSize=10", TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        using var document = await ReadJsonAsync(response);
+        var pagedResult = GetProperty(document.RootElement, "pagedResult");
+        var items = GetProperty(pagedResult, "items");
+
+        Assert.Equal(1, items.GetArrayLength());
+        Assert.Equal(_alertId, GetProperty(items[0], "id").GetGuid());
+    }
+
+    [Fact]
     public async Task Get_UnresolvedAlertEventsCount_ReturnsSuccess()
     {
         var response = await Client.GetAsync("/api/v1/alertEvents/unresolved-count", TestContext.Current.CancellationToken);
@@ -162,7 +183,7 @@ public sealed class AlertEventTests : IntegrationTestBase
         var root = document.RootElement;
 
         Assert.Equal(Constants.SystemId, GetProperty(root, "actorId").GetGuid());
-        Assert.Equal(actor?.Name, GetProperty(root, "actorName").GetString());
+        Assert.Equal(actor?.ActorMetadata?.Name, GetProperty(root, "actorName").GetString());
         Assert.Equal(actor?.Type.ToString(), GetProperty(root, "actorType").GetString());
     }
 

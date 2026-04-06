@@ -1,26 +1,19 @@
-﻿namespace Domain.Entities.Identity;
+﻿using Hosting.Common;
+
+namespace Domain.Entities.Identity;
 
 public class Permission
 {
-    /// <summary>
-    /// Permission Id
-    /// </summary>
     public Guid Id { get; private set; }
-
-    /// <summary>
-    /// Role ID
-    /// </summary>
     public Guid RoleId { get; private set; }
+    public ResourceType ResourceType { get; private set; }
+    public ResourceAction ResourceAction { get; private set; }
 
-    /// <summary>
-    /// The permission name
-    /// </summary>
-    public AppPermission PermissionCode { get; private set; }
-
-    public static Permission Create(Guid roleId, AppPermission permission, Guid? id = null) => new ()
+    public static Permission Create(Guid roleId, ResourceType resourceType, ResourceAction resourceAction, Guid? id = null) => new ()
     {
         Id = id ?? Guid.CreateVersion7(),
         RoleId = roleId,
-        PermissionCode = permission
+        ResourceType = resourceType,
+        ResourceAction = resourceAction,
     };
 }

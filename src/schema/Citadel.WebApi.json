@@ -554,169 +554,6 @@
         ]
       }
     },
-    "/api/v1/containers": {
-      "post": {
-        "tags": [
-          "Containers"
-        ],
-        "summary": "Create a container",
-        "operationId": "createContainer",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateContainerInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateContainerView"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "Containers"
-        ],
-        "summary": "Delete the given container(s)",
-        "operationId": "deleteContainers",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeleteContainersRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
     "/api/v1/containers/start": {
       "patch": {
         "tags": [
@@ -1060,6 +897,85 @@
                 "items": {
                   "type": "string"
                 }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/containers": {
+      "delete": {
+        "tags": [
+          "Containers"
+        ],
+        "summary": "Delete the given container(s)",
+        "operationId": "deleteContainers",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteContainersRequest"
               }
             }
           },
@@ -5322,95 +5238,6 @@
           },
           "204": {
             "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/compose/up": {
-      "post": {
-        "tags": [
-          "Compose"
-        ],
-        "summary": "Deploy a stack",
-        "operationId": "composeUp",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ComposeUpRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ComposeDeploymentEvent"
-                  }
-                }
-              }
-            }
           },
           "400": {
             "description": "Bad Request",
@@ -11254,41 +11081,6 @@
           }
         }
       },
-      "ComposeDeploymentEvent": {
-        "type": "object",
-        "properties": {
-          "stepId": {
-            "type": "string"
-          },
-          "timestamp": {
-            "format": "date-time"
-          }
-        }
-      },
-      "ComposeUpRequest": {
-        "required": [
-          "platformId",
-          "registryName",
-          "repositoryName",
-          "composeFileAsStr"
-        ],
-        "type": "object",
-        "properties": {
-          "platformId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "registryName": {
-            "type": "string"
-          },
-          "repositoryName": {
-            "type": "string"
-          },
-          "composeFileAsStr": {
-            "type": "string"
-          }
-        }
-      },
       "ConfigFromInput": {
         "required": [
           "network"
@@ -12285,220 +12077,6 @@
             "items": {
               "$ref": "#/components/schemas/AlertRuleQuietHour"
             }
-          }
-        }
-      },
-      "CreateContainerInput": {
-        "required": [
-          "platformId",
-          "imageId",
-          "name",
-          "workingDir",
-          "user",
-          "memoryLimit",
-          "cpuLimit",
-          "memoryReservation",
-          "autoRemove",
-          "stopTimeout",
-          "restartPolicy",
-          "labels",
-          "envVars",
-          "ports",
-          "volumes",
-          "networks",
-          "entryPoint",
-          "command"
-        ],
-        "type": "object",
-        "properties": {
-          "platformId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "imageId": {
-            "type": "string"
-          },
-          "name": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "workingDir": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "user": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "memoryLimit": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
-            "format": "float"
-          },
-          "cpuLimit": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
-            "format": "float"
-          },
-          "memoryReservation": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
-            "format": "float"
-          },
-          "autoRemove": {
-            "type": [
-              "null",
-              "boolean"
-            ]
-          },
-          "stopTimeout": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
-          "restartPolicy": {
-            "$ref": "#/components/schemas/ContainerRestartPolicy"
-          },
-          "labels": {
-            "type": [
-              "null",
-              "object"
-            ],
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "envVars": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "ports": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "volumes": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "networks": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "entryPoint": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "command": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "hostname": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "dns": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "security": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SecurityConfig"
-              }
-            ]
-          },
-          "loggingConfig": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/LoggingConfig"
-              }
-            ]
-          },
-          "healthCheck": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/HealthCheckConfig"
-              }
-            ]
-          }
-        }
-      },
-      "CreateContainerView": {
-        "required": [
-          "id"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
           }
         }
       },
@@ -14696,41 +14274,6 @@
           }
         }
       },
-      "HealthCheckConfig": {
-        "required": [
-          "test"
-        ],
-        "type": "object",
-        "properties": {
-          "test": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "interval": {
-            "type": "string",
-            "default": "30s"
-          },
-          "timeout": {
-            "type": "string",
-            "default": "5s"
-          },
-          "retries": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32",
-            "default": 3
-          },
-          "startPeriod": {
-            "type": "string",
-            "default": "0s"
-          }
-        }
-      },
       "HistoryImageResult": {
         "required": [
           "id",
@@ -15882,41 +15425,6 @@
             }
           }
         }
-      },
-      "LoggingConfig": {
-        "required": [
-          "driver"
-        ],
-        "type": "object",
-        "properties": {
-          "driver": {
-            "$ref": "#/components/schemas/LoggingDriverType"
-          },
-          "options": {
-            "type": [
-              "null",
-              "object"
-            ],
-            "additionalProperties": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "LoggingDriverType": {
-        "enum": [
-          "none",
-          "local",
-          "json-file",
-          "syslog",
-          "journald",
-          "gelf",
-          "fluentd",
-          "awslogs",
-          "splunk",
-          "etwlogs",
-          "gcplogs"
-        ]
       },
       "LoginRequest": {
         "required": [
@@ -17643,48 +17151,6 @@
           "Weekly"
         ]
       },
-      "SecurityConfig": {
-        "type": "object",
-        "properties": {
-          "privileged": {
-            "type": "boolean",
-            "default": false
-          },
-          "capAdd": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "capDrop": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "readOnlyRootFs": {
-            "type": [
-              "null",
-              "boolean"
-            ]
-          },
-          "securityOpt": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
       "StackConfigView": {
         "required": [
           "id",
@@ -18583,9 +18049,6 @@
     },
     {
       "name": "Volumes"
-    },
-    {
-      "name": "Compose"
     },
     {
       "name": "Deployments"

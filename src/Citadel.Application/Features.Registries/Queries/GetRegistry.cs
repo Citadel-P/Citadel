@@ -1,11 +1,14 @@
-﻿using Domain.Contracts.Interfaces;
+﻿using Hosting.Common;
+using Domain.Contracts.Interfaces;
 using Domain.Entities.Registries;
+using Hosting.Common.Attributes;
 using Hosting.Common.ErrorTypes;
 using LightResults;
 using Mediator;
 
 namespace Application.Features.Registries.Queries;
 
+[RequirePermission(ResourceType.Registry, ResourceAction.View)]
 public sealed record GetRegistry(Guid Id) : IQuery<Result<Registry>>;
 internal sealed class GetRegistryHandler(IUnitOfWork unitOfWork) : IQueryHandler<GetRegistry, Result<Registry>>
 {
