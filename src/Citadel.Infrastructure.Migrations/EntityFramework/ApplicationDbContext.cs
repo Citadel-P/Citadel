@@ -64,9 +64,9 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
 
         // Actors
         modelBuilder.Entity("Actor").HasData(
-            new { Id = systemActorId, Type = "System" },
-            new { Id = adminActorId, Type = "User" },
-            new { Id = teamActorId, Type = "Team" }
+            new { Id = systemActorId, Type = "System", IsEnabled = true },
+            new { Id = adminActorId, Type = "User", IsEnabled = true },
+            new { Id = teamActorId, Type = "Team", IsEnabled = true }
         );
 
         // User
@@ -464,6 +464,7 @@ internal static class Configuration
         actor.HasKey("Id");
 
         actor.Property<string>("Type").IsRequired();
+        actor.Property<bool>("IsEnabled").HasColumnType("INTEGER").HasDefaultValue(true).IsRequired();
 
         return builder;
     }

@@ -197,19 +197,7 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
 
     public async Task<IEnumerable<AlertRule>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken)
     {
-        const string sql = """
-            WITH ActorScope AS (
-                SELECT ActorId
-                FROM Users
-                WHERE Id = @UserId
-
-                UNION
-
-                SELECT t.ActorId
-                FROM Teams t
-                JOIN UsersTeams ut ON ut.TeamId = t.Id
-                WHERE ut.UserId = @UserId
-            )
+        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + @"
             SELECT 
                 r.Id, 
                 r.Name,
@@ -227,25 +215,9 @@ internal sealed class AlertRuleRepository(IDbConnection db, Func<IDbTransaction>
                 COALESCE(json_group_array(arc.AlertChannelId), '[]') AS ChannelIds
             FROM AlertRules r
             LEFT JOIN AlertRuleChannels arc ON arc.AlertRuleId = r.Id
-            WHERE EXISTS (
-                SELECT 1
-                FROM ActorRoles ar
-                JOIN Permissions p ON p.RoleId = ar.RoleId
-                WHERE ar.ActorId IN (SELECT ActorId FROM ActorScope)
-                  AND p.ResourceType = @ResourceType
-                  AND p.ResourceAction = @Action
-            )
-
-            OR EXISTS (
-                SELECT 1
-                FROM ResourceAccesses ra
-                WHERE ra.ActorId IN (SELECT ActorId FROM ActorScope)
-                  AND ra.ResourceType = @ResourceType
-                  AND ra.ResourceId = r.Id
-                  AND ra.Action = @Action
-            )
+            WHERE " + AuthorizationSql.ResourcePredicatePrefix + "r.Id" + AuthorizationSql.ResourcePredicateSuffix + @"
             GROUP BY r.Id
-            """;
+            ";
 
         var rows = await db.QueryAsync<AlertRuleDto>(sql, new
         {

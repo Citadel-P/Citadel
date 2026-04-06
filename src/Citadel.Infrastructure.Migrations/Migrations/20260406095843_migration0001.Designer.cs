@@ -90,6 +90,11 @@ namespace Infrastructure.Migrations.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
                     b.HasKey("Id");
 
                     b.ToTable("Actors", (string)null);
@@ -98,16 +103,19 @@ namespace Infrastructure.Migrations.Migrations
                         new
                         {
                             Id = "00000000-0000-0000-0000-000000000001",
+                            IsEnabled = true,
                             Type = "System"
                         },
                         new
                         {
                             Id = "00000000-0000-0000-0000-000000000002",
+                            IsEnabled = true,
                             Type = "User"
                         },
                         new
                         {
                             Id = "00000000-0000-0000-0000-000000000003",
+                            IsEnabled = true,
                             Type = "Team"
                         });
                 });

@@ -41,6 +41,7 @@ public interface IUnitOfWork : IAsyncDisposable
 public interface IActorRepository
 {
     Task<Actor?> GetById(Guid id, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(Actor actor, CancellationToken cancellationToken);
 }
 
 public interface IUserRepository 

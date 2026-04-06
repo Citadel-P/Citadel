@@ -108,40 +108,9 @@ internal sealed class GitReposRepository(IDbConnection db, Func<IDbTransaction> 
 
     public async Task<IEnumerable<GitRepository>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken)
     {
-        const string sql = """
-            WITH ActorScope AS (
-                SELECT ActorId
-                FROM Users
-                WHERE Id = @UserId
-
-                UNION
-
-                SELECT t.ActorId
-                FROM Teams t
-                JOIN UsersTeams ut ON ut.TeamId = t.Id
-                WHERE ut.UserId = @UserId
-            )
-            SELECT *
-            FROM GitRepositories gr
-            WHERE EXISTS (
-                SELECT 1
-                FROM ActorRoles ar
-                JOIN Permissions p ON p.RoleId = ar.RoleId
-                WHERE ar.ActorId IN (SELECT ActorId FROM ActorScope)
-                  AND p.ResourceType = @ResourceType
-                  AND p.ResourceAction = @Action
-            )
-
-            OR EXISTS (
-                SELECT 1
-                FROM ResourceAccesses ra
-                WHERE ra.ActorId IN (SELECT ActorId FROM ActorScope)
-                  AND ra.ResourceType = @ResourceType
-                  AND ra.ResourceId = gr.Id
-                  AND ra.Action = @Action
-            )
-            ORDER BY gr.CreatedAt DESC;
-            """;
+        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " SELECT * FROM GitRepositories gr WHERE "
+            + AuthorizationSql.ResourcePredicatePrefix + "gr.Id" + AuthorizationSql.ResourcePredicateSuffix
+            + " ORDER BY gr.CreatedAt DESC;";
 
         var result = await db.QueryAsync<GitRepositoryDto>(sql, new
         {

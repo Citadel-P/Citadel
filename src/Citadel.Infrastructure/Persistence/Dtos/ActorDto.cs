@@ -3,5 +3,6 @@
 internal sealed record class ActorDto(
     Guid Id,
     string Type,
-    string Name
+    string Name,
+    bool IsEnabled
     );

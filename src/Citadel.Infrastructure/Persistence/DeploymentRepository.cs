@@ -213,52 +213,9 @@ internal class DeploymentRepository(IDbConnection db, Func<IDbTransaction> tx) :
 
     public async Task<IEnumerable<Deployment>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken)
     {
-        const string sql = BaseSelect + " " + """
-            WHERE EXISTS (
-                WITH ActorScope AS (
-                    SELECT ActorId
-                    FROM Users
-                    WHERE Id = @UserId
-
-                    UNION
-
-                    SELECT t.ActorId
-                    FROM Teams t
-                    JOIN UsersTeams ut ON ut.TeamId = t.Id
-                    WHERE ut.UserId = @UserId
-                )
-                SELECT 1
-                FROM ActorRoles ar
-                JOIN Permissions permissions ON permissions.RoleId = ar.RoleId
-                WHERE ar.ActorId IN (SELECT ActorId FROM ActorScope)
-                  AND permissions.ResourceType = @ResourceType
-                  AND permissions.ResourceAction = @Action
-
-            )
-
-            OR EXISTS (
-                WITH ActorScope AS (
-                    SELECT ActorId
-                    FROM Users
-                    WHERE Id = @UserId
-
-                    UNION
-
-                    SELECT t.ActorId
-                    FROM Teams t
-                    JOIN UsersTeams ut ON ut.TeamId = t.Id
-                    WHERE ut.UserId = @UserId
-                )
-                SELECT 1
-                FROM ResourceAccesses ra
-                WHERE ra.ActorId IN (SELECT ActorId FROM ActorScope)
-                  AND ra.ResourceType = @ResourceType
-                  AND ra.ResourceId = d.Id
-                  AND ra.Action = @Action
-            )
-
-            ORDER BY d.CreatedAt DESC, d.Name ASC
-            """;
+        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + BaseSelect + " WHERE "
+            + AuthorizationSql.ResourcePredicatePrefix + "d.Id" + AuthorizationSql.ResourcePredicateSuffix
+            + " ORDER BY d.CreatedAt DESC, d.Name ASC";
 
         var result = await db.QueryAsync<DeploymentDto>(sql, new
         {

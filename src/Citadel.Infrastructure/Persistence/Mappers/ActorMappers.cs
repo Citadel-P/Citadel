@@ -11,7 +11,8 @@ internal static class ActorMappers
         return Actor.FromPersistence(
             id: activityEventDto.Id,
             type: Enum.Parse<ActorType>(activityEventDto.Type),
-            actorMetadata: new ActorMetadata(activityEventDto.Name)
+            actorMetadata: new ActorMetadata(activityEventDto.Name),
+            isEnabled: activityEventDto.IsEnabled
             );
     }
 }

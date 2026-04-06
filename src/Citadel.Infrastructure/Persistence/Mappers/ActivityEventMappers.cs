@@ -24,6 +24,6 @@ internal static class ActivityEventMappers
             createdAt: activityEventDto.CreatedAt,
             platform: activityEventDto.Platform_Name == null ? null : Platform.FromPersistence(id: activityEventDto.PlatformId.Value, name: activityEventDto.Platform_Name, address: string.Empty,
                 networkCount: 0, volumeCount: 0, imageCount: 0, cpuCount: 0, memTotal: 0, status: activityEventDto.Platform_Status != null ? Enum.Parse<PlatformStatus>(activityEventDto.Platform_Status): PlatformStatus.Offline, connectorType: PlatformConnectorType.Unknown, platformDescriptor: null),
-            actor: activityEventDto.Actor_Name == null ? null : Actor.FromPersistence(id: activityEventDto.CreatedByActorId , type: activityEventDto.Actor_Type != null ? Enum.Parse<ActorType>(activityEventDto.Actor_Type) : ActorType.User, actorMetadata: activityEventDto.Actor_Name != null ? new ActorMetadata(activityEventDto.Actor_Name) : null) );
+            actor: activityEventDto.Actor_Name == null ? null : Actor.FromPersistence(id: activityEventDto.CreatedByActorId , type: activityEventDto.Actor_Type != null ? Enum.Parse<ActorType>(activityEventDto.Actor_Type) : ActorType.User, actorMetadata: activityEventDto.Actor_Name != null ? new ActorMetadata(activityEventDto.Actor_Name) : null, isEnabled: true) );
     }
 }

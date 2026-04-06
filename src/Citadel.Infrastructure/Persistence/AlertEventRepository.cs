@@ -225,19 +225,7 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
         CancellationToken cancellationToken,
         bool? unresolvedOnly = null)
     {
-        const string SelectAlerts = """
-        WITH ActorScope AS (
-            SELECT ActorId
-            FROM Users
-            WHERE Id = @UserId
-
-            UNION
-
-            SELECT t.ActorId
-            FROM Teams t
-            JOIN UsersTeams ut ON ut.TeamId = t.Id
-            WHERE ut.UserId = @UserId
-        )
+        const string selectAlerts = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.PermissionGlobalAccessCte + @"
         SELECT
             a.Id,
             a.AlertRuleId,
@@ -264,68 +252,19 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             AND (@AlertType IS NULL OR a.Type = @AlertType)
             AND (@ResourceType IS NULL OR a.ResourceType = @ResourceType)
             AND (@UnresolvedOnly IS NULL OR @UnresolvedOnly = 0 OR a.ResolvedAt IS NULL)
-            AND (
-                EXISTS (
-                    SELECT 1
-                    FROM ActorRoles ar
-                    JOIN Permissions p ON p.RoleId = ar.RoleId
-                    WHERE ar.ActorId IN (SELECT ActorId FROM ActorScope)
-                      AND p.ResourceType = @PermissionResourceType
-                      AND p.ResourceAction = @Action
-                )
-
-                OR EXISTS (
-                    SELECT 1
-                    FROM ResourceAccesses ra
-                    WHERE ra.ActorId IN (SELECT ActorId FROM ActorScope)
-                      AND ra.ResourceType = @PermissionResourceType
-                      AND ra.ResourceId = a.Id
-                      AND ra.Action = @Action
-                )
-            )
+            AND " + AuthorizationSql.PermissionResourcePredicatePrefix + "a.Id" + AuthorizationSql.ResourcePredicateSuffix + @"
         ORDER BY a.UpdatedAt DESC, a.CreatedAt DESC
         LIMIT @PageSize OFFSET @Offset;
-        """;
+        ";
 
-        const string CountAlerts = """
-        WITH ActorScope AS (
-            SELECT ActorId
-            FROM Users
-            WHERE Id = @UserId
-
-            UNION
-
-            SELECT t.ActorId
-            FROM Teams t
-            JOIN UsersTeams ut ON ut.TeamId = t.Id
-            WHERE ut.UserId = @UserId
-        )
+        const string countAlerts = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.PermissionGlobalAccessCte + @"
         SELECT COUNT(*)
         FROM AlertEvents a
         WHERE (@ResourceId IS NULL OR a.ResourceId = @ResourceId)
             AND (@AlertType IS NULL OR a.Type = @AlertType)
             AND (@ResourceType IS NULL OR a.ResourceType = @ResourceType)
             AND (@UnresolvedOnly IS NULL OR @UnresolvedOnly = 0 OR a.ResolvedAt IS NULL)
-            AND (
-                EXISTS (
-                    SELECT 1
-                    FROM ActorRoles ar
-                    JOIN Permissions p ON p.RoleId = ar.RoleId
-                    WHERE ar.ActorId IN (SELECT ActorId FROM ActorScope)
-                      AND p.ResourceType = @PermissionResourceType
-                      AND p.ResourceAction = @Action
-                )
-
-                OR EXISTS (
-                    SELECT 1
-                    FROM ResourceAccesses ra
-                    WHERE ra.ActorId IN (SELECT ActorId FROM ActorScope)
-                      AND ra.ResourceType = @PermissionResourceType
-                      AND ra.ResourceId = a.Id
-                      AND ra.Action = @Action
-                )
-            );
-        """;
+            AND " + AuthorizationSql.PermissionResourcePredicatePrefix + "a.Id" + AuthorizationSql.ResourcePredicateSuffix + ";";
 
         var offset = (page - 1) * pageSize;
 
@@ -342,8 +281,8 @@ internal class AlertEventRepository(IDbConnection db, Func<IDbTransaction> tx) :
             Offset = offset,
         };
 
-        var totalCount = await db.QuerySingleAsync<int>(CountAlerts, p, transaction: tx());
-        var rows = await db.QueryAsync<AlertEventDto>(SelectAlerts, p, transaction: tx());
+        var totalCount = await db.QuerySingleAsync<int>(countAlerts, p, transaction: tx());
+        var rows = await db.QueryAsync<AlertEventDto>(selectAlerts, p, transaction: tx());
 
         return new PagedResult<AlertEvent>(
             [.. rows.Select(x => x.ToDomain())],

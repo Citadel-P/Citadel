@@ -15,10 +15,11 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
     {
         const string sql = """
             WITH ActorScope AS (
-                -- User actor
-                SELECT ActorId 
+                SELECT Users.ActorId 
                 FROM Users 
-                WHERE Id = @UserId
+                JOIN Actors userActor ON userActor.Id = Users.ActorId
+                WHERE Users.Id = @UserId
+                  AND userActor.IsEnabled = 1
 
                 UNION
 
@@ -26,26 +27,30 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 SELECT t.ActorId
                 FROM Teams t
                 JOIN UsersTeams ut ON ut.TeamId = t.Id
+                JOIN Actors teamActor ON teamActor.Id = t.ActorId
                 WHERE ut.UserId = @UserId
+                  AND teamActor.IsEnabled = 1
+            ),
+            GlobalAccess AS (
+                SELECT 1
+                FROM ActorRoles ar
+                JOIN Permissions p ON p.RoleId = ar.RoleId
+                JOIN ActorScope actorScope ON actorScope.ActorId = ar.ActorId
+                WHERE p.ResourceType = @ResourceType
+                  AND p.ResourceAction = @Action
             )
             SELECT
-                -- 1. Global role-based permissions
                 EXISTS (
                     SELECT 1
-                    FROM ActorRoles ar
-                    JOIN Permissions p ON p.RoleId = ar.RoleId
-                    WHERE ar.ActorId IN (SELECT ActorId FROM ActorScope)
-                      AND p.ResourceType = @ResourceType
-                      AND p.ResourceAction = @Action
+                    FROM GlobalAccess
                 )
                 OR
-                -- 2. Resource-specific access (only if resourceId provided)
                 (
                     @ResourceId IS NOT NULL AND EXISTS (
                         SELECT 1
                         FROM ResourceAccesses ra
-                        WHERE ra.ActorId IN (SELECT ActorId FROM ActorScope)
-                          AND ra.ResourceType = @ResourceType
+                        JOIN ActorScope actorScope ON actorScope.ActorId = ra.ActorId
+                        WHERE ra.ResourceType = @ResourceType
                           AND ra.ResourceId = @ResourceId
                           AND ra.Action = @Action
                     )
@@ -55,7 +60,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return await db.ExecuteScalarAsync<bool>(sql, new
         {
             UserId = userId.Format(),
-            ResourceId = resourceId?.Format(), // important: nullable
+            ResourceId = resourceId?.Format(),
             ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
             Action = EnumFormatter<ResourceAction>.GetValue(action)
         });
@@ -66,9 +71,11 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         const string sql =
             """
             WITH TargetUser AS (
-                SELECT *
+                SELECT Users.*
                 FROM Users
+                JOIN Actors userActor ON userActor.Id = Users.ActorId
                 WHERE Email = @Email
+                  AND userActor.IsEnabled = 1
                 LIMIT 1
             ),
             ActorScope AS (
@@ -81,6 +88,8 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 FROM TargetUser
                 JOIN UsersTeams ON TargetUser.Id = UsersTeams.UserId
                 JOIN Teams ON Teams.Id = UsersTeams.TeamId
+                JOIN Actors teamActor ON teamActor.Id = Teams.ActorId
+                WHERE teamActor.IsEnabled = 1
             )
             SELECT 
                 TargetUser.Id, 

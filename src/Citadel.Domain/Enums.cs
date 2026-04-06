@@ -315,7 +315,8 @@ public enum ActorType
     User = 0,
     System,
     Agent,
-    Service
+    Service,
+    Team
 }
 
 public enum RegistryStatus

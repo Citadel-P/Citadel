@@ -4,6 +4,7 @@ using Hosting.OpenApi;
 using WebApi.Routes.Endpoints;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Alerters;
+using WebApi.Routes.Endpoints.Resources.Actors;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
 using WebApi.Routes.Endpoints.Resources.GitRepositories;
@@ -23,6 +24,7 @@ public static class PublicEndpoints
     const string ActivitiesName = nameof(Activities);
     const string AlertEventsName = nameof(AlertEvents);
     const string AlertRulesName = nameof(AlertRules);
+    const string ActorsName = nameof(Actors);
     const string GitAccountsName = nameof(GitAccounts);
     const string GitRepositoriesName = nameof(GitRepositories);
     const string RegistriesName = nameof(Registries);
@@ -37,6 +39,10 @@ public static class PublicEndpoints
             var auth = group.MapGroup("/authentication").WithTags(AuthenticationName);
             {
                 MapAuthEndpoints(auth);
+            }
+            var actors = group.MapGroup("/actors").WithTags(ActorsName).RequireAuthorization();
+            {
+                MapActorEndpoints(actors);
             }
             var containers = group.MapGroup("/containers").WithTags(ContainersName).RequireAuthorization();
             {
@@ -93,6 +99,25 @@ public static class PublicEndpoints
         }
 
         group.ProducesProblem(StatusCodes.Status500InternalServerError);
+    }
+
+    private static void MapActorEndpoints(RouteGroupBuilder actors)
+    {
+        actors.MapGet("{id}", Actors.Get)
+            .WithSummary("Get actor by ID")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getActor");
+
+        actors.MapPatch("{id}/enabled", WebApi.Routes.Endpoints.Actors.PatchEnabled)
+            .WithSummary("Enable or disable an actor")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("patchActorEnabled");
     }
 
     private static void MapGitAccountEndpoints(RouteGroupBuilder gitAccounts)

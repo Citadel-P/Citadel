@@ -39,6 +39,7 @@ internal static class AlertEventMappers
                 : Actor.FromPersistence(
                     id: alertEventDto.Actor_Id ?? alertEventDto.ResolvedByActorId ?? alertEventDto.AcknowledgedByActorId ?? Guid.Empty,
                     type: alertEventDto.Actor_Type is null ? ActorType.System : Enum.Parse<ActorType>(alertEventDto.Actor_Type),
-                    actorMetadata: new ActorMetadata(alertEventDto.Actor_Name ?? "System")));
+                    actorMetadata: new ActorMetadata(alertEventDto.Actor_Name ?? "System"),
+                    isEnabled: true));
     }
 }

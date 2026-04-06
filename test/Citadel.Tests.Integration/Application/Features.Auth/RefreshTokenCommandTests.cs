@@ -34,6 +34,21 @@ public class RefreshTokenCommandTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Handle_ReturnsFailure_WhenUserActorIsDisabled()
+    {
+        var refreshToken = await GetRefreshToken();
+        await SetActorEnabledAsync(Constants.DefaultAdminId, false);
+
+        Client.DefaultRequestHeaders.Authorization = null;
+        Client.DefaultRequestHeaders.Remove("Cookie");
+        Client.DefaultRequestHeaders.Add("Cookie", $"{Constants.RefreshToken}={refreshToken}");
+
+        var response = await Client.GetAsync("/api/v1/authentication/refresh", cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Handle_ReturnsFailure_WhenRefreshTokenIsInvalid()
     {
         // Arrange

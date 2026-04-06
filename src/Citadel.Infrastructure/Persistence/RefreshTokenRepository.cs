@@ -40,6 +40,8 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
                 SELECT Users.Id, Users.Name, Users.Email, Users.ActorId
                 FROM Token
                 JOIN Users ON Users.Id = Token.UserId
+                JOIN Actors userActor ON userActor.Id = Users.ActorId
+                WHERE userActor.IsEnabled = 1
             ),
             ActorScope AS (
                 SELECT TargetUser.ActorId
@@ -51,6 +53,8 @@ internal class RefreshTokenRepository(IDbConnection db, Func<IDbTransaction> tx)
                 FROM TargetUser
                 JOIN UsersTeams ON TargetUser.Id = UsersTeams.UserId
                 JOIN Teams ON Teams.Id = UsersTeams.TeamId
+                JOIN Actors teamActor ON teamActor.Id = Teams.ActorId
+                WHERE teamActor.IsEnabled = 1
             )
             SELECT 
                 TargetUser.Id, 

@@ -18,7 +18,8 @@ namespace Infrastructure.Migrations.Migrations
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
-                    Type = table.Column<string>(type: "TEXT", nullable: false)
+                    Type = table.Column<string>(type: "TEXT", nullable: false),
+                    IsEnabled = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: true)
                 },
                 constraints: table =>
                 {

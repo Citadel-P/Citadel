@@ -19,6 +19,7 @@ using System.Text.Json.Serialization;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
+using WebApi.Routes.Endpoints.Resources.Actors;
 using WebApi.Routes.Endpoints.Resources.Auth;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
@@ -32,6 +33,7 @@ using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.Stacks;
 using WebApi.Routes.Endpoints.Resources.Volumes;
 using DeleteImageResponseItem = Domain.Contracts.Resources.Images.DeleteImageResponseItem;
+using ApiActorView = WebApi.Routes.Endpoints.Resources.Actors.ActorView;
 
 namespace Application.Models;
 
@@ -45,6 +47,8 @@ namespace Application.Models;
 [JsonSerializable(typeof(Guid[]))]
 [JsonSerializable(typeof(ActorType))]
 [JsonSerializable(typeof(ActorType?))]
+[JsonSerializable(typeof(ApiActorView))]
+[JsonSerializable(typeof(PatchActorEnabledInput))]
 [JsonSerializable(typeof(List<Platform>))]
 [JsonSerializable(typeof(List<PlatformStat>))]
 [JsonSerializable(typeof(SwarmPeer))]

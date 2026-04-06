@@ -228,6 +228,26 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 
+    protected async Task SetActorEnabledAsync(Guid actorId, bool isEnabled)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var connectionFactory = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>();
+        await using var connection = connectionFactory.Create();
+        await using var transaction = await connection.BeginTransactionAsync(TestContext.Current.CancellationToken);
+
+        await ExecuteNonQueryAsync(
+            (SqliteConnection)connection,
+            transaction,
+            "UPDATE Actors SET IsEnabled = @IsEnabled WHERE Id = @Id;",
+            new Dictionary<string, object?>
+            {
+                ["@Id"] = actorId.ToString(),
+                ["@IsEnabled"] = isEnabled ? 1 : 0
+            });
+
+        await transaction.CommitAsync(TestContext.Current.CancellationToken);
+    }
+
     private void ReplaceTestServices(IServiceCollection services)
     {
         services.ReplaceService<IPlatformContainerCache>(new PlatformContainerCache());

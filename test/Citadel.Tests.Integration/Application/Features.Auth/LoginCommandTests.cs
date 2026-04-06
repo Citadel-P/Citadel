@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using Hosting.Common;
+using System.Text;
 
 namespace Tests.Integration.Application.Features.Auth;
 
@@ -60,5 +61,24 @@ public class LoginCommandTests : IntegrationTestBase
         // Assert
         var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         await VerifyJson(responseBody);
+    }
+
+    [Fact]
+    public async Task Handle_ReturnsFailure_WhenUserActorIsDisabled()
+    {
+        await SetActorEnabledAsync(Constants.DefaultAdminId, false);
+        Client.DefaultRequestHeaders.Authorization = null;
+
+        var userAuth = """
+        {
+          "email": "admin@citadel.local",
+          "password": "admin123"
+        }
+        """;
+        var content = new StringContent(userAuth, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/authentication/login", content, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
     }
 }

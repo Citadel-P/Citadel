@@ -122,52 +122,9 @@ internal sealed class StackRepository(IDbConnection db, Func<IDbTransaction> tx)
 
     public async Task<IEnumerable<Stack>> GetAuthorizedInfoAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken)
     {
-        const string sql = InfoSelect + " " + """
-            WHERE EXISTS (
-                WITH ActorScope AS (
-                    SELECT ActorId
-                    FROM Users
-                    WHERE Id = @UserId
-
-                    UNION
-
-                    SELECT t.ActorId
-                    FROM Teams t
-                    JOIN UsersTeams ut ON ut.TeamId = t.Id
-                    WHERE ut.UserId = @UserId
-                )
-                SELECT 1
-                FROM ActorRoles ar
-                JOIN Permissions p ON p.RoleId = ar.RoleId
-                WHERE ar.ActorId IN (SELECT ActorId FROM ActorScope)
-                  AND p.ResourceType = @ResourceType
-                  AND p.ResourceAction = @Action
-
-            )
-
-            OR EXISTS (
-                WITH ActorScope AS (
-                    SELECT ActorId
-                    FROM Users
-                    WHERE Id = @UserId
-
-                    UNION
-
-                    SELECT t.ActorId
-                    FROM Teams t
-                    JOIN UsersTeams ut ON ut.TeamId = t.Id
-                    WHERE ut.UserId = @UserId
-                )
-                SELECT 1
-                FROM ResourceAccesses ra
-                WHERE ra.ActorId IN (SELECT ActorId FROM ActorScope)
-                  AND ra.ResourceType = @ResourceType
-                  AND ra.ResourceId = s.Id
-                  AND ra.Action = @Action
-            )
-
-            ORDER BY s.CreatedAt DESC, s.Name ASC
-            """;
+        const string sql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + InfoSelect + " WHERE "
+            + AuthorizationSql.ResourcePredicatePrefix + "s.Id" + AuthorizationSql.ResourcePredicateSuffix
+            + " ORDER BY s.CreatedAt DESC, s.Name ASC";
 
         var result = await db.QueryAsync<StackDto>(sql, new
         {

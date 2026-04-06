@@ -45,6 +45,7 @@ public static class ApplicationModule
 
     private static IServiceCollection AddServices(this IServiceCollection services)
         => services
+            .AddMemoryCache()
             .AddSingleton<IJwtService, JwtService>()
             .AddSingleton<ISyncBarrier, SyncBarrier>()
             .AddAlertEvaluators()
