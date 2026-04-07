@@ -49,10 +49,14 @@ public interface IActorRepository
 public interface IUserRepository 
 {
     Task<bool> HasPermissionAsync(Guid userId, ResourceType resourceType, ResourceAction action, Guid? resourceId, CancellationToken ct);
-    Task<UserAuthInfo?> GetUserAuthInfoByEmailAsync(string email, CancellationToken cancellationToken);
+    Task<UserAuthInfo?> GetUserAuthInfoByEmailOrNameAsync(string emailOrName, CancellationToken cancellationToken);
     Task<User?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<IEnumerable<User>> GetAllAsync(CancellationToken cancellationToken);
+    Task<Hosting.Common.Models.PagedResult<UserDetails>> GetPagedAsync(int page, int pageSize, CancellationToken cancellationToken);
+    Task<Hosting.Common.Models.PagedResult<UserDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, CancellationToken cancellationToken);
     Task<IEnumerable<User>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<(bool NameExists, bool EmailExists)> GetConflictsAsync(string name, string email, Guid? excludeId, CancellationToken cancellationToken);
+    Task<(User? User, bool IsEnabled, bool NameExists, bool EmailExists)> GetUserUpdateStateAsync(Guid id, string? name, string? email, CancellationToken cancellationToken);
     Task<bool> ExistsByNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken);
     Task<bool> ExistsByEmailAsync(string email, Guid? excludeId, CancellationToken cancellationToken);
     Task<int> AddAsync(User user, CancellationToken cancellationToken);
@@ -60,6 +64,9 @@ public interface IUserRepository
     Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
     Task<IEnumerable<Guid>> GetTeamIdsAsync(Guid userId, CancellationToken cancellationToken);
     Task<IEnumerable<Guid>> GetActorRoleIdsAsync(Guid actorId, CancellationToken cancellationToken);
+    Task<(UserDetails? User, bool RoleExists, bool HasRole)> GetRoleAssignmentStateAsync(Guid userId, Guid roleId, CancellationToken cancellationToken);
+    Task<int> AddActorRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken);
+    Task<int> RemoveActorRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken);
     Task<int> ReplaceTeamsAsync(Guid userId, IEnumerable<Guid> teamIds, CancellationToken cancellationToken);
     Task<int> ReplaceActorRolesAsync(Guid actorId, IEnumerable<Guid> roleIds, CancellationToken cancellationToken);
 }

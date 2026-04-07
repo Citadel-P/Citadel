@@ -10,7 +10,7 @@ public class LoginCommandTests : IntegrationTestBase
     {
         var userAuth = """
         {
-          "email": "admin@citadel.local",
+          "emailOrName": "admin@citadel.local",
           "password": "admin123"
         }
         """;
@@ -26,11 +26,29 @@ public class LoginCommandTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Handle_ReturnsSuccess_WhenCredentialsValid_WithUserName()
+    {
+        var userAuth = """
+        {
+          "emailOrName": "Admin",
+          "password": "admin123"
+        }
+        """;
+        var content = new StringContent(userAuth, Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/api/v1/authentication/login", content, cancellationToken: TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.NotNull(responseBody);
+    }
+
+    [Fact]
     public async Task Handle_ReturnsFailure_WhenUserDoesNotExist()
     {
         var userAuth = """
         {
-          "email": "fake@email.com",
+          "emailOrName": "fake@email.com",
           "password": "invalid@Password"
         }
         """;
@@ -49,7 +67,7 @@ public class LoginCommandTests : IntegrationTestBase
     {
         var userAuth = """
         {
-          "email": "admin@citadel.local",
+          "emailOrName": "admin@citadel.local",
           "password": "invalid@Password"
         }
         """;
@@ -71,7 +89,7 @@ public class LoginCommandTests : IntegrationTestBase
 
         var userAuth = """
         {
-          "email": "admin@citadel.local",
+          "emailOrName": "admin@citadel.local",
           "password": "admin123"
         }
         """;

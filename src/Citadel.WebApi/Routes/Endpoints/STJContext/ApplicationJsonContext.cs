@@ -1,5 +1,4 @@
-﻿using Application.Features.Auth.Models;
-using Application.Features.Images.Queries;
+﻿using Application.Features.Images.Queries;
 using Domain;
 using Domain.Contracts.Resources.Compose;
 using Domain.Contracts.Resources.Containers;
@@ -20,6 +19,7 @@ using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Identity.Actors;
+using WebApi.Routes.Endpoints.Resources.Identity.Users;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
@@ -35,6 +35,8 @@ using DeleteImageResponseItem = Domain.Contracts.Resources.Images.DeleteImageRes
 using ApiActorView = WebApi.Routes.Endpoints.Resources.Identity.Actors.ActorView;
 using WebApi.Routes.Endpoints.Resources.Identity.Roles;
 using WebApi.Routes.Endpoints.Resources.Identity.Auth;
+using Application.Features.Identity.Auth.Models;
+using Application.Features.Identity.Auth.Models;
 
 namespace Application.Models;
 
@@ -233,6 +235,14 @@ namespace Application.Models;
 [JsonSerializable(typeof(GitRepositoryConfigView))]
 [JsonSerializable(typeof(RoleInput))]
 [JsonSerializable(typeof(PermissionInput))]
+[JsonSerializable(typeof(CreateUserInput))]
+[JsonSerializable(typeof(PatchUserInput))]
+[JsonSerializable(typeof(PatchUserInputPatchDocument))]
+[JsonSerializable(typeof(AddUserRoleInput))]
+[JsonSerializable(typeof(DeleteUsersInput))]
+[JsonSerializable(typeof(UsersFilter))]
+[JsonSerializable(typeof(UserView))]
+[JsonSerializable(typeof(UsersView))]
 [JsonSerializable(typeof(DeleteRolesInput))]
 [JsonSerializable(typeof(PatchRolePermissionsInput))]
 [JsonSerializable(typeof(PatchRolePermissionsInputPatchDocument))]

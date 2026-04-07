@@ -7,7 +7,7 @@ using LightResults;
 using Mediator;
 using Microsoft.AspNetCore.Http;
 
-namespace Application.Features.Auth.Commands;
+namespace Application.Features.Identity.Auth.Commands;
 
 public sealed record RefreshTokenCommand() : ICommand<Result<string>>;
 

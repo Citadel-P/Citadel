@@ -1,4 +1,5 @@
 ﻿using Domain.Contracts.Resources.Role;
+using Domain.Contracts.Resources.Identity;
 using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
@@ -221,6 +222,7 @@ public partial class StackJsonContext : JsonSerializerContext
     })]
 [JsonSerializable(typeof(PatchRolePermissionsModel))]
 [JsonSerializable(typeof(PatchPermissionModel))]
+[JsonSerializable(typeof(PatchUserModel))]
 public partial class RoleJsonContext : JsonSerializerContext
 {
 }

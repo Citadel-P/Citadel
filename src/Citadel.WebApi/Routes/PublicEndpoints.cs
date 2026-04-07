@@ -10,6 +10,7 @@ using WebApi.Routes.Endpoints.Resources.GitRepositories;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.Stacks;
+using WebApi.Routes.Endpoints.Resources.Identity.Users;
 using WebApi.Routes.Endpoints.Resources.Identity.Roles;
 
 namespace WebApi.Routes;
@@ -25,6 +26,7 @@ public static class PublicEndpoints
     const string AlertEventsName = nameof(AlertEvents);
     const string AlertRulesName = nameof(AlertRules);
     const string ActorsName = nameof(Actors);
+    const string UsersName = nameof(Users);
     const string RolesName = nameof(Roles);
     const string GitAccountsName = nameof(GitAccounts);
     const string GitRepositoriesName = nameof(GitRepositories);
@@ -44,6 +46,10 @@ public static class PublicEndpoints
             var actors = group.MapGroup("/actors").WithTags(ActorsName).RequireAuthorization();
             {
                 MapActorEndpoints(actors);
+            }
+            var users = group.MapGroup("/users").WithTags(UsersName).RequireAuthorization();
+            {
+                MapUserEndpoints(users);
             }
             var roles = group.MapGroup("/roles").WithTags(RolesName).RequireAuthorization();
             {
@@ -123,6 +129,76 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("patchActorEnabled");
+    }
+
+    private static void MapUserEndpoints(RouteGroupBuilder users)
+    {
+        users.MapGet("/", Users.List)
+            .WithSummary("Get all users")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("listUsers");
+
+        users.MapGet("{id}", Users.Get)
+            .WithSummary("Get user by ID")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getUser");
+
+        users.MapPost("/", Users.Create)
+            .WithSummary("Create a user")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("createUser");
+
+        users.MapPatch("{id}", Users.Patch)
+            .WithSummary("Update a user")
+            .Accepts<PatchUserInput>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("updateUser");
+
+        users.MapPost("{id}/roles", Users.AddRole)
+            .WithSummary("Assign a role to a user")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("addUserRole");
+
+        users.MapDelete("{id}/roles/{roleId}", Users.RemoveRole)
+            .WithSummary("Remove a role from a user")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("removeUserRole");
+
+        users.MapPost("/rename", Users.Rename)
+            .WithSummary("Rename a user")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("renameUser");
+
+        users.MapDelete("/", Users.Delete)
+            .WithSummary("Delete users")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("deleteUsers");
     }
 
     private static void MapGitAccountEndpoints(RouteGroupBuilder gitAccounts)

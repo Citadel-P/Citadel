@@ -1,5 +1,5 @@
-﻿using Application.Features.Auth.Commands;
-using Application.Features.Auth.Models;
+﻿using Application.Features.Identity.Auth.Commands;
+using Application.Features.Identity.Auth.Models;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;

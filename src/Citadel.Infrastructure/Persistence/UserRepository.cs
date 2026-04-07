@@ -4,6 +4,7 @@ using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
 using Hosting.Common;
+using Hosting.Common.Models;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using System.Data;
@@ -28,11 +29,130 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return result.ToDomain();
     }
 
+    public async Task<PagedResult<UserDetails>> GetPagedAsync(int page, int pageSize, CancellationToken cancellationToken)
+    {
+        const string selectSql = """
+            SELECT
+                u.Id,
+                u.Name,
+                u.Email,
+                u.Password,
+                u.ActorId,
+                a.IsEnabled,
+                u.CreatedAt,
+                u.CreatedByActorId
+            FROM Users u
+            JOIN Actors a ON a.Id = u.ActorId
+            ORDER BY u.Name ASC
+            LIMIT @PageSize OFFSET @Offset
+            """;
+        const string countSql = "SELECT COUNT(*) FROM Users";
+
+        var offset = (page - 1) * pageSize;
+        var totalCount = await db.QuerySingleAsync<int>(countSql, transaction: tx());
+        var rows = await db.QueryAsync<UserWithActorDto>(selectSql, new { PageSize = pageSize, Offset = offset, cancellationToken }, transaction: tx());
+
+        return new PagedResult<UserDetails>(rows.ToDetails(), totalCount, page, pageSize);
+    }
+
+    public async Task<PagedResult<UserDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        const string selectSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " " + """
+            SELECT
+                u.Id,
+                u.Name,
+                u.Email,
+                u.Password,
+                u.ActorId,
+                a.IsEnabled,
+                u.CreatedAt,
+                u.CreatedByActorId
+            FROM Users u
+            JOIN Actors a ON a.Id = u.ActorId
+            WHERE
+        """ + AuthorizationSql.ResourcePredicatePrefix + "u.Id" + AuthorizationSql.ResourcePredicateSuffix + " ORDER BY u.Name ASC LIMIT @PageSize OFFSET @Offset;";
+
+        const string countSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " SELECT COUNT(*) FROM Users u WHERE "
+            + AuthorizationSql.ResourcePredicatePrefix + "u.Id" + AuthorizationSql.ResourcePredicateSuffix + ";";
+
+        var offset = (page - 1) * pageSize;
+        var parameters = new
+        {
+            UserId = userId.Format(),
+            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
+            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            PageSize = pageSize,
+            Offset = offset,
+            cancellationToken
+        };
+
+        var totalCount = await db.QuerySingleAsync<int>(countSql, parameters, transaction: tx());
+        var rows = await db.QueryAsync<UserWithActorDto>(selectSql, parameters, transaction: tx());
+
+        return new PagedResult<UserDetails>(rows.ToDetails(), totalCount, page, pageSize);
+    }
+
     public async Task<IEnumerable<User>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM Users WHERE Id IN (SELECT value FROM json_each(@Ids)) ORDER BY Name ASC";
         var result = await db.QueryAsync<UserDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
         return result.ToDomain();
+    }
+
+    public async Task<(bool NameExists, bool EmailExists)> GetConflictsAsync(string name, string email, Guid? excludeId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT
+                EXISTS (SELECT 1 FROM Users WHERE Name = @Name AND (@ExcludeId IS NULL OR Id != @ExcludeId)) AS NameExists,
+                EXISTS (SELECT 1 FROM Users WHERE Email = @Email AND (@ExcludeId IS NULL OR Id != @ExcludeId)) AS EmailExists
+            """;
+
+        var result = await db.QuerySingleAsync<UserConflictCheckDto>(sql, new { Name = name, Email = email, ExcludeId = excludeId?.Format(), cancellationToken }, transaction: tx());
+        return (result.NameExists, result.EmailExists);
+    }
+
+    public async Task<(User? User, bool IsEnabled, bool NameExists, bool EmailExists)> GetUserUpdateStateAsync(Guid id, string? name, string? email, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            WITH TargetUser AS (
+                SELECT
+                    u.Id,
+                    u.Name,
+                    u.Email,
+                    u.Password,
+                    u.ActorId,
+                    a.IsEnabled,
+                    u.CreatedAt,
+                    u.CreatedByActorId
+                FROM Users u
+                JOIN Actors a ON a.Id = u.ActorId
+                WHERE u.Id = @Id
+            )
+            SELECT
+                tu.Id,
+                tu.Name,
+                tu.Email,
+                tu.Password,
+                tu.ActorId,
+                tu.IsEnabled,
+                tu.CreatedAt,
+                tu.CreatedByActorId,
+                CASE WHEN tu.Id IS NULL OR @Name IS NULL OR @Name = tu.Name THEN 0
+                     ELSE EXISTS (SELECT 1 FROM Users WHERE Name = @Name AND Id != @Id)
+                END AS NameExists,
+                CASE WHEN tu.Id IS NULL OR @Email IS NULL OR @Email = tu.Email THEN 0
+                     ELSE EXISTS (SELECT 1 FROM Users WHERE Email = @Email AND Id != @Id)
+                END AS EmailExists
+            FROM (SELECT 1) seed
+            LEFT JOIN TargetUser tu ON 1 = 1
+            """;
+
+        var result = await db.QuerySingleAsync<UserUpdateStateDto>(sql, new { Id = id.Format(), Name = name, Email = email, cancellationToken }, transaction: tx());
+        var user = result.Id.HasValue && result.ActorId.HasValue && result.CreatedAt.HasValue && result.CreatedByActorId.HasValue && result.Name is not null && result.Email is not null && result.Password is not null
+            ? User.FromPersistence(result.Id.Value, result.Name, result.Email, result.Password, result.ActorId.Value, result.CreatedByActorId.Value, result.CreatedAt.Value)
+            : null;
+
+        return (user, result.IsEnabled ?? false, result.NameExists, result.EmailExists);
     }
 
     public Task<bool> ExistsByNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken)
@@ -85,6 +205,67 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
     {
         const string sql = "SELECT RoleId FROM ActorRoles WHERE ActorId = @ActorId";
         return db.QueryAsync<Guid>(sql, new { ActorId = actorId.Format(), cancellationToken }, transaction: tx());
+    }
+
+    public async Task<(UserDetails? User, bool RoleExists, bool HasRole)> GetRoleAssignmentStateAsync(Guid userId, Guid roleId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            WITH TargetUser AS (
+                SELECT
+                    u.Id,
+                    u.Name,
+                    u.Email,
+                    u.ActorId,
+                    a.IsEnabled,
+                    u.CreatedAt,
+                    u.CreatedByActorId
+                FROM Users u
+                JOIN Actors a ON a.Id = u.ActorId
+                WHERE u.Id = @UserId
+            ),
+            TargetRole AS (
+                SELECT 1 AS ExistsFlag
+                FROM Roles
+                WHERE Id = @RoleId
+            ),
+            ExistingAssignment AS (
+                SELECT 1 AS ExistsFlag
+                FROM ActorRoles ar
+                JOIN TargetUser tu ON tu.ActorId = ar.ActorId
+                WHERE ar.RoleId = @RoleId
+            )
+            SELECT
+                tu.Id,
+                tu.Name,
+                tu.Email,
+                tu.ActorId,
+                tu.IsEnabled,
+                tu.CreatedAt,
+                tu.CreatedByActorId,
+                EXISTS (SELECT 1 FROM TargetRole) AS RoleExists,
+                EXISTS (SELECT 1 FROM ExistingAssignment) AS HasRole
+            FROM (SELECT 1) seed
+            LEFT JOIN TargetUser tu ON 1 = 1
+            """;
+
+        var result = await db.QuerySingleAsync<UserRoleAssignmentStateDto>(sql, new { UserId = userId.Format(), RoleId = roleId.Format(), cancellationToken }, transaction: tx());
+        var user = result.Id.HasValue && result.ActorId.HasValue && result.IsEnabled.HasValue && result.CreatedAt.HasValue && result.CreatedByActorId.HasValue
+            ? new UserDetails(result.Id.Value, result.Name!, result.Email!, result.ActorId.Value, result.IsEnabled.Value, result.CreatedAt.Value, result.CreatedByActorId.Value)
+            : null;
+
+        return (user, result.RoleExists, result.HasRole);
+    }
+
+    public Task<int> AddActorRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken)
+    {
+        const string sql = "INSERT INTO ActorRoles (ActorId, RoleId) VALUES (@ActorId, @RoleId)";
+        return db.ExecuteAsync(sql, new { ActorId = actorId.Format(), RoleId = roleId.Format(), cancellationToken }, transaction: tx());
+    }
+
+    public Task<int> RemoveActorRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken)
+    {
+        const string sql = "DELETE FROM ActorRoles WHERE ActorId = @ActorId AND RoleId = @RoleId";
+        return db.ExecuteAsync(sql, new { ActorId = actorId.Format(), RoleId = roleId.Format(), cancellationToken }, transaction: tx());
     }
 
     public async Task<int> ReplaceTeamsAsync(Guid userId, IEnumerable<Guid> teamIds, CancellationToken cancellationToken)
@@ -172,7 +353,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         });
     }
 
-    public async Task<UserAuthInfo?> GetUserAuthInfoByEmailAsync(string email, CancellationToken cancellationToken)
+    public async Task<UserAuthInfo?> GetUserAuthInfoByEmailOrNameAsync(string emailOrName, CancellationToken cancellationToken)
     {
         const string sql =
             """
@@ -180,7 +361,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
                 SELECT Users.*
                 FROM Users
                 JOIN Actors userActor ON userActor.Id = Users.ActorId
-                WHERE Email = @Email
+                WHERE (Users.Email = @EmailOrName OR Users.Name = @EmailOrName)
                   AND userActor.IsEnabled = 1
                 LIMIT 1
             ),
@@ -217,7 +398,7 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
             """;
 
             var result = await db.QueryAsync<UserAuthInfoDto>(sql,
-            new { Email = email },
+            new { EmailOrName = emailOrName },
             transaction: tx());
 
         return result

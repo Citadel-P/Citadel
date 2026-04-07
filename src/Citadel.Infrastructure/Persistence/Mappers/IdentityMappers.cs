@@ -1,4 +1,5 @@
 using Domain.Entities.Identity;
+using Domain.Contracts.Resources.Identity;
 using Infrastructure.Persistence.Dtos;
 
 namespace Infrastructure.Persistence.Mappers;
@@ -10,6 +11,12 @@ internal static class IdentityMappers
 
     internal static IEnumerable<User> ToDomain(this IEnumerable<UserDto> dtos)
         => dtos.Select(ToDomain);
+
+    internal static UserDetails ToDetails(this UserWithActorDto dto)
+        => new(dto.Id, dto.Name, dto.Email, dto.ActorId, dto.IsEnabled, dto.CreatedAt, dto.CreatedByActorId);
+
+    internal static IEnumerable<UserDetails> ToDetails(this IEnumerable<UserWithActorDto> dtos)
+        => dtos.Select(ToDetails);
 
     internal static Team ToDomain(this TeamDto dto)
         => Team.FromPersistence(dto.Id, dto.Name, dto.ActorId);

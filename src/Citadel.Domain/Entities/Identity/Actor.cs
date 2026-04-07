@@ -10,6 +10,17 @@ public sealed class Actor
     public ActorMetadata ActorMetadata { get; private set; }
     public bool IsEnabled { get; private set; }
 
+    public static Actor Create(ActorType type, ActorMetadata actorMetadata, bool isEnabled = true)
+    {
+        return new Actor
+        {
+            Id = Guid.CreateVersion7(),
+            Type = type,
+            ActorMetadata = actorMetadata,
+            IsEnabled = isEnabled
+        };
+    }
+
     public Result SetEnabled(bool isEnabled)
     {
         if (Type is not ActorType.User and not ActorType.Team)

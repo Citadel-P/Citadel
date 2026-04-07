@@ -1,3 +1,3 @@
-﻿namespace Application.Features.Auth.Models;
+﻿namespace Application.Features.Identity.Auth.Models;
 
 public sealed record LoginResponse(string AccessToken);

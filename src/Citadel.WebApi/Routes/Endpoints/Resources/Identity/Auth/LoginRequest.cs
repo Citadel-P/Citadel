@@ -1,8 +1,8 @@
-﻿using Application.Features.Auth.Commands;
+﻿using Application.Features.Identity.Auth.Commands;
 
 namespace WebApi.Routes.Endpoints.Resources.Identity.Auth;
 
-public sealed record LoginRequest(string Email, string Password)
+public sealed record LoginRequest(string EmailOrName, string Password)
 {
-    internal LoginCommand ToQuery() => new(Email, Password);
+    internal LoginCommand ToQuery() => new(EmailOrName, Password);
 }
