@@ -1,6 +1,7 @@
 ﻿using Dapper;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
+using Domain;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using Infrastructure.TypeHandlers;
@@ -10,6 +11,18 @@ namespace Infrastructure.Persistence;
 
 internal sealed class ActorRepository(IDbConnection db, Func<IDbTransaction> tx) : IActorRepository
 {
+    public Task<int> AddAsync(Actor actor, CancellationToken cancellationToken)
+    {
+        const string sql = "INSERT INTO Actors (Id, Type, IsEnabled) VALUES (@Id, @Type, @IsEnabled)";
+        return db.ExecuteAsync(sql, new
+        {
+            Id = actor.Id.Format(),
+            Type = actor.Type.ToString(),
+            actor.IsEnabled,
+            cancellationToken
+        }, transaction: tx());
+    }
+
     public async Task<Actor?> GetById(Guid id, CancellationToken cancellationToken)
     {
         const string sql = """

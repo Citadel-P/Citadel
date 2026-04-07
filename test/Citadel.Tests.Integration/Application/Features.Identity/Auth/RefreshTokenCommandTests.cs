@@ -1,7 +1,7 @@
 ﻿using System.Text;
 using Hosting.Common;
 
-namespace Tests.Integration.Application.Features.Auth;
+namespace Tests.Integration.Application.Features.Identity.Auth;
 
 public class RefreshTokenCommandTests : IntegrationTestBase
 {

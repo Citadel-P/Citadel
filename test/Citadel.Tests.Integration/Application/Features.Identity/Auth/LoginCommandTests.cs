@@ -1,7 +1,7 @@
 ﻿using Hosting.Common;
 using System.Text;
 
-namespace Tests.Integration.Application.Features.Auth;
+namespace Tests.Integration.Application.Features.Identity.Auth;
 
 public class LoginCommandTests : IntegrationTestBase
 {

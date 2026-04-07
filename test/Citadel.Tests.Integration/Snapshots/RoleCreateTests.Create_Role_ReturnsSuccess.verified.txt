@@ -1,0 +1,14 @@
+﻿{
+  id: Guid_1,
+  name: Role-New,
+  permissions: [
+    {
+      resourceType: Registry,
+      resourceAction: View
+    },
+    {
+      resourceType: Role,
+      resourceAction: Update
+    }
+  ]
+}

@@ -20,6 +20,7 @@ internal class UnitOfWork : IUnitOfWork
 
         Users = new Lazy<IUserRepository>(() => new UserRepository(connection, GetTransaction));
         Teams = new Lazy<ITeamRepository>(() => new TeamRepository(connection, GetTransaction));
+        Roles = new Lazy<IRoleRepository>(() => new RoleRepository(connection, GetTransaction));
         Actors = new Lazy<IActorRepository>(() => new ActorRepository(connection, GetTransaction));
         Images = new Lazy<IImageRepository>(() => new ImageRepository(connection, GetTransaction));
         Stacks = new Lazy<IStackRepository>(() => new StackRepository(connection, GetTransaction));
@@ -39,6 +40,7 @@ internal class UnitOfWork : IUnitOfWork
 
     private Lazy<IUserRepository> Users { get; }
     private Lazy<ITeamRepository> Teams { get; }
+    private Lazy<IRoleRepository> Roles { get; }
     private Lazy<IImageRepository> Images { get; }
     private Lazy<IActorRepository> Actors { get; }
     private Lazy<IStackRepository> Stacks { get; }
@@ -57,6 +59,7 @@ internal class UnitOfWork : IUnitOfWork
 
     IUserRepository IUnitOfWork.Users => Users.Value;
     ITeamRepository IUnitOfWork.Teams => Teams.Value;
+    IRoleRepository IUnitOfWork.Roles => Roles.Value;
     IImageRepository IUnitOfWork.Images => Images.Value;
     IActorRepository IUnitOfWork.Actors => Actors.Value;
     IStackRepository IUnitOfWork.Stacks => Stacks.Value;

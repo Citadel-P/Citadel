@@ -1,0 +1,11 @@
+﻿{
+  type: https://tools.ietf.org/html/rfc9110#section-15.5.1,
+  title: One or more validation errors occurred.,
+  status: 400,
+  errors: {
+    Patch: [
+      Invalid patch JSON: The JSON value could not be converted to Domain.Contracts.Resources.Role.PatchPermissionModel. Path: $.permissions[0].resourceAction | LineNumber: 0 | BytePositionInLine: 62.
+    ]
+  },
+  traceId: {Scrubbed}
+}

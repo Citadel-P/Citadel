@@ -1,7 +1,7 @@
 using Domain;
 using Domain.Entities.Identity;
 
-namespace WebApi.Routes.Endpoints.Resources.Actors;
+namespace WebApi.Routes.Endpoints.Resources.Identity.Actors;
 
 public sealed record ActorView(
     Guid Id,

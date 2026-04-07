@@ -7,7 +7,7 @@ using LightResults;
 using Mediator;
 using Microsoft.AspNetCore.Http;
 
-namespace Application.Features.Actors.Queries;
+namespace Application.Features.Identity.Actors.Queries;
 
 public sealed record GetActor(Guid Id) : IQuery<Result<Actor>>
 {

@@ -3,7 +3,7 @@ using Application.Features.Auth.Models;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
-using WebApi.Routes.Endpoints.Resources.Auth;
+using WebApi.Routes.Endpoints.Resources.Identity.Auth;
 
 namespace WebApi.Routes.Endpoints;
 

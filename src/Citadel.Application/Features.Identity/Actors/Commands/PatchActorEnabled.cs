@@ -7,7 +7,7 @@ using LightResults;
 using Mediator;
 using Microsoft.AspNetCore.Http;
 
-namespace Application.Features.Actors.Commands;
+namespace Application.Features.Identity.Actors.Commands;
 
 public sealed record PatchActorEnabled(Guid Id, bool IsEnabled) : ICommand<Result<Actor>>
 {

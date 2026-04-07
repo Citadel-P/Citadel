@@ -27,6 +27,33 @@ public sealed class User(
     public ICollection<Team> Teams { get; } = [];
     public ICollection<RefreshToken> RefreshTokens { get; } = [];
 
+    public void UpdateMetadata(string? name = null, string? email = null)
+    {
+        if (name is not null)
+            Name = name;
+
+        if (email is not null)
+            Email = email;
+    }
+
+    public void SetPassword(string password) => Password = HashPassword(password);
+
+    public static User FromPersistence(
+        Guid id,
+        string name,
+        string email,
+        string password,
+        Guid actorId,
+        Guid createdByActorId,
+        DateTime createdAt)
+    {
+        return new User(name, email, password, actorId, createdByActorId, createdAt)
+        {
+            Id = id,
+            Password = password
+        };
+    }
+
     /// <summary>
     /// Check user password is valid
     /// </summary>

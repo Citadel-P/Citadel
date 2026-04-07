@@ -13,4 +13,14 @@ public class Team
         Name = name,
         ActorId = actorId
     };
+
+    public static Team FromPersistence(Guid id, string name, Guid actorId)
+        => new()
+        {
+            Id = id,
+            Name = name,
+            ActorId = actorId
+        };
+
+    public void Rename(string name) => Name = name;
 }

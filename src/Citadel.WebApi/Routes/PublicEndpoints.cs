@@ -4,13 +4,13 @@ using Hosting.OpenApi;
 using WebApi.Routes.Endpoints;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Alerters;
-using WebApi.Routes.Endpoints.Resources.Actors;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
 using WebApi.Routes.Endpoints.Resources.GitRepositories;
 using WebApi.Routes.Endpoints.Resources.Platforms;
 using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.Stacks;
+using WebApi.Routes.Endpoints.Resources.Identity.Roles;
 
 namespace WebApi.Routes;
 
@@ -25,6 +25,7 @@ public static class PublicEndpoints
     const string AlertEventsName = nameof(AlertEvents);
     const string AlertRulesName = nameof(AlertRules);
     const string ActorsName = nameof(Actors);
+    const string RolesName = nameof(Roles);
     const string GitAccountsName = nameof(GitAccounts);
     const string GitRepositoriesName = nameof(GitRepositories);
     const string RegistriesName = nameof(Registries);
@@ -43,6 +44,10 @@ public static class PublicEndpoints
             var actors = group.MapGroup("/actors").WithTags(ActorsName).RequireAuthorization();
             {
                 MapActorEndpoints(actors);
+            }
+            var roles = group.MapGroup("/roles").WithTags(RolesName).RequireAuthorization();
+            {
+                MapRoleEndpoints(roles);
             }
             var containers = group.MapGroup("/containers").WithTags(ContainersName).RequireAuthorization();
             {
@@ -170,6 +175,58 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("deleteGitAccounts");
+    }
+
+    private static void MapRoleEndpoints(RouteGroupBuilder roles)
+    {
+        roles.MapGet("/", Roles.List)
+            .WithSummary("Get all roles")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("listRoles");
+
+        roles.MapGet("{id}", Roles.Get)
+            .WithSummary("Get role by ID")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getRole");
+
+        roles.MapPost("/", Roles.Create)
+            .WithSummary("Create a role")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("createRole");
+
+        roles.MapPatch("{id}/permissions", Roles.PatchPermissions)
+            .WithSummary("Update role permissions")
+            .Accepts<PatchRolePermissionsInput>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("updateRolePermissions");
+
+        roles.MapPost("/rename", Roles.Rename)
+            .WithSummary("Rename a role")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("renameRole");
+
+        roles.MapDelete("/", Roles.Delete)
+            .WithSummary("Delete roles")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("deleteRoles");
     }
 
     private static void MapGitRepositoryEndpoints(RouteGroupBuilder gitRepositories)

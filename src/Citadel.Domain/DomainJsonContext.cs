@@ -1,11 +1,14 @@
-﻿using Domain.Entities;
+﻿using Domain.Contracts.Resources.Role;
+using Domain.Entities;
 using Domain.Entities.Activities;
 using Domain.Entities.Alerts;
 using Domain.Entities.Deployments;
 using Domain.Entities.Git;
+using Domain.Entities.Identity;
 using Domain.Entities.Platforms;
 using Domain.Entities.Registries;
 using Domain.Entities.Stacks;
+using Hosting.Common;
 using System.Text.Json.Serialization;
 
 namespace Domain;
@@ -204,5 +207,20 @@ public partial class GitJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(ImageUpdateState))]
 [JsonSerializable(typeof(IReadOnlyList<ImageUpdateState>))]
 public partial class StackJsonContext : JsonSerializerContext
+{
+}
+
+
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Default,
+    PropertyNameCaseInsensitive = true,
+    Converters = new[]
+    {
+        typeof(JsonStringEnumConverter<ResourceType>),
+        typeof(JsonStringEnumConverter<ResourceAction>)
+    })]
+[JsonSerializable(typeof(PatchRolePermissionsModel))]
+[JsonSerializable(typeof(PatchPermissionModel))]
+public partial class RoleJsonContext : JsonSerializerContext
 {
 }

@@ -2,15 +2,121 @@
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
+using Domain.Entities.Identity;
 using Hosting.Common;
 using Infrastructure.Persistence.Dtos;
+using Infrastructure.Persistence.Mappers;
 using System.Data;
+using System.Text.Json;
 using static Infrastructure.TypeHandlers.FormattingExtensions;
 
 namespace Infrastructure.Persistence;
 
 internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) : IUserRepository
 {
+    public async Task<User?> GetAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT * FROM Users WHERE Id = @Id LIMIT 1";
+        var result = await db.QuerySingleOrDefaultAsync<UserDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        return result?.ToDomain();
+    }
+
+    public async Task<IEnumerable<User>> GetAllAsync(CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT * FROM Users ORDER BY Name ASC";
+        var result = await db.QueryAsync<UserDto>(sql, transaction: tx());
+        return result.ToDomain();
+    }
+
+    public async Task<IEnumerable<User>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT * FROM Users WHERE Id IN (SELECT value FROM json_each(@Ids)) ORDER BY Name ASC";
+        var result = await db.QueryAsync<UserDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
+        return result.ToDomain();
+    }
+
+    public Task<bool> ExistsByNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT EXISTS (SELECT 1 FROM Users WHERE Name = @Name AND (@ExcludeId IS NULL OR Id != @ExcludeId))";
+        return db.ExecuteScalarAsync<bool>(sql, new { Name = name, ExcludeId = excludeId?.Format(), cancellationToken }, transaction: tx());
+    }
+
+    public Task<bool> ExistsByEmailAsync(string email, Guid? excludeId, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT EXISTS (SELECT 1 FROM Users WHERE Email = @Email AND (@ExcludeId IS NULL OR Id != @ExcludeId))";
+        return db.ExecuteScalarAsync<bool>(sql, new { Email = email, ExcludeId = excludeId?.Format(), cancellationToken }, transaction: tx());
+    }
+
+    public Task<int> AddAsync(User user, CancellationToken cancellationToken)
+    {
+        const string sql = "INSERT INTO Users (Id, Name, Email, Password, ActorId, CreatedAt, CreatedByActorId) VALUES (@Id, @Name, @Email, @Password, @ActorId, @CreatedAt, @CreatedByActorId)";
+        return db.ExecuteAsync(sql, new
+        {
+            Id = user.Id.Format(),
+            user.Name,
+            user.Email,
+            user.Password,
+            ActorId = user.ActorId.Format(),
+            user.CreatedAt,
+            CreatedByActorId = user.CreatedByActorId.Format(),
+            cancellationToken
+        }, transaction: tx());
+    }
+
+    public Task<int> UpdateAsync(User user, CancellationToken cancellationToken)
+    {
+        const string sql = "UPDATE Users SET Name = @Name, Email = @Email, Password = @Password WHERE Id = @Id";
+        return db.ExecuteAsync(sql, new { Id = user.Id.Format(), user.Name, user.Email, user.Password, cancellationToken }, transaction: tx());
+    }
+
+    public Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
+    {
+        const string sql = "DELETE FROM Users WHERE Id IN (SELECT value FROM json_each(@Ids))";
+        return db.ExecuteAsync(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
+    }
+
+    public Task<IEnumerable<Guid>> GetTeamIdsAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT TeamId FROM UsersTeams WHERE UserId = @UserId";
+        return db.QueryAsync<Guid>(sql, new { UserId = userId.Format(), cancellationToken }, transaction: tx());
+    }
+
+    public Task<IEnumerable<Guid>> GetActorRoleIdsAsync(Guid actorId, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT RoleId FROM ActorRoles WHERE ActorId = @ActorId";
+        return db.QueryAsync<Guid>(sql, new { ActorId = actorId.Format(), cancellationToken }, transaction: tx());
+    }
+
+    public async Task<int> ReplaceTeamsAsync(Guid userId, IEnumerable<Guid> teamIds, CancellationToken cancellationToken)
+    {
+        const string deleteSql = "DELETE FROM UsersTeams WHERE UserId = @UserId";
+        await db.ExecuteAsync(deleteSql, new { UserId = userId.Format(), cancellationToken }, transaction: tx());
+
+        var rows = 0;
+        foreach (var teamId in teamIds)
+        {
+            const string insertSql = "INSERT INTO UsersTeams (UserId, TeamId) VALUES (@UserId, @TeamId)";
+            rows += await db.ExecuteAsync(insertSql, new { UserId = userId.Format(), TeamId = teamId.Format(), cancellationToken }, transaction: tx());
+        }
+
+        return rows;
+    }
+
+    public async Task<int> ReplaceActorRolesAsync(Guid actorId, IEnumerable<Guid> roleIds, CancellationToken cancellationToken)
+    {
+        const string deleteSql = "DELETE FROM ActorRoles WHERE ActorId = @ActorId";
+        await db.ExecuteAsync(deleteSql, new { ActorId = actorId.Format(), cancellationToken }, transaction: tx());
+
+        var rows = 0;
+        foreach (var roleId in roleIds)
+        {
+            const string insertSql = "INSERT INTO ActorRoles (ActorId, RoleId) VALUES (@ActorId, @RoleId)";
+            rows += await db.ExecuteAsync(insertSql, new { ActorId = actorId.Format(), RoleId = roleId.Format(), cancellationToken }, transaction: tx());
+        }
+
+        return rows;
+    }
+
     public async Task<bool> HasPermissionAsync(Guid userId, ResourceType resourceType, ResourceAction action, Guid? resourceId, CancellationToken ct)
     {
         const string sql = """

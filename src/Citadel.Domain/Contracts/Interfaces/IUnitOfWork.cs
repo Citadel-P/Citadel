@@ -18,6 +18,7 @@ public interface IUnitOfWork : IAsyncDisposable
 {
     IUserRepository Users { get; }
     ITeamRepository Teams { get; }
+    IRoleRepository Roles { get; }
     IActorRepository Actors { get; }
     IImageRepository Images { get; }
     IPlatformRepository Platforms { get; }
@@ -41,6 +42,7 @@ public interface IUnitOfWork : IAsyncDisposable
 public interface IActorRepository
 {
     Task<Actor?> GetById(Guid id, CancellationToken cancellationToken);
+    Task<int> AddAsync(Actor actor, CancellationToken cancellationToken);
     Task<int> UpdateAsync(Actor actor, CancellationToken cancellationToken);
 }
 
@@ -48,6 +50,18 @@ public interface IUserRepository
 {
     Task<bool> HasPermissionAsync(Guid userId, ResourceType resourceType, ResourceAction action, Guid? resourceId, CancellationToken ct);
     Task<UserAuthInfo?> GetUserAuthInfoByEmailAsync(string email, CancellationToken cancellationToken);
+    Task<User?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<User>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<User>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<bool> ExistsByNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken);
+    Task<bool> ExistsByEmailAsync(string email, Guid? excludeId, CancellationToken cancellationToken);
+    Task<int> AddAsync(User user, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(User user, CancellationToken cancellationToken);
+    Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<IEnumerable<Guid>> GetTeamIdsAsync(Guid userId, CancellationToken cancellationToken);
+    Task<IEnumerable<Guid>> GetActorRoleIdsAsync(Guid actorId, CancellationToken cancellationToken);
+    Task<int> ReplaceTeamsAsync(Guid userId, IEnumerable<Guid> teamIds, CancellationToken cancellationToken);
+    Task<int> ReplaceActorRolesAsync(Guid actorId, IEnumerable<Guid> roleIds, CancellationToken cancellationToken);
 }
 
 public interface IRegistryRepository 
@@ -166,7 +180,34 @@ public interface IPlatformStatRepository
     Task<int> RemoveOlderThanAsync(long createdBeforeEpochSeconds, CancellationToken cancellationToken);
 }
 
-public interface ITeamRepository { }
+public interface ITeamRepository
+{
+    Task<Team?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<Team>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Team>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<bool> ExistsByNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken);
+    Task<int> AddAsync(Team team, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(Team team, CancellationToken cancellationToken);
+    Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<IEnumerable<Guid>> GetUserIdsAsync(Guid teamId, CancellationToken cancellationToken);
+    Task<IEnumerable<Guid>> GetActorRoleIdsAsync(Guid actorId, CancellationToken cancellationToken);
+    Task<int> ReplaceMembersAsync(Guid teamId, IEnumerable<Guid> userIds, CancellationToken cancellationToken);
+    Task<int> ReplaceActorRolesAsync(Guid actorId, IEnumerable<Guid> roleIds, CancellationToken cancellationToken);
+}
+
+public interface IRoleRepository
+{
+    Task<Role?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<IEnumerable<Role>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<Role>> GetAuthorizedAsync(Guid userId, ResourceType resourceType, ResourceAction action, CancellationToken cancellationToken);
+    Task<IEnumerable<Role>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<bool> ExistsByNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken);
+    Task<int> AddAsync(Role role, CancellationToken cancellationToken);
+    Task<int> RenameAsync(Role role, CancellationToken cancellationToken);
+    Task<int> RemoveRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
+    Task<IEnumerable<Permission>> GetPermissionsAsync(Guid roleId, CancellationToken cancellationToken);
+    Task<int> ReplacePermissionsAsync(Guid roleId, IEnumerable<Permission> permissions, CancellationToken cancellationToken);
+}
 
 public interface IPlatformRepository 
 {

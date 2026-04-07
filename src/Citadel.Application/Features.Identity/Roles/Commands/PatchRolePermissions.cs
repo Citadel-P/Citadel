@@ -1,0 +1,64 @@
+using Domain;
+using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Role;
+using FluentValidation;
+using Hosting.Common;
+using Hosting.Common.Attributes;
+using Hosting.Common.ErrorTypes;
+using Hosting.Common.MergePatch;
+using LightResults;
+using Mediator;
+
+namespace Application.Features.Identity.Roles.Commands;
+
+[RequirePermission(ResourceType.Role, ResourceAction.Update)]
+public sealed record PatchRolePermissions(Guid Id, JsonMergePatchDocument<PatchRolePermissionsModel> Patch) : ICommand<Result<RoleDetails>>
+{
+    internal sealed class Validator : PatchCommandValidator<PatchRolePermissions, PatchRolePermissionsModel>
+    {
+        public Validator()
+            : base(
+                patchSelector: x => x.Patch,
+                jsonTypeInfo: RoleJsonContext.Default.PatchRolePermissionsModel,
+                modelValidator: new PatchRolePermissionsModelValidator())
+        {
+        }
+    }
+
+    internal sealed class PatchRolePermissionsModelValidator : AbstractValidator<PatchRolePermissionsModel>
+    {
+        public PatchRolePermissionsModelValidator()
+        {
+            RuleFor(x => x.Permissions).NotNull();
+            RuleForEach(x => x.Permissions).SetValidator(new PermissionInputValidator());
+        }
+    }
+
+    internal sealed class PermissionInputValidator : AbstractValidator<PatchPermissionModel>
+    {
+        public PermissionInputValidator()
+        {
+            RuleFor(x => x.ResourceType).IsInEnum();
+            RuleFor(x => x.ResourceAction).IsInEnum();
+        }
+    }
+}
+
+internal sealed class PatchRolePermissionsHandler(IUnitOfWork unitOfWork) : ICommandHandler<PatchRolePermissions, Result<RoleDetails>>
+{
+    public async ValueTask<Result<RoleDetails>> Handle(PatchRolePermissions command, CancellationToken cancellationToken)
+    {
+        var role = await unitOfWork.Roles.GetAsync(command.Id, cancellationToken);
+        if (role is null)
+            return Result.Failure<RoleDetails>(new NotFoundError("The provided role does not exist"));
+
+        var current = new PatchRolePermissionsModel(role.Permissions.Select(x => new PatchPermissionModel(x.ResourceType, x.ResourceAction)));
+        var patched = command.Patch.ApplyTo(current, RoleJsonContext.Default.PatchRolePermissionsModel);
+        var permissions = patched.Permissions.Select(x => x.ToDomain(role.Id));
+
+        await unitOfWork.Roles.ReplacePermissionsAsync(role.Id, permissions, cancellationToken);
+        role.SetPermissions(permissions);
+        await unitOfWork.CommitAsync(cancellationToken);
+        return new RoleDetails(role.Id, role.Name, role.Permissions);
+    }
+}

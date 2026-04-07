@@ -19,8 +19,7 @@ using System.Text.Json.Serialization;
 using WebApi.Routes.Endpoints.Resources;
 using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
-using WebApi.Routes.Endpoints.Resources.Actors;
-using WebApi.Routes.Endpoints.Resources.Auth;
+using WebApi.Routes.Endpoints.Resources.Identity.Actors;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
@@ -33,7 +32,9 @@ using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.Stacks;
 using WebApi.Routes.Endpoints.Resources.Volumes;
 using DeleteImageResponseItem = Domain.Contracts.Resources.Images.DeleteImageResponseItem;
-using ApiActorView = WebApi.Routes.Endpoints.Resources.Actors.ActorView;
+using ApiActorView = WebApi.Routes.Endpoints.Resources.Identity.Actors.ActorView;
+using WebApi.Routes.Endpoints.Resources.Identity.Roles;
+using WebApi.Routes.Endpoints.Resources.Identity.Auth;
 
 namespace Application.Models;
 
@@ -230,6 +231,15 @@ namespace Application.Models;
 [JsonSerializable(typeof(DeleteAlertChannelsInput))]
 [JsonSerializable(typeof(AlertRuleConfigView))]
 [JsonSerializable(typeof(GitRepositoryConfigView))]
+[JsonSerializable(typeof(RoleInput))]
+[JsonSerializable(typeof(PermissionInput))]
+[JsonSerializable(typeof(DeleteRolesInput))]
+[JsonSerializable(typeof(PatchRolePermissionsInput))]
+[JsonSerializable(typeof(PatchRolePermissionsInputPatchDocument))]
+[JsonSerializable(typeof(PermissionView))]
+[JsonSerializable(typeof(RoleView))]
+[JsonSerializable(typeof(RolesView))]
+[JsonSerializable(typeof(IEnumerable<RoleView>))]
 [JsonSerializable(typeof(RenameResource))]
 [JsonSerializable(typeof(PatchDeploymentInput))]
 [JsonSerializable(typeof(PatchResourceMetadata))]

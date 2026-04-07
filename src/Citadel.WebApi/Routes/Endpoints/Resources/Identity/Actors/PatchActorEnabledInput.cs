@@ -1,6 +1,6 @@
-using Application.Features.Actors.Commands;
+using Application.Features.Identity.Actors.Commands;
 
-namespace WebApi.Routes.Endpoints.Resources.Actors;
+namespace WebApi.Routes.Endpoints.Resources.Identity.Actors;
 
 public sealed record PatchActorEnabledInput(bool IsEnabled)
 {

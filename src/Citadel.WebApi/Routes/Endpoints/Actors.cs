@@ -1,10 +1,10 @@
-using Application.Features.Actors.Queries;
+using Application.Features.Identity.Actors.Queries;
 using Hosting.Extensions;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
-using WebApi.Routes.Endpoints.Resources.Actors;
+using WebApi.Routes.Endpoints.Resources.Identity.Actors;
 
 namespace WebApi.Routes.Endpoints;
 
