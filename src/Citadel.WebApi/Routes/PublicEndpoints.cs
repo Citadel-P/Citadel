@@ -12,6 +12,7 @@ using WebApi.Routes.Endpoints.Resources.Registries;
 using WebApi.Routes.Endpoints.Resources.Stacks;
 using WebApi.Routes.Endpoints.Resources.Identity.Users;
 using WebApi.Routes.Endpoints.Resources.Identity.Roles;
+using WebApi.Routes.Endpoints.Resources.Identity.Teams;
 
 namespace WebApi.Routes;
 
@@ -27,6 +28,7 @@ public static class PublicEndpoints
     const string AlertRulesName = nameof(AlertRules);
     const string ActorsName = nameof(Actors);
     const string UsersName = nameof(Users);
+    const string TeamsName = nameof(Teams);
     const string RolesName = nameof(Roles);
     const string GitAccountsName = nameof(GitAccounts);
     const string GitRepositoriesName = nameof(GitRepositories);
@@ -50,6 +52,10 @@ public static class PublicEndpoints
             var users = group.MapGroup("/users").WithTags(UsersName).RequireAuthorization();
             {
                 MapUserEndpoints(users);
+            }
+            var teams = group.MapGroup("/teams").WithTags(TeamsName).RequireAuthorization();
+            {
+                MapTeamEndpoints(teams);
             }
             var roles = group.MapGroup("/roles").WithTags(RolesName).RequireAuthorization();
             {
@@ -1138,5 +1144,91 @@ public static class PublicEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .WithName("resolveAlertEvents");
+    }
+
+    private static void MapTeamEndpoints(RouteGroupBuilder teams)
+    {
+        teams.MapGet("/", Teams.List)
+            .WithSummary("Get all teams")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("listTeams");
+
+        teams.MapGet("{id}", Teams.Get)
+            .WithSummary("Get team by ID")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("getTeam");
+
+        teams.MapPost("/", Teams.Create)
+            .WithSummary("Create a team")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("createTeam");
+
+        teams.MapPatch("{id}", Teams.Patch)
+            .WithSummary("Update a team")
+            .Accepts<PatchTeamInput>("application/merge-patch+json", "application/json")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("updateTeam");
+
+        teams.MapPost("{id}/roles", Teams.AddRole)
+            .WithSummary("Assign a role to a team")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("addTeamRole");
+
+        teams.MapDelete("{id}/roles/{roleId}", Teams.RemoveRole)
+            .WithSummary("Remove a role from a team")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("removeTeamRole");
+
+        teams.MapPost("{id}/members", Teams.AddMember)
+            .WithSummary("Add a member to a team")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("addTeamMember");
+
+        teams.MapDelete("{id}/members/{userId}", Teams.RemoveMember)
+            .WithSummary("Remove a member from a team")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("removeTeamMember");
+
+        teams.MapPost("/rename", Teams.Rename)
+            .WithSummary("Rename a team")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("renameTeam");
+
+        teams.MapDelete("/", Teams.Delete)
+            .WithSummary("Delete teams")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .WithName("deleteTeams");
     }
 }

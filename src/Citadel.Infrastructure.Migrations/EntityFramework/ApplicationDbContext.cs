@@ -73,7 +73,7 @@ internal sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext
         modelBuilder.Entity("User").HasData(new
         {
             Id = adminUserId,
-            Name = "Admin",
+            Name = "admin",
             Email = "admin@citadel.local",
             Password = "o6hWzZ+DIuSZoHNjf5D1t6101vfm4w2kmPRiAZ3Xq53JMMl1",
             ActorId = adminActorId,

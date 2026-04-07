@@ -201,73 +201,6 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return db.QueryAsync<Guid>(sql, new { UserId = userId.Format(), cancellationToken }, transaction: tx());
     }
 
-    public Task<IEnumerable<Guid>> GetActorRoleIdsAsync(Guid actorId, CancellationToken cancellationToken)
-    {
-        const string sql = "SELECT RoleId FROM ActorRoles WHERE ActorId = @ActorId";
-        return db.QueryAsync<Guid>(sql, new { ActorId = actorId.Format(), cancellationToken }, transaction: tx());
-    }
-
-    public async Task<(UserDetails? User, bool RoleExists, bool HasRole)> GetRoleAssignmentStateAsync(Guid userId, Guid roleId, CancellationToken cancellationToken)
-    {
-        const string sql = """
-            WITH TargetUser AS (
-                SELECT
-                    u.Id,
-                    u.Name,
-                    u.Email,
-                    u.ActorId,
-                    a.IsEnabled,
-                    u.CreatedAt,
-                    u.CreatedByActorId
-                FROM Users u
-                JOIN Actors a ON a.Id = u.ActorId
-                WHERE u.Id = @UserId
-            ),
-            TargetRole AS (
-                SELECT 1 AS ExistsFlag
-                FROM Roles
-                WHERE Id = @RoleId
-            ),
-            ExistingAssignment AS (
-                SELECT 1 AS ExistsFlag
-                FROM ActorRoles ar
-                JOIN TargetUser tu ON tu.ActorId = ar.ActorId
-                WHERE ar.RoleId = @RoleId
-            )
-            SELECT
-                tu.Id,
-                tu.Name,
-                tu.Email,
-                tu.ActorId,
-                tu.IsEnabled,
-                tu.CreatedAt,
-                tu.CreatedByActorId,
-                EXISTS (SELECT 1 FROM TargetRole) AS RoleExists,
-                EXISTS (SELECT 1 FROM ExistingAssignment) AS HasRole
-            FROM (SELECT 1) seed
-            LEFT JOIN TargetUser tu ON 1 = 1
-            """;
-
-        var result = await db.QuerySingleAsync<UserRoleAssignmentStateDto>(sql, new { UserId = userId.Format(), RoleId = roleId.Format(), cancellationToken }, transaction: tx());
-        var user = result.Id.HasValue && result.ActorId.HasValue && result.IsEnabled.HasValue && result.CreatedAt.HasValue && result.CreatedByActorId.HasValue
-            ? new UserDetails(result.Id.Value, result.Name!, result.Email!, result.ActorId.Value, result.IsEnabled.Value, result.CreatedAt.Value, result.CreatedByActorId.Value)
-            : null;
-
-        return (user, result.RoleExists, result.HasRole);
-    }
-
-    public Task<int> AddActorRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken)
-    {
-        const string sql = "INSERT INTO ActorRoles (ActorId, RoleId) VALUES (@ActorId, @RoleId)";
-        return db.ExecuteAsync(sql, new { ActorId = actorId.Format(), RoleId = roleId.Format(), cancellationToken }, transaction: tx());
-    }
-
-    public Task<int> RemoveActorRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken)
-    {
-        const string sql = "DELETE FROM ActorRoles WHERE ActorId = @ActorId AND RoleId = @RoleId";
-        return db.ExecuteAsync(sql, new { ActorId = actorId.Format(), RoleId = roleId.Format(), cancellationToken }, transaction: tx());
-    }
-
     public async Task<int> ReplaceTeamsAsync(Guid userId, IEnumerable<Guid> teamIds, CancellationToken cancellationToken)
     {
         const string deleteSql = "DELETE FROM UsersTeams WHERE UserId = @UserId";
@@ -278,21 +211,6 @@ internal sealed class UserRepository(IDbConnection db, Func<IDbTransaction> tx) 
         {
             const string insertSql = "INSERT INTO UsersTeams (UserId, TeamId) VALUES (@UserId, @TeamId)";
             rows += await db.ExecuteAsync(insertSql, new { UserId = userId.Format(), TeamId = teamId.Format(), cancellationToken }, transaction: tx());
-        }
-
-        return rows;
-    }
-
-    public async Task<int> ReplaceActorRolesAsync(Guid actorId, IEnumerable<Guid> roleIds, CancellationToken cancellationToken)
-    {
-        const string deleteSql = "DELETE FROM ActorRoles WHERE ActorId = @ActorId";
-        await db.ExecuteAsync(deleteSql, new { ActorId = actorId.Format(), cancellationToken }, transaction: tx());
-
-        var rows = 0;
-        foreach (var roleId in roleIds)
-        {
-            const string insertSql = "INSERT INTO ActorRoles (ActorId, RoleId) VALUES (@ActorId, @RoleId)";
-            rows += await db.ExecuteAsync(insertSql, new { ActorId = actorId.Format(), RoleId = roleId.Format(), cancellationToken }, transaction: tx());
         }
 
         return rows;

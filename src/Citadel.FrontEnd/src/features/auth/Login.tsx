@@ -5,15 +5,14 @@ import { Input } from '@/components/ui/input';
 import { LoaderCircle } from 'lucide-react';
 import { AlertMessage } from '@/components/custom/alert-message';
 import { useAuthContext } from './auth-context';
-
-const EMAIL_REGEX = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
+import { Constants } from '@/lib/constants';
 
 const Login = () => {
   const { login, isPending, validationErrors } = useAuthContext();
 
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [formData, setFormData] = useState({ emailOrName: '', password: '' });
 
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ emailOrName?: string; password?: string }>({});
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -25,14 +24,14 @@ const Login = () => {
   };
 
   const validateForm = () => {
-    const newErrors: { email?: string; password?: string } = {};
+    const newErrors: { emailOrName?: string; password?: string } = {};
     let isValid = true;
 
-    if (!formData.email) {
-      newErrors.email = 'Email is required';
+    if (!formData.emailOrName) {
+      newErrors.emailOrName = 'Email address or username is required';
       isValid = false;
-    } else if (!EMAIL_REGEX.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
+    } else if (!new RegExp(Constants.validEmailOrName).test(formData.emailOrName)) {
+      newErrors.emailOrName = 'Please enter a valid email address or username';
       isValid = false;
     }
 
@@ -73,23 +72,22 @@ const Login = () => {
             {validationErrors && <AlertMessage type="warning">{validationErrors}</AlertMessage>}
 
             <form onSubmit={handleSubmit} className="space-y-8" noValidate>
-              {/* Email Field */}
+              {/* emailOrName Field */}
               <div className="space-y-2">
-                <label htmlFor="email" className="text-sm font-medium leading-none">
-                  Email address
+                <label htmlFor="emailOrName" className="text-sm font-medium leading-none">
+                  Email address or username
                 </label>
                 <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  // Add conditional border color if error exists
-                  className={`rounded-sm focus-visible:ring-transparent ${errors.email ? 'border-destructive' : ''}`}
-                  value={formData.email}
+                  id="emailOrName"
+                  name="emailOrName"
+                  type="text"
+                  placeholder="Enter your email address or username"
+                  className={`rounded-sm focus-visible:ring-transparent ${errors.emailOrName ? 'border-destructive' : ''}`}
+                  value={formData.emailOrName}
                   onChange={handleChange}
                   disabled={isPending}
                 />
-                {errors.email && <p className="text-xs font-medium text-destructive">{errors.email}</p>}
+                {errors.emailOrName && <p className="text-xs font-medium text-destructive">{errors.emailOrName}</p>}
               </div>
 
               {/* Password Field */}

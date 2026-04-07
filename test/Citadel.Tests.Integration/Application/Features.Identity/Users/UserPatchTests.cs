@@ -75,7 +75,7 @@ public class UserPatchTests : IntegrationTestBase
 
         await using var scope = Services.CreateAsyncScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var roleIds = await uow.Users.GetActorRoleIdsAsync(seeded.ActorId, TestContext.Current.CancellationToken);
+        var roleIds = await uow.Roles.GetActorRoleIdsAsync(seeded.ActorId, TestContext.Current.CancellationToken);
 
         Assert.Contains(ViewerRoleId, roleIds);
     }
@@ -88,7 +88,7 @@ public class UserPatchTests : IntegrationTestBase
         await using (var scope = Services.CreateAsyncScope())
         {
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            await uow.Users.AddActorRoleAsync(seeded.ActorId, ViewerRoleId, TestContext.Current.CancellationToken);
+            await uow.Roles.AddActorRoleAsync(seeded.ActorId, ViewerRoleId, TestContext.Current.CancellationToken);
             await uow.CommitAsync(TestContext.Current.CancellationToken);
         }
 
@@ -97,7 +97,7 @@ public class UserPatchTests : IntegrationTestBase
 
         await using var verificationScope = Services.CreateAsyncScope();
         var verificationUow = verificationScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var roleIds = await verificationUow.Users.GetActorRoleIdsAsync(seeded.ActorId, TestContext.Current.CancellationToken);
+        var roleIds = await verificationUow.Roles.GetActorRoleIdsAsync(seeded.ActorId, TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(ViewerRoleId, roleIds);
     }

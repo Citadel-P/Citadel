@@ -1,7 +1,10 @@
 ﻿using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
+using Domain.Contracts.Resources.Identity;
 using Domain.Entities.Identity;
+using Hosting.Common;
+using Hosting.Common.Models;
 using Infrastructure.Persistence.Dtos;
 using Infrastructure.Persistence.Mappers;
 using System.Data;
@@ -26,11 +29,124 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return result.ToDomain();
     }
 
+    public async Task<TeamDetails?> GetDetailsAsync(Guid id, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT
+                t.Id,
+                t.Name,
+                t.ActorId,
+                a.IsEnabled
+            FROM Teams t
+            JOIN Actors a ON a.Id = t.ActorId
+            WHERE t.Id = @Id
+            LIMIT 1
+            """;
+
+        var result = await db.QuerySingleOrDefaultAsync<TeamWithActorDto>(sql, new { Id = id.Format(), cancellationToken }, transaction: tx());
+        return result?.ToDetails();
+    }
+
+    public async Task<PagedResult<TeamDetails>> GetPagedAsync(int page, int pageSize, CancellationToken cancellationToken)
+    {
+        const string selectSql = """
+            SELECT
+                t.Id,
+                t.Name,
+                t.ActorId,
+                a.IsEnabled
+            FROM Teams t
+            JOIN Actors a ON a.Id = t.ActorId
+            ORDER BY t.Name ASC
+            LIMIT @PageSize OFFSET @Offset
+            """;
+        const string countSql = "SELECT COUNT(*) FROM Teams";
+
+        var offset = (page - 1) * pageSize;
+        var totalCount = await db.QuerySingleAsync<int>(countSql, transaction: tx());
+        var rows = await db.QueryAsync<TeamWithActorDto>(selectSql, new { PageSize = pageSize, Offset = offset, cancellationToken }, transaction: tx());
+
+        return new PagedResult<TeamDetails>(rows.ToDetails(), totalCount, page, pageSize);
+    }
+
+    public async Task<PagedResult<TeamDetails>> GetAuthorizedPagedAsync(Guid userId, ResourceType resourceType, ResourceAction action, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        const string selectSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " " + """
+            SELECT
+                t.Id,
+                t.Name,
+                t.ActorId,
+                a.IsEnabled
+            FROM Teams t
+            JOIN Actors a ON a.Id = t.ActorId
+            WHERE
+        """ + AuthorizationSql.ResourcePredicatePrefix + "t.Id" + AuthorizationSql.ResourcePredicateSuffix + " ORDER BY t.Name ASC LIMIT @PageSize OFFSET @Offset;";
+
+        const string countSql = "WITH " + AuthorizationSql.ActorScopeCte + ", " + AuthorizationSql.GlobalAccessCte + " SELECT COUNT(*) FROM Teams t WHERE "
+            + AuthorizationSql.ResourcePredicatePrefix + "t.Id" + AuthorizationSql.ResourcePredicateSuffix + ";";
+
+        var offset = (page - 1) * pageSize;
+        var parameters = new
+        {
+            UserId = userId.Format(),
+            ResourceType = EnumFormatter<ResourceType>.GetValue(resourceType),
+            Action = EnumFormatter<ResourceAction>.GetValue(action),
+            PageSize = pageSize,
+            Offset = offset,
+            cancellationToken
+        };
+
+        var totalCount = await db.QuerySingleAsync<int>(countSql, parameters, transaction: tx());
+        var rows = await db.QueryAsync<TeamWithActorDto>(selectSql, parameters, transaction: tx());
+
+        return new PagedResult<TeamDetails>(rows.ToDetails(), totalCount, page, pageSize);
+    }
+
     public async Task<IEnumerable<Team>?> GetAllAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
     {
         const string sql = "SELECT * FROM Teams WHERE Id IN (SELECT value FROM json_each(@Ids)) ORDER BY Name ASC";
         var result = await db.QueryAsync<TeamDto>(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
         return result.ToDomain();
+    }
+
+    public async Task<bool> GetConflictsAsync(string name, Guid? excludeId, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT EXISTS (SELECT 1 FROM Teams WHERE Name = @Name AND (@ExcludeId IS NULL OR Id != @ExcludeId)) AS NameExists";
+        var result = await db.QuerySingleAsync<TeamConflictCheckDto>(sql, new { Name = name, ExcludeId = excludeId?.Format(), cancellationToken }, transaction: tx());
+        return result.NameExists;
+    }
+
+    public async Task<(Team? Team, bool IsEnabled, bool NameExists)> GetTeamUpdateStateAsync(Guid id, string? name, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            WITH TargetTeam AS (
+                SELECT
+                    t.Id,
+                    t.Name,
+                    t.ActorId,
+                    a.IsEnabled
+                FROM Teams t
+                JOIN Actors a ON a.Id = t.ActorId
+                WHERE t.Id = @Id
+            )
+            SELECT
+                tt.Id,
+                tt.Name,
+                tt.ActorId,
+                tt.IsEnabled,
+                CASE WHEN tt.Id IS NULL OR @Name IS NULL OR @Name = tt.Name THEN 0
+                     ELSE EXISTS (SELECT 1 FROM Teams WHERE Name = @Name AND Id != @Id)
+                END AS NameExists
+            FROM (SELECT 1) seed
+            LEFT JOIN TargetTeam tt ON 1 = 1
+            """;
+
+        var result = await db.QuerySingleAsync<TeamUpdateStateDto>(sql, new { Id = id.Format(), Name = name, cancellationToken }, transaction: tx());
+        var team = result.Id.HasValue && result.ActorId.HasValue && result.Name is not null
+            ? Team.FromPersistence(result.Id.Value, result.Name, result.ActorId.Value)
+            : null;
+
+        return (team, result.IsEnabled ?? false, result.NameExists);
     }
 
     public Task<bool> ExistsByNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken)
@@ -63,10 +179,59 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return db.QueryAsync<Guid>(sql, new { TeamId = teamId.Format(), cancellationToken }, transaction: tx());
     }
 
-    public Task<IEnumerable<Guid>> GetActorRoleIdsAsync(Guid actorId, CancellationToken cancellationToken)
+    public async Task<(TeamDetails? Team, bool UserExists, bool HasMember)> GetMemberAssignmentStateAsync(Guid teamId, Guid userId, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT RoleId FROM ActorRoles WHERE ActorId = @ActorId";
-        return db.QueryAsync<Guid>(sql, new { ActorId = actorId.Format(), cancellationToken }, transaction: tx());
+        const string sql = """
+            WITH TargetTeam AS (
+                SELECT
+                    t.Id,
+                    t.Name,
+                    t.ActorId,
+                    a.IsEnabled
+                FROM Teams t
+                JOIN Actors a ON a.Id = t.ActorId
+                WHERE t.Id = @TeamId
+            ),
+            TargetUser AS (
+                SELECT 1 AS ExistsFlag
+                FROM Users
+                WHERE Id = @UserId
+            ),
+            ExistingMember AS (
+                SELECT 1 AS ExistsFlag
+                FROM UsersTeams ut
+                WHERE ut.TeamId = @TeamId
+                  AND ut.UserId = @UserId
+            )
+            SELECT
+                tt.Id,
+                tt.Name,
+                tt.ActorId,
+                tt.IsEnabled,
+                EXISTS (SELECT 1 FROM TargetUser) AS UserExists,
+                EXISTS (SELECT 1 FROM ExistingMember) AS HasMember
+            FROM (SELECT 1) seed
+            LEFT JOIN TargetTeam tt ON 1 = 1
+            """;
+
+        var result = await db.QuerySingleAsync<TeamMemberAssignmentStateDto>(sql, new { TeamId = teamId.Format(), UserId = userId.Format(), cancellationToken }, transaction: tx());
+        var team = result.Id.HasValue && result.ActorId.HasValue && result.IsEnabled.HasValue && result.Name is not null
+            ? new TeamDetails(result.Id.Value, result.Name, result.ActorId.Value, result.IsEnabled.Value)
+            : null;
+
+        return (team, result.UserExists, result.HasMember);
+    }
+
+    public Task<int> AddMemberAsync(Guid teamId, Guid userId, CancellationToken cancellationToken)
+    {
+        const string sql = "INSERT INTO UsersTeams (UserId, TeamId) VALUES (@UserId, @TeamId)";
+        return db.ExecuteAsync(sql, new { UserId = userId.Format(), TeamId = teamId.Format(), cancellationToken }, transaction: tx());
+    }
+
+    public Task<int> RemoveMemberAsync(Guid teamId, Guid userId, CancellationToken cancellationToken)
+    {
+        const string sql = "DELETE FROM UsersTeams WHERE TeamId = @TeamId AND UserId = @UserId";
+        return db.ExecuteAsync(sql, new { TeamId = teamId.Format(), UserId = userId.Format(), cancellationToken }, transaction: tx());
     }
 
     public async Task<int> ReplaceMembersAsync(Guid teamId, IEnumerable<Guid> userIds, CancellationToken cancellationToken)
@@ -79,21 +244,6 @@ internal sealed class TeamRepository(IDbConnection db, Func<IDbTransaction> tx) 
         {
             const string insertSql = "INSERT INTO UsersTeams (UserId, TeamId) VALUES (@UserId, @TeamId)";
             rows += await db.ExecuteAsync(insertSql, new { UserId = userId.Format(), TeamId = teamId.Format(), cancellationToken }, transaction: tx());
-        }
-
-        return rows;
-    }
-
-    public async Task<int> ReplaceActorRolesAsync(Guid actorId, IEnumerable<Guid> roleIds, CancellationToken cancellationToken)
-    {
-        const string deleteSql = "DELETE FROM ActorRoles WHERE ActorId = @ActorId";
-        await db.ExecuteAsync(deleteSql, new { ActorId = actorId.Format(), cancellationToken }, transaction: tx());
-
-        var rows = 0;
-        foreach (var roleId in roleIds)
-        {
-            const string insertSql = "INSERT INTO ActorRoles (ActorId, RoleId) VALUES (@ActorId, @RoleId)";
-            rows += await db.ExecuteAsync(insertSql, new { ActorId = actorId.Format(), RoleId = roleId.Format(), cancellationToken }, transaction: tx());
         }
 
         return rows;

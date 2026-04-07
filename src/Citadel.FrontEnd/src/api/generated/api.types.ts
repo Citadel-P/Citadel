@@ -99,20 +99,6 @@ export enum PlatformConnectorType {
   Agent = "Agent",
 }
 
-export enum LoggingDriverType {
-  None = "none",
-  Local = "local",
-  JsonFile = "json-file",
-  Syslog = "syslog",
-  Journald = "journald",
-  Gelf = "gelf",
-  Fluentd = "fluentd",
-  Awslogs = "awslogs",
-  Splunk = "splunk",
-  Etwlogs = "etwlogs",
-  Gcplogs = "gcplogs",
-}
-
 export enum GitTransport {
   Http = "Http",
   Https = "Https",
@@ -257,6 +243,7 @@ export enum ActorType {
   System = "System",
   Agent = "Agent",
   Service = "Service",
+  Team = "Team",
 }
 
 export enum ActivityStatus {
@@ -554,6 +541,29 @@ export interface ActivityView {
   actorId: string;
   actorName: string;
   actorType: ActorType;
+}
+
+export interface ActorView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  type: ActorType;
+  isEnabled: boolean;
+}
+
+export interface AddTeamMemberInput {
+  /** @format uuid */
+  userId: string;
+}
+
+export interface AddTeamRoleInput {
+  /** @format uuid */
+  roleId: string;
+}
+
+export interface AddUserRoleInput {
+  /** @format uuid */
+  roleId: string;
 }
 
 export interface AlertChannelInput {
@@ -938,20 +948,6 @@ export interface ClusterVolumeInfo {
   accessibleTopology: TopologyEntry[];
 }
 
-export interface ComposeDeploymentEvent {
-  stepId?: string;
-  /** @format date-time */
-  timestamp?: any;
-}
-
-export interface ComposeUpRequest {
-  /** @format uuid */
-  platformId: string;
-  registryName: string;
-  repositoryName: string;
-  composeFileAsStr: string;
-}
-
 export interface ConfigFromInput {
   network: string;
 }
@@ -1191,53 +1187,6 @@ export interface CreateAlertRuleInput {
   quietHours?: null | any[];
 }
 
-export interface CreateContainerInput {
-  /** @format uuid */
-  platformId: string;
-  imageId: string;
-  name: null | string;
-  workingDir: null | string;
-  user: null | string;
-  /**
-   * @format float
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  memoryLimit: null | number | string;
-  /**
-   * @format float
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  cpuLimit: null | number | string;
-  /**
-   * @format float
-   * @pattern ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
-   */
-  memoryReservation: null | number | string;
-  autoRemove: null | boolean;
-  /**
-   * @format int32
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  stopTimeout: null | number | string;
-  restartPolicy: ContainerRestartPolicy;
-  labels: null | object;
-  envVars: null | any[];
-  ports: null | any[];
-  volumes: null | any[];
-  networks: null | any[];
-  entryPoint: null | any[];
-  command: null | any[];
-  hostname?: null | string;
-  dns?: null | any[];
-  security?: null | SecurityConfig;
-  loggingConfig?: null | LoggingConfig;
-  healthCheck?: null | HealthCheckConfig;
-}
-
-export interface CreateContainerView {
-  id: string;
-}
-
 export interface CreateDeploymentInput {
   name: string;
   /** @format uuid */
@@ -1296,6 +1245,16 @@ export interface CreateStackInput {
   description: null | string;
   stackSource: StackSource;
   spec: StackSpec;
+}
+
+export interface CreateTeamInput {
+  name: string;
+}
+
+export interface CreateUserInput {
+  name: string;
+  email: string;
+  password: string;
 }
 
 export interface CreateVolumeInput {
@@ -1362,6 +1321,18 @@ export interface DeletePlatformsInput {
 }
 
 export interface DeleteRegistriesInput {
+  ids: string[];
+}
+
+export interface DeleteRolesInput {
+  ids: string[];
+}
+
+export interface DeleteTeamsInput {
+  ids: string[];
+}
+
+export interface DeleteUsersInput {
   ids: string[];
 }
 
@@ -1781,22 +1752,6 @@ export interface GraphDriverDataInfo {
   data: Record<string, string>;
 }
 
-export interface HealthCheckConfig {
-  test: string[];
-  /** @default "30s" */
-  interval?: string;
-  /** @default "5s" */
-  timeout?: string;
-  /**
-   * @format int32
-   * @default 3
-   * @pattern ^-?(?:0|[1-9]\d*)$
-   */
-  retries?: number | string;
-  /** @default "0s" */
-  startPeriod?: string;
-}
-
 export interface HistoryImageResult {
   id: string;
   /**
@@ -2119,13 +2074,8 @@ export interface LogConfiguration {
   config: Record<string, string>;
 }
 
-export interface LoggingConfig {
-  driver: LoggingDriverType;
-  options?: null | object;
-}
-
 export interface LoginRequest {
-  email: string;
+  emailOrName: string;
   password: string;
 }
 
@@ -2232,6 +2182,48 @@ export interface PagedResultViewOfAlertEventView {
   pageSize: number | string;
 }
 
+export interface PagedResultViewOfTeamView {
+  items: TeamView[];
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  totalCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  page: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  pageSize: number | string;
+}
+
+export interface PagedResultViewOfUserView {
+  items: UserView[];
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  totalCount: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  page: number | string;
+  /**
+   * @format int32
+   * @pattern ^-?(?:0|[1-9]\d*)$
+   */
+  pageSize: number | string;
+}
+
+export interface PatchActorEnabledInput {
+  isEnabled: boolean;
+}
+
 export interface PatchAlertRuleInput {
   description: null | string;
   type: AlertType;
@@ -2285,10 +2277,34 @@ export interface PatchResourceMetadata {
   tags: string[];
 }
 
+export interface PatchRolePermissionsInput {
+  permissions: PermissionInput[];
+}
+
 export interface PatchStackInput {
   /** @format uuid */
   platformId: string;
   spec: StackSpec;
+}
+
+export interface PatchTeamInput {
+  isEnabled: null | boolean;
+}
+
+export interface PatchUserInput {
+  email: null | string;
+  password: null | string;
+  isEnabled: null | boolean;
+}
+
+export interface PermissionInput {
+  resourceType: ResourceType;
+  resourceAction: ResourceAction;
+}
+
+export interface PermissionView {
+  resourceType: ResourceType;
+  resourceAction: ResourceAction;
 }
 
 export type PlatformDescriptor = BasePlatformDescriptor &
@@ -2649,6 +2665,8 @@ export interface ResolveAlertEventsInput {
   resolutionNote: null | string;
 }
 
+export type ResourceAction = any;
+
 export interface ResourceSpec {
   /**
    * @format float
@@ -2662,6 +2680,8 @@ export interface ResourceSpec {
   memoryLimit: null | number | string;
 }
 
+export type ResourceType = any;
+
 export interface RestartPolicy {
   name: null | string;
   /**
@@ -2671,13 +2691,20 @@ export interface RestartPolicy {
   maximumRetryCount: null | number | string;
 }
 
-export interface SecurityConfig {
-  /** @default false */
-  privileged?: boolean;
-  capAdd?: null | any[];
-  capDrop?: null | any[];
-  readOnlyRootFs?: null | boolean;
-  securityOpt?: null | any[];
+export interface RoleInput {
+  name: string;
+  permissions: PermissionInput[];
+}
+
+export interface RoleView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  permissions: PermissionView[];
+}
+
+export interface RolesView {
+  roles: RoleView[];
 }
 
 export interface StackConfigView {
@@ -2806,6 +2833,19 @@ export interface SwarmPeer {
   addr: null | string;
 }
 
+export interface TeamView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  /** @format uuid */
+  actorId: string;
+  isEnabled: boolean;
+}
+
+export interface TeamsView {
+  pagedResult: PagedResultViewOfTeamView;
+}
+
 export interface TimeZoneInfo {
   /** @pattern ^-?(\d+\.)?\d{2}:\d{2}:\d{2}(\.\d{1,7})?$ */
   baseUtcOffset?: string;
@@ -2841,6 +2881,24 @@ export interface UnresolvedAlertsCountView {
    * @pattern ^-?(?:0|[1-9]\d*)$
    */
   count: number | string;
+}
+
+export interface UserView {
+  /** @format uuid */
+  id: string;
+  name: string;
+  email: string;
+  /** @format uuid */
+  actorId: string;
+  isEnabled: boolean;
+  /** @format date-time */
+  createdAt: any;
+  /** @format uuid */
+  createdByActorId: string;
+}
+
+export interface UsersView {
+  pagedResult: PagedResultViewOfUserView;
 }
 
 export interface VerifyAlertChannelInput {
@@ -3309,6 +3367,729 @@ export class Api<
     /**
      * No description
      *
+     * @tags Actors
+     * @name GetActor
+     * @summary Get actor by ID
+     * @request GET:/api/v1/actors/{id}
+     * @secure
+     * @response `200` `ActorView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getActor: (id: string, params: RequestParams = {}) =>
+      this.request<ActorView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/actors/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Actors
+     * @name PatchActorEnabled
+     * @summary Enable or disable an actor
+     * @request PATCH:/api/v1/actors/{id}/enabled
+     * @secure
+     * @response `200` `ActorView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    patchActorEnabled: (
+      id: string,
+      data: PatchActorEnabledInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<ActorView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/actors/${id}/enabled`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name ListUsers
+     * @summary Get all users
+     * @request GET:/api/v1/users
+     * @secure
+     * @response `200` `UsersView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listUsers: (
+      query?: {
+        /**
+         * @format int32
+         * @default 1
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        Page?: number | string;
+        /**
+         * @format int32
+         * @default 50
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        PageSize?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<UsersView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/users`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name CreateUser
+     * @summary Create a user
+     * @request POST:/api/v1/users
+     * @secure
+     * @response `200` `UserView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createUser: (data: CreateUserInput, params: RequestParams = {}) =>
+      this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/users`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name DeleteUsers
+     * @summary Delete users
+     * @request DELETE:/api/v1/users
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteUsers: (data: DeleteUsersInput, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/users`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name GetUser
+     * @summary Get user by ID
+     * @request GET:/api/v1/users/{id}
+     * @secure
+     * @response `200` `UserView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getUser: (id: string, params: RequestParams = {}) =>
+      this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/users/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name UpdateUser
+     * @summary Update a user
+     * @request PATCH:/api/v1/users/{id}
+     * @secure
+     * @response `200` `UserView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateUser: (
+      id: string,
+      data: PatchUserInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/users/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name AddUserRole
+     * @summary Assign a role to a user
+     * @request POST:/api/v1/users/{id}/roles
+     * @secure
+     * @response `200` `UserView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    addUserRole: (
+      id: string,
+      data: AddUserRoleInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/users/${id}/roles`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name RemoveUserRole
+     * @summary Remove a role from a user
+     * @request DELETE:/api/v1/users/{id}/roles/{roleId}
+     * @secure
+     * @response `200` `UserView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    removeUserRole: (id: string, roleId: string, params: RequestParams = {}) =>
+      this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/users/${id}/roles/${roleId}`,
+        method: "DELETE",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name RenameUser
+     * @summary Rename a user
+     * @request POST:/api/v1/users/rename
+     * @secure
+     * @response `200` `UserView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renameUser: (data: RenameResource, params: RequestParams = {}) =>
+      this.request<UserView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/users/rename`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Teams
+     * @name ListTeams
+     * @summary Get all teams
+     * @request GET:/api/v1/teams
+     * @secure
+     * @response `200` `TeamsView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listTeams: (
+      query?: {
+        /**
+         * @format int32
+         * @default 1
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        Page?: number | string;
+        /**
+         * @format int32
+         * @default 50
+         * @pattern ^-?(?:0|[1-9]\d*)$
+         */
+        PageSize?: number | string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamsView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/teams`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Teams
+     * @name CreateTeam
+     * @summary Create a team
+     * @request POST:/api/v1/teams
+     * @secure
+     * @response `200` `TeamView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createTeam: (data: CreateTeamInput, params: RequestParams = {}) =>
+      this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/teams`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Teams
+     * @name DeleteTeams
+     * @summary Delete teams
+     * @request DELETE:/api/v1/teams
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteTeams: (data: DeleteTeamsInput, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/teams`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Teams
+     * @name GetTeam
+     * @summary Get team by ID
+     * @request GET:/api/v1/teams/{id}
+     * @secure
+     * @response `200` `TeamView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getTeam: (id: string, params: RequestParams = {}) =>
+      this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/teams/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Teams
+     * @name UpdateTeam
+     * @summary Update a team
+     * @request PATCH:/api/v1/teams/{id}
+     * @secure
+     * @response `200` `TeamView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateTeam: (
+      id: string,
+      data: PatchTeamInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/teams/${id}`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Teams
+     * @name AddTeamRole
+     * @summary Assign a role to a team
+     * @request POST:/api/v1/teams/{id}/roles
+     * @secure
+     * @response `200` `TeamView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    addTeamRole: (
+      id: string,
+      data: AddTeamRoleInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/teams/${id}/roles`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Teams
+     * @name RemoveTeamRole
+     * @summary Remove a role from a team
+     * @request DELETE:/api/v1/teams/{id}/roles/{roleId}
+     * @secure
+     * @response `200` `TeamView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    removeTeamRole: (id: string, roleId: string, params: RequestParams = {}) =>
+      this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/teams/${id}/roles/${roleId}`,
+        method: "DELETE",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Teams
+     * @name AddTeamMember
+     * @summary Add a member to a team
+     * @request POST:/api/v1/teams/{id}/members
+     * @secure
+     * @response `200` `TeamView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    addTeamMember: (
+      id: string,
+      data: AddTeamMemberInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/teams/${id}/members`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Teams
+     * @name RemoveTeamMember
+     * @summary Remove a member from a team
+     * @request DELETE:/api/v1/teams/{id}/members/{userId}
+     * @secure
+     * @response `200` `TeamView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    removeTeamMember: (
+      id: string,
+      userId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/teams/${id}/members/${userId}`,
+        method: "DELETE",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Teams
+     * @name RenameTeam
+     * @summary Rename a team
+     * @request POST:/api/v1/teams/rename
+     * @secure
+     * @response `200` `TeamView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renameTeam: (data: RenameResource, params: RequestParams = {}) =>
+      this.request<TeamView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/teams/rename`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Roles
+     * @name ListRoles
+     * @summary Get all roles
+     * @request GET:/api/v1/roles
+     * @secure
+     * @response `200` `RolesView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    listRoles: (params: RequestParams = {}) =>
+      this.request<RolesView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/roles`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Roles
+     * @name CreateRole
+     * @summary Create a role
+     * @request POST:/api/v1/roles
+     * @secure
+     * @response `200` `RoleView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    createRole: (data: RoleInput, params: RequestParams = {}) =>
+      this.request<RoleView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/roles`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Roles
+     * @name DeleteRoles
+     * @summary Delete roles
+     * @request DELETE:/api/v1/roles
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteRoles: (data: DeleteRolesInput, params: RequestParams = {}) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/roles`,
+        method: "DELETE",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Roles
+     * @name GetRole
+     * @summary Get role by ID
+     * @request GET:/api/v1/roles/{id}
+     * @secure
+     * @response `200` `RoleView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    getRole: (id: string, params: RequestParams = {}) =>
+      this.request<RoleView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/roles/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Roles
+     * @name UpdateRolePermissions
+     * @summary Update role permissions
+     * @request PATCH:/api/v1/roles/{id}/permissions
+     * @secure
+     * @response `200` `RoleView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    updateRolePermissions: (
+      id: string,
+      data: PatchRolePermissionsInput,
+      params: RequestParams = {},
+    ) =>
+      this.request<RoleView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/roles/${id}/permissions`,
+        method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Roles
+     * @name RenameRole
+     * @summary Rename a role
+     * @request POST:/api/v1/roles/rename
+     * @secure
+     * @response `200` `RoleView` OK
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    renameRole: (data: RenameResource, params: RequestParams = {}) =>
+      this.request<RoleView, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/roles/rename`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
      * @tags Containers
      * @name GetContainer
      * @summary Get container by Id
@@ -3411,63 +4192,6 @@ export class Api<
         method: "GET",
         secure: true,
         format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Containers
-     * @name CreateContainer
-     * @summary Create a container
-     * @request POST:/api/v1/containers
-     * @secure
-     * @response `200` `CreateContainerView` OK
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    createContainer: (data: CreateContainerInput, params: RequestParams = {}) =>
-      this.request<
-        CreateContainerView,
-        HttpValidationProblemDetails | ProblemDetails
-      >({
-        path: `/api/v1/containers`,
-        method: "POST",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Containers
-     * @name DeleteContainers
-     * @summary Delete the given container(s)
-     * @request DELETE:/api/v1/containers
-     * @secure
-     * @response `204` `void` No Content
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    deleteContainers: (
-      data: DeleteContainersRequest,
-      params: RequestParams = {},
-    ) =>
-      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
-        path: `/api/v1/containers`,
-        method: "DELETE",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
         ...params,
       }),
 
@@ -3590,6 +4314,34 @@ export class Api<
       this.request<void, HttpValidationProblemDetails | ProblemDetails>({
         path: `/api/v1/containers/unpause`,
         method: "PATCH",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Containers
+     * @name DeleteContainers
+     * @summary Delete the given container(s)
+     * @request DELETE:/api/v1/containers
+     * @secure
+     * @response `204` `void` No Content
+     * @response `400` `HttpValidationProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `500` `ProblemDetails` Internal Server Error
+     */
+    deleteContainers: (
+      data: DeleteContainersRequest,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, HttpValidationProblemDetails | ProblemDetails>({
+        path: `/api/v1/containers`,
+        method: "DELETE",
         body: data,
         secure: true,
         type: ContentType.Json,
@@ -4903,35 +5655,6 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Compose
-     * @name ComposeUp
-     * @summary Deploy a stack
-     * @request POST:/api/v1/compose/up
-     * @secure
-     * @response `200` `(ComposeDeploymentEvent)[]` OK
-     * @response `400` `HttpValidationProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `404` `ProblemDetails` Not Found
-     * @response `500` `ProblemDetails` Internal Server Error
-     */
-    composeUp: (data: ComposeUpRequest, params: RequestParams = {}) =>
-      this.request<
-        ComposeDeploymentEvent[],
-        HttpValidationProblemDetails | ProblemDetails
-      >({
-        path: `/api/v1/compose/up`,
-        method: "POST",
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: "json",
         ...params,
       }),
 

@@ -6,8 +6,8 @@
 BEGIN TRANSACTION;
 CREATE TABLE "Actors" (
     "Id" TEXT NOT NULL CONSTRAINT "PK_Actors" PRIMARY KEY,
-    "Type" TEXT NOT NULL,
-    "IsEnabled" INTEGER NOT NULL DEFAULT 1
+    "IsEnabled" INTEGER NOT NULL DEFAULT 1,
+    "Type" TEXT NOT NULL
 );
 
 CREATE TABLE "Platforms" (
@@ -341,16 +341,16 @@ CREATE TABLE "ContainerStats" (
     CONSTRAINT "FK_ContainerStats_Containers_ContainerId" FOREIGN KEY ("ContainerId") REFERENCES "Containers" ("Id") ON DELETE CASCADE
 );
 
-INSERT INTO "Actors" ("Id", "Type")
-VALUES ('00000000-0000-0000-0000-000000000001', 'System');
+INSERT INTO "Actors" ("Id", "IsEnabled", "Type")
+VALUES ('00000000-0000-0000-0000-000000000001', 1, 'System');
 SELECT changes();
 
-INSERT INTO "Actors" ("Id", "Type")
-VALUES ('00000000-0000-0000-0000-000000000002', 'User');
+INSERT INTO "Actors" ("Id", "IsEnabled", "Type")
+VALUES ('00000000-0000-0000-0000-000000000002', 1, 'User');
 SELECT changes();
 
-INSERT INTO "Actors" ("Id", "Type")
-VALUES ('00000000-0000-0000-0000-000000000003', 'Team');
+INSERT INTO "Actors" ("Id", "IsEnabled", "Type")
+VALUES ('00000000-0000-0000-0000-000000000003', 1, 'Team');
 SELECT changes();
 
 
@@ -434,7 +434,19 @@ VALUES ('017b5a65-e312-8a67-b7fd-6124f6ddeeee', 'View', 'GitRepository', '300000
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('0292fdeb-9a33-5a4c-60e9-395eac821cdc', 'Delete', 'User', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('0309bcb2-05ec-623d-e45b-ec10cfddee24', 'Create', 'Role', '30000000-0000-0000-0000-000000000002');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('052e45fb-cb15-9380-6a33-c233fde703a6', 'Update', 'GitAccount', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('0854c122-21bc-147b-506b-6caf72ac48ca', 'View', 'Team', '30000000-0000-0000-0000-000000000003');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
@@ -443,6 +455,10 @@ SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('0eda225f-cb5b-1bb0-9525-be92b14fc322', 'Apply', 'GitRepository', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('0edd69d5-bb37-653c-9b25-5ff32a2b8243', 'Apply', 'Role', '30000000-0000-0000-0000-000000000001');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
@@ -455,6 +471,10 @@ SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('12bbcf07-7237-3afb-65f7-1fc8e2de4939', 'Apply', 'Registry', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('15923c89-875e-7d0b-b80b-96af1f0cd1f2', 'Apply', 'Role', '30000000-0000-0000-0000-000000000002');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
@@ -502,11 +522,19 @@ VALUES ('30f18293-2d41-2525-3210-e0f83bafa13d', 'Update', 'Stack', '30000000-000
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('3a14f868-33fb-3a2e-92e1-5579da6962ce', 'Pull', 'Role', '30000000-0000-0000-0000-000000000002');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('3a8c08b1-d033-1580-65f9-a1cb3ed3fc6a', 'Create', 'Registry', '30000000-0000-0000-0000-000000000002');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('3d84b4f0-2433-c34e-45e1-84d18b6c155d', 'Pull', 'Platform', '30000000-0000-0000-0000-000000000002');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('3e1abbe9-b2f2-21b8-bf02-38d4c10cd79d', 'Create', 'Role', '30000000-0000-0000-0000-000000000001');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
@@ -522,7 +550,15 @@ VALUES ('4711987b-af34-12f7-4cf4-795f51049571', 'Pull', 'Platform', '30000000-00
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('47a25f07-9bb1-361d-788e-4d99fd0e50ee', 'Update', 'User', '30000000-0000-0000-0000-000000000002');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('47c763f4-71e9-2992-3223-8ab97876b727', 'Apply', 'Platform', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('49ce8531-88f1-5ed2-a1c7-95d40cc72c47', 'Create', 'User', '30000000-0000-0000-0000-000000000001');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
@@ -542,11 +578,23 @@ VALUES ('4fa196f3-a9e5-7716-b1dd-aa574061e1f7', 'Pull', 'GitAccount', '30000000-
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('510688a3-f3e5-851a-29fb-8c8ae66a06d5', 'View', 'User', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('55228106-7ae9-6748-5a33-73e253ad940d', 'Apply', 'AlertChannel', '30000000-0000-0000-0000-000000000002');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('57de5bf0-3ba6-3067-d4d0-c8c6a889507b', 'View', 'Role', '30000000-0000-0000-0000-000000000003');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('58e018b1-ba4c-56bb-c56c-b9473688127b', 'Pull', 'GitRepository', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('5e169a67-b789-1d24-db33-ea48a69f362e', 'Create', 'Team', '30000000-0000-0000-0000-000000000002');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
@@ -559,6 +607,10 @@ SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('613e9000-da2c-b4e7-9e02-b4bef349f0f7', 'Pull', 'AlertChannel', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('62d97329-3b51-37c0-abe7-aba92734e97e', 'Pull', 'Team', '30000000-0000-0000-0000-000000000002');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
@@ -591,6 +643,10 @@ SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('7238045c-c070-0ba5-b133-6083ea208d1b', 'Apply', 'Stack', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('723bb5cb-0c68-80e7-d890-7c4f6e3ce23a', 'Delete', 'Team', '30000000-0000-0000-0000-000000000001');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
@@ -630,7 +686,19 @@ VALUES ('83ac5b37-8bd4-e093-3cdd-7e9f61300108', 'View', 'Alert', '30000000-0000-
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('8469f325-f132-73f4-0fa4-42131875a5ed', 'Update', 'Role', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('8487254d-0383-5b91-fa5f-816cfdc29054', 'View', 'Team', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('8658afec-8be0-2f4b-7b1e-478ac44341ec', 'Create', 'Registry', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('8722b0da-7d07-7c14-0f9c-161e0c39a751', 'Pull', 'User', '30000000-0000-0000-0000-000000000002');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
@@ -647,6 +715,10 @@ SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('8de4cd72-b2ce-4e18-f148-b93892845825', 'View', 'Alert', '30000000-0000-0000-0000-000000000003');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('9308eb9b-7faa-e3d3-ffa8-86fc7946fae0', 'View', 'Team', '30000000-0000-0000-0000-000000000002');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
@@ -670,6 +742,10 @@ VALUES ('99b23eff-a5c8-0cbe-6383-b99e43a43b23', 'Create', 'AlertChannel', '30000
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('9aa863b1-84ad-e6c5-738f-41425290cbb8', 'Create', 'User', '30000000-0000-0000-0000-000000000002');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('9e087c4f-e933-37c9-3941-b1803f83ede3', 'Create', 'Platform', '30000000-0000-0000-0000-000000000001');
 SELECT changes();
 
@@ -682,6 +758,10 @@ VALUES ('9fd296b8-cb43-5a62-9672-cf562aa6efd1', 'Update', 'GitRepository', '3000
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('9feb50a6-6f53-b270-5e7c-f679e7d85ed5', 'Update', 'Role', '30000000-0000-0000-0000-000000000002');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('a178007d-0c14-258e-bb6a-8828a5c28db7', 'Update', 'Deployment', '30000000-0000-0000-0000-000000000001');
 SELECT changes();
 
@@ -690,11 +770,27 @@ VALUES ('a1a791a5-9c37-88ad-c0e2-9a6717191298', 'Update', 'Stack', '30000000-000
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('a7ac62e2-2a4d-50c6-6700-af7a5a345bf7', 'Update', 'Team', '30000000-0000-0000-0000-000000000002');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('ab32d40c-3859-6377-1634-a84b67e820dc', 'Apply', 'Team', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('ab3dfa51-423f-716d-a623-760c9f72f791', 'Pull', 'Role', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('acab0152-cf67-d16c-fe1e-c579972ad2df', 'Pull', 'Registry', '30000000-0000-0000-0000-000000000002');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('acece9ff-20d1-f3d5-c304-3a07adb9a03b', 'Update', 'Alert', '30000000-0000-0000-0000-000000000002');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('b60ccb85-3aaa-0077-b0e8-7adbb9f4a596', 'View', 'User', '30000000-0000-0000-0000-000000000002');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
@@ -726,6 +822,14 @@ VALUES ('c717528a-5a83-69a2-6893-4ab5fbc14d1b', 'View', 'Platform', '30000000-00
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('c75f0cb6-117e-8929-d133-c45f363c1610', 'Delete', 'Role', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('cbcc1ffb-e622-9159-df1e-d0d05e50385c', 'Pull', 'Team', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('cdd4e750-840f-2a08-7a9a-3bd65a4360e9', 'Delete', 'Stack', '30000000-0000-0000-0000-000000000001');
 SELECT changes();
 
@@ -750,11 +854,27 @@ VALUES ('d990b800-123d-a0ec-9b6a-239915235880', 'Create', 'GitAccount', '3000000
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('ddcb3cb1-e44f-0ab8-9e1e-698ed0352dc6', 'Apply', 'User', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('deb33289-b4e7-0111-9e93-079c08f09cf3', 'Create', 'Team', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('df77eb4e-7860-5319-431e-481bfe08baeb', 'Pull', 'AlertChannel', '30000000-0000-0000-0000-000000000002');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('e0494cd9-b3ec-b088-0532-089d029accca', 'Update', 'Team', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('e08e5c0a-2e94-f112-22dd-e06d44dd2d9b', 'View', 'Stack', '30000000-0000-0000-0000-000000000003');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('e0e6d40a-91ae-d947-56a3-6e71df38581a', 'Update', 'User', '30000000-0000-0000-0000-000000000001');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
@@ -782,6 +902,10 @@ VALUES ('ec427e29-a8ed-8604-59cc-7eda3268fc30', 'View', 'Alert', '30000000-0000-
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('eef93be9-d327-6cfe-3bc9-5c5290f4b686', 'Apply', 'User', '30000000-0000-0000-0000-000000000002');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('f12e902b-29c0-d404-41ef-6c7731211a70', 'Pull', 'Stack', '30000000-0000-0000-0000-000000000002');
 SELECT changes();
 
@@ -794,11 +918,27 @@ VALUES ('f30ff44f-86d5-8215-2c0f-60ed6ebd6234', 'Update', 'Registry', '30000000-
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('f43aa780-94d7-54b7-ceef-0cee3a2922df', 'View', 'Role', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('f4595acc-f991-34d8-834c-4a1136010e17', 'View', 'Platform', '30000000-0000-0000-0000-000000000003');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('f482aa00-8a5a-30da-4d1b-f0dfe770bcb3', 'Pull', 'User', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('f7be80a4-dffa-1049-994a-5314ee03efaf', 'Create', 'GitAccount', '30000000-0000-0000-0000-000000000001');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('f8833b18-d702-70b1-f75a-33f732e5ac29', 'Apply', 'Team', '30000000-0000-0000-0000-000000000002');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('f893a35b-7eac-bd31-921e-ec48bd5335e8', 'View', 'Role', '30000000-0000-0000-0000-000000000002');
 SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
@@ -811,6 +951,10 @@ SELECT changes();
 
 INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
 VALUES ('ff6e9bea-dbf2-e811-d4ba-6702a55c3f92', 'View', 'GitAccount', '30000000-0000-0000-0000-000000000002');
+SELECT changes();
+
+INSERT INTO "Permissions" ("Id", "ResourceAction", "ResourceType", "RoleId")
+VALUES ('ffc7419f-9c54-80fa-cac0-9e52ebeda6d3', 'View', 'User', '30000000-0000-0000-0000-000000000003');
 SELECT changes();
 
 
@@ -948,7 +1092,7 @@ CREATE INDEX "IX_UsersTeams_TeamId" ON "UsersTeams" ("TeamId");
 CREATE INDEX "IX_UsersTeams_UserId" ON "UsersTeams" ("UserId");
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20260406095843_migration0001', '10.0.5');
+VALUES ('20260407181754_migration0001', '10.0.5');
 
 COMMIT;
 

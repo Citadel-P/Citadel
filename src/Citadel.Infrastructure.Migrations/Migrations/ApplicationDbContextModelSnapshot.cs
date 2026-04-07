@@ -83,14 +83,14 @@ namespace Infrastructure.Migrations.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<bool>("IsEnabled")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(true);
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -987,6 +987,258 @@ namespace Infrastructure.Migrations.Migrations
                     b.ToTable("Permissions", (string)null);
 
                     b.HasData(
+                        new
+                        {
+                            Id = "510688a3-f3e5-851a-29fb-8c8ae66a06d5",
+                            ResourceAction = "View",
+                            ResourceType = "User",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "ffc7419f-9c54-80fa-cac0-9e52ebeda6d3",
+                            ResourceAction = "View",
+                            ResourceType = "User",
+                            RoleId = "30000000-0000-0000-0000-000000000003"
+                        },
+                        new
+                        {
+                            Id = "b60ccb85-3aaa-0077-b0e8-7adbb9f4a596",
+                            ResourceAction = "View",
+                            ResourceType = "User",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "49ce8531-88f1-5ed2-a1c7-95d40cc72c47",
+                            ResourceAction = "Create",
+                            ResourceType = "User",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "9aa863b1-84ad-e6c5-738f-41425290cbb8",
+                            ResourceAction = "Create",
+                            ResourceType = "User",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "e0e6d40a-91ae-d947-56a3-6e71df38581a",
+                            ResourceAction = "Update",
+                            ResourceType = "User",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "47a25f07-9bb1-361d-788e-4d99fd0e50ee",
+                            ResourceAction = "Update",
+                            ResourceType = "User",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "0292fdeb-9a33-5a4c-60e9-395eac821cdc",
+                            ResourceAction = "Delete",
+                            ResourceType = "User",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "ddcb3cb1-e44f-0ab8-9e1e-698ed0352dc6",
+                            ResourceAction = "Apply",
+                            ResourceType = "User",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "eef93be9-d327-6cfe-3bc9-5c5290f4b686",
+                            ResourceAction = "Apply",
+                            ResourceType = "User",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "f482aa00-8a5a-30da-4d1b-f0dfe770bcb3",
+                            ResourceAction = "Pull",
+                            ResourceType = "User",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "8722b0da-7d07-7c14-0f9c-161e0c39a751",
+                            ResourceAction = "Pull",
+                            ResourceType = "User",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "8487254d-0383-5b91-fa5f-816cfdc29054",
+                            ResourceAction = "View",
+                            ResourceType = "Team",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "0854c122-21bc-147b-506b-6caf72ac48ca",
+                            ResourceAction = "View",
+                            ResourceType = "Team",
+                            RoleId = "30000000-0000-0000-0000-000000000003"
+                        },
+                        new
+                        {
+                            Id = "9308eb9b-7faa-e3d3-ffa8-86fc7946fae0",
+                            ResourceAction = "View",
+                            ResourceType = "Team",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "deb33289-b4e7-0111-9e93-079c08f09cf3",
+                            ResourceAction = "Create",
+                            ResourceType = "Team",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "5e169a67-b789-1d24-db33-ea48a69f362e",
+                            ResourceAction = "Create",
+                            ResourceType = "Team",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "e0494cd9-b3ec-b088-0532-089d029accca",
+                            ResourceAction = "Update",
+                            ResourceType = "Team",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "a7ac62e2-2a4d-50c6-6700-af7a5a345bf7",
+                            ResourceAction = "Update",
+                            ResourceType = "Team",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "723bb5cb-0c68-80e7-d890-7c4f6e3ce23a",
+                            ResourceAction = "Delete",
+                            ResourceType = "Team",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "ab32d40c-3859-6377-1634-a84b67e820dc",
+                            ResourceAction = "Apply",
+                            ResourceType = "Team",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "f8833b18-d702-70b1-f75a-33f732e5ac29",
+                            ResourceAction = "Apply",
+                            ResourceType = "Team",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "cbcc1ffb-e622-9159-df1e-d0d05e50385c",
+                            ResourceAction = "Pull",
+                            ResourceType = "Team",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "62d97329-3b51-37c0-abe7-aba92734e97e",
+                            ResourceAction = "Pull",
+                            ResourceType = "Team",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "f43aa780-94d7-54b7-ceef-0cee3a2922df",
+                            ResourceAction = "View",
+                            ResourceType = "Role",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "57de5bf0-3ba6-3067-d4d0-c8c6a889507b",
+                            ResourceAction = "View",
+                            ResourceType = "Role",
+                            RoleId = "30000000-0000-0000-0000-000000000003"
+                        },
+                        new
+                        {
+                            Id = "f893a35b-7eac-bd31-921e-ec48bd5335e8",
+                            ResourceAction = "View",
+                            ResourceType = "Role",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "3e1abbe9-b2f2-21b8-bf02-38d4c10cd79d",
+                            ResourceAction = "Create",
+                            ResourceType = "Role",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "0309bcb2-05ec-623d-e45b-ec10cfddee24",
+                            ResourceAction = "Create",
+                            ResourceType = "Role",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "8469f325-f132-73f4-0fa4-42131875a5ed",
+                            ResourceAction = "Update",
+                            ResourceType = "Role",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "9feb50a6-6f53-b270-5e7c-f679e7d85ed5",
+                            ResourceAction = "Update",
+                            ResourceType = "Role",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "c75f0cb6-117e-8929-d133-c45f363c1610",
+                            ResourceAction = "Delete",
+                            ResourceType = "Role",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "0edd69d5-bb37-653c-9b25-5ff32a2b8243",
+                            ResourceAction = "Apply",
+                            ResourceType = "Role",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "15923c89-875e-7d0b-b80b-96af1f0cd1f2",
+                            ResourceAction = "Apply",
+                            ResourceType = "Role",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
+                        new
+                        {
+                            Id = "ab3dfa51-423f-716d-a623-760c9f72f791",
+                            ResourceAction = "Pull",
+                            ResourceType = "Role",
+                            RoleId = "30000000-0000-0000-0000-000000000001"
+                        },
+                        new
+                        {
+                            Id = "3a14f868-33fb-3a2e-92e1-5579da6962ce",
+                            ResourceAction = "Pull",
+                            ResourceType = "Role",
+                            RoleId = "30000000-0000-0000-0000-000000000002"
+                        },
                         new
                         {
                             Id = "6deaa9b4-66e6-22bb-3f49-62584ccd9e1f",

@@ -1,11 +1,8 @@
 namespace Infrastructure.Persistence.Dtos;
 
-internal sealed record UserRoleAssignmentStateDto(
+internal sealed record TeamRoleAssignmentStateDto(
     Guid? Id,
     string? Name,
-    string? Email,
     Guid? ActorId,
     bool? IsEnabled,
-    DateTime? CreatedAt,
-    Guid? CreatedByActorId,
     bool RoleExists);

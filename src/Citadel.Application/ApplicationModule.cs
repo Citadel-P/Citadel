@@ -2,6 +2,7 @@
 using Application.Permissions.Requirements;
 using Application.Services;
 using Application.Services.Alerts;
+using Application.Services.Identity;
 using Application.Services.SignalR;
 using Application.TaskJobs;
 using Citadel.SourceGen;
@@ -67,7 +68,8 @@ public static class ApplicationModule
             .AddScoped<IPullImageService, PullImageService>()
             .AddScoped<IRegistryConnectorResolver, RegistryConnectorResolver>()
             .AddSingleton<IDelayWithJitterService, DelayWithJitterService>()
-            .AddScoped<IPermissionService, PermissionService>();
+            .AddScoped<IPermissionService, PermissionService>()
+            .AddScoped<IActorRoleService, ActorRoleService>();
 
     private static IServiceCollection AddSignalRServices(this IServiceCollection services) =>
         services

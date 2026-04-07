@@ -30,7 +30,7 @@ public sealed record PatchUser(Guid Id, JsonMergePatchDocument<PatchUserModel> P
         public PatchUserModelValidator()
         {
             When(x => x.Email is not null, () => RuleFor(x => x.Email!).EmailAddress());
-            When(x => x.Password is not null, () => RuleFor(x => x.Password!).MinimumLength(8).MaximumLength(128));
+            When(x => x.Password is not null, () => RuleFor(x => x.Password!).MinimumLength(6).MaximumLength(128));
         }
     }
 }

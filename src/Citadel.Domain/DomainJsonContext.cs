@@ -223,6 +223,7 @@ public partial class StackJsonContext : JsonSerializerContext
 [JsonSerializable(typeof(PatchRolePermissionsModel))]
 [JsonSerializable(typeof(PatchPermissionModel))]
 [JsonSerializable(typeof(PatchUserModel))]
+[JsonSerializable(typeof(PatchTeamModel))]
 public partial class RoleJsonContext : JsonSerializerContext
 {
 }

@@ -1,5 +1,6 @@
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Identity;
+using Application.Services.Identity;
 using FluentValidation;
 using Hosting.Common;
 using Hosting.Common.Attributes;
@@ -22,23 +23,22 @@ public sealed record RemoveUserRole(Guid UserId, Guid RoleId) : ICommand<Result<
     }
 }
 
-internal sealed class RemoveUserRoleHandler(IUnitOfWork unitOfWork) : ICommandHandler<RemoveUserRole, Result<UserDetails>>
+internal sealed class RemoveUserRoleHandler(IUnitOfWork unitOfWork, IActorRoleService actorRoleService) : ICommandHandler<RemoveUserRole, Result<UserDetails>>
 {
     public async ValueTask<Result<UserDetails>> Handle(RemoveUserRole command, CancellationToken cancellationToken)
     {
-        var state = await unitOfWork.Users.GetRoleAssignmentStateAsync(command.UserId, command.RoleId, cancellationToken);
-        if (state.User is null)
+        var user = await unitOfWork.Users.GetAsync(command.UserId, cancellationToken);
+        if (user is null)
             return Result.Failure<UserDetails>(new NotFoundError("The provided user does not exist"));
 
-        if (!state.RoleExists)
-            return Result.Failure<UserDetails>(new NotFoundError("The provided role does not exist"));
+        var actor = await unitOfWork.Actors.GetById(user.ActorId, cancellationToken);
+        if (actor is null)
+            return Result.Failure<UserDetails>(new NotFoundError("The provided actor does not exist"));
 
-        if (!state.HasRole)
-            return Result.Failure<UserDetails>(new NotFoundError("The provided role is not assigned to the user"));
+        var result = await actorRoleService.RemoveRoleAsync(user.ActorId, command.RoleId, cancellationToken);
+        if (result.IsFailure(out var error))
+            return Result.Failure<UserDetails>(error);
 
-        await unitOfWork.Users.RemoveActorRoleAsync(state.User.ActorId, command.RoleId, cancellationToken);
-        await unitOfWork.CommitAsync(cancellationToken);
-
-        return state.User;
+        return new UserDetails(user.Id, user.Name, user.Email, user.ActorId, actor.IsEnabled, user.CreatedAt, user.CreatedByActorId);
     }
 }

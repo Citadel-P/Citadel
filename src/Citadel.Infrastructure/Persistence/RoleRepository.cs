@@ -144,11 +144,44 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
         return db.ExecuteAsync(sql, new { Ids = JsonSerializer.Serialize(ids, DeploymentJsonContext.Default.IEnumerableGuid), cancellationToken }, transaction: tx());
     }
 
+    public Task<IEnumerable<Guid>> GetActorRoleIdsAsync(Guid actorId, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT RoleId FROM ActorRoles WHERE ActorId = @ActorId";
+        return db.QueryAsync<Guid>(sql, new { ActorId = actorId.Format(), cancellationToken }, transaction: tx());
+    }
+
+    public Task<int> AddActorRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken)
+    {
+        const string sql = "INSERT OR IGNORE INTO ActorRoles (ActorId, RoleId) VALUES (@ActorId, @RoleId)";
+        return db.ExecuteAsync(sql, new { ActorId = actorId.Format(), RoleId = roleId.Format(), cancellationToken }, transaction: tx());
+    }
+
+    public Task<int> RemoveActorRoleAsync(Guid actorId, Guid roleId, CancellationToken cancellationToken)
+    {
+        const string sql = "DELETE FROM ActorRoles WHERE ActorId = @ActorId AND RoleId = @RoleId";
+        return db.ExecuteAsync(sql, new { ActorId = actorId.Format(), RoleId = roleId.Format(), cancellationToken }, transaction: tx());
+    }
+
     public async Task<IEnumerable<Permission>> GetPermissionsAsync(Guid roleId, CancellationToken cancellationToken)
     {
         const string sql = "SELECT ResourceType, ResourceAction FROM Permissions WHERE RoleId = @RoleId";
         var rows = await db.QueryAsync<PermissionAssignmentDto>(sql, new { RoleId = roleId.Format(), cancellationToken }, transaction: tx());
         return rows.Select(x => x.ToDomain(roleId));
+    }
+
+    public async Task<int> ReplaceActorRolesAsync(Guid actorId, IEnumerable<Guid> roleIds, CancellationToken cancellationToken)
+    {
+        const string deleteSql = "DELETE FROM ActorRoles WHERE ActorId = @ActorId";
+        await db.ExecuteAsync(deleteSql, new { ActorId = actorId.Format(), cancellationToken }, transaction: tx());
+
+        var rows = 0;
+        foreach (var roleId in roleIds)
+        {
+            const string insertSql = "INSERT INTO ActorRoles (ActorId, RoleId) VALUES (@ActorId, @RoleId)";
+            rows += await db.ExecuteAsync(insertSql, new { ActorId = actorId.Format(), RoleId = roleId.Format(), cancellationToken }, transaction: tx());
+        }
+
+        return rows;
     }
 
     public async Task<int> ReplacePermissionsAsync(Guid roleId, IEnumerable<Permission> permissions, CancellationToken cancellationToken)
@@ -164,8 +197,8 @@ internal sealed class RoleRepository(IDbConnection db, Func<IDbTransaction> tx) 
             {
                 Id = permission.Id.Format(),
                 RoleId = roleId.Format(),
-                ResourceType = EnumFormatter<Hosting.Common.ResourceType>.GetValue(permission.ResourceType),
-                ResourceAction = EnumFormatter<Hosting.Common.ResourceAction>.GetValue(permission.ResourceAction),
+                ResourceType = EnumFormatter<ResourceType>.GetValue(permission.ResourceType),
+                ResourceAction = EnumFormatter<ResourceAction>.GetValue(permission.ResourceAction),
                 cancellationToken
             }, transaction: tx());
         }

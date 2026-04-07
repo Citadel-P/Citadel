@@ -20,6 +20,7 @@ using WebApi.Routes.Endpoints.Resources.Activities;
 using WebApi.Routes.Endpoints.Resources.Alerters;
 using WebApi.Routes.Endpoints.Resources.Identity.Actors;
 using WebApi.Routes.Endpoints.Resources.Identity.Users;
+using WebApi.Routes.Endpoints.Resources.Identity.Teams;
 using WebApi.Routes.Endpoints.Resources.Containers;
 using WebApi.Routes.Endpoints.Resources.Deployments;
 using WebApi.Routes.Endpoints.Resources.GitAccounts;
@@ -243,6 +244,15 @@ namespace Application.Models;
 [JsonSerializable(typeof(UsersFilter))]
 [JsonSerializable(typeof(UserView))]
 [JsonSerializable(typeof(UsersView))]
+[JsonSerializable(typeof(CreateTeamInput))]
+[JsonSerializable(typeof(PatchTeamInput))]
+[JsonSerializable(typeof(PatchTeamInputPatchDocument))]
+[JsonSerializable(typeof(AddTeamRoleInput))]
+[JsonSerializable(typeof(AddTeamMemberInput))]
+[JsonSerializable(typeof(DeleteTeamsInput))]
+[JsonSerializable(typeof(TeamsFilter))]
+[JsonSerializable(typeof(TeamView))]
+[JsonSerializable(typeof(TeamsView))]
 [JsonSerializable(typeof(DeleteRolesInput))]
 [JsonSerializable(typeof(PatchRolePermissionsInput))]
 [JsonSerializable(typeof(PatchRolePermissionsInputPatchDocument))]

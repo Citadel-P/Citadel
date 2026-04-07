@@ -22,7 +22,7 @@ public sealed record CreateUser(string Name, string Email, string Password) : IC
         {
             RuleFor(x => x.Name).ValidNameIdentifier();
             RuleFor(x => x.Email).NotEmpty().EmailAddress();
-            RuleFor(x => x.Password).NotNull().MinimumLength(8).MaximumLength(128);
+            RuleFor(x => x.Password).NotNull().MinimumLength(6).MaximumLength(128);
         }
     }
 }

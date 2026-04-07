@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <Folder Include="EntityFramework\" />
+    <Folder Include="Migrations\" />
   </ItemGroup>
 
 </Project>

@@ -18,6 +18,12 @@ internal static class IdentityMappers
     internal static IEnumerable<UserDetails> ToDetails(this IEnumerable<UserWithActorDto> dtos)
         => dtos.Select(ToDetails);
 
+    internal static TeamDetails ToDetails(this TeamWithActorDto dto)
+        => new(dto.Id, dto.Name, dto.ActorId, dto.IsEnabled);
+
+    internal static IEnumerable<TeamDetails> ToDetails(this IEnumerable<TeamWithActorDto> dtos)
+        => dtos.Select(ToDetails);
+
     internal static Team ToDomain(this TeamDto dto)
         => Team.FromPersistence(dto.Id, dto.Name, dto.ActorId);
 
