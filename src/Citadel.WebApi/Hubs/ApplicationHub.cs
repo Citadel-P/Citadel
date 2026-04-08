@@ -1,4 +1,5 @@
-﻿using Application.Features.Images.Queries;
+﻿using Application.Features.Containers.Commands;
+using Application.Features.Images.Queries;
 using Application.Features.Platforms.Queries;
 using Application.Services.SignalR;
 using Mediator;
@@ -11,7 +12,7 @@ using WebApi.Routes.Endpoints.Resources.Platforms;
 namespace WebApi.Hubs;
 
 [Authorize]
-internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMediator mediator, IExecSessionManager execSessionManager) : Hub
+internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMediator mediator) : Hub
 {
     #region Overrides
     public override Task OnDisconnectedAsync(Exception? exception)
@@ -82,10 +83,14 @@ internal sealed class ApplicationHub(IStreamSubscriptionResolver resolver, IMedi
         else return new ImagesView([]);
     }
 
-    public Task StartExecProcess(string groupId, string shell) => execSessionManager.StartExecProcess(groupId, shell, Context.ConnectionAborted);
+    public async Task StartExecProcess(string groupId, string shell)
+        => await mediator.Send(new StartContainerShellSession(groupId, shell), Context.ConnectionAborted);
+    
+    public async Task ResizeExec(string groupId, int cols, int rows) 
+        => await mediator.Send(new ResizeContainerExecSession(groupId, cols, rows), Context.ConnectionAborted);
 
-    public Task ResizeExec(string groupId, int cols, int rows) => execSessionManager.ResizeAsync(groupId, cols, rows, Context.ConnectionAborted);
+    public async Task SendExecInput(string groupId, byte[] data)
+        => await mediator.Send(new SendContainerExecInput(groupId, data), Context.ConnectionAborted);
 
-    public Task SendExecInput(string groupId, byte[] data) => execSessionManager.SendInputAsync(groupId, data, Context.ConnectionAborted);
     #endregion
 }

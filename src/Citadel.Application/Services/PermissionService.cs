@@ -4,7 +4,6 @@ using Hosting.Common;
 using Hosting.Common.Extensions;
 using Hosting.Common.Pipelines.Interfaces;
 using LightResults;
-using Mediator;
 using Microsoft.Extensions.Caching.Memory;
 using System.Security.Claims;
 
@@ -14,7 +13,7 @@ internal class PermissionService(IUnitOfWork uow, IMemoryCache memoryCache) : IP
 {
     private static readonly TimeSpan PermissionCacheTtl = TimeSpan.FromSeconds(60);
 
-    public  Task<Result> EnforceAsync(IMessage message, ClaimsPrincipal user, CancellationToken cancellationToken = default)
+    public  Task<Result> EnforceAsync<TMessage>(TMessage message, ClaimsPrincipal user, CancellationToken cancellationToken = default) where TMessage : notnull
         => PermissionPipeline.Enforce(
             message,
             user.GetUserId(),

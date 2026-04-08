@@ -36,6 +36,10 @@ public static class ApplicationModule
                     typeof(PermissionBehavior<,>),
                     typeof(ValidatorBehavior<,>)
                 ];
+                options.StreamPipelineBehaviors =
+                [
+                    typeof(StreamPermissionBehavior<,>)
+                ];
             })
             .AddPermissions()
             .AddSingleton<IErrorFactoryProvider, ErrorFactoryProvider>()
