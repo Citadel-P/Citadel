@@ -7,11 +7,12 @@
 	<OpenApiGenerateDocuments>true</OpenApiGenerateDocuments>
 	<OpenApiGenerateDocumentsOnBuild>true</OpenApiGenerateDocumentsOnBuild>
 	<DockerfileFile>..\..\Dockerfile.dev</DockerfileFile>
-	<DockerfileContext>$(MSBuildProjectDirectory)\..\..</DockerfileContext>
+	<DockerfileContext>..\..</DockerfileContext>
 	<DockerfileRunArguments>-p 8000:8000 --env-file "$(MSBuildProjectDirectory)\.env" -v "citadel_data:/app/data" -v "/var/run/docker.sock:/var/run/docker.sock"</DockerfileRunArguments>
 	<ContainerRepository>citadel-webapi</ContainerRepository>
 	<PreserveCompilationContext>true</PreserveCompilationContext>
 	<InterceptorsNamespaces>$(InterceptorsNamespaces);Microsoft.AspNetCore.OpenApi.Generated</InterceptorsNamespaces>
+	<DockerComposeProjectPath>..\..\docker-compose.dcproj</DockerComposeProjectPath>
   </PropertyGroup>
 
 	<ItemGroup>

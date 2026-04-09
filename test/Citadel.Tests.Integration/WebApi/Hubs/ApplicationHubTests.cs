@@ -16,7 +16,7 @@ using WebApi.Routes.Endpoints.Resources.Platforms;
 
 namespace Tests.Integration.WebApi.Hubs;
 
-public class ApplicationHubTests : IntegrationTestBase
+public class ApplicationHubTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid platformId;
     private readonly Mock<IStreamSubscriptionResolver> resolverMock = new();

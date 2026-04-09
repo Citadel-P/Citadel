@@ -6,7 +6,7 @@ using System.Text.Json;
 
 namespace Tests.Integration.Application.Features.Identity.Roles;
 
-public class RoleViewTests : IntegrationTestBase
+public class RoleViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task List_Roles_Should_Return_All_Roles_For_Admin()

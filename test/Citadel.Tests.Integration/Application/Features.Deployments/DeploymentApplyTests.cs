@@ -19,7 +19,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Deployments;
 
-public class DeploymentApplyTests : IntegrationTestBase
+public class DeploymentApplyTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid _platformId;
     private Guid _deploymentId;
@@ -50,12 +50,12 @@ public class DeploymentApplyTests : IntegrationTestBase
 
         services.AddSingleton<IPlatformHealthBroadCaster>(broadcaster);
 
-        // Setup deployment connector factory mock
+        // Setup deployment connector Factory mock
         deploymentConnectorFactoryMock
             .Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
             .Returns(deploymentConnectorMock.Object);
 
-        // Setup container connector factory mock
+        // Setup container connector Factory mock
         containerConnectorFactoryMock
             .Setup(x => x.GetConnector(It.IsAny<PlatformConnectorType>()))
             .Returns(containerConnectorMock.Object);

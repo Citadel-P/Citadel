@@ -9,7 +9,7 @@ using Moq;
 
 namespace Tests.Integration.Application.Features.Networks;
 
-public class CreateNetworkTests : IntegrationTestBase
+public class CreateNetworkTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IConnectorFactory<INetworkConnector>> networkFactoryMock = new();
     private readonly Mock<IPlatformContainerCache> platformContainerCacheMock = new();

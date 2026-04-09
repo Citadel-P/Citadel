@@ -9,7 +9,7 @@ using System.Text.Json;
 
 namespace Tests.Integration.Application.Features.Registries;
 
-public class RegistryViewTests : IntegrationTestBase
+public class RegistryViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IRegistryConnectorStrategy> registryConnectorMock = new();
     private readonly Mock<IRegistryConnectorResolver> registryConnectorResolverMock = new();

@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.Alerters;
 
-public sealed class AlertEventRepositoryTests : IntegrationTestBase
+public sealed class AlertEventRepositoryTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Guid _firstResourceId = Guid.Parse("44444444-4444-4444-4444-444444444444");
     private readonly Guid _secondResourceId = Guid.Parse("55555555-5555-5555-5555-555555555555");

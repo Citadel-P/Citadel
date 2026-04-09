@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.GitAccounts;
 
-public class GitAccountPatchTests : IntegrationTestBase
+public class GitAccountPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid gitAccountId;
 

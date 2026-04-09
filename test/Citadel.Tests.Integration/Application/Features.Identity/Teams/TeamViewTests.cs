@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.Identity.Teams;
 
-public class TeamViewTests : IntegrationTestBase
+public class TeamViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task List_Teams_Should_Return_Paged_Teams_For_Admin()

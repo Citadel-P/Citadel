@@ -3,7 +3,7 @@ using Hosting.Common;
 
 namespace Tests.Integration.Application.Features.Identity.Auth;
 
-public class RefreshTokenCommandTests : IntegrationTestBase
+public class RefreshTokenCommandTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task Handle_ReturnsSuccess_WhenCredentialsValid()

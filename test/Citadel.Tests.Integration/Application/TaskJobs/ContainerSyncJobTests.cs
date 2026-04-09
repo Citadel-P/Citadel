@@ -17,7 +17,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
 
-public class ContainerSyncJobTests : IntegrationTestBase
+public class ContainerSyncJobTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IConnectorFactory<IContainerConnector>> containerFactoryMock = new();
     private readonly Mock<IContainerConnector> containerConnector = new();

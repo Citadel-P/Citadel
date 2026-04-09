@@ -3,7 +3,6 @@ using Application.Services;
 using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Activities;
 using Domain.Entities.Git;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,7 +13,7 @@ using System.Threading.Channels;
 
 namespace Tests.Integration.Application.Features.GitRepositories;
 
-public class GitRepositoryPatchTests : IntegrationTestBase
+public class GitRepositoryPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IRepoCacheManager> _repoCacheManagerMock = new();
     private readonly Channel<GitRepoSyncRequest> _gitSyncChannel = Channel.CreateUnbounded<GitRepoSyncRequest>();

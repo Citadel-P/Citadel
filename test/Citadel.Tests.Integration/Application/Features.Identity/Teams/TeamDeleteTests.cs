@@ -2,12 +2,11 @@ using System.Text;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities.Identity;
-using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.Identity.Teams;
 
-public class TeamDeleteTests : IntegrationTestBase
+public class TeamDeleteTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task Delete_Team_Should_Remove_Team()

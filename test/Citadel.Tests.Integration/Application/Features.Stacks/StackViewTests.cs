@@ -8,7 +8,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Stacks;
 
-public class StackViewTests : IntegrationTestBase
+public class StackViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid? platformId;
 

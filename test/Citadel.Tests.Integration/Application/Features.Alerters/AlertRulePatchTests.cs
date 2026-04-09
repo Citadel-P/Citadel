@@ -8,7 +8,7 @@ using System.Text;
 
 namespace Tests.Integration.Application.Features.Alerters;
 
-public class AlertRulePatchTests : IntegrationTestBase
+public class AlertRulePatchTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid ruleId;
     private Guid channelId;

@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.Identity.Users;
 
-public class UserCreateTests : IntegrationTestBase
+public class UserCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task Create_User_ReturnsSuccess()

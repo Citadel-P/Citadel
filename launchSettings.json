@@ -1,11 +1,11 @@
 {
-    "profiles": {
-        "Docker Compose": {
-            "commandName": "DockerCompose",
-            "commandVersion": "1.0",
-            "serviceActions": {
-                "Citadel.webapi": "StartDebugging"
-            }
-        }
+  "profiles": {
+    "Docker Compose": {
+      "commandName": "DockerCompose",
+      "commandVersion": "1.0",
+      "serviceActions": {
+        "citadel": "StartDebugging"
+      }
     }
+  }
 }

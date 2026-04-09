@@ -16,7 +16,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
 
-public class DeploymentImageScannerJobTests : IntegrationTestBase
+public class DeploymentImageScannerJobTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IConnectorFactory<IImageConnector>> _imageConnectorFactoryMock = new();
     private readonly Mock<IImageConnector> _imageConnectorMock = new();

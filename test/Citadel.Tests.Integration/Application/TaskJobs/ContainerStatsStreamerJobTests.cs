@@ -14,7 +14,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
 
-public class ContainerStatsStreamerJobTests : IntegrationTestBase
+public class ContainerStatsStreamerJobTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Channel<ContainersStatBatch> _channel = Channel.CreateUnbounded<ContainersStatBatch>();
     private readonly Mock<IConnectorFactory<IContainerConnector>> _containerFactoryMock = new();

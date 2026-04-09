@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.Identity.Users;
 
-public class UserPatchTests : IntegrationTestBase
+public class UserPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task Patch_User_Should_Update_Email_Password_And_IsEnabled()

@@ -9,7 +9,7 @@ using Moq;
 
 namespace Tests.Integration.Application.Features.Registries;
 
-public class RegistryCreateTests : IntegrationTestBase
+public class RegistryCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IRegistryConnectorStrategy> registryConnectorMock = new();
     private readonly Mock<IRegistryConnectorResolver> registryConnectorResolverMock = new();

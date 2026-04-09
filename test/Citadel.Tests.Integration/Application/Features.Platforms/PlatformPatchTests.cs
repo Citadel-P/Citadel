@@ -3,7 +3,6 @@ using Application.TaskJobs;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Contracts.Resources.Platforms;
-using Domain.Entities;
 using Domain.Entities.Platforms;
 using LightResults;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,7 +11,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Platforms;
 
-public class PlatformPatchTests : IntegrationTestBase
+public class PlatformPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid platformId;
 

@@ -1,0 +1,11 @@
+services:
+  citadel:
+    build:
+      context: .
+      dockerfile: src/Citadel.WebApi/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+
+  postgres:
+    ports:
+      - "5432:5432" # Allows to use local DB tools during dev

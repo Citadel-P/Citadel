@@ -1,8 +1,7 @@
 ﻿using Domain.Contracts.Interfaces;
-using Domain.Entities.Stacks;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using System.Data;
+using System.Data.Common;
 
 namespace Infrastructure.Persistence;
 
@@ -80,6 +79,10 @@ internal class UnitOfWork : IUnitOfWork
     private IDbTransaction GetTransaction()
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+        if (connection.State != ConnectionState.Open)
+        {
+            connection.Open();
+        }
         transaction ??= connection.BeginTransaction();
         return transaction;
     }
@@ -87,37 +90,29 @@ internal class UnitOfWork : IUnitOfWork
     public async Task CommitAsync(CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         if (transaction == null) return;
 
-        await DbRetryPolicies.RetryOnBusy.ExecuteAsync(async ct =>
+        try
         {
-            try
+            if (transaction is DbTransaction dbTransaction)
             {
-                if (transaction is IAsyncDisposable asyncDisposableTransaction)
-                {
-                    transaction.Commit();
-                    await asyncDisposableTransaction.DisposeAsync();
-                }
-                else
-                {
-                    transaction.Commit();
-                    transaction.Dispose();
-                }
-
-                transaction = null;
+                await dbTransaction.CommitAsync(cancellationToken);
             }
-            catch (SqliteException ex) when (DbRetryPolicies.IsBusy(ex))
+            else
             {
-                logger.LogWarning(ex, "SQLite busy/locked during commit. Will retry.");
-                throw;
+                transaction.Commit();
             }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error committing transaction");
-                await RollbackAsync();
-                throw;
-            }
-        }, cancellationToken);
+        }
+        catch
+        {
+            await RollbackAsync();
+            throw;
+        }
+        finally
+        {
+            await DisposeTransactionAsync();
+        }
     }
 
     public async Task RollbackAsync()
@@ -126,67 +121,56 @@ internal class UnitOfWork : IUnitOfWork
 
         try
         {
-            transaction.Rollback();
-            if (transaction is IAsyncDisposable asyncDisposableTransaction)
+            if (connection.State == ConnectionState.Open)
             {
-                await asyncDisposableTransaction.DisposeAsync();
+                await ((DbTransaction)transaction).RollbackAsync();
             }
-            else
-            {
-                transaction.Dispose();
-            }
-            transaction = null;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error rolling back transaction");
-            throw;
+            logger.LogWarning(ex, "Rollback failed, transaction may already be aborted.");
         }
+        finally
+        {
+            await DisposeTransactionAsync();
+        }
+    }
+
+    private async Task DisposeTransactionAsync()
+    {
+        if (transaction == null) return;
+
+        if (transaction is IAsyncDisposable asyncDisposable)
+        {
+            await asyncDisposable.DisposeAsync();
+        }
+        else
+        {
+            transaction.Dispose();
+        }
+
+        transaction = null;
     }
 
     public async ValueTask DisposeAsync()
     {
-        await DisposeAsync(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual async ValueTask DisposeAsync(bool disposing)
-    {
         if (disposed) return;
 
-        if (disposing)
+        if (transaction != null)
         {
-            try
-            {
-                if (transaction != null)
-                {
-                    if (transaction is IAsyncDisposable asyncDisposableTransaction)
-                    {
-                        await asyncDisposableTransaction.DisposeAsync();
-                    }
-                    else
-                    {
-                        transaction.Dispose();
-                    }
-                }
-
-                if (connection.State != ConnectionState.Closed)
-                {
-                    if (connection is IAsyncDisposable asyncDisposableConnection)
-                    {
-                        await asyncDisposableConnection.DisposeAsync();
-                    }
-                    else
-                    {
-                        connection.Dispose();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error disposing unit of work");
-            }
+            await RollbackAsync();
         }
+
+        if (connection is IAsyncDisposable asyncConn)
+        {
+            await asyncConn.DisposeAsync();
+        }
+        else
+        {
+            connection.Dispose();
+        }
+
         disposed = true;
+        GC.SuppressFinalize(this);
     }
 }

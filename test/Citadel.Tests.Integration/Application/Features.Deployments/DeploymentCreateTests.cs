@@ -6,7 +6,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Deployments;
 
-public class DeploymentCreateTests : IntegrationTestBase
+public class DeploymentCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     Guid? _platformId;
     

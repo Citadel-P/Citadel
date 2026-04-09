@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Tests.Integration.Application.Features.Alerters;
 
-public class AlertRuleCreateTests : IntegrationTestBase
+public class AlertRuleCreateTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid channelId;
 

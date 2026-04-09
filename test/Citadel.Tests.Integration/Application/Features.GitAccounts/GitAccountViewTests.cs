@@ -1,5 +1,4 @@
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Git;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text;
@@ -7,7 +6,7 @@ using System.Text.Json;
 
 namespace Tests.Integration.Application.Features.GitAccounts;
 
-public class GitAccountViewTests : IntegrationTestBase
+public class GitAccountViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task List_GitAccounts_Should_Return_Only_Accounts_User_Is_Permitted_To_View()

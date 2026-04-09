@@ -9,7 +9,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Stacks;
 
-public class StackDeleteTests : IntegrationTestBase
+public class StackDeleteTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid stackId;
 

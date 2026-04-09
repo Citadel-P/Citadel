@@ -1,14 +1,12 @@
 ﻿using Application.Services;
-using DbUp;
 using Domain.Contracts.Interfaces;
 using Hosting.Common;
-using Infrastructure;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data;
+using Npgsql;
 using System.Data.Common;
 using System.Net.Http.Headers;
 using System.Security.Claims;
@@ -16,7 +14,9 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration;
 
-public abstract class IntegrationTestBase : IAsyncLifetime
+
+[Collection("Postgres")]
+public abstract class IntegrationTestBase(PostgresTestFixture fixture) : IAsyncLifetime
 {
     protected sealed record AuthorizationSubject(Guid UserId, Guid ActorId, Guid? TeamId = null, Guid? TeamActorId = null);
     protected sealed record ResourceGrant(ResourceType ResourceType, Guid ResourceId, ResourceAction Action);
@@ -24,44 +24,41 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     protected static readonly Guid OperatorRoleId = Guid.Parse("30000000-0000-0000-0000-000000000002");
     protected static readonly Guid ViewerRoleId = Guid.Parse("30000000-0000-0000-0000-000000000003");
 
-    private SqliteConnection keepAliveConnection = default!;
-    private WebApplicationFactory<Program> factory = default!;
-    private readonly string connectionString = $"Data Source={Guid.NewGuid()};Mode=Memory;Cache=Shared";
-
     protected HttpClient Client = default!;
+    protected string ConnectionString = default!;
     protected IServiceProvider Services = default!;
+    protected WebApplicationFactory<Program> Factory = default!;
 
     public async ValueTask InitializeAsync()
     {
-        keepAliveConnection = new SqliteConnection(connectionString);
-        await keepAliveConnection.OpenAsync();
+        ConnectionString = await fixture.CreateDatabaseFromTemplateAsync();
 
-        RunMigrations(keepAliveConnection);
-
-        factory = new WebApplicationFactory<Program>()
+        Factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("IntegrationTests");
 
-                builder.ConfigureServices(async services =>
+                builder.ConfigureAppConfiguration((_, config) =>
                 {
-                    ReplaceTestServices(services);
+                    config.AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["CITADEL_POSTGRES_CONNECTION_STRING"] = ConnectionString
+                    });
+                });
+
+                builder.ConfigureServices(services =>
+                {
+                    services.ReplaceService<IPlatformContainerCache>(new PlatformContainerCache());
                     ConfigureTestServices(services);
-
-                    var sp = services.BuildServiceProvider();
-                    Services = sp;
-
-                    await using var scope = sp.CreateAsyncScope();
-                    await SeedDbAsync(scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
                 });
             });
 
-        Client = factory.CreateClient();
-        Services = factory.Services;
+        Client = Factory.CreateClient();
+        Services = Factory.Services;
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateJwtToken());
     }
 
-    protected HttpMessageHandler CreateServerHandler() => factory.Server.CreateHandler();
+    protected HttpMessageHandler CreateServerHandler() => Factory.Server.CreateHandler();
 
     protected virtual void ConfigureTestServices(IServiceCollection services) { }
 
@@ -211,18 +208,21 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     }
 
     private static async Task ExecuteNonQueryAsync(
-        SqliteConnection connection,
+        DbConnection connection,
         DbTransaction transaction,
         string commandText,
         IReadOnlyDictionary<string, object?> parameters)
     {
         await using var command = connection.CreateCommand();
-        command.Transaction = (SqliteTransaction)transaction;
+        command.Transaction = transaction;
         command.CommandText = commandText;
 
         foreach (var parameter in parameters)
         {
-            command.Parameters.AddWithValue(parameter.Key, parameter.Value ?? DBNull.Value);
+            var dbParameter = command.CreateParameter();
+            dbParameter.ParameterName = parameter.Key;
+            dbParameter.Value = parameter.Value ?? DBNull.Value;
+            command.Parameters.Add(dbParameter);
         }
 
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
@@ -236,7 +236,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         await using var transaction = await connection.BeginTransactionAsync(TestContext.Current.CancellationToken);
 
         await ExecuteNonQueryAsync(
-            (SqliteConnection)connection,
+            connection,
             transaction,
             "UPDATE Actors SET IsEnabled = @IsEnabled WHERE Id = @Id;",
             new Dictionary<string, object?>
@@ -248,31 +248,11 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         await transaction.CommitAsync(TestContext.Current.CancellationToken);
     }
 
-    private void ReplaceTestServices(IServiceCollection services)
-    {
-        services.ReplaceService<IPlatformContainerCache>(new PlatformContainerCache());
-        services.ReplaceService<IDbConnectionFactory>(new SqliteConnectionFactory(connectionString));
-    }
-
-    private static void RunMigrations(IDbConnection dbConnection)
-    {
-        var upgrader = DeployChanges.To
-            .SqliteDatabase(dbConnection.ConnectionString)
-            .WithScriptsAndCodeEmbeddedInAssembly(typeof(InfrastructureModule).Assembly)
-            .LogToConsole()
-            .Build();
-
-        var result = upgrader.PerformUpgrade();
-        if (!result.Successful)
-        {
-            throw new Exception($"Failed to upgrade in-memory test database: {result.Error.Message}", result.Error);
-        }
-    }
-
     public async ValueTask DisposeAsync()
     {
-        GC.SuppressFinalize(this);
-        await factory.DisposeAsync();
-        await keepAliveConnection.DisposeAsync();
+        Client?.Dispose();
+        if (Factory != null) await Factory.DisposeAsync();
+
+        NpgsqlConnection.ClearAllPools();
     }
 }

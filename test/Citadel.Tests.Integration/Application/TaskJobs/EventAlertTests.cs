@@ -23,7 +23,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.TaskJobs;
 
-public class EventAlertTests : IntegrationTestBase
+public class EventAlertTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private readonly Mock<IConnectorFactory<IPlatformConnector>> _platformConnectorFactoryMock = new();
     private readonly Mock<IConnectorFactory<IImageConnector>> _imageConnectorFactoryMock = new();

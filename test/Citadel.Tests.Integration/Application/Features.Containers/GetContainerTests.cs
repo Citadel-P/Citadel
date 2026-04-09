@@ -7,7 +7,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Containers;
 
-public class GetContainerTests : IntegrationTestBase
+public class GetContainerTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     readonly string containerId = "42ccd07956a6";
     protected override async ValueTask SeedDbAsync(IUnitOfWork uow)

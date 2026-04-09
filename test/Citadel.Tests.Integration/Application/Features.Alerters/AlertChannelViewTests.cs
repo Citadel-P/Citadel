@@ -1,5 +1,4 @@
 using Domain.Contracts.Interfaces;
-using Domain.Entities.Alerts;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
@@ -7,7 +6,7 @@ using System.Text;
 
 namespace Tests.Integration.Application.Features.Alerters;
 
-public class AlertChannelViewTests : IntegrationTestBase
+public class AlertChannelViewTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task List_AlertChannels_Should_Return_Only_Channels_User_Is_Permitted_To_View()

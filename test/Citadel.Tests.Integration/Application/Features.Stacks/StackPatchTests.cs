@@ -10,7 +10,7 @@ using Tests.Integration.Helpers;
 
 namespace Tests.Integration.Application.Features.Stacks;
 
-public class StackPatchTests : IntegrationTestBase
+public class StackPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid stackId;
     private Guid platformId;

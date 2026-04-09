@@ -1,7 +1,6 @@
 ﻿using Application.Services;
 using Domain;
 using Domain.Contracts.Interfaces;
-using Domain.Entities;
 using Domain.Entities.Registries;
 using Hosting.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,7 +9,7 @@ using System.Text;
 
 namespace Tests.Integration.Application.Features.Registries;
 
-public class RegistryPatchTests : IntegrationTestBase
+public class RegistryPatchTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     private Guid registryId;
     private readonly Mock<IRegistryConnectorStrategy> registryConnectorMock = new();

@@ -3,7 +3,7 @@ using System.Text;
 
 namespace Tests.Integration.Application.Features.Identity.Auth;
 
-public class LoginCommandTests : IntegrationTestBase
+public class LoginCommandTests(PostgresTestFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
     public async Task Handle_ReturnsSuccess_WhenCredentialsValid()

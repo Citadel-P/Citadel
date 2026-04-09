@@ -8,7 +8,7 @@
    - Generate script:
         - Init: `dotnet ef migrations script -o "../Citadel.Infrastructure/Scripts/script0001.sql"`
         - For diff: `dotnet ef migrations script 20250911211455_migration0001 20250911215953_migration0002  -o "../Citadel.Infrastructure/Scripts/script0002.sql"` 
-* Build the image: `docker build -t citadel.v1 .`
+* Build the image: `docker build --build-arg -t citadel.v1 -f src/Citadel.WebApi/Dockerfile .`
 	* Run the image:  `docker run -d -p 8000:8000 -p 8001:8001 -v "citadel_data:/app/data" -v "/var/run/docker.sock:/var/run/docker.sock" --name citadel.v1 citadel.v1`
 
 

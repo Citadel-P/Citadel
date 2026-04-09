@@ -1,6 +1,4 @@
-﻿using System.Reflection;
-using Dapper;
-using DbUp;
+﻿using Dapper;
 using Domain;
 using Domain.Contracts.Interfaces;
 using Domain.Entities;
@@ -19,11 +17,10 @@ using Infrastructure.Repositories;
 using Infrastructure.Repositories.DbQueue;
 using Infrastructure.Repositories.Security.Grpc;
 using Infrastructure.TypeHandlers;
-using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Refit;
-using SQLitePCL;
+using System.Data.Common;
 
 namespace Infrastructure;
 
@@ -32,19 +29,27 @@ namespace Infrastructure;
 /// </summary>
 public static class InfrastructureModule
 {
-    internal const string connectionString = $"Data Source={Constants.DbFilePath};Mode=ReadWriteCreate;Pooling=True;";
     private static readonly RefitSettings refitSettings = new() { ContentSerializer = new STJSourceGeneratorSerializer() };
 
     /// <summary>
     /// Registers the infrastructure module services and configurations.
     /// </summary>
-    public static IServiceCollection RegisterInfrastructureModule(this IServiceCollection services, IWebHostEnvironment environment)
+    public static IServiceCollection RegisterInfrastructureModule(this IServiceCollection services)
         => services
+            .AddDb()
             .AddServices()
-            .InitializeDb(environment)
             .AddGrpcClients()
             .AddHttpClients()
             .RegisterDockerClient();
+
+    public static async Task<WebApplication> InitializeInfrastructureAsync(this WebApplication app)
+    {
+        if (Helpers.IsDesignTime()) return app;
+
+        await DbUpgrader.Upgrade();
+
+        return app;
+    }
 
     private static IServiceCollection AddGrpcClients(this IServiceCollection services)
     {
@@ -57,6 +62,16 @@ public static class InfrastructureModule
                 return new GrpcClientFactory(interceptor);
             })
             .AddGrpc();
+
+        return services;
+    }
+
+    private static IServiceCollection AddDb(this IServiceCollection services)
+    {
+        services
+            .AddScoped<IUnitOfWork, UnitOfWork>()
+            .AddScoped<DbConnection>(sp => sp.GetRequiredService<IDbConnectionFactory>().Create())
+            .AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
 
         return services;
     }
@@ -109,50 +124,6 @@ public static class InfrastructureModule
                 .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://api.github.com"))
                 .AddPolicyHandler(Configuration.GetRetryPolicy())
             .Services;
-
-    /// <summary>
-    /// Initializes the database.
-    /// </summary>
-    private static IServiceCollection InitializeDb(this IServiceCollection services, IWebHostEnvironment environment)
-    {
-        Batteries_V2.Init();
-        //RegisterTypeHandlers(); // DapperAOT does not support this functionality yet: https://github.com/DapperLib/DapperAOT/issues/159
-
-        // Run the migration logic directly if not in a test environment
-        if (!environment.IsEnvironment("IntegrationTests"))
-        {
-            EnsureDatabaseFileExists();
-            PerformDatabaseUpgrade();
-        }
-        
-        return services
-            .AddScoped<IUnitOfWork, UnitOfWork>()
-            .AddScoped(sp => sp.GetRequiredService<IDbConnectionFactory>().Create())
-            .AddSingleton<IDbConnectionFactory>(new SqliteConnectionFactory(connectionString));
-    }
-
-    private static void EnsureDatabaseFileExists()
-    {
-        if (!System.IO.File.Exists(Constants.DbFilePath))
-        {
-            System.IO.File.Create(Constants.DbFilePath).Close();
-        }
-    }
-
-    private static void PerformDatabaseUpgrade()
-    {
-        var upgrader = DeployChanges.To
-            .SqliteDatabase(connectionString)
-            .WithScriptsAndCodeEmbeddedInAssembly(Assembly.GetExecutingAssembly())
-            .LogToConsole()
-            .Build();
-
-        var result = upgrader.PerformUpgrade();
-        if (!result.Successful)
-        {
-            throw new Exception(result.Error.Message, result.Error);
-        }
-    }
 
     private static void RegisterTypeHandlers()
     {
